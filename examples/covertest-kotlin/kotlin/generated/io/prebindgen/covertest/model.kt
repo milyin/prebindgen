@@ -738,44 +738,16 @@ public fun ReadingCallback.asRaw(): ReadingCallbackRaw =
         )
     }
 
-public fun interface DurationBoundaryBuilder<out R> {
-    public fun run(delay: ULong?): R
-}
-
 public fun interface DurationBoundaryBuilderRaw<out R> {
     public fun run(delay: Long): R
 }
 
-public fun <R> DurationBoundaryBuilder<R>.asRaw(): DurationBoundaryBuilderRaw<R> =
-    DurationBoundaryBuilderRaw<R> {
-        delay ->
-        run(
-            if (delay == -1L) null else delay.toULong()
-        )
-    }
-
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
 DurationBoundaryBuilderRaw { delay -> DurationBoundary.fromParts(delay) }
-
-public fun interface LookupBuilder<out R> {
-    public fun run(tag: Int, found_v0: Summary, failed_v0: String?): R
-}
 
 public fun interface LookupBuilderRaw<out R> {
     public fun run(tag: Int, found_v0: Long, failed_v0: String?): R
 }
-
-public fun <R> LookupBuilder<R>.asRaw(): LookupBuilderRaw<R> =
-    LookupBuilderRaw<R> {
-        tag,
-        found_v0,
-        failed_v0 ->
-        run(
-            tag,
-            Summary(found_v0),
-            failed_v0
-        )
-    }
 
 internal val __LookupBuilderRaw: LookupBuilderRaw<Lookup> =
 LookupBuilderRaw { tag, found_v0, failed_v0 ->
@@ -799,36 +771,12 @@ ReadingBuilder { tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, com
     when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
 }
 
-public fun interface UnsignedBuilder<out R> {
-    public fun run(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?): R
-}
-
 public fun interface UnsignedBuilderRaw<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: Long, maybeLong: Long?): R
 }
 
-public fun <R> UnsignedBuilder<R>.asRaw(): UnsignedBuilderRaw<R> =
-    UnsignedBuilderRaw<R> {
-        byte,
-        short,
-        int,
-        long,
-        maybeLong ->
-        run(
-            byte,
-            short,
-            int,
-            long.toULong(),
-            maybeLong?.toULong()
-        )
-    }
-
 internal val __UnsignedBuilderRaw: UnsignedBuilderRaw<Unsigned> =
 UnsignedBuilderRaw { byte, short, int, long, maybeLong -> Unsigned.fromParts(byte, short, int, long, maybeLong) }
-
-public fun interface ReadingFolder<A> {
-    public fun run(acc: A, element: Reading): A
-}
 
 public fun interface ReadingFolderRaw<A> {
     public fun run(
@@ -843,45 +791,15 @@ public fun interface ReadingFolderRaw<A> {
     ): A
 }
 
-public fun <A> ReadingFolder<A>.asRaw(): ReadingFolderRaw<A> =
-    ReadingFolderRaw<A> {
-        acc,
-        tag,
-        exact_v0,
-        range_low,
-        range_high,
-        tagged_v0,
-        tagged_v1,
-        companion_v0 ->
-        run(
-            acc,
-            when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
-        )
-    }
-
 internal object __ReadingFolderRawHolder {
     @JvmField
     val instance: ReadingFolderRaw<ArrayList<Reading>> =
     ReadingFolderRaw { acc, tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0 -> acc.add(when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }); acc }
 }
 
-public fun interface StampFolder<A> {
-    public fun run(acc: A, element: Stamp): A
-}
-
 public fun interface StampFolderRaw<A> {
     public fun run(acc: A, element: ByteArray): A
 }
-
-public fun <A> StampFolder<A>.asRaw(): StampFolderRaw<A> =
-    StampFolderRaw<A> {
-        acc,
-        element ->
-        run(
-            acc,
-            Stamp(element)
-        )
-    }
 
 internal object __StampFolderRawHolder {
     @JvmField

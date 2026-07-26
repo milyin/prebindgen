@@ -855,6 +855,51 @@ fn sum_return_builds_through_a_wire_shaped_singleton() {
     assert!(kotlin.contains("Reading: invalid tag $tag"), "{kotlin}");
 }
 
+/// A **fixed** builder is implemented only by its hoisted singleton, so the
+/// typed `fun interface` and the `asRaw` proxy that would adapt to it are dead
+/// public API — and for a sum with a handle payload they are actively wrong:
+/// `asRaw` would wrap every group's slot as if all were live, turning an inert
+/// group's `0L` sentinel into a handle to nothing. Neither is emitted (#160);
+/// the raw twin the singleton implements is.
+///
+/// Uses the handle-payload fixture because that is the shape with a raw twin
+/// at all — when a builder's leaves need no wrapping, `raw_name() == name` and
+/// the single interface IS the one JNI calls, so there is nothing dead to drop.
+#[test]
+fn a_fixed_builder_emits_no_dead_typed_twin() {
+    let (_, kotlin) = sum_returns("jnigen_sum_no_dead_twin");
+
+    // The twin the singleton implements and JNI calls.
+    assert!(
+        kotlin.contains("public fun interface LookupBuilderRaw<out R>"),
+        "the raw twin is what exists:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("internal val __LookupBuilderRaw: LookupBuilderRaw<Lookup>"),
+        "the singleton implements it:\n{kotlin}"
+    );
+    // The dead surface: the typed declaration and the proxy adapting to it.
+    assert!(
+        !kotlin.contains("public fun interface LookupBuilder<out R>"),
+        "no typed twin for a fixed builder:\n{kotlin}"
+    );
+    assert!(
+        !kotlin.contains("LookupBuilder<R>.asRaw()"),
+        "and so no proxy that would wrap an inert group's sentinel:\n{kotlin}"
+    );
+
+    // A CALLBACK interface is the opposite case and keeps both: the user
+    // implements the typed one, and `asRaw` is how the raw leaves reach it.
+    assert!(
+        kotlin.contains("public fun interface ReadingCallback"),
+        "a callback keeps its typed interface — the user implements it:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("ReadingCallback.asRaw()"),
+        "and keeps the proxy that feeds it:\n{kotlin}"
+    );
+}
+
 /// The sealed interface's own `fromParts` is the Kotlin-facing convenience
 /// stage C emits, NOT the wire target: its parameters are the variants'
 /// property types and its object slots are non-null. The return path therefore

@@ -1262,12 +1262,33 @@ impl JniGen {
                 self.iface_spec(registry, &u).map(|s| (s, is_error, fixed))
             })
             .map(|(s, is_error, fixed)| {
+                // A **fixed** builder/folder has no user-facing side: the only
+                // implementation is the hoisted singleton emitted below, which
+                // implements the RAW twin, and the wrapper passes that singleton
+                // to the native call. So the typed interface and its `asRaw`
+                // proxy would be dead public API — and for a sum actively
+                // misleading, since `asRaw` wraps every group's slots as if all
+                // were live when exactly one ever is (issue #160). Emit neither.
+                //
+                // Only when there IS a twin: with no twin, `raw_name() == name`,
+                // so `to_decl()` *is* the interface the singleton implements and
+                // JNI calls.
+                let typed_is_dead = fixed.is_some() && s.needs_raw();
+                let mut file = kt::KtFile::new(s.package.clone());
+                if !typed_is_dead {
+                    file = file.decl(s.to_decl());
+                }
                 // Typed (user-facing) interface; when any leaf's raw view
                 // differs, also the JNI-called raw twin and the `asRaw()`
                 // proxy adapter that wraps raw leaves into typed objects.
-                let mut file = kt::KtFile::new(s.package.clone()).decl(s.to_decl());
                 if s.needs_raw() {
-                    file = file.decl(s.to_raw_decl()).decl(s.to_as_raw_fun());
+                    file = file.decl(s.to_raw_decl());
+                    if !typed_is_dead {
+                        file = file.decl(s.to_as_raw_fun());
+                    }
+                    // Kept even when the proxy is suppressed: a hoisted
+                    // singleton names the same classes by short name from its
+                    // own raw text (`Class.fromParts(…)`, a `wrap` expression).
                     for p in &s.params {
                         if let Some(fqn) = p.wrap.class_fqn() {
                             file = file.import(fqn.to_string());
