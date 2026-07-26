@@ -365,9 +365,14 @@ fn vec_of_handle_output_folds_kotlin_side() {
         .join("\n");
     let kc: String = kotlin.split_whitespace().collect();
 
-    // A `ZThingFolder<A>` interface is generated, and the wrapper returns a typed
-    // list, allocating the `ArrayList<ZThing>` accumulator on the Kotlin side.
-    assert!(kc.contains("interfaceZThingFolder<A>"), "{kotlin}");
+    // A `ZThingFolderRaw<A>` interface is generated, and the wrapper returns a
+    // typed list, allocating the `ArrayList<ZThing>` accumulator on the Kotlin
+    // side. The fold is FIXED (the hoisted singleton below is its only
+    // implementation), so no typed twin or `asRaw` proxy is emitted — that
+    // surface would be dead public API (#160).
+    assert!(kc.contains("interfaceZThingFolderRaw<A>"), "{kotlin}");
+    assert!(!kc.contains("interfaceZThingFolder<A>"), "{kotlin}");
+    assert!(!kc.contains("ZThingFolder<A>.asRaw"), "{kotlin}");
     assert!(kc.contains("List<ZThing>"), "{kotlin}");
     assert!(kc.contains("ArrayList<ZThing>()"), "{kotlin}");
     // The folder singleton wraps each raw `jlong` element into the typed handle

@@ -419,27 +419,9 @@ public fun interface PayloadBuilder<out R> {
 internal val __PayloadBuilder: PayloadBuilder<Payload> =
 PayloadBuilder { id, seq, value, flag, label -> Payload.fromParts(id, seq, value, flag, label) }
 
-public fun interface PayloadFolder<A> {
-    public fun run(acc: A, element: Payload): A
-}
-
 public fun interface PayloadFolderRaw<A> {
     public fun run(acc: A, id: Long, seq: Int, value: Double, flag: Boolean, label: String?): A
 }
-
-public fun <A> PayloadFolder<A>.asRaw(): PayloadFolderRaw<A> =
-    PayloadFolderRaw<A> {
-        acc,
-        id,
-        seq,
-        value,
-        flag,
-        label ->
-        run(
-            acc,
-            Payload.fromParts(id, seq, value, flag, label)
-        )
-    }
 
 internal object __PayloadFolderRawHolder {
     @JvmField
@@ -447,23 +429,9 @@ internal object __PayloadFolderRawHolder {
     PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
 }
 
-public fun interface StorageFolder<A> {
-    public fun run(acc: A, element: Storage): A
-}
-
 public fun interface StorageFolderRaw<A> {
     public fun run(acc: A, element: Long): A
 }
-
-public fun <A> StorageFolder<A>.asRaw(): StorageFolderRaw<A> =
-    StorageFolderRaw<A> {
-        acc,
-        element ->
-        run(
-            acc,
-            Storage(element)
-        )
-    }
 
 internal object __StorageFolderRawHolder {
     @JvmField
@@ -481,23 +449,9 @@ internal object __StringFolderHolder {
     StringFolder { acc, element -> acc.add(element); acc }
 }
 
-public fun interface u64Folder<A> {
-    public fun run(acc: A, element: ULong): A
-}
-
 public fun interface u64FolderRaw<A> {
     public fun run(acc: A, element: Long): A
 }
-
-public fun <A> u64Folder<A>.asRaw(): u64FolderRaw<A> =
-    u64FolderRaw<A> {
-        acc,
-        element ->
-        run(
-            acc,
-            element.toULong()
-        )
-    }
 
 internal object __u64FolderRawHolder {
     @JvmField
