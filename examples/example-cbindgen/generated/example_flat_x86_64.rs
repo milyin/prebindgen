@@ -90,6 +90,13 @@ pub unsafe extern "C" fn shape_drop(this_: *mut ::core::mem::MaybeUninit<shape_t
     if this_.is_null() {
         return;
     }
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+        );
+    };
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         (*this_).as_ptr() as *const ::core::ffi::c_int,
     );

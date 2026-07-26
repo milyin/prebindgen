@@ -843,13 +843,15 @@ impl Cbindgen {
 
             if registry.output_entry(&ty).is_some() && !drop_arms.is_empty() {
                 let drop_ident = self.destructor_symbol(&ty);
-                let n = e.variants.len() as i64;
                 // The drop is a second C entry point into the same bytes, so it
                 // owes the same tag check as the input converter — `&mut *this_`
                 // on an out-of-range tag would be the very UB that check exists
-                // to prevent. Having nowhere to report to, it ignores the value
-                // (there is no live arm to release), which keeps `_drop` the
-                // always-safe no-op it is everywhere else.
+                // to prevent. It emits that check from the same place, and,
+                // having nowhere to report to, ignores the value (there is no
+                // live arm to release), which keeps `_drop` the always-safe
+                // no-op it is everywhere else.
+                let tag_guard =
+                    self.tag_guard(&cname, e.variants.len(), quote!((*this_)), quote!(return;));
                 items.push(syn::parse_quote!(
                     #[no_mangle]
                     #[allow(non_snake_case, unused_variables)]
@@ -859,11 +861,7 @@ impl Cbindgen {
                         if this_.is_null() {
                             return;
                         }
-                        let __tag: ::core::ffi::c_int =
-                            ::core::ptr::read((*this_).as_ptr() as *const ::core::ffi::c_int);
-                        if !((__tag as i64) >= 0 && (__tag as i64) < #n) {
-                            return;
-                        }
+                        #tag_guard
                         match (*this_).assume_init_mut() {
                             #(#drop_arms)*
                             _ => {}
@@ -985,7 +983,16 @@ impl Cbindgen {
                 quote!(#from => #to,)
             })
             .collect();
-        let tag_guard = self.tag_guard(&cname, e.variants.len());
+        let bad_msg = format!(
+            "invalid tag {{}} for `{cname}` (expected 0..{})",
+            e.variants.len()
+        );
+        let tag_guard = self.tag_guard(
+            &cname,
+            e.variants.len(),
+            quote!(v),
+            quote!(return ::core::result::Result::Err(::std::format!(#bad_msg, __tag));),
+        );
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) unsafe fn #name(
@@ -1008,18 +1015,26 @@ impl Cbindgen {
 
     /// The statements that make a C-supplied `MaybeUninit<mirror>` safe to
     /// `assume_init`: read the leading discriminant as a plain `c_int` and
-    /// reject anything outside `0..variants`. `v` is the `MaybeUninit`
-    /// binding in scope; on rejection the fn returns `Err`.
+    /// reject anything outside `0..variants`.
     ///
-    /// Shared by the input converter; the typed drop performs the same check inline
-    /// (it returns `()` rather than `Result`).
-    fn tag_guard(&self, cname: &syn::Ident, variants: usize) -> TokenStream {
+    /// `slot` is an expression for the `MaybeUninit` in scope and `on_bad` is
+    /// what to do with an out-of-range tag — the **only** thing the two C entry
+    /// points into these bytes differ in (the input converter returns `Err`,
+    /// the typed drop returns `()` and so just bails). Passing that difference
+    /// in, rather than letting the drop repeat the check inline, is what keeps
+    /// the two from drifting apart.
+    fn tag_guard(
+        &self,
+        cname: &syn::Ident,
+        variants: usize,
+        slot: TokenStream,
+        on_bad: TokenStream,
+    ) -> TokenStream {
         let n = variants as i64;
         let bounds_msg = format!(
             "`{cname}`: a #[repr(C)] enum with payload variants must be at least as large as \
              its C `int` discriminant"
         );
-        let bad_msg = format!("invalid tag {{}} for `{cname}` (expected 0..{variants})");
         quote!(
             const _: () = {
                 assert!(
@@ -1029,9 +1044,9 @@ impl Cbindgen {
                 );
             };
             let __tag: ::core::ffi::c_int =
-                ::core::ptr::read(v.as_ptr() as *const ::core::ffi::c_int);
+                ::core::ptr::read(#slot.as_ptr() as *const ::core::ffi::c_int);
             if !((__tag as i64) >= 0 && (__tag as i64) < #n) {
-                return ::core::result::Result::Err(::std::format!(#bad_msg, __tag));
+                #on_bad
             }
         )
     }
@@ -1126,7 +1141,24 @@ impl Cbindgen {
                     ::core::option::Option::Some(#boxed)
                 })
             } else {
-                boxed
+                // A bare `Box<T>` has no null representation, so a NULL slot
+                // cannot be decoded — and it is reachable, not hypothetical:
+                // the typed drop nulls the arm it frees, so a union passed back
+                // in after being dropped arrives here NULL. Same rule as the
+                // tag: report it, never materialise it.
+                let null_msg = format!(
+                    "null payload for `{}` (a non-optional `Box` payload cannot be NULL — the \
+                     union may already have been dropped)",
+                    type_short(&inner)
+                );
+                quote!({
+                    if #b.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_msg),
+                        );
+                    }
+                    #boxed
+                })
             };
         }
         quote!(#b)

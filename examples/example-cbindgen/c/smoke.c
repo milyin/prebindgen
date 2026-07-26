@@ -86,7 +86,12 @@ static void test_each_arm(void) {
 
 /* The union as a data-struct field: out through `drawing_new`, back in through
  * `drawing_get_shape`. The struct has no destructor, so the owning field is
- * released individually — exactly the existing data-struct contract. */
+ * released individually — exactly the existing data-struct contract.
+ *
+ * OWNERSHIP: passing a union by value does NOT transfer its payload. The callee
+ * copies the string contents out, so every union C holds — the argument it
+ * passed and each one it got back — is its own to drop. Each `shape_new_labeled`
+ * below is therefore paired with a `shape_drop`. */
 static void test_struct_field(void) {
     shape_t inner = shape_new_labeled("triangle", Add);
     drawing_t d = drawing_new(7, inner);
@@ -94,16 +99,19 @@ static void test_struct_field(void) {
     CHECK(d.shape.tag == Labeled);
     CHECK(strcmp(d.shape.labeled._0, "triangle") == 0);
 
-    /* Passing by value hands the callee a copy, so the caller still owns the
-     * `char *` in its own `d` — the returned shape carries a fresh block. */
+    /* `d.shape` is a fresh block, not `inner`'s: the argument survives the call
+     * and is still the caller's to release. */
+    CHECK(d.shape.labeled._0 != inner.labeled._0);
+
     shape_t back = drawing_get_shape(d);
     CHECK(back.tag == Labeled);
     CHECK(strcmp(back.labeled._0, "triangle") == 0);
     CHECK(back.labeled._1 == Add);
     shape_drop(&back);
     shape_drop(&d.shape);
+    shape_drop(&inner);
 
-    /* A plain-data arm rides through the field just the same. */
+    /* A plain-data arm rides through the field just the same, and owns nothing. */
     drawing_t plain = drawing_new(1, shape_new_rect(2.0, 5.0));
     shape_t plain_back = drawing_get_shape(plain);
     CHECK(plain_back.tag == Rect);
@@ -162,11 +170,14 @@ static void test_invalid_tag(void) {
     example_free(e);
     e = NULL;
 
-    /* The domain error still comes through the same channel, unchanged. */
-    CHECK(!shape_try_area(shape_new_labeled("hexagon", Add), &out, &e));
+    /* The domain error still comes through the same channel, unchanged. The
+     * argument is by value, so its label block is still ours to release. */
+    shape_t labeled = shape_new_labeled("hexagon", Add);
+    CHECK(!shape_try_area(labeled, &out, &e));
     CHECK(e != NULL);
     CHECK(strstr(e, "no area") != NULL);
     example_free(e);
+    shape_drop(&labeled);
 
     /* `shape_drop` is the other C entry point into these bytes: it checks the
      * tag too, and an out-of-range one is simply nothing to release. */

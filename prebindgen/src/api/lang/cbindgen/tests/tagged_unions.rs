@@ -382,3 +382,62 @@ fn unsupported_payload_is_a_generation_error() {
     };
     assert!(catch(boom));
 }
+
+/// An opaque-pointer payload is a raw pointer on the wire, so a C caller can
+/// leave it NULL — and the typed drop *nulls the arm it frees*, so a union
+/// passed back in after being dropped arrives exactly that way. A bare
+/// `Box<T>` has no null representation, so the decode reports it instead of
+/// constructing an invalid `Box`; the `Option<Box<T>>` form maps NULL to
+/// `None`, which is what that shape is for.
+#[test]
+fn null_opaque_payload_is_reported_not_materialised() {
+    let loc = SourceLocation::default();
+    let e: syn::ItemEnum = syn::parse_quote!(
+        pub enum Slot {
+            Empty,
+            Filled(Box<Blob>),
+            Maybe(Option<Box<Blob>>),
+        }
+    );
+    let make: syn::ItemFn = syn::parse_quote!(
+        pub fn slot_new() -> Slot {
+            unimplemented!()
+        }
+    );
+    let take: syn::ItemFn = syn::parse_quote!(
+        pub fn slot_take(s: Slot) -> u64 {
+            unimplemented!()
+        }
+    );
+    let registry = Registry::<()>::from_items([
+        (syn::Item::Enum(e), loc.clone()),
+        (syn::Item::Fn(make), loc.clone()),
+        (syn::Item::Fn(take), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(example_flat))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .opaque_ptr(syn::parse_quote!(Blob))
+        .tagged_union(syn::parse_quote!(Slot))
+        .function(syn::parse_quote!(slot_new))
+        .function(syn::parse_quote!(slot_take))
+        .panic();
+
+    let src = write(cbindgen, registry, "tagged_union_null_payload");
+    let compact: String = src.split_whitespace().collect();
+
+    // The bare `Box` arm checks before boxing, and names why.
+    assert!(
+        compact.contains("if__f0.is_null(){return::core::result::Result::Err("),
+        "{src}"
+    );
+    assert!(compact.contains("nullpayloadfor`Blob`"), "{src}");
+    // The `Option` arm keeps NULL as a legitimate value.
+    assert!(
+        compact.contains("if__f0.is_null(){::core::option::Option::None}"),
+        "{src}"
+    );
+}
