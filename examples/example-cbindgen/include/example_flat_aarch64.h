@@ -31,6 +31,7 @@ typedef struct calculator_t {
 typedef struct caption_t {
   uint64_t id;
   char *text;
+  bool emphatic;
 } caption_t;
 
 typedef enum shape_t_Tag {
@@ -140,7 +141,7 @@ struct calculator_t *calculator_new_from_str(const char *s, char **e);
 
 char *calculator_to_string(const struct calculator_t *c);
 
-struct caption_t caption_new(uint64_t id, const char *text);
+struct caption_t caption_new(uint64_t id, const char *text, bool emphatic);
 
 struct shape_t drawing_get_shape(struct drawing_t d);
 
@@ -154,6 +155,8 @@ enum inside_foo_t inside_foo_default(void);
 
 int32_t inside_foo_value(enum inside_foo_t x);
 
+bool note_emphatic(struct note_t n);
+
 struct note_t note_new_after(uint64_t millis);
 
 struct note_t note_new_flagged(bool flag);
@@ -162,7 +165,7 @@ struct note_t note_new_silent(void);
 
 struct note_t note_new_sketched(uint64_t id, const char *label);
 
-struct note_t note_new_titled(uint64_t id, const char *text);
+struct note_t note_new_titled(uint64_t id, const char *text, bool emphatic);
 
 uint64_t note_value(struct note_t n);
 

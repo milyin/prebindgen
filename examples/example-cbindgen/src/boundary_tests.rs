@@ -20,8 +20,9 @@ use core::{
 };
 
 use crate::{
-    calculator_apply, calculator_drop, calculator_get_value, calculator_new, example_free,
-    inside_foo_default, inside_foo_value, note_new_flagged, note_t, note_value, operation_t,
+    calculator_apply, calculator_drop, calculator_get_value, calculator_new, caption_t,
+    example_free, inside_foo_default, inside_foo_value, note_drop, note_emphatic, note_new_flagged,
+    note_new_titled, note_t, note_value, operation_t,
 };
 
 /// The wire value a C caller passing `value` produces — including a `value`
@@ -147,14 +148,67 @@ unsafe fn raw_flagged(byte: u8) -> MaybeUninit<note_t> {
 fn out_of_domain_bool_payload_is_normalised_not_materialised() {
     unsafe {
         // Rust's own `true`/`false` round trip.
-        assert_eq!(note_value(note_new_flagged(true)), 1);
-        assert_eq!(note_value(note_new_flagged(false)), 0);
+        assert_eq!(note_value(note_new_flagged(MaybeUninit::new(true))), 1);
+        assert_eq!(note_value(note_new_flagged(MaybeUninit::new(false))), 0);
         // The hand-written wire agrees with the generated encoder.
         assert_eq!(note_value(raw_flagged(0)), 0);
         assert_eq!(note_value(raw_flagged(1)), 1);
         // Bytes no Rust `bool` may hold: accepted, normalised to `true`.
         assert_eq!(note_value(raw_flagged(2)), 1);
         assert_eq!(note_value(raw_flagged(0xff)), 1);
+    }
+}
+
+/// The wire a C caller produces for a plain `bool` **parameter** with `byte` in
+/// the slot — including a byte no Rust `bool` may hold.
+unsafe fn raw_bool_arg(byte: u8) -> MaybeUninit<bool> {
+    let mut slot = MaybeUninit::<bool>::uninit();
+    ptr::write(slot.as_mut_ptr().cast::<u8>(), byte);
+    slot
+}
+
+/// #170 instance 1 — the broadest one: a plain `bool` **parameter**. It shares
+/// the payload's wire and normalising read, so the byte a caller supplies never
+/// becomes a Rust `bool` unchecked. The C prototype is untouched: cbindgen
+/// renders `MaybeUninit<bool>` as `bool`, so this is still `note_new_flagged(bool)`
+/// in the header.
+#[test]
+fn out_of_domain_bool_parameter_is_normalised_not_materialised() {
+    unsafe {
+        assert_eq!(note_value(note_new_flagged(raw_bool_arg(0))), 0);
+        assert_eq!(note_value(note_new_flagged(raw_bool_arg(1))), 1);
+        assert_eq!(note_value(note_new_flagged(raw_bool_arg(2))), 1);
+        assert_eq!(note_value(note_new_flagged(raw_bool_arg(0xff))), 1);
+    }
+}
+
+/// #170 instance 2 — a `bool` field of a `data_struct`, reached through a
+/// tagged-union payload. `caption_t` is built by the generated encoder and then
+/// its `emphatic` slot is overwritten the way a C caller can (a `memcpy`, a
+/// union, a struct read off the wire); the decode has to normalise it one level
+/// down, inside `__cbg_in_Caption`. This is what makes the union's "no invalid
+/// value is ever materialised" invariant transitive.
+#[test]
+fn out_of_domain_bool_data_struct_field_is_normalised_not_materialised() {
+    unsafe {
+        let text = c"chapter one";
+        for (byte, expected) in [(0u8, false), (1, true), (2, true), (0xff, true)] {
+            let mut note = note_new_titled(7, text.as_ptr(), raw_bool_arg(0));
+            // Overwrite the payload's `bool` field in place, through raw bytes.
+            // The payload begins at the union's alignment (see `raw_flagged`).
+            let caption = note
+                .as_mut_ptr()
+                .cast::<u8>()
+                .add(align_of::<note_t>())
+                .cast::<caption_t>();
+            ptr::write(ptr::addr_of_mut!((*caption).emphatic).cast::<u8>(), byte);
+
+            // A union crosses BY VALUE, so the callee copies the label out and
+            // the block stays ours — the same contract `smoke.c` relies on.
+            assert_eq!(note_emphatic(ptr::read(&note)), expected, "byte {byte:#x}");
+            assert_eq!(note_value(ptr::read(&note)), 7);
+            note_drop(&mut note);
+        }
     }
 }
 

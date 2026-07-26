@@ -161,6 +161,7 @@ fn generate_ffi_bindings() -> PathBuf {
         // `Note` crossing IN (tag validated, so fallible without a `Result`),
         // and its `&str`-taking constructor.
         pq!(note_value),
+        pq!(note_emphatic),
         pq!(note_new_titled),
         pq!(note_new_sketched),
         pq!(caption_new),

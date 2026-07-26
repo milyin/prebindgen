@@ -18,6 +18,7 @@ impl Cbindgen {
             .or_else(|| self.in_tagged_union(ty, registry))
             .or_else(|| self.in_string(ty))
             .or_else(|| self.in_str(ty))
+            .or_else(|| self.in_bool(ty))
             .or_else(|| self.in_scalar(ty))
             .or_else(|| self.in_wrappers(ty, registry))
     }

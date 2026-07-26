@@ -166,6 +166,11 @@ struct ValueOpaqueCfg {
     /// [`Cbindgen::repr_c_struct`]; `false` for `opaque_data_struct` /
     /// `opaque_owned_struct` (counterpart defined elsewhere).
     generate_mirror: bool,
+    /// Opt-out of the restricted-validity field audit (#170 instance 3, #158
+    /// instance 3). Set by [`Cbindgen::assume_c_field_validity`]. See
+    /// [`Cbindgen::restricted_validity_field`] for what the audit rejects and
+    /// why the escape hatch exists.
+    assume_c_field_validity: bool,
     /// Name config (`.base_name()` override; default naming via the manglers).
     cfg: TypeCfg,
 }
@@ -486,6 +491,41 @@ fn is_bool(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "bool").unwrap_or(false)
 }
 
+/// The C wire for a `bool` in any position C can write: `MaybeUninit<bool>`.
+///
+/// `bool` is the one FFI-safe scalar with a restricted domain — only `0` and
+/// `1` are valid — so a byte a C caller supplies may not be **held** in a Rust
+/// `bool` at all, let alone read from one. `MaybeUninit<bool>` holds any byte
+/// legally, has `bool`'s size and alignment (so a layout-preserving mirror
+/// still transmutes), and is invisible in the header: cbindgen simplifies
+/// `MaybeUninit<T>` to `T`, so the C prototype keeps saying `bool`.
+///
+/// The counterpart read is [`bool_in_expr`]. Together they are the single
+/// policy for #170; every position that lets C hand over a `bool` — a
+/// parameter, a `data_struct` field, a tagged-union payload — uses this pair
+/// and nothing else.
+fn bool_wire() -> syn::Type {
+    syn::parse_quote!(::core::mem::MaybeUninit<bool>)
+}
+
+/// Read a [`bool_wire`] slot the way C converts to `_Bool`: nonzero is true.
+///
+/// `access` must evaluate to a `MaybeUninit<bool>` place. The byte is read out
+/// as a `u8` — legal for any bit pattern — so no invalid `bool` ever exists.
+/// Unlike an enum discriminant there is nothing to reject: every byte has an
+/// unambiguous C meaning.
+///
+/// The read is `unsafe`; every caller emits it inside an `unsafe fn` body.
+fn bool_in_expr(access: TokenStream) -> TokenStream {
+    quote!(::core::ptr::read(#access.as_ptr() as *const u8) != 0)
+}
+
+/// Wrap a Rust `bool` for a [`bool_wire`] slot. Rust only ever writes `0`/`1`,
+/// so the outbound direction is a pure wrap.
+fn bool_out_expr(value: TokenStream) -> TokenStream {
+    quote!(::core::mem::MaybeUninit::new(#value))
+}
+
 /// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
 /// (`bool`, the fixed-width / pointer-width integers, and floats).
 fn is_scalar(ty: &syn::Type) -> bool {
@@ -628,11 +668,17 @@ fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {
     }
 }
 
-/// C-ABI wire type for a struct field. `String` → `*mut c_char`; FFI-safe
-/// scalars pass through. `None` for anything else (unsupported this increment).
+/// C-ABI wire type for a struct field. `String` → `*mut c_char`; `bool` →
+/// [`bool_wire`]; the remaining FFI-safe scalars pass through. `None` for
+/// anything else (unsupported this increment).
 fn c_field_wire(ty: &syn::Type) -> Option<syn::Type> {
     if is_string(ty) {
         return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
+    }
+    // #170 instance 2: the field arrives from C by value, so it may not be a
+    // Rust `bool` until the byte has been normalised.
+    if is_bool(ty) {
+        return Some(bool_wire());
     }
     if is_scalar(ty) {
         return Some(ty.clone());

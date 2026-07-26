@@ -73,7 +73,16 @@ fn generate_ffi_bindings() -> PathBuf {
     // consume (`storage_put_by_take`) reads the value out through a `*mut payload_t` and
     // nulls the moved-out `label` in place, making the caller's later free a no-op (no
     // `.owned()` modifier, no `Default` requirement — the `label` is nullable).
-    cbindgen = cbindgen.repr_c_struct(pq!(Payload));
+    //
+    // `.assume_c_field_validity()` acknowledges the one gap the mirror policy
+    // cannot close: `Payload::flag` is a `bool`, and the whole-struct
+    // reinterpret gives no hook to normalise a byte outside `{0, 1}` that a C
+    // caller wrote (#170 instance 3). This benchmark's C side writes the field
+    // through `_Bool`, so it is in-domain by construction; a real binding should
+    // prefer a `data_struct` field, which normalises per field.
+    cbindgen = cbindgen
+        .repr_c_struct(pq!(Payload))
+        .assume_c_field_validity();
 
     // The `&Payload` callback signature -> a `closure_payload_t` closure struct
     // whose `call` takes a `const payload_t *` (zero-copy borrow). `.base_name`

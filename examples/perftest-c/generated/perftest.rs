@@ -333,8 +333,8 @@ pub(crate) unsafe fn __cbg_in___str<'a>(
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_bool(v: bool) -> bool {
-    v
+pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
+    ::core::ptr::read(v.as_ptr() as *const u8) != 0
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_closure_payload_t(

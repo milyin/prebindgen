@@ -52,6 +52,7 @@ pub unsafe extern "C" fn calculator_drop(this_: *mut calculator_t) {
 pub struct caption_t {
     pub id: u64,
     pub text: *mut ::core::ffi::c_char,
+    pub emphatic: ::core::mem::MaybeUninit<bool>,
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -187,6 +188,7 @@ pub(crate) unsafe fn __cbg_in_Caption(v: caption_t) -> example_flat::Caption {
         } else {
             ::std::ffi::CStr::from_ptr(v.text).to_string_lossy().into_owned()
         },
+        emphatic: ::core::ptr::read(v.emphatic.as_ptr() as *const u8) != 0,
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -412,8 +414,8 @@ pub(crate) unsafe fn __cbg_in___str<'a>(
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_bool(v: bool) -> bool {
-    v
+pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
+    ::core::ptr::read(v.as_ptr() as *const u8) != 0
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_closure_value_t(
@@ -463,6 +465,7 @@ pub(crate) fn __cbg_out_Caption(v: example_flat::Caption) -> caption_t {
     caption_t {
         id: v.id,
         text: __cbg_alloc_cstr(v.text),
+        emphatic: ::core::mem::MaybeUninit::new(v.emphatic),
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -776,6 +779,7 @@ pub unsafe extern "C" fn calculator_to_string(
 pub unsafe extern "C" fn caption_new(
     id: u64,
     text: *const ::core::ffi::c_char,
+    emphatic: ::core::mem::MaybeUninit<bool>,
 ) -> caption_t {
     let id = __cbg_in_u64(id);
     let text = match __cbg_in___str(text) {
@@ -784,7 +788,8 @@ pub unsafe extern "C" fn caption_new(
             panic!("{}", __msg);
         }
     };
-    let __v = example_flat::caption_new(id, text);
+    let emphatic = __cbg_in_bool(emphatic);
+    let __v = example_flat::caption_new(id, text, emphatic);
     let __ret: caption_t;
     __ret = __cbg_out_Caption(__v);
     __ret
@@ -867,6 +872,20 @@ pub unsafe extern "C" fn inside_foo_value(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn note_emphatic(n: ::core::mem::MaybeUninit<note_t>) -> bool {
+    let n = match __cbg_in_Note(n) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::note_emphatic(n);
+    let __ret: bool;
+    __ret = __cbg_out_bool(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn note_new_after(
     millis: u64,
 ) -> ::core::mem::MaybeUninit<note_t> {
@@ -879,7 +898,7 @@ pub unsafe extern "C" fn note_new_after(
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn note_new_flagged(
-    flag: bool,
+    flag: ::core::mem::MaybeUninit<bool>,
 ) -> ::core::mem::MaybeUninit<note_t> {
     let flag = __cbg_in_bool(flag);
     let __v = example_flat::note_new_flagged(flag);
@@ -918,6 +937,7 @@ pub unsafe extern "C" fn note_new_sketched(
 pub unsafe extern "C" fn note_new_titled(
     id: u64,
     text: *const ::core::ffi::c_char,
+    emphatic: ::core::mem::MaybeUninit<bool>,
 ) -> ::core::mem::MaybeUninit<note_t> {
     let id = __cbg_in_u64(id);
     let text = match __cbg_in___str(text) {
@@ -926,7 +946,8 @@ pub unsafe extern "C" fn note_new_titled(
             panic!("{}", __msg);
         }
     };
-    let __v = example_flat::note_new_titled(id, text);
+    let emphatic = __cbg_in_bool(emphatic);
+    let __v = example_flat::note_new_titled(id, text, emphatic);
     let __ret: ::core::mem::MaybeUninit<note_t>;
     __ret = __cbg_out_Note(__v);
     __ret

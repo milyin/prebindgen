@@ -77,9 +77,9 @@ impl Cbindgen {
     /// they do too. That is what makes the mirror's tag the *only* thing
     /// [`Cbindgen::in_tagged_union`] has to validate before `assume_init`.
     ///
-    /// (A `bool` reached through a nested `data_struct` payload is **not**
-    /// covered here — see #170. That is the pre-existing `c_field_wire` policy,
-    /// which a plain `bool` parameter shares.)
+    /// A `bool` reached through a nested `data_struct` payload is covered by
+    /// the same [`bool_wire`] policy, which [`c_field_wire`] and the plain
+    /// `bool` parameter now share (#170).
     pub(super) fn payload_field_wire(
         &self,
         fty: &syn::Type,
@@ -98,11 +98,9 @@ impl Cbindgen {
         // `bool` is the one scalar with a restricted domain: `2` is a byte a C
         // caller can write into the union and NOT a Rust `bool`, so holding it
         // in the mirror is the same UB an out-of-range discriminant is. Same
-        // remedy, and invisible in C for the same reason (cbindgen simplifies
-        // `MaybeUninit<T>` to `T`); the byte is normalised C-style — nonzero is
-        // true — in `payload_in_expr`.
+        // remedy everywhere C writes a `bool` — see `bool_wire`.
         if is_bool(fty) {
-            return Ok(syn::parse_quote!(::core::mem::MaybeUninit<bool>));
+            return Ok(bool_wire());
         }
         // A `Vec` payload needs TWO C wires (pointer + length) and one union
         // field can carry only one, so its length would be silently dropped.
@@ -325,6 +323,12 @@ impl Cbindgen {
     /// [`Cbindgen::opaque_ptr`]) becomes `*mut t_t`. The whole-struct `Transmute`
     /// (size/align-equal, asserted) then reinterprets each source field's bits into
     /// this wire. `None` ⇒ the field type is unsupported in a `repr_c_struct`.
+    ///
+    /// Note what this policy cannot express: the wire *is* the source field's
+    /// type, so a field whose Rust type has restricted validity is reinterpreted
+    /// from C's bytes with no chance to check them. That gap is audited
+    /// separately by [`Self::restricted_validity_field`] — this function keeps
+    /// answering what the layout is.
     pub(super) fn mirror_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
         if is_scalar(fty) {
             return Some(fty.clone());
@@ -347,6 +351,73 @@ impl Cbindgen {
             }
         }
         None
+    }
+
+    /// Why a `repr_c_struct` mirror field is **not** safe to reinterpret from
+    /// C-supplied bytes, or `None` when every bit pattern of its wire is a valid
+    /// value of the source field's type.
+    ///
+    /// Integers, floats and raw pointers hold any bits legally (holding a
+    /// garbage pointer is sound; dereferencing it is the caller's contract).
+    /// Two Rust types do not: `bool`, whose domain is `0`/`1` (#170 instance 3),
+    /// and a declared `enum_type`, whose domain is the declared discriminants
+    /// (#158 instance 3).
+    ///
+    /// The other positions these types cross — a parameter, a `data_struct`
+    /// field, a tagged-union payload — all go through a *per-value* converter,
+    /// so each has a hook: `bool` normalises through [`bool_wire`], an enum
+    /// validates its discriminant in `in_enum`. A `repr_c_struct` has no such
+    /// hook: one whole-struct `Transmute` reinterprets the mirror into the
+    /// source type, and by the time any generated code could look, the invalid
+    /// value already exists. Wrapping the mirror field in `MaybeUninit` moves
+    /// the problem rather than solving it — the transmute's *output* still has
+    /// the real field.
+    pub(super) fn restricted_validity_field(&self, fty: &syn::Type) -> Option<&'static str> {
+        if is_bool(fty) {
+            return Some("`bool` — only `0` and `1` are valid");
+        }
+        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+            return Some("a declared `enum_type` — only its declared discriminants are valid");
+        }
+        None
+    }
+
+    /// The audit of [`Self::restricted_validity_field`] over one
+    /// `repr_c_struct`'s mirror: the offending `(field, reason)` pairs, in
+    /// declaration order. Empty ⇒ the whole mirror is safe to reinterpret.
+    pub(super) fn restricted_validity_fields(
+        &self,
+        registry: &Registry<()>,
+        ty: &syn::Type,
+    ) -> Vec<(syn::Ident, &'static str)> {
+        self.struct_fields(registry, ty)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(fname, fty)| {
+                self.restricted_validity_field(&fty)
+                    .map(|reason| (fname, reason))
+            })
+            .collect()
+    }
+
+    /// Whether C can hand this type's mirror **back** to Rust. Only then can a
+    /// caller-written byte reach a reinterpret, so only then does
+    /// [`Self::restricted_validity_fields`] describe a live hazard.
+    ///
+    /// Every inbound position keys its own converter, so the four spellings are
+    /// checked directly rather than inferred from the base type's entry.
+    pub(super) fn crosses_in_by_reinterpret(
+        &self,
+        registry: &Registry<()>,
+        ty: &syn::Type,
+    ) -> bool {
+        let forms: [syn::Type; 4] = [
+            ty.clone(),
+            syn::parse_quote!(&#ty),
+            syn::parse_quote!(&mut #ty),
+            syn::parse_quote!(&[#ty]),
+        ];
+        forms.iter().any(|f| registry.input_entry(f).is_some())
     }
 
     /// Exported `#[no_mangle]` symbol for a declared function:
