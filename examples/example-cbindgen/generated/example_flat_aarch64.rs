@@ -101,20 +101,68 @@ pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_InsideFoo(v: inside_foo_t) -> example_flat::InsideFoo {
-    match v {
-        inside_foo_t::DouddleDee => example_flat::InsideFoo::DouddleDee,
-        inside_foo_t::DouddleDum => example_flat::InsideFoo::DouddleDum,
+pub(crate) unsafe fn __cbg_in_InsideFoo(
+    v: ::core::mem::MaybeUninit<inside_foo_t>,
+) -> ::core::result::Result<example_flat::InsideFoo, ::std::string::String> {
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < inside_foo_t > () == ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`inside_foo_t`: a #[repr(C)] enum must have the size of a C `int`"
+        );
+        assert!(
+            ::core::mem::align_of:: < inside_foo_t > () == ::core::mem::align_of:: <
+            ::core::ffi::c_int > (),
+            "`inside_foo_t`: a #[repr(C)] enum must have the alignment of a C `int`"
+        );
+    };
+    let __raw: ::core::ffi::c_int = ::core::ptr::read(
+        v.as_ptr() as *const ::core::ffi::c_int,
+    );
+    if __raw == inside_foo_t::DouddleDee as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::InsideFoo::DouddleDee);
     }
+    if __raw == inside_foo_t::DouddleDum as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::InsideFoo::DouddleDum);
+    }
+    ::core::result::Result::Err(
+        ::std::format!("invalid discriminant {} for `inside_foo_t`", __raw),
+    )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_Operation(v: operation_t) -> example_flat::Operation {
-    match v {
-        operation_t::Add => example_flat::Operation::Add,
-        operation_t::Sub => example_flat::Operation::Sub,
-        operation_t::Mul => example_flat::Operation::Mul,
-        operation_t::Div => example_flat::Operation::Div,
+pub(crate) unsafe fn __cbg_in_Operation(
+    v: ::core::mem::MaybeUninit<operation_t>,
+) -> ::core::result::Result<example_flat::Operation, ::std::string::String> {
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < operation_t > () == ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`operation_t`: a #[repr(C)] enum must have the size of a C `int`"
+        );
+        assert!(
+            ::core::mem::align_of:: < operation_t > () == ::core::mem::align_of:: <
+            ::core::ffi::c_int > (),
+            "`operation_t`: a #[repr(C)] enum must have the alignment of a C `int`"
+        );
+    };
+    let __raw: ::core::ffi::c_int = ::core::ptr::read(
+        v.as_ptr() as *const ::core::ffi::c_int,
+    );
+    if __raw == operation_t::Add as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Add);
     }
+    if __raw == operation_t::Sub as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Sub);
+    }
+    if __raw == operation_t::Mul as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Mul);
+    }
+    if __raw == operation_t::Div as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Div);
+    }
+    ::core::result::Result::Err(
+        ::std::format!("invalid discriminant {} for `operation_t`", __raw),
+    )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in___Calculator<'a>(
@@ -259,7 +307,7 @@ pub(crate) fn __cbg_result_Result___f64___Error__() {}
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn calculator_apply(
     c: *mut calculator_t,
-    op: operation_t,
+    op: ::core::mem::MaybeUninit<operation_t>,
     operand: f64,
     out: *mut f64,
     e: *mut *mut ::core::ffi::c_char,
@@ -277,7 +325,19 @@ pub unsafe extern "C" fn calculator_apply(
             return false;
         }
     };
-    let op = __cbg_in_Operation(op);
+    let op = match __cbg_in_Operation(op) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(
+                    <example_flat::Error as ::core::convert::From<
+                        ::std::string::String,
+                    >>::from(__msg),
+                );
+            }
+            return false;
+        }
+    };
     let operand = __cbg_in_f64(operand);
     match example_flat::calculator_apply(c, op, operand) {
         ::core::result::Result::Ok(__v) => {
@@ -471,8 +531,15 @@ pub unsafe extern "C" fn inside_foo_default() -> inside_foo_t {
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-pub unsafe extern "C" fn inside_foo_value(x: inside_foo_t) -> i32 {
-    let x = __cbg_in_InsideFoo(x);
+pub unsafe extern "C" fn inside_foo_value(
+    x: ::core::mem::MaybeUninit<inside_foo_t>,
+) -> i32 {
+    let x = match __cbg_in_InsideFoo(x) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
     let __v = example_flat::inside_foo_value(x);
     let __ret: i32;
     __ret = __cbg_out_i32(__v);

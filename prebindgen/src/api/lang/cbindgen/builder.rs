@@ -144,7 +144,9 @@ impl Cbindgen {
 
     /// Allow the most recently declared [`Self::function`] to `panic!` on an
     /// internal error message. Required when a non-`Result` function has a
-    /// fallible input (otherwise that's a build error).
+    /// fallible input (otherwise that's a build error) — a null borrow, an
+    /// invalid `String`, or an out-of-range discriminant for a declared
+    /// [`Self::enum_type`].
     pub fn panic(mut self) -> Self {
         match &self.current {
             Some(CurrentDecl::Function(ident)) => {
@@ -395,6 +397,11 @@ impl Cbindgen {
 
     /// Declare a C-like (fieldless) enum type to convert. (Mirrors `JniExt`'s
     /// `enum_class`.)
+    ///
+    /// Crossing **into** Rust, the caller's discriminant is validated before any
+    /// Rust enum is built — an out-of-range one is a fallible-input error, so a
+    /// non-`Result` function taking this enum by value needs [`Self::panic`].
+    /// See the module docs for why the wire is `MaybeUninit<mirror>`.
     pub fn enum_type(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         assert!(

@@ -26,6 +26,20 @@
 //!   `#[repr(C)]` struct whose fields are mapped to C-ABI wire types
 //!   (`String` → `*mut c_char`). No per-struct destructor — each `char*` field
 //!   is released individually via the [`Cbindgen::free_memory_function`].
+//! * **Enum type** (declared with [`Cbindgen::enum_type`]): a fieldless enum,
+//!   mirrored as a `#[repr(C)]` enum that cbindgen renders as the C enum.
+//!   Rust → C hands over the mirror directly (Rust only ever builds declared
+//!   variants). C → Rust must **not** do the reverse: a C `enum` is an `int` at
+//!   the ABI, so materialising a caller-supplied discriminant as a Rust enum is
+//!   undefined behaviour when it matches no variant — before any `match` could
+//!   check it. An enum parameter is therefore taken as
+//!   `MaybeUninit<mirror>` — the same ABI and the same C spelling (cbindgen
+//!   renders `MaybeUninit<T>` as `T`), but legal to hold any bit pattern — and
+//!   its raw `c_int` is validated against the mirror's variants before the Rust
+//!   value is built. An unmatched value is a fallible-input error (see below),
+//!   so a function taking an enum by value needs either a `Result` return or
+//!   [`Cbindgen::panic`]. This relies on cbindgen's C rendering; the `C++`
+//!   language mode is not supported.
 //! * **Direct `String` output**: a bare `char *` — a `malloc`'d, null-terminated
 //!   raw block (no wrapper struct), freed via the `free_memory_function`.
 //! * **[`Cbindgen::free_memory_function`]**: the single, type-agnostic raw memory
@@ -50,7 +64,8 @@
 //! must additionally implement `From<String>`.
 //!
 //! Built-in input converters that can fail (a `String` arg, an opaque handle
-//! passed by value) are **error-type-agnostic**: they return `Result<_, String>`
+//! passed by value, a declared enum whose discriminant the caller chose) are
+//! **error-type-agnostic**: they return `Result<_, String>`
 //! where the `Err` is just a message. The generated wrapper for a `Result<T, E>`
 //! function converts such a message into *that function's* `E` via
 //! `<E as From<String>>::from(msg)`; the function's own `Err(E)` is marshalled

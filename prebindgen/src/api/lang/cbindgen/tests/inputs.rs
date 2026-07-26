@@ -200,6 +200,123 @@ fn relation_to_lowering() {
     );
 }
 
+/// A declared `enum_type` crossing **C → Rust** never materialises the
+/// caller-supplied discriminant (#158): the wire is `MaybeUninit<mirror>`,
+/// which has the mirror's ABI (and the mirror's C spelling — cbindgen renders
+/// `MaybeUninit<T>` as `T`) but may legally hold any bit pattern. The raw
+/// `c_int` is compared against the mirror's own variants, so an unmatched value
+/// reaches the error channel instead of becoming an invalid Rust enum.
+#[test]
+fn enum_input_validates_the_discriminant() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_keyexpr_require(level: SetIntersectionLevel) -> Result<(), Error> {
+            unimplemented!()
+        }
+    );
+    let enum_item: syn::ItemEnum = syn::parse_quote!(
+        pub enum SetIntersectionLevel {
+            Disjoint = 0,
+            Equals = LEVELS - 1,
+        }
+    );
+
+    let registry = Registry::<()>::from_items([
+        (syn::Item::Fn(func), loc.clone()),
+        (syn::Item::Enum(enum_item), loc.clone()),
+        (syn::Item::Struct(error_struct()), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .data_struct(syn::parse_quote!(Error))
+        .base_name("z_error")
+        .error()
+        .enum_type(syn::parse_quote!(SetIntersectionLevel))
+        .base_name("z_intersection")
+        .function(syn::parse_quote!(z_keyexpr_require));
+
+    let src = write(cbindgen, registry, "enum_input_validated");
+    let compact: String = src.split_whitespace().collect();
+
+    // The wire is the bit-pattern-agnostic wrapper, in the extern and in the
+    // converter — never the mirror enum itself.
+    assert!(
+        compact.contains("level:::core::mem::MaybeUninit<z_intersection>"),
+        "{src}"
+    );
+    assert!(
+        !compact.contains("fn__cbg_in_SetIntersectionLevel(v:z_intersection)"),
+        "{src}"
+    );
+    // The discriminant is read as a plain integer and compared against the
+    // mirror's variants — a `const`-driven one needs no evaluation here.
+    assert!(
+        compact.contains(
+            "let__raw:::core::ffi::c_int=::core::ptr::read(v.as_ptr()as*const::core::ffi::c_int"
+        ),
+        "{src}"
+    );
+    assert!(
+        compact.contains("if__raw==z_intersection::Equalsas::core::ffi::c_int"),
+        "{src}"
+    );
+    assert!(compact.contains("Equals=LEVELS-1"), "{src}");
+    // Unmatched ⇒ a binding error, routed to the `char **e` channel.
+    assert!(
+        compact.contains("invaliddiscriminant{}for`z_intersection`"),
+        "{src}"
+    );
+    assert!(compact.contains("if!e.is_null()"), "{src}");
+}
+
+/// The same enum input in a function with **no** `Result` channel is a fallible
+/// decode with nowhere to report, so it needs `.panic()` — the rule null borrows
+/// already follow.
+#[test]
+fn enum_input_without_error_channel_requires_panic() {
+    let enum_item: syn::ItemEnum = syn::parse_quote!(
+        pub enum SetIntersectionLevel {
+            Disjoint = 0,
+            Equals = 1,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_intersection_value(level: SetIntersectionLevel) -> i32 {
+            unimplemented!()
+        }
+    );
+    let build = |allow_panic: bool| {
+        let loc = SourceLocation::default();
+        let registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func.clone()), loc.clone()),
+            (syn::Item::Enum(enum_item.clone()), loc.clone()),
+        ])
+        .expect("index items");
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .enum_type(syn::parse_quote!(SetIntersectionLevel))
+            .base_name("z_intersection")
+            .function(syn::parse_quote!(z_intersection_value));
+        let cbindgen = if allow_panic {
+            cbindgen.panic()
+        } else {
+            cbindgen
+        };
+        write(cbindgen, registry, "enum_input_panic")
+    };
+
+    assert!(catch(|| {
+        build(false);
+    }));
+
+    let src = build(true);
+    let compact: String = src.split_whitespace().collect();
+    assert!(compact.contains("panic!("), "{src}");
+}
+
 /// A mutable borrow of an opaque handle lowers to `*mut <handle>` and
 /// decodes back to `&mut T`.
 #[test]

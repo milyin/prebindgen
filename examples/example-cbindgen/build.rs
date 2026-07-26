@@ -87,8 +87,10 @@ fn generate_ffi_bindings() -> PathBuf {
         .base_name("value");
 
     // Constructors / `Result`-returning ops (fallible inputs route through the
-    // error out-param), plus the infallible by-value `Foo`/`InsideFoo` accessors —
-    // none need `.panic()`.
+    // error out-param), plus the infallible by-value `Foo` accessors and the
+    // `InsideFoo` producer — none need `.panic()`. `calculator_apply` takes an
+    // `Operation` by value, so its `char **e` also carries an invalid-discriminant
+    // rejection (see `inside_foo_value` below).
     for function in [
         pq!(calculator_new),
         pq!(calculator_new_from_str),
@@ -96,7 +98,6 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(foo_new),
         pq!(foo_get_id),
         pq!(inside_foo_default),
-        pq!(inside_foo_value),
     ] {
         cbindgen = cbindgen.function(function);
     }
@@ -109,8 +110,12 @@ fn generate_ffi_bindings() -> PathBuf {
 
     // Borrow-only accessors / predicates / the callback driver: they have fallible
     // (null-checked) borrow inputs but no `Result` channel, so `.panic()` lets the
-    // wrapper abort on a null handle.
+    // wrapper abort on a null handle. `inside_foo_value` joins them for the same
+    // reason with a different fallible input: a C enum is an `int` at the ABI, so
+    // its discriminant is validated on the way in (never materialised unchecked),
+    // and with no `char **e` to report an out-of-range one it aborts.
     for function in [
+        pq!(inside_foo_value),
         pq!(calculator_new_clone),
         pq!(calculator_get_value),
         pq!(calculator_get_count),

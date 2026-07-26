@@ -20,6 +20,11 @@ include!(concat!(
     "/generated/example_flat_aarch64.rs"
 ));
 
+// Hand-written tests calling the generated C ABI the way a C caller would —
+// including with an enum discriminant no variant has.
+#[cfg(test)]
+mod boundary_tests;
+
 // Convenient alternative when you DON'T want to commit generated files to git:
 // build.rs always also writes the current target's bindings to OUT_DIR under a
 // stable name, so this single line works for any target (the file just isn't kept

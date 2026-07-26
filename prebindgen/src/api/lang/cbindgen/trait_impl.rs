@@ -221,7 +221,25 @@ impl Cbindgen {
         })
     }
 
-    /// Enum input: `match` the C enum back to the source enum — infallible.
+    /// Enum input: read the C-supplied discriminant as a plain integer,
+    /// **validate** it, then build the source enum — fallible.
+    ///
+    /// A C `enum` is an `int` at the ABI, so nothing stops a caller passing a
+    /// value no variant has. Taking the mirror `#[repr(C)]` enum by value would
+    /// **materialise** that invalid discriminant at the boundary — undefined
+    /// behaviour *before* any `match` in this converter could inspect it, which
+    /// is why validating a already-materialised enum is not a fix (#158).
+    ///
+    /// So the wire is [`::core::mem::MaybeUninit<mirror>`], which is
+    /// `#[repr(transparent)]` over the mirror (identical ABI, identical C
+    /// spelling — cbindgen renders `MaybeUninit<T>` as `T`) and, unlike the
+    /// mirror itself, may legally hold **any** bit pattern. The discriminant is
+    /// then read out as `c_int` — the representation a `#[repr(C)]` fieldless
+    /// enum has by definition, asserted below — and compared against the
+    /// mirror's own variants, so a `const`- or `cfg`-driven discriminant needs
+    /// no generator-side evaluation. An unmatched value is a binding error
+    /// through the wrapper's error channel; no Rust enum is ever constructed
+    /// from it.
     pub(crate) fn in_enum(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.enums.contains_key(&key) {
@@ -232,19 +250,45 @@ impl Cbindgen {
         let name = Self::in_name(ty);
         let cname = self.c_type_ident(ty);
         let src = self.src_ty(ty);
+        let cname_str = cname.to_string();
         let arms = e.variants.iter().map(|v| {
             let id = &v.ident;
-            quote!(#cname::#id => #src::#id,)
+            quote!(
+                if __raw == #cname::#id as ::core::ffi::c_int {
+                    return ::core::result::Result::Ok(#src::#id);
+                }
+            )
         });
+        let bad_msg = format!("invalid discriminant {{}} for `{cname_str}`");
+        let size_msg = format!("`{cname_str}`: a #[repr(C)] enum must have the size of a C `int`");
+        let align_msg =
+            format!("`{cname_str}`: a #[repr(C)] enum must have the alignment of a C `int`");
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) fn #name(v: #cname) -> #src {
-                match v { #(#arms)* }
+            pub(crate) unsafe fn #name(
+                v: ::core::mem::MaybeUninit<#cname>,
+            ) -> ::core::result::Result<#src, ::std::string::String> {
+                const _: () = {
+                    assert!(
+                        ::core::mem::size_of::<#cname>()
+                            == ::core::mem::size_of::<::core::ffi::c_int>(),
+                        #size_msg
+                    );
+                    assert!(
+                        ::core::mem::align_of::<#cname>()
+                            == ::core::mem::align_of::<::core::ffi::c_int>(),
+                        #align_msg
+                    );
+                };
+                let __raw: ::core::ffi::c_int =
+                    ::core::ptr::read(v.as_ptr() as *const ::core::ffi::c_int);
+                #(#arms)*
+                ::core::result::Result::Err(::std::format!(#bad_msg, __raw))
             }
         );
         Some(ConverterImpl {
             subs: vec![],
-            destination: syn::parse_quote!(#cname),
+            destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
             function,
             pre_stages: vec![],
             niches: Niches::empty(),
