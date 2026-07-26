@@ -121,6 +121,19 @@ pub fn shape_area(s: Shape) -> f64 {
     }
 }
 
+/// Area of a shape, reporting the alternative that has none through the error
+/// channel — the sum in parameter position on a **fallible** function. The C
+/// binding routes a rejected tag (a discriminant no variant has, which a C
+/// caller can always supply) to this same `char **e`, so the boundary check is
+/// observable instead of aborting.
+#[prebindgen]
+pub fn shape_try_area(s: Shape) -> Result<f64, Error> {
+    match s {
+        Shape::Labeled(_, _) => Err("a labeled shape has no area".to_string().into()),
+        other => Ok(shape_area(other)),
+    }
+}
+
 /// The label of a `Labeled` shape, or the empty string for any other alternative.
 #[prebindgen]
 pub fn shape_get_label(s: Shape) -> String {

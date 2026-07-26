@@ -105,15 +105,14 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(foo_new),
         pq!(foo_get_id),
         pq!(inside_foo_default),
-        // The tagged union in every position: constructed and returned, taken
-        // by value as a parameter, and carried through a data-struct field.
+        // The tagged union crossing OUT: constructed and returned. Nothing to
+        // validate on this side — Rust always writes a live arm.
         pq!(shape_new_empty),
         pq!(shape_new_circle),
         pq!(shape_new_rect),
-        pq!(shape_area),
-        pq!(shape_get_label),
-        pq!(drawing_new),
-        pq!(drawing_get_shape),
+        // The union crossing IN on a fallible function: an out-of-range tag
+        // reports through the same `char **e` as the domain error.
+        pq!(shape_try_area),
     ] {
         cbindgen = cbindgen.function(function);
     }
@@ -129,9 +128,15 @@ fn generate_ffi_bindings() -> PathBuf {
     // wrapper abort on a null handle. `inside_foo_value` joins them for the same
     // reason with a different fallible input: a C enum is an `int` at the ABI, so
     // its discriminant is validated on the way in (never materialised unchecked),
-    // and with no `char **e` to report an out-of-range one it aborts.
+    // and with no `char **e` to report an out-of-range one it aborts. The three
+    // union-consuming accessors are the same case one level up — the tag a C
+    // caller supplies is validated before the Rust enum exists, here abortively.
     for function in [
         pq!(inside_foo_value),
+        pq!(shape_area),
+        pq!(shape_get_label),
+        pq!(drawing_new),
+        pq!(drawing_get_shape),
         pq!(calculator_new_clone),
         pq!(calculator_get_value),
         pq!(calculator_get_count),

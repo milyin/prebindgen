@@ -16,7 +16,11 @@
  *   - the union in every position: returned, taken by value as a parameter,
  *     and carried through a `drawing_t` data-struct field;
  *   - `shape_drop` freeing the ACTIVE arm, and being a no-op the second time
- *     (the freed slot is nulled) and on a non-owning arm.
+ *     (the freed slot is nulled) and on a non-owning arm;
+ *   - a tag NO variant has. A C caller can always write one, so the binding
+ *     validates it before a Rust enum exists: `shape_try_area` reports it
+ *     through its `char **e`, and `shape_drop` ignores it. Constructing that
+ *     value is the point of the check — it is not a Rust `shape_t` at all.
  *
  * Exits non-zero on the first failed check.
  */
@@ -122,15 +126,64 @@ static void test_drop(void) {
     shape_drop(NULL);
 }
 
+/* A tag no variant declares — what a buggy or hostile C caller produces. It is
+ * written through the raw bytes because no valid `shape_t` has this value. */
+static shape_t with_raw_tag(int tag) {
+    shape_t s = shape_new_rect(1.0, 1.0);
+    memcpy(&s, &tag, sizeof tag);
+    return s;
+}
+
+/* The fallible route: a rejected tag reaches the error channel, and the call
+ * has no other effect. */
+static void test_invalid_tag(void) {
+    double out = -1.0;
+    char *e = NULL;
+
+    /* A valid arm first, so the comparison is against a working call. */
+    CHECK(shape_try_area(shape_new_rect(3.0, 4.0), &out, &e));
+    CHECK(e == NULL);
+    CHECK(out == 12.0);
+
+    /* 99 selects no variant. */
+    out = -1.0;
+    CHECK(!shape_try_area(with_raw_tag(99), &out, &e));
+    CHECK(e != NULL);
+    CHECK(strstr(e, "invalid tag 99") != NULL);
+    CHECK(out == -1.0);
+    example_free(e);
+    e = NULL;
+
+    /* Negative too: the tag is read as a signed int, not truncated into a
+     * variant. */
+    CHECK(!shape_try_area(with_raw_tag(-1), &out, &e));
+    CHECK(e != NULL);
+    CHECK(strstr(e, "invalid tag -1") != NULL);
+    example_free(e);
+    e = NULL;
+
+    /* The domain error still comes through the same channel, unchanged. */
+    CHECK(!shape_try_area(shape_new_labeled("hexagon", Add), &out, &e));
+    CHECK(e != NULL);
+    CHECK(strstr(e, "no area") != NULL);
+    example_free(e);
+
+    /* `shape_drop` is the other C entry point into these bytes: it checks the
+     * tag too, and an out-of-range one is simply nothing to release. */
+    shape_t bad = with_raw_tag(99);
+    shape_drop(&bad);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
     test_drop();
+    test_invalid_tag();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
         return 1;
     }
-    printf("PASS - tagged union: every arm, every position, drop\n");
+    printf("PASS - tagged union: every arm, every position, drop, invalid tag\n");
     return 0;
 }

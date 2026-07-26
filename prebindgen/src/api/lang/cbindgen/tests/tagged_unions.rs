@@ -55,7 +55,8 @@ fn tagged_union_mirror_and_converters() {
         .enum_type(syn::parse_quote!(Operation))
         .tagged_union(syn::parse_quote!(Shape))
         .function(syn::parse_quote!(shape_new))
-        .function(syn::parse_quote!(shape_area));
+        .function(syn::parse_quote!(shape_area))
+        .panic();
 
     let src = write(cbindgen, registry, "tagged_union");
     let compact: String = src.split_whitespace().collect();
@@ -65,9 +66,11 @@ fn tagged_union_mirror_and_converters() {
     assert!(compact.contains("Empty,"), "{src}");
     assert!(compact.contains("Circle(f64),"), "{src}");
     assert!(compact.contains("Rect{width:f64,height:f64},"), "{src}");
-    // The owning payload lowers to `char *`; the declared enum to its C enum.
+    // The owning payload lowers to `char *`; the declared enum to its C enum
+    // behind `MaybeUninit`, so no payload wire constrains the bit patterns the
+    // mirror may legally hold — leaving the tag as the only thing to validate.
     assert!(
-        compact.contains("Labeled(*mut::core::ffi::c_char,operation_t),"),
+        compact.contains("Labeled(*mut::core::ffi::c_char,::core::mem::MaybeUninit<operation_t>),"),
         "{src}"
     );
 
@@ -81,16 +84,42 @@ fn tagged_union_mirror_and_converters() {
         "{src}"
     );
     assert!(
-        compact.contains("shape_t::Labeled(__cbg_alloc_cstr(__f0),__cbg_out_Operation(__f1))"),
+        compact.contains("shape_t::Labeled(__cbg_alloc_cstr(__f0),"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("::core::mem::MaybeUninit::new(__cbg_out_Operation(__f1)),"),
         "{src}"
     );
 
-    // Input: the same match in reverse, through the same per-field policy.
+    // Input: the same match in reverse, through the same per-field policy —
+    // but only after the C-supplied tag has been range-checked, and the enum
+    // payload's own validating decode propagates with `?`.
+    assert!(
+        compact.contains("fn__cbg_in_Shape(v:::core::mem::MaybeUninit<shape_t>,)"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("let__tag:::core::ffi::c_int=::core::ptr::read(v.as_ptr()"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("if!((__tagasi64)>=0&&(__tagasi64)<4i64)"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("invalidtag{}for`shape_t`(expected0..4)"),
+        "{src}"
+    );
+    assert!(compact.contains("letv=v.assume_init();"), "{src}");
     assert!(
         compact.contains("shape_t::Empty=>example_flat::Shape::Empty,"),
         "{src}"
     );
-    assert!(compact.contains("__cbg_in_Operation(__f1),"), "{src}");
+    assert!(compact.contains("__cbg_in_Operation(__f1)?,"), "{src}");
+    // A union taken by value is a fallible input like any other: with no
+    // `Result` channel the declaration had to opt into aborting.
+    assert!(compact.contains("panic!("), "{src}");
 }
 
 /// An owning payload gets a typed drop that frees the **active arm** and nulls
@@ -123,10 +152,17 @@ fn owning_payload_gets_typed_drop() {
     let src = write(cbindgen, registry, "tagged_union_drop");
     let compact: String = src.split_whitespace().collect();
 
+    // The drop is a second C entry point into the same bytes, so it checks the
+    // tag too — and ignores an out-of-range one rather than matching on it.
     assert!(
-        compact.contains("pubunsafeextern\"C\"fnshape_drop(this_:*mutshape_t)"),
+        compact.contains("fnshape_drop(this_:*mut::core::mem::MaybeUninit<shape_t>)"),
         "{src}"
     );
+    assert!(
+        compact.contains("if!((__tagasi64)>=0&&(__tagasi64)<4i64){return;}"),
+        "{src}"
+    );
+    assert!(compact.contains("match(*this_).assume_init_mut()"), "{src}");
     assert!(compact.contains("shape_t::Labeled(__f0,__f1)=>{"), "{src}");
     assert!(
         compact.contains("free(*__f0as*mut::core::ffi::c_void);"),
@@ -203,14 +239,65 @@ fn tagged_union_as_data_struct_field() {
         .enum_type(syn::parse_quote!(Operation))
         .tagged_union(syn::parse_quote!(Shape))
         .data_struct(syn::parse_quote!(Drawing))
-        .function(syn::parse_quote!(drawing_new));
+        .function(syn::parse_quote!(drawing_new))
+        .panic();
 
     let src = write(cbindgen, registry, "tagged_union_field");
     let compact: String = src.split_whitespace().collect();
 
-    assert!(compact.contains("pubshape:shape_t,"), "{src}");
-    assert!(compact.contains("shape:__cbg_in_Shape(v.shape),"), "{src}");
+    // One mirror field type serves both directions, so it is the wire the
+    // inbound side needs — the union's tag is C's until it is checked.
+    assert!(
+        compact.contains("pubshape:::core::mem::MaybeUninit<shape_t>,"),
+        "{src}"
+    );
+    // The field's decode carries the union's fallibility up into the struct's,
+    // so a bad tag in a nested union cannot be silently skipped.
+    assert!(compact.contains("shape:__cbg_in_Shape(v.shape)?,"), "{src}");
+    assert!(
+        compact.contains("fn__cbg_in_Drawing(v:drawing_t,)->::core::result::Result<"),
+        "{src}"
+    );
     assert!(compact.contains("shape:__cbg_out_Shape(v.shape),"), "{src}");
+}
+
+/// A data struct of plain fields keeps its **infallible** decode — only a
+/// union field makes the struct's own conversion able to fail.
+#[test]
+fn plain_data_struct_decode_stays_infallible() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Label {
+            pub id: u64,
+            pub text: String,
+        }
+    );
+    let f: syn::ItemFn = syn::parse_quote!(
+        pub fn label_id(l: Label) -> u64 {
+            unimplemented!()
+        }
+    );
+    let registry = Registry::<()>::from_items([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(f), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(example_flat))
+        .free_memory_function("example_free")
+        .mangle_type_name(|base| format!("{base}_t"))
+        .data_struct(syn::parse_quote!(Label))
+        .function(syn::parse_quote!(label_id));
+
+    let src = write(cbindgen, registry, "plain_data_struct");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("fn__cbg_in_Label(v:label_t)->example_flat::Label"),
+        "{src}"
+    );
+    assert!(!compact.contains("panic!("), "{src}");
 }
 
 /// The two enum declarators are shape-exclusive in both directions, and each

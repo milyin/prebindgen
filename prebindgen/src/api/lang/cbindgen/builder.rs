@@ -439,6 +439,13 @@ impl Cbindgen {
     /// `<base>_drop(t_t *)` is generated that frees the **active arm** —
     /// consistent with the existing typed per-pointer drops. A union whose
     /// payloads are all plain data needs no drop and gets none.
+    ///
+    /// **Validity.** Crossing **into** Rust, the tag a C caller supplied is
+    /// range-checked before any Rust enum is built — so, exactly like
+    /// [`Self::enum_type`], a union taken by value is a fallible input, and a
+    /// function taking one without a `Result` return needs [`Self::panic`].
+    /// A data struct carrying a union field inherits that fallibility. See the
+    /// module docs for the wire this uses and why.
     pub fn tagged_union(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         assert!(

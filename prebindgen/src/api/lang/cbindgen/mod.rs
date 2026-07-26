@@ -45,7 +45,14 @@
 //!   data-carrying enum crossing by value as a `#[repr(C)]` enum with payload
 //!   variants, which cbindgen renders as a tag enum plus a `union` of the
 //!   variant bodies. When any variant's payload wire owns memory, a typed
-//!   `<name>_drop` frees the **active arm**.
+//!   `<name>_drop` frees the **active arm**. Inbound it obeys the same rule as
+//!   a plain enum, one level up: the mirror arrives as `MaybeUninit<mirror>`,
+//!   its leading `c_int` tag is range-checked against the variants, and only
+//!   then is the value `assume_init`ed and matched. Every payload wire is
+//!   bit-pattern-agnostic (a declared `enum_type` payload rides as
+//!   `MaybeUninit` too, and is validated by its own converter), so the tag is
+//!   the sole obligation. The typed drop checks it as well and treats an
+//!   out-of-range one as nothing to release.
 //! * **Direct `String` output**: a bare `char *` — a `malloc`'d, null-terminated
 //!   raw block (no wrapper struct), freed via the `free_memory_function`.
 //! * **[`Cbindgen::free_memory_function`]**: the single, type-agnostic raw memory

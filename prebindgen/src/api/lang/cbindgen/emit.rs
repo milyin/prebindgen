@@ -69,9 +69,20 @@ impl Cbindgen {
     /// wholesale by one `Transmute` — a tagged union is rebuilt arm by arm,
     /// so each wire here is produced by a real per-field conversion. That is
     /// what lets `String` join the set.
+    ///
+    /// Every wire this returns is **bit-pattern-agnostic**: scalars and raw
+    /// pointers hold any bits legally, and a declared `enum_type` payload is
+    /// wrapped in [`::core::mem::MaybeUninit`] so it does too (holding a Rust
+    /// enum with a discriminant no variant has would be UB). That is what makes
+    /// the mirror's tag the *only* thing [`Cbindgen::in_tagged_union`] has to
+    /// validate before `assume_init`.
     pub(super) fn payload_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
         if is_string(fty) {
             return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
+        }
+        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+            let c = self.c_type_ident(fty);
+            return Some(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         self.mirror_field_wire(fty)
     }
@@ -85,10 +96,15 @@ impl Cbindgen {
     /// A union field with an owning payload keeps the data struct's existing
     /// contract: the struct has no destructor, and each owning field is
     /// released individually — here through the union's own typed drop.
+    ///
+    /// Like a union **parameter**, the field is wrapped in
+    /// [`::core::mem::MaybeUninit`]: one mirror struct serves both directions,
+    /// and on the way in its bytes are C's, so the field may not be a Rust enum
+    /// until its tag has been validated. Invisible in C either way.
     pub(super) fn data_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
         if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
             let c = self.c_type_ident(fty);
-            return Some(syn::parse_quote!(#c));
+            return Some(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         c_field_wire(fty)
     }

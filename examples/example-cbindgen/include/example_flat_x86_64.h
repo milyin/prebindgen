@@ -131,4 +131,6 @@ struct shape_t shape_new_labeled(const char *label, enum operation_t op);
 
 struct shape_t shape_new_rect(double width, double height);
 
+bool shape_try_area(struct shape_t s, double *out, char **e);
+
 #endif  /* EXAMPLE_FLAT_H */
