@@ -265,7 +265,7 @@ pub(crate) fn build_typed_handle(
     let gc_managed = ext
         .types
         .get(key)
-        .and_then(|cfg| cfg.opaque.as_ref())
+        .and_then(|cfg| cfg.opaque())
         .is_some_and(|o| o.gc_managed);
     let base_short = if gc_managed {
         "GcNativeHandle"

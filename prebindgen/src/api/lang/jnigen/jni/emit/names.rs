@@ -157,7 +157,7 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
 /// knows which inline field to unwrap (`<name>.bytes`).
 pub(crate) fn value_projection_field_for_leaf(ext: &JniGen, leaf_key: &TypeKey) -> Option<String> {
     let cfg = ext.types.get(leaf_key)?;
-    if cfg.value_blob {
+    if cfg.is_value_blob() {
         return Some("bytes".to_string());
     }
     None

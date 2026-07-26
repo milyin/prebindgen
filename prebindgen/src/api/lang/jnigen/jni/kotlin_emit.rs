@@ -402,7 +402,7 @@ impl JniGen {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
             let cfg = &self.types[key];
-            if !cfg.value_blob {
+            if !cfg.is_value_blob() {
                 continue;
             }
             let fqn = cfg
@@ -512,7 +512,7 @@ impl JniGen {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
             let cfg = &self.types[key];
-            if cfg.opaque.is_none() {
+            if !cfg.is_opaque() {
                 continue;
             }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
@@ -594,7 +594,7 @@ impl JniGen {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
             let cfg = &self.types[key];
-            if cfg.enum_cfg.is_none() {
+            if !cfg.is_enum_class() {
                 continue;
             }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
@@ -655,7 +655,7 @@ impl JniGen {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
             let cfg = &self.types[key];
-            let Some(sum_cfg) = cfg.sum_cfg.as_ref() else {
+            let Some(sum_cfg) = cfg.sum() else {
                 continue;
             };
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
@@ -1545,8 +1545,7 @@ impl JniGen {
             .get(&ident)
             .unwrap_or_else(|| panic!("sum builder: no indexed enum `{ident}`"));
         let sum_cfg = self.types[&key]
-            .sum_cfg
-            .as_ref()
+            .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
         let spec = SumSpec::from_item_enum(item_enum);
         let tag = &names[0];

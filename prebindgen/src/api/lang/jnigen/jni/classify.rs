@@ -5,14 +5,14 @@
 use super::*;
 
 /// The adapter-declared kind of a **bare** (already `Option`/`&`-stripped)
-/// Rust type, in fixed precedence: opaque handle → enum class → sealed class
-/// → value blob → registered source struct → everything else.
+/// Rust type: the declared [`DeclaredKind`] when the type is declared to this
+/// adapter, else a registered source struct, else everything else.
 ///
-/// The four special kinds are mutually exclusive by builder enforcement;
-/// the precedence order only pins down behavior if that invariant is ever
-/// violated. `DataStruct` is any struct captured from the source crate —
-/// `cfg` tells whether it was also declared to the builder (a `data_class`
-/// candidate) or is merely known to the registry.
+/// The four special kinds cannot overlap — a type stores exactly one
+/// [`DeclaredKind`], so this is a lookup, not a precedence chain.
+/// `DataStruct` is any struct captured from the source crate — `cfg` tells
+/// whether it was also declared to the builder (a `data_class` candidate) or
+/// is merely known to the registry.
 pub(crate) enum TypeKind<'r, 'c> {
     /// Declared via `ptr_class` — jlong wire, typed-handle Kotlin class.
     Handle,
@@ -39,10 +39,7 @@ impl TypeConfig {
     /// `enum_class` / `sealed_class` / `value_class`) — types with their own
     /// dedicated Kotlin emitters, never flattened as data classes.
     pub(crate) fn special_decl(&self) -> bool {
-        self.opaque.is_some()
-            || self.enum_cfg.is_some()
-            || self.sum_cfg.is_some()
-            || self.value_blob
+        !matches!(self.kind, DeclaredKind::Data)
     }
 }
 
@@ -57,17 +54,15 @@ impl JniGen {
     ) -> TypeKind<'r, 'c> {
         let cfg = self.types.get(&TypeKey::from_type(bare));
         if let Some(c) = cfg {
-            if c.opaque.is_some() {
-                return TypeKind::Handle;
-            }
-            if c.enum_cfg.is_some() {
-                return TypeKind::Enum;
-            }
-            if c.sum_cfg.is_some() {
-                return TypeKind::Sum;
-            }
-            if c.value_blob {
-                return TypeKind::ValueBlob;
+            match c.kind {
+                DeclaredKind::Ptr(_) => return TypeKind::Handle,
+                DeclaredKind::Enum(_) => return TypeKind::Enum,
+                DeclaredKind::Sealed(_) => return TypeKind::Sum,
+                DeclaredKind::Value => return TypeKind::ValueBlob,
+                // A data class is exactly a declared source struct — fall
+                // through to the registry probe below, which supplies the
+                // `syn::ItemStruct` its emitters flatten.
+                DeclaredKind::Data => {}
             }
         }
         if let Some(name) = bare_path_ident(bare) {

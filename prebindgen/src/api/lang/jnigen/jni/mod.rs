@@ -68,18 +68,18 @@ pub(crate) use crate::api::{
 // Structured type-conversion configuration
 // ──────────────────────────────────────────────────────────────────────
 
-/// Per-opaque-handle configuration (driven by `JniGen::ptr_class`).
+/// Options of a type declared with `ptr_class!` — the payload of
+/// [`DeclaredKind::Ptr`], which is what marks the type as an opaque handle.
+/// The unified Kotlin emitter writes a typed-handle `.kt` file (and the Rust
+/// side its `freePtr` destructor) for every such type.
 ///
 /// The typed-handle Kotlin FQN (e.g. `"io.zenoh.jni.JNISession"`) lives
-/// in the surrounding [`TypeConfig::kotlin_name`] slot — FQN-consumers
+/// in the surrounding [`TypeConfig::name_spec`] slot — FQN-consumers
 /// (typed-handle class emission, `instanceof` dispatch,
 /// return-value constructor wrap) read it from there. The
 /// value-context Kotlin name for the same type (`"Long"`) is produced
 /// independently by the rank-0 opaque handler in [`KotlinMeta`], so
 /// the two roles don't collide despite sharing the `TypeConfig`.
-/// Presence marker: a type registered via `JniGen::ptr_class`. The unified
-/// Kotlin emitter writes a typed-handle `.kt` file (and the Rust side its
-/// `freePtr` destructor) for every opaque type.
 #[derive(Clone, Default)]
 pub(crate) struct OpaqueConfig {
     /// `ptr_class!(X).gc_managed()`: the typed handle stores its pointer in
@@ -89,22 +89,24 @@ pub(crate) struct OpaqueConfig {
     pub gc_managed: bool,
 }
 
-/// Per-enum configuration (driven by `JniGen::enum_class`).
+/// Options of a type declared with `enum_class!` — the payload of
+/// [`DeclaredKind::Enum`], which is what marks a `#[prebindgen]`-scanned
+/// `enum` as a Kotlin enum class. There are none yet: the declaration itself
+/// carries all the information, so this is the empty slot future enum options
+/// go in.
 ///
-/// Marks a `#[prebindgen]`-scanned `enum` as a Kotlin enum class — the
-/// rank-0 converter arms emit `jint ↔ Rust enum` bodies (via `TryFrom<i32>`
-/// for input and `as jni::sys::jint` for output), and the Kotlin emitter
-/// writes an `enum class` file with SCREAMING_SNAKE_CASE variants and a
-/// discriminant-keyed `fromInt(...)` companion. The Kotlin FQN lives in
-/// the surrounding [`TypeConfig::kotlin_name`] slot, same as
+/// The rank-0 converter arms emit `jint ↔ Rust enum` bodies (via
+/// `TryFrom<i32>` for input and `as jni::sys::jint` for output), and the
+/// Kotlin emitter writes an `enum class` file with SCREAMING_SNAKE_CASE
+/// variants and a discriminant-keyed `fromInt(...)` companion. The Kotlin FQN
+/// lives in the surrounding [`TypeConfig::name_spec`] slot, same as
 /// [`OpaqueConfig`].
-/// Presence marker: a type registered via `JniGen::enum_class`. The unified
-/// Kotlin emitter writes an `enum class` `.kt` file for every declared enum.
 #[derive(Clone, Default)]
 pub(crate) struct EnumConfig {}
 
-/// Presence marker + per-variant naming of a type registered via
-/// `sealed_class!`: a `#[prebindgen]` **data-carrying** enum mirrored as a
+/// Per-variant naming of a type declared with `sealed_class!` — the payload
+/// of [`DeclaredKind::Sealed`], which is what marks a `#[prebindgen]`
+/// **data-carrying** enum as mirrored by a
 /// Kotlin `sealed interface`. The tag/leaf-group structure itself is read
 /// from the source enum through the neutral
 /// [`SumSpec`](crate::api::core::types_util::SumSpec) — only what the
@@ -141,11 +143,56 @@ impl FunctionEntry {
     }
 }
 
+/// Which of the five class declarators a type is registered under, **with
+/// that declarator's own options**. A type gets exactly one — this is a sum,
+/// not a set of independent markers: two declarators would emit two Kotlin
+/// declarations for the same FQN, so the second is a hard error (see
+/// [`DeclaredKind::merge`]). Reopening the *same* declarator stays legal —
+/// `merge` folds the incoming payload into the stored one.
+///
+/// Adding a sixth class kind is one variant here plus its emitter: there is
+/// no flag to add and no precedence chain to extend, because every consumer
+/// reads this one field (via [`TypeConfig`]'s accessors, [`JniGen::type_kind`],
+/// or a direct match).
+#[derive(Clone)]
+pub(crate) enum DeclaredKind {
+    /// `ptr_class!` — an opaque-handle type: jlong wire,
+    /// `Box::into_raw`/`Box::from_raw` conventions, instanceof dispatch, and
+    /// Kotlin typed-handle class emission.
+    Ptr(OpaqueConfig),
+    /// `enum_class!` — a `#[prebindgen]` fieldless enum mirrored as a Kotlin
+    /// `enum class`: jint wire (input + output via `TryFrom<i32>` / `as
+    /// jint`) and a generated `.kt` file.
+    Enum(EnumConfig),
+    /// `sealed_class!` — a `#[prebindgen]` data-carrying enum mirrored as a
+    /// Kotlin `sealed interface`: a tag plus one leaf group per variant.
+    Sealed(SumConfig),
+    /// `data_class!` — a `#[prebindgen]` struct mirrored as a Kotlin `data
+    /// class`, flattened field-by-field at the boundary. The kind with no
+    /// options of its own.
+    Data,
+    /// `value_class!` — a `Copy` Rust type passed **by value as its raw
+    /// memory blob** in a `JByteArray` (wire), the value-level peer of an
+    /// opaque handle's `jlong`. Surfaces as a `@JvmInline value class`
+    /// erased to `ByteArray`.
+    Value,
+}
+
 /// All configuration the structured builder accumulates for one
-/// canonical Rust type key. Every field is `None` by default;
-/// builder methods populate the ones they care about.
-#[derive(Clone, Default)]
+/// canonical Rust type key. The declared kind is mandatory (an entry exists
+/// only because some declarator created it); the remaining, cross-kind
+/// options default to unset and are populated by the decl that carries them.
+#[derive(Clone)]
 pub(crate) struct TypeConfig {
+    /// The class declarator this type is registered under, carrying that
+    /// kind's own options. Every entry in [`JniGen::types`] has one: entries
+    /// are created only by a class declarator (see
+    /// `JniGen::register_class`), which is why presence in the table *is*
+    /// "declared as a class" — declared classes are required in **both**
+    /// directions at scan (their converters always resolve both ways),
+    /// unlike a wrapper registration, which is required per **usage**
+    /// direction.
+    pub kind: DeclaredKind,
     /// Raw naming spec of the type as declared — verbatim Kotlin type or
     /// settings-derived class name. Required for any type emitted in
     /// Kotlin; the concrete FQN (`Sample` → `"io.zenoh.jni.Sample"`,
@@ -153,41 +200,10 @@ pub(crate) struct TypeConfig {
     /// [`JniGen::fqn_of`], which is what makes the `set_*` settings
     /// order-independent w.r.t. declarations.
     pub name_spec: Option<NameSpec>,
-    /// If `Some`, this is an opaque-handle type — gets jlong wire,
-    /// `Box::into_raw`/`Box::from_raw` conventions, instanceof
-    /// dispatch, and Kotlin typed-handle class emission.
-    pub opaque: Option<OpaqueConfig>,
-    /// If `Some`, this is a `#[prebindgen]` enum mirrored as a Kotlin
-    /// `enum class` — gets jint wire (input + output via `TryFrom<i32>`
-    /// / `as jint`) and a generated `.kt` file. Class kinds are mutually
-    /// exclusive — see the note on [`Self::class_decl`].
-    pub enum_cfg: Option<EnumConfig>,
-    /// If `Some`, this is a `#[prebindgen]` data-carrying enum mirrored as a
-    /// Kotlin `sealed interface` — a tag plus one leaf group per variant.
-    pub sum_cfg: Option<SumConfig>,
-    /// Set by [`JniGen::value_class`]: this is a `Copy` Rust type passed
-    /// **by value as its raw memory blob** in a `JByteArray` (wire), the
-    /// value-level peer of an opaque handle's `jlong`. No Kotlin class, no
-    /// projection — it surfaces as `ByteArray`.
-    pub value_blob: bool,
     /// Explicit opt-in for a `data_class` to cross Kotlin → Rust as one
     /// `JObject`. Unmarked data classes are required to flatten completely;
     /// this flag is sticky across reopened declarations.
     pub jobject_input: bool,
-    /// Set by the five class declarators (`ptr_class` / `enum_class` /
-    /// `sealed_class` / `data_class` / `value_class`), NOT by wrapper
-    /// registration. Declared classes are required in **both** directions at
-    /// scan (their converters always resolve both ways); a wrapper-only entry
-    /// is required per **usage** direction, so an output-only wrapper needs no
-    /// input twin.
-    ///
-    /// A type gets exactly **one** of the five: the kind markers above are
-    /// mutually exclusive, enforced in one place for all of them by
-    /// `JniGen::assert_class_kind`. Reopening the *same* declarator is legal
-    /// and merges its options. This flag is also what identifies a **data
-    /// class** — the declarator with no marker of its own is precisely a
-    /// declared class that is none of the special kinds.
-    pub class_decl: bool,
     /// Emit the generated interface mirroring the class's public instance
     /// surface, and make the class implement it with `override` on every
     /// class-body member (`.interface()` / implied by `.interface_name()`).
@@ -200,6 +216,53 @@ pub(crate) struct TypeConfig {
     /// nominally; the class body and lifecycle members are unaffected.
     /// Orthogonal to [`Self::interface_enabled`].
     pub interfaces: Vec<String>,
+}
+
+impl TypeConfig {
+    /// A freshly declared type: the declarator's kind and naming spec, every
+    /// cross-kind option unset. Reopening the same declarator goes through
+    /// [`DeclaredKind::merge`] instead.
+    pub(crate) fn new(kind: DeclaredKind, name_spec: NameSpec) -> Self {
+        Self {
+            kind,
+            name_spec: Some(name_spec),
+            jobject_input: false,
+            interface_enabled: false,
+            interface_name_override: None,
+            interfaces: Vec::new(),
+        }
+    }
+
+    /// The opaque-handle options if this type is a `ptr_class`, else `None`.
+    pub(crate) fn opaque(&self) -> Option<&OpaqueConfig> {
+        match &self.kind {
+            DeclaredKind::Ptr(o) => Some(o),
+            _ => None,
+        }
+    }
+
+    /// `true` if this type is a `ptr_class`-declared opaque handle.
+    pub(crate) fn is_opaque(&self) -> bool {
+        matches!(self.kind, DeclaredKind::Ptr(_))
+    }
+
+    /// `true` if this type is an `enum_class`-declared Kotlin `enum class`.
+    pub(crate) fn is_enum_class(&self) -> bool {
+        matches!(self.kind, DeclaredKind::Enum(_))
+    }
+
+    /// The sum options if this type is a `sealed_class`, else `None`.
+    pub(crate) fn sum(&self) -> Option<&SumConfig> {
+        match &self.kind {
+            DeclaredKind::Sealed(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// `true` if this type is a `value_class`-declared `Copy` value blob.
+    pub(crate) fn is_value_blob(&self) -> bool {
+        matches!(self.kind, DeclaredKind::Value)
+    }
 }
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
@@ -378,9 +441,11 @@ pub struct JniGen {
     pub(crate) interface_name_mangle: Option<NameMangle>,
 
     /// Structured per-type configuration keyed by canonical Rust type.
-    /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated when accepting
-    /// a `ClassDecl`. Holds opaque-handle
-    /// config, enum config, and the raw [`NameSpec`] (Kotlin FQNs are
+    /// One entry per declared class; populated when accepting a `ClassDecl`,
+    /// through the table's single writer `JniGen::register_class` — so
+    /// presence here *is* "declared as a class", and each entry's
+    /// [`TypeConfig::kind`] is the one representation of which declarator it
+    /// came from. Also holds the raw [`NameSpec`] (Kotlin FQNs are
     /// derived from it on read via [`JniGen::kotlin_fqn`] /
     /// [`JniGen::fqn_of`]); the converter bodies themselves live in
     /// [`Self::input_wrappers`] / [`Self::output_wrappers`]. The rank-0

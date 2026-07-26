@@ -457,8 +457,7 @@ fn sum_plan_kind(
         .get(&key)
         .unwrap_or_else(|| panic!("fromParts bridge: `{ident}` is not declared"));
     let sum_cfg = cfg
-        .sum_cfg
-        .as_ref()
+        .sum()
         .unwrap_or_else(|| panic!("fromParts bridge: `{ident}` is not a sealed class"));
     let kotlin_fqn = cfg
         .name_spec

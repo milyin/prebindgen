@@ -8,29 +8,61 @@
 
 use super::*;
 
-/// Which of the five class declarators a type is registered under. A type
-/// gets exactly one: two declarators would emit two Kotlin declarations for
-/// the same FQN and leave the type table ambiguous about the kind, so the
-/// second is a hard error (see [`JniGen::assert_class_kind`]). Reopening the
-/// *same* declarator stays legal — its options merge.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DeclaredKind {
-    Ptr,
-    Enum,
-    Sealed,
-    Data,
-    Value,
-}
-
 impl DeclaredKind {
     /// The declaring macro's name, for the conflict message.
-    fn macro_name(self) -> &'static str {
+    pub(crate) fn macro_name(&self) -> &'static str {
         match self {
-            DeclaredKind::Ptr => "ptr_class",
-            DeclaredKind::Enum => "enum_class",
-            DeclaredKind::Sealed => "sealed_class",
+            DeclaredKind::Ptr(_) => "ptr_class",
+            DeclaredKind::Enum(_) => "enum_class",
+            DeclaredKind::Sealed(_) => "sealed_class",
             DeclaredKind::Data => "data_class",
             DeclaredKind::Value => "value_class",
+        }
+    }
+
+    /// Fold a **reopened** declaration of the same kind into this one, or
+    /// reject a *different* kind. Both halves of "a type gets exactly one
+    /// class declarator" live here, once, for every kind:
+    ///
+    /// * a different variant is rejected — two declarators would emit two
+    ///   Kotlin declarations for the same FQN and leave the type table
+    ///   ambiguous about the kind. The check is one discriminant comparison,
+    ///   kind-agnostic and symmetric in declaration order, so a new kind is
+    ///   covered by it without touching this function;
+    /// * the same variant merges that kind's own payload, each rule written
+    ///   next to the payload it merges.
+    ///
+    /// `type_name` is the short Rust name of the type being declared, for the
+    /// message.
+    fn merge(&mut self, incoming: DeclaredKind, type_name: &str) {
+        assert!(
+            std::mem::discriminant(&*self) == std::mem::discriminant(&incoming),
+            "`{}` is already declared with `{}!(...)`; it cannot also be declared with \
+             `{}!(...)` — a type gets exactly one class declarator",
+            type_name,
+            self.macro_name(),
+            incoming.macro_name(),
+        );
+        match (self, incoming) {
+            // `.gc_managed()` is sticky-OR: once any declaration asks for
+            // Cleaner-backed release, the handle keeps it.
+            (DeclaredKind::Ptr(have), DeclaredKind::Ptr(add)) => {
+                have.gc_managed |= add.gc_managed;
+            }
+            // Per-variant last-wins: a second `sealed_class!(E)` adding one
+            // `.variant(...)` must not drop the renames the first one set.
+            (DeclaredKind::Sealed(have), DeclaredKind::Sealed(add)) => {
+                have.variant_names.extend(add.variant_names);
+            }
+            // Kinds with no payload of their own: nothing to merge.
+            (DeclaredKind::Enum(_), _) | (DeclaredKind::Data, _) | (DeclaredKind::Value, _) => {}
+            // The discriminants were just checked equal, so no mixed pair
+            // reaches this arm — landing here means a kind carrying options
+            // was added above without a merge rule.
+            (existing, _) => unreachable!(
+                "`{}!(...)` has no merge rule for a reopened declaration",
+                existing.macro_name()
+            ),
         }
     }
 }
@@ -67,10 +99,7 @@ impl JniGen {
     /// wire (JNI `external fun`).
     pub(crate) fn is_kotlin_enum(&self, ty: &syn::Type) -> bool {
         let key = TypeKey::from_type(ty);
-        self.types
-            .get(&key)
-            .and_then(|c| c.enum_cfg.as_ref())
-            .is_some()
+        self.types.get(&key).is_some_and(|c| c.is_enum_class())
     }
 }
 
@@ -322,51 +351,22 @@ impl JniGen {
         }
     }
 
-    /// The class declarator a type is already registered under, read back
-    /// from the marker its acceptor set. A data class has no marker of its
-    /// own — it is precisely a declared class that is none of the special
-    /// kinds — so it is recognized by [`TypeConfig::class_decl`] alone, which
-    /// makes this total over the five declarators.
-    fn declared_kind(&self, key: &TypeKey) -> Option<DeclaredKind> {
-        let cfg = self.types.get(key)?;
-        if cfg.opaque.is_some() {
-            return Some(DeclaredKind::Ptr);
-        }
-        if cfg.enum_cfg.is_some() {
-            return Some(DeclaredKind::Enum);
-        }
-        if cfg.sum_cfg.is_some() {
-            return Some(DeclaredKind::Sealed);
-        }
-        if cfg.value_blob {
-            return Some(DeclaredKind::Value);
-        }
-        cfg.class_decl.then_some(DeclaredKind::Data)
-    }
-
-    /// One type gets exactly **one** class declarator. Reopening the same
-    /// declarator is supported (options merge); a second, different one is a
-    /// hard error — it would emit two Kotlin declarations for the same FQN
-    /// and leave the type table with an ambiguous kind. Called by every
-    /// acceptor before it registers anything, so the rule holds symmetrically
-    /// for all five and does not depend on declaration order.
-    fn assert_class_kind(&self, key: &TypeKey, incoming: DeclaredKind) {
-        if let Some(existing) = self.declared_kind(key) {
-            assert!(
-                existing == incoming,
-                "`{}` is already declared with `{}!(...)`; it cannot also be declared with \
-                 `{}!(...)` — a type gets exactly one class declarator",
-                rust_short_name(key),
-                existing.macro_name(),
-                incoming.macro_name(),
-            );
-        }
-    }
-
-    /// Store one class declaration's raw [`NameSpec`] in the type table.
+    /// Register one class declaration: its [`DeclaredKind`] (kind + that
+    /// kind's own options) and its raw [`NameSpec`]. The single entry point
+    /// into [`Self::types`] — every acceptor goes through it, so the
+    /// one-declarator-per-type rule is enforced for all kinds by
+    /// [`DeclaredKind::merge`] and cannot be forgotten by a new one.
     /// No FQN is derived here — names materialize at read time via
     /// [`JniGen::fqn_of`], against whatever the settings are then.
-    fn register_class_name(&mut self, key: &TypeKey, spec: NameSpec) {
+    ///
+    /// Returns the stored config so the caller can fold in its cross-kind
+    /// options (`jobject_input`, interfaces).
+    fn register_class(
+        &mut self,
+        key: &TypeKey,
+        kind: DeclaredKind,
+        spec: NameSpec,
+    ) -> &mut TypeConfig {
         // Early failure for a bad per-decl `.name()`: the FQN itself is only
         // derived at write time, but a dotted relative name is a declaration
         // mistake and should surface in the declaring call (the same check
@@ -383,9 +383,16 @@ impl JniGen {
                 n
             );
         }
-        let entry = self.types.entry(key.clone()).or_default();
-        entry.class_decl = true;
-        entry.name_spec = Some(spec);
+        let short = rust_short_name(key);
+        match self.types.entry(key.clone()) {
+            std::collections::hash_map::Entry::Occupied(e) => {
+                let cfg = e.into_mut();
+                cfg.kind.merge(kind, &short);
+                cfg.name_spec = Some(spec);
+                cfg
+            }
+            std::collections::hash_map::Entry::Vacant(e) => e.insert(TypeConfig::new(kind, spec)),
+        }
     }
 
     /// Merge a decl's interface options into the type's [`TypeConfig`]
@@ -396,7 +403,7 @@ impl JniGen {
         let cfg = self
             .types
             .get_mut(key)
-            .expect("register_class_name created the entry");
+            .expect("register_class created the entry");
         cfg.interface_enabled |= iface.enabled;
         if iface.name_override.is_some() {
             cfg.interface_name_override = iface.name_override;
@@ -411,9 +418,11 @@ impl JniGen {
     fn accept_ptr_class(&mut self, subpackage: &str, decl: PtrClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.assert_class_kind(&key, DeclaredKind::Ptr);
-        self.register_class_name(
+        self.register_class(
             &key,
+            DeclaredKind::Ptr(OpaqueConfig {
+                gc_managed: decl.gc_managed,
+            }),
             NameSpec {
                 subpackage: subpackage.to_string(),
                 short,
@@ -421,13 +430,6 @@ impl JniGen {
                 kind: NameKind::Ptr,
             },
         );
-        let opaque = self
-            .types
-            .get_mut(&key)
-            .expect("register_class_name created the entry")
-            .opaque
-            .get_or_insert_with(OpaqueConfig::default);
-        opaque.gc_managed |= decl.gc_managed;
         self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
     }
@@ -435,9 +437,9 @@ impl JniGen {
     fn accept_enum_class(&mut self, subpackage: &str, decl: EnumClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.assert_class_kind(&key, DeclaredKind::Enum);
-        self.register_class_name(
+        self.register_class(
             &key,
+            DeclaredKind::Enum(EnumConfig::default()),
             NameSpec {
                 subpackage: subpackage.to_string(),
                 short,
@@ -445,10 +447,6 @@ impl JniGen {
                 kind: NameKind::Enum,
             },
         );
-        self.types
-            .get_mut(&key)
-            .expect("register_class_name created the entry")
-            .enum_cfg = Some(EnumConfig::default());
         self.store_iface_opts(&key, decl.iface);
     }
 
@@ -459,9 +457,17 @@ impl JniGen {
     fn accept_sealed_class(&mut self, subpackage: &str, decl: SealedClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.assert_class_kind(&key, DeclaredKind::Sealed);
-        self.register_class_name(
+        // Reopened decls merge — `DeclaredKind::merge` owns that rule for
+        // every kind, so this acceptor only builds its own payload.
+        let mut sum = SumConfig::default();
+        for v in decl.variants {
+            if let Some(name) = v.name_override {
+                sum.variant_names.insert(v.rust_ident, name);
+            }
+        }
+        self.register_class(
             &key,
+            DeclaredKind::Sealed(sum),
             NameSpec {
                 subpackage: subpackage.to_string(),
                 short,
@@ -469,20 +475,6 @@ impl JniGen {
                 kind: NameKind::Enum,
             },
         );
-        // Reopened decls MERGE, like every other class kind: a second
-        // `sealed_class!(E)` adding one `.variant(...)` must not drop the
-        // renames the first one set. Per variant it is last-wins.
-        let sum = self
-            .types
-            .get_mut(&key)
-            .expect("register_class_name created the entry")
-            .sum_cfg
-            .get_or_insert_with(SumConfig::default);
-        for v in decl.variants {
-            if let Some(name) = v.name_override {
-                sum.variant_names.insert(v.rust_ident, name);
-            }
-        }
         self.store_iface_opts(&key, decl.iface);
     }
 
@@ -502,12 +494,8 @@ impl JniGen {
     fn accept_data_class(&mut self, subpackage: &str, decl: DataClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.assert_class_kind(&key, DeclaredKind::Data);
         let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
-        self.register_class_name(&key, spec);
-        self.types
-            .get_mut(&key)
-            .expect("register_class_name created the entry")
+        self.register_class(&key, DeclaredKind::Data, spec)
             .jobject_input |= decl.jobject_input;
         self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
@@ -516,13 +504,8 @@ impl JniGen {
     fn accept_value_class(&mut self, subpackage: &str, decl: ValueClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.assert_class_kind(&key, DeclaredKind::Value);
         let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
-        self.register_class_name(&key, spec);
-        self.types
-            .get_mut(&key)
-            .expect("register_class_name created the entry")
-            .value_blob = true;
+        self.register_class(&key, DeclaredKind::Value, spec);
         self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
     }
@@ -693,14 +676,15 @@ impl JniGen {
         })
     }
 
-    /// Whether `key` was declared as a class in some package (any of the four
-    /// class kinds). A boundary decl on a type without a class declaration
-    /// makes it **rust-side-only**: the value is always built from
-    /// ingredients / decomposed into fields at the boundary and never
-    /// materializes in Kotlin — so the `_self` arms are structurally
-    /// impossible for it.
+    /// Whether `key` was declared as a class in some package (any
+    /// [`DeclaredKind`]). Presence in [`Self::types`] *is* the answer —
+    /// [`Self::register_class`] is the table's only writer. A boundary decl on
+    /// a type without a class declaration makes it **rust-side-only**: the
+    /// value is always built from ingredients / decomposed into fields at the
+    /// boundary and never materializes in Kotlin — so the `_self` arms are
+    /// structurally impossible for it.
     fn is_class_declared(&self, key: &TypeKey) -> bool {
-        self.types.get(key).is_some_and(|c| c.class_decl)
+        self.types.contains_key(key)
     }
 
     /// Lower the raw [`ExpandParamDecl`]s into the core's immutable
@@ -985,9 +969,7 @@ impl JniGen {
         };
         let inner_key = TypeKey::from_type(&r.elem);
         assert!(
-            self.types
-                .get(&inner_key)
-                .is_some_and(|c| c.opaque.is_some()),
+            self.types.get(&inner_key).is_some_and(|c| c.is_opaque()),
             "expand_return!({}).field(… .name(\"{name}\")): an `Option<&T>` binding-local field \
              delivers a nullable typed HANDLE, so `T` must be a declared ptr_class — `{}` is \
              not; return an owned `Option<{}>` instead",
