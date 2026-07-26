@@ -40,6 +40,22 @@
 //!   at the source it is exactly a two-alternative sum, and modelling it as an
 //!   opaque leaf would hide `T` and `E` from the tier whose job is structure.
 //!
+//! # What is deliberately *not* decomposed
+//!
+//! A [`Leaf`](SemanticShape::Leaf) says "this tier does not decompose it", and
+//! two cases take that answer on purpose, because the alternative is a node
+//! that looks decomposed and is wrong:
+//!
+//! - **A type-or-const-generic declared item** ([`generic_over_types`]).
+//!   `struct Wrap<T> { value: T }` interned as `Wrap<u8>` would otherwise be a
+//!   product keyed `Wrap<u8>` whose field is still the *parameter* `T`.
+//!   Instantiating the root's arguments is the other half of the answer and
+//!   lands the day an adapter needs it.
+//! - **A foreign-qualified path** ([`source_item_ident`]). Ingest normalizes
+//!   every captured source spelling to a bare ident, so anything still
+//!   qualified is not the registry's own item — matching on the tail would give
+//!   `foreign::Rec` the local `Rec`'s fields under the key `foreign::Rec`.
+//!
 //! # Cycles are represented, never cut
 //!
 //! `Node { children: Vec<Node> }` interns to a finite graph with a back-edge,
@@ -451,13 +467,19 @@ impl ShapeGraph {
             };
         }
 
-        // A declared struct or enum, looked up by its bare ident because that
-        // is how the registry indexes source items — the graph's own key stays
-        // the full `TypeKey` either way.
-        let Some(ident) = super::types_util::path_tail_ident(ty) else {
+        // A declared struct or enum — but only through a **canonical source
+        // path**. See `source_item_ident`: matching on the tail ident alone
+        // would give `foreign::Rec` the local `Rec`'s fields while keeping
+        // `foreign::Rec` as its key, which contradicts both the full-`TypeKey`
+        // rule and `normalize_type`'s own statement that an unknown crate path
+        // is never reduced because its spelling is its identity.
+        let Some(ident) = source_item_ident(ty) else {
             return SemanticShape::Leaf(key.clone());
         };
         if let Some((item, _)) = registry.structs.get(&ident) {
+            if generic_over_types(&item.generics) {
+                return SemanticShape::Leaf(key.clone());
+            }
             let item = item.clone();
             return SemanticShape::Product {
                 key: key.clone(),
@@ -465,6 +487,9 @@ impl ShapeGraph {
             };
         }
         if let Some((item, _)) = registry.enums.get(&ident) {
+            if generic_over_types(&item.generics) {
+                return SemanticShape::Leaf(key.clone());
+            }
             let item = item.clone();
             return SemanticShape::Choice {
                 key: key.clone(),
@@ -554,6 +579,69 @@ impl ShapeGraph {
             },
         }
     }
+}
+
+/// The ident of a **canonical source-item path**, or `None` for anything that
+/// is not one.
+///
+/// The registry indexes source items by bare ident, and ingest normalizes every
+/// captured spelling to that form (`crate::Foo`, `myflat::Foo` → `Foo`). So a
+/// path that is still qualified after normalization denotes something the
+/// registry does *not* own — `normalize_type` says exactly this about unknown
+/// crate paths: they are never reduced, because `a::KeyExpr` and `b::KeyExpr`
+/// may be genuinely distinct types and their spelling is their identity.
+///
+/// Matching on the tail ident instead would hand `foreign::Rec` the local
+/// `Rec`'s fields while keeping `foreign::Rec` as the node's key — a product
+/// assembled from an unrelated item, and the full-`TypeKey` invariant broken
+/// from the other direction.
+///
+/// Lifetime arguments are allowed (`Ref<'a>` is still `Ref`): a lifetime cannot
+/// appear in a field's *type structure*, so decomposition stays sound. Type and
+/// const arguments are not — see [`generic_over_types`].
+fn source_item_ident(ty: &syn::Type) -> Option<syn::Ident> {
+    let syn::Type::Path(tp) = ty else { return None };
+    if tp.qself.is_some() || tp.path.leading_colon.is_some() || tp.path.segments.len() != 1 {
+        return None;
+    }
+    let seg = tp.path.segments.first()?;
+    match &seg.arguments {
+        syn::PathArguments::None => Some(seg.ident.clone()),
+        syn::PathArguments::AngleBracketed(ab) => ab
+            .args
+            .iter()
+            .all(|a| matches!(a, syn::GenericArgument::Lifetime(_)))
+            .then(|| seg.ident.clone()),
+        syn::PathArguments::Parenthesized(_) => None,
+    }
+}
+
+/// Whether a declared item is parameterized by **types or consts** — in which
+/// case this tier refuses to decompose it.
+///
+/// `struct Wrap<T> { value: T }` interned as `Wrap<u8>` would otherwise become a
+/// product keyed `Wrap<u8>` whose field is still the *parameter* `T`, not `u8`:
+/// a node that looks decomposed and is wrong, which is worse than one that
+/// admits it does not know. Recursive generic types compound it, since the
+/// back-edge would point at the uninstantiated body rather than the concrete
+/// root.
+///
+/// Substituting the root's arguments is the other half of the answer and is
+/// deliberately **not** attempted here: doing it properly means defaults,
+/// const generics, partial application and nested parameter references, and a
+/// half-done substitution reintroduces exactly the silently-wrong node this
+/// guard exists to prevent. A [`Leaf`](SemanticShape::Leaf) is the honest
+/// answer — "this tier does not decompose it" — and an adapter that meets one
+/// rejects it as unsupported instead of mis-planning it. The day an adapter
+/// needs generic source items, instantiation lands here with its own tests.
+///
+/// Lifetime parameters do not count: they cannot appear in a field's type
+/// structure.
+fn generic_over_types(generics: &syn::Generics) -> bool {
+    generics
+        .params
+        .iter()
+        .any(|p| matches!(p, syn::GenericParam::Type(_) | syn::GenericParam::Const(_)))
 }
 
 /// Split `ty` into how it is held and what is held.

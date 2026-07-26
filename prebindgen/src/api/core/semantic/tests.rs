@@ -261,6 +261,93 @@ fn no_node_is_itself_a_reference() {
     assert!(g.id_of(&key("Option<Rec>")).is_none());
 }
 
+/// A **generic declared type is a `Leaf`**, not a product assembled from its
+/// uninstantiated body.
+///
+/// `struct Wrap<T> { value: T }` interned as `Wrap<u8>` would otherwise become a
+/// product keyed `Wrap<u8>` whose field is the *parameter* `T` — a node that
+/// looks decomposed and is wrong, which is worse than one that admits it does
+/// not know. Substituting the root's arguments is a separate piece of work with
+/// its own edge cases (defaults, const generics, partial application); until an
+/// adapter needs it, refusing is the honest answer.
+#[test]
+fn generic_declared_types_are_leaves_not_uninstantiated_products() {
+    let items = &[
+        "pub struct Wrap<T> { pub value: T }",
+        "pub enum Either<A, B> { Left(A), Right(B) }",
+        "pub struct Sized2<const N: usize> { pub v: [u8; N] }",
+        "pub struct Rec { pub id: u64 }",
+    ];
+    for spelling in [
+        "Wrap<u8>",
+        "Wrap<Rec>",
+        "Wrap",
+        "Either<u8, Rec>",
+        "Sized2<4>",
+    ] {
+        let (g, root) = graph_of(items, spelling);
+        assert!(
+            matches!(g.get(root.shape), SemanticShape::Leaf(_)),
+            "`{spelling}` must be a Leaf, got {:?}",
+            g.get(root.shape)
+        );
+        // Crucially: the parameter never appears as a node of its own.
+        assert!(
+            g.id_of(&key("T")).is_none() && g.id_of(&key("A")).is_none(),
+            "`{spelling}` leaked a type parameter into the graph"
+        );
+    }
+
+    // A **lifetime**-only generic is still decomposed: a lifetime cannot appear
+    // in a field's type structure, so nothing is left uninstantiated.
+    let (g, root) = graph_of(
+        &[
+            "pub struct Ref<'a> { pub inner: &'a Rec }",
+            "pub struct Rec { pub id: u64 }",
+        ],
+        "Ref<'a>",
+    );
+    let SemanticShape::Product { fields, .. } = g.get(root.shape) else {
+        panic!(
+            "a lifetime-only generic must still decompose, got {:?}",
+            g.get(root.shape)
+        );
+    };
+    assert_eq!(fields[0].uses.source, SourceUse::SharedRef);
+    assert_eq!(g.key(fields[0].uses.shape), &key("Rec"));
+}
+
+/// A **foreign-qualified type is a `Leaf`**, even when the registry happens to
+/// hold a local item with the same tail ident.
+///
+/// Matching on the tail alone would give `foreign::Rec` the local `Rec`'s
+/// fields while keeping `foreign::Rec` as the node's key — a product assembled
+/// from an unrelated item. `normalize_type` says the same thing from the other
+/// side: an unknown crate path is never reduced, because `a::KeyExpr` and
+/// `b::KeyExpr` may be genuinely distinct types and their spelling is their
+/// identity.
+#[test]
+fn foreign_qualified_types_do_not_inherit_a_local_item() {
+    let items = &["pub struct Rec { pub id: u64, pub label: String }"];
+
+    // The local one decomposes…
+    let (g, root) = graph_of(items, "Rec");
+    assert!(matches!(g.get(root.shape), SemanticShape::Product { .. }));
+
+    // …and every qualified spelling that is NOT the registry's own item does
+    // not, however suggestive its tail ident is.
+    for spelling in ["foreign::Rec", "a::b::Rec", "::other::Rec"] {
+        let (g, root) = graph_of(items, spelling);
+        assert!(
+            matches!(g.get(root.shape), SemanticShape::Leaf(_)),
+            "`{spelling}` must be a Leaf, got {:?}",
+            g.get(root.shape)
+        );
+        // …and it keeps its own identity rather than collapsing onto `Rec`.
+        assert_ne!(g.key(root.shape), &key("Rec"), "for `{spelling}`");
+    }
+}
+
 /// `Result<T, E>` is a two-alternative sum at the source. Both adapters route
 /// it to an error channel, but that is a Tier 1 decision — modelling it as an
 /// opaque leaf would hide `T` and `E` from the tier whose job is structure.
