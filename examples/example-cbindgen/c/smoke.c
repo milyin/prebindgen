@@ -252,6 +252,29 @@ static void test_out_of_domain_bool_payload(void) {
     note_drop(&off);
 }
 
+/* A union nested inside a struct payload. `note_t`'s `Sketched` arm carries a
+ * `drawing_t` BY VALUE, whose own `shape` field is another union with an owning
+ * arm — a `char *` two levels down that nothing else can reach: a union arm is
+ * not a top-level struct field the C caller releases by hand. `note_drop` has to
+ * reach through the record and call the nested union's own typed drop. */
+static void test_nested_union_payload(void) {
+    note_t sketched = note_new_sketched(3, "outline");
+    CHECK(sketched.tag == Sketched);
+    CHECK(sketched.sketched.id == 3);
+    CHECK(sketched.sketched.shape.tag == Labeled);
+    CHECK(strcmp(sketched.sketched.shape.labeled._0, "outline") == 0);
+
+    /* …and crosses back IN, rebuilt through both levels of converter. */
+    CHECK(note_value(sketched) == 3);
+
+    /* The outer drop reaches the inner union's active arm and nulls it, so a
+     * second drop of either is a no-op. */
+    note_drop(&sketched);
+    CHECK(sketched.sketched.shape.labeled._0 == NULL);
+    note_drop(&sketched);
+    shape_drop(&sketched.sketched.shape);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
@@ -259,12 +282,14 @@ int main(void) {
     test_invalid_tag();
     test_converter_derived_payloads();
     test_out_of_domain_bool_payload();
+    test_nested_union_payload();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
         return 1;
     }
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
-           "converter-derived payloads, out-of-domain bool payload\n");
+           "converter-derived payloads, out-of-domain bool payload, "
+           "nested union payload\n");
     return 0;
 }

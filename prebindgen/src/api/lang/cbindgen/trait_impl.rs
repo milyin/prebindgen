@@ -841,7 +841,11 @@ impl Cbindgen {
                 }
             ));
 
-            if registry.output_entry(&ty).is_some() && !drop_arms.is_empty() {
+            // The same predicate a CONTAINING struct uses to decide whether to
+            // call this drop, so a nested union can never be freed through a
+            // symbol that was not emitted.
+            if self.tagged_union_has_drop(&ty, registry) {
+                debug_assert!(!drop_arms.is_empty(), "has_drop implies an owning arm");
                 let drop_ident = self.destructor_symbol(&ty);
                 // The drop is a second C entry point into the same bytes, so it
                 // owes the same tag check as the input converter — `&mut *this_`
@@ -929,16 +933,25 @@ impl Cbindgen {
                         free((*#binding).#fname as *mut ::core::ffi::c_void);
                         (*#binding).#fname = ::core::ptr::null_mut();
                     )
+                } else if self.tagged_union_has_drop(fty, registry) {
+                    // The field is ANOTHER union, crossing by value. Its own
+                    // typed drop releases whichever arm is live and nulls the
+                    // slot, so this stays idempotent like every other arm here
+                    // — and the owning pointer is reached even though it is two
+                    // levels down. Nothing else can reach it: a union arm is not
+                    // a top-level struct field the C caller releases by hand.
+                    let drop_ident = self.destructor_symbol(fty);
+                    quote!(#drop_ident(&mut (*#binding).#fname);)
                 } else {
-                    let inner = opaque_ptr_payload_inner(fty).unwrap_or_else(|| fty.clone());
-                    let src_inner = self.src_ty(&inner);
-                    quote!(
-                        if !(*#binding).#fname.is_null() {
-                            drop(::std::boxed::Box::from_raw(
-                                (*#binding).#fname as *mut #src_inner,
-                            ));
-                            (*#binding).#fname = ::core::ptr::null_mut();
-                        }
+                    // `owning_data_struct_fields` yields exactly the two shapes
+                    // above (`data_field_owns`), so this is unreachable — and a
+                    // silent fall-through here would be a leak, which is the
+                    // defect this whole path exists to prevent.
+                    panic!(
+                        "Cbindgen: data-struct field `{}` of type `{}` is owning but has no \
+                         release form (expected a `String` or a declared `tagged_union`)",
+                        fname,
+                        fty.to_token_stream(),
                     )
                 }
             });

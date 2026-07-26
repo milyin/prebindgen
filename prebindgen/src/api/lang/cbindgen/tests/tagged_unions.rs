@@ -261,6 +261,74 @@ fn tagged_union_as_data_struct_field() {
     assert!(compact.contains("shape:__cbg_out_Shape(v.shape),"), "{src}");
 }
 
+/// A union nested inside a **struct payload** of another union. The record
+/// crosses by value, so the pointer it owns is two levels down — and nothing
+/// else can release it: a union arm is not a top-level struct field the C caller
+/// drops by hand. The outer drop therefore reaches through the payload and calls
+/// the inner union's own typed drop, which nulls what it frees and so keeps the
+/// whole thing idempotent.
+#[test]
+fn a_union_nested_in_a_struct_payload_is_freed() {
+    let loc = SourceLocation::default();
+    let drawing: syn::ItemStruct = syn::parse_quote!(
+        pub struct Drawing {
+            pub id: u64,
+            pub shape: Shape,
+        }
+    );
+    let note: syn::ItemEnum = syn::parse_quote!(
+        pub enum Note {
+            Silent,
+            Sketched(Drawing),
+        }
+    );
+    let make: syn::ItemFn = syn::parse_quote!(
+        pub fn note_new() -> Note {
+            unimplemented!()
+        }
+    );
+    let shape_new: syn::ItemFn = syn::parse_quote!(
+        pub fn shape_new() -> Shape {
+            unimplemented!()
+        }
+    );
+    let registry = Registry::<()>::from_items([
+        (syn::Item::Enum(shape_enum()), loc.clone()),
+        (syn::Item::Enum(operation_enum()), loc.clone()),
+        (syn::Item::Struct(drawing), loc.clone()),
+        (syn::Item::Enum(note), loc.clone()),
+        (syn::Item::Fn(make), loc.clone()),
+        (syn::Item::Fn(shape_new), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(example_flat))
+        .free_memory_function("example_free")
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .enum_type(syn::parse_quote!(Operation))
+        .tagged_union(syn::parse_quote!(Shape))
+        .data_struct(syn::parse_quote!(Drawing))
+        .tagged_union(syn::parse_quote!(Note))
+        .function(syn::parse_quote!(note_new))
+        .function(syn::parse_quote!(shape_new));
+
+    let src = write(cbindgen, registry, "nested_union_payload");
+    let compact: String = src.split_whitespace().collect();
+
+    // The outer union owns something only THROUGH the record, so it gets a drop
+    // at all — and that drop delegates to the inner union's.
+    assert!(
+        compact.contains("fnnote_drop(this_:*mut::core::mem::MaybeUninit<note_t>)"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("note_t::Sketched(__f0)=>{shape_drop(&mut(*__f0).shape);}"),
+        "{src}"
+    );
+}
+
 /// A data struct of plain fields keeps its **infallible** decode — only a
 /// union field makes the struct's own conversion able to fail.
 #[test]

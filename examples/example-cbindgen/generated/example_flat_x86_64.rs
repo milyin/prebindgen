@@ -89,6 +89,7 @@ pub enum note_t {
     Titled(caption_t),
     After(u64),
     Flagged(::core::mem::MaybeUninit<bool>),
+    Sketched(drawing_t),
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -106,13 +107,16 @@ pub unsafe extern "C" fn note_drop(this_: *mut ::core::mem::MaybeUninit<note_t>)
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         (*this_).as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
+    if !((__tag as i64) >= 0 && (__tag as i64) < 5i64) {
         return;
     }
     match (*this_).assume_init_mut() {
         note_t::Titled(__f0) => {
             free((*__f0).text as *mut ::core::ffi::c_void);
             (*__f0).text = ::core::ptr::null_mut();
+        }
+        note_t::Sketched(__f0) => {
+            shape_drop(&mut (*__f0).shape);
         }
         _ => {}
     }
@@ -249,9 +253,9 @@ pub(crate) unsafe fn __cbg_in_Note(
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         v.as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
+    if !((__tag as i64) >= 0 && (__tag as i64) < 5i64) {
         return ::core::result::Result::Err(
-            ::std::format!("invalid tag {} for `note_t` (expected 0..4)", __tag),
+            ::std::format!("invalid tag {} for `note_t` (expected 0..5)", __tag),
         );
     }
     let v = v.assume_init();
@@ -264,6 +268,9 @@ pub(crate) unsafe fn __cbg_in_Note(
                 example_flat::Note::Flagged(
                     ::core::ptr::read(__f0.as_ptr() as *const u8) != 0,
                 )
+            }
+            note_t::Sketched(__f0) => {
+                example_flat::Note::Sketched(__cbg_in_Drawing(__f0)?)
             }
         },
     )
@@ -497,6 +504,9 @@ pub(crate) fn __cbg_out_Note(v: example_flat::Note) -> ::core::mem::MaybeUninit<
             example_flat::Note::After(__f0) => note_t::After(__cbg_out_Millis(__f0)),
             example_flat::Note::Flagged(__f0) => {
                 note_t::Flagged(::core::mem::MaybeUninit::new(__f0))
+            }
+            example_flat::Note::Sketched(__f0) => {
+                note_t::Sketched(__cbg_out_Drawing(__f0))
             }
         },
     )
@@ -881,6 +891,24 @@ pub unsafe extern "C" fn note_new_flagged(
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn note_new_silent() -> ::core::mem::MaybeUninit<note_t> {
     let __v = example_flat::note_new_silent();
+    let __ret: ::core::mem::MaybeUninit<note_t>;
+    __ret = __cbg_out_Note(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn note_new_sketched(
+    id: u64,
+    label: *const ::core::ffi::c_char,
+) -> ::core::mem::MaybeUninit<note_t> {
+    let id = __cbg_in_u64(id);
+    let label = match __cbg_in___str(label) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::note_new_sketched(id, label);
     let __ret: ::core::mem::MaybeUninit<note_t>;
     __ret = __cbg_out_Note(__v);
     __ret

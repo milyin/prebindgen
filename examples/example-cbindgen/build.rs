@@ -162,6 +162,7 @@ fn generate_ffi_bindings() -> PathBuf {
         // and its `&str`-taking constructor.
         pq!(note_value),
         pq!(note_new_titled),
+        pq!(note_new_sketched),
         pq!(caption_new),
         pq!(calculator_new_clone),
         pq!(calculator_get_value),
