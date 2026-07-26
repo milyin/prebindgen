@@ -22,9 +22,17 @@
  *     through its `char **e`, and `shape_drop` ignores it. Constructing that
  *     value is the point of the check — it is not a Rust `shape_t` at all;
  *   - the same rule one level down, on a `bool` payload (`note_t`'s `Flagged`
- *     arm): a byte outside `{0,1}` is normalised, not materialised.
+ *     arm): a byte outside `{0,1}` is normalised, not materialised;
+ *   - and one level below THAT, on a `bool` field of a `data_struct` payload
+ *     (`caption_t`'s `emphatic`) — which is what makes the invariant
+ *     transitive rather than true only of the tag and the direct payloads.
  *
  * Exits non-zero on the first failed check.
+ *
+ * This file is also the repo's ownership contract in executable form — every
+ * arm C receives is C's to release — so it is run under ASan/LSan/UBSan by
+ * `examples/smoke-asan.sh` in CI. A missing `*_drop` or `example_free` here is
+ * a failure, not a silent PASS.
  */
 #include <math.h>
 #include <stdio.h>
@@ -206,12 +214,14 @@ static void test_converter_derived_payloads(void) {
     CHECK(note_value(after) == 1500);
 
     /* Nested data_struct by value: the whole record rides in the union arm. */
-    note_t titled = note_new_titled(7, "chapter one");
+    note_t titled = note_new_titled(7, "chapter one", true);
     CHECK(titled.tag == Titled);
     CHECK(titled.titled.id == 7);
     CHECK(strcmp(titled.titled.text, "chapter one") == 0);
+    CHECK(titled.titled.emphatic == true);
     /* …and crosses back IN, rebuilt through the payload's own converter. */
     CHECK(note_value(titled) == 7);
+    CHECK(note_emphatic(titled) == true);
 
     /* The union's drop reaches through the struct payload and frees its
      * owning field, nulling the slot so a second drop is a no-op. */
@@ -252,6 +262,27 @@ static void test_out_of_domain_bool_payload(void) {
     note_drop(&off);
 }
 
+/* The same rule one level DOWN, on a `bool` field of a `data_struct` payload
+ * (#170 instance 2). This is what makes the union's "no invalid value is ever
+ * materialised" invariant transitive: the nested record is rebuilt through
+ * per-field wires, so each restricted-validity field has to be normalised on
+ * its own, not just the tag and the direct payloads. */
+static void test_out_of_domain_bool_data_struct_field(void) {
+    static const unsigned char bytes[] = {0, 1, 2, 0xff};
+    static const bool expected[] = {false, true, true, true};
+
+    for (size_t i = 0; i < sizeof bytes / sizeof bytes[0]; i++) {
+        note_t titled = note_new_titled(7, "chapter one", false);
+        memcpy(&titled.titled.emphatic, &bytes[i], 1);
+
+        CHECK(note_emphatic(titled) == expected[i]);
+        /* The rest of the record still decodes normally around it. */
+        CHECK(note_value(titled) == 7);
+
+        note_drop(&titled);
+    }
+}
+
 /* A union nested inside a struct payload. `note_t`'s `Sketched` arm carries a
  * `drawing_t` BY VALUE, whose own `shape` field is another union with an owning
  * arm — a `char *` two levels down that nothing else can reach: a union arm is
@@ -275,6 +306,40 @@ static void test_nested_union_payload(void) {
     shape_drop(&sketched.sketched.shape);
 }
 
+/* #189's alias preflight, under the leak detector that makes it meaningful.
+ * `calculator_merge(x, x)` would hand one allocation to two `Box::from_raw`
+ * calls — a double free ASan reports immediately. The generated wrapper
+ * compares the pointers before either conversion runs, so the call is rejected
+ * and the handle is untouched: still live, still ours to drop exactly once. */
+static void test_alias_preflight(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+
+    CHECK(calculator_merge(c, c, &e) == NULL);
+    CHECK(e != NULL);
+    CHECK(strstr(e, "aliasing arguments") != NULL);
+    example_free(e);
+    e = NULL;
+
+    /* Nothing was consumed — the handle still works and is dropped once. */
+    CHECK(calculator_get_value(c) == 0.0);
+
+    /* The mixed consume/borrow shape is rejected by the same rule. */
+    double out = -1.0;
+    CHECK(!calculator_absorb(c, c, &out, &e));
+    CHECK(e != NULL);
+    CHECK(out == -1.0);
+    example_free(e);
+    e = NULL;
+
+    /* Two DISTINCT handles still work — the preflight adds no false positive.
+     * Both are consumed by the merge; the result is the only thing to drop. */
+    calculator_t *merged = calculator_merge(c, calculator_new(), &e);
+    CHECK(merged != NULL);
+    CHECK(e == NULL);
+    calculator_drop(merged);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
@@ -282,14 +347,16 @@ int main(void) {
     test_invalid_tag();
     test_converter_derived_payloads();
     test_out_of_domain_bool_payload();
+    test_out_of_domain_bool_data_struct_field();
     test_nested_union_payload();
+    test_alias_preflight();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
         return 1;
     }
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
-           "converter-derived payloads, out-of-domain bool payload, "
-           "nested union payload\n");
+           "converter-derived payloads, out-of-domain bool payload and "
+           "data-struct field, nested union payload, alias preflight\n");
     return 0;
 }

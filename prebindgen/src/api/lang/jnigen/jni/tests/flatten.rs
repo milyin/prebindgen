@@ -1340,7 +1340,7 @@ fn split_fixture(extra: &[&str]) -> Registry<KotlinMeta> {
     Registry::<KotlinMeta>::from_items(items).expect("index items")
 }
 
-fn write_all(gen: crate::api::core::Generation<JniGen>, tag: &str) -> String {
+pub(super) fn write_all(gen: crate::api::core::Generation<JniGen>, tag: &str) -> String {
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

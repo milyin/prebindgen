@@ -656,6 +656,12 @@ struct Opaque {
     consume_null: Option<String>,
     /// `true` for `Option<&T>` — nullable param, branches before lock.
     nullable: bool,
+    /// The **resource domain**: the handle's Kotlin type name with nullability
+    /// dropped, so `T` and `T?` land in one domain and two unrelated handle
+    /// classes do not. Used only by [`render_alias_preflight`], to keep it from
+    /// comparing a `Storage` against a `Summary` — pointers that can never be
+    /// equal. `None` ⇒ unknown, so compare against everything (fail-safe).
+    domain: Option<String>,
 }
 
 /// Peel `&` / `Option<…>` / `Option<&…>` layers and return the inner type's
@@ -1175,6 +1181,12 @@ fn classify_params(
                             target,
                             consume_null: Some(consume_null),
                             nullable: leaf.handle_nullable,
+                            // A flattened leaf carries no Kotlin class name of
+                            // its own, so its domain is unknown and it compares
+                            // against every other handle — the fail-safe
+                            // direction (an extra `ptr` comparison, never a
+                            // missed alias).
+                            domain: None,
                         })
                     })
                     .collect();
@@ -1592,6 +1604,7 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
                 target,
                 consume_null,
                 nullable,
+                domain: p.kt_type.simple_name().map(str::to_string),
             }]
         })
         .collect()
@@ -1678,6 +1691,73 @@ fn error_sink_parts(
         binding_call_arg: "__bcap.ze0".to_string(),
         domain,
     })
+}
+
+/// Pre-lock **alias preflight**: reject a call whose handle arguments name the
+/// same native resource in a combination that would consume or invalidate it
+/// twice — before the lock, and before any conversion.
+///
+/// `zCombine(primary: ZThing, fallback: ZThing)` is a supported declaration;
+/// called as `zCombine(x, x)` it hands one allocation to two consuming
+/// converters. `zAbsorb(a: ZThing, b: ZThing?)` mixing a consume with a borrow
+/// is the same defect: the borrow dangles the moment the consume takes
+/// ownership. Emitted whenever the call has **at least one consumed handle**
+/// and **any other handle**.
+///
+/// Comparison is on `ptr`, the resource's own address, not on the declared
+/// Kotlin type — which is what makes `T` and `T?` (and a handle nested inside a
+/// flattened `data_class`) compare in the same domain without enumerating the
+/// spellings. Two distinct live handles cannot share an address, so this has no
+/// false positives; `0L` names no resource and is skipped.
+///
+/// A binding failure, so it routes through the same channel a closed handle
+/// does — a function-level return, never a throw.
+fn render_alias_preflight(opaques: &[Opaque], binding_param: &str, is_unit: bool) -> kt::Code {
+    let mut guards = kt::Code::new();
+    if opaques.len() < 2 || !opaques.iter().any(|o| o.consume_null.is_some()) {
+        return guards;
+    }
+    let ptr_of = |o: &Opaque| {
+        if o.nullable {
+            format!("({t}?.ptr ?: 0L)", t = o.target)
+        } else {
+            format!("{t}.ptr", t = o.target)
+        }
+    };
+    for i in 0..opaques.len() {
+        for j in (i + 1)..opaques.len() {
+            let (a, b) = (&opaques[i], &opaques[j]);
+            // Two borrows of one resource are legal; at least one side must be
+            // taking it away.
+            if a.consume_null.is_none() && b.consume_null.is_none() {
+                continue;
+            }
+            // Two handles of different classes are different allocations, so
+            // their pointers can never be equal — checking them would be dead
+            // code in every wrapper that mixes handle types. An unknown domain
+            // compares against everything.
+            if let (Some(da), Some(db)) = (&a.domain, &b.domain) {
+                if da != db {
+                    continue;
+                }
+            }
+            let (pa, pb) = (ptr_of(a), ptr_of(b));
+            let msg = format!(
+                "\"Aliasing arguments: '{}' and '{}' are the same native resource; a consumed \
+                 handle may not be passed twice in one call.\"",
+                a.name, b.name,
+            );
+            let cond = format!("{pa} != 0L && {pa} == {pb}");
+            guards = if is_unit {
+                guards.wline(format!(
+                    "if ({cond}) {{ {binding_param}.run({msg}); return }}"
+                ))
+            } else {
+                guards.wline(format!("if ({cond}) return {binding_param}.run({msg})"))
+            };
+        }
+    }
+    guards
 }
 
 /// Pre-lock closed-handle guards: a racy-but-safe `isClosed()` check before
@@ -1860,10 +1940,12 @@ fn render_body(
     // The capture is a per-thread reusable holder (zero allocation): the
     // extern writes its `@JvmField` slots via `run`, the wrapper reads
     // them after the (synchronous) call. `acquire()` resets the slots.
-    let mut b = render_prelock_guards(opaques, &sink.binding_param, is_unit).line(format!(
-        "val __bcap = {}.acquire()",
-        sink.binding_capture_short
-    ));
+    let mut b = render_alias_preflight(opaques, &sink.binding_param, is_unit)
+        .push(render_prelock_guards(opaques, &sink.binding_param, is_unit))
+        .line(format!(
+            "val __bcap = {}.acquire()",
+            sink.binding_capture_short
+        ));
     if let Some(d) = &sink.domain {
         b = b.line(format!("val __dcap = {}.acquire()", d.capture_short));
     }

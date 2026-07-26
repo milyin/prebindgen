@@ -103,3 +103,11 @@ add_custom_target(run_smoke
   DEPENDS example_smoke
   VERBATIM
 )
+
+# The same smoke test under ASan/LSan/UBSan — the form CI runs, and the one that
+# can fail on a leak rather than printing PASS while leaking. Kept as a script
+# rather than a CMake option so CI does not need CMake at all.
+add_custom_target(run_smoke_asan
+  COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/../smoke-asan.sh"
+  VERBATIM
+)

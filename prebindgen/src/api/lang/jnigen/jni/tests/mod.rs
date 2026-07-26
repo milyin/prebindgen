@@ -23,6 +23,7 @@ fn myflat_loc() -> crate::SourceLocation {
     }
 }
 
+mod aliasing;
 mod callbacks;
 mod config;
 mod consts;

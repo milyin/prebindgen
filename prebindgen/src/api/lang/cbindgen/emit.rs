@@ -77,9 +77,9 @@ impl Cbindgen {
     /// they do too. That is what makes the mirror's tag the *only* thing
     /// [`Cbindgen::in_tagged_union`] has to validate before `assume_init`.
     ///
-    /// (A `bool` reached through a nested `data_struct` payload is **not**
-    /// covered here — see #170. That is the pre-existing `c_field_wire` policy,
-    /// which a plain `bool` parameter shares.)
+    /// A `bool` reached through a nested `data_struct` payload is covered by
+    /// the same [`bool_wire`] policy, which [`c_field_wire`] and the plain
+    /// `bool` parameter now share (#170).
     pub(super) fn payload_field_wire(
         &self,
         fty: &syn::Type,
@@ -98,11 +98,9 @@ impl Cbindgen {
         // `bool` is the one scalar with a restricted domain: `2` is a byte a C
         // caller can write into the union and NOT a Rust `bool`, so holding it
         // in the mirror is the same UB an out-of-range discriminant is. Same
-        // remedy, and invisible in C for the same reason (cbindgen simplifies
-        // `MaybeUninit<T>` to `T`); the byte is normalised C-style — nonzero is
-        // true — in `payload_in_expr`.
+        // remedy everywhere C writes a `bool` — see `bool_wire`.
         if is_bool(fty) {
-            return Ok(syn::parse_quote!(::core::mem::MaybeUninit<bool>));
+            return Ok(bool_wire());
         }
         // A `Vec` payload needs TWO C wires (pointer + length) and one union
         // field can carry only one, so its length would be silently dropped.
@@ -325,6 +323,12 @@ impl Cbindgen {
     /// [`Cbindgen::opaque_ptr`]) becomes `*mut t_t`. The whole-struct `Transmute`
     /// (size/align-equal, asserted) then reinterprets each source field's bits into
     /// this wire. `None` ⇒ the field type is unsupported in a `repr_c_struct`.
+    ///
+    /// Note what this policy cannot express: the wire *is* the source field's
+    /// type, so a field whose Rust type has restricted validity is reinterpreted
+    /// from C's bytes with no chance to check them. That gap is audited
+    /// separately by [`Self::restricted_validity_field`] — this function keeps
+    /// answering what the layout is.
     pub(super) fn mirror_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
         if is_scalar(fty) {
             return Some(fty.clone());
@@ -347,6 +351,53 @@ impl Cbindgen {
             }
         }
         None
+    }
+
+    /// Why a `repr_c_struct` mirror field is **not** safe to reinterpret from
+    /// C-supplied bytes, or `None` when every bit pattern of its wire is a valid
+    /// value of the source field's type.
+    ///
+    /// Integers, floats and raw pointers hold any bits legally (holding a
+    /// garbage pointer is sound; dereferencing it is the caller's contract).
+    /// Two Rust types do not: `bool`, whose domain is `0`/`1` (#170 instance 3),
+    /// and a declared `enum_type`, whose domain is the declared discriminants
+    /// (#158 instance 3).
+    ///
+    /// The other positions these types cross — a parameter, a `data_struct`
+    /// field, a tagged-union payload — all go through a *per-value* converter,
+    /// so each has a hook: `bool` normalises through [`bool_wire`], an enum
+    /// validates its discriminant in `in_enum`. A `repr_c_struct` has no such
+    /// hook: one whole-struct `Transmute` reinterprets the mirror into the
+    /// source type, and by the time any generated code could look, the invalid
+    /// value already exists. Wrapping the mirror field in `MaybeUninit` moves
+    /// the problem rather than solving it — the transmute's *output* still has
+    /// the real field.
+    pub(super) fn restricted_validity_field(&self, fty: &syn::Type) -> Option<&'static str> {
+        if is_bool(fty) {
+            return Some("`bool` — only `0` and `1` are valid");
+        }
+        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+            return Some("a declared `enum_type` — only its declared discriminants are valid");
+        }
+        None
+    }
+
+    /// The audit of [`Self::restricted_validity_field`] over one
+    /// `repr_c_struct`'s mirror: the offending `(field, reason)` pairs, in
+    /// declaration order. Empty ⇒ the whole mirror is safe to reinterpret.
+    pub(super) fn restricted_validity_fields(
+        &self,
+        registry: &Registry<()>,
+        ty: &syn::Type,
+    ) -> Vec<(syn::Ident, &'static str)> {
+        self.struct_fields(registry, ty)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(fname, fty)| {
+                self.restricted_validity_field(&fty)
+                    .map(|reason| (fname, reason))
+            })
+            .collect()
     }
 
     /// Exported `#[no_mangle]` symbol for a declared function:
@@ -812,6 +863,115 @@ impl Cbindgen {
             .is_some_and(|entry| returns_result(&entry.function.sig.output))
     }
 
+    /// How one parameter *uses* the resource it names — the axis the alias rule
+    /// is stated on. `None` ⇒ the parameter names no single owned resource (a
+    /// scalar, a string, a slice block, an undeclared type), so it cannot alias
+    /// one.
+    ///
+    /// `T` and `Option<T>` share a resource domain: both arrive as the same
+    /// handle pointer, and comparing the syntactic parameter type instead would
+    /// miss `f(x: ZThing, y: Option<ZThing>)` called with the same handle
+    /// twice.
+    fn alias_slot(&self, ty: &syn::Type) -> Option<(TypeKey, AliasAccess)> {
+        let inner = if is_option(ty) {
+            first_type_arg(ty)?
+        } else {
+            ty.clone()
+        };
+        let declared =
+            |key: &TypeKey| self.opaque.contains_key(key) || self.value_opaque.contains_key(key);
+        if let syn::Type::Reference(r) = &inner {
+            // `&mut MaybeUninit<T>` borrows T's slot exclusively just as
+            // `&mut T` does; the wire is the same pointer.
+            let elem = (*r.elem).clone();
+            let elem = maybe_uninit_inner(&elem).unwrap_or(elem);
+            let key = TypeKey::from_type(&elem);
+            if !declared(&key) {
+                return None;
+            }
+            return Some((
+                key,
+                if r.mutability.is_some() {
+                    AliasAccess::Exclusive
+                } else {
+                    AliasAccess::Shared
+                },
+            ));
+        }
+        let key = TypeKey::from_type(&inner);
+        declared(&key).then_some((key, AliasAccess::Consume))
+    }
+
+    /// The runtime **alias preflight**: reject a call whose arguments name the
+    /// same resource in a combination that would reconstruct or invalidate it
+    /// twice, *before* any conversion runs.
+    ///
+    /// `z_combine(primary: ZThing, fallback: ZThing)` is a supported
+    /// declaration; called as `z_combine(x, x)` it reaches `Box::from_raw`
+    /// twice on one allocation. So is `f(a: ZThing, b: &ZThing)` — the borrow
+    /// dangles the moment the consume takes ownership — and `f(a: &mut T, b:
+    /// &T)`, where the exclusive reference is not exclusive at all. Rejecting
+    /// the *declaration* is not an option: these are shapes that ship today, so
+    /// removing them would be a regression that a later stage would have to
+    /// undo.
+    ///
+    /// Emitted whenever a call has **at least one `Consume` or
+    /// `ExclusiveBorrow`** and **any other active access in the same resource
+    /// domain**. Stated that way rather than as "two or more consumed
+    /// parameters", which would skip exactly the two mixed cases above.
+    ///
+    /// A NULL pointer names no resource — two NULLs are not an alias — and is
+    /// rejected by each converter's own null check, so the comparison skips it.
+    ///
+    /// Shared/shared is *not* rejected: two `&T` to one resource is legal Rust
+    /// and legal C.
+    pub(super) fn alias_preflight(&self, f: &syn::ItemFn, route: &ErrRoute) -> Option<TokenStream> {
+        let mut slots: Vec<(syn::Ident, TypeKey, AliasAccess)> = Vec::new();
+        for input in &f.sig.inputs {
+            let syn::FnArg::Typed(pt) = input else {
+                continue;
+            };
+            let syn::Pat::Ident(pat_id) = &*pt.pat else {
+                continue;
+            };
+            if let Some((key, access)) = self.alias_slot(&pt.ty) {
+                slots.push((pat_id.ident.clone(), key, access));
+            }
+        }
+
+        let on_err = route_message(route);
+        let mut checks: Vec<TokenStream> = Vec::new();
+        for i in 0..slots.len() {
+            for j in (i + 1)..slots.len() {
+                let (a, a_key, a_access) = &slots[i];
+                let (b, b_key, b_access) = &slots[j];
+                if a_key != b_key {
+                    continue;
+                }
+                // At least one side must be exclusive about the resource.
+                if matches!(a_access, AliasAccess::Shared)
+                    && matches!(b_access, AliasAccess::Shared)
+                {
+                    continue;
+                }
+                let msg = format!(
+                    "aliasing arguments: `{a}` ({}) and `{b}` ({}) are the same `{}` — a \
+                     consumed or exclusively-borrowed resource may not be named twice in one call",
+                    a_access.describe(),
+                    b_access.describe(),
+                    a_key.as_str(),
+                );
+                checks.push(quote!(
+                    if !(#a as *const ()).is_null() && (#a as *const ()) == (#b as *const ()) {
+                        let __msg = ::std::string::String::from(#msg);
+                        #on_err
+                    }
+                ));
+            }
+        }
+        (!checks.is_empty()).then(|| quote!(#(#checks)*))
+    }
+
     /// Build the wire param list, per-input decode statements, and call-site
     /// argument expressions. Fallible inputs (converter returns `Result<_,
     /// String>`) route their `Err(msg)` per `route`; infallible inputs decode
@@ -824,7 +984,10 @@ impl Cbindgen {
         route: &ErrRoute,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
         let mut params = Vec::new();
-        let mut decodes = Vec::new();
+        // The alias preflight runs BEFORE every decode, which is the whole
+        // point: by the time the first converter has run, one of the aliased
+        // arguments has already been consumed.
+        let mut decodes: Vec<TokenStream> = self.alias_preflight(f, route).into_iter().collect();
         let mut call_args = Vec::new();
 
         for input in &f.sig.inputs {
@@ -895,19 +1058,7 @@ impl Cbindgen {
             params.push(quote!(#ident: #wire));
 
             if returns_result(&entry.function.sig.output) {
-                let on_err = match route {
-                    ErrRoute::Result {
-                        e_conv,
-                        e_ty_src,
-                        fail_return,
-                    } => quote!(
-                        if !e.is_null() {
-                            *e = #e_conv(<#e_ty_src as ::core::convert::From<::std::string::String>>::from(__msg));
-                        }
-                        return #fail_return;
-                    ),
-                    ErrRoute::Panic => quote!(panic!("{}", __msg);),
-                };
+                let on_err = route_message(route);
                 decodes.push(quote!(
                     let #ident = match #conv(#ident) {
                         ::core::result::Result::Ok(__v) => __v,

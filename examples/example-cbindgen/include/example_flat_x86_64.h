@@ -31,6 +31,7 @@ typedef struct calculator_t {
 typedef struct caption_t {
   uint64_t id;
   char *text;
+  bool emphatic;
 } caption_t;
 
 typedef enum shape_t_Tag {
@@ -116,6 +117,8 @@ void note_drop(struct note_t *this_);
 
 void shape_drop(struct shape_t *this_);
 
+bool calculator_absorb(struct calculator_t *a, const struct calculator_t *b, double *out, char **e);
+
 bool calculator_apply(struct calculator_t *c,
                       enum operation_t op,
                       double operand,
@@ -132,6 +135,8 @@ double calculator_get_value(const struct calculator_t *c);
 
 bool calculator_is(const struct calculator_t *c, double value);
 
+struct calculator_t *calculator_merge(struct calculator_t *a, struct calculator_t *b, char **e);
+
 struct calculator_t *calculator_new(void);
 
 struct calculator_t *calculator_new_clone(const struct calculator_t *c);
@@ -140,7 +145,7 @@ struct calculator_t *calculator_new_from_str(const char *s, char **e);
 
 char *calculator_to_string(const struct calculator_t *c);
 
-struct caption_t caption_new(uint64_t id, const char *text);
+struct caption_t caption_new(uint64_t id, const char *text, bool emphatic);
 
 struct shape_t drawing_get_shape(struct drawing_t d);
 
@@ -154,6 +159,8 @@ enum inside_foo_t inside_foo_default(void);
 
 int32_t inside_foo_value(enum inside_foo_t x);
 
+bool note_emphatic(struct note_t n);
+
 struct note_t note_new_after(uint64_t millis);
 
 struct note_t note_new_flagged(bool flag);
@@ -162,7 +169,7 @@ struct note_t note_new_silent(void);
 
 struct note_t note_new_sketched(uint64_t id, const char *label);
 
-struct note_t note_new_titled(uint64_t id, const char *text);
+struct note_t note_new_titled(uint64_t id, const char *text, bool emphatic);
 
 uint64_t note_value(struct note_t n);
 

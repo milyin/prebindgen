@@ -118,6 +118,12 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_new),
         pq!(calculator_new_from_str),
         pq!(calculator_apply),
+        // Two consumed handles of one type, and one consumed beside one
+        // borrowed: the two shapes the alias preflight covers. Both return
+        // `Result`, so the rejection reaches the caller through `char **e`
+        // rather than aborting.
+        pq!(calculator_merge),
+        pq!(calculator_absorb),
         pq!(foo_new),
         pq!(foo_get_id),
         pq!(inside_foo_default),
@@ -161,6 +167,7 @@ fn generate_ffi_bindings() -> PathBuf {
         // `Note` crossing IN (tag validated, so fallible without a `Result`),
         // and its `&str`-taking constructor.
         pq!(note_value),
+        pq!(note_emphatic),
         pq!(note_new_titled),
         pq!(note_new_sketched),
         pq!(caption_new),

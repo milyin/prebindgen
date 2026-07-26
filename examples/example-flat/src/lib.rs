@@ -80,19 +80,27 @@ pub enum Shape {
 /// `ReplyResult` needs, where an alternative carries a whole record rather than a
 /// scalar. Its `String` field owns memory, so the union's typed drop has to reach
 /// through the payload and release it.
+///
+/// The `bool` field is the second half of #170: a `data_struct` field crosses by
+/// value through a per-field wire, so a byte C wrote has to be normalised there
+/// too — and because this struct is also a union payload, that is what makes the
+/// tagged union's "no invalid value is ever materialised" invariant hold
+/// *transitively*, one level down.
 #[prebindgen]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Caption {
     pub id: u64,
     pub text: String,
+    pub emphatic: bool,
 }
 
 /// Build a [`Caption`].
 #[prebindgen]
-pub fn caption_new(id: u64, text: &str) -> Caption {
+pub fn caption_new(id: u64, text: &str, emphatic: bool) -> Caption {
     Caption {
         id,
         text: text.to_string(),
+        emphatic,
     }
 }
 
@@ -141,8 +149,8 @@ pub fn millis_to_raw(v: &Millis) -> u64 {
 
 /// A titled note (nested-struct payload).
 #[prebindgen]
-pub fn note_new_titled(id: u64, text: &str) -> Note {
-    Note::Titled(caption_new(id, text))
+pub fn note_new_titled(id: u64, text: &str, emphatic: bool) -> Note {
+    Note::Titled(caption_new(id, text, emphatic))
 }
 
 /// A delayed note (converted-leaf payload).
@@ -183,6 +191,17 @@ pub fn note_value(n: Note) -> u64 {
         Note::After(Millis(m)) => m,
         Note::Flagged(f) => f as u64,
         Note::Sketched(d) => d.id,
+    }
+}
+
+/// Whether a titled note's caption is emphatic. The observable of #170's
+/// second instance: the `bool` rides in as a `data_struct` field of a union
+/// payload, two per-field wires down from the C caller's bytes.
+#[prebindgen]
+pub fn note_emphatic(n: Note) -> bool {
+    match n {
+        Note::Titled(c) => c.emphatic,
+        _ => false,
     }
 }
 
@@ -300,6 +319,32 @@ pub fn calculator_new_clone(c: &Calculator) -> Calculator {
         value: c.value,
         history: c.history.clone(),
     }
+}
+
+/// Fold one accumulator into another, consuming **both**.
+///
+/// Two consumed handles of the same type is a supported shape, and it is the
+/// aliasing hazard: called as `calculator_merge(x, x)` a C caller would have
+/// one allocation reconstructed twice, so the generated wrapper runs a
+/// pointer-identity **preflight** before either conversion and reports the
+/// alias through this `Result`'s error channel.
+#[prebindgen]
+pub fn calculator_merge(a: Calculator, b: Calculator) -> Result<Calculator, Error> {
+    let mut history = a.history;
+    history.extend(b.history);
+    Ok(Calculator {
+        value: a.value + b.value,
+        history,
+    })
+}
+
+/// Consume one accumulator while **borrowing** another — the mixed case the
+/// "two or more consumed parameters" reading of the rule would have skipped.
+/// The borrow dangles the moment the consume takes ownership, so the same
+/// preflight covers it.
+#[prebindgen]
+pub fn calculator_absorb(a: Calculator, b: &Calculator) -> Result<f64, Error> {
+    Ok(a.value + b.value)
 }
 
 /// Apply `op` with `operand`, updating the accumulator and returning the new

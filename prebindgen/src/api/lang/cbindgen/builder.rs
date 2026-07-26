@@ -243,6 +243,7 @@ impl Cbindgen {
                 opaque: opaque_ty,
                 kind,
                 generate_mirror: false,
+                assume_c_field_validity: false,
                 cfg: TypeCfg::default(),
             },
         );
@@ -289,10 +290,51 @@ impl Cbindgen {
                 opaque: syn::parse_quote!(#mirror),
                 kind: OpaqueKind::Data,
                 generate_mirror: true,
+                assume_c_field_validity: false,
                 cfg: TypeCfg::default(),
             },
         );
         self.current = Some(CurrentDecl::ValueOpaque(key));
+        self
+    }
+
+    /// Accept a [`Self::repr_c_struct`] whose mirror has **restricted-validity**
+    /// fields, taking responsibility for their bytes.
+    ///
+    /// A `repr_c_struct` crosses IN by one whole-struct reinterpret, so there is
+    /// no per-field hook where a C-supplied byte could be normalised or checked
+    /// before the source struct exists. A field whose Rust type accepts only
+    /// *some* bit patterns — `bool` (`0`/`1`) or a declared [`Self::enum_type`]
+    /// (the declared discriminants) — is therefore undefined behaviour the
+    /// moment C writes anything else into the mirror and hands it back. The
+    /// generator rejects such a declaration by default (#170 instance 3, #158
+    /// instance 3); the real fix is a raw-wire lowering, which does not exist
+    /// yet.
+    ///
+    /// This modifier is the acknowledgement, not a fix: it says the C side of
+    /// this binding is trusted to write only in-domain bytes into those fields.
+    /// It exists so that the audit rejects **silently unsound new declarations**
+    /// without removing bindings that already ship. Chain it directly after the
+    /// [`Self::repr_c_struct`] it applies to; the panic message names every
+    /// field it would cover.
+    ///
+    /// Prefer, in order: move the field into a [`Self::data_struct`] (per-field
+    /// wires, so `bool` normalises), pass it as a separate scalar parameter, or
+    /// widen it to an integer the whole domain of which is valid.
+    pub fn assume_c_field_validity(mut self) -> Self {
+        match self.current.clone() {
+            Some(CurrentDecl::ValueOpaque(key)) => {
+                self.value_opaque
+                    .get_mut(&key)
+                    .expect("entry vanished")
+                    .assume_c_field_validity = true;
+            }
+            other => panic!(
+                "Cbindgen::assume_c_field_validity must follow a `repr_c_struct` declaration, \
+                 not {}",
+                describe_current(&other)
+            ),
+        }
         self
     }
 

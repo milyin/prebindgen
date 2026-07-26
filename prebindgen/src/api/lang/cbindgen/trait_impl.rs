@@ -73,6 +73,12 @@ impl Cbindgen {
                 subs.push(fty.clone());
                 fallible = true;
                 inits.push(quote!(#fname: #conv(v.#fname)?));
+            } else if is_bool(fty) {
+                // #170 instance 2: the field's wire is `MaybeUninit<bool>`, so
+                // the byte C wrote is normalised here — a Rust `bool` never
+                // holds it unchecked.
+                let read = bool_in_expr(quote!(v.#fname));
+                inits.push(quote!(#fname: #read));
             } else {
                 inits.push(quote!(#fname: v.#fname));
             }
@@ -378,9 +384,39 @@ impl Cbindgen {
         })
     }
 
-    /// FFI-safe scalar (`bool`, integers, floats): identity pass-through.
+    /// `bool` input: the one scalar that is **not** a pass-through (#170).
+    ///
+    /// A `bool` parameter is the broadest place C hands over a byte that no
+    /// Rust `bool` may hold, so it crosses as [`bool_wire`] and is normalised
+    /// by [`bool_in_expr`] before a `bool` exists. The C prototype is
+    /// unchanged — cbindgen simplifies `MaybeUninit<T>` to `T`.
+    pub(crate) fn in_bool(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+        if !is_bool(ty) {
+            return None;
+        }
+        let name = Self::in_name(ty);
+        let wire = bool_wire();
+        let read = bool_in_expr(quote!(v));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(v: #wire) -> bool {
+                #read
+            }
+        );
+        Some(ConverterImpl {
+            subs: vec![],
+            destination: wire,
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// FFI-safe scalar (integers, floats): identity pass-through. `bool` is
+    /// claimed earlier by [`Self::in_bool`] and never reaches here.
     pub(crate) fn in_scalar(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
-        if !is_scalar(ty) {
+        if !is_scalar(ty) || is_bool(ty) {
             return None;
         }
         let name = Self::in_name(ty);
@@ -587,6 +623,38 @@ impl Cbindgen {
                         type_short(&ty)
                     )
                 });
+                // Restricted-validity audit (#170 instance 3, #158 instance 3):
+                // a mirror is reinterpreted whole, so a field whose Rust type
+                // rejects some bit patterns is UB the moment C writes one and
+                // hands the struct back.
+                //
+                // Not narrowed to inbound mirrors, though only those are
+                // reachable: converter reachability is not derived from use
+                // today (a declared type resolves BOTH directions whether or
+                // not either is called — the accounting #194/#196 replace), so
+                // "does it cross in" has no truthful answer here. Over-
+                // reporting is the safe direction, and the acknowledgement
+                // below is the escape for a genuinely write-only mirror.
+                let restricted = self.restricted_validity_fields(registry, &ty);
+                if !restricted.is_empty() && !cfg.assume_c_field_validity {
+                    let listed: Vec<String> = restricted
+                        .iter()
+                        .map(|(fname, reason)| format!("  `{fname}`: {reason}"))
+                        .collect();
+                    panic!(
+                        "Cbindgen::repr_c_struct: `{}` crosses C's memory by whole-struct \
+                         reinterpret, but these fields have restricted-validity Rust types:\n\
+                         {}\n\
+                         A C caller can write a byte outside those domains, and the reinterpret \
+                         materialises it with no hook to normalise or validate it first (#170, \
+                         #158). Move the field to a `data_struct` (per-field wires), pass it as \
+                         a separate parameter, or widen it to an integer. If this binding's C \
+                         side is trusted to write only in-domain bytes — or never hands the \
+                         mirror back at all — acknowledge it with `.assume_c_field_validity()`.",
+                        type_short(&ty),
+                        listed.join("\n"),
+                    );
+                }
                 let field_defs: Vec<TokenStream> = fields
                     .iter()
                     .map(|(fname, fty)| {
@@ -1233,13 +1301,10 @@ impl Cbindgen {
                 })
             };
         }
-        // A `bool` payload rides as `MaybeUninit<bool>` (see
-        // `payload_field_wire`), so the byte C wrote is read out as a `u8` —
-        // legal for any bit pattern — and normalised the way C converts to
-        // `_Bool`: nonzero is true. No rejection: unlike a tag, every byte here
-        // has an unambiguous meaning.
+        // A `bool` payload rides as `MaybeUninit<bool>` (see `bool_wire`), so
+        // the byte C wrote is normalised rather than materialised.
         if is_bool(fty) {
-            return quote!(::core::ptr::read(#b.as_ptr() as *const u8) != 0);
+            return bool_in_expr(quote!(#b));
         }
         // A scalar is its own wire and needs no call.
         if is_scalar(fty) {
@@ -1293,7 +1358,7 @@ impl Cbindgen {
         // The counterpart of the normalising read above: Rust always writes a
         // valid `0`/`1`, so this only wraps.
         if is_bool(fty) {
-            return quote!(::core::mem::MaybeUninit::new(#b));
+            return bool_out_expr(quote!(#b));
         }
         if is_scalar(fty) {
             return quote!(#b);
@@ -1750,6 +1815,9 @@ impl Cbindgen {
                     let conv = Self::out_name(fty);
                     subs.push(fty.clone());
                     inits.push(quote!(#fname: #conv(v.#fname)));
+                } else if is_bool(fty) {
+                    let wrap = bool_out_expr(quote!(v.#fname));
+                    inits.push(quote!(#fname: #wrap));
                 } else {
                     inits.push(quote!(#fname: v.#fname));
                 }
@@ -1967,6 +2035,22 @@ impl Cbindgen {
         if rf.mutability.is_none() {
             if let syn::Type::Slice(s) = &*rf.elem {
                 let e = (*s.elem).clone();
+                // #170, the slice instance. The two-param lowering builds the
+                // `&[E]` zero-copy from C's own block, so there is nowhere to
+                // normalise the bytes: `&[bool]` would materialise every
+                // element's restricted domain at once. `MaybeUninit<bool>` is
+                // not a fix here — the callee wants `&[bool]`, and rebuilding
+                // the block would silently drop the zero-copy contract this
+                // path exists for. Rejected until a raw-wire lowering exists.
+                if is_bool(&e) {
+                    panic!(
+                        "Cbindgen: `&[bool]` cannot cross IN from C. A `bool` slice is \
+                         reinterpreted zero-copy from the caller's block, so a byte outside \
+                         `{{0, 1}}` would become a Rust `bool` with no chance to normalise it \
+                         (#170). Take the flags as an integer slice, or wrap them in a declared \
+                         `opaque_ptr` handle."
+                    );
+                }
                 if is_scalar(&e) {
                     let name =
                         format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(&e)));
