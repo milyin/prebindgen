@@ -410,18 +410,21 @@ fn nullable_group_part(
 /// characters, so rewriting `x` never touches `x_2` or `ax` — slot names of
 /// one group share a prefix (`exact_v0`, `exact_v01`), and a substring
 /// replace would corrupt them.
+///
+/// The left-hand character is taken from what has already been **written**,
+/// never from the remaining input: `rest` advances past a rejected occurrence,
+/// so by the next candidate the character preceding it can already have been
+/// consumed. Re-slicing `rest` there loses it and turns two adjacent
+/// occurrences (`"axx"`, rewriting `x`) into one accepted match.
 fn replace_ident(haystack: &str, from: &str, to: &str) -> String {
     let is_ident_char = |c: char| c == '_' || c.is_alphanumeric();
     let mut out = String::with_capacity(haystack.len());
     let mut rest = haystack;
     while let Some(pos) = rest.find(from) {
-        let before_ok = rest[..pos]
-            .chars()
-            .next_back()
-            .is_none_or(|c| !is_ident_char(c));
+        out.push_str(&rest[..pos]);
+        let before_ok = out.chars().next_back().is_none_or(|c| !is_ident_char(c));
         let after = &rest[pos + from.len()..];
         let after_ok = after.chars().next().is_none_or(|c| !is_ident_char(c));
-        out.push_str(&rest[..pos]);
         if before_ok && after_ok {
             out.push_str(to);
         } else {
@@ -431,6 +434,43 @@ fn replace_ident(haystack: &str, from: &str, to: &str) -> String {
     }
     out.push_str(rest);
     out
+}
+
+#[cfg(test)]
+mod replace_ident_tests {
+    use super::replace_ident;
+
+    /// The property the function exists for: a slot name is rewritten only as a
+    /// whole identifier, so the `!!` never lands on a longer name that merely
+    /// starts (or ends) with it.
+    #[test]
+    fn only_whole_identifiers_are_rewritten() {
+        assert_eq!(replace_ident("x", "x", "x!!"), "x!!");
+        assert_eq!(replace_ident("x_2", "x", "x!!"), "x_2");
+        assert_eq!(replace_ident("ax", "x", "x!!"), "ax");
+        assert_eq!(
+            replace_ident("Reading.Exact(exact_v0)", "exact_v0", "exact_v0!!"),
+            "Reading.Exact(exact_v0!!)"
+        );
+        // A prefix of a longer slot name of the same group is left alone.
+        assert_eq!(
+            replace_ident("f(exact_v0, exact_v01)", "exact_v0", "exact_v0!!"),
+            "f(exact_v0!!, exact_v01)"
+        );
+    }
+
+    /// A rejected occurrence must not consume the context of the next one: with
+    /// the left character re-sliced out of the remaining input, `"axx"` rewrote
+    /// its second `x` — the first having been dropped from `rest` along with the
+    /// `a` that disqualified it.
+    #[test]
+    fn a_rejected_match_keeps_its_left_context() {
+        assert_eq!(replace_ident("axx", "x", "x!!"), "axx");
+        assert_eq!(replace_ident("xxx", "x", "x!!"), "xxx");
+        assert_eq!(replace_ident("x ax", "x", "x!!"), "x!! ax");
+        // Every occurrence of a genuinely standalone identifier is rewritten.
+        assert_eq!(replace_ident("x + x", "x", "x!!"), "x!! + x!!");
+    }
 }
 
 /// Render the Kotlin `close()` expression for a handle `receiver` through
