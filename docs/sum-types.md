@@ -324,9 +324,34 @@ universal `.name()` override, and the `CurrentDecl` cursor for error messages (`
 ### 5.2 The mirror type
 
 `prereq_tagged_unions` mirrors `prereq_enums`
-(`prebindgen/src/api/lang/cbindgen/trait_impl.rs:650`), emitting a `#[repr(C)]` enum whose payload
-fields carry **wire** types chosen by the same `mirror_field_wire` policy `data_struct` uses
-(`trait_impl.rs:513`):
+(`prebindgen/src/api/lang/cbindgen/trait_impl.rs`), emitting a `#[repr(C)]` enum whose payload
+fields carry **wire** types chosen by `payload_field_wire`.
+
+A payload's wire is its **resolved converter destination** — the same source a `data_struct` field
+effectively uses — not the layout-preserving `mirror_field_wire` policy. That policy exists for
+`repr_c_struct`, where one whole-struct `Transmute` reinterprets the bytes, so it can only accept
+shapes that survive a reinterpret. **A tagged union is not reinterpreted; it is rebuilt arm by arm
+through per-field converters**, so its payloads are not constrained that way. What that admits:
+
+| Payload | Wire |
+|---|---|
+| scalar | itself |
+| `String` | `char *` (the one type whose two directions disagree — `*const` in, `*mut` out — so the field fixes the owning form and the arms convert by hand) |
+| declared `enum_type` | `MaybeUninit<mirror>`, validated on the way in (§5.3) |
+| `Box<T>` / `Option<Box<T>>`, `T` an `opaque_ptr` | `*mut t_t` |
+| nested `data_struct` | its mirror, **by value** |
+| bare `opaque_ptr` handle | `*mut t_t` |
+| converted leaf (`Duration` → `u64`) | the converter's destination |
+| `Vec<_>` | **rejected** — it needs two wires (pointer + length) and a union field carries one |
+
+The two directions must agree on the wire, since one field serves both; a disagreement is a
+generation error naming the payload, not a silent pick of one side. A payload with a **fallible
+output** converter is also refused: the union's encoder has no error channel, because Rust always
+writes a live arm.
+
+Because a payload can now reach its own converter, it is registered as a resolver dependency and the
+union's converter **defers** (returns `None`, which the resolver retries) until that converter has
+resolved. `subs` alone cannot order this — it only drives the post-resolution propagation pass.
 
 ```rust
 #[repr(C)]
@@ -364,6 +389,15 @@ A tagged union crosses **by value**, like a `data_struct`. If any variant's payl
 `z_<name>_drop(z_<name>_t *)` that frees the **active arm** — consistent with the existing typed
 per-pointer drops. Phase B requires it: an owning payload without a drop is a generation error, not a
 leak.
+
+Ownership follows from the wire, so a **nested `data_struct` payload** is owning when its own mirror
+has owning fields, even though the payload wire is a struct by value rather than a pointer. The drop
+reaches through the payload and releases each of them, nulling the slot so a second drop is a no-op.
+Without that a `String` or handle inside a struct payload would leak silently — which is exactly the
+shape zenoh-flat#30 needs (`ReplyResult`'s alternatives are structs whose fields are handles).
+
+The drop is also a second C entry point into the same bytes, so it validates the tag the same way
+`in_tagged_union` does (§5.3) and treats an out-of-range one as nothing to release.
 
 ## 6. What core owns
 

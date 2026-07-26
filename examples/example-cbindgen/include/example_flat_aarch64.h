@@ -28,6 +28,29 @@ typedef struct calculator_t {
   uint8_t _private[0];
 } calculator_t;
 
+typedef struct caption_t {
+  uint64_t id;
+  char *text;
+} caption_t;
+
+typedef enum note_t_Tag {
+  Silent,
+  Titled,
+  After,
+} note_t_Tag;
+
+typedef struct note_t {
+  note_t_Tag tag;
+  union {
+    struct {
+      struct caption_t titled;
+    };
+    struct {
+      uint64_t after;
+    };
+  };
+} note_t;
+
 typedef enum shape_t_Tag {
   Empty,
   Circle,
@@ -81,6 +104,8 @@ void example_free(void *p);
 
 void calculator_drop(struct calculator_t *this_);
 
+void note_drop(struct note_t *this_);
+
 void shape_drop(struct shape_t *this_);
 
 bool calculator_apply(struct calculator_t *c,
@@ -107,6 +132,8 @@ struct calculator_t *calculator_new_from_str(const char *s, char **e);
 
 char *calculator_to_string(const struct calculator_t *c);
 
+struct caption_t caption_new(uint64_t id, const char *text);
+
 struct shape_t drawing_get_shape(struct drawing_t d);
 
 struct drawing_t drawing_new(uint64_t id, struct shape_t shape);
@@ -118,6 +145,14 @@ struct foo_t foo_new(uint64_t id);
 enum inside_foo_t inside_foo_default(void);
 
 int32_t inside_foo_value(enum inside_foo_t x);
+
+struct note_t note_new_after(uint64_t millis);
+
+struct note_t note_new_silent(void);
+
+struct note_t note_new_titled(uint64_t id, const char *text);
+
+uint64_t note_value(struct note_t n);
 
 double shape_area(struct shape_t s);
 

@@ -76,6 +76,89 @@ pub enum Shape {
     Labeled(String, Operation),
 }
 
+/// A by-value data struct used as a **union payload** — the shape zenoh-flat's
+/// `ReplyResult` needs, where an alternative carries a whole record rather than a
+/// scalar. Its `String` field owns memory, so the union's typed drop has to reach
+/// through the payload and release it.
+#[prebindgen]
+#[derive(Debug, Clone, PartialEq)]
+pub struct Caption {
+    pub id: u64,
+    pub text: String,
+}
+
+/// Build a [`Caption`].
+#[prebindgen]
+pub fn caption_new(id: u64, text: &str) -> Caption {
+    Caption {
+        id,
+        text: text.to_string(),
+    }
+}
+
+/// A sum whose payloads are the shapes the zero-copy mirror policy could not
+/// express: a nested `data_struct` (by value, owning a `char *`) and a
+/// **converted leaf** whose wire is its converter's destination rather than its
+/// own layout.
+#[prebindgen]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Note {
+    /// No payload — only the tag.
+    Silent,
+    /// A whole record by value, owning a `char *`.
+    Titled(Caption),
+    /// A converted leaf: `Millis` crosses as the `u64` its conversion produces.
+    After(Millis),
+}
+
+/// A newtype whose C wire is the `u64` its declared conversion produces — not
+/// its own layout. As a union payload it exercises the converter-destination
+/// rule directly.
+#[prebindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Millis(pub u64);
+
+/// `Millis` from its raw value (the conversion's **input**).
+#[prebindgen]
+pub fn millis_from_raw(v: u64) -> Millis {
+    Millis(v)
+}
+
+/// `Millis` to its raw value (the conversion's **output**).
+#[prebindgen]
+pub fn millis_to_raw(v: &Millis) -> u64 {
+    v.0
+}
+
+/// A titled note (nested-struct payload).
+#[prebindgen]
+pub fn note_new_titled(id: u64, text: &str) -> Note {
+    Note::Titled(caption_new(id, text))
+}
+
+/// A delayed note (converted-leaf payload).
+#[prebindgen]
+pub fn note_new_after(millis: u64) -> Note {
+    Note::After(Millis(millis))
+}
+
+/// The silent note.
+#[prebindgen]
+pub fn note_new_silent() -> Note {
+    Note::Silent
+}
+
+/// Read a note back: its caption id, its delay, or 0 — the sum in **parameter**
+/// position, so both new payload kinds cross inbound as well as outbound.
+#[prebindgen]
+pub fn note_value(n: Note) -> u64 {
+    match n {
+        Note::Silent => 0,
+        Note::Titled(c) => c.id,
+        Note::After(Millis(m)) => m,
+    }
+}
+
 /// A by-value data struct carrying a sum as a **field** — the position that makes
 /// "exactly one of" compose with ordinary product data.
 #[prebindgen]

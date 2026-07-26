@@ -79,6 +79,22 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.tagged_union(pq!(Shape));
     cbindgen = cbindgen.data_struct(pq!(Drawing));
 
+    // #158 part 2: payload wires come from the resolved CONVERTER DESTINATION,
+    // not the layout-preserving mirror policy. `Note` exercises the two shapes
+    // that admits — a nested `data_struct` by value (`Caption`, owning a
+    // `char *` the union's drop must reach through and free) and a converted
+    // leaf (`Millis` → `u64`).
+    cbindgen = cbindgen.data_struct(pq!(Caption));
+    cbindgen = cbindgen.convert(
+        prebindgen::convert!(Millis)
+            .input(prebindgen::fun!(millis_from_raw))
+            .output(prebindgen::fun!(millis_to_raw)),
+    );
+    cbindgen = cbindgen
+        .ignore_function(pq!(millis_from_raw))
+        .ignore_function(pq!(millis_to_raw));
+    cbindgen = cbindgen.tagged_union(pq!(Note));
+
     // Multi-target cfg demonstration: `InsideFoo` (a fieldless enum whose
     // discriminants vary by `target_arch`) and `Foo` (a by-value data struct whose
     // field set varies by `target_arch` + feature). Declared unconditionally —
@@ -113,6 +129,10 @@ fn generate_ffi_bindings() -> PathBuf {
         // The union crossing IN on a fallible function: an out-of-range tag
         // reports through the same `char **e` as the domain error.
         pq!(shape_try_area),
+        // `Note`'s constructors: the nested-struct and converted-leaf payloads
+        // crossing OUT.
+        pq!(note_new_silent),
+        pq!(note_new_after),
     ] {
         cbindgen = cbindgen.function(function);
     }
@@ -137,6 +157,11 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(shape_get_label),
         pq!(drawing_new),
         pq!(drawing_get_shape),
+        // `Note` crossing IN (tag validated, so fallible without a `Result`),
+        // and its `&str`-taking constructor.
+        pq!(note_value),
+        pq!(note_new_titled),
+        pq!(caption_new),
         pq!(calculator_new_clone),
         pq!(calculator_get_value),
         pq!(calculator_get_count),
