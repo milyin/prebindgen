@@ -1303,9 +1303,18 @@ impl Prebindgen for JniGen {
                              deliver, so the error crosses through the typed domain-handler \
                              channel; or, if a text message really is what you want, drop the \
                              `sealed_class!` declaration for this type",
+                            // `Result<_, E>` and the `expand_return!` key are
+                            // the WHOLE error type: the `Display` bound falls
+                            // on it (the generated code calls `__e.to_string()`
+                            // on the `Err` value), and the auto-apply matches a
+                            // deconstructor by that same whole type. Only the
+                            // "is declared `sealed_class!`" clause names the
+                            // peeled sum, since that is what carries the
+                            // declaration. Identical for a bare `E`; they
+                            // diverge once it is wrapped.
                             err_ty.to_token_stream(),
                             core.to_token_stream(),
-                            core.to_token_stream(),
+                            err_ty.to_token_stream(),
                             err_ty.to_token_stream(),
                         ));
                     }

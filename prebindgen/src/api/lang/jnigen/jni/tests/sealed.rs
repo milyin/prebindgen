@@ -1138,6 +1138,57 @@ fn undeclared_sum_in_result_error_position_is_rejected() {
     );
 }
 
+/// A WRAPPED error type (`Result<_, Option<Sum>>`) is where the diagnostic's
+/// two type spellings diverge, so it pins which is which: the `Display` bound
+/// and the `expand_return!` key are the WHOLE error type (that is what
+/// `__e.to_string()` runs on, and what the deconstructor auto-apply matches),
+/// while only the "is declared `sealed_class!`" clause names the peeled sum.
+/// Getting these backwards would hand the author advice that cannot work.
+#[test]
+fn the_diagnostic_names_the_whole_error_type_where_it_must() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_try(n: i64) -> Result<i64, Option<Reading>> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .fun(crate::fun!(read_try)),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("must be rejected")
+        .to_string();
+    let compact: String = err.split_whitespace().collect();
+
+    // The whole `E` — the position, the `Display` bound, and the fix.
+    assert!(compact.contains("`Result<_,Option<Reading>>`"), "{err}");
+    assert!(compact.contains("`Option<Reading>:Display`"), "{err}");
+    assert!(compact.contains("expand_return!(Option<Reading>)"), "{err}");
+    // …and the peeled sum only where the declaration lives.
+    assert!(
+        compact.contains("`Reading`isdeclared`sealed_class!`"),
+        "{err}"
+    );
+}
+
 /// The counterpart: a sum error type WITH a type-level deconstructor is the
 /// supported shape and must keep resolving — the diagnostic above must not
 /// become a blanket ban on sums in the error position.
