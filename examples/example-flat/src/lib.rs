@@ -113,6 +113,11 @@ pub enum Note {
     /// so it crosses behind `MaybeUninit` like a declared enum does and a byte
     /// C wrote is normalised, never materialised as a Rust `bool`.
     Flagged(bool),
+    /// A record whose own field is ANOTHER union with an owning arm. The
+    /// payload crosses by value, so `note_drop` has to reach through it and
+    /// release the nested union's active arm — nothing else can: a union arm
+    /// is not a top-level struct field the C caller drops by hand.
+    Sketched(Drawing),
 }
 
 /// A newtype whose C wire is the `u64` its declared conversion produces — not
@@ -158,6 +163,16 @@ pub fn note_new_flagged(flag: bool) -> Note {
     Note::Flagged(flag)
 }
 
+/// A sketched note: a record payload whose own `shape` field is another union,
+/// with an arm that owns a `char *`.
+#[prebindgen]
+pub fn note_new_sketched(id: u64, label: &str) -> Note {
+    Note::Sketched(Drawing {
+        id,
+        shape: Shape::Labeled(label.to_string(), Operation::Add),
+    })
+}
+
 /// Read a note back: its caption id, its delay, or 0 — the sum in **parameter**
 /// position, so both new payload kinds cross inbound as well as outbound.
 #[prebindgen]
@@ -167,6 +182,7 @@ pub fn note_value(n: Note) -> u64 {
         Note::Titled(c) => c.id,
         Note::After(Millis(m)) => m,
         Note::Flagged(f) => f as u64,
+        Note::Sketched(d) => d.id,
     }
 }
 

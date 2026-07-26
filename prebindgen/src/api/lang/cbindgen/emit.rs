@@ -240,11 +240,45 @@ impl Cbindgen {
         self.struct_fields(registry, fty)
             .unwrap_or_default()
             .into_iter()
-            .filter(|(_, fty)| {
-                self.data_field_wire(fty)
-                    .is_some_and(|w| matches!(w, syn::Type::Ptr(_)))
-            })
+            .filter(|(_, fty)| self.data_field_owns(fty, registry))
             .collect()
+    }
+
+    /// Whether one `data_struct` **field** hands owned memory to C: its own wire
+    /// is a pointer (`String` → `char *`), or it is a declared
+    /// [`Cbindgen::tagged_union`] with an owning arm — which crosses by value,
+    /// so the pointer it owns is one level further down.
+    fn data_field_owns(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
+        if matches!(self.data_field_wire(fty), Some(syn::Type::Ptr(_))) {
+            return true;
+        }
+        self.tagged_union_has_drop(fty, registry)
+    }
+
+    /// Whether a declared `tagged_union` gets a typed `<base>_drop` — i.e. it is
+    /// produced at all, and some arm's payload owns memory.
+    ///
+    /// This is the emission condition of that drop
+    /// ([`Cbindgen::prereq_tagged_unions`]) *and* the test for whether a
+    /// containing struct has to call it, so a union nested inside a payload
+    /// cannot be freed through a symbol that was never emitted. `false` for
+    /// anything that is not a declared tagged union.
+    pub(super) fn tagged_union_has_drop(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
+        if !self.tagged_unions.contains_key(&TypeKey::from_type(fty))
+            || registry.output_entry(fty).is_none()
+        {
+            return false;
+        }
+        self.enum_variants(registry, fty)
+            .unwrap_or_default()
+            .iter()
+            .flat_map(|v| v.fields.iter())
+            .any(|f| match self.payload_field_wire(&f.ty, registry) {
+                // A rejected payload is reported from the emission site, which
+                // panics before any of this matters.
+                Err(_) => false,
+                Ok(wire) => self.payload_wire_owns(&f.ty, &wire, registry),
+            })
     }
 
     /// Whether any declared function returns a `Vec<_>` (possibly nested under

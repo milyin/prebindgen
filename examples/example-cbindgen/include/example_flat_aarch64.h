@@ -33,28 +33,6 @@ typedef struct caption_t {
   char *text;
 } caption_t;
 
-typedef enum note_t_Tag {
-  Silent,
-  Titled,
-  After,
-  Flagged,
-} note_t_Tag;
-
-typedef struct note_t {
-  note_t_Tag tag;
-  union {
-    struct {
-      struct caption_t titled;
-    };
-    struct {
-      uint64_t after;
-    };
-    struct {
-      bool flagged;
-    };
-  };
-} note_t;
-
 typedef enum shape_t_Tag {
   Empty,
   Circle,
@@ -83,16 +61,42 @@ typedef struct shape_t {
   };
 } shape_t;
 
+typedef struct drawing_t {
+  uint64_t id;
+  struct shape_t shape;
+} drawing_t;
+
+typedef enum note_t_Tag {
+  Silent,
+  Titled,
+  After,
+  Flagged,
+  Sketched,
+} note_t_Tag;
+
+typedef struct note_t {
+  note_t_Tag tag;
+  union {
+    struct {
+      struct caption_t titled;
+    };
+    struct {
+      uint64_t after;
+    };
+    struct {
+      bool flagged;
+    };
+    struct {
+      struct drawing_t sketched;
+    };
+  };
+} note_t;
+
 typedef struct closure_value_t {
   void *context;
   void (*call)(double, void*);
   void (*drop)(void*);
 } closure_value_t;
-
-typedef struct drawing_t {
-  uint64_t id;
-  struct shape_t shape;
-} drawing_t;
 
 typedef struct foo_t {
   uint64_t id;
@@ -155,6 +159,8 @@ struct note_t note_new_after(uint64_t millis);
 struct note_t note_new_flagged(bool flag);
 
 struct note_t note_new_silent(void);
+
+struct note_t note_new_sketched(uint64_t id, const char *label);
 
 struct note_t note_new_titled(uint64_t id, const char *text);
 
