@@ -1767,13 +1767,23 @@ fn sum_return_layers_ride_the_shape_fold() {
 /// `Option<Reading>` fixture unrequires the bare type through a *different*
 /// layer, so it would keep passing if the `Vec` element were left required.
 ///
-/// At this level the element is not in the scan set to begin with (only a
-/// top-level return is registered as required), so this pins the invariant
-/// rather than catching a regression — the `unrequire_output(&core)` that makes
-/// it hold for every path is defence against a caller that does require it.
+/// The bare requirement is **seeded explicitly**. A scan registers only the
+/// top-level return, so `Reading` would not be in the set to begin with and the
+/// assertion would hold whether or not `wire_fixed_returns` unrequired the
+/// peeled element — passing while testing nothing. Seeding reproduces what an
+/// adapter that does require the element leaves behind, which is the state the
+/// unrequire exists for.
 #[test]
 fn a_vec_only_sum_return_drops_the_bare_requirement() {
     let mut reg = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
+    let bare: syn::Type = syn::parse_quote!(Reading);
+    reg.require_output(&bare, &crate::SourceLocation::default());
+    assert!(
+        reg.required_outputs_scan
+            .contains(&TypeKey::from_type(&bare)),
+        "fixture precondition: the bare element starts out required"
+    );
+
     let declared: std::collections::HashSet<syn::Ident> =
         ["read_all"].iter().map(|s| ident(s)).collect();
     apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
