@@ -883,18 +883,17 @@ impl Cbindgen {
         registry: &Registry<()>,
     ) -> syn::Type {
         self.payload_field_wire(&field.ty, registry)
-            .unwrap_or_else(|| {
+            .unwrap_or_else(|reason| {
                 panic!(
-                    "Cbindgen::tagged_union: payload `{}::{}{}` has unsupported type `{}` \
-                 — it has no resolved output converter, or its input and output \
-                 converters disagree on the wire (one union field serves both)",
+                    "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
                     type_short(ty),
                     variant,
                     match &field.ident {
                         Some(n) => format!(".{n}"),
                         None => String::new(),
                     },
-                    field.ty.to_token_stream()
+                    field.ty.to_token_stream(),
+                    reason,
                 )
             })
     }
@@ -1273,20 +1272,13 @@ impl Cbindgen {
         if is_scalar(fty) {
             return quote!(#b);
         }
-        // The output counterpart of the input dispatch above. A FALLIBLE output
-        // converter is refused rather than silently unwrapped: the union's own
-        // encoder has no error channel (Rust always writes a live arm), so
-        // there is nowhere honest for the failure to go.
+        // The output counterpart of the input dispatch above. Acceptance —
+        // including the refusal of a FALLIBLE output converter, which a union
+        // cannot report through — is decided once in `payload_field_wire`, so
+        // this site only emits the call.
         match registry.output_entry(fty) {
             Some(entry) => {
                 let conv = entry.function.sig.ident.clone();
-                assert!(
-                    !returns_result(&entry.function.sig.output),
-                    "Cbindgen::tagged_union: payload `{}` has a FALLIBLE output converter, but \
-                     a union is encoded without an error channel — the encoder always writes a \
-                     live arm. Use an infallible conversion for this payload",
-                    fty.to_token_stream()
-                );
                 quote!(#conv(#b))
             }
             None => quote!(#b),

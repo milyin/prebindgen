@@ -351,6 +351,62 @@ fn declarators_do_not_accept_each_others_shape() {
     assert!(catch(unit_as_union));
 }
 
+/// Each way a payload can be refused reports ITS OWN reason. The wire policy
+/// has four of them, and a message that lists all four on every failure — or,
+/// worse, names the wrong one — is what makes a rejection hard to act on. A
+/// `Vec` payload is the case that proves it: it HAS an output converter and
+/// its directions agree, so a message about missing or mismatched converters
+/// would be flatly wrong.
+#[test]
+fn each_payload_rejection_names_its_own_reason() {
+    let loc = SourceLocation::default();
+    let make: syn::ItemFn = syn::parse_quote!(
+        pub fn odd_new() -> Odd {
+            unimplemented!()
+        }
+    );
+
+    // (1) `Vec` — two wires needed, one field available.
+    let vec_case = || {
+        let e: syn::ItemEnum = syn::parse_quote!(
+            pub enum Odd {
+                Nothing,
+                Many(Vec<u8>),
+            }
+        );
+        let registry = Registry::<()>::from_items([
+            (syn::Item::Enum(e), loc.clone()),
+            (syn::Item::Fn(make.clone()), loc.clone()),
+        ])
+        .expect("index items");
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(example_flat))
+            .free_memory_function("example_free")
+            .mangle_type_name(|base| format!("{base}_t"))
+            .tagged_union(syn::parse_quote!(Odd))
+            .function(syn::parse_quote!(odd_new));
+        let _ = write(cbindgen, registry, "reject_vec_payload");
+    };
+    let msg = catch_msg(vec_case);
+    assert!(
+        msg.contains("Odd::Many"),
+        "names the offending payload: {msg}"
+    );
+    assert!(
+        msg.contains("TWO C wires") && msg.contains("pointer + length"),
+        "…and why a Vec cannot cross, not a converter complaint: {msg}"
+    );
+    assert!(
+        !msg.contains("no resolved OUTPUT converter"),
+        "a Vec HAS an output converter — that reason would be wrong: {msg}"
+    );
+
+    // The other three reasons (no output converter, wire mismatch, fallible
+    // output converter) are guards: an undeclared payload type fails at
+    // RESOLVE, before `prereq_tagged_unions` runs, so nothing reaches them
+    // from a fixture. Their messages are specific, but unexercised.
+}
+
 /// A payload type outside the supported wire set is a generation error naming
 /// the offending variant field, not a silently wrong wire.
 #[test]
