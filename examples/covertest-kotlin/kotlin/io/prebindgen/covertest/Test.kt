@@ -844,6 +844,32 @@ fun main() {
             } == (3L to 42.0),
         )                                                                          // handle / handle
 
+        // #189 ALIAS PREFLIGHT: two consumed handle params of one class can be
+        // handed the SAME resource, which would consume one allocation twice.
+        // The wrapper compares `ptr` before the lock and before any conversion,
+        // so the rejection reaches `onError` and the handle is untouched —
+        // still open, still usable, and still ours to close. A check inside the
+        // converter could not offer that: by then the first argument is gone.
+        run {
+            val shared = Summary.of(5L, 55.0, boom)
+            var aliasMessage: String? = null
+            val rejected = summaryPrefer(shared, shared) { je ->
+                aliasMessage = je
+                -1L
+            }
+            check(rejected == -1L)
+            check(aliasMessage?.contains("Aliasing arguments") == true) {
+                "expected an alias rejection, got: $aliasMessage"
+            }
+            // Nothing was consumed: the handle survives and still reads.
+            check(!shared.isClosed())
+            check(shared.total(boom) == 55.0)
+
+            // No false positives — two DISTINCT handles of the same class go
+            // through untouched.
+            check(summaryPrefer(shared, Summary.of(3L, 99.0, boom), boom) == 0L)
+        }
+
         // Optional combined-selector expansion: `Option<&Summary>` under the
         // dual-arm type default. The selector also encodes absence (-1 = None);
         // the borrow-identity arm CLONES, so the handle survives the call.

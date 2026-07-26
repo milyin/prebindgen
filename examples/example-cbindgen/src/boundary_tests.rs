@@ -20,9 +20,9 @@ use core::{
 };
 
 use crate::{
-    calculator_apply, calculator_drop, calculator_get_value, calculator_new, caption_t,
-    example_free, inside_foo_default, inside_foo_value, note_drop, note_emphatic, note_new_flagged,
-    note_new_titled, note_t, note_value, operation_t,
+    calculator_absorb, calculator_apply, calculator_drop, calculator_get_value, calculator_merge,
+    calculator_new, caption_t, example_free, inside_foo_default, inside_foo_value, note_drop,
+    note_emphatic, note_new_flagged, note_new_titled, note_t, note_value, operation_t,
 };
 
 /// The wire value a C caller passing `value` produces — including a `value`
@@ -220,5 +220,105 @@ fn enum_round_trips_through_the_validating_wire() {
     unsafe {
         let v = inside_foo_default();
         assert_eq!(inside_foo_value(MaybeUninit::new(v)), v as i32);
+    }
+}
+
+/// #189's alias preflight, in the shape it exists for: two **consumed** handles
+/// of one type. `calculator_merge(x, x)` would reconstruct one allocation twice
+/// — the second `Box::from_raw` on a pointer the first already owns.
+///
+/// Rejected *before* either conversion runs, so the handle is untouched and
+/// still usable afterwards. That is the observable that distinguishes a
+/// preflight from a check inside the converter: by then the first argument has
+/// already been consumed and there is nothing left to keep.
+#[test]
+fn aliased_consumed_handles_are_rejected_before_any_conversion() {
+    unsafe {
+        let c = calculator_new();
+        let mut err: *mut c_char = ptr::null_mut();
+
+        assert!(calculator_merge(c, c, &mut err).is_null());
+        assert!(!err.is_null());
+        let msg = CStr::from_ptr(err).to_string_lossy().into_owned();
+        assert!(msg.contains("aliasing arguments"), "{msg}");
+        assert!(msg.contains("Calculator"), "{msg}");
+        example_free(err.cast::<c_void>());
+
+        // Nothing was consumed: the handle is still live and still owns its
+        // value. (Under ASan a consumed-then-reused handle is a use-after-free;
+        // here it is simply the argument we passed.)
+        assert_eq!(calculator_get_value(c), 0.0);
+        calculator_drop(c);
+    }
+}
+
+/// The mixed case: one **consumed** handle beside one **borrowed** handle. The
+/// borrow dangles the moment the consume takes ownership, so it is rejected by
+/// the same rule — which is why the generation predicate is "at least one
+/// consume or exclusive borrow, and any other access in the same domain"
+/// rather than "two or more consumed parameters".
+#[test]
+fn consumed_and_borrowed_alias_is_rejected() {
+    unsafe {
+        let c = calculator_new();
+        let mut out = -1.0f64;
+        let mut err: *mut c_char = ptr::null_mut();
+
+        assert!(!calculator_absorb(c, c, &mut out, &mut err));
+        assert!(!err.is_null());
+        let msg = CStr::from_ptr(err).to_string_lossy().into_owned();
+        assert!(msg.contains("aliasing arguments"), "{msg}");
+        // The call had no effect at all.
+        assert_eq!(out, -1.0);
+        example_free(err.cast::<c_void>());
+
+        assert_eq!(calculator_get_value(c), 0.0);
+        calculator_drop(c);
+    }
+}
+
+/// No false positives: two **distinct** resources of the same type still work,
+/// in both the consume/consume and the consume/borrow shape. A preflight that
+/// rejected these would have removed working surface, which is exactly what
+/// #189 rules out.
+#[test]
+fn distinct_handles_are_not_treated_as_aliases() {
+    unsafe {
+        let mut err: *mut c_char = ptr::null_mut();
+
+        let a = calculator_new();
+        let b = calculator_new();
+        assert!(calculator_apply(
+            a,
+            MaybeUninit::new(operation_t::Add),
+            2.0,
+            &mut 0.0,
+            &mut err
+        ));
+        assert!(calculator_apply(
+            b,
+            MaybeUninit::new(operation_t::Add),
+            5.0,
+            &mut 0.0,
+            &mut err
+        ));
+
+        // consume/borrow with distinct resources.
+        let mut out = -1.0f64;
+        assert!(calculator_absorb(a, b, &mut out, &mut err));
+        assert!(err.is_null());
+        assert_eq!(out, 7.0);
+
+        // consume/consume with distinct resources. `a` is gone (absorbed), so
+        // build two more.
+        let c = calculator_new();
+        let d = calculator_new();
+        let merged = calculator_merge(c, d, &mut err);
+        assert!(!merged.is_null());
+        assert!(err.is_null());
+        assert_eq!(calculator_get_value(merged), 0.0);
+
+        calculator_drop(merged);
+        calculator_drop(b);
     }
 }

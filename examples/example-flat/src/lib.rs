@@ -321,6 +321,32 @@ pub fn calculator_new_clone(c: &Calculator) -> Calculator {
     }
 }
 
+/// Fold one accumulator into another, consuming **both**.
+///
+/// Two consumed handles of the same type is a supported shape, and it is the
+/// aliasing hazard: called as `calculator_merge(x, x)` a C caller would have
+/// one allocation reconstructed twice, so the generated wrapper runs a
+/// pointer-identity **preflight** before either conversion and reports the
+/// alias through this `Result`'s error channel.
+#[prebindgen]
+pub fn calculator_merge(a: Calculator, b: Calculator) -> Result<Calculator, Error> {
+    let mut history = a.history;
+    history.extend(b.history);
+    Ok(Calculator {
+        value: a.value + b.value,
+        history,
+    })
+}
+
+/// Consume one accumulator while **borrowing** another — the mixed case the
+/// "two or more consumed parameters" reading of the rule would have skipped.
+/// The borrow dangles the moment the consume takes ownership, so the same
+/// preflight covers it.
+#[prebindgen]
+pub fn calculator_absorb(a: Calculator, b: &Calculator) -> Result<f64, Error> {
+    Ok(a.value + b.value)
+}
+
 /// Apply `op` with `operand`, updating the accumulator and returning the new
 /// value. Division by zero returns an error (its fallible `&mut` input routes
 /// through the error channel of the `Result`).

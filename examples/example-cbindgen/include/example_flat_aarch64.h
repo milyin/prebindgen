@@ -117,6 +117,8 @@ void note_drop(struct note_t *this_);
 
 void shape_drop(struct shape_t *this_);
 
+bool calculator_absorb(struct calculator_t *a, const struct calculator_t *b, double *out, char **e);
+
 bool calculator_apply(struct calculator_t *c,
                       enum operation_t op,
                       double operand,
@@ -132,6 +134,8 @@ double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
 double calculator_get_value(const struct calculator_t *c);
 
 bool calculator_is(const struct calculator_t *c, double value);
+
+struct calculator_t *calculator_merge(struct calculator_t *a, struct calculator_t *b, char **e);
 
 struct calculator_t *calculator_new(void);
 

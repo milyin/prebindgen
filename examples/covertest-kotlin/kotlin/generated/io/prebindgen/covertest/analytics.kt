@@ -464,6 +464,9 @@ public fun summaryPrefer(
     fallback1: Summary?,
     onError: JniErrorHandler<Long>,
 ): Long {
+    if ((primary1?.ptr ?: 0L) != 0L && (primary1?.ptr ?: 0L) == (fallback1?.ptr ?: 0L)) return onError.run(
+        "Aliasing arguments: 'primary1' and 'fallback1' are the same native resource; a consumed handle may not be passed twice in one call.",
+    )
     if (primary1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     if (fallback1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
@@ -559,6 +562,9 @@ public fun <R> summaryMerge(
     onError: JniErrorHandler<R>,
     build: SummaryBuilder<R>,
 ): R {
+    if ((primary1?.ptr ?: 0L) != 0L && (primary1?.ptr ?: 0L) == (fallback1?.ptr ?: 0L)) return onError.run(
+        "Aliasing arguments: 'primary1' and 'fallback1' are the same native resource; a consumed handle may not be passed twice in one call.",
+    )
     if (primary1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     if (fallback1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()

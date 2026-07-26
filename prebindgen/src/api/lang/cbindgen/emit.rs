@@ -863,6 +863,115 @@ impl Cbindgen {
             .is_some_and(|entry| returns_result(&entry.function.sig.output))
     }
 
+    /// How one parameter *uses* the resource it names — the axis the alias rule
+    /// is stated on. `None` ⇒ the parameter names no single owned resource (a
+    /// scalar, a string, a slice block, an undeclared type), so it cannot alias
+    /// one.
+    ///
+    /// `T` and `Option<T>` share a resource domain: both arrive as the same
+    /// handle pointer, and comparing the syntactic parameter type instead would
+    /// miss `f(x: ZThing, y: Option<ZThing>)` called with the same handle
+    /// twice.
+    fn alias_slot(&self, ty: &syn::Type) -> Option<(TypeKey, AliasAccess)> {
+        let inner = if is_option(ty) {
+            first_type_arg(ty)?
+        } else {
+            ty.clone()
+        };
+        let declared =
+            |key: &TypeKey| self.opaque.contains_key(key) || self.value_opaque.contains_key(key);
+        if let syn::Type::Reference(r) = &inner {
+            // `&mut MaybeUninit<T>` borrows T's slot exclusively just as
+            // `&mut T` does; the wire is the same pointer.
+            let elem = (*r.elem).clone();
+            let elem = maybe_uninit_inner(&elem).unwrap_or(elem);
+            let key = TypeKey::from_type(&elem);
+            if !declared(&key) {
+                return None;
+            }
+            return Some((
+                key,
+                if r.mutability.is_some() {
+                    AliasAccess::Exclusive
+                } else {
+                    AliasAccess::Shared
+                },
+            ));
+        }
+        let key = TypeKey::from_type(&inner);
+        declared(&key).then_some((key, AliasAccess::Consume))
+    }
+
+    /// The runtime **alias preflight**: reject a call whose arguments name the
+    /// same resource in a combination that would reconstruct or invalidate it
+    /// twice, *before* any conversion runs.
+    ///
+    /// `z_combine(primary: ZThing, fallback: ZThing)` is a supported
+    /// declaration; called as `z_combine(x, x)` it reaches `Box::from_raw`
+    /// twice on one allocation. So is `f(a: ZThing, b: &ZThing)` — the borrow
+    /// dangles the moment the consume takes ownership — and `f(a: &mut T, b:
+    /// &T)`, where the exclusive reference is not exclusive at all. Rejecting
+    /// the *declaration* is not an option: these are shapes that ship today, so
+    /// removing them would be a regression that a later stage would have to
+    /// undo.
+    ///
+    /// Emitted whenever a call has **at least one `Consume` or
+    /// `ExclusiveBorrow`** and **any other active access in the same resource
+    /// domain**. Stated that way rather than as "two or more consumed
+    /// parameters", which would skip exactly the two mixed cases above.
+    ///
+    /// A NULL pointer names no resource — two NULLs are not an alias — and is
+    /// rejected by each converter's own null check, so the comparison skips it.
+    ///
+    /// Shared/shared is *not* rejected: two `&T` to one resource is legal Rust
+    /// and legal C.
+    pub(super) fn alias_preflight(&self, f: &syn::ItemFn, route: &ErrRoute) -> Option<TokenStream> {
+        let mut slots: Vec<(syn::Ident, TypeKey, AliasAccess)> = Vec::new();
+        for input in &f.sig.inputs {
+            let syn::FnArg::Typed(pt) = input else {
+                continue;
+            };
+            let syn::Pat::Ident(pat_id) = &*pt.pat else {
+                continue;
+            };
+            if let Some((key, access)) = self.alias_slot(&pt.ty) {
+                slots.push((pat_id.ident.clone(), key, access));
+            }
+        }
+
+        let on_err = route_message(route);
+        let mut checks: Vec<TokenStream> = Vec::new();
+        for i in 0..slots.len() {
+            for j in (i + 1)..slots.len() {
+                let (a, a_key, a_access) = &slots[i];
+                let (b, b_key, b_access) = &slots[j];
+                if a_key != b_key {
+                    continue;
+                }
+                // At least one side must be exclusive about the resource.
+                if matches!(a_access, AliasAccess::Shared)
+                    && matches!(b_access, AliasAccess::Shared)
+                {
+                    continue;
+                }
+                let msg = format!(
+                    "aliasing arguments: `{a}` ({}) and `{b}` ({}) are the same `{}` — a \
+                     consumed or exclusively-borrowed resource may not be named twice in one call",
+                    a_access.describe(),
+                    b_access.describe(),
+                    a_key.as_str(),
+                );
+                checks.push(quote!(
+                    if !(#a as *const ()).is_null() && (#a as *const ()) == (#b as *const ()) {
+                        let __msg = ::std::string::String::from(#msg);
+                        #on_err
+                    }
+                ));
+            }
+        }
+        (!checks.is_empty()).then(|| quote!(#(#checks)*))
+    }
+
     /// Build the wire param list, per-input decode statements, and call-site
     /// argument expressions. Fallible inputs (converter returns `Result<_,
     /// String>`) route their `Err(msg)` per `route`; infallible inputs decode
@@ -875,7 +984,10 @@ impl Cbindgen {
         route: &ErrRoute,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
         let mut params = Vec::new();
-        let mut decodes = Vec::new();
+        // The alias preflight runs BEFORE every decode, which is the whole
+        // point: by the time the first converter has run, one of the aliased
+        // arguments has already been consumed.
+        let mut decodes: Vec<TokenStream> = self.alias_preflight(f, route).into_iter().collect();
         let mut call_args = Vec::new();
 
         for input in &f.sig.inputs {
@@ -946,19 +1058,7 @@ impl Cbindgen {
             params.push(quote!(#ident: #wire));
 
             if returns_result(&entry.function.sig.output) {
-                let on_err = match route {
-                    ErrRoute::Result {
-                        e_conv,
-                        e_ty_src,
-                        fail_return,
-                    } => quote!(
-                        if !e.is_null() {
-                            *e = #e_conv(<#e_ty_src as ::core::convert::From<::std::string::String>>::from(__msg));
-                        }
-                        return #fail_return;
-                    ),
-                    ErrRoute::Panic => quote!(panic!("{}", __msg);),
-                };
+                let on_err = route_message(route);
                 decodes.push(quote!(
                     let #ident = match #conv(#ident) {
                         ::core::result::Result::Ok(__v) => __v,

@@ -306,6 +306,40 @@ static void test_nested_union_payload(void) {
     shape_drop(&sketched.sketched.shape);
 }
 
+/* #189's alias preflight, under the leak detector that makes it meaningful.
+ * `calculator_merge(x, x)` would hand one allocation to two `Box::from_raw`
+ * calls — a double free ASan reports immediately. The generated wrapper
+ * compares the pointers before either conversion runs, so the call is rejected
+ * and the handle is untouched: still live, still ours to drop exactly once. */
+static void test_alias_preflight(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+
+    CHECK(calculator_merge(c, c, &e) == NULL);
+    CHECK(e != NULL);
+    CHECK(strstr(e, "aliasing arguments") != NULL);
+    example_free(e);
+    e = NULL;
+
+    /* Nothing was consumed — the handle still works and is dropped once. */
+    CHECK(calculator_get_value(c) == 0.0);
+
+    /* The mixed consume/borrow shape is rejected by the same rule. */
+    double out = -1.0;
+    CHECK(!calculator_absorb(c, c, &out, &e));
+    CHECK(e != NULL);
+    CHECK(out == -1.0);
+    example_free(e);
+    e = NULL;
+
+    /* Two DISTINCT handles still work — the preflight adds no false positive.
+     * Both are consumed by the merge; the result is the only thing to drop. */
+    calculator_t *merged = calculator_merge(c, calculator_new(), &e);
+    CHECK(merged != NULL);
+    CHECK(e == NULL);
+    calculator_drop(merged);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
@@ -315,6 +349,7 @@ int main(void) {
     test_out_of_domain_bool_payload();
     test_out_of_domain_bool_data_struct_field();
     test_nested_union_payload();
+    test_alias_preflight();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
@@ -322,6 +357,6 @@ int main(void) {
     }
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
            "converter-derived payloads, out-of-domain bool payload and "
-           "data-struct field, nested union payload\n");
+           "data-struct field, nested union payload, alias preflight\n");
     return 0;
 }

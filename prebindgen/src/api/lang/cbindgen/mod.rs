@@ -233,6 +233,54 @@ enum ErrRoute<'a> {
     Panic,
 }
 
+/// Emit the statements that report `__msg` — a `String` already in scope — per
+/// `route`, and leave the wrapper.
+///
+/// Shared by the per-input decode failure and by the alias preflight, so the
+/// two cannot drift on how a binding error reaches the caller.
+fn route_message(route: &ErrRoute<'_>) -> TokenStream {
+    match route {
+        ErrRoute::Result {
+            e_conv,
+            e_ty_src,
+            fail_return,
+        } => quote!(
+            if !e.is_null() {
+                *e = #e_conv(
+                    <#e_ty_src as ::core::convert::From<::std::string::String>>::from(__msg),
+                );
+            }
+            return #fail_return;
+        ),
+        ErrRoute::Panic => quote!(panic!("{}", __msg);),
+    }
+}
+
+/// How a parameter uses the resource it names — the axis
+/// [`Cbindgen::alias_preflight`] states its rule on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AliasAccess {
+    /// Taken by value: the callee owns it afterwards, and the C-side handle is
+    /// dead.
+    Consume,
+    /// `&mut T`: exclusive for the duration of the call.
+    Exclusive,
+    /// `&T`: shared, and the only access that may legally coexist with another
+    /// of its own kind.
+    Shared,
+}
+
+impl AliasAccess {
+    /// The word used for this access in a preflight rejection message.
+    fn describe(self) -> &'static str {
+        match self {
+            AliasAccess::Consume => "consumed",
+            AliasAccess::Exclusive => "exclusively borrowed",
+            AliasAccess::Shared => "borrowed",
+        }
+    }
+}
+
 /// C / cbindgen language adapter. Build it with [`Cbindgen::new`], declare the
 /// items to convert with the fluent methods, then drive it through
 /// [`Registry::resolve`](crate::core::Registry::resolve) →

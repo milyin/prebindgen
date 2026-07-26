@@ -576,6 +576,66 @@ pub(crate) fn __cbg_result_Result___Calculator___Error__() {}
 pub(crate) fn __cbg_result_Result___f64___Error__() {}
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn calculator_absorb(
+    a: *mut calculator_t,
+    b: *const calculator_t,
+    out: *mut f64,
+    e: *mut *mut ::core::ffi::c_char,
+) -> bool {
+    if !(a as *const ()).is_null() && (a as *const ()) == (b as *const ()) {
+        let __msg = ::std::string::String::from(
+            "aliasing arguments: `a` (consumed) and `b` (borrowed) are the same `Calculator` — a consumed or exclusively-borrowed resource may not be named twice in one call",
+        );
+        if !e.is_null() {
+            *e = __cbg_out_Error(
+                <example_flat::Error as ::core::convert::From<
+                    ::std::string::String,
+                >>::from(__msg),
+            );
+        }
+        return false;
+    }
+    let a = match __cbg_in_Calculator(a) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(
+                    <example_flat::Error as ::core::convert::From<
+                        ::std::string::String,
+                    >>::from(__msg),
+                );
+            }
+            return false;
+        }
+    };
+    let b = match __cbg_in___Calculator(b) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(
+                    <example_flat::Error as ::core::convert::From<
+                        ::std::string::String,
+                    >>::from(__msg),
+                );
+            }
+            return false;
+        }
+    };
+    match example_flat::calculator_absorb(a, b) {
+        ::core::result::Result::Ok(__v) => {
+            *out = __cbg_out_f64(__v);
+            true
+        }
+        ::core::result::Result::Err(__err) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(__err);
+            }
+            false
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn calculator_apply(
     c: *mut calculator_t,
     op: ::core::mem::MaybeUninit<operation_t>,
@@ -700,6 +760,66 @@ pub unsafe extern "C" fn calculator_is(c: *const calculator_t, value: f64) -> bo
     let __ret: bool;
     __ret = __cbg_out_bool(__v);
     __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn calculator_merge(
+    a: *mut calculator_t,
+    b: *mut calculator_t,
+    e: *mut *mut ::core::ffi::c_char,
+) -> *mut calculator_t {
+    if !(a as *const ()).is_null() && (a as *const ()) == (b as *const ()) {
+        let __msg = ::std::string::String::from(
+            "aliasing arguments: `a` (consumed) and `b` (consumed) are the same `Calculator` — a consumed or exclusively-borrowed resource may not be named twice in one call",
+        );
+        if !e.is_null() {
+            *e = __cbg_out_Error(
+                <example_flat::Error as ::core::convert::From<
+                    ::std::string::String,
+                >>::from(__msg),
+            );
+        }
+        return ::core::ptr::null_mut();
+    }
+    let a = match __cbg_in_Calculator(a) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(
+                    <example_flat::Error as ::core::convert::From<
+                        ::std::string::String,
+                    >>::from(__msg),
+                );
+            }
+            return ::core::ptr::null_mut();
+        }
+    };
+    let b = match __cbg_in_Calculator(b) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(
+                    <example_flat::Error as ::core::convert::From<
+                        ::std::string::String,
+                    >>::from(__msg),
+                );
+            }
+            return ::core::ptr::null_mut();
+        }
+    };
+    match example_flat::calculator_merge(a, b) {
+        ::core::result::Result::Ok(__v) => {
+            let __ret: *mut calculator_t;
+            __ret = __cbg_out_Calculator(__v);
+            __ret
+        }
+        ::core::result::Result::Err(__err) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
