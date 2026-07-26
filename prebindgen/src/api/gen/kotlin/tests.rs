@@ -31,18 +31,9 @@ fn body_of(src: &str) -> &str {
 fn enum_class_with_from_int_companion() {
     let class = KtClass::new(
         ClassKind::Enum(vec![
-            KtEnumEntry {
-                name: "RED".into(),
-                args: Some("0".into()),
-            },
-            KtEnumEntry {
-                name: "GREEN".into(),
-                args: Some("5".into()),
-            },
-            KtEnumEntry {
-                name: "BLUE".into(),
-                args: Some("6".into()),
-            },
+            KtEnumEntry::legacy_args("RED", "0"),
+            KtEnumEntry::legacy_args("GREEN", "5"),
+            KtEnumEntry::legacy_args("BLUE", "6"),
         ]),
         "Color",
     )

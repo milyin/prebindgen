@@ -5,6 +5,7 @@
 
 use super::{
     model::*,
+    slot::{AnnotationSlot, PropertyValue, StaticAnnotationText},
     types::{ImportSet, KtType},
 };
 
@@ -79,11 +80,13 @@ fn collect_decl_imports(d: &KtDecl, sink: &mut Vec<String>) {
             }
         }
         KtDecl::Fun(f) => match &f.body {
-            KtBody::Expr(c) | KtBody::Block(c) => c.collect_imports(sink),
+            KtBody::Expr(c) => c.collect_imports(sink),
+            KtBody::Block(c) => c.collect_imports(sink),
             KtBody::None => {}
         },
         KtDecl::FunInterface(_) => {}
         KtDecl::Property(p) => {
+            p.value.collect_imports(sink);
             if let Some(a) = &p.accessors {
                 a.collect_imports(sink);
             }
@@ -157,7 +160,7 @@ fn class_keyword(kind: &ClassKind) -> &'static str {
 fn render_ctor_param(p: &KtCtorParam, imports: &mut ImportSet) -> String {
     let mut s = String::new();
     for a in &p.annotations {
-        s.push_str(&format!("@{a} "));
+        s.push_str(&format!("@{} ", a.render(imports)));
     }
     s.push_str(p.vis.prefix());
     if p.overrides {
@@ -170,7 +173,7 @@ fn render_ctor_param(p: &KtCtorParam, imports: &mut ImportSet) -> String {
     }
     s.push_str(&format!("{}: {}", p.name, p.ty.render(imports)));
     if let Some(d) = &p.default {
-        s.push_str(&format!(" = {d}"));
+        s.push_str(&format!(" = {}", d.render_inline(imports)));
     }
     s
 }
@@ -180,12 +183,17 @@ fn render_class(c: &KtClass, level: usize, imports: &mut ImportSet, out: &mut St
         render_kdoc(doc, level, out);
     }
     let mut annotations = c.annotations.clone();
-    if matches!(c.kind, ClassKind::ValueInline) && !annotations.iter().any(|a| a == "JvmInline") {
-        annotations.insert(0, "JvmInline".to_string());
+    if matches!(c.kind, ClassKind::ValueInline)
+        && !annotations.iter().any(|a| a.renders_as("JvmInline"))
+    {
+        annotations.insert(
+            0,
+            AnnotationSlot::Legacy(StaticAnnotationText::__from_literal("JvmInline")),
+        );
     }
     for a in &annotations {
         indent(level, out);
-        out.push_str(&format!("@{a}\n"));
+        out.push_str(&format!("@{}\n", a.render(imports)));
     }
 
     indent(level, out);
@@ -215,7 +223,7 @@ fn render_class(c: &KtClass, level: usize, imports: &mut ImportSet, out: &mut St
             .map(|(ty, args)| {
                 let t = ty.render(imports);
                 match args {
-                    Some(a) => format!("{t}({a})"),
+                    Some(a) => format!("{t}({})", a.render_args(imports)),
                     None => t,
                 }
             })
@@ -239,7 +247,7 @@ fn render_class(c: &KtClass, level: usize, imports: &mut ImportSet, out: &mut St
             indent(level + 1, out);
             out.push_str(&e.name);
             if let Some(args) = &e.args {
-                out.push_str(&format!("({args})"));
+                out.push_str(&format!("({})", args.render_args(imports)));
             }
             out.push_str(if i + 1 == entries.len() { ";\n" } else { ",\n" });
         }
@@ -278,7 +286,7 @@ fn render_signature_param(p: &KtParam, imports: &mut ImportSet, level: usize) ->
     let default = p
         .default
         .as_ref()
-        .map(|d| format!(" = {d}"))
+        .map(|d| format!(" = {}", d.render_inline(imports)))
         .unwrap_or_default();
     // Column where the type begins on the parameter line.
     let type_col = level * 4 + name_prefix.len();
@@ -351,7 +359,7 @@ fn render_fun(f: &KtFun, level: usize, imports: &mut ImportSet, out: &mut String
     }
     for a in &f.annotations {
         indent(level, out);
-        out.push_str(&format!("@{a}\n"));
+        out.push_str(&format!("@{}\n", a.render(imports)));
     }
     indent(level, out);
     out.push_str(f.vis.prefix());
@@ -370,7 +378,7 @@ fn render_fun(f: &KtFun, level: usize, imports: &mut ImportSet, out: &mut String
         .map(|p| {
             let mut s = format!("{}: {}", p.name, p.ty.render(imports));
             if let Some(d) = &p.default {
-                s.push_str(&format!(" = {d}"));
+                s.push_str(&format!(" = {}", d.render_inline(imports)));
             }
             s
         })
@@ -411,21 +419,23 @@ fn render_fun(f: &KtFun, level: usize, imports: &mut ImportSet, out: &mut String
     }
     match &f.body {
         KtBody::None => out.push('\n'),
-        KtBody::Expr(code) => {
+        KtBody::Expr(slot) => {
             // Single-line expression renders inline; multi-line after `=`.
-            let mut tmp = String::new();
-            code.render(0, &mut tmp);
-            let trimmed = tmp.trim_end_matches('\n');
-            if trimmed.lines().count() <= 1 {
-                out.push_str(&format!(" = {trimmed}\n"));
+            let rendered = slot.render_inline(imports);
+            if rendered.lines().count() <= 1 {
+                out.push_str(&format!(" = {rendered}\n"));
             } else {
                 out.push_str(" =\n");
-                code.render(level + 1, out);
+                for line in rendered.lines() {
+                    indent(level + 1, out);
+                    out.push_str(line);
+                    out.push('\n');
+                }
             }
         }
-        KtBody::Block(code) => {
+        KtBody::Block(slot) => {
             out.push_str(" {\n");
-            code.render(level + 1, out);
+            slot.render_lines(imports).render(level + 1, out);
             indent(level, out);
             out.push_str("}\n");
         }
@@ -460,7 +470,7 @@ fn render_property(p: &KtProperty, level: usize, imports: &mut ImportSet, out: &
     }
     indent(level, out);
     for a in &p.annotations {
-        out.push_str(&format!("@{a} "));
+        out.push_str(&format!("@{} ", a.render(imports)));
     }
     out.push_str(p.vis.prefix());
     for m in &p.modifiers {
@@ -472,20 +482,21 @@ fn render_property(p: &KtProperty, level: usize, imports: &mut ImportSet, out: &
     if let Some(ty) = &p.ty {
         out.push_str(&format!(": {}", ty.render(imports)));
     }
-    debug_assert!(
-        p.delegate.is_none() || p.initializer.is_none(),
-        "property `{}`: delegate and initializer are mutually exclusive",
-        p.name
-    );
-    if let Some(delegate) = &p.delegate {
-        out.push_str(&format!(" by {delegate}"));
-    }
-    if let Some(init) = &p.initializer {
-        out.push_str(&format!(" = {init}"));
+    // No `debug_assert` here any more: `PropertyValue` is a sum, so
+    // "delegate and initializer are mutually exclusive" is a property of the
+    // type rather than a runtime check that only fires in debug builds.
+    match &p.value {
+        PropertyValue::None => {}
+        PropertyValue::Delegate(d) => {
+            out.push_str(&format!(" by {}", d.render_inline(imports)));
+        }
+        PropertyValue::Initializer(i) => {
+            out.push_str(&format!(" = {}", i.render_inline(imports)));
+        }
     }
     out.push('\n');
     if let Some(acc) = &p.accessors {
-        acc.render(level + 1, out);
+        acc.render_lines(imports).render(level + 1, out);
     }
 }
 

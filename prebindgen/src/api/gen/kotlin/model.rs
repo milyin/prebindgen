@@ -3,7 +3,27 @@
 //! style as the JniGen config builder. Rendering lives in
 //! [`super::render`]; this module is pure data.
 
-use super::{code::Code, types::KtType};
+use super::{
+    code::Code,
+    expr::{KtExpr, KtStmt},
+    slot::{AnnotationSlot, ExprSlot, KtAccessor, PropertyValue, StaticAnnotationText},
+    types::KtType,
+};
+
+/// Wrap a legacy textual annotation. Every call is a #199 work item; see
+/// [`StaticAnnotationText::from_legacy_string`].
+fn legacy_annotation(a: impl Into<String>) -> AnnotationSlot {
+    AnnotationSlot::Legacy(StaticAnnotationText::from_legacy_string(a))
+}
+
+/// Wrap legacy expression text as a slot. The mechanical 5A bridge: builder
+/// signatures are unchanged, so no producer moves here — only the field types.
+fn legacy_expr<T>(text: impl Into<String>) -> ExprSlot<T> {
+    // `line`, not `wline`: these fields held a plain `String` that the renderer
+    // interpolated verbatim, and wrapping them would reflow existing output.
+    // The bridge has to be byte-identical — this stage moves no artifact.
+    ExprSlot::Legacy(Code::new().line(text.into()))
+}
 
 /// Visibility modifier. `Public` renders explicitly (matching the existing
 /// generated style); `Default` renders nothing.
@@ -190,8 +210,25 @@ pub enum ClassKind {
 #[derive(Clone, Debug)]
 pub struct KtEnumEntry {
     pub name: String,
-    /// Constructor argument text, e.g. `"0"` → `NAME(0)`.
-    pub args: Option<String>,
+    /// Constructor arguments: `NAME(0)`.
+    pub args: Option<ExprSlot<Vec<KtExpr>>>,
+}
+
+impl KtEnumEntry {
+    /// An entry with no constructor arguments.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            args: None,
+        }
+    }
+    /// An entry whose arguments are still legacy text.
+    pub fn legacy_args(name: impl Into<String>, args: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            args: Some(legacy_expr(args)),
+        }
+    }
 }
 
 /// Primary-constructor parameter, optionally a `val`/`var` property.
@@ -205,8 +242,8 @@ pub struct KtCtorParam {
     /// property implements an abstract of a supertype interface.
     pub overrides: bool,
     pub vis: Vis,
-    pub default: Option<String>,
-    pub annotations: Vec<String>,
+    pub default: Option<ExprSlot<KtExpr>>,
+    pub annotations: Vec<AnnotationSlot>,
 }
 
 impl KtCtorParam {
@@ -239,11 +276,11 @@ impl KtCtorParam {
         self
     }
     pub fn default(mut self, d: impl Into<String>) -> Self {
-        self.default = Some(d.into());
+        self.default = Some(legacy_expr(d));
         self
     }
     pub fn annotation(mut self, a: impl Into<String>) -> Self {
-        self.annotations.push(a.into());
+        self.annotations.push(legacy_annotation(a));
         self
     }
 }
@@ -254,13 +291,13 @@ pub struct KtClass {
     pub kind: ClassKind,
     pub name: String,
     pub vis: Vis,
-    pub annotations: Vec<String>,
+    pub annotations: Vec<AnnotationSlot>,
     pub kdoc: Option<String>,
     pub ctor_params: Vec<KtCtorParam>,
     /// Supertypes with optional constructor-argument text:
     /// `(NativeHandle, Some("initialPtr"))` → `: NativeHandle(initialPtr)`;
     /// `(AutoCloseable, None)` → `: AutoCloseable`.
-    pub supertypes: Vec<(KtType, Option<String>)>,
+    pub supertypes: Vec<(KtType, Option<ExprSlot<Vec<KtExpr>>>)>,
     pub members: Vec<KtDecl>,
     pub companion: Option<Box<KtClass>>,
 }
@@ -291,7 +328,7 @@ impl KtClass {
         self
     }
     pub fn annotation(mut self, a: impl Into<String>) -> Self {
-        self.annotations.push(a.into());
+        self.annotations.push(legacy_annotation(a));
         self
     }
     pub fn kdoc(mut self, d: impl Into<String>) -> Self {
@@ -303,7 +340,7 @@ impl KtClass {
         self
     }
     pub fn supertype(mut self, ty: KtType, ctor_args: Option<&str>) -> Self {
-        self.supertypes.push((ty, ctor_args.map(str::to_string)));
+        self.supertypes.push((ty, ctor_args.map(legacy_expr)));
         self
     }
     pub fn member(mut self, d: impl Into<KtDecl>) -> Self {
@@ -322,10 +359,10 @@ pub enum KtBody {
     /// No body (`external` / `abstract` declarations).
     #[default]
     None,
-    /// Single-expression body: `= <code>` (one line) or multi-line after `=`.
-    Expr(Code),
+    /// Single-expression body: `= <expr>`.
+    Expr(ExprSlot<KtExpr>),
     /// Block body: `{ … }`.
-    Block(Code),
+    Block(ExprSlot<Vec<KtStmt>>),
 }
 
 /// A function declaration (top-level or member).
@@ -336,7 +373,7 @@ pub struct KtFun {
     /// Modifier keywords in render order, e.g. `external`, `inline`,
     /// `override`, `abstract`, `operator`.
     pub modifiers: Vec<String>,
-    pub annotations: Vec<String>,
+    pub annotations: Vec<AnnotationSlot>,
     pub kdoc: Option<String>,
     /// Generic type-variable names: `["R"]` → `fun <R> …`.
     pub generics: Vec<String>,
@@ -369,7 +406,7 @@ impl KtFun {
         self
     }
     pub fn annotation(mut self, a: impl Into<String>) -> Self {
-        self.annotations.push(a.into());
+        self.annotations.push(legacy_annotation(a));
         self
     }
     pub fn kdoc(mut self, d: impl Into<String>) -> Self {
@@ -389,11 +426,11 @@ impl KtFun {
         self
     }
     pub fn body(mut self, c: Code) -> Self {
-        self.body = KtBody::Block(c);
+        self.body = KtBody::Block(ExprSlot::Legacy(c));
         self
     }
     pub fn expr_body(mut self, c: Code) -> Self {
-        self.body = KtBody::Expr(c);
+        self.body = KtBody::Expr(ExprSlot::Legacy(c));
         self
     }
 }
@@ -404,7 +441,7 @@ impl KtFun {
 pub struct KtParam {
     pub name: String,
     pub ty: KtType,
-    pub default: Option<String>,
+    pub default: Option<ExprSlot<KtExpr>>,
 }
 
 impl KtParam {
@@ -416,7 +453,7 @@ impl KtParam {
         }
     }
     pub fn default(mut self, d: impl Into<String>) -> Self {
-        self.default = Some(d.into());
+        self.default = Some(legacy_expr(d));
         self
     }
 }
@@ -426,22 +463,20 @@ impl KtParam {
 pub struct KtProperty {
     pub name: String,
     pub ty: Option<KtType>,
-    /// Raw initializer expression text.
-    pub initializer: Option<String>,
-    /// Raw delegate expression text (`val x by <delegate>`, e.g.
-    /// `lazy { … }`). Mutually exclusive with `initializer`.
-    pub delegate: Option<String>,
+    /// The initializer or the delegate — **never both**. The exclusion used to
+    /// be two `Option<String>` fields plus a doc comment and a `debug_assert`;
+    /// it is now a sum, so the illegal state is unrepresentable.
+    pub value: PropertyValue,
     pub mutable: bool,
     pub vis: Vis,
     /// Inline annotations rendered before the keyword: `@Volatile internal var …`.
-    pub annotations: Vec<String>,
+    pub annotations: Vec<AnnotationSlot>,
     /// Keyword modifiers rendered between visibility and `val`/`var`
     /// (`open`, `final override`, …).
     pub modifiers: Vec<String>,
     pub kdoc: Option<String>,
-    /// Raw accessor text rendered indented under the property (e.g. a
-    /// custom getter `get() = …`).
-    pub accessors: Option<Code>,
+    /// A structured accessor — a declaration with a body, not an expression.
+    pub accessors: Option<KtAccessor>,
 }
 
 impl KtProperty {
@@ -449,8 +484,7 @@ impl KtProperty {
         Self {
             name: name.into(),
             ty: None,
-            initializer: None,
-            delegate: None,
+            value: PropertyValue::None,
             mutable: false,
             vis: Vis::Default,
             annotations: Vec::new(),
@@ -470,11 +504,11 @@ impl KtProperty {
         self
     }
     pub fn initializer(mut self, i: impl Into<String>) -> Self {
-        self.initializer = Some(i.into());
+        self.value = PropertyValue::Initializer(legacy_expr(i));
         self
     }
     pub fn delegate(mut self, d: impl Into<String>) -> Self {
-        self.delegate = Some(d.into());
+        self.value = PropertyValue::Delegate(legacy_expr(d));
         self
     }
     pub fn vis(mut self, v: Vis) -> Self {
@@ -482,7 +516,7 @@ impl KtProperty {
         self
     }
     pub fn annotation(mut self, a: impl Into<String>) -> Self {
-        self.annotations.push(a.into());
+        self.annotations.push(legacy_annotation(a));
         self
     }
     pub fn modifier(mut self, m: impl Into<String>) -> Self {
@@ -494,7 +528,7 @@ impl KtProperty {
         self
     }
     pub fn accessors(mut self, c: Code) -> Self {
-        self.accessors = Some(c);
+        self.accessors = Some(KtAccessor::legacy(c));
         self
     }
 }
