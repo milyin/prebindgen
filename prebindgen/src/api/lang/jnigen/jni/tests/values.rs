@@ -1333,3 +1333,105 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
     assert!(kc.contains("fununsignedResult(value:ULong"), "{kotlin}");
     assert!(kc.contains("):ULong"), "{kotlin}");
 }
+
+/// A data class's constructor property types come from the SAME
+/// [`build_struct_plan`] its `fromParts` factory walks, so a property and its
+/// own factory parameter cannot disagree (#156). Pinned across the field kinds
+/// the plan distinguishes: a handle projection, a nested data class, a bare
+/// enum, and an `Option` leaf over an object-shaped wire.
+#[test]
+fn data_class_properties_match_their_from_parts_params() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Child {
+                    pub n: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Level {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Handle {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Bag {
+                    pub handle: Handle,
+                    pub child: Child,
+                    pub level: Level,
+                    pub note: Option<String>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bag_make() -> Bag {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bag_take(b: Bag) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::ptr_class!(Handle))
+            .class(crate::data_class!(Child))
+            .class(crate::enum_class!(Level))
+            .class(crate::data_class!(Bag))
+            .fun(crate::fun!(bag_make))
+            .fun(crate::fun!(bag_take)),
+    );
+
+    let dir = unique_test_dir("jnigen_data_class_props");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).expect("resolve");
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The declaration: each property takes the plan's type for its kind.
+    assert!(kc.contains("valhandle:Handle"), "{kotlin}");
+    assert!(kc.contains("valchild:Child"), "{kotlin}");
+    assert!(kc.contains("vallevel:Level"), "{kotlin}");
+    assert!(kc.contains("valnote:String?"), "{kotlin}");
+    // An owned handle property makes the class closeable.
+    assert!(kc.contains("AutoCloseable"), "{kotlin}");
+    assert!(kc.contains("funclose()"), "{kotlin}");
+    // …and the factory reassembles into exactly those properties: the nested
+    // child is inlined as its own leaves, the handle arrives as a raw pointer
+    // and the enum as its discriminant, then each is rebuilt.
+    assert!(kc.contains("Bag(Handle(handle)"), "{kotlin}");
+    assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
+    assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
+}

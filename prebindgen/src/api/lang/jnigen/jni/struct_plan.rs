@@ -324,6 +324,90 @@ pub(crate) fn classify_field(
     }
 }
 
+impl PlanFieldKind {
+    /// The Kotlin type of the `data class` **constructor property** this field
+    /// becomes.
+    ///
+    /// The class declaration, the `fromParts` factory and the Rust encoder are
+    /// three views of one classification, so all three read it from here — the
+    /// module docs' "agree by construction instead of by hand-synchronized
+    /// parallel walks" applied to the declaration too (#156). Deriving it
+    /// separately is what let a property's type disagree with its own
+    /// factory parameter.
+    ///
+    /// `owner` is the dotted path used in diagnostics.
+    pub(crate) fn property_type(&self, owner: &str) -> kt::KtType {
+        match self {
+            // A projection's typed surface is its folded shape over the leaf
+            // class (`ZKeyExpr?`, `List<ZKeyExpr>`, `ULong`), which the plan
+            // already resolved into `fqn`.
+            PlanFieldKind::Projection { proj, fqn, .. } => {
+                handle_kt_type(&proj.strategy, &kt::KtType::cls(fqn))
+            }
+            PlanFieldKind::Enum { kotlin, .. } => kotlin.clone(),
+            PlanFieldKind::OptionEnum { kotlin, .. } => kotlin.clone().nullable(),
+            PlanFieldKind::Nested {
+                optional,
+                child_fqn,
+                ..
+            } => {
+                let fqn = child_fqn.as_ref().unwrap_or_else(|| {
+                    panic!(
+                        "data class property `{owner}`: nested data-class field has no \
+                         registered Kotlin class — declare the child type in a package"
+                    )
+                });
+                let t = kt::KtType::cls(fqn);
+                if *optional {
+                    t.nullable()
+                } else {
+                    t
+                }
+            }
+            PlanFieldKind::Sum {
+                kotlin_fqn,
+                optional,
+                ..
+            } => {
+                let t = kt::KtType::cls(kotlin_fqn);
+                if *optional {
+                    t.nullable()
+                } else {
+                    t
+                }
+            }
+            // `nullable` is the plan's own rule — an `Option` field whose wire
+            // is object-shaped. An `Option` over a PRIMITIVE wire stays
+            // non-null, because the encoder passes the bare primitive with a
+            // sentinel and the JVM slot must match (`J`, not `Ljava/lang/Long;`).
+            PlanFieldKind::Leaf {
+                kotlin, nullable, ..
+            } => {
+                if *nullable {
+                    kotlin.clone().nullable()
+                } else {
+                    kotlin.clone()
+                }
+            }
+        }
+    }
+
+    /// The close strategy when this field owns a native handle, so the class
+    /// implements `AutoCloseable` and `close()` walks it. Only an **owned**
+    /// `Handle` projection qualifies: a value blob is erased to its inner wire
+    /// and owns nothing, and a borrowed handle is not this object's to release.
+    pub(crate) fn destructible(&self) -> Option<FoldStrategy> {
+        match self {
+            PlanFieldKind::Projection { proj, .. }
+                if matches!(proj.kind, ProjectionKind::Handle) && proj.owned =>
+            {
+                Some(proj.strategy.clone())
+            }
+            _ => None,
+        }
+    }
+}
+
 /// Build the [`PlanFieldKind::Sum`] for a `sealed_class`-declared enum: one
 /// leaf group per variant, each payload classified through
 /// [`classify_field`].
