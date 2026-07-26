@@ -37,6 +37,7 @@ typedef enum note_t_Tag {
   Silent,
   Titled,
   After,
+  Flagged,
 } note_t_Tag;
 
 typedef struct note_t {
@@ -47,6 +48,9 @@ typedef struct note_t {
     };
     struct {
       uint64_t after;
+    };
+    struct {
+      bool flagged;
     };
   };
 } note_t;
@@ -147,6 +151,8 @@ enum inside_foo_t inside_foo_default(void);
 int32_t inside_foo_value(enum inside_foo_t x);
 
 struct note_t note_new_after(uint64_t millis);
+
+struct note_t note_new_flagged(bool flag);
 
 struct note_t note_new_silent(void);
 

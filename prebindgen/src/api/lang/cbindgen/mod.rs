@@ -480,6 +480,12 @@ fn maybe_uninit_inner(ty: &syn::Type) -> Option<syn::Type> {
     None
 }
 
+/// Whether `ty` is `bool` — the one scalar whose domain is restricted (`0`/`1`),
+/// so C-supplied bytes may not be held in it without being normalised first.
+fn is_bool(ty: &syn::Type) -> bool {
+    type_path_tail(ty).map(|i| i == "bool").unwrap_or(false)
+}
+
 /// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
 /// (`bool`, the fixed-width / pointer-width integers, and floats).
 fn is_scalar(ty: &syn::Type) -> bool {

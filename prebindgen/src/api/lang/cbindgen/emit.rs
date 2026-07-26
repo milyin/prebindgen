@@ -70,12 +70,16 @@ impl Cbindgen {
     /// so each wire here is produced by a real per-field conversion. That is
     /// what lets `String` join the set.
     ///
-    /// Every wire this returns is **bit-pattern-agnostic**: scalars and raw
-    /// pointers hold any bits legally, and a declared `enum_type` payload is
-    /// wrapped in [`::core::mem::MaybeUninit`] so it does too (holding a Rust
-    /// enum with a discriminant no variant has would be UB). That is what makes
-    /// the mirror's tag the *only* thing [`Cbindgen::in_tagged_union`] has to
-    /// validate before `assume_init`.
+    /// Every wire this returns is **bit-pattern-agnostic**: integers, floats and
+    /// raw pointers hold any bits legally, and the two Rust types that do *not*
+    /// — a declared `enum_type` (a discriminant no variant has) and `bool`
+    /// (anything but `0`/`1`) — are wrapped in [`::core::mem::MaybeUninit`] so
+    /// they do too. That is what makes the mirror's tag the *only* thing
+    /// [`Cbindgen::in_tagged_union`] has to validate before `assume_init`.
+    ///
+    /// (A `bool` reached through a nested `data_struct` payload is **not**
+    /// covered here — see #170. That is the pre-existing `c_field_wire` policy,
+    /// which a plain `bool` parameter shares.)
     pub(super) fn payload_field_wire(
         &self,
         fty: &syn::Type,
@@ -90,6 +94,15 @@ impl Cbindgen {
         if self.enums.contains_key(&TypeKey::from_type(fty)) {
             let c = self.c_type_ident(fty);
             return Ok(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
+        }
+        // `bool` is the one scalar with a restricted domain: `2` is a byte a C
+        // caller can write into the union and NOT a Rust `bool`, so holding it
+        // in the mirror is the same UB an out-of-range discriminant is. Same
+        // remedy, and invisible in C for the same reason (cbindgen simplifies
+        // `MaybeUninit<T>` to `T`); the byte is normalised C-style — nonzero is
+        // true — in `payload_in_expr`.
+        if is_bool(fty) {
+            return Ok(syn::parse_quote!(::core::mem::MaybeUninit<bool>));
         }
         // A `Vec` payload needs TWO C wires (pointer + length) and one union
         // field can carry only one, so its length would be silently dropped.

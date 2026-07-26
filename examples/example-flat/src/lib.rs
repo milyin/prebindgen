@@ -109,6 +109,10 @@ pub enum Note {
     Titled(Caption),
     /// A converted leaf: `Millis` crosses as the `u64` its conversion produces.
     After(Millis),
+    /// A `bool` payload — the one scalar whose domain is restricted (`0`/`1`),
+    /// so it crosses behind `MaybeUninit` like a declared enum does and a byte
+    /// C wrote is normalised, never materialised as a Rust `bool`.
+    Flagged(bool),
 }
 
 /// A newtype whose C wire is the `u64` its declared conversion produces — not
@@ -148,6 +152,12 @@ pub fn note_new_silent() -> Note {
     Note::Silent
 }
 
+/// A flagged note (`bool` payload).
+#[prebindgen]
+pub fn note_new_flagged(flag: bool) -> Note {
+    Note::Flagged(flag)
+}
+
 /// Read a note back: its caption id, its delay, or 0 — the sum in **parameter**
 /// position, so both new payload kinds cross inbound as well as outbound.
 #[prebindgen]
@@ -156,6 +166,7 @@ pub fn note_value(n: Note) -> u64 {
         Note::Silent => 0,
         Note::Titled(c) => c.id,
         Note::After(Millis(m)) => m,
+        Note::Flagged(f) => f as u64,
     }
 }
 

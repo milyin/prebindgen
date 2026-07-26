@@ -15,13 +15,13 @@
 
 use core::{
     ffi::{c_char, c_int, c_void, CStr},
-    mem::MaybeUninit,
+    mem::{align_of, MaybeUninit},
     ptr,
 };
 
 use crate::{
     calculator_apply, calculator_drop, calculator_get_value, calculator_new, example_free,
-    inside_foo_default, inside_foo_value, operation_t,
+    inside_foo_default, inside_foo_value, note_new_flagged, note_t, note_value, operation_t,
 };
 
 /// The wire value a C caller passing `value` produces — including a `value`
@@ -116,6 +116,45 @@ fn negative_operation_discriminant_is_rejected() {
 
         example_free(err.cast::<c_void>());
         calculator_drop(c);
+    }
+}
+
+/// The wire a C caller produces by writing raw union bytes: tag `Flagged` with
+/// `byte` in the payload slot.
+///
+/// A `#[repr(C)]` enum with payload variants is laid out as a leading `int`
+/// discriminant followed by the variant union, padded to the union's alignment
+/// — so the payload begins at the whole type's alignment. The `0`/`1` cases in
+/// the test below pin that offset against the generated encoder.
+unsafe fn raw_flagged(byte: u8) -> MaybeUninit<note_t> {
+    const FLAGGED_TAG: c_int = 3;
+    let mut slot = MaybeUninit::<note_t>::zeroed();
+    ptr::write(slot.as_mut_ptr().cast::<c_int>(), FLAGGED_TAG);
+    ptr::write(
+        slot.as_mut_ptr().cast::<u8>().add(align_of::<note_t>()),
+        byte,
+    );
+    slot
+}
+
+/// `bool` is the one scalar whose domain is restricted (`0`/`1`), so a `bool`
+/// payload crosses behind `MaybeUninit` like a declared enum does: the byte C
+/// wrote is read as a `u8` and normalised the way C converts to `_Bool`, never
+/// materialised as a Rust `bool`. Written against a bare `bool` payload wire the
+/// `2` case below would have been undefined behaviour at `assume_init` — before
+/// any `match` — which is the point.
+#[test]
+fn out_of_domain_bool_payload_is_normalised_not_materialised() {
+    unsafe {
+        // Rust's own `true`/`false` round trip.
+        assert_eq!(note_value(note_new_flagged(true)), 1);
+        assert_eq!(note_value(note_new_flagged(false)), 0);
+        // The hand-written wire agrees with the generated encoder.
+        assert_eq!(note_value(raw_flagged(0)), 0);
+        assert_eq!(note_value(raw_flagged(1)), 1);
+        // Bytes no Rust `bool` may hold: accepted, normalised to `true`.
+        assert_eq!(note_value(raw_flagged(2)), 1);
+        assert_eq!(note_value(raw_flagged(0xff)), 1);
     }
 }
 

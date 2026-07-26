@@ -620,3 +620,71 @@ fn payload_wires_come_from_the_converter_destination() {
         "{src}"
     );
 }
+
+/// A `bool` payload is the one scalar whose domain is restricted, so it rides
+/// as `MaybeUninit<bool>` like a declared enum does — otherwise the union's
+/// `assume_init` would materialise a `bool` from whatever byte C wrote, which is
+/// the same UB the tag check exists to prevent. On the way in the byte is read
+/// as a `u8` and normalised C-style (nonzero is true); on the way out Rust's
+/// own `0`/`1` is only wrapped. The C spelling is unchanged: cbindgen
+/// simplifies `MaybeUninit<T>` to `T`.
+#[test]
+fn bool_payload_is_normalised_not_materialised() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Flagged {
+                    Off,
+                    On(bool),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn flagged_new() -> Flagged {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn flagged_value(f: Flagged) -> bool {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<()>::from_items(items).expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(example_flat))
+        .free_memory_function("example_free")
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .tagged_union(syn::parse_quote!(Flagged))
+        .function(syn::parse_quote!(flagged_new))
+        .function(syn::parse_quote!(flagged_value))
+        .panic();
+
+    let src = write(cbindgen, registry, "bool_payload");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("On(::core::mem::MaybeUninit<bool>),"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("example_flat::Flagged::On(::core::ptr::read(__f0.as_ptr()as*constu8)!=0"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("flagged_t::On(::core::mem::MaybeUninit::new(__f0))"),
+        "{src}"
+    );
+    // A bool owns nothing, so the union still gets no typed drop.
+    assert!(!compact.contains("flagged_drop"), "{src}");
+}
