@@ -20,7 +20,9 @@
  *   - a tag NO variant has. A C caller can always write one, so the binding
  *     validates it before a Rust enum exists: `shape_try_area` reports it
  *     through its `char **e`, and `shape_drop` ignores it. Constructing that
- *     value is the point of the check — it is not a Rust `shape_t` at all.
+ *     value is the point of the check — it is not a Rust `shape_t` at all;
+ *   - the same rule one level down, on a `bool` payload (`note_t`'s `Flagged`
+ *     arm): a byte outside `{0,1}` is normalised, not materialised.
  *
  * Exits non-zero on the first failed check.
  */
@@ -223,18 +225,46 @@ static void test_converter_derived_payloads(void) {
     note_drop(NULL);
 }
 
+/* A `bool` payload. `bool` is the one scalar whose domain is restricted, and C
+ * can put any byte in the slot — `memcpy` from a `char`, a union, a struct read
+ * off the wire. Rust may not HOLD such a byte in a `bool`, so the payload
+ * crosses behind `MaybeUninit` (spelled `bool` in the header, unchanged) and the
+ * byte is normalised C-style on the way in: nonzero is true. */
+static void test_out_of_domain_bool_payload(void) {
+    note_t on = note_new_flagged(true);
+    CHECK(on.tag == Flagged);
+    CHECK(note_value(on) == 1);
+
+    note_t off = note_new_flagged(false);
+    CHECK(off.tag == Flagged);
+    CHECK(note_value(off) == 0);
+
+    /* A byte no Rust `bool` may hold, written the way a C caller can. */
+    unsigned char junk = 2;
+    memcpy(&off.flagged, &junk, sizeof junk);
+    CHECK(note_value(off) == 1);
+
+    junk = 0xff;
+    memcpy(&off.flagged, &junk, sizeof junk);
+    CHECK(note_value(off) == 1);
+
+    /* A bool owns nothing: the drop is a no-op on this arm. */
+    note_drop(&off);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
     test_drop();
     test_invalid_tag();
     test_converter_derived_payloads();
+    test_out_of_domain_bool_payload();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
         return 1;
     }
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
-           "converter-derived payloads\n");
+           "converter-derived payloads, out-of-domain bool payload\n");
     return 0;
 }

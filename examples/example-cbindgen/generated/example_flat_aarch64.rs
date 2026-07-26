@@ -88,6 +88,7 @@ pub enum note_t {
     Silent,
     Titled(caption_t),
     After(u64),
+    Flagged(::core::mem::MaybeUninit<bool>),
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
@@ -105,7 +106,7 @@ pub unsafe extern "C" fn note_drop(this_: *mut ::core::mem::MaybeUninit<note_t>)
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         (*this_).as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 3i64) {
+    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
         return;
     }
     match (*this_).assume_init_mut() {
@@ -248,9 +249,9 @@ pub(crate) unsafe fn __cbg_in_Note(
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         v.as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 3i64) {
+    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
         return ::core::result::Result::Err(
-            ::std::format!("invalid tag {} for `note_t` (expected 0..3)", __tag),
+            ::std::format!("invalid tag {} for `note_t` (expected 0..4)", __tag),
         );
     }
     let v = v.assume_init();
@@ -259,6 +260,11 @@ pub(crate) unsafe fn __cbg_in_Note(
             note_t::Silent => example_flat::Note::Silent,
             note_t::Titled(__f0) => example_flat::Note::Titled(__cbg_in_Caption(__f0)),
             note_t::After(__f0) => example_flat::Note::After(__cbg_in_Millis(__f0)),
+            note_t::Flagged(__f0) => {
+                example_flat::Note::Flagged(
+                    ::core::ptr::read(__f0.as_ptr() as *const u8) != 0,
+                )
+            }
         },
     )
 }
@@ -399,6 +405,10 @@ pub(crate) unsafe fn __cbg_in___str<'a>(
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_in_bool(v: bool) -> bool {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_closure_value_t(
     c: closure_value_t,
 ) -> impl Fn(f64) + Send + Sync + 'static {
@@ -485,6 +495,9 @@ pub(crate) fn __cbg_out_Note(v: example_flat::Note) -> ::core::mem::MaybeUninit<
             example_flat::Note::Silent => note_t::Silent,
             example_flat::Note::Titled(__f0) => note_t::Titled(__cbg_out_Caption(__f0)),
             example_flat::Note::After(__f0) => note_t::After(__cbg_out_Millis(__f0)),
+            example_flat::Note::Flagged(__f0) => {
+                note_t::Flagged(::core::mem::MaybeUninit::new(__f0))
+            }
         },
     )
 }
@@ -849,6 +862,17 @@ pub unsafe extern "C" fn note_new_after(
 ) -> ::core::mem::MaybeUninit<note_t> {
     let millis = __cbg_in_u64(millis);
     let __v = example_flat::note_new_after(millis);
+    let __ret: ::core::mem::MaybeUninit<note_t>;
+    __ret = __cbg_out_Note(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn note_new_flagged(
+    flag: bool,
+) -> ::core::mem::MaybeUninit<note_t> {
+    let flag = __cbg_in_bool(flag);
+    let __v = example_flat::note_new_flagged(flag);
     let __ret: ::core::mem::MaybeUninit<note_t>;
     __ret = __cbg_out_Note(__v);
     __ret

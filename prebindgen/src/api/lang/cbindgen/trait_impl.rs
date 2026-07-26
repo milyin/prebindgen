@@ -1220,6 +1220,14 @@ impl Cbindgen {
                 })
             };
         }
+        // A `bool` payload rides as `MaybeUninit<bool>` (see
+        // `payload_field_wire`), so the byte C wrote is read out as a `u8` —
+        // legal for any bit pattern — and normalised the way C converts to
+        // `_Bool`: nonzero is true. No rejection: unlike a tag, every byte here
+        // has an unambiguous meaning.
+        if is_bool(fty) {
+            return quote!(::core::ptr::read(#b.as_ptr() as *const u8) != 0);
+        }
         // A scalar is its own wire and needs no call.
         if is_scalar(fty) {
             return quote!(#b);
@@ -1268,6 +1276,11 @@ impl Cbindgen {
             } else {
                 quote!(::std::boxed::Box::into_raw(#b) as *mut #c)
             };
+        }
+        // The counterpart of the normalising read above: Rust always writes a
+        // valid `0`/`1`, so this only wraps.
+        if is_bool(fty) {
+            return quote!(::core::mem::MaybeUninit::new(#b));
         }
         if is_scalar(fty) {
             return quote!(#b);

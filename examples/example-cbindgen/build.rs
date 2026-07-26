@@ -129,10 +129,11 @@ fn generate_ffi_bindings() -> PathBuf {
         // The union crossing IN on a fallible function: an out-of-range tag
         // reports through the same `char **e` as the domain error.
         pq!(shape_try_area),
-        // `Note`'s constructors: the nested-struct and converted-leaf payloads
-        // crossing OUT.
+        // `Note`'s constructors: the nested-struct, converted-leaf and `bool`
+        // payloads crossing OUT.
         pq!(note_new_silent),
         pq!(note_new_after),
+        pq!(note_new_flagged),
     ] {
         cbindgen = cbindgen.function(function);
     }
