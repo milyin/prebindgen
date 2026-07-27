@@ -249,6 +249,39 @@ pub fn render_stmts_named(
     (names, out)
 }
 
+/// Render a **vector** of expressions through **one** scope.
+///
+/// Not a loop over [`render_expr_in_scope`]: each of those builds a fresh
+/// `Scope`, so its `introduced` set starts empty and the sibling duplication the
+/// whole-render check exists to catch — one `BindingId` bound in two of the
+/// vector's roots — slips through. Argument lists are exactly where sibling
+/// lambdas appear, so this is the position the check most needed to cover.
+///
+/// Free names are reserved from the entire vector for the same reason: a name
+/// referenced in one element must be avoided by binders allocated in another,
+/// since they share the rendered scope.
+pub fn render_exprs_in_scope(
+    arena: &ExprArena,
+    outer: &[BindingId],
+    exprs: &[KtExpr],
+    imports: &mut ImportSet,
+) -> Vec<String> {
+    // One synthetic root so `Scope::new` sees every element's free names, the
+    // same trick `render_stmts` uses.
+    let all = KtExpr::Lambda(KtLambda::new(
+        [],
+        exprs.iter().cloned().map(KtStmt::Expr).collect(),
+    ));
+    let mut scope = Scope::new(arena, &all);
+    scope.push(outer);
+    let out = exprs
+        .iter()
+        .map(|e| write_expr(e, &mut scope, imports, Prec::Elvis))
+        .collect();
+    scope.pop();
+    out
+}
+
 /// Render a statement list as a block body's lines, with `outer` already bound.
 pub fn render_stmts(
     arena: &ExprArena,

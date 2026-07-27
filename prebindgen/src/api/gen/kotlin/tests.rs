@@ -703,3 +703,44 @@ fn every_expression_slot_contributes_its_raw_imports() {
         );
     }
 }
+
+/// The AST surface #193 and #199 will build against must be reachable by the
+/// **normal** `kt::` path, not only via `kt::expr::`.
+///
+/// `KtLambda` was missing from the re-export list even though
+/// `with_trailing_lambda` requires that concrete type, so a downstream emitter
+/// would have had to reach into the module's internals for it. This names each
+/// intended type through `super::*` — the same glob the back-end imports — so a
+/// dropped re-export is a compile error here rather than a surprise at the call
+/// site.
+#[test]
+fn the_ast_surface_is_reachable_by_its_intended_path() {
+    let mut arena: ExprArena = ExprArena::new();
+    let id: BindingId = arena.bind_fixed(KtName::expect("v"));
+    let _: &Binder = arena.binder(id);
+    let _: ArenaId = id.arena();
+
+    let lambda: KtLambda = KtLambda::expr([id], KtExpr::local(id));
+    let call: KtExpr = KtExpr::free_call("f", []).with_trailing_lambda(lambda);
+    let _: KtStmt = KtStmt::Expr(call.clone());
+    let _: KtPattern = KtPattern::Else;
+    let _: KtLiteral = KtLiteral::Null;
+    let _: Spelling = Spelling::Fresh(NameHint::new("x"));
+
+    // The slot surface, likewise.
+    let _: ExprSlot<KtExpr> = ExprSlot::ast(arena.clone(), call.clone());
+    let _: PropertyValue = PropertyValue::None;
+    let _: KtAccessor = KtAccessor::get_expr(arena.clone(), call.clone());
+    let _: AccessorTree = AccessorTree::Expr(slot::Ast::new(arena.clone(), call.clone()));
+    let _: KtAnnotation = KtAnnotation::new(KtName::expect("JvmStatic"));
+    // Through the macro, which is the intended constructor for literal
+    // annotation text — and keeps this test out of the `from_legacy_string`
+    // audit, whose job is to count *generator* call sites.
+    let _: AnnotationSlot = AnnotationSlot::Legacy(slot::kt_annotation_text!("JvmStatic"));
+
+    // …and the tree operations.
+    let _ = free_names(&call);
+    let _ = has_hole(&call);
+    let _ = fill_hole(&arena, &call, &KtExpr::null());
+    let _ = substitute(&arena, &call, id, &KtExpr::null());
+}

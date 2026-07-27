@@ -27,8 +27,8 @@ pub use code::Code;
 // already used by the model's mechanical bridges.
 #[allow(unused_imports)]
 pub use expr::{
-    fill_hole, free_names, has_hole, substitute, Binder, BindingId, ExprArena, KtExpr, KtLiteral,
-    KtName, KtPattern, KtStmt, Spelling,
+    fill_hole, free_names, has_hole, substitute, ArenaId, Binder, BindingId, ExprArena, KtExpr,
+    KtLambda, KtLiteral, KtName, KtPattern, KtStmt, NameHint, Spelling,
 };
 pub use file::{merge_files, write_files, WriteKotlinError};
 pub use model::{

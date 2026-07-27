@@ -758,6 +758,77 @@ fn two_distinct_binders_sharing_a_hint_are_fine() {
     assert_eq!(r(&arena, &tree), "{ x -> { x2 -> x } }");
 }
 
+/// The uniqueness check must hold **across a vector-valued slot**, not only
+/// within one expression.
+///
+/// `render_args` used to render each element through its own `Scope`, so every
+/// element started with an empty `introduced` set and two arguments could bind
+/// the same `BindingId` — the exact sibling duplication the whole-render check
+/// exists to reject, arriving through the one position where sibling lambdas
+/// are most natural. Reachable from enum-entry and supertype-constructor
+/// argument slots.
+#[test]
+#[should_panic(expected = "is introduced twice in one tree")]
+fn sibling_reintroduction_across_a_vector_slot_is_rejected() {
+    let mut arena = ExprArena::new();
+    let b = arena.bind_fresh("x");
+    let slot: ExprSlot<Vec<KtExpr>> = ExprSlot::ast(
+        arena,
+        vec![
+            KtExpr::lambda1([b], KtExpr::local(b)),
+            KtExpr::lambda1([b], KtExpr::local(b)),
+        ],
+    );
+    let mut imports = ImportSet::default();
+    let _ = slot.render_args(&mut imports);
+}
+
+/// The elements of a vector slot share **one name scope**, so a free name
+/// referenced in *any* element is reserved against binders allocated in the
+/// others — they render into the same argument list, where a binder that took
+/// the free name's spelling would capture it.
+///
+/// Note what this does *not* require: the two sibling binders may share a
+/// spelling. Their scopes do not overlap — each lambda's frame pops before the
+/// next pushes — so `config2` twice is correct Kotlin and gratuitous numbering
+/// would be noise. Only the *free* name is off limits to both.
+#[test]
+fn a_vector_slot_shares_one_name_scope() {
+    let mut arena = ExprArena::new();
+    let a = arena.bind_fresh("config");
+    let b = arena.bind_fresh("config");
+    let slot: ExprSlot<Vec<KtExpr>> = ExprSlot::ast(
+        arena,
+        vec![
+            KtExpr::lambda1([a], KtExpr::local(a)),
+            KtExpr::lambda1([b], KtExpr::local(b)),
+            KtExpr::name("config"),
+        ],
+    );
+    let mut imports = ImportSet::default();
+    assert_eq!(
+        slot.render_args(&mut imports),
+        "{ config2 -> config2 }, { config2 -> config2 }, config"
+    );
+
+    // The reservation is what matters, and it comes from the *whole* vector:
+    // the free `config` appears only in the last element, yet both binders in
+    // the earlier ones avoid it.
+    let mut arena = ExprArena::new();
+    let only = arena.bind_fresh("config");
+    let slot: ExprSlot<Vec<KtExpr>> = ExprSlot::ast(
+        arena,
+        vec![
+            KtExpr::lambda1([only], KtExpr::local(only)),
+            KtExpr::name("config"),
+        ],
+    );
+    assert_eq!(
+        slot.render_args(&mut imports),
+        "{ config2 -> config2 }, config"
+    );
+}
+
 // ── trailing lambdas ────────────────────────────────────────────────────
 
 /// Kotlin's trailing-argument syntax accepts only a lambda, and the field is

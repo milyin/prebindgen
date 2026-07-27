@@ -370,12 +370,13 @@ impl ExprSlot<Vec<KtExpr>> {
                 c.render(0, &mut s);
                 s.trim_end().to_string()
             }
-            ExprSlot::Ast(a) => a
-                .tree
-                .iter()
-                .map(|e| render_expr_in_scope(&a.arena, &a.scope, e, imports))
-                .collect::<Vec<_>>()
-                .join(", "),
+            // One scope for the whole vector — see `render_exprs_in_scope`.
+            // Rendering each element separately would give every one a fresh
+            // `introduced` set, letting two arguments bind the same `BindingId`.
+            ExprSlot::Ast(a) => {
+                super::expr::render::render_exprs_in_scope(&a.arena, &a.scope, &a.tree, imports)
+                    .join(", ")
+            }
         }
     }
 
