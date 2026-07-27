@@ -380,23 +380,22 @@ impl JniGen {
         // existence just to make the generated Rust compile, and would be
         // asymmetric with consts, which qualify whether or not JniGen declared
         // them.
-        let mut length_names: std::collections::HashMap<String, syn::Path> =
-            std::collections::HashMap::new();
-        let mut add_length_name = |ident: &syn::Ident| {
-            let module = registry
-                .origin_module(ident)
-                .unwrap_or_else(|| self.default_module(registry));
-            length_names.insert(ident.to_string(), module);
-        };
-        for ident in registry.consts.keys() {
-            add_length_name(ident);
-        }
-        for ident in registry.structs.keys() {
-            add_length_name(ident);
-        }
-        for ident in registry.enums.keys() {
-            add_length_name(ident);
-        }
+        // EVERY indexed item, keyed off the same origin map `origin_module`
+        // reads. A length is an arbitrary const expression, so it can name a
+        // const, the type owning an associated const, or a `const fn` — and
+        // enumerating item KINDS here has already missed one of those three
+        // twice. Iterating the origin map cannot drift from `origin_module`
+        // and needs no revisiting when a new item kind is indexed.
+        let length_names: std::collections::HashMap<String, syn::Path> = registry
+            .item_origins
+            .keys()
+            .map(|ident| {
+                let module = registry
+                    .origin_module(ident)
+                    .unwrap_or_else(|| self.default_module(registry));
+                (ident.to_string(), module)
+            })
+            .collect();
         let mut visitor = QualifyEmittedTypes {
             source_names: &source_names,
             length_names: &length_names,

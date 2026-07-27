@@ -1436,9 +1436,13 @@ fn data_class_properties_match_their_from_parts_params() {
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 }
 
-/// Array-length consts — both a FREE const and an ASSOCIATED one — are
-/// qualified against their origin module, and that rewrite reaches ONLY the
-/// length, never a converter body's locals.
+/// Every shape an array length can take — a FREE const, an ASSOCIATED const,
+/// and a `const fn` CALL — is qualified against its origin module, and that
+/// rewrite reaches ONLY the length, never a converter body's locals.
+///
+/// None of the three owners is declared to JniGen: each is a compile-time
+/// namespace, not a boundary type, so qualification must not depend on a
+/// Kotlin class existing for it.
 ///
 /// The const here is deliberately named `env`, which is also the name of the
 /// `JNIEnv` local every generated converter uses. A source crate may legally
@@ -1470,11 +1474,23 @@ fn array_length_const_is_qualified_without_touching_locals() {
         )),
         loc.clone(),
     ));
+    // A `const fn` whose CALL is a length. Also never declared: its result
+    // determines an array size, which is no reason to put it in the Kotlin
+    // surface.
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub const fn array_len() -> usize {
+                4
+            }
+        )),
+        loc.clone(),
+    ));
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Blob {
                 pub bytes: [u8; env],
                 pub assoc: [u8; Holder::N],
+                pub called: [u8; array_len()],
             }
         )),
         loc.clone(),
@@ -1526,4 +1542,11 @@ fn array_length_const_is_qualified_without_touching_locals() {
     // The leading segment is rewritten ONCE — the associated item stays
     // relative to the type it belongs to.
     assert!(!rc.contains("myflat::Holder::myflat"), "{rust}");
+
+    // A `const fn` CALL is a third shape a length can take, and its callee is
+    // an indexed item like the other two. Also undeclared.
+    assert!(rc.contains("Result<[u8;myflat::array_len()]"), "{rust}");
+    assert!(rc.contains("v:[u8;myflat::array_len()]"), "{rust}");
+    assert!(!rc.contains("Result<[u8;array_len()]"), "{rust}");
+    assert!(!rc.contains("v:[u8;array_len()]"), "{rust}");
 }
