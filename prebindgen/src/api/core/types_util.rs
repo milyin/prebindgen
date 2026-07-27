@@ -2,6 +2,12 @@
 //! short-name helpers every pipeline stage needs. One definition here
 //! replaces the per-module copies that used to live in `core::unfold`,
 //! `core::expand`, and the jnigen adapter.
+//!
+//! `is_vec_type`, `is_unit` and `first_type_arg` used to be gated behind
+//! `unstable-cbindgen`, because the C adapter was their only caller.
+//! [`semantic`](super::semantic) — Tier 0 — needs them now, and core may not
+//! depend on an adapter's feature flag: that is the same tier boundary the
+//! module-boundary test enforces from the other direction.
 
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -363,19 +369,18 @@ pub fn is_option_type(ty: &syn::Type) -> bool {
 }
 
 /// True when `ty` is `Vec<…>` (by last path segment).
-#[cfg(feature = "unstable-cbindgen")]
 pub fn is_vec_type(ty: &syn::Type) -> bool {
     path_tail_is(ty, "Vec")
 }
 
-/// True when `ty` is `Result<…>` (by last path segment).
+/// True when `ty` is `Result<…>` (by last path segment). Still adapter-only —
+/// Tier 0 goes through [`result_parts`], which needs the arms anyway.
 #[cfg(feature = "unstable-cbindgen")]
 pub fn is_result_type(ty: &syn::Type) -> bool {
     path_tail_is(ty, "Result")
 }
 
 /// True when `ty` is the unit type `()`.
-#[cfg(feature = "unstable-cbindgen")]
 pub fn is_unit(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }
@@ -412,7 +417,6 @@ pub fn result_err_type(ty: &syn::Type) -> Option<syn::Type> {
 /// First angle-bracketed **type** argument of a path type (`T` of `Option<T>`
 /// / `Vec<T>` / `Result<T, _>`), skipping lifetime/const args. `None` when
 /// there is no type argument.
-#[cfg(feature = "unstable-cbindgen")]
 pub fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
     let syn::Type::Path(tp) = ty else { return None };
     let seg = tp.path.segments.last()?;
@@ -532,10 +536,13 @@ pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
 /// them in memory as a `#[repr(C)]` union). Nothing here names a wire
 /// detail — in particular a payload enum carries no `repr`, so tags are
 /// declaration order and never an explicit discriminant.
-/// The neutral description lands before either lowering, so both adapters
-/// read one definition instead of growing a private one each; the
-/// `dead_code` allow covers that gap and goes away with the first adapter
-/// that reads a sum.
+///
+/// As of Stage T (#190) this is the **`Choice` constructor** for the Tier 0
+/// semantic tier rather than a parallel description of the same enum:
+/// [`ShapeGraph`](crate::api::core::semantic::ShapeGraph) builds
+/// [`SemanticShape::Choice`](crate::api::core::semantic::SemanticShape::Choice)
+/// through it, so declaration-order tags, `syn::Member` addressing and the
+/// nested-prefix leaf names are computed in exactly one place.
 #[allow(dead_code)]
 pub struct SumSpec {
     /// Canonical key of the enum type.
