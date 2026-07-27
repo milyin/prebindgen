@@ -18,8 +18,8 @@
 use std::collections::HashSet;
 
 use super::{
-    super::types::ImportSet, free_names, BindingId, ExprArena, KtExpr, KtLiteral, KtName,
-    KtPattern, KtStmt, Spelling,
+    super::types::ImportSet, free_names, is_hard_keyword, BindingId, ExprArena, KtExpr, KtLiteral,
+    KtName, KtPattern, KtStmt, Spelling,
 };
 
 /// Binding strength of an expression, high binds tighter. Only the operators
@@ -45,7 +45,7 @@ fn prec(e: &KtExpr) -> Prec {
         // A `when` and a lambda are brace-delimited, so they are self-bracketing
         // in every position we emit them.
         KtExpr::Lambda { .. } | KtExpr::When { .. } => Prec::Atom,
-        KtExpr::Local(_) | KtExpr::Name(_) | KtExpr::Literal(_) => Prec::Atom,
+        KtExpr::Local(_) | KtExpr::Name(_) | KtExpr::This | KtExpr::Literal(_) => Prec::Atom,
         KtExpr::Hole | KtExpr::Raw(_) => Prec::Atom,
     }
 }
@@ -106,9 +106,15 @@ impl<'a> Scope<'a> {
         }
     }
 
-    /// `hint`, else `hint2`, `hint3`, … — the first spelling not already taken.
+    /// `hint`, else `hint2`, `hint3`, … — the first spelling that is neither
+    /// taken nor a Kotlin hard keyword.
+    ///
+    /// A hint is advisory and arrives from a leaf name or a field name, so it
+    /// can easily be `when` or `object`; emitting that bare would be
+    /// uncompilable. Suffixing sidesteps it with no extra machinery — `when`
+    /// becomes `when2`.
     fn allocate(&self, hint: &str) -> String {
-        if !self.taken.contains(hint) {
+        if !self.taken.contains(hint) && !is_hard_keyword(hint) {
             return hint.to_string();
         }
         (2..)
@@ -132,15 +138,39 @@ impl<'a> Scope<'a> {
     }
 }
 
-/// Render `expr` to Kotlin source, registering the FQNs it references in
-/// `imports`.
+/// Render `expr` with no enclosing binders.
 pub fn render_expr(arena: &ExprArena, expr: &KtExpr, imports: &mut ImportSet) -> String {
-    let mut scope = Scope::new(arena, expr);
-    write_expr(expr, &mut scope, imports, Prec::Elvis)
+    render_expr_in_scope(arena, &[], expr, imports)
 }
 
-/// Render a statement list as a block body's lines.
-pub fn render_stmts(arena: &ExprArena, stmts: &[KtStmt], imports: &mut ImportSet) -> Vec<String> {
+/// Render `expr` with `outer` already bound — the enclosing declaration's
+/// parameters.
+///
+/// This is what lets a typed function body, default, supertype argument or
+/// accessor reference its own parameter through `Local`. Without it every slot
+/// would render in a fresh scope and such a reference would be unbound;
+/// reaching for `Name("initialPtr")` instead would put a binder back into the
+/// free-name set and restore the textual capture risk `BindingId` removes.
+pub fn render_expr_in_scope(
+    arena: &ExprArena,
+    outer: &[BindingId],
+    expr: &KtExpr,
+    imports: &mut ImportSet,
+) -> String {
+    let mut scope = Scope::new(arena, expr);
+    scope.push(outer);
+    let out = write_expr(expr, &mut scope, imports, Prec::Elvis);
+    scope.pop();
+    out
+}
+
+/// Render a statement list as a block body's lines, with `outer` already bound.
+pub fn render_stmts(
+    arena: &ExprArena,
+    outer: &[BindingId],
+    stmts: &[KtStmt],
+    imports: &mut ImportSet,
+) -> Vec<String> {
     // Reserve against every statement, not just the first: a name free in one
     // and taken in another must be avoided in both.
     let mut scope = Scope::new(
@@ -150,7 +180,7 @@ pub fn render_stmts(arena: &ExprArena, stmts: &[KtStmt], imports: &mut ImportSet
             body: stmts.to_vec(),
         },
     );
-    scope.push(&[]);
+    scope.push(outer);
     let out = write_stmts(stmts, &mut scope, imports);
     scope.pop();
     out
@@ -170,6 +200,7 @@ fn write_bare(e: &KtExpr, scope: &mut Scope, imports: &mut ImportSet) -> String 
     match e {
         KtExpr::Local(id) => scope.lookup(*id).to_string(),
         KtExpr::Name(n) => render_name(n, imports),
+        KtExpr::This => "this".to_string(),
         KtExpr::Literal(l) => render_literal(l),
         KtExpr::Field { recv, name, safe } => {
             let r = write_expr(recv, scope, imports, Prec::Postfix);
@@ -306,11 +337,24 @@ fn render_literal(l: &KtLiteral) -> String {
     match l {
         KtLiteral::Null => "null".to_string(),
         KtLiteral::Bool(b) => b.to_string(),
+        // `-2147483648` / `-9223372036854775808` do not round-trip: Kotlin
+        // parses them as unary minus applied to a *positive* literal that is
+        // one past the type's maximum, and rejects them as out of range. The
+        // named constants are the only spellings that carry the value.
+        KtLiteral::Int(v) if *v == i32::MIN => "Int.MIN_VALUE".to_string(),
         KtLiteral::Int(v) => v.to_string(),
+        KtLiteral::Long(v) if *v == i64::MIN => "Long.MIN_VALUE".to_string(),
         KtLiteral::Long(v) => format!("{v}L"),
+        // Rust prints these as `NaN` / `inf` / `-inf`, none of which Kotlin
+        // accepts as a literal.
+        KtLiteral::Double(v) if v.is_nan() => "Double.NaN".to_string(),
+        KtLiteral::Double(v) if v.is_infinite() && *v > 0.0 => {
+            "Double.POSITIVE_INFINITY".to_string()
+        }
+        KtLiteral::Double(v) if v.is_infinite() => "Double.NEGATIVE_INFINITY".to_string(),
         KtLiteral::Double(v) => {
             // Kotlin needs a decimal point to infer `Double`.
-            if v.fract() == 0.0 && v.is_finite() {
+            if v.fract() == 0.0 {
                 format!("{v:.1}")
             } else {
                 v.to_string()

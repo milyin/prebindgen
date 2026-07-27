@@ -39,7 +39,7 @@
 
 use super::{
     code::Code,
-    expr::{ExprArena, KtExpr, KtName, KtStmt},
+    expr::{BindingId, ExprArena, KtExpr, KtName, KtStmt},
 };
 
 /// A typed tree together with the arena owning its binders.
@@ -52,12 +52,36 @@ use super::{
 #[derive(Clone, Debug)]
 pub struct Ast<T> {
     pub arena: ExprArena,
+    /// Binders already in scope at the tree's **root** — the enclosing
+    /// declaration's parameters.
+    ///
+    /// Without this a typed function body could not reference its own
+    /// parameter: every slot renders in a fresh scope, so `Local(param)` would
+    /// be unbound and the renderer would panic. Reaching for
+    /// `Name("initialPtr")` instead would put a binder back in the free-name
+    /// set and restore exactly the textual capture risk `BindingId` exists to
+    /// remove — so the parameter has to arrive as a binder, not as a name.
+    ///
+    /// Kept on the `Ast` rather than on the declaration so a slot still renders
+    /// with no ambient state, and so the binders and the arena that owns them
+    /// cannot be supplied from two different places.
+    pub scope: Vec<BindingId>,
     pub tree: T,
 }
 
 impl<T> Ast<T> {
+    /// A tree with no enclosing binders.
     pub fn new(arena: ExprArena, tree: T) -> Self {
-        Self { arena, tree }
+        Self {
+            arena,
+            scope: Vec::new(),
+            tree,
+        }
+    }
+
+    /// A tree rendered with `scope` already bound — see [`Self::scope`].
+    pub fn in_scope(arena: ExprArena, scope: Vec<BindingId>, tree: T) -> Self {
+        Self { arena, scope, tree }
     }
 }
 
@@ -82,6 +106,12 @@ impl<T> ExprSlot<T> {
     /// Wrap a typed tree.
     pub fn ast(arena: ExprArena, tree: T) -> Self {
         ExprSlot::Ast(Ast::new(arena, tree))
+    }
+
+    /// Wrap a typed tree that may reference the enclosing declaration's
+    /// parameters — see [`Ast::scope`].
+    pub fn ast_in_scope(arena: ExprArena, scope: Vec<BindingId>, tree: T) -> Self {
+        ExprSlot::Ast(Ast::in_scope(arena, scope, tree))
     }
 
     /// Whether this slot still holds text — the predicate #199's exit counts.
@@ -257,7 +287,10 @@ impl AnnotationSlot {
 // never has to know which arm it holds — which is what keeps the `Legacy`
 // deletion in #199 a local change.
 
-use super::{expr::render::render_expr, types::ImportSet};
+use super::{
+    expr::render::{render_expr, render_expr_in_scope},
+    types::ImportSet,
+};
 
 impl ExprSlot<KtExpr> {
     /// Render to a single Kotlin expression.
@@ -268,7 +301,7 @@ impl ExprSlot<KtExpr> {
                 c.render(0, &mut s);
                 s.trim_end().to_string()
             }
-            ExprSlot::Ast(a) => render_expr(&a.arena, &a.tree, imports),
+            ExprSlot::Ast(a) => render_expr_in_scope(&a.arena, &a.scope, &a.tree, imports),
         }
     }
 
@@ -302,7 +335,7 @@ impl ExprSlot<Vec<KtExpr>> {
             ExprSlot::Ast(a) => a
                 .tree
                 .iter()
-                .map(|e| render_expr(&a.arena, e, imports))
+                .map(|e| render_expr_in_scope(&a.arena, &a.scope, e, imports))
                 .collect::<Vec<_>>()
                 .join(", "),
         }
@@ -332,7 +365,8 @@ impl ExprSlot<Vec<KtStmt>> {
             ExprSlot::Legacy(c) => c.clone(),
             ExprSlot::Ast(a) => {
                 let mut code = Code::new();
-                for line in super::expr::render::render_stmts(&a.arena, &a.tree, imports) {
+                for line in super::expr::render::render_stmts(&a.arena, &a.scope, &a.tree, imports)
+                {
                     code = code.line(line);
                 }
                 code
@@ -383,7 +417,7 @@ impl KtAccessor {
             )),
             AccessorBody::Block(a) => {
                 let mut code = Code::new();
-                let lines = super::expr::render::render_stmts(&a.arena, &a.tree, imports);
+                let lines = super::expr::render::render_stmts(&a.arena, &a.scope, &a.tree, imports);
                 code = code.blk(format!("{head} {{"), |c| {
                     let mut c = c;
                     for l in lines {

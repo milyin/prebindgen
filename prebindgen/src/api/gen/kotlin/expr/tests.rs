@@ -6,6 +6,77 @@ use crate::api::gen::kotlin::{
     types::{ImportSet, KtType},
 };
 
+/// Strip Rust comments — both `//` and `/* … */` — while leaving **string
+/// literals intact**, so a scan for a forbidden token still sees one written in
+/// a message but not one written in prose.
+///
+/// Char literals are not tracked: `'` is overwhelmingly a lifetime, and a naive
+/// char state would swallow code from `'a` to the next quote.
+///
+/// NOTE: Stage T (#190) carries an identical helper for its module-boundary
+/// test. The two branches are independent, so this is a deliberate copy rather
+/// than a shared util that would conflict on merge; folding them into one test
+/// utility belongs to whichever lands second.
+fn code_without_comments(src: &str) -> String {
+    #[derive(Clone, Copy, PartialEq)]
+    enum St {
+        Code,
+        Line,
+        Block,
+        Str,
+        StrEsc,
+    }
+    let mut out = String::with_capacity(src.len());
+    let mut st = St::Code;
+    let mut chars = src.chars().peekable();
+    while let Some(c) = chars.next() {
+        match st {
+            St::Code => match (c, chars.peek()) {
+                ('/', Some('/')) => {
+                    chars.next();
+                    st = St::Line;
+                }
+                ('/', Some('*')) => {
+                    chars.next();
+                    st = St::Block;
+                }
+                ('"', _) => {
+                    st = St::Str;
+                    out.push(c);
+                }
+                _ => out.push(c),
+            },
+            St::Line => {
+                if c == '\n' {
+                    st = St::Code;
+                    out.push(c);
+                }
+            }
+            St::Block => {
+                if c == '*' && chars.peek() == Some(&'/') {
+                    chars.next();
+                    st = St::Code;
+                } else if c == '\n' {
+                    out.push(c);
+                }
+            }
+            St::Str => {
+                out.push(c);
+                st = match c {
+                    '\\' => St::StrEsc,
+                    '"' => St::Code,
+                    _ => St::Str,
+                };
+            }
+            St::StrEsc => {
+                out.push(c);
+                st = St::Str;
+            }
+        }
+    }
+    out
+}
+
 /// Render with a throwaway import set — for assertions that do not care about
 /// imports.
 fn r(arena: &ExprArena, e: &KtExpr) -> String {
@@ -246,7 +317,7 @@ fn fill_hole_replaces_the_base_in_place() {
             KtExpr::name("payload"),
             "(payload.field as? Exact)?.v0 ?: 0L",
         ),
-        (KtExpr::name("this"), "(this.field as? Exact)?.v0 ?: 0L"),
+        (KtExpr::this(), "(this.field as? Exact)?.v0 ?: 0L"),
     ] {
         let filled = fill_hole(&template, &base);
         assert!(!has_hole(&filled));
@@ -435,6 +506,168 @@ fn no_variant_other_than_raw_accepts_free_form_text() {
     assert_eq!(r(&arena, &KtExpr::Raw("a ?: b".into())), "a ?: b");
 }
 
+// ── declaration parameters are binders ──────────────────────────────────
+
+/// A typed function body can reference its **own parameters** through `Local`.
+///
+/// Every slot renders in a fresh scope, so without the enclosing declaration's
+/// binders a `Local(param)` would be unbound and the renderer would panic.
+/// Reaching for `Name("initialPtr")` instead is not an option — it would put a
+/// binder back into the free-name set and restore exactly the textual capture
+/// `BindingId` exists to remove.
+#[test]
+fn a_typed_body_can_reference_its_own_parameters() {
+    let fun = crate::api::gen::kotlin::KtFun::new("open")
+        .param(crate::api::gen::kotlin::KtParam::new(
+            "initialPtr",
+            KtType::long(),
+        ))
+        .param(crate::api::gen::kotlin::KtParam::new(
+            "config",
+            KtType::string(),
+        ))
+        .typed_body(ExprArena::new(), |_arena, params| {
+            vec![KtStmt::Expr(KtExpr::free_call(
+                "nativeOpen",
+                [KtExpr::local(params[0]), KtExpr::local(params[1])],
+            ))]
+        });
+
+    // The binders were recorded on the parameters…
+    assert!(fun.params.iter().all(|p| p.binder.is_some()));
+    // …and the body renders them by their declared names, byte-identically:
+    // a parameter name is Kotlin's named-argument surface.
+    let crate::api::gen::kotlin::KtBody::Block(slot) = &fun.body else {
+        panic!("expected a typed block body");
+    };
+    let mut imports = ImportSet::default();
+    let mut out = String::new();
+    slot.render_lines(&mut imports).render(0, &mut out);
+    assert_eq!(out.trim(), "nativeOpen(initialPtr, config)");
+}
+
+/// A `Fresh` binder introduced inside a typed body moves aside for the
+/// enclosing **parameter**, never the reverse — the parameter's spelling is
+/// public API.
+#[test]
+fn a_body_local_does_not_shadow_an_enclosing_parameter() {
+    let fun = crate::api::gen::kotlin::KtFun::new("f")
+        .param(crate::api::gen::kotlin::KtParam::new(
+            "value",
+            KtType::long(),
+        ))
+        .typed_body(ExprArena::new(), |arena, params| {
+            let local = arena.bind_fresh("value");
+            vec![
+                KtStmt::Let {
+                    binder: local,
+                    mutable: false,
+                    value: KtExpr::local(params[0]),
+                },
+                KtStmt::Expr(KtExpr::local(local)),
+            ]
+        });
+    let crate::api::gen::kotlin::KtBody::Block(slot) = &fun.body else {
+        panic!("expected a typed block body");
+    };
+    let mut imports = ImportSet::default();
+    let mut out = String::new();
+    slot.render_lines(&mut imports).render(0, &mut out);
+    assert_eq!(out.trim(), "val value2 = value\nvalue2");
+}
+
+/// The same scope wiring on an arbitrary slot, which is what a supertype
+/// constructor argument (`NativeHandle(initialPtr)`) or a setter body needs.
+#[test]
+fn any_slot_can_be_rendered_with_enclosing_binders() {
+    let mut arena = ExprArena::new();
+    let param = arena.bind_fixed(KtName::expect("initialPtr"));
+    let slot: ExprSlot<Vec<KtExpr>> =
+        ExprSlot::ast_in_scope(arena, vec![param], vec![KtExpr::local(param)]);
+    let mut imports = ImportSet::default();
+    assert_eq!(slot.render_args(&mut imports), "initialPtr");
+}
+
+// ── keywords and the literal domain ─────────────────────────────────────
+
+/// Kotlin **hard keywords** are not identifiers. `KtName::new("when")` used to
+/// succeed and the renderer emitted uncompilable Kotlin.
+///
+/// Rejected rather than backtick-escaped: silently rewriting a name would make
+/// the emitted spelling differ from the one asked for, which for a `Fixed`
+/// binder — a named-argument surface — is exactly what must not happen.
+#[test]
+fn kt_name_rejects_kotlin_hard_keywords() {
+    for kw in [
+        "when",
+        "class",
+        "object",
+        "val",
+        "is",
+        "in",
+        "fun",
+        "typealias",
+    ] {
+        assert!(KtName::new(kw).is_err(), "`{kw}` is a hard keyword");
+        // …in any path segment, too.
+        assert!(
+            KtName::new(format!("io.zenoh.{kw}")).is_err(),
+            "`{kw}` segment"
+        );
+    }
+    // Soft / modifier keywords ARE legal identifiers and must stay accepted.
+    for ok in ["data", "value", "by", "where", "sealed", "inline", "it"] {
+        assert!(KtName::new(ok).is_ok(), "`{ok}` is only a soft keyword");
+    }
+    // `this` is a hard keyword AND a legitimate expression — so it is a node,
+    // not a name.
+    let arena = ExprArena::new();
+    assert_eq!(r(&arena, &KtExpr::this().field("x")), "this.x");
+}
+
+/// A `Fresh` hint can easily be a keyword — hints come from field and leaf
+/// names — so the allocator sidesteps them the same way it sidesteps a taken
+/// name.
+#[test]
+fn a_fresh_binder_never_renders_as_a_hard_keyword() {
+    let mut arena = ExprArena::new();
+    let b = arena.bind_fresh("when");
+    let tree = KtExpr::lambda1([b], KtExpr::local(b));
+    assert_eq!(r(&arena, &tree), "{ when2 -> when2 }");
+}
+
+/// Literals must cover the **whole** domain they can represent.
+///
+/// `-2147483648` and `-9223372036854775808` do not round-trip: Kotlin parses
+/// them as unary minus applied to a positive literal one past the type's
+/// maximum, and rejects them as out of range. Rust prints non-finite doubles as
+/// `NaN` / `inf` / `-inf`, none of which Kotlin accepts.
+#[test]
+fn literals_cover_their_whole_value_domain() {
+    let arena = ExprArena::new();
+    for (e, want) in [
+        (KtExpr::int(i32::MIN), "Int.MIN_VALUE"),
+        (KtExpr::int(i32::MAX), "2147483647"),
+        (KtExpr::int(-1), "-1"),
+        (KtExpr::long(i64::MIN), "Long.MIN_VALUE"),
+        (KtExpr::long(i64::MAX), "9223372036854775807L"),
+        (KtExpr::long(-1), "-1L"),
+        (KtExpr::Literal(KtLiteral::Double(f64::NAN)), "Double.NaN"),
+        (
+            KtExpr::Literal(KtLiteral::Double(f64::INFINITY)),
+            "Double.POSITIVE_INFINITY",
+        ),
+        (
+            KtExpr::Literal(KtLiteral::Double(f64::NEG_INFINITY)),
+            "Double.NEGATIVE_INFINITY",
+        ),
+        (KtExpr::Literal(KtLiteral::Double(1.0)), "1.0"),
+        (KtExpr::Literal(KtLiteral::Double(-0.5)), "-0.5"),
+    ] {
+        assert_eq!(r(&arena, &e), want);
+    }
+}
+
 // ── the slot bridges ────────────────────────────────────────────────────
 
 /// **No expression position can hold a legacy and a typed value
@@ -570,14 +803,9 @@ fn ktexpr_raw_has_no_producers() {
     }
     // …and no other file of the Kotlin generator may reference it in *code*.
     // Doc comments discussing the contract are the point, not a violation, so
-    // they are stripped first — the same treatment Tier 0's module-boundary
-    // test gives its own prose.
-    let code_of = |src: &str| -> String {
-        src.lines()
-            .filter(|l| !l.trim_start().starts_with("//"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
+    // they are stripped first — with the same scanner Tier 0's module-boundary
+    // test uses, which handles `/* … */` as well as `//` and leaves string
+    // literals alone.
     let mut offenders = Vec::new();
     for (name, src) in [
         ("slot.rs", include_str!("../slot.rs")),
@@ -587,7 +815,7 @@ fn ktexpr_raw_has_no_producers() {
         ("file.rs", include_str!("../file.rs")),
         ("types.rs", include_str!("../types.rs")),
     ] {
-        if code_of(src).contains("KtExpr::Raw") {
+        if code_without_comments(src).contains("KtExpr::Raw") {
             offenders.push(name);
         }
     }

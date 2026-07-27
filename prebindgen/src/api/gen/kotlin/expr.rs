@@ -136,9 +136,52 @@ impl std::fmt::Display for KtNameError {
 
 impl std::error::Error for KtNameError {}
 
+/// Kotlin's **hard keywords** — the ones that are never valid as a bare
+/// identifier, in any position.
+///
+/// Soft and modifier keywords (`data`, `value`, `by`, `where`, …) are
+/// deliberately absent: they are contextual and *are* legal identifiers, so
+/// rejecting them would refuse names Kotlin accepts.
+pub(crate) const KOTLIN_HARD_KEYWORDS: &[&str] = &[
+    "as",
+    "break",
+    "class",
+    "continue",
+    "do",
+    "else",
+    "false",
+    "for",
+    "fun",
+    "if",
+    "in",
+    "interface",
+    "is",
+    "null",
+    "object",
+    "package",
+    "return",
+    "super",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typealias",
+    "typeof",
+    "val",
+    "var",
+    "when",
+    "while",
+];
+
+/// Whether `s` is a Kotlin hard keyword.
+pub(crate) fn is_hard_keyword(s: &str) -> bool {
+    KOTLIN_HARD_KEYWORDS.contains(&s)
+}
+
 impl KtName {
     /// Validate and build. Each dot-separated segment must be a Kotlin
-    /// identifier: a letter or `_` followed by letters, digits or `_`.
+    /// identifier: a letter or `_` followed by letters, digits or `_`, and not
+    /// a [hard keyword](KOTLIN_HARD_KEYWORDS).
     ///
     /// This is what stops a producer smuggling an expression through a name —
     /// without it, `Name("a.b() ?: c")` would render as arbitrary source and
@@ -165,6 +208,14 @@ impl KtName {
             }
             if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 return reject("segment may only contain letters, digits and `_`");
+            }
+            // A hard keyword renders as uncompilable Kotlin. Rejected rather
+            // than backtick-escaped: nothing in this generator needs a
+            // keyword-named class or member, and silently rewriting a name
+            // would make the emitted spelling differ from the one asked for —
+            // which for a `Fixed` binder is exactly what must not happen.
+            if is_hard_keyword(seg) {
+                return reject("segment is a Kotlin hard keyword");
             }
         }
         Ok(KtName(s))
@@ -215,6 +266,14 @@ pub enum KtExpr {
     Local(BindingId),
     /// A **free** name: class, member, or type reference.
     Name(KtName),
+    /// `this` — the enclosing receiver.
+    ///
+    /// A node of its own rather than a `Name`, because `this` is a hard keyword
+    /// and `KtName` rejects those. That rejection is the point: it forced the
+    /// one expression that legitimately spells a keyword to become structure
+    /// instead of slipping through the free-name set. The generator needs it
+    /// for a promoted receiver, where the access base is `this`.
+    This,
     Literal(KtLiteral),
     /// `recv.name` / `recv?.name`.
     Field {
@@ -404,6 +463,7 @@ impl ExprArena {
             }
             KtExpr::Local(_)
             | KtExpr::Name(_)
+            | KtExpr::This
             | KtExpr::Literal(_)
             | KtExpr::Hole
             | KtExpr::Raw(_) => {}
@@ -446,7 +506,9 @@ impl ExprArena {
         };
         match expr {
             KtExpr::Local(id) => KtExpr::Local(lookup(id)),
-            KtExpr::Name(_) | KtExpr::Literal(_) | KtExpr::Hole | KtExpr::Raw(_) => expr.clone(),
+            KtExpr::Name(_) | KtExpr::This | KtExpr::Literal(_) | KtExpr::Hole | KtExpr::Raw(_) => {
+                expr.clone()
+            }
             KtExpr::Field { recv, name, safe } => KtExpr::Field {
                 recv: Box::new(self.rewrite_ids(recv, map)),
                 name: name.clone(),
@@ -524,9 +586,12 @@ pub fn map_expr(expr: &KtExpr, f: &mut dyn FnMut(&KtExpr) -> Option<KtExpr>) -> 
         return replacement;
     }
     match expr {
-        KtExpr::Local(_) | KtExpr::Name(_) | KtExpr::Literal(_) | KtExpr::Hole | KtExpr::Raw(_) => {
-            expr.clone()
-        }
+        KtExpr::Local(_)
+        | KtExpr::Name(_)
+        | KtExpr::This
+        | KtExpr::Literal(_)
+        | KtExpr::Hole
+        | KtExpr::Raw(_) => expr.clone(),
         KtExpr::Field { recv, name, safe } => KtExpr::Field {
             recv: Box::new(map_expr(recv, f)),
             name: name.clone(),
@@ -663,6 +728,10 @@ impl KtExpr {
     }
     pub fn name(n: impl Into<String>) -> Self {
         KtExpr::Name(KtName::expect(n))
+    }
+    /// `this`.
+    pub fn this() -> Self {
+        KtExpr::This
     }
     pub fn null() -> Self {
         KtExpr::Literal(KtLiteral::Null)

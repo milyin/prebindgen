@@ -5,7 +5,7 @@
 
 use super::{
     code::Code,
-    expr::{KtExpr, KtStmt},
+    expr::{BindingId, ExprArena, KtExpr, KtName, KtStmt},
     slot::{AnnotationSlot, ExprSlot, KtAccessor, PropertyValue, StaticAnnotationText},
     types::KtType,
 };
@@ -244,6 +244,10 @@ pub struct KtCtorParam {
     pub vis: Vis,
     pub default: Option<ExprSlot<KtExpr>>,
     pub annotations: Vec<AnnotationSlot>,
+    /// The AST binder this constructor parameter is — see [`KtParam::binder`].
+    /// A supertype constructor argument (`NativeHandle(initialPtr)`) references
+    /// it through `Local`.
+    pub binder: Option<BindingId>,
 }
 
 impl KtCtorParam {
@@ -256,6 +260,7 @@ impl KtCtorParam {
             vis: Vis::Default,
             default: None,
             annotations: Vec::new(),
+            binder: None,
         }
     }
     pub fn val(mut self) -> Self {
@@ -433,6 +438,39 @@ impl KtFun {
         self.body = KtBody::Expr(ExprSlot::Legacy(c));
         self
     }
+
+    /// Give this function a **typed** body that may reference its own
+    /// parameters.
+    ///
+    /// One call does all three things that have to agree: it binds each
+    /// parameter in `arena` as a [`Spelling::Fixed`](super::expr::Spelling)
+    /// binder (so the rendered name stays byte-identical — parameter names are
+    /// Kotlin's named-argument surface), records the ids on the `KtParam`s, and
+    /// puts the same ids in the body slot's scope.
+    ///
+    /// Splitting that across three calls is how the binder, the arena that owns
+    /// it, and the scope it is rendered in would end up disagreeing — the
+    /// cross-arena hazard `ExprArena::graft` exists for, arriving through the
+    /// back door.
+    ///
+    /// `build` receives the parameters' binders in declaration order.
+    pub fn typed_body(
+        mut self,
+        mut arena: ExprArena,
+        build: impl FnOnce(&mut ExprArena, &[BindingId]) -> Vec<KtStmt>,
+    ) -> Self {
+        let scope: Vec<BindingId> = self
+            .params
+            .iter()
+            .map(|p| arena.bind_fixed(KtName::expect(&p.name)))
+            .collect();
+        for (p, id) in self.params.iter_mut().zip(&scope) {
+            p.binder = Some(*id);
+        }
+        let stmts = build(&mut arena, &scope);
+        self.body = KtBody::Block(ExprSlot::ast_in_scope(arena, scope, stmts));
+        self
+    }
 }
 
 /// A function parameter with an optional default-value expression (raw
@@ -442,6 +480,17 @@ pub struct KtParam {
     pub name: String,
     pub ty: KtType,
     pub default: Option<ExprSlot<KtExpr>>,
+    /// The AST binder this parameter **is**, when the enclosing declaration has
+    /// a typed body.
+    ///
+    /// A parameter is a binder exactly as a lambda parameter is, so a typed
+    /// body references it through `Local`, never through `Name` — a name would
+    /// put it back in the free-name set and restore textual capture. `None` on
+    /// the legacy path, where the body is text and the name is all there is.
+    ///
+    /// Set through [`KtFun::typed_body`], which allocates the binder and the
+    /// body's scope together so the two cannot disagree.
+    pub binder: Option<BindingId>,
 }
 
 impl KtParam {
@@ -450,6 +499,7 @@ impl KtParam {
             name: name.into(),
             ty,
             default: None,
+            binder: None,
         }
     }
     pub fn default(mut self, d: impl Into<String>) -> Self {
