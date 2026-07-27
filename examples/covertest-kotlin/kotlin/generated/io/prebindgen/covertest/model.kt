@@ -211,6 +211,97 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
 }
 
 /**
+ * Fixed-size arrays of every JNI-primitive element type.
+ *
+ * Each crosses as the matching Kotlin primitive array — bulk-copied, nothing
+ * boxed — rather than through the `Vec<T>` -> `List<T>` path. The wider
+ * unsigned field (`raw`) pins the raw-bit-pattern rule: `[u64; N]` carries its
+ * bits in a `LongArray`, exactly as a scalar `u64` crosses as a raw `jlong`.
+ *
+ * `flags` is the one element type that is NOT a cast: a `jboolean` is a `u8`,
+ * and reinterpreting an out-of-range byte as a Rust `bool` would be undefined
+ * behavior, so the decode normalizes instead.
+ */
+public data class Arrays(val bytes: ByteArray, val shorts: ShortArray, val ints: IntArray, val longs: LongArray, val doubles: DoubleArray, val flags: BooleanArray, val raw: LongArray) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Arrays) return false
+        return bytes.contentEquals(other.bytes) && shorts.contentEquals(other.shorts) && ints.contentEquals(other.ints) && longs.contentEquals(other.longs) && doubles.contentEquals(other.doubles) && flags.contentEquals(other.flags) && raw.contentEquals(other.raw)
+    }
+
+    override fun hashCode(): Int {
+        var result = bytes.contentHashCode()
+        result = 31 * result + shorts.contentHashCode()
+        result = 31 * result + ints.contentHashCode()
+        result = 31 * result + longs.contentHashCode()
+        result = 31 * result + doubles.contentHashCode()
+        result = 31 * result + flags.contentHashCode()
+        result = 31 * result + raw.contentHashCode()
+        return result
+    }
+
+    override fun toString(): String = "Arrays(bytes=${bytes.contentToString()}, shorts=${shorts.contentToString()}, ints=${ints.contentToString()}, longs=${longs.contentToString()}, doubles=${doubles.contentToString()}, flags=${flags.contentToString()}, raw=${raw.contentToString()})"
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            bytes: ByteArray,
+            shorts: ShortArray,
+            ints: IntArray,
+            longs: LongArray,
+            doubles: DoubleArray,
+            flags: BooleanArray,
+            raw: LongArray,
+        ): Arrays = Arrays(bytes, shorts, ints, longs, doubles, flags, raw)
+    }
+}
+
+/**
+ * A value whose equality is **array-backed** on the JVM side: a byte-array
+ * field beside a nested data class.
+ *
+ * Kotlin arrays compare by identity, so the `Vec<u8>` field would make two
+ * equal-content values compare unequal unless the binding emits content-based
+ * operators. This mirrors the shape that broke downstream (a `Vec<u8>` struct
+ * field), which nothing else here exercised. Two fields are enough: `id` is
+ * array-backed and the nested [`Stamp`] — which itself crosses as its scalar
+ * fields — is not, so both comparison branches are covered, and a third of
+ * either kind would only repeat an emitted form.
+ *
+ * Field ORDER is deliberate: the array-backed fields come after `stamp`, so
+ * the generated `hashCode` folds them as `31 * result + id.contentHashCode()`
+ * rather than seeding the accumulator with them. That is the shape a real
+ * value takes (`Timestamp(ntp64, id)`), and it is a different emitted form
+ * from the array-first one.
+ */
+public data class BlobValue(val stamp: Stamp, val id: ByteArray, val chunks: List<ByteArray>) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is BlobValue) return false
+        return stamp == other.stamp && id.contentEquals(other.id) && (chunks.size == other.chunks.size && chunks.indices.all { __i -> val __x = chunks[__i]; val __y = other.chunks[__i]; __x.contentEquals(__y) })
+    }
+
+    override fun hashCode(): Int {
+        var result = stamp.hashCode()
+        result = 31 * result + id.contentHashCode()
+        result = 31 * result + (chunks.fold(1) { __acc, __e -> 31 * __acc + __e.contentHashCode() })
+        return result
+    }
+
+    override fun toString(): String = "BlobValue(stamp=${stamp}, id=${id.contentToString()}, chunks=${chunks.joinToString(", ", "[", "]") { __e -> "${__e.contentToString()}" }})"
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            stamp_secs: Long,
+            stamp_nanos: Long,
+            id: ByteArray,
+            chunks: List<ByteArray>,
+        ): BlobValue = BlobValue(Stamp.fromParts(stamp_secs, stamp_nanos), id, chunks)
+    }
+}
+
+/**
  * Outer cache config crossed as `Option<CacheConfig>`. Its optional-ness
  * propagates into the non-optional nested [`RepliesConfig`], whose non-null
  * `priority` enum field must decode with exactly **one** Elvis default (#144).
@@ -713,6 +804,34 @@ public data class RepliesConfig(val priority: Priority, val maxSamples: Long) {
     }
 }
 
+/**
+ * A plain `Copy` timestamp. Declared `data_class` in the binding, so it
+ * crosses **by value as its two scalar fields** (no heap handle, no
+ * `close()`), and `Vec<Stamp>` surfaces as `List<Stamp>`.
+ */
+public data class Stamp(val secs: Long, val nanos: Long) {
+    /** Seconds component (data-class **accessor**, receiver = its field leaves). */
+    public fun secs(onError: JniErrorHandler<Long>): Long {
+        val __bcap = JniErrorHandlerCapture.acquire()
+        val __ret = CovNative.stampSecs(this.secs, this.nanos, __bcap)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
+        return __ret
+    }
+
+    /** Nanoseconds component (data-class **accessor**). */
+    public fun nanos(onError: JniErrorHandler<Long>): Long {
+        val __bcap = JniErrorHandlerCapture.acquire()
+        val __ret = CovNative.stampNanos(this.secs, this.nanos, __bcap)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
+        return __ret
+    }
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(secs: Long, nanos: Long): Stamp = Stamp(secs, nanos)
+    }
+}
+
 /** A data class carrying the object-shaped sum. */
 public data class Tagged(val id: Long, val marker: Marker) {
     public companion object {
@@ -736,33 +855,6 @@ public data class Unsigned(val byte: Int, val short: Int, val int: Long, val lon
             long: Long,
             maybeLong: Long?,
         ): Unsigned = Unsigned(byte, short, int, long.toULong(), maybeLong?.toULong())
-    }
-}
-
-/**
- * A plain `Copy` timestamp. Declared `value_class` in the binding, so it
- * crosses **by value as its raw bytes** in a `ByteArray` (no heap handle, no
- * `close()`), and `Vec<Stamp>` surfaces as `List<ByteArray>`.
- *
- * Typed by-value wrapper for the native Rust `Stamp` (a `Copy` blob carried
- * as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).
- */
-@JvmInline
-public value class Stamp(public val bytes: ByteArray) {
-    /** Seconds component (value-class **accessor**, receiver = the value bytes). */
-    public fun secs(onError: JniErrorHandler<Long>): Long {
-        val __bcap = JniErrorHandlerCapture.acquire()
-        val __ret = CovNative.stampSecs(this.bytes, __bcap)
-        if (__bcap.failed) return onError.run(__bcap.ze0)
-        return __ret
-    }
-
-    /** Nanoseconds component (value-class **accessor**). */
-    public fun nanos(onError: JniErrorHandler<Long>): Long {
-        val __bcap = JniErrorHandlerCapture.acquire()
-        val __ret = CovNative.stampNanos(this.bytes, __bcap)
-        if (__bcap.failed) return onError.run(__bcap.ze0)
-        return __ret
     }
 }
 
@@ -813,6 +905,28 @@ public fun ReadingCallback.asRaw(): ReadingCallbackRaw =
             when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
         )
     }
+
+public fun interface ArraysBuilder<out R> {
+    public fun run(
+        bytes: ByteArray,
+        shorts: ShortArray,
+        ints: IntArray,
+        longs: LongArray,
+        doubles: DoubleArray,
+        flags: BooleanArray,
+        raw: LongArray,
+    ): R
+}
+
+internal val __ArraysBuilder: ArraysBuilder<Arrays> =
+ArraysBuilder { bytes, shorts, ints, longs, doubles, flags, raw -> Arrays.fromParts(bytes, shorts, ints, longs, doubles, flags, raw) }
+
+public fun interface BlobValueBuilder<out R> {
+    public fun run(stamp__secs: Long, stamp__nanos: Long, id: ByteArray, chunks: List<ByteArray>): R
+}
+
+internal val __BlobValueBuilder: BlobValueBuilder<BlobValue> =
+BlobValueBuilder { stamp__secs, stamp__nanos, id, chunks -> BlobValue.fromParts(stamp__secs, stamp__nanos, id, chunks) }
 
 public fun interface DurationBoundaryBuilderRaw<out R> {
     public fun run(required: Long, delay: Long): R
@@ -865,6 +979,13 @@ ReadingBuilder { tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, com
     when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
 }
 
+public fun interface StampBuilder<out R> {
+    public fun run(secs: Long, nanos: Long): R
+}
+
+internal val __StampBuilder: StampBuilder<Stamp> =
+StampBuilder { secs, nanos -> Stamp.fromParts(secs, nanos) }
+
 public fun interface UnsignedBuilderRaw<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: Long, maybeLong: Long?): R
 }
@@ -892,13 +1013,13 @@ internal object __ReadingFolderRawHolder {
 }
 
 public fun interface StampFolderRaw<A> {
-    public fun run(acc: A, element: ByteArray): A
+    public fun run(acc: A, secs: Long, nanos: Long): A
 }
 
 internal object __StampFolderRawHolder {
     @JvmField
     val instance: StampFolderRaw<ArrayList<Stamp>> =
-    StampFolderRaw { acc, element -> acc.add(Stamp(element)); acc }
+    StampFolderRaw { acc, secs, nanos -> acc.add(Stamp.fromParts(secs, nanos)); acc }
 }
 
 /** Classify a payload by magnitude of its `value` (enum **return**). */
@@ -929,17 +1050,24 @@ public fun priorityOr(
     return io.prebindgen.covertest.model.Priority.fromInt(__ret)
 }
 
-/** Build a [`Stamp`] (value-class **return**). */
+/**
+ * Build a [`Stamp`] (data-class **return**).
+ *
+ * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).
+ */
+@Suppress("UNCHECKED_CAST")
 public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.stampNew(secs, nanos, __bcap)
+    val __ret = CovNative.stampNew(secs, nanos, __StampBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return Stamp(__ret)
+    return __ret as Stamp
 }
 
 /**
- * A monotonically increasing run of stamps (`Vec<value-class>` →
- * `List<ByteArray>`).
+ * A monotonically increasing run of stamps (`Vec<data-class>` →
+ * `List<Stamp>`).
+ *
+ * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).
  */
 @Suppress("UNCHECKED_CAST")
 public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp> {
@@ -1526,6 +1654,66 @@ public fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong> {
     val __ret = CovNative.unsignedSeries(ArrayList<ULong>(), __u64FolderRawHolder.instance, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as List<ULong>
+}
+
+/**
+ * Build a [`BlobValue`] (its equality is asserted from Kotlin).
+ *
+ * The Rust `BlobValue` result is delivered decomposed: the builder callback receives (`stamp__secs`, `stamp__nanos`, `id`, `chunks`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun blobValueNew(
+    secs: Long,
+    id: ByteArray,
+    chunks: List<ByteArray>,
+    onError: JniErrorHandler<BlobValue>,
+): BlobValue {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.blobValueNew(secs, id, chunks, __BlobValueBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as BlobValue
+}
+
+/**
+ * Round-trip a [`BlobValue`] through the WHOLE-OBJECT input decoder.
+ *
+ * The binding marks this class `.jobject_input()`, so the decoder reads each
+ * field off the Kotlin object by JVM descriptor — including the nested
+ * [`Stamp`], whose slot is its own class rather than the scalar leaves it
+ * flattens to everywhere else. Getting that descriptor wrong is a
+ * `NoSuchFieldError` on the first decode.
+ *
+ * The Rust `BlobValue` result is delivered decomposed: the builder callback receives (`stamp__secs`, `stamp__nanos`, `id`, `chunks`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun blobValueEcho(value: BlobValue, onError: JniErrorHandler<BlobValue>): BlobValue {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.blobValueEcho(value, __BlobValueBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as BlobValue
+}
+
+/**
+ * Round-trip every fixed-size array shape, both directions.
+ *
+ * The Rust `Arrays` result is delivered decomposed: the builder callback receives (`bytes`, `shorts`, `ints`, `longs`, `doubles`, `flags`, `raw`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun arraysEcho(a: Arrays, onError: JniErrorHandler<Arrays>): Arrays {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.arraysEcho(
+        a.bytes,
+        a.shorts,
+        a.ints,
+        a.longs,
+        a.doubles,
+        a.flags,
+        a.raw,
+        __ArraysBuilder,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Arrays
 }
 
 /**

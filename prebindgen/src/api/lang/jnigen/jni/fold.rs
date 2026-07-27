@@ -52,14 +52,12 @@ pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &kt::KtType) -> kt::
     )
 }
 
-/// Typed Kotlin leaf of a projection. Declared handle/value-blob projections
+/// Typed Kotlin leaf of a projection. Declared handle projections
 /// take their configured class FQN; the built-in `u64` projection is Kotlin's
 /// stable unsigned scalar type.
 pub(crate) fn projection_leaf_kt(ext: &JniGen, proj: &Projection) -> Option<kt::KtType> {
     match proj.kind {
-        ProjectionKind::Handle | ProjectionKind::ValueBlob => {
-            ext.kotlin_fqn(&proj.leaf_key).map(kt::KtType::cls)
-        }
+        ProjectionKind::Handle => ext.kotlin_fqn(&proj.leaf_key).map(kt::KtType::cls),
         ProjectionKind::Unsigned64 => Some(kt::KtType::cls("ULong")),
     }
 }
@@ -67,16 +65,16 @@ pub(crate) fn projection_leaf_kt(ext: &JniGen, proj: &Projection) -> Option<kt::
 /// Wrap one raw projection leaf into its typed Kotlin form.
 pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str) -> String {
     match kind {
-        ProjectionKind::Handle | ProjectionKind::ValueBlob => format!("{short}({raw})"),
+        ProjectionKind::Handle => format!("{short}({raw})"),
         ProjectionKind::Unsigned64 => format!("{raw}.toULong()"),
     }
 }
 
-/// For a projection (handle / value-class / value-blob) **struct field**,
+/// For a projection (handle / unsigned) **struct field**,
 /// compute the `(wire_param_type, wrap_expr)` the data class's `fromParts`
 /// factory uses: the wire param type matches the leaf wire
-/// `struct_output_body` passes (handle → `Long` jlong sentinel, value class /
-/// blob → `ByteArray`), and the wrap reconstructs the typed value in JVM
+/// `struct_output_body` passes (handle → `Long` jlong sentinel), and the wrap
+/// reconstructs the typed value in JVM
 /// bytecode (`Short(arg)`, with null mapped from the `0L` sentinel for handles
 /// or the declared invalid `Long` for a bounded unsigned representation; JVM
 /// null remains the fallback for non-niche value projections). Only the
@@ -95,7 +93,6 @@ pub(crate) fn factory_projection_wire_wrap(
     };
     let direct = |kind: &crate::api::lang::jnigen::jni::ProjectionKind| match kind {
         Handle => (kt::KtType::long(), format!("{short}({name})")),
-        ValueBlob => (kt::KtType::byte_array(), format!("{short}({name})")),
         Unsigned64 => (kt::KtType::long(), format!("{name}.toULong()")),
     };
     match &proj.strategy {
@@ -112,11 +109,6 @@ pub(crate) fn factory_projection_wire_wrap(
                 Handle => (
                     kt::KtType::long(),
                     format!("if ({name} == 0L) null else {short}({name})"),
-                ),
-                // Value-blob null rides JVM-null of the `ByteArray` slot.
-                ValueBlob => (
-                    kt::KtType::byte_array().nullable(),
-                    format!("{name}?.let {{ {short}(it) }}"),
                 ),
                 Unsigned64 => match nullable {
                     // A bounded unsigned representation reserves an invalid
@@ -232,7 +224,7 @@ fn factory_field(
     {
         let f_kind = kind;
         match f_kind {
-            // Projection leaf (handle / value class / blob).
+            // Projection leaf (handle / `ULong`).
             PlanFieldKind::Projection { proj, fqn, .. } => {
                 let short = register_fqn(fqn, imports);
                 let (wire_ty, wrap) = factory_projection_wire_wrap(proj, &short, &base);
@@ -552,9 +544,9 @@ pub(crate) fn fold_projection_wrap(
 }
 
 /// JNI extern's declared Kotlin wire-return for a projection. The leaf wire
-/// is the inner converter's destination Kotlin name: `Long` for handles
-/// (boxed jlong), the inner field's converter result for value classes (e.g.
-/// `ByteArray` for `ZenohId`/`ZBytes`). The fold honours
+/// is the inner converter's destination Kotlin name — `Long` for both
+/// projection kinds (a handle's pointer, a `ULong`'s raw bit pattern). The
+/// fold honours
 /// [`NullableKind`] so the declared wire matches the runtime ABI:
 /// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
 /// represents null); `Niche+object` and `Boxed` add `?`.
@@ -564,8 +556,6 @@ pub(crate) fn projection_wire_return(
     use crate::api::lang::jnigen::jni::{FoldStrategy, NullableKind, ProjectionKind};
     let (inner_wire, inner_is_primitive) = match proj.kind {
         ProjectionKind::Handle => (kt::KtType::long(), true),
-        // Value-blob's inner wire is always `ByteArray` (object-shaped).
-        ProjectionKind::ValueBlob => (kt::KtType::byte_array(), false),
         ProjectionKind::Unsigned64 => (kt::KtType::long(), true),
     };
     fold_shape(
@@ -586,8 +576,8 @@ pub(crate) fn projection_wire_return(
 
 /// Kotlin null-sentinel literal for the *leaf wire* of a projection. Read
 /// at the wrapper-body call site and forwarded to [`fold_projection_wrap`];
-/// `None` for object-wired leaves (e.g. value classes over `ByteArray`),
-/// where `?.let { }` covers the JVM-null case directly.
+/// `None` when the leaf wire has no primitive null sentinel, where
+/// `?.let { }` covers the JVM-null case directly.
 pub(crate) fn projection_leaf_sentinel(
     proj: &crate::api::lang::jnigen::jni::Projection,
 ) -> Option<String> {
@@ -597,10 +587,6 @@ pub(crate) fn projection_leaf_sentinel(
     use crate::api::lang::jnigen::jni::ProjectionKind;
     let leaf_wire: syn::Type = match proj.kind {
         ProjectionKind::Handle => syn::parse_quote!(jni::sys::jlong),
-        // Value-blob leaf wire is always `JByteArray` (object-shaped) — no
-        // primitive sentinel; JVM `null` represents the absent value, so
-        // `?.let` covers nullability.
-        ProjectionKind::ValueBlob => syn::parse_quote!(jni::objects::JByteArray),
         // No niche exists for `u64`; `Option<u64>` uses the boxed path, so a
         // primitive sentinel must never be synthesized.
         ProjectionKind::Unsigned64 => return None,

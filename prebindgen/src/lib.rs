@@ -136,8 +136,7 @@
 //! syntax — the domain vocabulary you compose and hand to [`lang::JniGen`]:
 //!
 //! - Kotlin surface: [`package!`](crate::package), [`ptr_class!`](crate::ptr_class),
-//!   [`data_class!`](crate::data_class), [`value_class!`](crate::value_class),
-//!   [`enum_class!`](crate::enum_class)
+//!   [`data_class!`](crate::data_class), [`enum_class!`](crate::enum_class)
 //! - Members & constants: [`fun!`](crate::fun), [`constant!`](crate::constant)
 //! - Conversions: [`convert!`](crate::convert), [`from!`](crate::from),
 //!   [`try_from!`](crate::try_from), [`into!`](crate::into),
@@ -217,7 +216,7 @@ pub mod __macro_support {
 /// generic `impl Into<T>` bound doesn't give it anything to unify against.
 ///
 /// This is what powers the `lang::jnigen` [`fun!`](crate::fun) decl macro —
-/// see that macro (and `ptr_class!`/`enum_class!`/`data_class!`/`value_class!`,
+/// see that macro (and `ptr_class!`/`enum_class!`/`data_class!`,
 /// which apply the same trick to `syn::Type`) for the primary way this
 /// crate's builders are fed bare Rust names today.
 ///
@@ -324,7 +323,7 @@ pub mod lang {
         null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
         ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
         ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, KotlinFile,
-        PackageDecl, PtrClassDecl, SealedClassDecl, ValueClassDecl, VariantDecl, WriteKotlinError,
+        PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl, WriteKotlinError,
     };
 }
 

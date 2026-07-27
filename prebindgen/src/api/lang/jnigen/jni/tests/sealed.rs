@@ -346,17 +346,17 @@ fn a_type_gets_one_class_declarator() {
         drop(registry);
     };
 
-    // Every conflicting pair among the five declarators is rejected, in both
+    // Every conflicting pair among the four declarators is rejected, in both
     // orders — the second declaration is matched against the kind the first
     // one stored, so it does not depend on which came first.
     type MakeDecl = fn() -> crate::lang::ClassDecl;
     let pairs: Vec<(MakeDecl, MakeDecl)> = vec![
         (
             || crate::sealed_class!(Reading).into(),
-            || crate::value_class!(Reading).into(),
+            || crate::data_class!(Reading).into(),
         ),
         (
-            || crate::value_class!(Reading).into(),
+            || crate::data_class!(Reading).into(),
             || crate::sealed_class!(Reading).into(),
         ),
         (
@@ -364,20 +364,40 @@ fn a_type_gets_one_class_declarator() {
             || crate::enum_class!(Reading).into(),
         ),
         (
+            || crate::enum_class!(Reading).into(),
+            || crate::sealed_class!(Reading).into(),
+        ),
+        (
             || crate::sealed_class!(Reading).into(),
             || crate::ptr_class!(Reading).into(),
         ),
         (
-            || crate::data_class!(Sample).into(),
-            || crate::value_class!(Sample).into(),
+            || crate::ptr_class!(Reading).into(),
+            || crate::sealed_class!(Reading).into(),
         ),
         (
-            || crate::value_class!(Sample).into(),
+            || crate::data_class!(Sample).into(),
+            || crate::enum_class!(Sample).into(),
+        ),
+        (
+            || crate::enum_class!(Sample).into(),
             || crate::data_class!(Sample).into(),
         ),
         (
             || crate::ptr_class!(Sample).into(),
             || crate::data_class!(Sample).into(),
+        ),
+        (
+            || crate::data_class!(Sample).into(),
+            || crate::ptr_class!(Sample).into(),
+        ),
+        (
+            || crate::ptr_class!(Sample).into(),
+            || crate::enum_class!(Sample).into(),
+        ),
+        (
+            || crate::enum_class!(Sample).into(),
+            || crate::ptr_class!(Sample).into(),
         ),
     ];
     for (a, b) in pairs {

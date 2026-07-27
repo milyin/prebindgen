@@ -94,9 +94,8 @@ impl ConvChain {
 }
 
 pub(crate) enum PlanFieldKind {
-    /// Opaque-handle / value-blob leaf. Wire slot: `jlong` (`"J"`) for a
-    /// handle, `ByteArray` (`"[B"`) for a blob; the factory rebuilds the
-    /// typed value from `fqn`.
+    /// Projection leaf (opaque handle / `ULong`). Wire slot: `jlong` (`"J"`);
+    /// the factory rebuilds the typed value from `fqn`.
     Projection {
         conv: ConvChain,
         proj: Projection,
@@ -260,7 +259,7 @@ pub(crate) fn classify_field(
     let conv = ConvChain::of(field_entry);
 
     {
-        // Projection leaf (opaque handle / value blob).
+        // Projection leaf (opaque handle / `ULong`).
         if let Some(proj) = field_entry.metadata.projection.clone() {
             if matches!(proj.strategy, FoldStrategy::Iterable(_)) {
                 panic!(
@@ -343,16 +342,10 @@ pub(crate) fn classify_field(
                     .or_else(|| {
                         if pat_match_top(&slot_ty, "Vec") {
                             Some("Ljava/util/List;".to_string())
-                        } else if let syn::Type::Path(tp) = &wire {
-                            tp.path.segments.last().and_then(|seg| {
-                                match seg.ident.to_string().as_str() {
-                                    "JString" => Some("Ljava/lang/String;".to_string()),
-                                    "JByteArray" => Some("[B".to_string()),
-                                    _ => None,
-                                }
-                            })
                         } else {
-                            None
+                            // The wire table already names every reference wire's
+                            // descriptor — String and the eight primitive arrays.
+                            jni_field_access(&wire).map(|(sig, _, _)| sig.to_string())
                         }
                     })
                     .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
@@ -441,8 +434,8 @@ impl PlanFieldKind {
 
     /// The close strategy when this field owns a native handle, so the class
     /// implements `AutoCloseable` and `close()` walks it. Only an **owned**
-    /// `Handle` projection qualifies: a value blob is erased to its inner wire
-    /// and owns nothing, and a borrowed handle is not this object's to release.
+    /// `Handle` projection qualifies: a `ULong` owns nothing, and a borrowed
+    /// handle is not this object's to release.
     pub(crate) fn destructible(&self) -> Option<FoldStrategy> {
         match self {
             PlanFieldKind::Projection { proj, .. }

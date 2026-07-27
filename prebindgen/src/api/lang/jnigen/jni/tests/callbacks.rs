@@ -268,7 +268,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
 /// `z_sample_timestamp`), a nested handle identity reached *through* an
 /// `Option` step (`z_reply_sample` → `z_sample_key_expr`), and an Acc leaf
 /// whose own return keeps its full `Option<…>` as the converter input
-/// (`z_reply_zid -> Option<ZId>`, a value class with no canonical child).
+/// (`z_reply_zid -> Option<ZId>`, a data class with no canonical child).
 /// Every `Option` nesting step must become its own `match` (`None` ⇒ null
 /// leaf) — never a blind accessor compose through an `Option`.
 #[test]
@@ -293,6 +293,17 @@ fn callback_double_option_unwrap_pipeline() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
+    // `ZId` is the value leaf of the outer `Option`; it needs a real struct so
+    // it can be a `data_class!`.
+    items.push((
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZId {
+                pub hi: i64,
+                pub lo: i64,
+            }
+        )),
+        loc.clone(),
+    ));
     items.push((
         syn::Item::Fn(syn::parse_quote!(
             pub fn z_get(cb: impl Fn(ZReply) + Send + Sync + 'static) {
@@ -307,7 +318,7 @@ fn callback_double_option_unwrap_pipeline() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("query")
-                .class(crate::value_class!(ZId))
+                .class(crate::data_class!(ZId))
                 .class(
                     crate::ptr_class!(ZKeyExpr).method(crate::fun!(z_keyexpr_as_str).name("asStr")),
                 )
@@ -377,11 +388,13 @@ fn callback_double_option_unwrap_pipeline() {
     // converter — no unwrap of the leaf's own `Option`.
     assert!(rc.contains("myflat::z_reply_zid(&__cb_arg0)"), "{rust}");
     assert!(!rc.contains("matchmyflat::z_reply_zid("), "{rust}");
-    // 6 leaves ⇒ typed `run` descriptor: nullable value-blob `[B`, raw `Z`
+    // 6 leaves ⇒ typed `run` descriptor: nullable `ZId` data class, raw `Z`
     // for the non-null bool discriminator, typed handle class (full FQN),
     // nullable String, BOXED Long for the nullable timestamp, nullable `[B`.
     assert!(
-        rc.contains("\"([BZLjava/lang/Long;Ljava/lang/String;Ljava/lang/Long;[B)V\""),
+        rc.contains(
+            "\"(Lio/test/jni/query/ZId;ZLjava/lang/Long;Ljava/lang/String;Ljava/lang/Long;[B)V\""
+        ),
         "{rust}"
     );
     // The non-null bool crosses as a raw typed jvalue — never boxed.
@@ -389,8 +402,8 @@ fn callback_double_option_unwrap_pipeline() {
 
     // Kotlin tier: the generated callback `fun interface` carries the typed
     // params — ok-arm and err-arm leaves nullable (the value may be absent),
-    // the discriminator non-null; the value-blob leaf surfaces as its raw
-    // (nullable) ByteArray wire, NOT the value class — the SDK wraps.
+    // the discriminator non-null; the nested `ZId` data class surfaces as its
+    // typed (nullable) Kotlin class.
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let iface_file = paths
@@ -399,7 +412,7 @@ fn callback_double_option_unwrap_pipeline() {
         .find(|v| v.contains("fun interface ZReplyCallback"))
         .unwrap_or_default();
     // Scope to the interface block — the merged package file also holds the
-    // ZId value class and other decls.
+    // ZId data class and other decls.
     let iface = iface_file
         .split("fun interface ZReplyCallback")
         .nth(1)
@@ -410,8 +423,7 @@ fn callback_double_option_unwrap_pipeline() {
     assert!(ic.contains("sample__keyExpr:ZKeyExpr?"), "{iface}");
     assert!(ic.contains(":Long?"), "{iface}");
     assert!(ic.contains(":ZId?"), "{iface}");
-    // The wrapper takes the typed interface and forwards it bare (no
-    // value-blob rebuilding adapter exists anymore).
+    // The wrapper takes the typed interface and forwards it bare.
     let pkg = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())

@@ -10,9 +10,7 @@
 //! Every callback position (impl-`Fn` delivery, output-expansion `build`,
 //! `fold`, `onError`) gets a generated interface whose single method is
 //! `public fun run(...)` with **JVM-stable parameter types** — typed handle
-//! classes, `ByteArray` for `value_blob` (never the `@JvmInline` class —
-//! Kotlin would mangle the method name and `GetMethodID` would fail),
-//! primitives unboxed, nullable primitives boxed. The native side calls
+//! classes, primitives unboxed, nullable primitives boxed. The native side calls
 //! `run` with raw typed `jvalue`s: no per-leaf boxing upcalls, no erased
 //! `FunctionN`.
 //!
@@ -48,8 +46,6 @@ pub(crate) enum WrapKind {
     /// zeroes its `ptr`). Replaces the former Rust-side `new_object` + post-invoke
     /// `close()` for a plan-less `impl Fn(Handle)` arg (Phase 3).
     HandleOwned(String),
-    /// `Copy` value blob: raw `ByteArray` → `@JvmInline` value class (FQN).
-    Blob(String),
     /// Rust `u64`: raw `Long` bit pattern → typed Kotlin `ULong`. A bounded
     /// optional representation carries its `None` niche as a primitive value.
     Unsigned64 { niche_sentinel: Option<String> },
@@ -60,7 +56,7 @@ impl WrapKind {
     pub fn class_fqn(&self) -> Option<&str> {
         match self {
             WrapKind::None | WrapKind::Unsigned64 { .. } => None,
-            WrapKind::Handle(f) | WrapKind::HandleOwned(f) | WrapKind::Blob(f) => Some(f),
+            WrapKind::Handle(f) | WrapKind::HandleOwned(f) => Some(f),
         }
     }
 
@@ -103,7 +99,7 @@ impl WrapKind {
 #[derive(Clone, Debug)]
 pub(crate) struct IfaceParam {
     pub name: String,
-    /// User-facing type (typed handle class, value class, …).
+    /// User-facing type (typed handle class, …).
     pub typed: kt::KtType,
     /// JNI-called raw-twin type (`Long`, `ByteArray`, …) — what the
     /// descriptor and the native jvalues match.
@@ -592,10 +588,13 @@ fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> String {
                 p.descriptor().to_string()
             };
         }
+        if let Some(d) = crate::api::lang::jnigen::jni::wire_access::kotlin_array_descriptor(simple)
+        {
+            return d.to_string();
+        }
         return match simple {
             "Unit" => "V".to_string(),
             "String" => "Ljava/lang/String;".to_string(),
-            "ByteArray" => "[B".to_string(),
             "List" | "MutableList" => "Ljava/util/List;".to_string(),
             "Any" => "Ljava/lang/Object;".to_string(),
             // A dot-free non-builtin: a generated class with no package
@@ -728,13 +727,11 @@ fn plan_leaf_param(
 /// Both interface views of one delivered leaf.
 ///
 /// * **typed** (user-facing, Kotlin-called): handles as their typed handle
-///   classes, value blobs as their `@JvmInline` value classes — legal here
-///   because the JNI border never touches this method.
+///   classes — legal here because the JNI border never touches this method.
 /// * **raw** (JNI-called twin): a PLAN leaf (`raw_handle`) crosses handles
 ///   as the raw `jlong` (`Long`/boxed `Long?` — the proxy constructs the
 ///   class in bytecode; a native `new_object` would cost descriptor parse +
-///   FindClass + GetMethodID + NewObjectA per message) and blobs as
-///   `ByteArray` (the `@JvmInline` class would mangle `run`). A whole
+///   FindClass + GetMethodID + NewObjectA per message). A whole
 ///   (plan-less callback) arg keeps the typed handle class in BOTH views —
 ///   the close-unless-taken contract needs the native side to `close()` the
 ///   wrapped object after the invoke.
@@ -773,15 +770,6 @@ fn leaf_iface_param(
     };
     if is_value_projection {
         match proj?.kind {
-            ProjectionKind::ValueBlob => {
-                let fqn = ext.kotlin_fqn(&proj?.leaf_key)?.to_string();
-                return Some(IfaceParam {
-                    name,
-                    typed: nullable_kt(kt::KtType::cls(fqn.clone())),
-                    raw: nullable_kt(kt::KtType::byte_array()),
-                    wrap: WrapKind::Blob(fqn),
-                });
-            }
             ProjectionKind::Unsigned64 => {
                 let mut raw = projection_wire_return(proj?);
                 if nullable && !raw.is_nullable() {

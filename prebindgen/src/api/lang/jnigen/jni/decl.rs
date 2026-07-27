@@ -112,14 +112,6 @@ macro_rules! data_class {
     };
 }
 
-/// Build a [`ValueClassDecl`] directly from a bare Rust type. See [`ptr_class!`].
-#[macro_export]
-macro_rules! value_class {
-    ($t:ty) => {
-        $crate::lang::ValueClassDecl::new($crate::__macro_support::parse_type(stringify!($t)))
-    };
-}
-
 /// Build a [`FunctionDecl`] from a bare function ident or a path:
 ///
 /// * `fun!(foo)` — a `#[prebindgen]` fn; its signature is read from the
@@ -309,8 +301,7 @@ macro_rules! expand_return {
 /// in Rust; the object crosses the boundary as that pointer, never copied.
 /// Use this for types with identity and a lifecycle — sessions, subscribers,
 /// configs, key expressions — that you pass around and eventually `close()`,
-/// as opposed to plain data you copy across ([`data_class!`](crate::data_class))
-/// or small `Copy` values ([`value_class!`](crate::value_class)).
+/// as opposed to plain data you copy across ([`data_class!`](crate::data_class)).
 ///
 /// A type that never materializes in Kotlin needs **no class declaration at
 /// all**: give it boundary decls only ([`expand_param!`](crate::expand_param)
@@ -896,8 +887,7 @@ impl VariantDecl {
 /// boundary individually and Kotlin reassembles the object with a generated
 /// `fromParts(...)` — no Rust-side heap object, no handle to close. Use this
 /// for plain immutable data you copy across, as opposed to
-/// [`ptr_class!`](crate::ptr_class) handles or
-/// [`value_class!`](crate::value_class) blobs.
+/// [`ptr_class!`](crate::ptr_class) handles.
 ///
 /// Members work like every class kind whose instance can re-enter Rust —
 /// here the receiver re-enters as its **field leaves** (the same call-site
@@ -967,58 +957,6 @@ impl From<syn::Type> for DataClassDecl {
     }
 }
 
-/// Declares a small **`Copy`** Rust type that crosses **by value** — as its
-/// raw bytes in a `ByteArray` — rather than as a heap handle. The
-/// lightweight peer of [`PtrClassDecl`] for things like ids and timestamps
-/// that have no lifecycle to manage. The type must be `Copy` (the generator
-/// asserts it at compile time). Readers added with [`method`](Self::method) become
-/// instance methods on the Kotlin value class.
-pub struct ValueClassDecl {
-    pub(crate) key: TypeKey,
-    pub(crate) name_override: Option<String>,
-    pub(crate) iface: IfaceOpts,
-    pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
-}
-
-impl ValueClassDecl {
-    pub fn new(rust_type: syn::Type) -> Self {
-        Self {
-            key: TypeKey::from_type(&rust_type),
-            name_override: None,
-            iface: IfaceOpts::default(),
-            members: Vec::new(),
-        }
-    }
-
-    /// Override the Kotlin **class name** (relative, no dots).
-    pub fn name(mut self, name: impl Into<String>) -> Self {
-        self.name_override = Some(name.into());
-        self
-    }
-
-    class_interface_methods!("value_class");
-
-    /// Expose a `#[prebindgen]` reader (`f(&Self) -> R`) as an instance
-    /// method on the Kotlin value class (see [`PtrClassDecl::method`]).
-    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
-        self.members.push((rust_fun, MemberKind::Method));
-        self
-    }
-
-    /// Expose a `#[prebindgen]` factory as a companion-object factory
-    /// (see [`PtrClassDecl::constructor`]).
-    pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
-        self.members.push((rust_fun, MemberKind::Constructor));
-        self
-    }
-}
-
-impl From<syn::Type> for ValueClassDecl {
-    fn from(rust_type: syn::Type) -> Self {
-        Self::new(rust_type)
-    }
-}
-
 /// Unifies the four class-kind decls into one type so [`PackageDecl::class`]
 /// can expose a single entry point. Deliberately **no**
 /// `impl From<syn::Type> for ClassDecl` — a bare `syn::Type` alone doesn't
@@ -1031,7 +969,6 @@ pub enum ClassDecl {
     Enum(EnumClassDecl),
     Sealed(SealedClassDecl),
     Data(DataClassDecl),
-    Value(ValueClassDecl),
 }
 
 impl From<PtrClassDecl> for ClassDecl {
@@ -1052,11 +989,6 @@ impl From<SealedClassDecl> for ClassDecl {
 impl From<DataClassDecl> for ClassDecl {
     fn from(d: DataClassDecl) -> Self {
         Self::Data(d)
-    }
-}
-impl From<ValueClassDecl> for ClassDecl {
-    fn from(d: ValueClassDecl) -> Self {
-        Self::Value(d)
     }
 }
 
@@ -1500,8 +1432,7 @@ impl PackageDecl {
     }
 
     /// Add a class to this package — any of [`ptr_class!`](crate::ptr_class) /
-    /// [`enum_class!`](crate::enum_class) / [`data_class!`](crate::data_class) /
-    /// [`value_class!`](crate::value_class).
+    /// [`enum_class!`](crate::enum_class) / [`data_class!`](crate::data_class).
     pub fn class(mut self, decl: impl Into<ClassDecl>) -> Self {
         self.classes.push(decl.into());
         self

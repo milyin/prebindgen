@@ -49,8 +49,8 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
             IfaceParam {
                 name: "replierZid".to_string(),
                 typed: kt::KtType::cls("io.test.ZenohId").nullable(),
-                raw: kt::KtType::byte_array().nullable(),
-                wrap: WrapKind::Blob("io.test.ZenohId".to_string()),
+                raw: kt::KtType::long().nullable(),
+                wrap: WrapKind::Handle("io.test.ZenohId".to_string()),
             },
             IfaceParam::same("replierEid".to_string(), kt::KtType::int()),
             IfaceParam::same("isOk".to_string(), kt::KtType::boolean()),
@@ -68,7 +68,7 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
             },
         ],
         ret: kt::KtType::unit(),
-        descr: "([BIZLjava/lang/Long;Ljava/lang/Long;)V".to_string(),
+        descr: "(Ljava/lang/Long;IZLjava/lang/Long;Ljava/lang/Long;)V".to_string(),
         typed_groups: Vec::new(),
         kdoc: None,
     };

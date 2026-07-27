@@ -28,8 +28,8 @@ pub enum NullableKind {
     Boxed,
 }
 
-/// The JNI adapter's nullability / collection layer stack over a handle or
-/// value-class leaf, on the unified [`Shape`](crate::api::core::shape::Shape)
+/// The JNI adapter's nullability / collection layer stack over a projection
+/// leaf, on the unified [`Shape`](crate::api::core::shape::Shape)
 /// with [`NullableKind`] as the per-`Optional`-layer payload:
 ///   * `Base` — the receiver *is* the handle;
 ///   * `Optional(kind, inner)` — `T?`; `kind` records how null is represented
@@ -48,19 +48,14 @@ pub enum ProjectionKind {
     /// Opaque native handle (`ptr_class`). Wire is `jlong`; a struct field
     /// stores the **boxed** handle object (`L<fqn>;`); closeable when owned.
     Handle,
-    /// Kotlin `@JvmInline value class` wrapping a **`Copy` value-blob**
-    /// (`value_blob`). Its inner is always a raw `ByteArray` (`[B`) — there is
-    /// no Rust struct field to resolve. The typed class has a single
-    /// `bytes: ByteArray` field; the wire is `JByteArray`. Never closeable.
-    ValueBlob,
     /// Rust `u64`: raw JNI `jlong` bit pattern with a typed Kotlin `ULong`
     /// surface. It owns no resource; wrapping/unwrapping is
     /// `Long.toULong()` / `ULong.toLong()`.
     Unsigned64,
 }
 
-/// Folded description of a Kotlin newtype projection (opaque handle or value
-/// class) reached through zero or more wrapper layers. Set at the leaf,
+/// Folded description of a Kotlin newtype projection (opaque handle or
+/// `ULong`) reached through zero or more wrapper layers. Set at the leaf,
 /// transformed by each wrapper as the type folds (see [`FoldStrategy`]), and
 /// read by every typed-surface emitter (data-class fields, struct
 /// encode/decode, `classify_return`, param classification) so "what Kotlin
@@ -74,11 +69,11 @@ pub struct Projection {
     pub leaf_key: crate::api::core::registry::TypeKey,
     /// `false` for `&T` borrows of a handle — still a projection (param
     /// classification needs this), but not the holder's to close, so
-    /// `close()` emission skips it. Always `false` for [`ProjectionKind::ValueBlob`].
+    /// `close()` emission skips it.
     pub owned: bool,
     /// Nullability / collection layers.
     pub strategy: FoldStrategy,
-    /// Handle vs value class — see [`ProjectionKind`].
+    /// Handle vs `ULong` — see [`ProjectionKind`].
     pub kind: ProjectionKind,
     /// Kotlin literals for representation-domain niches, in carve order.
     /// Empty for ordinary projections; bounded u64 conversions populate it.

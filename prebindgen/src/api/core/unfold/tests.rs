@@ -721,7 +721,7 @@ fn iterable_whole_element_plan() {
     });
     // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
     // accessor → Iterable with per-element leaves: the string form + the
-    // value itself via `record_id` (a `value_blob` identity, owned at the
+    // value itself via `record_id` (an identity leaf, owned at the
     // root since `Vec<ZZenohId>` owns its elements).
 
     apply(
@@ -759,7 +759,7 @@ fn iterable_whole_element_plan() {
 fn iterable_decomposed_plan() {
     // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
     // accessor → Iterable with per-element leaves: the string form + the
-    // value itself via `record_id` (a `value_blob` identity, owned at the
+    // value itself via `record_id` (an identity leaf, owned at the
     // root since `Vec<ZZenohId>` owns its elements).
     let mut reg = reg_with(&[
         "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",

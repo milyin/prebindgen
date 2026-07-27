@@ -214,12 +214,12 @@ fn interface_name_override_and_hook() {
     );
 }
 
-/// #54: `.interface()` on a `value_class!` — the generated `<Name>Api`
-/// interface carries the `bytes` property and the accessors, and the
-/// `@JvmInline value class` implements it with `override val bytes`
-/// (the ctor-prop path, shared with data/enum classes).
+/// #54: `.interface()` on a `data_class!` — the generated `<Name>Api`
+/// interface carries the field properties and the accessors, and the
+/// `data class` implements it with `override val` on each field
+/// (the ctor-prop path, shared with ptr/enum classes).
 #[test]
-fn value_class_interface_emits_generated_api() {
+fn data_class_interface_emits_generated_api() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
@@ -227,6 +227,7 @@ fn value_class_interface_emits_generated_api() {
                 #[derive(Clone, Copy)]
                 pub struct ZStamp {
                     pub secs: i64,
+                    pub nanos: i64,
                 }
             )),
             loc.clone(),
@@ -243,12 +244,12 @@ fn value_class_interface_emits_generated_api() {
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t").class(
-            crate::value_class!(ZStamp)
+            crate::data_class!(ZStamp)
                 .interface()
                 .method(crate::fun!(z_stamp_secs).name("secs")),
         ),
     );
-    let dir = unique_test_dir("jnigen_value_iface");
+    let dir = unique_test_dir("jnigen_data_iface");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = registry.resolve(jni).expect("resolve");
@@ -261,14 +262,20 @@ fn value_class_interface_emits_generated_api() {
         .join("\n");
     let ac: String = all.split_whitespace().collect();
     assert!(ac.contains("interfaceZStampApi{"), "{all}");
-    assert!(ac.contains("valbytes:ByteArray"), "{all}");
+    // The interface carries one property per struct FIELD (the data class
+    // crosses as its fields), plus the declared accessor.
+    assert!(ac.contains("valsecs:Long"), "{all}");
+    assert!(ac.contains("valnanos:Long"), "{all}");
     assert!(ac.contains("funsecs("), "{all}");
     assert!(
-        ac.contains("valueclassZStamp(overridepublicvalbytes:ByteArray):ZStampApi{")
-            || ac.contains("valueclassZStamp(publicoverridevalbytes:ByteArray):ZStampApi{"),
+        ac.contains("dataclassZStamp(overridevalsecs:Long,overridevalnanos:Long):ZStampApi{"),
         "{all}"
     );
     assert!(ac.contains("publicoverridefunsecs("), "{all}");
+    // Equality comes from the `data class` itself (all-scalar ctor props), so
+    // no hand-written `equals`/`hashCode` members are emitted.
+    assert!(!ac.contains("funequals("), "{all}");
+    assert!(!ac.contains("funhashCode("), "{all}");
 }
 
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn

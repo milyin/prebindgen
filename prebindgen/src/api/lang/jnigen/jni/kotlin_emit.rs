@@ -7,7 +7,7 @@
 //!   * the shared `NativeHandle` base + lock helpers (root package, e.g.
 //!     `io.zenoh.jni`).
 //!   * one typed-handle class per `ptr_class` entry.
-//!   * one enum / data / `@JvmInline value` class per declaration.
+//!   * one enum / data class per declaration.
 //!   * one top-level free-function bucket per `package()` context.
 //!   * the centralized `external fun` holder (`JNINative`). (`impl Fn(...)`
 //!     params surface as typed Kotlin lambdas on the wrapper tier and erased
@@ -18,7 +18,7 @@
 //! at the FLATTENED path `<root>/<package as dirs>.kt` (`io.zenoh.jni.config`
 //! → `io/zenoh/jni/config.kt`) — i.e. the file is named after the package's
 //! last segment and lives in the directory of its parent package, holding all
-//! of that package's classes, enums, value-classes and free functions.
+//! of that package's classes, enums and free functions.
 //!
 //! Every `#[prebindgen]` function must be assigned a Kotlin home — as a
 //! class member (`.method`/`.constructor` on a class decl) or a free function
@@ -84,7 +84,6 @@ impl JniGen {
         fragments.extend(self.write_enum_classes(registry)?);
         fragments.extend(self.write_sealed_classes(registry)?);
         fragments.extend(self.write_data_classes(registry));
-        fragments.extend(self.write_value_blobs(registry)?);
 
         // Build the borrowed `TypedHandle<'_>` view from internal config.
         let owned = self.collect_typed_handles();
@@ -386,122 +385,6 @@ impl JniGen {
         file
     }
 
-    /// Emit one `@JvmInline value class <Name>(val bytes: ByteArray)` per
-    /// declared `value_blob` type. The class is the typed wrapper level; it is
-    /// erased to its `ByteArray` field at the JVM/ABI level, so the `JNINative`
-    /// extern (and the wire) stays `ByteArray` while wrappers speak the typed
-    /// class. The single field name `bytes` matches `value_projection_field`.
-    pub(crate) fn write_value_blobs(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
-        let mut written = Vec::new();
-        // Deterministic order by canonical Rust type-key (the `types` map is a
-        // HashMap, so iterate sorted keys rather than raw map order).
-        let mut keys: Vec<&TypeKey> = self.types.keys().collect();
-        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        for key in keys {
-            let cfg = &self.types[key];
-            if !cfg.is_value_blob() {
-                continue;
-            }
-            let fqn = cfg
-                .name_spec
-                .as_ref()
-                .map(|s| self.fqn_of(s))
-                .ok_or_else(|| {
-                    WriteKotlinError::Other(format!(
-                        "value_blob `{}` has no Kotlin FQN",
-                        key.as_str()
-                    ))
-                })?;
-            let (package, class_name) = match fqn.rsplit_once('.') {
-                Some((p, c)) => (p.to_string(), c.to_string()),
-                None => (String::new(), fqn.clone()),
-            };
-            let framework_line = format!(
-                "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
-                 as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
-                key.as_str()
-            );
-            let class_kdoc = crate::api::lang::jnigen::jni::source_item_doc(registry, key)
-                .map(|d| format!("{d}\n\n{framework_line}"))
-                .unwrap_or(framework_line);
-            let mut class = KtClass::new(ClassKind::ValueInline, &class_name)
-                .vis(Vis::Public)
-                .kdoc(class_kdoc)
-                .ctor_param(
-                    KtCtorParam::new("bytes", KtType::byte_array())
-                        .val()
-                        .vis(Vis::Public),
-                );
-            let mut imports: BTreeSet<String> = BTreeSet::new();
-            let members = self
-                .class_members
-                .get(key)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            if !members.is_empty() && !self.package.is_empty() {
-                imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
-            }
-            // Promoted instance methods (`.method`): receiver bound to `this`,
-            // passing `this.bytes` to the extern.
-            for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-                if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
-                    if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
-                        self,
-                        item_fn,
-                        registry,
-                        Some(self.effective_method_name(key, m).as_str()),
-                        Some(key),
-                    ) {
-                        for ov in crate::api::lang::jnigen::jni::render_param_overloads(
-                            self, item_fn, registry, &f,
-                        ) {
-                            class = class.member(ov);
-                        }
-                        class = class.member(f);
-                    }
-                }
-            }
-            // Companion-object factory members (`.constructor`).
-            let ctors: Vec<_> = members
-                .iter()
-                .filter(|m| m.kind == MemberKind::Constructor)
-                .collect();
-            if !ctors.is_empty() {
-                let mut companion = KtClass::companion_object().vis(Vis::Public);
-                for m in ctors {
-                    if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
-                        if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
-                            self,
-                            item_fn,
-                            registry,
-                            Some(self.effective_method_name(key, m).as_str()),
-                            None,
-                        ) {
-                            for ov in crate::api::lang::jnigen::jni::render_param_overloads(
-                                self, item_fn, registry, &f,
-                            ) {
-                                companion = companion.member(ov);
-                            }
-                            companion = companion.member(f);
-                        }
-                    }
-                }
-                class = class.companion(companion);
-            }
-            let mut file = kt::KtFile::new(package);
-            if let Some(iface) =
-                self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
-            {
-                file = file.decl(iface);
-            }
-            written.push(file.decl(class).imports(imports));
-        }
-        Ok(written)
-    }
-
     /// Build the `TypedHandle` slice from internal `types` config.
     /// Iterates entries where `opaque.is_some()` and emits one
     /// `TypedHandle` per opaque-handle registration. Stable order by
@@ -744,6 +627,7 @@ impl JniGen {
             if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_variant.attrs) {
                 vclass = vclass.kdoc(doc);
             }
+            let mut vprops: Vec<(String, KtType)> = Vec::new();
             for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
                 let prop = sum_field_property_name(field);
                 let ty = self.sum_payload_kt_type(
@@ -753,7 +637,17 @@ impl JniGen {
                     &prop,
                     item_field,
                 );
+                vprops.push((prop.clone(), ty.clone()));
                 vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
+            }
+            // An array-backed payload (a `Vec<u8>` variant field) compares by
+            // identity otherwise — same rule as a data-class property.
+            for m in
+                crate::api::lang::jnigen::jni::equality::content_equality_members(&vname, &vprops)
+                    .into_iter()
+                    .flatten()
+            {
+                vclass = vclass.member(m);
             }
             class = class.member(vclass);
         }
@@ -906,7 +800,7 @@ impl JniGen {
         if let Some(h) = out.metadata.projection.clone() {
             let leaf = projection_leaf_kt(self, &h).unwrap_or_else(|| {
                 panic!(
-                    "{}: leaf `{}` has no Kotlin FQN registered (ptr_class / value_class)",
+                    "{}: leaf `{}` has no Kotlin FQN registered (ptr_class)",
                     where_(),
                     h.leaf_key
                 )
@@ -982,9 +876,8 @@ impl JniGen {
 
         for key in keys {
             let cfg = &self.types[key];
-            // Opaque handles, enums and `value_blob` (`@JvmInline value`)
-            // types each have their own emitter; only plain structs become
-            // data classes here.
+            // Opaque handles, enums and sealed classes each have their own
+            // emitter; only plain structs become data classes here.
             if cfg.special_decl() {
                 continue;
             }
@@ -1016,7 +909,7 @@ impl JniGen {
             // factory-body imports ride the AST/`Code`); this file-level set
             // is only for the `JNINative` harness the promoted members call.
             let mut imports: BTreeSet<String> = BTreeSet::new();
-            // Members: same shape as the value-blob path — the instance
+            // Members: the instance
             // method's receiver re-enters Rust as `this`'s field leaves
             // (the data-class param destructuring, rebased to `this`).
             let members = self
@@ -1630,13 +1523,13 @@ impl JniGen {
     }
 
     /// The hoisted **folder-appender** singleton for a **whole single-leaf
-    /// element** fold (`Vec<String>` / `Vec<value-blob>` return, or the matching
+    /// element** fold (`Vec<String>` / `Vec<handle>` return, or the matching
     /// slice callback): an instance of the folder's raw twin (`__<Elem>FolderRaw`)
     /// that, per element, wraps the raw leaf into its typed Kotlin value and
     /// appends it to the accumulator `ArrayList`, returning the same list. The
     /// single-leaf analog of [`Self::value_struct_folder_singleton`] — there is no
     /// `fromParts`; reassembly is just `acc.add(<wrap>(element))`, where `<wrap>`
-    /// is the value-class ctor for a value blob, the handle ctor for a handle, or
+    /// is the handle ctor for a handle, `toULong()` for a `u64`, or
     /// identity for a String. So the list is composed on the Kotlin side and no
     /// Java object is built on the Rust side. The folder's `run` params are
     /// `[acc, element]`.

@@ -38,11 +38,6 @@ pub(crate) fn struct_input_body(
         //  * Handle: read the JNINativeHandle object from the JVM slot,
         //    `peek()` the raw jlong, then run the per-field input converter
         //    (jlong-keyed; null handle ⇒ jlong 0 ⇒ `None` via the niche path).
-        //  * ValueBlob: the class is JVM-erased to its `bytes: ByteArray`, so
-        //    the slot is the `[B` descriptor; read it as a JObject, coerce to
-        //    the inner wire, and run the per-field converter. (Without this
-        //    branch a value-blob field would be mis-decoded as a handle —
-        //    peeking a non-handle object.)
         if let Some(proj) = &field_entry.metadata.projection {
             match proj.kind {
                 ProjectionKind::Handle => {
@@ -93,17 +88,6 @@ pub(crate) fn struct_input_body(
                                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
                         };
                         #decode
-                    });
-                }
-                ProjectionKind::ValueBlob => {
-                    let descriptor = "[B";
-                    let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                    field_preludes.push(quote! {
-                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #descriptor)
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        let #raw_ident: #field_wire = #tmp_ident.into();
-                        let #fname_ident = #field_conv;
                     });
                 }
                 ProjectionKind::Unsigned64 => {
@@ -799,8 +783,16 @@ pub(crate) fn kt_leaf_default(sig: &str, nullable: bool) -> Option<String> {
             "F" => "0.0f",
             "D" => "0.0",
             "Ljava/lang/String;" => "\"\"",
-            "[B" => "ByteArray(0)",
-            _ => "null",
+            other => {
+                // An inert primitive-array slot is an EMPTY array of its own
+                // type, never null — the slot is non-nullable in the factory.
+                if let Some(n) =
+                    crate::api::lang::jnigen::jni::wire_access::kotlin_array_of_descriptor(other)
+                {
+                    return Some(format!("{n}(0)"));
+                }
+                "null"
+            }
         }
         .to_string(),
     )
@@ -916,7 +908,7 @@ fn build_flat_sum_field(
         let mut fields = Vec::new();
         for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
             let entry = registry.input_entry(&item_field.ty)?;
-            // A projection payload (handle / value blob) carries ownership
+            // A projection payload (handle) carries ownership
             // and locking rules the tag-gated group does not model yet.
             if entry.metadata.projection.is_some() {
                 return None;
@@ -1432,34 +1424,6 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: true,
                         optional_handle,
-                        rust_ty: Box::new(field.ty.clone()),
-                    });
-                    continue;
-                }
-                ProjectionKind::ValueBlob => {
-                    let is_opt = option_inner_type(&field.ty).is_some();
-                    let mut access = if is_opt || nullable_context {
-                        format!("{field_ref}?.bytes")
-                    } else {
-                        format!("{field_ref}.bytes")
-                    };
-                    if nullable_context && !is_opt {
-                        access.push_str(" ?: ByteArray(0)");
-                    }
-                    let value_index = push_value_leaf(
-                        leaves,
-                        &child_native,
-                        fident.clone(),
-                        fentry,
-                        access,
-                        is_opt,
-                    );
-                    fields.push(FlatFieldNode::Value {
-                        field: fident,
-                        value_leaf: value_index,
-                        present_leaf: None,
-                        direct_handle: false,
-                        optional_handle: false,
                         rust_ty: Box::new(field.ty.clone()),
                     });
                     continue;

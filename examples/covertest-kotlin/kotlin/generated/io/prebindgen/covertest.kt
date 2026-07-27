@@ -2,6 +2,7 @@
 package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.BlobValue
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.Hold
 import io.prebindgen.covertest.model.HoldPolicy
@@ -700,6 +701,28 @@ internal object CovNative {
         errorSink: Any,
     )
 
+    external fun arraysEcho(
+        aBytes: ByteArray,
+        aShorts: ShortArray,
+        aInts: IntArray,
+        aLongs: LongArray,
+        aDoubles: DoubleArray,
+        aFlags: BooleanArray,
+        aRaw: LongArray,
+        build: Any,
+        errorSink: Any,
+    ): Any?
+
+    external fun blobValueEcho(value: BlobValue, build: Any, errorSink: Any): Any?
+
+    external fun blobValueNew(
+        secs: Long,
+        id: ByteArray,
+        chunks: List<ByteArray>,
+        build: Any,
+        errorSink: Any,
+    ): Any?
+
     external fun cacheConfigWeight(
         cachePresent: Boolean,
         cacheRepliesPriority: Int,
@@ -809,11 +832,11 @@ internal object CovNative {
 
     external fun readingSeries(n: Int, acc: Any?, fold: Any, errorSink: Any): Any?
 
-    external fun stampNanos(s: ByteArray, errorSink: Any): Long
+    external fun stampNanos(sSecs: Long, sNanos: Long, errorSink: Any): Long
 
-    external fun stampNew(secs: Long, nanos: Long, errorSink: Any): ByteArray
+    external fun stampNew(secs: Long, nanos: Long, build: Any, errorSink: Any): Any?
 
-    external fun stampSecs(s: ByteArray, errorSink: Any): Long
+    external fun stampSecs(sSecs: Long, sNanos: Long, errorSink: Any): Long
 
     external fun stampSeries(count: Long, acc: Any?, fold: Any, errorSink: Any): Any?
 
@@ -914,7 +937,13 @@ internal object CovNative {
 
     external fun storageTotalLen(a: Long, b: Long, c: Long, errorSink: Any): Long
 
-    external fun storageTryFromStamp(s: ByteArray, errorSink: Any, domainSink: Any): Long
+    external fun storageTryFromStamp(
+        sSecs: Long,
+        sNanos: Long,
+        tag: ByteArray,
+        errorSink: Any,
+        domainSink: Any,
+    ): Long
 
     external fun storageTryWithLabel(label: String, errorSink: Any, domainSink: Any): Long
 

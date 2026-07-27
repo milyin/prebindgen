@@ -70,7 +70,7 @@ pub enum DeconRecord {
     /// (part of) the value itself, e.g. under a binding-defined condition.
     LocalAcc { path: syn::Path, name: String },
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
-    /// moved for an owned `T`, copied for a `Copy` value_blob). At most one per
+    /// moved for an owned `T`). At most one per
     /// deconstructor.
     Identity,
 }
@@ -700,7 +700,7 @@ fn wire_fixed_callbacks<M>(
 
 /// Wire **whole-element** `Iterable` fold plans for bare `Vec<T>` /
 /// `Option<Vec<T>>` returns and `impl Fn(&[T])` callback args whose element `T`
-/// is a single leaf (String, value blob, opaque handle) nominated by the adapter
+/// is a single leaf (String, scalar, opaque handle) nominated by the adapter
 /// via [`crate::api::core::prebindgen::Prebindgen::leaf_vec_fold_elements`]. Each
 /// such position crosses as decoupled raw leaves folded into a **foreign-built**
 /// list — the single-leaf dual of [`apply_value_structs`] (which handles
@@ -747,7 +747,7 @@ pub fn apply_leaf_vec_folds<M>(
                     registry.require_output(&vec_elem, &loc);
                     // The fold delivers the return element-by-element, so the
                     // whole `Vec<T>` / `Option<Vec<T>>` converter is not needed.
-                    // De-require it: for String / value-blob elements it still
+                    // De-require it: for String / scalar elements it still
                     // resolves (and is emitted as harmless dead code); for an
                     // opaque-handle element it cannot resolve (`jlong` wire isn't
                     // JObject-shaped), and de-requiring keeps that `None` from

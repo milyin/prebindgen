@@ -21,7 +21,6 @@
 //! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
-//! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
@@ -54,7 +53,7 @@
 //! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
 //! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
 //! | `Result<_, E>` → typed domain `onError` | `storage_try_with_label` |
-//! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (malformed `Stamp` → binding; bad `secs` → domain) |
+//! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (wrong-length `tag` → binding; bad `secs` → domain) |
 //! | fixed-width unsigned scalars (#108) | `Unsigned` + direct/optional/callback/collection max-value round trips |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | non-null enum field under nullable-context (#144) | `Option<CacheConfig>` → nested `RepliesConfig.priority` (single Elvis default) |
@@ -66,7 +65,7 @@
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
 //! | `String` return                      | `string_new` |
-//! | binding-error channel (`JniErrorHandler`) | malformed `Stamp` bytes (value-blob length guard) |
+//! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
 //! | `JniGen::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
@@ -99,7 +98,7 @@
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
     from, fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig, try_from,
-    ty, value_class, variant,
+    ty, variant,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -286,14 +285,22 @@ fn main() {
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
                 .class(data_class!(Unsigned))
-                // `Stamp` as a `@JvmInline value class` over its raw bytes; its readers
-                // become instance methods (`secs()` / `nanos()`), and `Vec<Stamp>`
-                // surfaces as `List<ByteArray>`.
+                // `Stamp` is a small `Copy` struct of two scalars, so it crosses
+                // as its FIELDS — no array, no raw-memory image. Its readers stay
+                // instance methods (`secs()` / `nanos()`) whose receiver crosses
+                // as those field leaves, and `Vec<Stamp>` surfaces as
+                // `List<Stamp>`.
                 .class(
-                    value_class!(Stamp)
+                    data_class!(Stamp)
                         .method(fun!(stamp_secs))
                         .method(fun!(stamp_nanos)),
-                ),
+                )
+                // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
+                // field beside a scalar, plus a nested data class. Both compare
+                // by identity in Kotlin unless the binding says otherwise.
+                .class(data_class!(BlobValue).jobject_input())
+                // Fixed-size arrays of every JNI-primitive element.
+                .class(data_class!(Arrays)),
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
         .package(package!("errors").class(
@@ -501,6 +508,9 @@ fn main() {
                 .fun(fun!(unsigned_data_maybe))
                 .fun(fun!(unsigned_emit))
                 .fun(fun!(unsigned_series))
+                .fun(fun!(blob_value_new))
+                .fun(fun!(blob_value_echo))
+                .fun(fun!(arrays_echo))
                 .fun(fun!(duration_optional))
                 .fun(fun!(duration_boundary_echo))
                 // The converted analogue of `unsigned_emit`: a whole-value

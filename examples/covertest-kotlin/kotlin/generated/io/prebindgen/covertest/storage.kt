@@ -252,9 +252,11 @@ public fun storageTryWithLabel(
 
 /**
  * Build a storage stamped with `s`, **failing** on a non-positive `secs` (a
- * domain [`StorageError`]). This takes a `Stamp` **by value** (a value-blob
- * input), so a malformed `Stamp` blob fails the input decode FIRST — the
- * binding channel — while a well-formed but rejected value fails in the domain
+ * domain [`StorageError`]).
+ *
+ * `tag` is a fixed-size array purely so the two error channels stay separately
+ * provable: a wrong-length array fails the input DECODE first — the binding
+ * channel — while a well-formed but rejected `secs` fails in the domain
  * channel. It is the covertest exercise for issue #45's two-caller split: one
  * wrapper, both `onBindingError` and `onError` provable independently.
  *
@@ -262,12 +264,13 @@ public fun storageTryWithLabel(
  */
 public fun storageTryFromStamp(
     s: Stamp,
+    tag: ByteArray,
     onBindingError: JniErrorHandler<Storage>,
     onError: StorageErrorHandler<Storage>,
 ): Storage {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __dcap = StorageErrorHandlerRawCapture.acquire()
-    val __ret = CovNative.storageTryFromStamp(s.bytes, __bcap, __dcap)
+    val __ret = CovNative.storageTryFromStamp(s.secs, s.nanos, tag, __bcap, __dcap)
     if (__bcap.failed) return onBindingError.run(__bcap.ze0)
     if (__dcap.failed) return onError.run(__dcap.ze0!!, StorageError(__dcap.ze1!!))
     return Storage(__ret)

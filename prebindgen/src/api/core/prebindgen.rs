@@ -242,7 +242,7 @@ pub trait Prebindgen {
 
     /// Element types the adapter nominates for a **whole-element leaf fold**: a
     /// `Vec<T>` / `Option<Vec<T>>` return (or `impl Fn(&[T])` callback arg) whose
-    /// element `T` is a single boundary leaf (e.g. a String, a value blob, an
+    /// element `T` is a single boundary leaf (e.g. a String, a scalar, an
     /// opaque handle) the foreign side can reassemble from one wire value. The
     /// single-leaf analog of [`Self::value_struct_decons`]: consulted right after
     /// it and wired by [`crate::api::core::unfold::apply_leaf_vec_folds`] so the

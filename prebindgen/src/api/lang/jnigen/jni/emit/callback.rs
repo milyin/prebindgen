@@ -253,7 +253,7 @@ pub(crate) fn callback_input(
             }
         }
 
-        // Whole-value arg (scalar / String / data-class / value-blob …):
+        // Whole-value arg (scalar / String / data-class …):
         // encode with its output converter. A non-`Option` primitive-wire arg
         // passes its raw primitive; everything else casts to JObject. Output
         // converters take the value by move; `cb_arg` is the closure
@@ -385,11 +385,8 @@ pub(crate) fn reject_vec_of_handle(inner_projection: &Option<Projection>, elem: 
         if p.kind == ProjectionKind::Handle {
             panic!(
                 "JniGen: `Vec<{}>` is unsupported — its elements would be closeable native \
-                 handles (jlong) the JVM must free individually. If `{}` is `Copy`, declare \
-                 it as a value class via `.value_class(...)` so the Vec surfaces as \
-                 `List<ByteArray>`; otherwise expose a per-element accessor instead of \
-                 returning a `Vec` of handles.",
-                elem.to_token_stream(),
+                 handles (jlong) the JVM must free individually. Expose a per-element \
+                 accessor instead of returning a `Vec` of handles.",
                 elem.to_token_stream(),
             );
         }

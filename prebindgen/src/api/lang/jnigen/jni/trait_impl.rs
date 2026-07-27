@@ -372,11 +372,36 @@ impl JniGen {
     /// site having to remember to qualify.
     fn qualify_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
         let source_names = self.emitted_source_type_names(registry);
-        if source_names.is_empty() {
-            return;
-        }
+        // Names reachable from an array LENGTH (`[u8; MAX]`, `[u8; Holder::N]`).
+        //
+        // Registry-wide, NOT the declared-surface `source_names`: a length's
+        // owner is a compile-time namespace, not a boundary type. Requiring it
+        // to be declared would force an otherwise-unused Kotlin class into
+        // existence just to make the generated Rust compile, and would be
+        // asymmetric with consts, which qualify whether or not JniGen declared
+        // them.
+        // EVERY named item the registry indexes. A length is an arbitrary const
+        // expression, so it can name a const, the type owning an associated
+        // const, or a `const fn` — and enumerating item KINDS here missed one
+        // of those three twice, so the enumeration lives in core
+        // (`named_item_idents`) where a new kind is added once.
+        //
+        // The NAME SET is independent of origin stamps and the VALUE falls back
+        // to the default module: an origin-less hand-built stream indexes items
+        // that `item_origins` never sees, and those still need qualifying (core
+        // documents `crate` as their module).
+        let length_names: std::collections::HashMap<String, syn::Path> = registry
+            .named_item_idents()
+            .map(|ident| {
+                let module = registry
+                    .origin_module(ident)
+                    .unwrap_or_else(|| self.default_module(registry));
+                (ident.to_string(), module)
+            })
+            .collect();
         let mut visitor = QualifyEmittedTypes {
             source_names: &source_names,
+            length_names: &length_names,
         };
         syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
     }
@@ -868,22 +893,23 @@ impl JniGen {
     }
 
     /// True when `elem` crosses the boundary as a **single leaf** the foreign
-    /// side can reassemble from one wire value — a value blob (→ `ByteArray`) or
-    /// the `String` builtin (→ `JString`). Multi-field `data_class` elements
-    /// (whose output is a `fromParts` object), enums, and opaque handles are
-    /// excluded. Drives [`Self::leaf_vec_fold_elements`].
+    /// side can reassemble from one wire value — a declared opaque handle
+    /// (→ a `jlong` pointer), the `String` builtin (→ `JString`), or the `u64`
+    /// scalar projection (→ a raw `jlong` the folder wraps into `ULong`).
+    /// Multi-field `data_class` elements (whose output is a `fromParts`
+    /// object) and enums are excluded. Drives
+    /// [`Self::leaf_vec_fold_elements`].
     ///
     /// Classified from the adapter's declared [`TypeConfig`] table (and the
     /// `String` builtin), not the resolver's output converters — this runs
     /// **before** type resolution, exactly like [`Self::value_struct_decons`].
     fn is_leaf_vec_element(&self, elem: &syn::Type) -> bool {
         match self.types.get(&TypeKey::from_type(elem)) {
-            // A declared value blob crosses as a single `ByteArray` leaf; a
-            // declared opaque handle crosses as a single `jlong` (pointer) leaf
-            // that the Kotlin folder wraps into its typed handle class. Enums
-            // and multi-field data classes are not leaf-folded — data classes go
-            // through `value_struct_decons`.
-            Some(cfg) => cfg.is_value_blob() || cfg.is_opaque(),
+            // A declared opaque handle crosses as a single `jlong` (pointer)
+            // leaf that the Kotlin folder wraps into its typed handle class.
+            // Enums and multi-field data classes are not leaf-folded — data
+            // classes go through `value_struct_decons`.
+            Some(cfg) => cfg.is_opaque(),
             // Undeclared: `String` is JObject-shaped; `u64` is the built-in
             // scalar projection whose raw jlong leaf the Kotlin folder wraps
             // into `ULong`. Other primitive collections retain their existing
@@ -963,7 +989,7 @@ impl Prebindgen for JniGen {
             let source: syn::Type = syn::parse_quote!(#ident);
             let key = TypeKey::from_type(&source);
             // A `data_class` is a registered type that is neither an opaque
-            // handle, an enum, nor a value blob.
+            // handle nor an enum.
             let is_data_class = matches!(
                 self.type_kind(registry, &source),
                 TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
@@ -1031,8 +1057,8 @@ impl Prebindgen for JniGen {
     /// `Option<Vec<T>>` return or an `impl Fn(&[T])` callback arg, so
     /// [`crate::api::core::unfold::apply_leaf_vec_folds`] routes the collection
     /// through a foreign-built fold (no Rust `ArrayList`). A single-leaf element
-    /// is a value blob (→ `ByteArray`), an opaque handle (→ a `jlong` pointer
-    /// the Kotlin folder wraps into its typed handle class), or a non-`data_class`
+    /// is an opaque handle (→ a `jlong` pointer the Kotlin folder wraps into its
+    /// typed handle class) or a non-`data_class`
     /// builtin with a JObject-shaped output wire (e.g. String). Multi-field
     /// `data_class` elements are excluded — they go through
     /// [`Self::value_struct_decons`].
@@ -1135,8 +1161,8 @@ impl Prebindgen for JniGen {
     }
 
     /// Every type registered via one of the **class declarators**
-    /// (`ptr_class!` / `enum_class!` / `sealed_class!` / `data_class!` /
-    /// `value_class!`) — i.e. every entry in the type table, whose only
+    /// (`ptr_class!` / `enum_class!` / `sealed_class!` / `data_class!`)
+    /// — i.e. every entry in the type table, whose only
     /// writer is `JniGen::register_class`. These are the only structs/enums
     /// the per-item emitter walks, and the scan requires them in BOTH
     /// directions (their converters always resolve both ways). Wrapper
@@ -1499,23 +1525,6 @@ impl Prebindgen for JniGen {
         // the handle (see `ParamMode::VecBuild`), avoiding per-element
         // `env.get_field(...)` upcalls on the Rust side.
         items.extend(build_vec_build_helper_items(self, registry));
-        // Compile-time `Copy` assertion per `value_blob` type — the blob
-        // converters reinterpret raw bytes by value, which is only sound for
-        // `Copy` types. A mis-declared non-`Copy` type fails to compile here
-        // (at the include site) with a clear bound error rather than at a
-        // converter use. The bare type name is qualified against
-        // its origin module by `post_process_item` like every other body.
-        for (key, cfg) in &self.types {
-            if cfg.is_value_blob() {
-                let ty = key.to_type();
-                items.push(syn::parse_quote!(
-                    const _: () = {
-                        const fn __assert_copy<T: ::core::marker::Copy>() {}
-                        __assert_copy::<#ty>();
-                    };
-                ));
-            }
-        }
         // Expression constants — one nullary JNI getter extern per
         // `PackageDecl::constant_expr`, its value the binding-defined
         // expression evaluated with a glob import of every source module (so
@@ -1623,8 +1632,8 @@ impl Prebindgen for JniGen {
 impl JniGen {
     // ── Input converters ─────────────────────────────────────────────
 
-    /// Whole-type **input** terminal categories (opaque handle, value-blob,
-    /// enum, the rank-0 user table, `str`, primitive, struct) — depends on
+    /// Whole-type **input** terminal categories (opaque handle, enum, the
+    /// rank-0 user table, `str`, primitive, struct) — depends on
     /// nothing, `subs` empty.
     pub(crate) fn input_terminal(
         &self,
@@ -1639,31 +1648,13 @@ impl JniGen {
                 return Some(self.opaque_handle_input(ty));
             }
         }
-        // `value_blob`-declared `Copy` types: decode the raw memory blob out
-        // of a `JByteArray` (length-checked, `read_unaligned` since the byte
-        // array isn't aligned to the type). Returns owned `T`, so `&T` /
-        // by-value / `Vec<T>` / `Option<T>` all compose through the existing
-        // handlers. `T: Copy` ⇒ reading the value out is sound (no double
-        // drop); the `Copy` bound itself is enforced by the assertion in
-        // `prerequisites`.
-        if self.types.get(&key).is_some_and(|c| c.is_value_blob()) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
-            let body: syn::Expr = syn::parse_quote!({
-                let __bytes = env.convert_byte_array(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "value-blob decode: {}",
-                        e
-                    ))
-                })?;
-                if __bytes.len() != ::core::mem::size_of::<#ty>() {
-                    return ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<String>>::from(
-                            "value-blob decode: wrong byte length".to_string(),
-                        ),
-                    );
-                }
-                unsafe { ::core::ptr::read_unaligned(__bytes.as_ptr() as *const #ty) }
-            });
+        // Fixed-size array of JNI primitives — dual of the output branch.
+        // The `try_into` IS the length check: a JVM array of the wrong size
+        // becomes a binding error naming the type, never a panic.
+        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(ty) {
+            let body = crate::api::lang::jnigen::jni::prim_array::input_body(ty, &spec);
+            let wire = spec.wire.clone();
+            let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -1671,16 +1662,7 @@ impl JniGen {
                 function: self.build_input_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: KotlinMeta {
-                    projection: Some(Projection {
-                        leaf_key: key.clone(),
-                        owned: false,
-                        strategy: FoldStrategy::Base,
-                        kind: ProjectionKind::ValueBlob,
-                        niche_sentinels: Vec::new(),
-                    }),
-                    ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
-                },
+                metadata: self.framework_meta(kotlin_name),
             });
         }
         // `enum_class`-declared enums: jint wire, `TryFrom<i32>` decode.
@@ -1866,7 +1848,7 @@ impl JniGen {
     // ── Output converters ────────────────────────────────────────────
 
     /// Whole-type **output** terminal categories (the dual of
-    /// [`Self::input_terminal`]: opaque handle, value-blob, enum, user table,
+    /// [`Self::input_terminal`]: opaque handle, enum, user table,
     /// `str`, `Cow<[u8]>`, unit, primitive, struct) — `subs` empty.
     pub(crate) fn output_terminal(
         &self,
@@ -1881,28 +1863,13 @@ impl JniGen {
                 return Some(self.opaque_handle_output(ty));
             }
         }
-        // `value_blob`-declared `Copy` types: encode the value's raw memory
-        // bytes into a fresh `JByteArray` (the value-level peer of an opaque
-        // handle's `jlong`). `v: #ty` is owned and `Copy`, so reading its
-        // bytes and letting it drop normally is sound. Wire is `JByteArray`
-        // (jobject-shaped), so `Vec<T>` / `Option<T>` compose through the
-        // existing handlers — `Vec<value-blob>` surfaces as `List<ByteArray>`.
-        if self.types.get(&key).is_some_and(|c| c.is_value_blob()) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
-            let body: syn::Expr = syn::parse_quote!({
-                let __bytes: &[u8] = unsafe {
-                    ::core::slice::from_raw_parts(
-                        (&v as *const #ty) as *const u8,
-                        ::core::mem::size_of::<#ty>(),
-                    )
-                };
-                env.byte_array_from_slice(__bytes).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "value-blob encode: {}",
-                        e
-                    ))
-                })?
-            });
+        // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
+        // `[i64; N]` -> `LongArray`, ... Bulk-copied, nothing boxed. See
+        // [`prim_array`]; this replaced the raw-memory value blob.
+        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(ty) {
+            let body = crate::api::lang::jnigen::jni::prim_array::output_body(&spec);
+            let wire = spec.wire.clone();
+            let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -1910,16 +1877,7 @@ impl JniGen {
                 function: self.build_output_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: KotlinMeta {
-                    projection: Some(Projection {
-                        leaf_key: key.clone(),
-                        owned: false,
-                        strategy: FoldStrategy::Base,
-                        kind: ProjectionKind::ValueBlob,
-                        niche_sentinels: Vec::new(),
-                    }),
-                    ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
-                },
+                metadata: self.framework_meta(kotlin_name),
             });
         }
         // `enum_class`-declared enums: jint wire, `as jni::sys::jint`
@@ -2195,7 +2153,7 @@ impl JniGen {
                 Some(kt::KtType::generic("List", [inner_kotlin])),
             );
             // Fold an Iterable layer over the inner projection (if any), so
-            // `Vec<Handle>` / `Vec<ValueClass>` carry the full strategy.
+            // `Vec<Handle>` carries the full strategy.
             let projection = inner.metadata.projection.clone().map(|h| Projection {
                 strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
                 ..h
