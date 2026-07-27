@@ -96,13 +96,37 @@ pub(crate) fn struct_input_body(
                     });
                 }
                 ProjectionKind::ValueBlob => {
-                    let descriptor = "[B";
+                    // The JVM slot is the WRAPPER class, then its `bytes`. It
+                    // was `[B` while a value blob was `@JvmInline`-erased; the
+                    // wrapper is a real class now (it has to be, to carry value
+                    // equality), so reading `[B` here raises
+                    // `NoSuchFieldError` at the first decode.
+                    let fqn = ext
+                        .kotlin_fqn(&proj.leaf_key)
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "value_blob field `{struct_name}.{fname}`: no Kotlin FQN for `{}`",
+                                proj.leaf_key
+                            )
+                        });
+                    let sig = format!("L{};", fqn.replace('.', "/"));
                     let tmp_ident = format_ident!("__{}_jobj", fname_ident);
+                    let bytes_ident = format_ident!("__{}_bytes", fname_ident);
                     field_preludes.push(quote! {
-                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #descriptor)
+                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
                             .and_then(|val| val.l())
                             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        let #raw_ident: #field_wire = #tmp_ident.into();
+                        // A null wrapper stays a null `[B`, so the field's own
+                        // converter carves `None` exactly as it did before.
+                        let #bytes_ident: jni::objects::JObject = if #tmp_ident.is_null() {
+                            jni::objects::JObject::null()
+                        } else {
+                            env.get_field(&#tmp_ident, "bytes", "[B")
+                                .and_then(|val| val.l())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
+                        };
+                        let #raw_ident: #field_wire = #bytes_ident.into();
                         let #fname_ident = #field_conv;
                     });
                 }
@@ -455,6 +479,32 @@ fn read_kotlin_property(
                             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
                     };
                     #decode
+                },
+                quote!(#bind),
+            ));
+        }
+        // A value blob's JVM slot is the WRAPPER class, then its `bytes` — it
+        // was `[B` only while the wrapper was `@JvmInline`-erased. Same
+        // correction as the data-class field path in `struct_input_body`.
+        if matches!(proj.kind, ProjectionKind::ValueBlob) {
+            let fqn = ext.kotlin_fqn(&proj.leaf_key).map(|v| v.to_string())?;
+            let sig = format!("L{};", fqn.replace('.', "/"));
+            let obj = format_ident!("{}_obj", bind);
+            let wire = entry.destination.clone();
+            return Some((
+                quote! {
+                    let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                    let #raw: #wire = if #obj.is_null() {
+                        jni::objects::JObject::null().into()
+                    } else {
+                        env.get_field(&#obj, "bytes", "[B")
+                            .and_then(|val| val.l())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
+                            .into()
+                    };
+                    let #bind = #conv;
                 },
                 quote!(#bind),
             ));

@@ -297,7 +297,7 @@ fn main() {
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested value blob. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                .class(data_class!(BlobValue)),
+                .class(data_class!(BlobValue).jobject_input()),
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
         .package(package!("errors").class(
@@ -506,6 +506,7 @@ fn main() {
                 .fun(fun!(unsigned_emit))
                 .fun(fun!(unsigned_series))
                 .fun(fun!(blob_value_new))
+                .fun(fun!(blob_value_echo))
                 .fun(fun!(duration_optional))
                 .fun(fun!(duration_boundary_echo))
                 // The converted analogue of `unsigned_emit`: a whole-value

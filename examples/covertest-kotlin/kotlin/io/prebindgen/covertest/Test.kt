@@ -41,6 +41,7 @@ import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
+import io.prebindgen.covertest.model.blobValueEcho
 import io.prebindgen.covertest.model.blobValueNew
 import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
@@ -678,16 +679,38 @@ fun main() {
         // blob — the two shapes that broke downstream. The bytes sit LAST, so
         // this also covers the `31 * result + …contentHashCode()` fold form
         // that a real value (`Timestamp(ntp64, id)`) produces.
-        val b1 = blobValueNew(7L, byteArrayOf(1, 2, 3), boom)
-        val b2 = blobValueNew(7L, byteArrayOf(1, 2, 3), boom)
+        fun blob(secs: Long, id: ByteArray, chunks: List<ByteArray>) =
+            blobValueNew(secs, id, chunks, boom)
+
+        val chunks = listOf(byteArrayOf(9), byteArrayOf(8, 7))
+        val b1 = blob(7L, byteArrayOf(1, 2, 3), chunks)
+        val b2 = blob(7L, byteArrayOf(1, 2, 3), listOf(byteArrayOf(9), byteArrayOf(8, 7)))
         check(b1 == b2) { "array-backed data class must compare by content: $b1 vs $b2" }
         check(b1.hashCode() == b2.hashCode())
         check(hashSetOf(b1, b2).size == 1)
-        // Both components must actually participate — a comparison that ignored
-        // either would still pass the equality checks above.
-        check(blobValueNew(7L, byteArrayOf(1, 2, 4), boom) != b1) { "id must matter" }
-        check(blobValueNew(8L, byteArrayOf(1, 2, 3), boom) != b1) { "nested blob must matter" }
+        // Every component must actually participate — a comparison that ignored
+        // any of them would still pass the equality checks above.
+        check(blob(7L, byteArrayOf(1, 2, 4), chunks) != b1) { "id must matter" }
+        check(blob(8L, byteArrayOf(1, 2, 3), chunks) != b1) { "nested blob must matter" }
+        // A CONTAINER of arrays: `List<ByteArray>` inherits `ByteArray`'s
+        // identity equality, so the operators must dig through the container.
+        check(blob(7L, byteArrayOf(1, 2, 3), listOf(byteArrayOf(9), byteArrayOf(8, 6))) != b1) {
+            "chunk contents must matter"
+        }
+        check(blob(7L, byteArrayOf(1, 2, 3), listOf(byteArrayOf(9))) != b1) {
+            "chunk count must matter"
+        }
         check(b1.toString().contains("id=[1, 2, 3]")) { "toString must render bytes, got $b1" }
+        check(b1.toString().contains("chunks=[[9], [8, 7]]")) {
+            "toString must render nested bytes, got $b1"
+        }
+
+        // WHOLE-OBJECT input decode (`.jobject_input()`): the decoder reads each
+        // field off the Kotlin object by JVM descriptor. A value-blob field's
+        // slot is the wrapper class, not `[B` — reading the old descriptor threw
+        // `NoSuchFieldError` on the first decode.
+        check(blobValueEcho(b1, boom) == b1) { "jobject-input round trip must preserve the value" }
+        check(blobValueEcho(blob(0L, ByteArray(0), emptyList()), boom).chunks.isEmpty())
     }
 
     // ── Option<scalar> nullable primitive return + data_class instance

@@ -349,15 +349,32 @@ pub fn stamp_secs(s: &Stamp) -> i64 {
 pub struct BlobValue {
     pub stamp: Stamp,
     pub id: Vec<u8>,
+    /// A CONTAINER of arrays. `List<ByteArray>` inherits `ByteArray`'s
+    /// identity equality just as a bare array does, so the generated operators
+    /// have to dig through the container rather than stopping at the property.
+    pub chunks: Vec<Vec<u8>>,
 }
 
 /// Build a [`BlobValue`] (its equality is asserted from Kotlin).
 #[prebindgen]
-pub fn blob_value_new(secs: i64, id: Vec<u8>) -> BlobValue {
+pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue {
     BlobValue {
         stamp: Stamp { secs, nanos: 0 },
         id,
+        chunks,
     }
+}
+
+/// Round-trip a [`BlobValue`] through the WHOLE-OBJECT input decoder.
+///
+/// The binding marks this class `.jobject_input()`, so the decoder reads each
+/// field off the Kotlin object by JVM descriptor. A value-blob field's slot is
+/// the wrapper class (it stopped being `@JvmInline`-erased when it gained value
+/// equality), which the old `[B` lookup got wrong — `NoSuchFieldError` on the
+/// first decode.
+#[prebindgen]
+pub fn blob_value_echo(value: BlobValue) -> BlobValue {
+    value
 }
 
 /// Nanoseconds component (value-class **accessor**).

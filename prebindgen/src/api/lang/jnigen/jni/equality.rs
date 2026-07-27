@@ -33,21 +33,101 @@
 
 use super::*;
 
-/// A property whose Kotlin type compares by identity and therefore needs
-/// content-aware operators.
-enum ArrayProp {
-    /// `ByteArray` / `ByteArray?`.
-    Bytes { nullable: bool },
+/// Whether a Kotlin type carries an array anywhere inside it, and therefore
+/// compares by identity unless the generated operators dig in.
+///
+/// Recursive, because a container of arrays is just as identity-compared as a
+/// bare one: `List<ByteArray>` (from `Vec<Vec<u8>>`) inherits `ByteArray`'s
+/// `equals`, so two lists of equal chunks are unequal and `toString` renders
+/// `[[B@3830f1c0]`. A container of *classes* is fine — those already compare
+/// by value — so only an array at the bottom makes a property array-bearing.
+fn array_bearing(ty: &kt::KtType) -> bool {
+    match ty {
+        kt::KtType::Named { fqn, args, .. } => {
+            fqn.rsplit('.').next().unwrap_or(fqn) == "ByteArray" || args.iter().any(array_bearing)
+        }
+        kt::KtType::Function { .. } => false,
+    }
 }
 
-/// Classify one constructor property. `None` for everything that already
-/// compares by value (scalars, `String`, enums, nested generated classes).
-fn array_prop(ty: &kt::KtType) -> Option<ArrayProp> {
-    match ty.simple_name() {
-        Some("ByteArray") => Some(ArrayProp::Bytes {
-            nullable: ty.is_nullable(),
-        }),
+/// The element type of a single-argument container (`List<T>` -> `T`).
+fn element_of(ty: &kt::KtType) -> Option<&kt::KtType> {
+    match ty {
+        kt::KtType::Named { args, .. } if args.len() == 1 => Some(&args[0]),
         _ => None,
+    }
+}
+
+/// `a == b` for one value of type `ty`, digging through containers.
+///
+/// `a`/`b` are Kotlin expressions. Nullability is handled per level: a
+/// `ByteArray?` rides `contentEquals`'s nullable-receiver overload, while a
+/// nullable container needs an explicit both-null / both-present test.
+fn eq_expr(a: &str, b: &str, ty: &kt::KtType) -> String {
+    if !array_bearing(ty) {
+        return format!("{a} == {b}");
+    }
+    if element_of(ty).is_none() {
+        // The array itself.
+        return format!("{a}.contentEquals({b})");
+    }
+    let elem = element_of(ty).expect("checked above");
+    let inner = eq_expr("__x", "__y", elem);
+    let cmp = format!(
+        "{a}.size == {b}.size && {a}.indices.all {{ __i -> \
+         val __x = {a}[__i]; val __y = {b}[__i]; {inner} }}"
+    );
+    if ty.is_nullable() {
+        format!("(({a} == null && {b} == null) || ({a} != null && {b} != null && {cmp}))")
+    } else {
+        format!("({cmp})")
+    }
+}
+
+/// `hashCode` for one value of type `ty`, digging through containers. The
+/// container fold mirrors `Arrays.hashCode`'s 31-multiplier so a `List` and the
+/// array it came from agree.
+fn hash_expr(x: &str, ty: &kt::KtType) -> String {
+    if !array_bearing(ty) {
+        return if ty.is_nullable() {
+            format!("({x}?.hashCode() ?: 0)")
+        } else {
+            format!("{x}.hashCode()")
+        };
+    }
+    match element_of(ty) {
+        None if ty.is_nullable() => format!("({x}?.contentHashCode() ?: 0)"),
+        None => format!("{x}.contentHashCode()"),
+        Some(elem) => {
+            let inner = hash_expr("__e", elem);
+            let fold = format!("{x}.fold(1) {{ __acc, __e -> 31 * __acc + {inner} }}");
+            if ty.is_nullable() {
+                format!("({x}?.let {{ __l -> {} }} ?: 0)", fold.replace(x, "__l"))
+            } else {
+                format!("({fold})")
+            }
+        }
+    }
+}
+
+/// `toString` rendering for one value of type `ty`, digging through containers
+/// so a nested array never prints as `[B@1a2b3c`.
+fn str_expr(x: &str, ty: &kt::KtType) -> String {
+    if !array_bearing(ty) {
+        return format!("${{{x}}}");
+    }
+    match element_of(ty) {
+        None if ty.is_nullable() => format!("${{{x}?.contentToString()}}"),
+        None => format!("${{{x}.contentToString()}}"),
+        Some(elem) => {
+            let inner = str_expr("__e", elem);
+            let join = format!("{x}.joinToString(\", \", \"[\", \"]\") {{ __e -> \"{inner}\" }}");
+            if ty.is_nullable() {
+                format!("${{{x}?.let {{ __l -> {} }}}}", join.replace(x, "__l"))
+            } else {
+                format!("${{{join}}}")
+            }
+        }
     }
 }
 
@@ -63,43 +143,29 @@ pub(crate) fn content_equality_members(
     class_name: &str,
     props: &[(String, kt::KtType)],
 ) -> Option<Vec<kt::KtFun>> {
-    if !props.iter().any(|(_, ty)| array_prop(ty).is_some()) {
+    if !props.iter().any(|(_, ty)| array_bearing(ty)) {
         return None;
     }
 
     // `equals`: identity short-circuit, type check, then per-property
-    // comparison — `contentEquals` for arrays (its nullable-receiver overload
-    // covers `ByteArray?`), `==` for everything else.
+    // comparison that digs through any container down to the arrays.
     let comparisons: Vec<String> = props
         .iter()
-        .map(|(name, ty)| match array_prop(ty) {
-            Some(ArrayProp::Bytes { .. }) => format!("{name}.contentEquals(other.{name})"),
-            None => format!("{name} == other.{name}"),
-        })
+        .map(|(name, ty)| eq_expr(name, &format!("other.{name}"), ty))
         .collect();
-    let mut equals_body = kt::Code::new()
+    let equals_body = kt::Code::new()
         .line("if (this === other) return true")
-        .line(format!("if (other !is {class_name}) return false"));
-    equals_body = equals_body.line(format!("return {}", comparisons.join(" && ")));
+        .line(format!("if (other !is {class_name}) return false"))
+        .line(format!("return {}", comparisons.join(" && ")));
     let equals = kt::KtFun::new("equals")
         .modifier("override")
         .param(kt::KtParam::new("other", kt::KtType::any().nullable()))
         .returns(kt::KtType::boolean())
         .body(equals_body);
 
-    // `hashCode`: the standard 31-multiplier fold, with `contentHashCode` for
-    // arrays (`?: 0` for an absent one, matching how Kotlin hashes a null).
-    let hash_of = |name: &str, ty: &kt::KtType| -> String {
-        match array_prop(ty) {
-            Some(ArrayProp::Bytes { nullable: true }) => {
-                format!("({name}?.contentHashCode() ?: 0)")
-            }
-            Some(ArrayProp::Bytes { nullable: false }) => format!("{name}.contentHashCode()"),
-            None if ty.is_nullable() => format!("({name}?.hashCode() ?: 0)"),
-            None => format!("{name}.hashCode()"),
-        }
-    };
-    let first = hash_of(&props[0].0, &props[0].1);
+    // `hashCode`: the standard 31-multiplier fold over the same per-property
+    // expressions, so equal values always agree.
+    let first = hash_expr(&props[0].0, &props[0].1);
     let hash_body = if props.len() == 1 {
         // A single property needs no accumulator — `var result` would draw a
         // "never reassigned" warning in the generated source.
@@ -107,7 +173,7 @@ pub(crate) fn content_equality_members(
     } else {
         let mut b = kt::Code::new().line(format!("var result = {first}"));
         for (name, ty) in &props[1..] {
-            b = b.line(format!("result = 31 * result + {}", hash_of(name, ty)));
+            b = b.line(format!("result = 31 * result + {}", hash_expr(name, ty)));
         }
         b.line("return result")
     };
@@ -116,18 +182,10 @@ pub(crate) fn content_equality_members(
         .returns(kt::KtType::int())
         .body(hash_body);
 
-    // `toString`: an array would otherwise render as `[B@1a2b3c`.
+    // `toString`: an array at any depth would otherwise render as `[B@1a2b3c`.
     let rendered: Vec<String> = props
         .iter()
-        .map(|(name, ty)| match array_prop(ty) {
-            Some(ArrayProp::Bytes { nullable: true }) => {
-                format!("{name}=${{{name}?.contentToString()}}")
-            }
-            Some(ArrayProp::Bytes { nullable: false }) => {
-                format!("{name}=${{{name}.contentToString()}}")
-            }
-            None => format!("{name}=${name}"),
-        })
+        .map(|(name, ty)| format!("{name}={}", str_expr(name, ty)))
         .collect();
     let to_string = kt::KtFun::new("toString")
         .modifier("override")

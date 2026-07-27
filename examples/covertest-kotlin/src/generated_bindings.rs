@@ -523,14 +523,19 @@ pub(crate) unsafe fn BlobValue_to_JObject_89b5dab7<'a>(
                 v.id.clone(),
             )?
             .into();
+        let ___chunks: jni::objects::JObject = Vec_Vec_u8_to_JObject_43404875(
+            env,
+            v.chunks.clone(),
+        )?;
         let __obj = env
             .call_static_method(
                 "io/prebindgen/covertest/model/BlobValue",
                 "fromParts",
-                "([B[B)Lio/prebindgen/covertest/model/BlobValue;",
+                "([B[BLjava/util/List;)Lio/prebindgen/covertest/model/BlobValue;",
                 &[
                     jni::objects::JValue::Object(&___stamp),
                     jni::objects::JValue::Object(&___id),
+                    jni::objects::JValue::Object(&___chunks),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -931,12 +936,21 @@ pub(crate) unsafe fn JObject_to_BlobValue_89b5dab7<'env, 'v>(
 ) -> ::core::result::Result<perftest_flat::BlobValue, __JniErr> {
     Ok({
         let __stamp_jobj: jni::objects::JObject = env
-            .get_field(v, "stamp", "[B")
+            .get_field(v, "stamp", "Lio/prebindgen/covertest/model/Stamp;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
             >>::from(format!("BlobValue.stamp: {}", e)))?;
-        let __stamp_raw: jni::objects::JByteArray = __stamp_jobj.into();
+        let __stamp_bytes: jni::objects::JObject = if __stamp_jobj.is_null() {
+            jni::objects::JObject::null()
+        } else {
+            env.get_field(&__stamp_jobj, "bytes", "[B")
+                .and_then(|val| val.l())
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("BlobValue.stamp: {}", e)))?
+        };
+        let __stamp_raw: jni::objects::JByteArray = __stamp_bytes.into();
         let stamp = JByteArray_to_Stamp_2fc9bd18(env, &__stamp_raw)?;
         let __id_jobj: jni::objects::JObject = env
             .get_field(v, "id", "[B")
@@ -946,9 +960,17 @@ pub(crate) unsafe fn JObject_to_BlobValue_89b5dab7<'env, 'v>(
             >>::from(format!("BlobValue.id: {}", e)))?;
         let __id_raw: jni::objects::JByteArray = __id_jobj.into();
         let id = JByteArray_to_Vec_u8_7936d5de(env, &__id_raw)?;
+        let __chunks_raw: jni::objects::JObject = env
+            .get_field(v, "chunks", "Ljava/util/List;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("BlobValue.chunks: {}", e)))?;
+        let chunks = JObject_to_Vec_Vec_u8_43404875(env, &__chunks_raw)?;
         perftest_flat::BlobValue {
             stamp,
             id,
+            chunks,
         }
     })
 }
@@ -2419,6 +2441,45 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
                 env,
                 &__elem_wire,
             )?;
+            __out.push(__elem);
+        }
+        __out
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_Vec_Vec_u8_43404875<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<Vec<Vec<u8>>, __JniErr> {
+    Ok({
+        let __list = jni::objects::JList::from_env(env, v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        let mut __it = __list
+            .iter(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
+        let mut __out: Vec<Vec<u8>> = Vec::new();
+        while let Some(__obj) = __it
+            .next(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-next: {}", e)))?
+        {
+            let __elem_wire: jni::objects::JByteArray = __obj.into();
+            let __elem: Vec<u8> = JByteArray_to_Vec_u8_7936d5de(env, &__elem_wire)?;
             __out.push(__elem);
         }
         __out
@@ -6986,6 +7047,43 @@ pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Vec_Vec_u8_to_JObject_43404875<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Vec<Vec<u8>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let __list_obj = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
+        let __list = jni::objects::JList::from_env(env, &__list_obj)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        for __elem in v.into_iter() {
+            let __elem_wire = Vec_u8_to_JByteArray_7936d5de(env, __elem)?;
+            let __elem_obj: jni::objects::JObject = __elem_wire.into();
+            __list
+                .add(env, &__elem_obj)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Vec<_>: list-add: {}", e)))?;
+        }
+        __list_obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Vec_u8_to_JByteArray_7936d5de<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<u8>,
@@ -9745,11 +9843,54 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let value = match JObject_to_BlobValue_89b5dab7(&mut env, &value) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::blob_value_echo(value);
+    match BlobValue_to_JObject_89b5dab7(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     secs: jni::sys::jlong,
     id: jni::objects::JByteArray<'a>,
+    chunks: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
@@ -9784,7 +9925,21 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __out = perftest_flat::blob_value_new(secs, id);
+    let chunks = match JObject_to_Vec_Vec_u8_43404875(&mut env, &chunks) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::blob_value_new(secs, id, chunks);
     match BlobValue_to_JObject_89b5dab7(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {

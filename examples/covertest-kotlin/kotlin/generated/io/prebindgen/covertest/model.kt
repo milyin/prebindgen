@@ -228,24 +228,25 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
  * (`Timestamp(ntp64, id)`), and it is a different emitted form from the
  * array-first one.
  */
-public data class BlobValue(val stamp: Stamp, val id: ByteArray) {
+public data class BlobValue(val stamp: Stamp, val id: ByteArray, val chunks: List<ByteArray>) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is BlobValue) return false
-        return stamp == other.stamp && id.contentEquals(other.id)
+        return stamp == other.stamp && id.contentEquals(other.id) && (chunks.size == other.chunks.size && chunks.indices.all { __i -> val __x = chunks[__i]; val __y = other.chunks[__i]; __x.contentEquals(__y) })
     }
 
     override fun hashCode(): Int {
         var result = stamp.hashCode()
         result = 31 * result + id.contentHashCode()
+        result = 31 * result + (chunks.fold(1) { __acc, __e -> 31 * __acc + __e.contentHashCode() })
         return result
     }
 
-    override fun toString(): String = "BlobValue(stamp=$stamp, id=${id.contentToString()})"
+    override fun toString(): String = "BlobValue(stamp=${stamp}, id=${id.contentToString()}, chunks=${chunks.joinToString(", ", "[", "]") { __e -> "${__e.contentToString()}" }})"
 
     public companion object {
         @JvmStatic
-        public fun fromParts(stamp: ByteArray, id: ByteArray): BlobValue = BlobValue(Stamp(stamp), id)
+        public fun fromParts(stamp: ByteArray, id: ByteArray, chunks: List<ByteArray>): BlobValue = BlobValue(Stamp(stamp), id, chunks)
     }
 }
 
@@ -1583,9 +1584,30 @@ public fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong> {
 }
 
 /** Build a [`BlobValue`] (its equality is asserted from Kotlin). */
-public fun blobValueNew(secs: Long, id: ByteArray, onError: JniErrorHandler<BlobValue>): BlobValue {
+public fun blobValueNew(
+    secs: Long,
+    id: ByteArray,
+    chunks: List<ByteArray>,
+    onError: JniErrorHandler<BlobValue>,
+): BlobValue {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.blobValueNew(secs, id, __bcap)
+    val __ret = CovNative.blobValueNew(secs, id, chunks, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Round-trip a [`BlobValue`] through the WHOLE-OBJECT input decoder.
+ *
+ * The binding marks this class `.jobject_input()`, so the decoder reads each
+ * field off the Kotlin object by JVM descriptor. A value-blob field's slot is
+ * the wrapper class (it stopped being `@JvmInline`-erased when it gained value
+ * equality), which the old `[B` lookup got wrong — `NoSuchFieldError` on the
+ * first decode.
+ */
+public fun blobValueEcho(value: BlobValue, onError: JniErrorHandler<BlobValue>): BlobValue {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.blobValueEcho(value, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
