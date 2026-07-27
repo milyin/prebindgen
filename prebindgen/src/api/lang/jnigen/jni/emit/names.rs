@@ -45,9 +45,9 @@ pub(crate) struct QualifyEmittedTypes<'a> {
     /// Bare type name → the module it is reachable under (the item's origin
     /// crate, or the registry's default module).
     pub(crate) source_names: &'a std::collections::HashMap<String, syn::Path>,
-    /// Bare **const** name → the same. Applied ONLY inside an array length —
-    /// see [`QualifyConstPaths`].
-    pub(crate) const_names: &'a std::collections::HashMap<String, syn::Path>,
+    /// Every indexed source name (consts, structs, enums) → the same. Applied
+    /// ONLY inside an array length — see [`QualifyLengthPaths`].
+    pub(crate) length_names: &'a std::collections::HashMap<String, syn::Path>,
 }
 
 impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
@@ -75,11 +75,10 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     /// length cannot contain a local, which is what makes this scope safe.
     fn visit_type_array_mut(&mut self, arr: &mut syn::TypeArray) {
         syn::visit_mut::visit_type_mut(self, &mut arr.elem);
-        let mut consts = QualifyConstPaths {
-            const_names: self.const_names,
-            source_names: self.source_names,
+        let mut lengths = QualifyLengthPaths {
+            length_names: self.length_names,
         };
-        syn::visit_mut::visit_expr_mut(&mut consts, &mut arr.len);
+        syn::visit_mut::visit_expr_mut(&mut lengths, &mut arr.len);
     }
 }
 
@@ -90,30 +89,27 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
 /// A length is an ordinary Rust const expression, so it reaches the source
 /// crate two ways and both need the origin module prefixed:
 ///
-/// * a **free const**, `[u8; MAX]` — one segment, looked up in `const_names`;
-/// * an **associated const**, `[u8; Holder::N]` — the leading segment is a
-///   TYPE, looked up in `source_names`. Only that segment is rewritten; the
-///   rest of the path (`::N`, and any further associated item) is relative to
-///   it and must be left alone.
-struct QualifyConstPaths<'a> {
-    const_names: &'a std::collections::HashMap<String, syn::Path>,
-    source_names: &'a std::collections::HashMap<String, syn::Path>,
+/// * a **free const**, `[u8; MAX]` — the whole path is the name;
+/// * an **associated const**, `[u8; Holder::N]` — the LEADING segment is the
+///   owning type. Only that segment is rewritten; the rest (`::N`, and any
+///   further associated item) is relative to it and must be left alone.
+///
+/// Both look up the same registry-wide map, so an owner that exists only as a
+/// compile-time namespace does not have to be declared to the binding: forcing
+/// that would emit a dead Kotlin class purely to make the generated Rust
+/// compile.
+struct QualifyLengthPaths<'a> {
+    length_names: &'a std::collections::HashMap<String, syn::Path>,
 }
 
-impl syn::visit_mut::VisitMut for QualifyConstPaths<'_> {
+impl syn::visit_mut::VisitMut for QualifyLengthPaths<'_> {
     fn visit_expr_path_mut(&mut self, ep: &mut syn::ExprPath) {
         if ep.qself.is_none() && ep.path.leading_colon.is_none() {
-            // The map to consult is decided by shape: one segment names a const
-            // directly, more than one means the leading segment is the type
-            // that owns the const.
-            let head = &ep.path.segments[0];
-            let ident = head.ident.to_string();
-            let module = if ep.path.segments.len() == 1 {
-                self.const_names.get(&ident)
-            } else {
-                self.source_names.get(&ident)
-            };
-            if let Some(module) = module {
+            // One segment names the const itself; more than one means the
+            // leading segment is the type that owns it. Either way it is the
+            // leading segment that carries the origin module.
+            let ident = ep.path.segments[0].ident.to_string();
+            if let Some(module) = self.length_names.get(&ident) {
                 let mut qualified = module.clone();
                 qualified.segments.extend(ep.path.segments.iter().cloned());
                 ep.path = qualified;

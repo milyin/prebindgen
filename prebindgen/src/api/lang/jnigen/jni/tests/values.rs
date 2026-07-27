@@ -1458,9 +1458,10 @@ fn array_length_const_is_qualified_without_touching_locals() {
         )),
         loc.clone(),
     ));
-    // A type owning an ASSOCIATED const, used as the other length below. The
-    // path is `Holder::N` — two segments, so the leading one is a TYPE and is
-    // qualified from `source_names`, not from the free-const map.
+    // A type owning an ASSOCIATED const, used as the other length below. It is
+    // deliberately NEVER declared to JniGen: it is only the Rust namespace for
+    // a compile-time length, not a boundary type, so qualification must not
+    // require a Kotlin class to exist for it.
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Holder {
@@ -1490,7 +1491,6 @@ fn array_length_const_is_qualified_without_touching_locals() {
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("blob")
             .class(crate::data_class!(Blob))
-            .class(crate::data_class!(Holder))
             .fun(crate::fun!(blob_echo)),
     );
     let dir = unique_test_dir("jnigen_array_len_const");
@@ -1514,9 +1514,11 @@ fn array_length_const_is_qualified_without_touching_locals() {
 
     // An ASSOCIATED const qualifies its leading TYPE segment and leaves the
     // rest of the path relative to it — `myflat::Holder::N`, never
-    // `myflat::Holder::myflat::N`. Asserted at the two CODE positions (return
-    // type and param type); the bare spelling legitimately survives inside the
-    // decode's diagnostic string, which names the type as the source wrote it.
+    // `myflat::Holder::myflat::N`. `Holder` is UNDECLARED, so this also pins
+    // that qualification reads the registry rather than the declared surface.
+    // Asserted at the two CODE positions (return type and param type); the bare
+    // spelling legitimately survives inside the decode's diagnostic string,
+    // which names the type as the source wrote it.
     assert!(rc.contains("Result<[u8;myflat::Holder::N]"), "{rust}");
     assert!(rc.contains("v:[u8;myflat::Holder::N]"), "{rust}");
     assert!(!rc.contains("Result<[u8;Holder::N]"), "{rust}");

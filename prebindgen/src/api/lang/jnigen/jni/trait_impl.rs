@@ -372,21 +372,34 @@ impl JniGen {
     /// site having to remember to qualify.
     fn qualify_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
         let source_names = self.emitted_source_type_names(registry);
-        // `#[prebindgen]` consts, for the expression-path pass — a const can
-        // sit inside a type as an array length (`[u8; MAX_SIZE]`).
-        let const_names: std::collections::HashMap<String, syn::Path> = registry
-            .consts
-            .keys()
-            .map(|ident| {
-                let module = registry
-                    .origin_module(ident)
-                    .unwrap_or_else(|| self.default_module(registry));
-                (ident.to_string(), module)
-            })
-            .collect();
+        // Names reachable from an array LENGTH (`[u8; MAX]`, `[u8; Holder::N]`).
+        //
+        // Registry-wide, NOT the declared-surface `source_names`: a length's
+        // owner is a compile-time namespace, not a boundary type. Requiring it
+        // to be declared would force an otherwise-unused Kotlin class into
+        // existence just to make the generated Rust compile, and would be
+        // asymmetric with consts, which qualify whether or not JniGen declared
+        // them.
+        let mut length_names: std::collections::HashMap<String, syn::Path> =
+            std::collections::HashMap::new();
+        let mut add_length_name = |ident: &syn::Ident| {
+            let module = registry
+                .origin_module(ident)
+                .unwrap_or_else(|| self.default_module(registry));
+            length_names.insert(ident.to_string(), module);
+        };
+        for ident in registry.consts.keys() {
+            add_length_name(ident);
+        }
+        for ident in registry.structs.keys() {
+            add_length_name(ident);
+        }
+        for ident in registry.enums.keys() {
+            add_length_name(ident);
+        }
         let mut visitor = QualifyEmittedTypes {
             source_names: &source_names,
-            const_names: &const_names,
+            length_names: &length_names,
         };
         syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
     }
