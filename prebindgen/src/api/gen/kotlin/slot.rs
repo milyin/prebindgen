@@ -214,19 +214,29 @@ impl KtAnnotation {
     }
 }
 
-/// Annotation text of **literal origin**.
+/// Annotation text that is **intended** to be of literal origin.
 ///
-/// The private field is the point: narrowing to `&'static str` would not be
-/// enough, since `String::leak` and `Box::leak` produce `&'static str` from
-/// dynamically built text — the type would prove lifetime, not literal origin.
-/// Constructing this through [`kt_annotation_text!`](crate::kt_annotation_text)
-/// makes literal origin a **compile-time** property, because `macro_rules!`'s
-/// `literal` fragment cannot match an expression.
+/// Two constructors reach it, and neither makes literal origin a property of
+/// the *type*:
 ///
-/// [`Self::from_legacy_string`] is the one remaining hole, and it exists only
-/// so 5A can change the field type without touching call sites. It is counted
-/// by a test and deleted by #199 — the same enumerate-then-delete contract
-/// `KtExpr::Raw` is under.
+/// - [`kt_annotation_text!`] takes a `literal` fragment, so **its own callers**
+///   cannot pass `String::leak(…)` — the macro is where the guarantee lives.
+/// - [`Self::__from_literal`] is what the macro expands to, and on its own it
+///   accepts any `&'static str`, leaked included. Narrowing the payload to
+///   `&'static str` was never enough for exactly that reason: the type proves
+///   lifetime, not origin.
+/// - [`Self::from_legacy_string`] is the 5A bridge that let the field type
+///   change without touching call sites, and takes an owned `String`.
+///
+/// So the guarantee here is **audited, not typed**. Both direct constructors
+/// are crate-internal (`api::gen` is `pub(crate)`), which bounds the audit to
+/// this crate, and a test pins the call sites of each so neither can grow
+/// unnoticed. #199 drives both to zero and deletes them — the same
+/// enumerate-then-delete contract `KtExpr::Raw` is under.
+///
+/// Sealing `__from_literal` properly would need a witness type the macro can
+/// mint and nothing else can; that is worth doing when this type outlives 5B,
+/// and pointless if #199 deletes it first.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StaticAnnotationText(std::borrow::Cow<'static, str>);
 
@@ -411,9 +421,12 @@ impl KtAccessor {
         };
         match &self.body {
             AccessorBody::Legacy(c) => c.clone(),
+            // `render_expr_in_scope`, like every other typed slot: a getter or
+            // setter expression referencing a constructor parameter or the
+            // setter's own binder would otherwise be unbound.
             AccessorBody::Expr(a) => Code::new().line(format!(
                 "{head} = {}",
-                render_expr(&a.arena, &a.tree, imports)
+                render_expr_in_scope(&a.arena, &a.scope, &a.tree, imports)
             )),
             AccessorBody::Block(a) => {
                 let mut code = Code::new();

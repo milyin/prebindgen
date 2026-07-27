@@ -51,17 +51,42 @@ use std::collections::{BTreeSet, HashMap};
 
 use super::types::KtType;
 
-/// Identity of a binder within one [`ExprArena`].
-///
-/// Never compared across arenas — [`ExprArena::graft`] remaps rather than
-/// trusting that two arenas agree.
+/// Identity of the arena a [`BindingId`] belongs to. Globally generative, so
+/// two arenas are always distinguishable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BindingId(u32);
+pub struct ArenaId(u64);
+
+impl ArenaId {
+    fn next() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        ArenaId(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+/// Identity of a binder: **which arena** it came from, plus its index there.
+///
+/// The arena tag is what makes a cross-arena mistake detectable rather than
+/// silent. Indices still start at zero per arena — so two independently built
+/// trees still collide on `index`, and [`ExprArena::graft`]'s alpha-remap stays
+/// load-bearing and exercised — but a `Local` from another arena can no longer
+/// resolve against a host binder that happens to share its index. Composition
+/// ([`fill_hole`], [`substitute`], [`Ast::in_scope`]) asserts provenance, so
+/// the failure is a named panic at the seam instead of silent capture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BindingId {
+    arena: ArenaId,
+    index: u32,
+}
 
 impl BindingId {
-    /// The raw index, for diagnostics and test assertions.
+    /// The raw index within its arena, for diagnostics and test assertions.
     pub fn index(self) -> u32 {
-        self.0
+        self.index
+    }
+    /// The arena this binder belongs to.
+    pub fn arena(self) -> ArenaId {
+        self.arena
     }
 }
 
@@ -93,7 +118,9 @@ impl NameHint {
             .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
             .collect();
         let cleaned = cleaned.trim_start_matches(|c: char| c.is_ascii_digit());
-        NameHint(if cleaned.is_empty() {
+        // An all-underscore hint would render as Kotlin's discard placeholder,
+        // which is not a referenceable binder.
+        NameHint(if cleaned.is_empty() || cleaned.chars().all(|c| c == '_') {
             "tmp".to_string()
         } else {
             cleaned.to_string()
@@ -216,6 +243,12 @@ impl KtName {
             // which for a `Fixed` binder is exactly what must not happen.
             if is_hard_keyword(seg) {
                 return reject("segment is a Kotlin hard keyword");
+            }
+            // Kotlin treats a bare `_` as an ignoring placeholder, not an
+            // identifier — `val _ = x` is a discard and `_` is not referenceable.
+            // `_x` and `x_` are fine; only an all-underscore segment is not.
+            if seg.chars().all(|c| c == '_') {
+                return reject("segment is only underscores, which Kotlin reads as a placeholder");
             }
         }
         Ok(KtName(s))
@@ -351,14 +384,50 @@ pub enum KtPattern {
 ///
 /// Ids start at zero per arena, so two independently built arenas collide —
 /// see the module docs for why that is the point.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ExprArena {
+    id: ArenaId,
     binders: Vec<Binder>,
+}
+
+impl Default for ExprArena {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExprArena {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            id: ArenaId::next(),
+            binders: Vec::new(),
+        }
+    }
+
+    /// This arena's identity.
+    pub fn id(&self) -> ArenaId {
+        self.id
+    }
+
+    /// Panic unless every `Local` in `expr` belongs to this arena.
+    ///
+    /// The guard behind every composition entry point. Without it, inserting a
+    /// tree built elsewhere lets `Local(index 0)` resolve against *this*
+    /// arena's binder 0 — the structural capture `graft` exists to prevent,
+    /// arriving through `fill_hole` or `substitute` instead.
+    pub fn assert_owns(&self, expr: &KtExpr, what: &str) {
+        map_expr(expr, &mut |e| {
+            if let KtExpr::Local(id) = e {
+                assert!(
+                    id.arena == self.id,
+                    "{what}: `Local` from arena {:?} used with arena {:?} — graft the tree in \
+                     with `ExprArena::graft`, which alpha-remaps, instead of cloning it across",
+                    id.arena,
+                    self.id
+                );
+            }
+            None
+        });
     }
 
     /// A binder whose spelling is **public API** and must survive rendering
@@ -374,14 +443,23 @@ impl ExprArena {
     }
 
     fn push(&mut self, spelling: Spelling) -> BindingId {
-        let id = BindingId(self.binders.len() as u32);
+        let id = BindingId {
+            arena: self.id,
+            index: self.binders.len() as u32,
+        };
         self.binders.push(Binder { id, spelling });
         id
     }
 
-    /// The binder behind an id.
+    /// The binder behind an id. Panics if the id is from another arena.
     pub fn binder(&self, id: BindingId) -> &Binder {
-        &self.binders[id.0 as usize]
+        assert!(
+            id.arena == self.id,
+            "BindingId from arena {:?} looked up in arena {:?}",
+            id.arena,
+            self.id
+        );
+        &self.binders[id.index as usize]
     }
 
     /// Number of binders — the count a remap test compares against.
@@ -500,7 +578,7 @@ impl ExprArena {
                 panic!(
                     "ExprArena::graft: `Local({})` refers to a binder the grafted tree does not \
                      introduce — it was built against a scope that is not being grafted with it",
-                    id.0
+                    id.index
                 )
             })
         };
@@ -660,7 +738,12 @@ pub fn map_stmt(stmt: &KtStmt, f: &mut dyn FnMut(&KtExpr) -> Option<KtExpr>) -> 
 /// (`(<base>.field as? Reading.Exact)?.v0 ?: 0L`) is just a tree with a hole,
 /// and filling it is a rewrite rather than three string concatenations that
 /// each have to remember the other two.
-pub fn fill_hole(template: &KtExpr, value: &KtExpr) -> KtExpr {
+pub fn fill_hole(arena: &ExprArena, template: &KtExpr, value: &KtExpr) -> KtExpr {
+    // Both sides must belong to `arena`: filling a hole with a tree built
+    // elsewhere would let its `Local`s resolve against this arena's binders.
+    // Cross-arena composition goes through `ExprArena::graft`, which remaps.
+    arena.assert_owns(template, "fill_hole(template)");
+    arena.assert_owns(value, "fill_hole(value)");
     map_expr(template, &mut |e| match e {
         KtExpr::Hole => Some(value.clone()),
         _ => None,
@@ -686,7 +769,13 @@ pub fn has_hole(expr: &KtExpr) -> bool {
 /// binder that happens to *print* the same name cannot rebind it — the renderer
 /// allocates the printed names afterwards, and it knows which id each one
 /// belongs to.
-pub fn substitute(expr: &KtExpr, target: BindingId, value: &KtExpr) -> KtExpr {
+pub fn substitute(arena: &ExprArena, expr: &KtExpr, target: BindingId, value: &KtExpr) -> KtExpr {
+    arena.assert_owns(expr, "substitute(expr)");
+    arena.assert_owns(value, "substitute(value)");
+    assert!(
+        target.arena == arena.id(),
+        "substitute: target binder is from another arena"
+    );
     map_expr(expr, &mut |e| match e {
         KtExpr::Local(id) if *id == target => Some(value.clone()),
         _ => None,

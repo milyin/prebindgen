@@ -319,14 +319,18 @@ fn fill_hole_replaces_the_base_in_place() {
         ),
         (KtExpr::this(), "(this.field as? Exact)?.v0 ?: 0L"),
     ] {
-        let filled = fill_hole(&template, &base);
+        let filled = fill_hole(&arena, &template, &base);
         assert!(!has_hole(&filled));
         assert_eq!(r(&arena, &filled), want);
     }
 
     // A base that is itself compound gets its own parentheses from precedence,
     // not from the template author remembering to add them.
-    let filled = fill_hole(&template, &KtExpr::name("a").elvis(KtExpr::name("b")));
+    let filled = fill_hole(
+        &arena,
+        &template,
+        &KtExpr::name("a").elvis(KtExpr::name("b")),
+    );
     assert_eq!(r(&arena, &filled), "((a ?: b).field as? Exact)?.v0 ?: 0L");
 }
 
@@ -358,7 +362,7 @@ fn substituting_a_local_into_a_same_printed_scope_does_not_capture() {
     let value = KtExpr::free_call("use", [KtExpr::local(outer)]);
     // …and is inserted under a lambda that binds another binder also hinted `e`.
     let template = KtExpr::lambda1([inner], KtExpr::local(target));
-    let substituted = substitute(&template, target, &value);
+    let substituted = substitute(&arena, &template, target, &value);
     let whole = KtExpr::lambda1([outer], substituted);
 
     let rendered = r(&arena, &whole);
@@ -377,7 +381,7 @@ fn substituting_a_free_name_into_a_colliding_scope_does_not_capture() {
 
     let value = KtExpr::free_call("use", [KtExpr::name("config")]);
     let template = KtExpr::lambda1([inner], KtExpr::local(target));
-    let whole = substitute(&template, target, &value);
+    let whole = substitute(&arena, &template, target, &value);
 
     // The binder moved aside; the free `config` still reads as itself.
     assert_eq!(r(&arena, &whole), "{ config2 -> use(config) }");
@@ -668,6 +672,86 @@ fn literals_cover_their_whole_value_domain() {
     }
 }
 
+// ── cross-arena composition ─────────────────────────────────────────────
+
+/// `fill_hole` and `substitute` clone trees, so a tree built in **another**
+/// arena would bring its `Local`s along — and because indices start at zero per
+/// arena, `Local(index 0)` would resolve against the host's binder 0. That is
+/// the structural capture `graft` exists to prevent, arriving through the
+/// composition functions instead.
+///
+/// `BindingId` now carries its arena, so the mismatch is detected at the seam
+/// rather than silently rendering the wrong binder.
+#[test]
+#[should_panic(expected = "fill_hole(value)")]
+fn filling_a_hole_with_a_foreign_tree_is_rejected() {
+    let mut host = ExprArena::new();
+    let host_b = host.bind_fresh("v");
+    let mut guest = ExprArena::new();
+    let guest_b = guest.bind_fresh("v");
+    // Both are index 0 — the collision that used to resolve silently.
+    assert_eq!(host_b.index(), guest_b.index());
+
+    let template = KtExpr::lambda1([host_b], KtExpr::Hole);
+    let _ = fill_hole(&host, &template, &KtExpr::local(guest_b));
+}
+
+#[test]
+#[should_panic(expected = "substitute(value)")]
+fn substituting_a_foreign_tree_is_rejected() {
+    let mut host = ExprArena::new();
+    let target = host.bind_fresh("slot");
+    let mut guest = ExprArena::new();
+    let guest_b = guest.bind_fresh("v");
+    let _ = substitute(
+        &host,
+        &KtExpr::local(target),
+        target,
+        &KtExpr::local(guest_b),
+    );
+}
+
+/// The supported way across is `graft`, which alpha-remaps — and after it the
+/// composition is accepted, because the tree now belongs to the host arena.
+#[test]
+fn grafting_first_makes_cross_arena_composition_legal() {
+    let mut host = ExprArena::new();
+    let host_b = host.bind_fresh("v");
+    let mut guest = ExprArena::new();
+    let guest_b = guest.bind_fresh("v");
+    let guest_tree = KtExpr::lambda1([guest_b], KtExpr::local(guest_b));
+
+    let grafted = host.graft(&guest, &guest_tree);
+    let template = KtExpr::lambda1([host_b], KtExpr::free_call("f", [KtExpr::Hole]));
+    let filled = fill_hole(&host, &template, &grafted);
+    assert_eq!(r(&host, &filled), "{ v -> f({ v2 -> v2 }) }");
+}
+
+/// A binder looked up in the wrong arena is a named panic, not an index into
+/// someone else's `Vec`.
+#[test]
+#[should_panic(expected = "looked up in arena")]
+fn a_foreign_binder_lookup_is_rejected() {
+    let host = ExprArena::new();
+    let mut guest = ExprArena::new();
+    let guest_b = guest.bind_fresh("v");
+    let _ = host.binder(guest_b);
+}
+
+/// `Ast::in_scope` permits the same mismatched arena/id pairing, so it is
+/// guarded at render time by the binder lookup above.
+#[test]
+#[should_panic(expected = "looked up in arena")]
+fn a_slot_scope_from_another_arena_is_rejected() {
+    let host = ExprArena::new();
+    let mut guest = ExprArena::new();
+    let foreign = guest.bind_fresh("v");
+    let slot: ExprSlot<KtExpr> =
+        ExprSlot::ast_in_scope(host, vec![foreign], KtExpr::local(foreign));
+    let mut imports = ImportSet::default();
+    let _ = slot.render_inline(&mut imports);
+}
+
 // ── the slot bridges ────────────────────────────────────────────────────
 
 /// **No expression position can hold a legacy and a typed value
@@ -725,6 +809,49 @@ fn accessors_are_structured_declarations() {
     assert_eq!(out.trim(), "get() = { v -> v }");
 }
 
+/// An **expression** accessor keeps its scope, like the block arm and every
+/// other typed slot. A getter referencing a constructor parameter would
+/// otherwise be unbound.
+#[test]
+fn an_expression_accessor_can_reference_its_enclosing_binders() {
+    let mut arena = ExprArena::new();
+    let ctor_param = arena.bind_fixed(KtName::expect("initialPtr"));
+    let acc = KtAccessor {
+        kind: crate::api::gen::kotlin::AccessorKind::Get,
+        body: crate::api::gen::kotlin::slot::AccessorBody::Expr(
+            crate::api::gen::kotlin::slot::Ast::in_scope(
+                arena,
+                vec![ctor_param],
+                KtExpr::local(ctor_param).field("value"),
+            ),
+        ),
+    };
+    let mut imports = ImportSet::default();
+    let mut out = String::new();
+    acc.render_lines(&mut imports).render(0, &mut out);
+    assert_eq!(out.trim(), "get() = initialPtr.value");
+}
+
+/// Kotlin reads a bare `_` as an ignoring placeholder, not an identifier — it
+/// is not referenceable, so it may be neither a `KtName` nor a rendered binder.
+#[test]
+fn underscore_is_not_an_identifier() {
+    for bad in ["_", "__", "___"] {
+        assert!(KtName::new(bad).is_err(), "`{bad}` is a placeholder");
+    }
+    // …but an underscore *within* a name is ordinary.
+    for ok in ["_x", "x_", "a_b", "_1"] {
+        assert!(KtName::new(ok).is_ok(), "`{ok}` should be accepted");
+    }
+    // A hint that would render as the placeholder falls back instead.
+    let mut arena = ExprArena::new();
+    let b = arena.bind_fresh("_");
+    assert_eq!(
+        r(&arena, &KtExpr::lambda1([b], KtExpr::local(b))),
+        "{ tmp -> tmp }"
+    );
+}
+
 /// Annotation arguments are expressions, and the typed form renders them
 /// through the same escaping the rest of the tier uses.
 #[test]
@@ -778,6 +905,49 @@ fn legacy_annotation_bridge_has_exactly_one_caller() {
     ] {
         assert!(!other.contains("from_legacy_string"));
     }
+}
+
+/// `StaticAnnotationText`'s literal-origin guarantee is **audited, not typed**:
+/// `__from_literal` accepts any `&'static str`, leaked included, so the macro —
+/// not the type — is where the guarantee lives for the macro's own callers.
+///
+/// Both direct constructors are crate-internal, which bounds the audit to this
+/// crate, and this pins their call sites so neither can grow unnoticed. #199
+/// drives both to zero and deletes them.
+#[test]
+fn static_annotation_text_constructors_are_pinned() {
+    let slot = include_str!("../slot.rs");
+    let render = include_str!("../render.rs");
+    let model = include_str!("../model.rs");
+
+    // `__from_literal`: the macro body, plus the one `JvmInline` site the
+    // value-class renderer injects.
+    let macro_body = code_without_comments(slot)
+        .matches("StaticAnnotationText::__from_literal(")
+        .count();
+    assert_eq!(
+        macro_body, 1,
+        "only the macro should expand to `__from_literal`"
+    );
+    let direct = code_without_comments(render)
+        .matches("StaticAnnotationText::__from_literal(")
+        .count();
+    assert_eq!(
+        direct, 1,
+        "render.rs should have exactly one direct `__from_literal` (the injected `JvmInline`); \
+         every new one is a #199 work item"
+    );
+
+    // `from_legacy_string`: the single `legacy_annotation` helper in the model.
+    assert_eq!(
+        code_without_comments(model)
+            .matches("StaticAnnotationText::from_legacy_string(")
+            .count(),
+        1
+    );
+    // `slot.rs` holds the definition, so only other modules are scanned for
+    // uses.
+    assert!(!code_without_comments(render).contains("from_legacy_string("));
 }
 
 /// `KtExpr::Raw` exists only if migration needs it, and **enumerating its
