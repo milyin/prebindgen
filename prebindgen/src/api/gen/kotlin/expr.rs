@@ -322,7 +322,14 @@ pub enum KtExpr {
         /// `?.name(…)`.
         safe: bool,
         /// A trailing lambda argument, rendered outside the parentheses.
-        trailing_lambda: Option<Box<KtExpr>>,
+        ///
+        /// Typed as a [`KtLambda`], not a `KtExpr`: Kotlin's trailing-argument
+        /// syntax accepts only a lambda, so
+        /// `consume().with_trailing_lambda(int(1))` would render `consume() 1`.
+        /// Constraining the field means direct variant construction cannot
+        /// produce that either, which an assert in the helper alone would not
+        /// prevent.
+        trailing_lambda: Option<Box<KtLambda>>,
     },
     /// `expr as ty` / `expr as? ty`.
     As {
@@ -333,10 +340,7 @@ pub enum KtExpr {
     /// `lhs ?: rhs`.
     Elvis(Box<KtExpr>, Box<KtExpr>),
     /// `{ params -> body }`.
-    Lambda {
-        params: Vec<BindingId>,
-        body: Vec<KtStmt>,
-    },
+    Lambda(KtLambda),
     /// `when (subject) { arms }`.
     When {
         subject: Box<KtExpr>,
@@ -351,6 +355,33 @@ pub enum KtExpr {
     /// TEMPORARY escape hatch. Crate-private, every construction site tracked
     /// in #199, whose exit deletes this variant.
     Raw(String),
+}
+
+/// A lambda: its parameter binders and its body.
+///
+/// A type of its own so Kotlin's **trailing-argument** position can be typed as
+/// one. `Call::trailing_lambda` used to be an `Option<Box<KtExpr>>`, which let
+/// `consume().with_trailing_lambda(int(1))` render `consume() 1` — invalid
+/// Kotlin that only an assert would have caught, and only on the path through
+/// the helper.
+#[derive(Clone, Debug, PartialEq)]
+pub struct KtLambda {
+    pub params: Vec<BindingId>,
+    pub body: Vec<KtStmt>,
+}
+
+impl KtLambda {
+    pub fn new(params: impl IntoIterator<Item = BindingId>, body: Vec<KtStmt>) -> Self {
+        Self {
+            params: params.into_iter().collect(),
+            body,
+        }
+    }
+
+    /// A single-expression body.
+    pub fn expr(params: impl IntoIterator<Item = BindingId>, body: KtExpr) -> Self {
+        Self::new(params, vec![KtStmt::Expr(body)])
+    }
 }
 
 /// A statement inside a lambda or block body.
@@ -534,15 +565,7 @@ impl ExprArena {
         map: &mut HashMap<BindingId, BindingId>,
     ) {
         match expr {
-            KtExpr::Lambda { params, body } => {
-                for p in params {
-                    let fresh = self.push(from.binder(*p).spelling.clone());
-                    map.insert(*p, fresh);
-                }
-                for s in body {
-                    self.remap_stmt_introductions(from, s, map);
-                }
-            }
+            KtExpr::Lambda(l) => self.remap_lambda_introductions(from, l, map),
             KtExpr::Field { recv, .. } => self.remap_introductions(from, recv, map),
             KtExpr::Call {
                 recv,
@@ -557,7 +580,7 @@ impl ExprArena {
                     self.remap_introductions(from, a, map);
                 }
                 if let Some(l) = trailing_lambda {
-                    self.remap_introductions(from, l, map);
+                    self.remap_lambda_introductions(from, l, map);
                 }
             }
             KtExpr::As { expr, .. } => self.remap_introductions(from, expr, map),
@@ -580,6 +603,21 @@ impl ExprArena {
             | KtExpr::Literal(_)
             | KtExpr::Hole
             | KtExpr::Raw(_) => {}
+        }
+    }
+
+    fn remap_lambda_introductions(
+        &mut self,
+        from: &ExprArena,
+        l: &KtLambda,
+        map: &mut HashMap<BindingId, BindingId>,
+    ) {
+        for p in &l.params {
+            let fresh = self.push(from.binder(*p).spelling.clone());
+            map.insert(*p, fresh);
+        }
+        for s in &l.body {
+            self.remap_stmt_introductions(from, s, map);
         }
     }
 
@@ -640,7 +678,7 @@ impl ExprArena {
                 safe: *safe,
                 trailing_lambda: trailing_lambda
                     .as_ref()
-                    .map(|l| Box::new(self.rewrite_ids(l, map))),
+                    .map(|l| Box::new(self.rewrite_lambda_ids(l, map))),
             },
             KtExpr::As { expr, ty, safe } => KtExpr::As {
                 expr: Box::new(self.rewrite_ids(expr, map)),
@@ -651,10 +689,14 @@ impl ExprArena {
                 Box::new(self.rewrite_ids(a, map)),
                 Box::new(self.rewrite_ids(b, map)),
             ),
-            KtExpr::Lambda { params, body } => KtExpr::Lambda {
-                params: params.iter().map(lookup).collect(),
-                body: body.iter().map(|s| self.rewrite_stmt_ids(s, map)).collect(),
-            },
+            KtExpr::Lambda(l) => KtExpr::Lambda(KtLambda {
+                params: l.params.iter().map(lookup).collect(),
+                body: l
+                    .body
+                    .iter()
+                    .map(|s| self.rewrite_stmt_ids(s, map))
+                    .collect(),
+            }),
             KtExpr::When { subject, arms } => KtExpr::When {
                 subject: Box::new(self.rewrite_ids(subject, map)),
                 arms: arms
@@ -668,6 +710,21 @@ impl ExprArena {
                     })
                     .collect(),
             },
+        }
+    }
+
+    fn rewrite_lambda_ids(&self, l: &KtLambda, map: &HashMap<BindingId, BindingId>) -> KtLambda {
+        let lookup = |id: &BindingId| {
+            *map.get(id)
+                .expect("a lambda's own binders are introduced by its tree")
+        };
+        KtLambda {
+            params: l.params.iter().map(lookup).collect(),
+            body: l
+                .body
+                .iter()
+                .map(|s| self.rewrite_stmt_ids(s, map))
+                .collect(),
         }
     }
 
@@ -721,7 +778,7 @@ pub fn map_expr(expr: &KtExpr, f: &mut dyn FnMut(&KtExpr) -> Option<KtExpr>) -> 
             name: name.clone(),
             args: args.iter().map(|a| map_expr(a, f)).collect(),
             safe: *safe,
-            trailing_lambda: trailing_lambda.as_ref().map(|l| Box::new(map_expr(l, f))),
+            trailing_lambda: trailing_lambda.as_ref().map(|l| Box::new(map_lambda(l, f))),
         },
         KtExpr::As { expr, ty, safe } => KtExpr::As {
             expr: Box::new(map_expr(expr, f)),
@@ -729,10 +786,7 @@ pub fn map_expr(expr: &KtExpr, f: &mut dyn FnMut(&KtExpr) -> Option<KtExpr>) -> 
             safe: *safe,
         },
         KtExpr::Elvis(a, b) => KtExpr::Elvis(Box::new(map_expr(a, f)), Box::new(map_expr(b, f))),
-        KtExpr::Lambda { params, body } => KtExpr::Lambda {
-            params: params.clone(),
-            body: body.iter().map(|s| map_stmt(s, f)).collect(),
-        },
+        KtExpr::Lambda(l) => KtExpr::Lambda(map_lambda(l, f)),
         KtExpr::When { subject, arms } => KtExpr::When {
             subject: Box::new(map_expr(subject, f)),
             arms: arms
@@ -746,6 +800,14 @@ pub fn map_expr(expr: &KtExpr, f: &mut dyn FnMut(&KtExpr) -> Option<KtExpr>) -> 
                 })
                 .collect(),
         },
+    }
+}
+
+/// [`map_expr`] over a lambda.
+pub fn map_lambda(l: &KtLambda, f: &mut dyn FnMut(&KtExpr) -> Option<KtExpr>) -> KtLambda {
+    KtLambda {
+        params: l.params.clone(),
+        body: l.body.iter().map(|s| map_stmt(s, f)).collect(),
     }
 }
 
@@ -923,7 +985,7 @@ impl KtExpr {
         }
     }
     /// Attach a trailing lambda: `f(a) { … }`.
-    pub fn with_trailing_lambda(mut self, lambda: KtExpr) -> Self {
+    pub fn with_trailing_lambda(mut self, lambda: KtLambda) -> Self {
         match &mut self {
             KtExpr::Call {
                 trailing_lambda, ..
@@ -954,10 +1016,7 @@ impl KtExpr {
     }
     /// `{ params -> body }`.
     pub fn lambda(params: impl IntoIterator<Item = BindingId>, body: Vec<KtStmt>) -> Self {
-        KtExpr::Lambda {
-            params: params.into_iter().collect(),
-            body,
-        }
+        KtExpr::Lambda(KtLambda::new(params, body))
     }
     /// A single-expression lambda body.
     pub fn lambda1(params: impl IntoIterator<Item = BindingId>, body: KtExpr) -> Self {

@@ -18,8 +18,8 @@
 use std::collections::HashMap;
 
 use super::{
-    super::types::ImportSet, free_names, is_hard_keyword, BindingId, ExprArena, KtExpr, KtLiteral,
-    KtName, KtPattern, KtStmt, Spelling,
+    super::types::ImportSet, free_names, is_hard_keyword, BindingId, ExprArena, KtExpr, KtLambda,
+    KtLiteral, KtName, KtPattern, KtStmt, Spelling,
 };
 
 /// Binding strength of an expression, high binds tighter. Only the operators
@@ -67,6 +67,20 @@ struct Scope<'a> {
     /// later `Fresh` binder is free to allocate that spelling and capture the
     /// free reference. Counting keeps the two claims independent.
     taken: HashMap<String, usize>,
+    /// Every `BindingId` this render has already introduced, **never cleared**.
+    ///
+    /// One `BindingId` is one binding site. Reusing it in two places —
+    /// `lambda1([b], lambda1([b], local(b)))`, two lambda parameters, or two
+    /// sequential `Let`s — gives one structural identity two binding sites, and
+    /// `Local(b)` then changes referent purely because `lookup` walks frames
+    /// innermost-first. It also silently breaks `substitute`, which would
+    /// rewrite both.
+    ///
+    /// Checked across the whole render rather than only against live frames:
+    /// two *sibling* scopes reusing an id never overlap, so `lookup` stays
+    /// unambiguous, but the identity is still duplicated and substitution is
+    /// still wrong.
+    introduced: std::collections::HashSet<BindingId>,
 }
 
 impl<'a> Scope<'a> {
@@ -88,12 +102,21 @@ impl<'a> Scope<'a> {
             arena,
             frames: Vec::new(),
             taken,
+            introduced: std::collections::HashSet::new(),
         }
     }
 
     fn push(&mut self, binders: &[BindingId]) {
         let mut frame = Vec::new();
         for id in binders {
+            assert!(
+                self.introduced.insert(*id),
+                "BindingId({}) is introduced twice in one tree — one binder identity cannot have \
+                 two binding sites: `Local` would change referent by nesting depth, and \
+                 `substitute` would rewrite both. Allocate a second binder, or graft the \
+                 duplicated subtree into fresh ids.",
+                id.index()
+            );
             let name = match &self.arena.binder(*id).spelling {
                 // Public API: preserved byte-identically. A `Fixed` name is
                 // *claimed*, never renamed, so a later `Fresh` binder avoids it
@@ -218,13 +241,7 @@ pub fn render_stmts_named(
     stmts: &[KtStmt],
     imports: &mut ImportSet,
 ) -> (Vec<String>, Vec<String>) {
-    let mut scope = Scope::new(
-        arena,
-        &KtExpr::Lambda {
-            params: Vec::new(),
-            body: stmts.to_vec(),
-        },
-    );
+    let mut scope = Scope::new(arena, &KtExpr::Lambda(KtLambda::new([], stmts.to_vec())));
     scope.push(outer);
     let names = outer.iter().map(|b| scope.lookup(*b).to_string()).collect();
     let out = write_stmts(stmts, &mut scope, imports);
@@ -241,13 +258,7 @@ pub fn render_stmts(
 ) -> Vec<String> {
     // Reserve against every statement, not just the first: a name free in one
     // and taken in another must be avoided in both.
-    let mut scope = Scope::new(
-        arena,
-        &KtExpr::Lambda {
-            params: Vec::new(),
-            body: stmts.to_vec(),
-        },
-    );
+    let mut scope = Scope::new(arena, &KtExpr::Lambda(KtLambda::new([], stmts.to_vec())));
     scope.push(outer);
     let out = write_stmts(stmts, &mut scope, imports);
     scope.pop();
@@ -297,7 +308,7 @@ fn write_bare(e: &KtExpr, scope: &mut Scope, imports: &mut ImportSet) -> String 
             let mut out = format!("{head}({})", rendered_args.join(", "));
             if let Some(l) = trailing_lambda {
                 out.push(' ');
-                out.push_str(&write_bare(l, scope, imports));
+                out.push_str(&write_lambda(l, scope, imports));
             }
             out
         }
@@ -318,21 +329,7 @@ fn write_bare(e: &KtExpr, scope: &mut Scope, imports: &mut ImportSet) -> String 
             let rhs = write_expr(b, scope, imports, Prec::Elvis);
             format!("{lhs} ?: {rhs}")
         }
-        KtExpr::Lambda { params, body } => {
-            scope.push(params);
-            let names: Vec<String> = params
-                .iter()
-                .map(|p| scope.lookup(*p).to_string())
-                .collect();
-            let lines = write_stmts(body, scope, imports);
-            scope.pop();
-            let head = if names.is_empty() {
-                String::new()
-            } else {
-                format!("{} -> ", names.join(", "))
-            };
-            format!("{{ {head}{} }}", lines.join("; "))
-        }
+        KtExpr::Lambda(l) => write_lambda(l, scope, imports),
         KtExpr::When { subject, arms } => {
             let subj = write_expr(subject, scope, imports, Prec::Elvis);
             let rendered: Vec<String> = arms
@@ -354,6 +351,24 @@ fn write_bare(e: &KtExpr, scope: &mut Scope, imports: &mut ImportSet) -> String 
         ),
         KtExpr::Raw(s) => s.clone(),
     }
+}
+
+/// `{ params -> body }`, with the parameters bound for the body only.
+fn write_lambda(l: &KtLambda, scope: &mut Scope, imports: &mut ImportSet) -> String {
+    scope.push(&l.params);
+    let names: Vec<String> = l
+        .params
+        .iter()
+        .map(|p| scope.lookup(*p).to_string())
+        .collect();
+    let lines = write_stmts(&l.body, scope, imports);
+    scope.pop();
+    let head = if names.is_empty() {
+        String::new()
+    } else {
+        format!("{} -> ", names.join(", "))
+    };
+    format!("{{ {head}{} }}", lines.join("; "))
 }
 
 fn write_stmts(stmts: &[KtStmt], scope: &mut Scope, imports: &mut ImportSet) -> Vec<String> {

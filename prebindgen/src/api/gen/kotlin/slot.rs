@@ -416,10 +416,7 @@ impl ExprSlot<Vec<KtStmt>> {
         match self {
             ExprSlot::Legacy(c) => c.collect_imports(sink),
             ExprSlot::Ast(a) => {
-                let wrapper = KtExpr::Lambda {
-                    params: Vec::new(),
-                    body: a.tree.clone(),
-                };
+                let wrapper = KtExpr::Lambda(super::expr::KtLambda::new([], a.tree.clone()));
                 sink.extend(
                     super::expr::free_names(&wrapper)
                         .into_iter()
@@ -513,10 +510,7 @@ impl KtAccessor {
         match tree {
             AccessorTree::Expr(a) => qualified(&a.tree, sink),
             AccessorTree::Block(a) => qualified(
-                &KtExpr::Lambda {
-                    params: Vec::new(),
-                    body: a.tree.clone(),
-                },
+                &KtExpr::Lambda(super::expr::KtLambda::new([], a.tree.clone())),
                 sink,
             ),
         }

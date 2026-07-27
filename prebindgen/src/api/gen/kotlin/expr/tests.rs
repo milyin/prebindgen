@@ -175,7 +175,7 @@ fn nested_lambdas_do_not_shadow() {
     // { e -> f(e, { e2 -> g(e, e2) }) }
     let tree = KtExpr::lambda1(
         [outer],
-        KtExpr::free_call("f", [KtExpr::local(outer)]).with_trailing_lambda(KtExpr::lambda1(
+        KtExpr::free_call("f", [KtExpr::local(outer)]).with_trailing_lambda(KtLambda::expr(
             [inner],
             KtExpr::free_call("g", [KtExpr::local(outer), KtExpr::local(inner)]),
         )),
@@ -407,16 +407,20 @@ fn grafting_colliding_arenas_alpha_remaps() {
 
     let grafted = host.graft(&guest, &guest_tree);
     // The guest's binder got a fresh id in the host arena.
-    let KtExpr::Lambda { params, .. } = &grafted else {
+    let KtExpr::Lambda(l) = &grafted else {
         panic!("expected a lambda");
     };
+    let params = &l.params;
     assert_ne!(params[0], host_b, "the graft must not reuse the host's id");
     assert_eq!(host.len(), 2);
 
     // And the whole thing renders with two distinct names.
     let whole = KtExpr::lambda1(
         [host_b],
-        KtExpr::free_call("f", [KtExpr::local(host_b)]).with_trailing_lambda(grafted),
+        KtExpr::free_call("f", [KtExpr::local(host_b)]).with_trailing_lambda(match grafted {
+            KtExpr::Lambda(l) => l,
+            other => panic!("expected a lambda, got {other:?}"),
+        }),
     );
     assert_eq!(r(&host, &whole), "{ v -> f(v) { v2 -> g(v2) } }");
 }
@@ -670,6 +674,112 @@ fn literals_cover_their_whole_value_domain() {
     ] {
         assert_eq!(r(&arena, &e), want);
     }
+}
+
+// ── one BindingId is one binding site ───────────────────────────────────
+
+/// Reintroducing the same `BindingId` is rejected.
+///
+/// `lambda1([b], lambda1([b], local(b)))` used to render `{ x -> { x2 -> x2 } }`:
+/// one structural identity with two binding sites, where `Local(b)` picks its
+/// referent purely by nesting depth because `lookup` walks frames
+/// innermost-first. It also silently breaks `substitute`, which rewrites *every*
+/// `Local(b)`.
+#[test]
+#[should_panic(expected = "is introduced twice in one tree")]
+fn nested_reintroduction_of_a_binder_is_rejected() {
+    let mut arena = ExprArena::new();
+    let b = arena.bind_fresh("x");
+    let tree = KtExpr::lambda1([b], KtExpr::lambda1([b], KtExpr::local(b)));
+    let _ = r(&arena, &tree);
+}
+
+/// The same identity twice in **one** parameter list.
+#[test]
+#[should_panic(expected = "is introduced twice in one tree")]
+fn same_frame_reintroduction_of_a_binder_is_rejected() {
+    let mut arena = ExprArena::new();
+    let b = arena.bind_fresh("x");
+    let tree = KtExpr::lambda1([b, b], KtExpr::local(b));
+    let _ = r(&arena, &tree);
+}
+
+/// And in two sequential `Let`s, which is the statement-position form.
+#[test]
+#[should_panic(expected = "is introduced twice in one tree")]
+fn repeated_let_of_one_binder_is_rejected() {
+    let mut arena = ExprArena::new();
+    let b = arena.bind_fresh("x");
+    let tree = KtExpr::lambda(
+        [],
+        vec![
+            KtStmt::Let {
+                binder: b,
+                mutable: false,
+                value: KtExpr::int(1),
+            },
+            KtStmt::Let {
+                binder: b,
+                mutable: false,
+                value: KtExpr::int(2),
+            },
+            KtStmt::Expr(KtExpr::local(b)),
+        ],
+    );
+    let _ = r(&arena, &tree);
+}
+
+/// **Sibling** scopes too, even though they never overlap and `lookup` would
+/// stay unambiguous: the identity is still duplicated, so `substitute` would
+/// rewrite both occurrences.
+#[test]
+#[should_panic(expected = "is introduced twice in one tree")]
+fn sibling_reintroduction_of_a_binder_is_rejected() {
+    let mut arena = ExprArena::new();
+    let b = arena.bind_fresh("x");
+    let tree = KtExpr::free_call(
+        "f",
+        [
+            KtExpr::lambda1([b], KtExpr::local(b)),
+            KtExpr::lambda1([b], KtExpr::local(b)),
+        ],
+    );
+    let _ = r(&arena, &tree);
+}
+
+/// Two *distinct* binders that merely share a hint are fine — that is the
+/// allocator's job, not an identity error.
+#[test]
+fn two_distinct_binders_sharing_a_hint_are_fine() {
+    let mut arena = ExprArena::new();
+    let a = arena.bind_fresh("x");
+    let b = arena.bind_fresh("x");
+    let tree = KtExpr::lambda1([a], KtExpr::lambda1([b], KtExpr::local(a)));
+    assert_eq!(r(&arena, &tree), "{ x -> { x2 -> x } }");
+}
+
+// ── trailing lambdas ────────────────────────────────────────────────────
+
+/// Kotlin's trailing-argument syntax accepts only a lambda, and the field is
+/// typed as one — so `consume() 1` is not constructible rather than rejected at
+/// render time. `with_trailing_lambda` takes a [`KtLambda`], and direct variant
+/// construction cannot bypass it either, because the field itself is
+/// `Option<Box<KtLambda>>`.
+#[test]
+fn a_trailing_lambda_is_structurally_a_lambda() {
+    let mut arena = ExprArena::new();
+    let e = arena.bind_fresh("e");
+    let call = KtExpr::free_call("consume", [KtExpr::int(1)])
+        .with_trailing_lambda(KtLambda::expr([e], KtExpr::local(e)));
+    assert_eq!(r(&arena, &call), "consume(1) { e -> e }");
+
+    // A receiver-qualified call takes one too.
+    let mut arena = ExprArena::new();
+    let it = arena.bind_fresh("it");
+    let call = KtExpr::name("list")
+        .call("map", [])
+        .with_trailing_lambda(KtLambda::expr([it], KtExpr::local(it).field("id")));
+    assert_eq!(r(&arena, &call), "list.map() { it -> it.id }");
 }
 
 // ── free-name reservations vs. binder scope ─────────────────────────────
