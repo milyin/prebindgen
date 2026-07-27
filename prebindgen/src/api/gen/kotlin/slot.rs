@@ -155,6 +155,17 @@ pub enum AccessorKind {
 #[derive(Clone, Debug)]
 pub struct KtAccessor {
     pub kind: AccessorKind,
+    /// A setter's value parameter, as a **binder**.
+    ///
+    /// The header used to be a hardcoded `set(value)`, independent of anything
+    /// in the body's scope — so a binder spelled `incoming` rendered
+    /// `set(value) = incoming`, and a `Fresh` binder hinted `value` that the
+    /// allocator moved to `value2` left the signature still saying `value`.
+    /// The spelling now comes from the same allocation the body uses, which is
+    /// the only way the two cannot disagree.
+    ///
+    /// `None` for a getter, and on the legacy path.
+    pub param: Option<BindingId>,
     /// `= <expr>` when `Some(expr)`, else a block of `body`.
     pub body: AccessorBody,
 }
@@ -176,13 +187,31 @@ impl KtAccessor {
     pub fn legacy(code: Code) -> Self {
         Self {
             kind: AccessorKind::Get,
+            param: None,
             body: AccessorBody::Legacy(code),
         }
     }
     pub fn get_expr(arena: ExprArena, e: KtExpr) -> Self {
         Self {
             kind: AccessorKind::Get,
+            param: None,
             body: AccessorBody::Expr(Ast::new(arena, e)),
+        }
+    }
+
+    /// A setter whose value parameter is a binder the body references through
+    /// `Local` — so the header and the body are spelled from one allocation.
+    pub fn set_expr(
+        mut arena: ExprArena,
+        hint: &str,
+        build: impl FnOnce(BindingId) -> KtExpr,
+    ) -> Self {
+        let param = arena.bind_fresh(hint);
+        let tree = build(param);
+        Self {
+            kind: AccessorKind::Set,
+            param: Some(param),
+            body: AccessorBody::Expr(Ast::in_scope(arena, vec![param], tree)),
         }
     }
     pub fn is_legacy(&self) -> bool {
@@ -415,30 +444,46 @@ impl PropertyValue {
 impl KtAccessor {
     /// Render the accessor's lines, indented under the property by the caller.
     pub fn render_lines(&self, imports: &mut ImportSet) -> Code {
-        let head = match self.kind {
-            AccessorKind::Get => "get()",
-            AccessorKind::Set => "set(value)",
+        // The setter's header is spelled from the SAME allocation the body
+        // uses, via the scope names the renderer hands back. Deriving it
+        // independently — as a hardcoded `set(value)` did — is how a signature
+        // ends up saying `value` while the body says `value2`.
+        let head = |scope: &[BindingId], names: &[String]| -> String {
+            match self.kind {
+                AccessorKind::Get => "get()".to_string(),
+                AccessorKind::Set => {
+                    let name = self
+                        .param
+                        .and_then(|p| scope.iter().position(|b| *b == p))
+                        .and_then(|i| names.get(i).cloned())
+                        // A setter with no declared binder keeps Kotlin's
+                        // implicit parameter name.
+                        .unwrap_or_else(|| "value".to_string());
+                    format!("set({name})")
+                }
+            }
         };
         match &self.body {
             AccessorBody::Legacy(c) => c.clone(),
-            // `render_expr_in_scope`, like every other typed slot: a getter or
-            // setter expression referencing a constructor parameter or the
-            // setter's own binder would otherwise be unbound.
-            AccessorBody::Expr(a) => Code::new().line(format!(
-                "{head} = {}",
-                render_expr_in_scope(&a.arena, &a.scope, &a.tree, imports)
-            )),
+            // Scope-aware, like every other typed slot: a getter or setter
+            // expression referencing a constructor parameter or the setter's
+            // own binder would otherwise be unbound.
+            AccessorBody::Expr(a) => {
+                let (names, rendered) = super::expr::render::render_expr_in_scope_named(
+                    &a.arena, &a.scope, &a.tree, imports,
+                );
+                Code::new().line(format!("{} = {rendered}", head(&a.scope, &names)))
+            }
             AccessorBody::Block(a) => {
-                let mut code = Code::new();
-                let lines = super::expr::render::render_stmts(&a.arena, &a.scope, &a.tree, imports);
-                code = code.blk(format!("{head} {{"), |c| {
+                let (names, lines) =
+                    super::expr::render::render_stmts_named(&a.arena, &a.scope, &a.tree, imports);
+                Code::new().blk(format!("{} {{", head(&a.scope, &names)), |c| {
                     let mut c = c;
                     for l in lines {
                         c = c.line(l);
                     }
                     c
-                });
-                code
+                })
             }
         }
     }

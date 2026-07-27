@@ -384,10 +384,38 @@ pub enum KtPattern {
 ///
 /// Ids start at zero per arena, so two independently built arenas collide —
 /// see the module docs for why that is the point.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ExprArena {
     id: ArenaId,
     binders: Vec<Binder>,
+    /// A **clone** cannot allocate. See the `Clone` impl below.
+    sealed: bool,
+}
+
+/// Cloning keeps the [`ArenaId`], because the trees already built against this
+/// arena keep referring to it — a clone with a fresh id would orphan every
+/// `Local` in them.
+///
+/// That is exactly why the clone is **sealed**: two arenas sharing an id and
+/// both still allocating would hand out identical
+/// `BindingId { arena, index }` values for different binders, and the
+/// provenance check would wave the collision straight through. A sealed arena
+/// can be read, rendered and grafted *from*; it just cannot mint anything new,
+/// so the id/index pair stays unique to one binder for the arena's whole
+/// lifetime.
+///
+/// The model clones arenas constantly — `Ast<T>`, `ExprSlot`, `KtFun` all derive
+/// `Clone` — and none of those clones binds afterwards, so sealing costs
+/// nothing in practice and closes the hole by construction. To extend a cloned
+/// tree, `graft` it into a fresh arena, which alpha-remaps.
+impl Clone for ExprArena {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            binders: self.binders.clone(),
+            sealed: true,
+        }
+    }
 }
 
 impl Default for ExprArena {
@@ -401,6 +429,7 @@ impl ExprArena {
         Self {
             id: ArenaId::next(),
             binders: Vec::new(),
+            sealed: false,
         }
     }
 
@@ -443,6 +472,12 @@ impl ExprArena {
     }
 
     fn push(&mut self, spelling: Spelling) -> BindingId {
+        assert!(
+            !self.sealed,
+            "ExprArena: this arena is a clone and cannot allocate — two arenas sharing an \
+             `ArenaId` would mint identical `BindingId`s for different binders, which is the \
+             collision provenance exists to catch. Graft the tree into a fresh arena instead."
+        );
         let id = BindingId {
             arena: self.id,
             index: self.binders.len() as u32,

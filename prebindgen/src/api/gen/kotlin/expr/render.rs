@@ -164,6 +164,48 @@ pub fn render_expr_in_scope(
     out
 }
 
+/// Render `expr` with `outer` bound, **also returning the printed name of each
+/// binder in `outer`**.
+///
+/// The renderer allocates those names, so anything that has to *spell* an outer
+/// binder elsewhere — a setter's `set(<param>)` header, say — has to ask the
+/// same allocation rather than guess. Deriving the header independently is how
+/// a signature ends up saying `value` while the body says `value2`.
+pub fn render_expr_in_scope_named(
+    arena: &ExprArena,
+    outer: &[BindingId],
+    expr: &KtExpr,
+    imports: &mut ImportSet,
+) -> (Vec<String>, String) {
+    let mut scope = Scope::new(arena, expr);
+    scope.push(outer);
+    let names = outer.iter().map(|b| scope.lookup(*b).to_string()).collect();
+    let out = write_expr(expr, &mut scope, imports, Prec::Elvis);
+    scope.pop();
+    (names, out)
+}
+
+/// [`render_stmts`], also returning the printed names of `outer`.
+pub fn render_stmts_named(
+    arena: &ExprArena,
+    outer: &[BindingId],
+    stmts: &[KtStmt],
+    imports: &mut ImportSet,
+) -> (Vec<String>, Vec<String>) {
+    let mut scope = Scope::new(
+        arena,
+        &KtExpr::Lambda {
+            params: Vec::new(),
+            body: stmts.to_vec(),
+        },
+    );
+    scope.push(outer);
+    let names = outer.iter().map(|b| scope.lookup(*b).to_string()).collect();
+    let out = write_stmts(stmts, &mut scope, imports);
+    scope.pop();
+    (names, out)
+}
+
 /// Render a statement list as a block body's lines, with `outer` already bound.
 pub fn render_stmts(
     arena: &ExprArena,

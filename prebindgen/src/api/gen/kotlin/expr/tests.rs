@@ -818,6 +818,7 @@ fn an_expression_accessor_can_reference_its_enclosing_binders() {
     let ctor_param = arena.bind_fixed(KtName::expect("initialPtr"));
     let acc = KtAccessor {
         kind: crate::api::gen::kotlin::AccessorKind::Get,
+        param: None,
         body: crate::api::gen::kotlin::slot::AccessorBody::Expr(
             crate::api::gen::kotlin::slot::Ast::in_scope(
                 arena,
@@ -830,6 +831,67 @@ fn an_expression_accessor_can_reference_its_enclosing_binders() {
     let mut out = String::new();
     acc.render_lines(&mut imports).render(0, &mut out);
     assert_eq!(out.trim(), "get() = initialPtr.value");
+}
+
+/// A setter's value parameter is a **binder**, so the header and the body are
+/// spelled from one allocation.
+///
+/// The header used to be a hardcoded `set(value)`: a binder spelled `incoming`
+/// rendered `set(value) = incoming`, and a `Fresh` binder hinted `value` that
+/// the allocator moved aside left the signature still saying `value`.
+#[test]
+fn a_setter_parameter_is_spelled_from_the_same_allocation_as_its_body() {
+    // A differently-spelled binder reaches the header.
+    let acc = KtAccessor::set_expr(ExprArena::new(), "incoming", |p| {
+        KtExpr::free_call("store", [KtExpr::local(p)])
+    });
+    let mut imports = ImportSet::default();
+    let mut out = String::new();
+    acc.render_lines(&mut imports).render(0, &mut out);
+    assert_eq!(out.trim(), "set(incoming) = store(incoming)");
+
+    // …and one the allocator has to move aside moves in BOTH places, never
+    // just the body.
+    let acc = KtAccessor::set_expr(ExprArena::new(), "value", |p| {
+        // A free `value` in the tree forces the binder to be renamed.
+        KtExpr::free_call("store", [KtExpr::local(p), KtExpr::name("value")])
+    });
+    let mut out = String::new();
+    acc.render_lines(&mut imports).render(0, &mut out);
+    assert_eq!(out.trim(), "set(value2) = store(value2, value)");
+}
+
+/// A **clone** of an arena cannot allocate.
+///
+/// Cloning keeps the `ArenaId` — trees already built against it still refer to
+/// it — so two clones both allocating would mint identical
+/// `BindingId { arena, index }` values for different binders, and the
+/// provenance check would wave the collision straight through. Sealing the
+/// clone closes that by construction; the model's own clones never bind
+/// afterwards, so nothing legitimate is lost.
+#[test]
+#[should_panic(expected = "cannot allocate")]
+fn a_cloned_arena_cannot_allocate() {
+    let mut original = ExprArena::new();
+    let _ = original.bind_fresh("v");
+    let mut copy = original.clone();
+    let _ = copy.bind_fresh("v");
+}
+
+/// The clone is still fully usable for everything except allocation — reading,
+/// rendering, and being grafted *from*.
+#[test]
+fn a_cloned_arena_still_renders_and_grafts() {
+    let mut original = ExprArena::new();
+    let b = original.bind_fresh("v");
+    let tree = KtExpr::lambda1([b], KtExpr::local(b));
+
+    let copy = original.clone();
+    assert_eq!(r(&copy, &tree), "{ v -> v }");
+
+    let mut host = ExprArena::new();
+    let grafted = host.graft(&copy, &tree);
+    assert_eq!(r(&host, &grafted), "{ v -> v }");
 }
 
 /// Kotlin reads a bare `_` as an ignoring placeholder, not an identifier — it
@@ -907,47 +969,83 @@ fn legacy_annotation_bridge_has_exactly_one_caller() {
     }
 }
 
+/// Every `.rs` file in the crate, for an audit that cannot be outrun by adding
+/// a module.
+///
+/// The constructors below are crate-visible, so a hand-listed set of files is
+/// not an audit — a direct call from `expr.rs`, `file.rs` or any JniGen module
+/// would simply not be looked at. This walks `src/` instead.
+fn crate_sources() -> Vec<(String, String)> {
+    // The auditing file is skipped: it necessarily *spells* the constructors it
+    // searches for, so counting itself would make the audit self-defeating.
+    const SELF: &str = "kotlin/expr/tests.rs";
+    fn walk(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        for entry in std::fs::read_dir(dir).expect("readable source dir") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let shown = path.display().to_string();
+                if shown.replace('\\', "/").ends_with(SELF) {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("readable source");
+                out.push((shown, code_without_comments(&text)));
+            }
+        }
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut out = Vec::new();
+    walk(&root, &mut out);
+    assert!(out.len() > 50, "the walk should find the whole crate");
+    out
+}
+
 /// `StaticAnnotationText`'s literal-origin guarantee is **audited, not typed**:
 /// `__from_literal` accepts any `&'static str`, leaked included, so the macro —
-/// not the type — is where the guarantee lives for the macro's own callers.
+/// not the type — is where the guarantee lives, and only for its own callers.
 ///
-/// Both direct constructors are crate-internal, which bounds the audit to this
-/// crate, and this pins their call sites so neither can grow unnoticed. #199
+/// The audit is therefore the whole point, and it runs over **every file in the
+/// crate**, which is the scope the constructors' visibility actually has. #199
 /// drives both to zero and deletes them.
 #[test]
-fn static_annotation_text_constructors_are_pinned() {
-    let slot = include_str!("../slot.rs");
-    let render = include_str!("../render.rs");
-    let model = include_str!("../model.rs");
+fn static_annotation_text_constructors_are_pinned_crate_wide() {
+    let mut from_literal: Vec<&str> = Vec::new();
+    let mut legacy: Vec<&str> = Vec::new();
+    for (path, code) in crate_sources() {
+        for _ in 0..code
+            .matches("StaticAnnotationText::__from_literal(")
+            .count()
+        {
+            from_literal.push(Box::leak(path.clone().into_boxed_str()));
+        }
+        for _ in 0..code
+            .matches("StaticAnnotationText::from_legacy_string(")
+            .count()
+        {
+            legacy.push(Box::leak(path.clone().into_boxed_str()));
+        }
+    }
+    let ends_with = |v: &[&str], suffix: &str| v.iter().filter(|p| p.ends_with(suffix)).count();
 
-    // `__from_literal`: the macro body, plus the one `JvmInline` site the
-    // value-class renderer injects.
-    let macro_body = code_without_comments(slot)
-        .matches("StaticAnnotationText::__from_literal(")
-        .count();
+    // `__from_literal`: the macro body, plus the one injected `JvmInline` the
+    // value-class renderer adds.
     assert_eq!(
-        macro_body, 1,
-        "only the macro should expand to `__from_literal`"
+        from_literal.len(),
+        2,
+        "unexpected `__from_literal` call sites: {from_literal:?} — every new one is a #199 work \
+         item, and the constructor is crate-visible so this list is the only thing bounding it"
     );
-    let direct = code_without_comments(render)
-        .matches("StaticAnnotationText::__from_literal(")
-        .count();
-    assert_eq!(
-        direct, 1,
-        "render.rs should have exactly one direct `__from_literal` (the injected `JvmInline`); \
-         every new one is a #199 work item"
-    );
+    assert_eq!(ends_with(&from_literal, "kotlin/slot.rs"), 1);
+    assert_eq!(ends_with(&from_literal, "kotlin/render.rs"), 1);
 
     // `from_legacy_string`: the single `legacy_annotation` helper in the model.
     assert_eq!(
-        code_without_comments(model)
-            .matches("StaticAnnotationText::from_legacy_string(")
-            .count(),
-        1
+        legacy.len(),
+        1,
+        "unexpected `from_legacy_string` call sites: {legacy:?}"
     );
-    // `slot.rs` holds the definition, so only other modules are scanned for
-    // uses.
-    assert!(!code_without_comments(render).contains("from_legacy_string("));
+    assert_eq!(ends_with(&legacy, "kotlin/model.rs"), 1);
 }
 
 /// `KtExpr::Raw` exists only if migration needs it, and **enumerating its
