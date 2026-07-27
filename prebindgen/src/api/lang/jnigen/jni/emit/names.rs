@@ -75,7 +75,7 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     /// length cannot contain a local, which is what makes this scope safe.
     fn visit_type_array_mut(&mut self, arr: &mut syn::TypeArray) {
         syn::visit_mut::visit_type_mut(self, &mut arr.elem);
-        reject_scoped_array_length(arr);
+        reject_unsupported_array_length(arr);
         let mut lengths = QualifyLengthPaths {
             length_names: self.length_names,
         };
@@ -83,59 +83,69 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     }
 }
 
-/// Reject an array length that opens a SCOPE.
+/// Refuse an array length built from anything but a small, closed set of
+/// expression forms.
 ///
 /// [`QualifyLengthPaths`] rewrites a bare path to its origin module, which is
-/// sound only while every path in the length names a source item. An inline
-/// const block breaks that — it may bind locals, and a local shadowing a source
-/// item would be rewritten into it:
+/// sound only while every path in the length names a source ITEM. Anything that
+/// can bind a name breaks that premise — a local shadowing a source item gets
+/// rewritten into it:
 ///
 /// ```ignore
 /// [u8; const { let array_len = 3; array_len }]   // `array_len` is a LOCAL
+/// [u8; match 3 { array_len => array_len }]       // ...so is this one
 /// ```
 ///
-/// Qualifying that yields `myflat::array_len`, a function item where a `usize`
-/// was meant. Scope tracking would be the general answer; it is a lot of
-/// machinery for a shape that has no place in an FFI boundary type, so this
-/// rejects the whole family instead — including a block that binds nothing,
-/// since "binds nothing" is exactly the judgement that needs the scope tracking
-/// to be trustworthy. Hoist the value to a named `const` and the length becomes
-/// an ordinary path.
+/// Qualifying either yields `myflat::array_len`, a function item where a
+/// `usize` was meant; a same-typed collision would compile and silently change
+/// the length.
 ///
-/// Rejecting is deliberate over silently mis-qualifying: the failure a user
-/// sees names the type and the fix.
-fn reject_scoped_array_length(arr: &mut syn::TypeArray) {
+/// This is a WHITELIST on purpose. Listing the binding forms instead means
+/// every omitted or newly added `syn::Expr` variant silently reopens the hole —
+/// which is exactly how `match` and `if let` slipped past the first attempt.
+/// Inverting it makes the failure mode "a legitimate length is refused", which
+/// is loud and trivially worked around by hoisting the value into a named
+/// `const`.
+fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
     // Rendered before the mutable walk below borrows the length.
     let rendered = quote::ToTokens::to_token_stream(&*arr).to_string();
-    struct FindScope(bool);
+    struct Check(Option<&'static str>);
     // `VisitMut` rather than `Visit`: syn's immutable visitor is behind a
     // feature this crate does not enable, and the walk mutates nothing.
-    impl syn::visit_mut::VisitMut for FindScope {
+    impl syn::visit_mut::VisitMut for Check {
         fn visit_expr_mut(&mut self, e: &mut syn::Expr) {
-            // Every expression form that can introduce a binding.
-            if matches!(
+            let ok = matches!(
                 e,
-                syn::Expr::Const(_)
-                    | syn::Expr::Block(_)
-                    | syn::Expr::Unsafe(_)
-                    | syn::Expr::Closure(_)
-                    | syn::Expr::Async(_)
-            ) {
-                self.0 = true;
+                // A literal length, `[u8; 4]`.
+                syn::Expr::Lit(_)
+                    // The names this pass exists to qualify: `MAX`,
+                    // `Holder::N`, and the callee of `array_len()`.
+                    | syn::Expr::Path(_)
+                    // Const arithmetic over those: `A + 1`, `-1`, `(A) * 2`,
+                    // `A as usize`, `array_len()`.
+                    | syn::Expr::Binary(_)
+                    | syn::Expr::Unary(_)
+                    | syn::Expr::Paren(_)
+                    | syn::Expr::Group(_)
+                    | syn::Expr::Cast(_)
+                    | syn::Expr::Call(_)
+            );
+            if !ok && self.0.is_none() {
+                self.0 = Some("an unsupported expression form");
             }
             syn::visit_mut::visit_expr_mut(self, e);
         }
     }
-    let mut find = FindScope(false);
-    syn::visit_mut::VisitMut::visit_expr_mut(&mut find, &mut arr.len);
-    if find.0 {
+    let mut check = Check(None);
+    syn::visit_mut::VisitMut::visit_expr_mut(&mut check, &mut arr.len);
+    if let Some(what) = check.0 {
         panic!(
-            "fixed-size array `{}`: a length that opens a scope (an inline `const {{ … }}` \
-             block, or a closure) is not supported — such a block can bind locals, and this \
-             generator qualifies the length's paths against their source module, which would \
-             rewrite a local into a source item. Hoist the value into a named `const` and use \
-             that as the length.",
-            rendered
+            "fixed-size array `{rendered}`: the length uses {what}. Only a literal, a path, a \
+             call, and const arithmetic over those are supported — anything that can bind a name \
+             (`const {{ … }}`, `match`, `if let`, a closure, a loop) would let a LOCAL be \
+             mistaken for a source item, because this generator qualifies the length's paths \
+             against their source module. Hoist the value into a named `const` and use that as \
+             the length."
         );
     }
 }

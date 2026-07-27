@@ -1583,7 +1583,8 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     assert!(!rc.contains("v:[u8;array_len()]"), "{rust}");
 }
 
-/// An array length that opens a SCOPE is REJECTED, not qualified.
+/// An array length whose expression form is not on the supported whitelist is
+/// REJECTED, not qualified.
 ///
 /// An inline `const { … }` block may bind locals, and this generator qualifies
 /// a length's bare paths against their source module — so a local shadowing a
@@ -1593,8 +1594,40 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
 /// message naming the type and the fix. Silently mis-qualifying is the
 /// alternative this exists to prevent.
 #[test]
-#[should_panic(expected = "a length that opens a scope")]
-fn array_length_opening_a_scope_is_rejected() {
+#[should_panic(expected = "an unsupported expression form")]
+fn array_length_inline_const_block_is_rejected() {
+    // A local bound by an inline const block, shadowing the indexed fn.
+    check_array_length_rejected(syn::parse_quote!(
+        [u8; const {
+            let array_len = 3;
+            array_len
+        }]
+    ));
+}
+
+/// `match` arms bind their patterns directly, with no `Expr::Block` node in
+/// between — which is how this form slipped past the first, blacklist-shaped
+/// attempt. The whitelist refuses it because `match` is simply not on the list.
+#[test]
+#[should_panic(expected = "an unsupported expression form")]
+fn array_length_match_arm_binding_is_rejected() {
+    check_array_length_rejected(syn::parse_quote!(
+        [u8; match 3 {
+            array_len => array_len,
+        }]
+    ));
+}
+
+/// `if let` likewise binds without an intervening block node.
+#[test]
+#[should_panic(expected = "an unsupported expression form")]
+fn array_length_if_let_binding_is_rejected() {
+    check_array_length_rejected(syn::parse_quote!(
+        [u8; if let array_len = 3 { array_len } else { 0 }]
+    ));
+}
+
+fn check_array_length_rejected(field_ty: syn::Type) {
     let loc = myflat_loc();
     let mut items: Vec<(syn::Item, SourceLocation)> = Vec::new();
     items.push((
@@ -1605,14 +1638,11 @@ fn array_length_opening_a_scope_is_rejected() {
         )),
         loc.clone(),
     ));
+    // The offending length; in each case its binding shadows `array_len`.
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Blob {
-                // The local shadows the indexed `array_len` fn above.
-                pub local: [u8; const {
-                    let array_len = 3;
-                    array_len
-                }],
+                pub local: #field_ty,
             }
         )),
         loc.clone(),
