@@ -41,6 +41,7 @@ import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
+import io.prebindgen.covertest.model.blobValueNew
 import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.durationOptional
@@ -652,6 +653,40 @@ fun main() {
         check(series[0].secs(boom) == 0L)
         check(series[2].secs(boom) == 2L && series[2].nanos(boom) == 0L)
         check(stampSeries(0L, boom).isEmpty())
+    }
+
+    // ── array-backed VALUE EQUALITY ─────────────────────────────────────────
+    // The Rust types derive `Eq`, so the Kotlin mirrors must compare by
+    // content. Kotlin arrays compare by IDENTITY, which silently breaks that
+    // for every `ByteArray`-backed property — a value blob's `bytes`, a
+    // `Vec<u8>` field, and any value carrying one of those. Kotlin's own
+    // `data class` codegen is inconsistent here (its `hashCode`/`toString` DO
+    // special-case arrays, its `equals` does not), so `==` is the assertion
+    // that matters and `hashCode` alone would not have caught the defect.
+    section("array-backed value equality (content, not identity)") {
+        // A value blob: two independently-built values with equal bytes.
+        val s1 = stampNew(7L, 42L, boom)
+        val s2 = stampNew(7L, 42L, boom)
+        check(s1 == s2) { "value blob must compare by content: $s1 vs $s2" }
+        check(s1.hashCode() == s2.hashCode())
+        check(stampNew(8L, 42L, boom) != s1) { "different content must not compare equal" }
+        // The whole contract, not just `==`: a hash container must de-duplicate.
+        check(hashSetOf(s1, s2).size == 1) { "value blob must de-duplicate in a HashSet" }
+        check(s1.toString().contains("bytes=[")) { "toString must render bytes, got ${s1}" }
+
+        // A data class with a DIRECT `ByteArray` field plus a NESTED value
+        // blob — the two shapes that broke downstream.
+        val b1 = blobValueNew(byteArrayOf(1, 2, 3), 9L, 7L, boom)
+        val b2 = blobValueNew(byteArrayOf(1, 2, 3), 9L, 7L, boom)
+        check(b1 == b2) { "array-backed data class must compare by content: $b1 vs $b2" }
+        check(b1.hashCode() == b2.hashCode())
+        check(hashSetOf(b1, b2).size == 1)
+        // Each component must actually participate — a comparison that ignored
+        // one of them would still pass the equality checks above.
+        check(blobValueNew(byteArrayOf(1, 2, 4), 9L, 7L, boom) != b1) { "id must matter" }
+        check(blobValueNew(byteArrayOf(1, 2, 3), 8L, 7L, boom) != b1) { "n must matter" }
+        check(blobValueNew(byteArrayOf(1, 2, 3), 9L, 8L, boom) != b1) { "nested blob must matter" }
+        check(b1.toString().contains("id=[1, 2, 3]")) { "toString must render bytes, got $b1" }
     }
 
     // ── Option<scalar> nullable primitive return + data_class instance

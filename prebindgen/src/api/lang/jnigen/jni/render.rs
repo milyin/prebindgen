@@ -94,6 +94,9 @@ pub(crate) fn build_data_class(
     });
 
     let mut ctor_params: Vec<kt::KtCtorParam> = Vec::new();
+    // Property (name, type) pairs, for the content-equality members an
+    // array-backed property needs — see [`equality::content_equality_members`].
+    let mut equality_props: Vec<(String, kt::KtType)> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
     let mut destructible_fields: Vec<(String, crate::api::lang::jnigen::jni::FoldStrategy)> =
@@ -137,8 +140,9 @@ pub(crate) fn build_data_class(
             }
         }
 
-        ctor_params
-            .push(kt::KtCtorParam::new(&kotlin_field_name, pf.kind.property_type(&owner)).val());
+        let property_type = pf.kind.property_type(&owner);
+        equality_props.push((kotlin_field_name.clone(), property_type.clone()));
+        ctor_params.push(kt::KtCtorParam::new(&kotlin_field_name, property_type).val());
         if let Some(strategy) = pf.kind.destructible() {
             destructible_fields.push((kotlin_field_name, strategy));
         }
@@ -170,6 +174,17 @@ pub(crate) fn build_data_class(
     }
     for p in ctor_params {
         class = class.ctor_param(p);
+    }
+    // Array-backed properties compare by identity in Kotlin, so a class with
+    // one gets explicit content-based operators (the Rust type derives `Eq`).
+    for m in crate::api::lang::jnigen::jni::equality::content_equality_members(
+        class_name,
+        &equality_props,
+    )
+    .into_iter()
+    .flatten()
+    {
+        class = class.member(m);
     }
     // Supertype clause: a data class with a destructible native-handle field
     // implements `AutoCloseable`; otherwise no supertype.

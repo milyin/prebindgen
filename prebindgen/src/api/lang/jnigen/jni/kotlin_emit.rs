@@ -421,13 +421,16 @@ impl JniGen {
             };
             let framework_line = format!(
                 "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
-                 as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
+                 as its raw bytes; it crosses the JNI boundary as a bare `ByteArray`).\n\n\
+                 Not a `@JvmInline value class`: Kotlin 1.9 reserves `equals`/`hashCode`\n\
+                 members on a value class, so one cannot be given the value equality this\n\
+                 type has in Rust — arrays would compare by identity.",
                 key.as_str()
             );
             let class_kdoc = crate::api::lang::jnigen::jni::source_item_doc(registry, key)
                 .map(|d| format!("{d}\n\n{framework_line}"))
                 .unwrap_or(framework_line);
-            let mut class = KtClass::new(ClassKind::ValueInline, &class_name)
+            let mut class = KtClass::new(ClassKind::Data, &class_name)
                 .vis(Vis::Public)
                 .kdoc(class_kdoc)
                 .ctor_param(
@@ -435,6 +438,16 @@ impl JniGen {
                         .val()
                         .vis(Vis::Public),
                 );
+            // The blob IS the value, so it compares by content.
+            for m in crate::api::lang::jnigen::jni::equality::content_equality_members(
+                &class_name,
+                &[("bytes".to_string(), KtType::byte_array())],
+            )
+            .into_iter()
+            .flatten()
+            {
+                class = class.member(m);
+            }
             let mut imports: BTreeSet<String> = BTreeSet::new();
             let members = self
                 .class_members
@@ -744,6 +757,7 @@ impl JniGen {
             if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_variant.attrs) {
                 vclass = vclass.kdoc(doc);
             }
+            let mut vprops: Vec<(String, KtType)> = Vec::new();
             for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
                 let prop = sum_field_property_name(field);
                 let ty = self.sum_payload_kt_type(
@@ -753,7 +767,17 @@ impl JniGen {
                     &prop,
                     item_field,
                 );
+                vprops.push((prop.clone(), ty.clone()));
                 vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
+            }
+            // An array-backed payload (a `Vec<u8>` variant field) compares by
+            // identity otherwise — same rule as a data-class property.
+            for m in
+                crate::api::lang::jnigen::jni::equality::content_equality_members(&vname, &vprops)
+                    .into_iter()
+                    .flatten()
+            {
+                vclass = vclass.member(m);
             }
             class = class.member(vclass);
         }

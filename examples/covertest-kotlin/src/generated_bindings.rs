@@ -509,6 +509,50 @@ pub(crate) unsafe fn Archive_to_jlong_cd73502c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn BlobValue_to_JObject_89b5dab7<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::BlobValue,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___id: jni::objects::JObject = Vec_u8_to_JByteArray_7936d5de(
+                env,
+                v.id.clone(),
+            )?
+            .into();
+        let ___n: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.n.clone())?;
+        let ___stamp: jni::objects::JObject = {
+            Stamp_to_JByteArray_2fc9bd18(env, v.stamp.clone())?
+        }
+            .into();
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/BlobValue",
+                "fromParts",
+                "([BJ[B)Lio/prebindgen/covertest/model/BlobValue;",
+                &[
+                    jni::objects::JValue::Object(&___id),
+                    jni::objects::JValue::from(___n),
+                    jni::objects::JValue::Object(&___stamp),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn CacheConfig_to_JObject_db89a97c<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::CacheConfig,
@@ -795,6 +839,30 @@ pub(crate) unsafe fn JByteArray_to_Stamp_2fc9bd18<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JByteArray_to_Vec_u8_7936d5de<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JByteArray<'v>,
+) -> ::core::result::Result<Vec<u8>, __JniErr> {
+    Ok({
+        env.convert_byte_array(v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("decode_byte_array: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -845,6 +913,52 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
             alternate,
             ttl,
             priority,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_BlobValue_89b5dab7<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::BlobValue, __JniErr> {
+    Ok({
+        let __id_jobj: jni::objects::JObject = env
+            .get_field(v, "id", "[B")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("BlobValue.id: {}", e)))?;
+        let __id_raw: jni::objects::JByteArray = __id_jobj.into();
+        let id = JByteArray_to_Vec_u8_7936d5de(env, &__id_raw)?;
+        let __n_raw: jni::sys::jlong = env
+            .get_field(v, "n", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("BlobValue.n: {}", e)))? as _;
+        let n = jlong_to_i64_fbf9a9bc(env, &__n_raw)?;
+        let __stamp_jobj: jni::objects::JObject = env
+            .get_field(v, "stamp", "[B")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("BlobValue.stamp: {}", e)))?;
+        let __stamp_raw: jni::objects::JByteArray = __stamp_jobj.into();
+        let stamp = JByteArray_to_Stamp_2fc9bd18(env, &__stamp_raw)?;
+        perftest_flat::BlobValue {
+            id,
+            n,
+            stamp,
         }
     })
 }
@@ -6882,6 +6996,30 @@ pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Vec_u8_to_JByteArray_7936d5de<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Vec<u8>,
+) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
+    Ok({
+        env.byte_array_from_slice(v.as_slice())
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("encode_byte_array: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn bool_to_jboolean_31306d98<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: bool,
@@ -9612,6 +9750,78 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
                 &__e.to_string(),
             );
             ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueNew<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    id: jni::objects::JByteArray<'a>,
+    n: jni::sys::jlong,
+    secs: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let id = match JByteArray_to_Vec_u8_7936d5de(&mut env, &id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let n = match jlong_to_i64_fbf9a9bc(&mut env, &n) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let secs = match jlong_to_i64_fbf9a9bc(&mut env, &secs) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::blob_value_new(id, n, secs);
+    match BlobValue_to_JObject_89b5dab7(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

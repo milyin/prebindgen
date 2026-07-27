@@ -2,6 +2,7 @@
 package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.BlobValue
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.Hold
 import io.prebindgen.covertest.model.HoldPolicy
@@ -699,6 +700,8 @@ internal object CovNative {
         s1: Long,
         errorSink: Any,
     )
+
+    external fun blobValueNew(id: ByteArray, n: Long, secs: Long, errorSink: Any): BlobValue
 
     external fun cacheConfigWeight(
         cachePresent: Boolean,

@@ -211,6 +211,38 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
 }
 
 /**
+ * A value whose equality is **array-backed** on the JVM side: a raw-bytes
+ * field beside an ordinary scalar, plus a nested value blob.
+ *
+ * Kotlin arrays compare by identity, so both the direct `Vec<u8>` field and
+ * the nested [`Stamp`] would make two equal-content values compare unequal
+ * unless the binding emits content-based operators. This mirrors the two
+ * shapes that broke downstream (a `Vec<u8>` struct field, and a struct
+ * carrying a value blob), which nothing else here exercised.
+ */
+public data class BlobValue(val id: ByteArray, val n: Long, val stamp: Stamp) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is BlobValue) return false
+        return id.contentEquals(other.id) && n == other.n && stamp == other.stamp
+    }
+
+    override fun hashCode(): Int {
+        var result = id.contentHashCode()
+        result = 31 * result + n.hashCode()
+        result = 31 * result + stamp.hashCode()
+        return result
+    }
+
+    override fun toString(): String = "BlobValue(id=${id.contentToString()}, n=$n, stamp=$stamp)"
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(id: ByteArray, n: Long, stamp: ByteArray): BlobValue = BlobValue(id, n, Stamp(stamp))
+    }
+}
+
+/**
  * Outer cache config crossed as `Option<CacheConfig>`. Its optional-ness
  * propagates into the non-optional nested [`RepliesConfig`], whose non-null
  * `priority` enum field must decode with exactly **one** Elvis default (#144).
@@ -745,10 +777,25 @@ public data class Unsigned(val byte: Int, val short: Int, val int: Long, val lon
  * `close()`), and `Vec<Stamp>` surfaces as `List<ByteArray>`.
  *
  * Typed by-value wrapper for the native Rust `Stamp` (a `Copy` blob carried
- * as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).
+ * as its raw bytes; it crosses the JNI boundary as a bare `ByteArray`).
+ *
+ * Not a `@JvmInline value class`: Kotlin 1.9 reserves `equals`/`hashCode`
+ * members on a value class, so one cannot be given the value equality this
+ * type has in Rust — arrays would compare by identity.
  */
-@JvmInline
-public value class Stamp(public val bytes: ByteArray) {
+public data class Stamp(public val bytes: ByteArray) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Stamp) return false
+        return bytes.contentEquals(other.bytes)
+    }
+
+    override fun hashCode(): Int {
+        return bytes.contentHashCode()
+    }
+
+    override fun toString(): String = "Stamp(bytes=${bytes.contentToString()})"
+
     /** Seconds component (value-class **accessor**, receiver = the value bytes). */
     public fun secs(onError: JniErrorHandler<Long>): Long {
         val __bcap = JniErrorHandlerCapture.acquire()
@@ -1526,6 +1573,19 @@ public fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong> {
     val __ret = CovNative.unsignedSeries(ArrayList<ULong>(), __u64FolderRawHolder.instance, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as List<ULong>
+}
+
+/** Build a [`BlobValue`] (its equality is asserted from Kotlin). */
+public fun blobValueNew(
+    id: ByteArray,
+    n: Long,
+    secs: Long,
+    onError: JniErrorHandler<BlobValue>,
+): BlobValue {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.blobValueNew(id, n, secs, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
 }
 
 /**

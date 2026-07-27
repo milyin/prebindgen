@@ -328,6 +328,32 @@ pub fn stamp_secs(s: &Stamp) -> i64 {
     s.secs
 }
 
+/// A value whose equality is **array-backed** on the JVM side: a raw-bytes
+/// field beside an ordinary scalar, plus a nested value blob.
+///
+/// Kotlin arrays compare by identity, so both the direct `Vec<u8>` field and
+/// the nested [`Stamp`] would make two equal-content values compare unequal
+/// unless the binding emits content-based operators. This mirrors the two
+/// shapes that broke downstream (a `Vec<u8>` struct field, and a struct
+/// carrying a value blob), which nothing else here exercised.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlobValue {
+    pub id: Vec<u8>,
+    pub n: i64,
+    pub stamp: Stamp,
+}
+
+/// Build a [`BlobValue`] (its equality is asserted from Kotlin).
+#[prebindgen]
+pub fn blob_value_new(id: Vec<u8>, n: i64, secs: i64) -> BlobValue {
+    BlobValue {
+        id,
+        n,
+        stamp: Stamp { secs, nanos: 0 },
+    }
+}
+
 /// Nanoseconds component (value-class **accessor**).
 #[prebindgen]
 pub fn stamp_nanos(s: &Stamp) -> i64 {

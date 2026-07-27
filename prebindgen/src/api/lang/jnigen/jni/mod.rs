@@ -582,6 +582,7 @@ mod classify;
 mod config;
 mod decl;
 mod emit;
+mod equality;
 mod iface;
 mod prim;
 mod selector;

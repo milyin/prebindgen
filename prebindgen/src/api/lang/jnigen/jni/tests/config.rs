@@ -263,12 +263,22 @@ fn value_class_interface_emits_generated_api() {
     assert!(ac.contains("interfaceZStampApi{"), "{all}");
     assert!(ac.contains("valbytes:ByteArray"), "{all}");
     assert!(ac.contains("funsecs("), "{all}");
+    // A value blob is a `data class`, NOT `@JvmInline value class`: Kotlin 1.9
+    // reserves `equals`/`hashCode` members on a value class, so an inline one
+    // could not carry the content equality the Rust `Copy` blob has.
     assert!(
-        ac.contains("valueclassZStamp(overridepublicvalbytes:ByteArray):ZStampApi{")
-            || ac.contains("valueclassZStamp(publicoverridevalbytes:ByteArray):ZStampApi{"),
+        ac.contains("dataclassZStamp(overridepublicvalbytes:ByteArray):ZStampApi{")
+            || ac.contains("dataclassZStamp(publicoverridevalbytes:ByteArray):ZStampApi{"),
         "{all}"
     );
+    assert!(!ac.contains("@JvmInlinepublic"), "{all}");
     assert!(ac.contains("publicoverridefunsecs("), "{all}");
+    // …and it compares by CONTENT, not by array identity.
+    assert!(
+        ac.contains("returnbytes.contentEquals(other.bytes)"),
+        "{all}"
+    );
+    assert!(ac.contains("returnbytes.contentHashCode()"), "{all}");
 }
 
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn
