@@ -1436,8 +1436,9 @@ fn data_class_properties_match_their_from_parts_params() {
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 }
 
-/// An array-length const is qualified against its origin module, and that
-/// rewrite reaches ONLY the length — never a converter body's locals.
+/// Array-length consts — both a FREE const and an ASSOCIATED one — are
+/// qualified against their origin module, and that rewrite reaches ONLY the
+/// length, never a converter body's locals.
 ///
 /// The const here is deliberately named `env`, which is also the name of the
 /// `JNIEnv` local every generated converter uses. A source crate may legally
@@ -1457,10 +1458,22 @@ fn array_length_const_is_qualified_without_touching_locals() {
         )),
         loc.clone(),
     ));
+    // A type owning an ASSOCIATED const, used as the other length below. The
+    // path is `Holder::N` — two segments, so the leading one is a TYPE and is
+    // qualified from `source_names`, not from the free-const map.
+    items.push((
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct Holder {
+                pub marker: u8,
+            }
+        )),
+        loc.clone(),
+    ));
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Blob {
                 pub bytes: [u8; env],
+                pub assoc: [u8; Holder::N],
             }
         )),
         loc.clone(),
@@ -1477,6 +1490,7 @@ fn array_length_const_is_qualified_without_touching_locals() {
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("blob")
             .class(crate::data_class!(Blob))
+            .class(crate::data_class!(Holder))
             .fun(crate::fun!(blob_echo)),
     );
     let dir = unique_test_dir("jnigen_array_len_const");
@@ -1497,4 +1511,17 @@ fn array_length_const_is_qualified_without_touching_locals() {
     assert!(!rc.contains("myflat::env.byte_array_from_slice"), "{rust}");
     assert!(!rc.contains("myflat::env,"), "{rust}");
     assert!(!rc.contains("&mutmyflat::env"), "{rust}");
+
+    // An ASSOCIATED const qualifies its leading TYPE segment and leaves the
+    // rest of the path relative to it — `myflat::Holder::N`, never
+    // `myflat::Holder::myflat::N`. Asserted at the two CODE positions (return
+    // type and param type); the bare spelling legitimately survives inside the
+    // decode's diagnostic string, which names the type as the source wrote it.
+    assert!(rc.contains("Result<[u8;myflat::Holder::N]"), "{rust}");
+    assert!(rc.contains("v:[u8;myflat::Holder::N]"), "{rust}");
+    assert!(!rc.contains("Result<[u8;Holder::N]"), "{rust}");
+    assert!(!rc.contains("v:[u8;Holder::N]"), "{rust}");
+    // The leading segment is rewritten ONCE — the associated item stays
+    // relative to the type it belongs to.
+    assert!(!rc.contains("myflat::Holder::myflat"), "{rust}");
 }

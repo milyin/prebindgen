@@ -77,25 +77,45 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
         syn::visit_mut::visit_type_mut(self, &mut arr.elem);
         let mut consts = QualifyConstPaths {
             const_names: self.const_names,
+            source_names: self.source_names,
         };
         syn::visit_mut::visit_expr_mut(&mut consts, &mut arr.len);
     }
 }
 
-/// Qualifies bare const paths, run ONLY over an array's length expression by
-/// [`QualifyEmittedTypes::visit_type_array_mut`]. Separate from the type
+/// Qualifies the source-crate paths in an array's LENGTH expression, run only
+/// by [`QualifyEmittedTypes::visit_type_array_mut`]. Separate from the type
 /// visitor so it can never reach a converter body's locals.
+///
+/// A length is an ordinary Rust const expression, so it reaches the source
+/// crate two ways and both need the origin module prefixed:
+///
+/// * a **free const**, `[u8; MAX]` — one segment, looked up in `const_names`;
+/// * an **associated const**, `[u8; Holder::N]` — the leading segment is a
+///   TYPE, looked up in `source_names`. Only that segment is rewritten; the
+///   rest of the path (`::N`, and any further associated item) is relative to
+///   it and must be left alone.
 struct QualifyConstPaths<'a> {
     const_names: &'a std::collections::HashMap<String, syn::Path>,
+    source_names: &'a std::collections::HashMap<String, syn::Path>,
 }
 
 impl syn::visit_mut::VisitMut for QualifyConstPaths<'_> {
     fn visit_expr_path_mut(&mut self, ep: &mut syn::ExprPath) {
-        if ep.qself.is_none() && ep.path.leading_colon.is_none() && ep.path.segments.len() == 1 {
-            let ident = ep.path.segments[0].ident.to_string();
-            if let Some(module) = self.const_names.get(&ident) {
+        if ep.qself.is_none() && ep.path.leading_colon.is_none() {
+            // The map to consult is decided by shape: one segment names a const
+            // directly, more than one means the leading segment is the type
+            // that owns the const.
+            let head = &ep.path.segments[0];
+            let ident = head.ident.to_string();
+            let module = if ep.path.segments.len() == 1 {
+                self.const_names.get(&ident)
+            } else {
+                self.source_names.get(&ident)
+            };
+            if let Some(module) = module {
                 let mut qualified = module.clone();
-                qualified.segments.push(ep.path.segments[0].clone());
+                qualified.segments.extend(ep.path.segments.iter().cloned());
                 ep.path = qualified;
             }
         }
