@@ -221,9 +221,10 @@ fn encode_field(
     let mut slots: Vec<EncSlot> = Vec::new();
     {
         let id = format_ident!("__{}", base);
-        let conv_value = |conv: &syn::Ident| -> TokenStream {
-            quote! { #conv(#env_expr, #value.clone())? }
-        };
+        // The leaf's COMPLETE chain, not just its wire-facing converter: a
+        // `convert!`-declared type (`Duration`) reaches the wire through its
+        // rust-side stages first (`Duration → u64 → jlong`).
+        let conv_value = |conv: &ConvChain| -> TokenStream { conv.call(env_expr, value, base) };
         match kind {
             // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
             PlanFieldKind::Projection { conv, proj, .. } => {

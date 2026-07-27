@@ -204,9 +204,35 @@ pub(crate) fn callback_input(
             },
         };
         let arg_wire = arg_entry.destination.clone();
-        let conv = arg_entry.function.sig.ident.clone();
         let enc_ident = format_ident!("__cb{}_enc", i);
         let obj_ident = format_ident!("__cb{}_obj", i);
+
+        // The arg's COMPLETE Rust -> wire chain: the rust-side stages a custom
+        // `convert!` declaration inserts (`Duration -> u64`), then the
+        // wire-facing converter (`u64 -> jlong`). A whole-value callback arg
+        // has no leaf plan, so this is its own encoder path — calling only the
+        // wire-facing converter would hand it the semantic value where it
+        // expects the representation. Stage locals are keyed on the arg index.
+        let conv = {
+            let converter = arg_entry.converter_ident();
+            if arg_entry.pre_stages.is_empty() {
+                quote!(#converter(&mut env, #cb_val)?)
+            } else {
+                let mut body = TokenStream::new();
+                let mut previous = cb_val.clone();
+                for (order, (_, stage)) in arg_entry.output_stage_order().enumerate() {
+                    let stage_fn = &stage.function.sig.ident;
+                    let next = format_ident!("__cb{}_s{}", i, order);
+                    body.extend(quote! {
+                        let #next = #stage_fn(&mut env, #previous)
+                            .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
+                                __e.to_string()))?;
+                    });
+                    previous = quote!(#next);
+                }
+                quote!({ #body #converter(&mut env, #previous)? })
+            }
+        };
 
         // Plan-less opaque-handle arg: encode to a raw `jlong` (`Box::into_raw`)
         // and deliver it as-is. The typed handle class is constructed Kotlin-side
@@ -219,7 +245,7 @@ pub(crate) fn callback_input(
         if let Some(h) = &arg_entry.metadata.projection {
             if matches!(h.kind, ProjectionKind::Handle) {
                 preludes.push(quote! {
-                    let #enc_ident = #conv(&mut env, #cb_val)?;
+                    let #enc_ident = #conv;
                 });
                 jvalue_exprs.push(quote!(jni::sys::jvalue { j: #enc_ident }));
                 total += 1;
@@ -242,7 +268,7 @@ pub(crate) fn callback_input(
         if arg_is_prim {
             let letter = jni_field_access(&arg_wire).unwrap().1;
             preludes.push(quote! {
-                let #enc_ident = #conv(&mut env, #cb_val)?;
+                let #enc_ident = #conv;
             });
             jvalue_exprs.push(quote!(jni::sys::jvalue { #letter: #enc_ident }));
             total += 1;
@@ -250,7 +276,7 @@ pub(crate) fn callback_input(
         }
         let cast = cast_wire_to_jobject(&enc_ident, &arg_wire, &fail);
         preludes.push(quote! {
-            let #enc_ident = #conv(&mut env, #cb_val)?;
+            let #enc_ident = #conv;
             let #obj_ident: jni::objects::JObject = #cast;
         });
         jvalue_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));

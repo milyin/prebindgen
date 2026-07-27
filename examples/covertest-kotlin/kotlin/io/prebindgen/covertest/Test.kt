@@ -34,6 +34,8 @@ import io.prebindgen.covertest.model.ObjectBoundary63
 import io.prebindgen.covertest.model.ObjectBoundary64
 import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
+import io.prebindgen.covertest.model.Hold
+import io.prebindgen.covertest.model.HoldPolicy
 import io.prebindgen.covertest.model.Lookup
 import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
@@ -43,8 +45,12 @@ import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
+import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
+import io.prebindgen.covertest.model.holdEcho
+import io.prebindgen.covertest.model.holdPolicyEcho
 import io.prebindgen.covertest.model.labelReverse
+import io.prebindgen.covertest.model.labelSeriesEcho
 import io.prebindgen.covertest.model.percentInvalidOutput
 import io.prebindgen.covertest.model.percentOptional
 import io.prebindgen.covertest.model.percentScale
@@ -227,19 +233,46 @@ fun main() {
         check(durationOptional(0uL, boom) == 0uL)
         check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
 
-        // The data-class property is semantic `ULong?`, while its native
-        // output factory receives primitive Long + niche. The echo's explicit
-        // object input also executes the complete ULong -> Duration decoder.
+        // The data-class properties are semantic `ULong` / `ULong?`, while the
+        // native output factory receives primitive Longs (the optional one
+        // niche-encoded). The echo's explicit object input also executes the
+        // complete ULong -> Duration decoder.
+        //
+        // `required` and `delay` take DIFFERENT emitter paths: `delay` rides
+        // the `Option<_>` wrapper, which composes its inner conversion chain
+        // itself, while `required` is a bare leaf the whole-object decoder and
+        // the leaf encoder each have to compose for. Both fields therefore
+        // have to round-trip, not just the nullable one.
         val fromParts = DurationBoundary::class.java.getDeclaredMethod(
             "fromParts",
             java.lang.Long.TYPE,
+            java.lang.Long.TYPE,
         )
-        check(fromParts.parameterTypes.single() == java.lang.Long.TYPE)
-        check(durationBoundaryEcho(DurationBoundary(null), boom) == DurationBoundary(null))
+        check(fromParts.parameterTypes.all { it == java.lang.Long.TYPE })
         check(
-            durationBoundaryEcho(DurationBoundary(12_345uL), boom) ==
-                DurationBoundary(12_345uL),
+            durationBoundaryEcho(DurationBoundary(0uL, null), boom) ==
+                DurationBoundary(0uL, null),
         )
+        check(
+            durationBoundaryEcho(DurationBoundary(7uL, 12_345uL), boom) ==
+                DurationBoundary(7uL, 12_345uL),
+        )
+        // The required field carries its own value rather than mirroring the
+        // optional one — a chain wired to the wrong binding would cross them.
+        check(
+            durationBoundaryEcho(DurationBoundary(86_400_000uL, 1uL), boom) ==
+                DurationBoundary(86_400_000uL, 1uL),
+        )
+
+        // A whole-value CALLBACK argument is a third encoder path, independent
+        // of the data-class and sum emitters above: the trampoline encodes the
+        // arg itself, with no leaf plan to carry the chain. The converted
+        // analogue of `unsignedEmit`.
+        var emittedDuration = 0uL
+        durationEmit(12_345uL, DurationCallback { emittedDuration = it }, boom)
+        check(emittedDuration == 12_345uL)
+        durationEmit(86_400_000uL, DurationCallback { emittedDuration = it }, boom)
+        check(emittedDuration == 86_400_000uL)
 
         var inputError: String? = null
         val inputFallback = durationOptional(86_400_001uL) { je ->
@@ -338,6 +371,32 @@ fun main() {
             invalid = e.message
         }
         check(invalid == "Reading: invalid tag 5")
+    }
+
+    // ── a sum payload that is a CONVERTED type ───────────────────────────────
+    // `Hold.For` carries a `Duration`, whose boundary conversion is the
+    // `convert!` chain `Duration -> u64 -> jlong` rather than a single wire
+    // converter. Every sum emitter has to run the whole chain: reading only the
+    // wire-facing converter passes the semantic value where the representation
+    // is expected. Exercised at all three positions — the function's own return
+    // (`holdEcho`), a required data-class field and an optional one
+    // (`holdPolicyEcho`), the last of which also decodes the sum back off a
+    // Kotlin property.
+    section("sum payload crossing a convert! chain") {
+        check(holdEcho(Hold.Indefinite, boom) == Hold.Indefinite)
+        check(holdEcho(Hold.For(12_345uL), boom) == Hold.For(12_345uL))
+        // The domain bounds still apply inside a variant group: the payload
+        // converter is the same one a bare `Duration` uses.
+        check(holdEcho(Hold.For(86_400_000uL), boom) == Hold.For(86_400_000uL))
+
+        val both = holdPolicyEcho(HoldPolicy(Hold.For(7uL), Hold.Indefinite), boom)
+        check(both == HoldPolicy(Hold.For(7uL), Hold.Indefinite))
+        val absent = holdPolicyEcho(HoldPolicy(Hold.Indefinite, null), boom)
+        check(absent == HoldPolicy(Hold.Indefinite, null))
+        // The optional group's payload must survive independently of the
+        // required one's — a chain wired to the wrong binding would cross them.
+        val onlyGrace = holdPolicyEcho(HoldPolicy(Hold.Indefinite, Hold.For(99uL)), boom)
+        check(onlyGrace == HoldPolicy(Hold.Indefinite, Hold.For(99uL)))
     }
 
     // ── a sum as a data-class FIELD, crossing Rust → Kotlin ───────────────────
@@ -1008,6 +1067,15 @@ fun main() {
         check(msg?.contains("label must not be empty") == true) {
             "labelReverse(\"\") must report the empty-label error, got: $msg"
         }
+
+        // `Vec<Label>` — a collection whose ELEMENT is a converted type. The
+        // `Vec` converters build the element conversion inline in both
+        // directions, so each has to run the element's chain rather than its
+        // wire-facing converter alone. (`Vec<Duration>` cannot probe this: a
+        // `Vec` needs a JObject-shaped element wire and a bounded duration's
+        // is a primitive `Long`, so it is refused at resolve time.)
+        check(labelSeriesEcho(listOf("alpha", "beta"), boom) == listOf("alpha", "beta"))
+        check(labelSeriesEcho(emptyList(), boom) == emptyList<String>())
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────

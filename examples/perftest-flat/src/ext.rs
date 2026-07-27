@@ -613,9 +613,15 @@ pub fn duration_out_of_range() -> Option<Duration> {
 /// its echo executes both the whole-object input decoder and the `fromParts`
 /// output encoder; the nullable duration itself still uses the raw `jlong`
 /// niche whenever it crosses a generated JNI call boundary.
+///
+/// The two fields are the two shapes a converted leaf takes, and they exercise
+/// DIFFERENT emitter paths: `delay` goes through the `Option<_>` wrapper, which
+/// composes its inner conversion chain itself, while `required` is a bare leaf
+/// the data-class encoder/decoder has to compose for.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DurationBoundary {
+    pub required: Duration,
     pub delay: Option<Duration>,
 }
 
@@ -623,6 +629,58 @@ pub struct DurationBoundary {
 #[prebindgen]
 pub fn duration_boundary_echo(value: &DurationBoundary) -> DurationBoundary {
     value.clone()
+}
+
+/// Deliver a converted value through the generated typed/raw callback twin —
+/// the converted analogue of [`unsigned_emit`].
+///
+/// A callback argument that crosses WHOLE (no deconstructor, so no leaf plan)
+/// is its own encoder path, independent of the data-class and sum emitters, so
+/// a converted type has to reach its representation here too.
+#[prebindgen]
+pub fn duration_emit(value: Duration, f: impl Fn(Duration) + Send + Sync + 'static) {
+    f(value)
+}
+
+/// How long something is held: for an explicit period, or indefinitely.
+///
+/// A **sum whose payload is a converted type**. `Duration` crosses through the
+/// binding's `convert!` declaration, so this payload's boundary conversion is
+/// two steps (`Duration -> u64 -> jlong`, and back) rather than the single
+/// wire converter every other sum payload here uses — the position where an
+/// emitter that reads only the wire-facing converter builds code that hands
+/// the semantic value where the representation is expected.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Hold {
+    /// Held with no end — the payload-less group.
+    Indefinite,
+    /// Held for this long.
+    For(Duration),
+}
+
+/// A retention policy: a required converted-payload sum beside an optional one.
+///
+/// The data-class position for [`Hold`], so the converted payload is exercised
+/// both as a top-level sum and as a tag-gated group inside a `fromParts`
+/// bridge — the two encoders are separate code paths.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HoldPolicy {
+    pub hold: Hold,
+    pub grace: Option<Hold>,
+}
+
+/// Round-trip a converted-payload sum, whole.
+#[prebindgen]
+pub fn hold_echo(h: Hold) -> Hold {
+    h
+}
+
+/// Round-trip a data class carrying converted-payload sums.
+#[prebindgen]
+pub fn hold_policy_echo(p: HoldPolicy) -> HoldPolicy {
+    p
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -709,6 +767,20 @@ pub struct Label(pub String);
 #[prebindgen]
 pub fn label_reverse(l: Label) -> Label {
     Label(l.0.chars().rev().collect())
+}
+
+/// Round-trip a collection of labels — a `Vec` whose ELEMENT is a converted
+/// type.
+///
+/// `Duration` cannot take this path (a `Vec` needs a JObject-shaped element
+/// wire, and its representation is a primitive `jlong`, so `Vec<Duration>` is
+/// refused at resolve time), but `Label` lowers to `String` and therefore does.
+/// The `Vec` converters build their element conversion inline, in both
+/// directions, so each has to compose the element's chain rather than call its
+/// wire-facing converter alone.
+#[prebindgen]
+pub fn label_series_echo(labels: Vec<Label>) -> Vec<Label> {
+    labels
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

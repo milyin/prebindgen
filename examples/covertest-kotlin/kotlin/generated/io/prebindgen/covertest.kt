@@ -3,6 +3,8 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.DurationBoundary
+import io.prebindgen.covertest.model.Hold
+import io.prebindgen.covertest.model.HoldPolicy
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.Observation
@@ -377,6 +379,22 @@ public fun interface PayloadListCallback {
     public fun run(arg0: List<Payload>)
 }
 
+public fun interface DurationCallback {
+    public fun run(duration: ULong)
+}
+
+public fun interface DurationCallbackRaw {
+    public fun run(duration: Long)
+}
+
+public fun DurationCallback.asRaw(): DurationCallbackRaw =
+    DurationCallbackRaw {
+        duration ->
+        run(
+            duration.toULong()
+        )
+    }
+
 public fun interface StorageCallback {
     public fun run(storage: Storage)
 }
@@ -696,6 +714,8 @@ internal object CovNative {
 
     external fun durationBoundaryEcho(value: DurationBoundary, build: Any, errorSink: Any): Any?
 
+    external fun durationEmit(value: Long, f: Any, errorSink: Any)
+
     external fun durationOptional(value: Long, errorSink: Any): Long
 
     external fun durationOutOfRange(errorSink: Any): Long
@@ -704,7 +724,17 @@ internal object CovNative {
 
     external fun escape_probe_value(p: Long, errorSink: Any): Long
 
+    external fun holdEcho(h: Hold, build: Any, errorSink: Any): Any?
+
+    external fun holdPolicyEcho(
+        pHold: Hold,
+        pGrace: io.prebindgen.covertest.model.Hold?,
+        errorSink: Any,
+    ): HoldPolicy
+
     external fun labelReverse(l: String, errorSink: Any): String
+
+    external fun labelSeriesEcho(labels: List<String>, errorSink: Any): List<String>
 
     external fun lookupEach(n: Long, total: Double, sink: Any, errorSink: Any)
 
