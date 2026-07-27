@@ -1435,3 +1435,66 @@ fn data_class_properties_match_their_from_parts_params() {
     assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 }
+
+/// An array-length const is qualified against its origin module, and that
+/// rewrite reaches ONLY the length — never a converter body's locals.
+///
+/// The const here is deliberately named `env`, which is also the name of the
+/// `JNIEnv` local every generated converter uses. A source crate may legally
+/// declare it (`#[allow(non_upper_case_globals)] pub const env`), so a
+/// whole-item expression pass would rewrite `env.get_java_vm()` to
+/// `myflat::env.get_java_vm()` even when restricted to registered const idents
+/// — thousands of `no method named get_java_vm found for type usize`. Scoping
+/// the pass to `TypeArray::len` is what makes the two cases distinguishable.
+#[test]
+fn array_length_const_is_qualified_without_touching_locals() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = Vec::new();
+    items.push((
+        syn::Item::Const(syn::parse_quote!(
+            #[allow(non_upper_case_globals)]
+            pub const env: usize = 4;
+        )),
+        loc.clone(),
+    ));
+    items.push((
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct Blob {
+                pub bytes: [u8; env],
+            }
+        )),
+        loc.clone(),
+    ));
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn blob_echo(b: Blob) -> Blob {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    ));
+    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("blob")
+            .class(crate::data_class!(Blob))
+            .fun(crate::fun!(blob_echo)),
+    );
+    let dir = unique_test_dir("jnigen_array_len_const");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).unwrap();
+    let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
+    let rust = std::fs::read_to_string(rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // The length IS qualified — otherwise the generated file names a const
+    // that is not in scope.
+    assert!(rc.contains("[u8;myflat::env]"), "{rust}");
+    // ...and the identically-named LOCAL is untouched. These two assertions
+    // fail in opposite directions, so neither alone pins the behavior: the
+    // `env` here is the `&mut JNIEnv` every converter body threads through.
+    assert!(rc.contains("env.byte_array_from_slice"), "{rust}");
+    assert!(!rc.contains("myflat::env.byte_array_from_slice"), "{rust}");
+    assert!(!rc.contains("myflat::env,"), "{rust}");
+    assert!(!rc.contains("&mutmyflat::env"), "{rust}");
+}

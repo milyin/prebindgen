@@ -45,9 +45,8 @@ pub(crate) struct QualifyEmittedTypes<'a> {
     /// Bare type name → the module it is reachable under (the item's origin
     /// crate, or the registry's default module).
     pub(crate) source_names: &'a std::collections::HashMap<String, syn::Path>,
-    /// Bare **const** name → the same. Kept separate from `source_names`
-    /// because it qualifies EXPRESSION paths, where a blanket rename would
-    /// also hit every local variable — see [`Self::visit_expr_path_mut`].
+    /// Bare **const** name → the same. Applied ONLY inside an array length —
+    /// see [`QualifyConstPaths`].
     pub(crate) const_names: &'a std::collections::HashMap<String, syn::Path>,
 }
 
@@ -64,14 +63,33 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
         syn::visit_mut::visit_type_path_mut(self, tp);
     }
 
-    /// Qualify a bare `#[prebindgen]` **const** reference.
+    /// Qualify a `#[prebindgen]` const used as an ARRAY LENGTH (`[u8; MAX]`).
     ///
-    /// A const can appear inside a TYPE — an array length, `[u8; MAX_SIZE]` —
-    /// which `syn` models as an expression, so `visit_type_path_mut` never sees
-    /// it and the generated file references a const that is not in scope. Only
-    /// idents the registry indexes as consts are rewritten: expression paths
-    /// are also every local variable and function name in a converter body, and
-    /// qualifying those indiscriminately would rewrite `v` or `env`.
+    /// `syn` models the length as an expression, so `visit_type_path_mut` never
+    /// sees it and the generated file would reference a const that is not in
+    /// scope. The rewrite is confined to `arr.len` on purpose: a generated
+    /// converter body is full of expression paths that are LOCALS (`v`, `env`),
+    /// and a source crate may legally declare `pub const env: usize` — so a
+    /// whole-item expression pass would rewrite those locals to
+    /// `mycrate::env` even when restricted to registered const idents. An array
+    /// length cannot contain a local, which is what makes this scope safe.
+    fn visit_type_array_mut(&mut self, arr: &mut syn::TypeArray) {
+        syn::visit_mut::visit_type_mut(self, &mut arr.elem);
+        let mut consts = QualifyConstPaths {
+            const_names: self.const_names,
+        };
+        syn::visit_mut::visit_expr_mut(&mut consts, &mut arr.len);
+    }
+}
+
+/// Qualifies bare const paths, run ONLY over an array's length expression by
+/// [`QualifyEmittedTypes::visit_type_array_mut`]. Separate from the type
+/// visitor so it can never reach a converter body's locals.
+struct QualifyConstPaths<'a> {
+    const_names: &'a std::collections::HashMap<String, syn::Path>,
+}
+
+impl syn::visit_mut::VisitMut for QualifyConstPaths<'_> {
     fn visit_expr_path_mut(&mut self, ep: &mut syn::ExprPath) {
         if ep.qself.is_none() && ep.path.leading_colon.is_none() && ep.path.segments.len() == 1 {
             let ident = ep.path.segments[0].ident.to_string();
