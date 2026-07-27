@@ -672,6 +672,84 @@ fn literals_cover_their_whole_value_domain() {
     }
 }
 
+// ── free-name reservations vs. binder scope ─────────────────────────────
+
+/// A **`Fixed` binder sharing a free name's spelling must not consume the free
+/// name's reservation** when its frame pops.
+///
+/// The reservations made up front are permanent for the whole render; a
+/// binder's claim lasts until its frame pops. With a set they were the same
+/// thing, so a `Fixed` binder inserted a no-op and then *removed the
+/// reservation* — after which a later `Fresh` binder could allocate that
+/// spelling and capture the free reference.
+#[test]
+fn a_fixed_binder_does_not_consume_a_free_name_reservation() {
+    let mut arena = ExprArena::new();
+    let fixed = arena.bind_fixed(KtName::expect("config"));
+    let fresh = arena.bind_fresh("config");
+    // `{ config -> config }` — the Fixed binder's frame opens and closes —
+    // then a Fresh binder asks for the same hint, while the tree still
+    // references the free `io.example.config`.
+    let tree = KtExpr::free_call(
+        "f",
+        [
+            KtExpr::lambda1([fixed], KtExpr::local(fixed)),
+            KtExpr::lambda1([fresh], KtExpr::local(fresh)),
+            KtExpr::name("io.example.config"),
+        ],
+    );
+    let mut imports = ImportSet::default();
+    let rendered = render_expr(&arena, &tree, &mut imports);
+    // The Fresh binder had to move aside: the reservation survived the Fixed
+    // binder's pop.
+    assert_eq!(
+        rendered,
+        "f({ config -> config }, { config2 -> config2 }, config)"
+    );
+}
+
+/// While a binder printed `config` is live, a **qualified** free name that
+/// would shorten to `config` stays fully qualified.
+///
+/// Shortening it would silently turn the qualified reference into the
+/// parameter — capture arriving through the import set rather than the scope.
+#[test]
+fn a_qualified_free_name_shadowed_by_a_binder_stays_qualified() {
+    let mut arena = ExprArena::new();
+    let fixed = arena.bind_fixed(KtName::expect("config"));
+    let tree = KtExpr::lambda1(
+        [fixed],
+        KtExpr::free_call(
+            "f",
+            [KtExpr::local(fixed), KtExpr::name("io.example.config")],
+        ),
+    );
+    let mut imports = ImportSet::default();
+    assert_eq!(
+        render_expr(&arena, &tree, &mut imports),
+        "{ config -> f(config, io.example.config) }"
+    );
+}
+
+/// A **bare** free name shadowed by a live binder is rejected: the two are the
+/// same token in the output, and the only fix would be renaming a `Fixed`
+/// binder that callers name in arguments.
+///
+/// A `Fresh` binder can never reach this — the allocator avoids every reserved
+/// free name — so it is exactly the `Fixed` case.
+#[test]
+#[should_panic(expected = "is shadowed by a binder printed the same way")]
+fn a_bare_free_name_shadowed_by_a_fixed_binder_is_rejected() {
+    let mut arena = ExprArena::new();
+    let fixed = arena.bind_fixed(KtName::expect("config"));
+    let tree = KtExpr::lambda1(
+        [fixed],
+        KtExpr::free_call("f", [KtExpr::local(fixed), KtExpr::name("config")]),
+    );
+    let mut imports = ImportSet::default();
+    let _ = render_expr(&arena, &tree, &mut imports);
+}
+
 // ── cross-arena composition ─────────────────────────────────────────────
 
 /// `fill_hole` and `substitute` clone trees, so a tree built in **another**
@@ -816,17 +894,13 @@ fn accessors_are_structured_declarations() {
 fn an_expression_accessor_can_reference_its_enclosing_binders() {
     let mut arena = ExprArena::new();
     let ctor_param = arena.bind_fixed(KtName::expect("initialPtr"));
-    let acc = KtAccessor {
-        kind: crate::api::gen::kotlin::AccessorKind::Get,
-        param: None,
-        body: crate::api::gen::kotlin::slot::AccessorBody::Expr(
-            crate::api::gen::kotlin::slot::Ast::in_scope(
-                arena,
-                vec![ctor_param],
-                KtExpr::local(ctor_param).field("value"),
-            ),
+    let acc = KtAccessor::Get(crate::api::gen::kotlin::AccessorTree::Expr(
+        crate::api::gen::kotlin::slot::Ast::in_scope(
+            arena,
+            vec![ctor_param],
+            KtExpr::local(ctor_param).field("value"),
         ),
-    };
+    ));
     let mut imports = ImportSet::default();
     let mut out = String::new();
     acc.render_lines(&mut imports).render(0, &mut out);
@@ -859,6 +933,44 @@ fn a_setter_parameter_is_spelled_from_the_same_allocation_as_its_body() {
     let mut out = String::new();
     acc.render_lines(&mut imports).render(0, &mut out);
     assert_eq!(out.trim(), "set(value2) = store(value2, value)");
+}
+
+/// A typed `Set` **cannot** be built without its value parameter: the variant
+/// carries the binder, so `param: None` is not a representable state.
+///
+/// The old shape fell back to the text `value` whenever `param` was absent, so
+/// a `Set` with a body containing `KtExpr::name("value")` rendered
+/// `set(value) = value` — a free name captured by an implicit binder with no
+/// `BindingId` at all.
+#[test]
+fn a_typed_setter_always_carries_its_parameter() {
+    // The only way to build one binds the parameter.
+    let acc = KtAccessor::set_expr(ExprArena::new(), "value", KtExpr::local);
+    assert!(matches!(acc, KtAccessor::Set { .. }));
+    let mut imports = ImportSet::default();
+    let mut out = String::new();
+    acc.render_lines(&mut imports).render(0, &mut out);
+    assert_eq!(out.trim(), "set(value) = value");
+
+    // And a hand-built `Set` whose parameter is not in its body's scope fails
+    // fast rather than falling back to a textual header.
+    let mut arena = ExprArena::new();
+    let param = arena.bind_fresh("incoming");
+    let stray = KtAccessor::Set {
+        param,
+        body: crate::api::gen::kotlin::AccessorTree::Expr(crate::api::gen::kotlin::slot::Ast::new(
+            arena,
+            KtExpr::int(0),
+        )),
+    };
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut imports = ImportSet::default();
+        stray.render_lines(&mut imports)
+    }));
+    assert!(
+        err.is_err(),
+        "a parameter outside its body's scope must be rejected"
+    );
 }
 
 /// A **clone** of an arena cannot allocate.

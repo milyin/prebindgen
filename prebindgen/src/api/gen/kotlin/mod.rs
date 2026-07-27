@@ -37,7 +37,7 @@ pub use model::{
 };
 #[allow(unused_imports)]
 pub use slot::{
-    AccessorKind, AnnotationSlot, ExprSlot, KtAccessor, KtAnnotation, PropertyValue,
+    AccessorTree, AnnotationSlot, ExprSlot, KtAccessor, KtAnnotation, PropertyValue,
     StaticAnnotationText,
 };
 pub use types::{ImportSet, KtType};

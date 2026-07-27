@@ -140,63 +140,63 @@ pub enum PropertyValue {
     Delegate(ExprSlot<KtExpr>),
 }
 
-/// Which accessor of a property.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AccessorKind {
-    Get,
-    Set,
-}
-
 /// A property accessor.
 ///
 /// **A declaration containing a body**, not an expression — which is why it is
-/// not an `ExprSlot<KtExpr>`. A getter may be `get() = <expr>` or `get() { … }`,
-/// and a setter binds its parameter.
+/// not an `ExprSlot<KtExpr>`.
+///
+/// A **sum**, so that a typed setter without its value parameter is
+/// unrepresentable. It was `{ kind, param: Option<BindingId>, body }` with the
+/// header falling back to the text `value` when `param` was absent — and since
+/// the fields are public, a `Set` could be built with `param: None` and a body
+/// containing `KtExpr::name("value")`, rendering `set(value) = value`: a free
+/// name captured by an implicit binder with no `BindingId` at all. Carrying the
+/// binder in the variant removes that state instead of checking for it.
 #[derive(Clone, Debug)]
-pub struct KtAccessor {
-    pub kind: AccessorKind,
-    /// A setter's value parameter, as a **binder**.
+pub enum KtAccessor {
+    /// Pre-rendered accessor text, verbatim. Deleted by #199.
+    Legacy(Code),
+    /// `get() = <expr>` / `get() { … }`.
+    Get(AccessorTree),
+    /// `set(<param>) = <expr>` / `set(<param>) { … }`.
     ///
-    /// The header used to be a hardcoded `set(value)`, independent of anything
-    /// in the body's scope — so a binder spelled `incoming` rendered
-    /// `set(value) = incoming`, and a `Fresh` binder hinted `value` that the
-    /// allocator moved to `value2` left the signature still saying `value`.
-    /// The spelling now comes from the same allocation the body uses, which is
-    /// the only way the two cannot disagree.
-    ///
-    /// `None` for a getter, and on the legacy path.
-    pub param: Option<BindingId>,
-    /// `= <expr>` when `Some(expr)`, else a block of `body`.
-    pub body: AccessorBody,
+    /// `param` is the value parameter as a **binder**, and the header is
+    /// spelled from the same allocation the body uses — the only way the
+    /// signature and the body cannot disagree.
+    Set {
+        param: BindingId,
+        body: AccessorTree,
+    },
 }
 
-/// An accessor's body — expression form or block form.
+/// A typed accessor body — expression form or block form.
 #[derive(Clone, Debug)]
-pub enum AccessorBody {
-    /// Legacy pre-rendered accessor text, verbatim. Deleted by #199.
-    Legacy(Code),
-    /// `get() = <expr>`.
+pub enum AccessorTree {
+    /// `= <expr>`.
     Expr(Ast<KtExpr>),
-    /// `get() { <stmts> }`.
+    /// `{ <stmts> }`.
     Block(Ast<Vec<KtStmt>>),
+}
+
+impl AccessorTree {
+    fn scope(&self) -> &[BindingId] {
+        match self {
+            AccessorTree::Expr(a) => &a.scope,
+            AccessorTree::Block(a) => &a.scope,
+        }
+    }
 }
 
 impl KtAccessor {
     /// Wrap pre-rendered accessor text. The mechanical bridge; #199 replaces
     /// each caller with a structured accessor.
     pub fn legacy(code: Code) -> Self {
-        Self {
-            kind: AccessorKind::Get,
-            param: None,
-            body: AccessorBody::Legacy(code),
-        }
+        KtAccessor::Legacy(code)
     }
+
+    /// `get() = <expr>`.
     pub fn get_expr(arena: ExprArena, e: KtExpr) -> Self {
-        Self {
-            kind: AccessorKind::Get,
-            param: None,
-            body: AccessorBody::Expr(Ast::new(arena, e)),
-        }
+        KtAccessor::Get(AccessorTree::Expr(Ast::new(arena, e)))
     }
 
     /// A setter whose value parameter is a binder the body references through
@@ -208,14 +208,13 @@ impl KtAccessor {
     ) -> Self {
         let param = arena.bind_fresh(hint);
         let tree = build(param);
-        Self {
-            kind: AccessorKind::Set,
-            param: Some(param),
-            body: AccessorBody::Expr(Ast::in_scope(arena, vec![param], tree)),
+        KtAccessor::Set {
+            param,
+            body: AccessorTree::Expr(Ast::in_scope(arena, vec![param], tree)),
         }
     }
     pub fn is_legacy(&self) -> bool {
-        matches!(self.body, AccessorBody::Legacy(_))
+        matches!(self, KtAccessor::Legacy(_))
     }
 }
 
@@ -448,33 +447,42 @@ impl KtAccessor {
         // uses, via the scope names the renderer hands back. Deriving it
         // independently — as a hardcoded `set(value)` did — is how a signature
         // ends up saying `value` while the body says `value2`.
+        let (tree, param) = match self {
+            KtAccessor::Legacy(c) => return c.clone(),
+            KtAccessor::Get(t) => (t, None),
+            KtAccessor::Set { param, body } => (body, Some(*param)),
+        };
+        // A setter's parameter must be in its body's scope, or the header would
+        // be spelled from an allocation the body never saw. `Set` guarantees
+        // the binder exists; this is the remaining half — that it is the one
+        // the body renders under.
+        if let Some(p) = param {
+            assert!(
+                tree.scope().contains(&p),
+                "KtAccessor::Set: the value parameter is not in its body's scope — the header \
+                 and the body would be spelled from different allocations"
+            );
+        }
         let head = |scope: &[BindingId], names: &[String]| -> String {
-            match self.kind {
-                AccessorKind::Get => "get()".to_string(),
-                AccessorKind::Set => {
-                    let name = self
-                        .param
-                        .and_then(|p| scope.iter().position(|b| *b == p))
-                        .and_then(|i| names.get(i).cloned())
-                        // A setter with no declared binder keeps Kotlin's
-                        // implicit parameter name.
-                        .unwrap_or_else(|| "value".to_string());
-                    format!("set({name})")
+            match param {
+                None => "get()".to_string(),
+                Some(p) => {
+                    let i = scope.iter().position(|b| *b == p).expect("asserted above");
+                    format!("set({})", names[i])
                 }
             }
         };
-        match &self.body {
-            AccessorBody::Legacy(c) => c.clone(),
+        match tree {
             // Scope-aware, like every other typed slot: a getter or setter
             // expression referencing a constructor parameter or the setter's
             // own binder would otherwise be unbound.
-            AccessorBody::Expr(a) => {
+            AccessorTree::Expr(a) => {
                 let (names, rendered) = super::expr::render::render_expr_in_scope_named(
                     &a.arena, &a.scope, &a.tree, imports,
                 );
                 Code::new().line(format!("{} = {rendered}", head(&a.scope, &names)))
             }
-            AccessorBody::Block(a) => {
+            AccessorTree::Block(a) => {
                 let (names, lines) =
                     super::expr::render::render_stmts_named(&a.arena, &a.scope, &a.tree, imports);
                 Code::new().blk(format!("{} {{", head(&a.scope, &names)), |c| {
@@ -489,26 +497,28 @@ impl KtAccessor {
     }
 
     pub fn collect_imports(&self, sink: &mut Vec<String>) {
-        match &self.body {
-            AccessorBody::Legacy(c) => c.collect_imports(sink),
-            AccessorBody::Expr(a) => sink.extend(
-                super::expr::free_names(&a.tree)
+        let qualified = |e: &KtExpr, sink: &mut Vec<String>| {
+            sink.extend(
+                super::expr::free_names(e)
                     .into_iter()
                     .filter(|n| n.is_qualified())
                     .map(|n| n.as_str().to_string()),
-            ),
-            AccessorBody::Block(a) => {
-                let wrapper = KtExpr::Lambda {
+            );
+        };
+        let tree = match self {
+            KtAccessor::Legacy(c) => return c.collect_imports(sink),
+            KtAccessor::Get(t) => t,
+            KtAccessor::Set { body, .. } => body,
+        };
+        match tree {
+            AccessorTree::Expr(a) => qualified(&a.tree, sink),
+            AccessorTree::Block(a) => qualified(
+                &KtExpr::Lambda {
                     params: Vec::new(),
                     body: a.tree.clone(),
-                };
-                sink.extend(
-                    super::expr::free_names(&wrapper)
-                        .into_iter()
-                        .filter(|n| n.is_qualified())
-                        .map(|n| n.as_str().to_string()),
-                );
-            }
+                },
+                sink,
+            ),
         }
     }
 }

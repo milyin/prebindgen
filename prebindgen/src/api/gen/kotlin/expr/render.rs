@@ -15,7 +15,7 @@
 //!   could drift. Here a rendered unit reports what it needs, because the
 //!   names are in the tree.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use super::{
     super::types::ImportSet, free_names, is_hard_keyword, BindingId, ExprArena, KtExpr, KtLiteral,
@@ -56,9 +56,17 @@ struct Scope<'a> {
     arena: &'a ExprArena,
     /// Printed name per binder, innermost last.
     frames: Vec<Vec<(BindingId, String)>>,
-    /// Every name currently unavailable: the free names reserved up front plus
-    /// every live binder's printed name.
-    taken: HashSet<String>,
+    /// How many times each spelling is currently claimed — **counted**, not a
+    /// set.
+    ///
+    /// A set conflates two different claims on one name. The free-name
+    /// reservations made in [`Self::new`] are permanent for the whole render,
+    /// while a binder's claim lasts only until its frame pops. With a set, a
+    /// `Fixed` binder that happens to share a free name's spelling inserts a
+    /// no-op and then *removes the reservation* when it pops — after which a
+    /// later `Fresh` binder is free to allocate that spelling and capture the
+    /// free reference. Counting keeps the two claims independent.
+    taken: HashMap<String, usize>,
 }
 
 impl<'a> Scope<'a> {
@@ -69,11 +77,12 @@ impl<'a> Scope<'a> {
     /// refers to — the same capture the `BindingId` scheme prevents for
     /// binders, arriving through the one position `BindingId`s do not cover.
     fn new(arena: &'a ExprArena, root: &KtExpr) -> Self {
-        let mut taken = HashSet::new();
+        let mut taken: HashMap<String, usize> = HashMap::new();
         for n in free_names(root) {
             // A qualified name renders as its last segment once imported, so
-            // that is the spelling a binder could collide with.
-            taken.insert(n.simple().to_string());
+            // that is the spelling a binder could collide with. These claims
+            // are never released.
+            *taken.entry(n.simple().to_string()).or_default() += 1;
         }
         Self {
             arena,
@@ -92,7 +101,7 @@ impl<'a> Scope<'a> {
                 Spelling::Fixed(n) => n.as_str().to_string(),
                 Spelling::Fresh(hint) => self.allocate(hint.as_str()),
             };
-            self.taken.insert(name.clone());
+            *self.taken.entry(name.clone()).or_default() += 1;
             frame.push((*id, name));
         }
         self.frames.push(frame);
@@ -101,9 +110,26 @@ impl<'a> Scope<'a> {
     fn pop(&mut self) {
         if let Some(frame) = self.frames.pop() {
             for (_, name) in frame {
-                self.taken.remove(&name);
+                if let Some(count) = self.taken.get_mut(&name) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.taken.remove(&name);
+                    }
+                }
             }
         }
+    }
+
+    fn is_taken(&self, name: &str) -> bool {
+        self.taken.contains_key(name)
+    }
+
+    /// Whether a **live binder** currently prints as `simple`.
+    ///
+    /// Distinct from [`Self::is_taken`], which also counts the permanent
+    /// free-name reservations: a reserved-but-unbound name shadows nothing.
+    fn live_binder_named(&self, simple: &str) -> bool {
+        self.frames.iter().flatten().any(|(_, name)| name == simple)
     }
 
     /// `hint`, else `hint2`, `hint3`, … — the first spelling that is neither
@@ -114,12 +140,12 @@ impl<'a> Scope<'a> {
     /// uncompilable. Suffixing sidesteps it with no extra machinery — `when`
     /// becomes `when2`.
     fn allocate(&self, hint: &str) -> String {
-        if !self.taken.contains(hint) && !is_hard_keyword(hint) {
+        if !self.is_taken(hint) && !is_hard_keyword(hint) {
             return hint.to_string();
         }
         (2..)
             .map(|i| format!("{hint}{i}"))
-            .find(|c| !self.taken.contains(c))
+            .find(|c| !self.is_taken(c) && !is_hard_keyword(c))
             .expect("an unbounded sequence always yields a free name")
     }
 
@@ -241,7 +267,7 @@ fn write_expr(e: &KtExpr, scope: &mut Scope, imports: &mut ImportSet, needed: Pr
 fn write_bare(e: &KtExpr, scope: &mut Scope, imports: &mut ImportSet) -> String {
     match e {
         KtExpr::Local(id) => scope.lookup(*id).to_string(),
-        KtExpr::Name(n) => render_name(n, imports),
+        KtExpr::Name(n) => render_name(n, scope, imports),
         KtExpr::This => "this".to_string(),
         KtExpr::Literal(l) => render_literal(l),
         KtExpr::Field { recv, name, safe } => {
@@ -266,7 +292,7 @@ fn write_bare(e: &KtExpr, scope: &mut Scope, imports: &mut ImportSet) -> String 
                 }
                 // An unqualified call names a free function, which may be
                 // imported like a class.
-                None => render_name(name, imports),
+                None => render_name(name, scope, imports),
             };
             let mut out = format!("{head}({})", rendered_args.join(", "));
             if let Some(l) = trailing_lambda {
@@ -367,7 +393,37 @@ fn write_stmts(stmts: &[KtStmt], scope: &mut Scope, imports: &mut ImportSet) -> 
 /// A qualified name registers an import and renders short; a bare one renders
 /// verbatim. Same rule [`super::super::types::KtType`] follows, so a class
 /// referenced from a type and from an expression agree on their import.
-fn render_name(n: &KtName, imports: &mut ImportSet) -> String {
+///
+/// **Unless a live binder already prints as that short name.** Shortening
+/// `io.example.config` to `config` inside `{ config -> … }` silently turns a
+/// qualified free reference into the parameter — capture through the one
+/// position `BindingId`s do not cover, arriving via the import set rather than
+/// via the scope.
+///
+/// A `Fresh` binder can never cause this: [`Scope::allocate`] avoids every
+/// reserved free name. Only a `Fixed` binder can, because its spelling is
+/// verbatim public API and is not the renderer's to move — so:
+///
+/// - a **qualified** name stays fully qualified, which reads correctly whatever
+///   is in scope;
+/// - a **bare** name is rejected, because there is nothing left to disambiguate
+///   with: the free reference and the binder are the same token, and the only
+///   fix would be renaming a `Fixed` binder that callers name in arguments.
+fn render_name(n: &KtName, scope: &Scope, imports: &mut ImportSet) -> String {
+    if scope.live_binder_named(n.simple()) {
+        if n.is_qualified() {
+            // Deliberately not `imports.short`: the whole point is to *not*
+            // collapse onto the shadowed spelling.
+            return n.as_str().to_string();
+        }
+        panic!(
+            "free name `{}` is shadowed by a binder printed the same way — a bare free name and \
+             a `Fixed` binder cannot be told apart in the output, and renaming the binder would \
+             change a named-argument surface. Qualify the reference, or rename the binder at its \
+             declaration.",
+            n.as_str()
+        );
+    }
     if n.is_qualified() {
         imports.short(n.as_str())
     } else {
