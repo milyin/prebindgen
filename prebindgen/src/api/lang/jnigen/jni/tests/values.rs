@@ -1582,3 +1582,58 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     assert!(!rc.contains("Result<[u8;array_len()]"), "{rust}");
     assert!(!rc.contains("v:[u8;array_len()]"), "{rust}");
 }
+
+/// An array length that opens a SCOPE is REJECTED, not qualified.
+///
+/// An inline `const { … }` block may bind locals, and this generator qualifies
+/// a length's bare paths against their source module — so a local shadowing a
+/// source item would be rewritten into it (`array_len` the local becoming
+/// `myflat::array_len` the fn). Scope tracking is the general answer; the shape
+/// has no place in an FFI boundary type, so the whole family is refused with a
+/// message naming the type and the fix. Silently mis-qualifying is the
+/// alternative this exists to prevent.
+#[test]
+#[should_panic(expected = "a length that opens a scope")]
+fn array_length_opening_a_scope_is_rejected() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = Vec::new();
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub const fn array_len() -> usize {
+                4
+            }
+        )),
+        loc.clone(),
+    ));
+    items.push((
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct Blob {
+                // The local shadows the indexed `array_len` fn above.
+                pub local: [u8; const {
+                    let array_len = 3;
+                    array_len
+                }],
+            }
+        )),
+        loc.clone(),
+    ));
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn blob_echo(b: Blob) -> Blob {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    ));
+    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("blob")
+            .class(crate::data_class!(Blob))
+            .fun(crate::fun!(blob_echo)),
+    );
+    let dir = unique_test_dir("jnigen_array_len_scope");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).unwrap();
+    generation.write_rust(dir.join("gen.rs")).unwrap();
+}
