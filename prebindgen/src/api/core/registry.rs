@@ -685,6 +685,24 @@ impl<M> Registry<M> {
     /// the item's [`SourceLocation`] stamp, or `None` when unknown —
     /// callers then fall
     /// back to [`Self::default_module`].
+    /// Every **named** item the registry indexes — functions, structs, enums,
+    /// consts — regardless of whether the stream carried an origin stamp.
+    ///
+    /// Lives here, beside the maps, so an adapter that needs "anything the
+    /// source crate defines" does not enumerate item kinds itself: a new kind
+    /// is added once, here, instead of drifting in each adapter. Deliberately
+    /// NOT keyed off [`Self::item_origins`], which holds only the items whose
+    /// [`SourceLocation::crate_name`] was set — an origin-less hand-built
+    /// stream indexes items that map never sees, and callers are expected to
+    /// pair this with `origin_module(..).unwrap_or_else(default_module)`.
+    pub fn named_item_idents(&self) -> impl Iterator<Item = &syn::Ident> {
+        self.functions
+            .keys()
+            .chain(self.structs.keys())
+            .chain(self.enums.keys())
+            .chain(self.consts.keys())
+    }
+
     pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
         let crate_name = self.item_origins.get(ident)?;
         let module = crate_name.replace('-', "_");

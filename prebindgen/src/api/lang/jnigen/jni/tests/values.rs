@@ -1453,7 +1453,21 @@ fn data_class_properties_match_their_from_parts_params() {
 /// the pass to `TypeArray::len` is what makes the two cases distinguishable.
 #[test]
 fn array_length_const_is_qualified_without_touching_locals() {
-    let loc = myflat_loc();
+    // Stamped stream: names qualify with the origin crate's module.
+    check_array_length_qualification(myflat_loc(), "myflat");
+}
+
+/// The same contract for an ORIGIN-LESS stream. Core supports hand-built item
+/// streams with no `SourceLocation::crate_name` and documents `crate` as their
+/// module, so the name set must not be derived from the origin map — those
+/// items are absent from it entirely, and deriving from it silently emitted
+/// every length bare.
+#[test]
+fn array_length_qualification_falls_back_to_crate_without_an_origin() {
+    check_array_length_qualification(SourceLocation::default(), "crate");
+}
+
+fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     let mut items: Vec<(syn::Item, SourceLocation)> = Vec::new();
     items.push((
         syn::Item::Const(syn::parse_quote!(
@@ -1509,7 +1523,7 @@ fn array_length_const_is_qualified_without_touching_locals() {
             .class(crate::data_class!(Blob))
             .fun(crate::fun!(blob_echo)),
     );
-    let dir = unique_test_dir("jnigen_array_len_const");
+    let dir = unique_test_dir(&format!("jnigen_array_len_const_{module}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = registry.resolve(jni).unwrap();
@@ -1519,14 +1533,17 @@ fn array_length_const_is_qualified_without_touching_locals() {
 
     // The length IS qualified — otherwise the generated file names a const
     // that is not in scope.
-    assert!(rc.contains("[u8;myflat::env]"), "{rust}");
+    assert!(rc.contains(&format!("[u8;{module}::env]")), "{rust}");
     // ...and the identically-named LOCAL is untouched. These two assertions
     // fail in opposite directions, so neither alone pins the behavior: the
     // `env` here is the `&mut JNIEnv` every converter body threads through.
     assert!(rc.contains("env.byte_array_from_slice"), "{rust}");
-    assert!(!rc.contains("myflat::env.byte_array_from_slice"), "{rust}");
-    assert!(!rc.contains("myflat::env,"), "{rust}");
-    assert!(!rc.contains("&mutmyflat::env"), "{rust}");
+    assert!(
+        !rc.contains(&format!("{module}::env.byte_array_from_slice")),
+        "{rust}"
+    );
+    assert!(!rc.contains(&format!("{module}::env,")), "{rust}");
+    assert!(!rc.contains(&format!("&mut{module}::env")), "{rust}");
 
     // An ASSOCIATED const qualifies its leading TYPE segment and leaves the
     // rest of the path relative to it — `myflat::Holder::N`, never
@@ -1535,18 +1552,33 @@ fn array_length_const_is_qualified_without_touching_locals() {
     // Asserted at the two CODE positions (return type and param type); the bare
     // spelling legitimately survives inside the decode's diagnostic string,
     // which names the type as the source wrote it.
-    assert!(rc.contains("Result<[u8;myflat::Holder::N]"), "{rust}");
-    assert!(rc.contains("v:[u8;myflat::Holder::N]"), "{rust}");
+    assert!(
+        rc.contains(&format!("Result<[u8;{module}::Holder::N]")),
+        "{rust}"
+    );
+    assert!(
+        rc.contains(&format!("v:[u8;{module}::Holder::N]")),
+        "{rust}"
+    );
     assert!(!rc.contains("Result<[u8;Holder::N]"), "{rust}");
     assert!(!rc.contains("v:[u8;Holder::N]"), "{rust}");
     // The leading segment is rewritten ONCE — the associated item stays
     // relative to the type it belongs to.
-    assert!(!rc.contains("myflat::Holder::myflat"), "{rust}");
+    assert!(
+        !rc.contains(&format!("{module}::Holder::{module}")),
+        "{rust}"
+    );
 
     // A `const fn` CALL is a third shape a length can take, and its callee is
     // an indexed item like the other two. Also undeclared.
-    assert!(rc.contains("Result<[u8;myflat::array_len()]"), "{rust}");
-    assert!(rc.contains("v:[u8;myflat::array_len()]"), "{rust}");
+    assert!(
+        rc.contains(&format!("Result<[u8;{module}::array_len()]")),
+        "{rust}"
+    );
+    assert!(
+        rc.contains(&format!("v:[u8;{module}::array_len()]")),
+        "{rust}"
+    );
     assert!(!rc.contains("Result<[u8;array_len()]"), "{rust}");
     assert!(!rc.contains("v:[u8;array_len()]"), "{rust}");
 }

@@ -380,15 +380,18 @@ impl JniGen {
         // existence just to make the generated Rust compile, and would be
         // asymmetric with consts, which qualify whether or not JniGen declared
         // them.
-        // EVERY indexed item, keyed off the same origin map `origin_module`
-        // reads. A length is an arbitrary const expression, so it can name a
-        // const, the type owning an associated const, or a `const fn` — and
-        // enumerating item KINDS here has already missed one of those three
-        // twice. Iterating the origin map cannot drift from `origin_module`
-        // and needs no revisiting when a new item kind is indexed.
+        // EVERY named item the registry indexes. A length is an arbitrary const
+        // expression, so it can name a const, the type owning an associated
+        // const, or a `const fn` — and enumerating item KINDS here missed one
+        // of those three twice, so the enumeration lives in core
+        // (`named_item_idents`) where a new kind is added once.
+        //
+        // The NAME SET is independent of origin stamps and the VALUE falls back
+        // to the default module: an origin-less hand-built stream indexes items
+        // that `item_origins` never sees, and those still need qualifying (core
+        // documents `crate` as their module).
         let length_names: std::collections::HashMap<String, syn::Path> = registry
-            .item_origins
-            .keys()
+            .named_item_idents()
             .map(|ident| {
                 let module = registry
                     .origin_module(ident)
