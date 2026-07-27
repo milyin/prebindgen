@@ -2,6 +2,7 @@
 package io.prebindgen.covertest.model
 
 import io.prebindgen.covertest.CovNative
+import io.prebindgen.covertest.DurationCallback
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.Payload
@@ -32,6 +33,36 @@ public enum class Priority(public override val value: Int) : PriorityKind, Ranke
     public companion object {
         @JvmStatic
         public fun fromInt(value: Int): Priority = entries.first { it.value == value }
+    }
+}
+
+/**
+ * How long something is held: for an explicit period, or indefinitely.
+ *
+ * A **sum whose payload is a converted type**. `Duration` crosses through the
+ * binding's `convert!` declaration, so this payload's boundary conversion is
+ * two steps (`Duration -> u64 -> jlong`, and back) rather than the single
+ * wire converter every other sum payload here uses — the position where an
+ * emitter that reads only the wire-facing converter builds code that hands
+ * the semantic value where the representation is expected.
+ *
+ * JVM-side surface for the native Rust `Hold` sum: exactly one alternative is live.
+ */
+public sealed interface Hold {
+    /** Held with no end — the payload-less group. */
+    public data object Indefinite : Hold
+
+    /** Held for this long. */
+    public data class For(public val v0: ULong) : Hold
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Int, for_v0: ULong): Hold =
+            when (tag) {
+                0 -> Indefinite
+                1 -> For(for_v0)
+                else -> throw IllegalArgumentException("Hold: invalid tag $tag")
+            }
     }
 }
 
@@ -201,11 +232,36 @@ public data class CacheConfig(val replies: RepliesConfig, val ttl: Long) {
  * its echo executes both the whole-object input decoder and the `fromParts`
  * output encoder; the nullable duration itself still uses the raw `jlong`
  * niche whenever it crosses a generated JNI call boundary.
+ *
+ * The two fields are the two shapes a converted leaf takes, and they exercise
+ * DIFFERENT emitter paths: `delay` goes through the `Option<_>` wrapper, which
+ * composes its inner conversion chain itself, while `required` is a bare leaf
+ * the data-class encoder/decoder has to compose for.
  */
-public data class DurationBoundary(val delay: ULong?) {
+public data class DurationBoundary(val required: ULong, val delay: ULong?) {
     public companion object {
         @JvmStatic
-        public fun fromParts(delay: Long): DurationBoundary = DurationBoundary(if (delay == -1L) null else delay.toULong())
+        public fun fromParts(required: Long, delay: Long): DurationBoundary = DurationBoundary(required.toULong(), if (delay == -1L) null else delay.toULong())
+    }
+}
+
+/**
+ * A retention policy: a required converted-payload sum beside an optional one.
+ *
+ * The data-class position for [`Hold`], so the converted payload is exercised
+ * both as a top-level sum and as a tag-gated group inside a `fromParts`
+ * bridge — the two encoders are separate code paths.
+ */
+public data class HoldPolicy(val hold: Hold, val grace: Hold?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            hold__tag: Int,
+            hold_for_v0: Long,
+            grace__present: Boolean,
+            grace__tag: Int,
+            grace_for_v0: Long,
+        ): HoldPolicy = HoldPolicy(when (hold__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(hold_for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $hold__tag") }, if (grace__present) when (grace__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(grace_for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $grace__tag") } else null)
     }
 }
 
@@ -759,11 +815,20 @@ public fun ReadingCallback.asRaw(): ReadingCallbackRaw =
     }
 
 public fun interface DurationBoundaryBuilderRaw<out R> {
-    public fun run(delay: Long): R
+    public fun run(required: Long, delay: Long): R
 }
 
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
-DurationBoundaryBuilderRaw { delay -> DurationBoundary.fromParts(delay) }
+DurationBoundaryBuilderRaw { required, delay -> DurationBoundary.fromParts(required, delay) }
+
+public fun interface HoldBuilderRaw<out R> {
+    public fun run(tag: Int, for_v0: Long): R
+}
+
+internal val __HoldBuilderRaw: HoldBuilderRaw<Hold> =
+HoldBuilderRaw { tag, for_v0 ->
+    when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
+}
 
 public fun interface LookupBuilderRaw<out R> {
     public fun run(tag: Int, found_v0: Long, failed_v0: String?): R
@@ -941,6 +1006,27 @@ public fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int? {
 public fun labelReverse(l: String, onError: JniErrorHandler<String>): String {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.labelReverse(l, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Round-trip a collection of labels — a `Vec` whose ELEMENT is a converted
+ * type.
+ *
+ * `Duration` cannot take this path (a `Vec` needs a JObject-shaped element
+ * wire, and its representation is a primitive `jlong`, so `Vec<Duration>` is
+ * refused at resolve time), but `Label` lowers to `String` and therefore does.
+ * The `Vec` converters build their element conversion inline, in both
+ * directions, so each has to compose the element's chain rather than call its
+ * wire-facing converter alone.
+ */
+public fun labelSeriesEcho(
+    labels: List<String>,
+    onError: JniErrorHandler<List<String>>,
+): List<String> {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.labelSeriesEcho(labels, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
@@ -1321,6 +1407,27 @@ public fun archiveReadingMaybe(a: SummaryVault, onError: JniErrorHandler<Reading
 }
 
 /**
+ * Round-trip a converted-payload sum, whole.
+ *
+ * The Rust `Hold` result is delivered decomposed: the builder callback receives (`tag`, `for_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold>): Hold {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.holdEcho(h, __HoldBuilderRaw, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Hold
+}
+
+/** Round-trip a data class carrying converted-payload sums. */
+public fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy>): HoldPolicy {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * The cache's replies-priority weight plus its `ttl`, or `-1` when the cache
  * is absent (`Option<CacheConfig>` **input** — the #144 reproduction: a
  * non-null enum field reached through the outer optional data class).
@@ -1436,7 +1543,7 @@ public fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): UL
 /**
  * Round-trip [`DurationBoundary`] through the explicit object-input bridge.
  *
- * The Rust `DurationBoundary` result is delivered decomposed: the builder callback receives (`delay`).
+ * The Rust `DurationBoundary` result is delivered decomposed: the builder callback receives (`required`, `delay`).
  */
 @Suppress("UNCHECKED_CAST")
 public fun durationBoundaryEcho(
@@ -1447,6 +1554,20 @@ public fun durationBoundaryEcho(
     val __ret = CovNative.durationBoundaryEcho(value, __DurationBoundaryBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as DurationBoundary
+}
+
+/**
+ * Deliver a converted value through the generated typed/raw callback twin —
+ * the converted analogue of [`unsigned_emit`].
+ *
+ * A callback argument that crosses WHOLE (no deconstructor, so no leaf plan)
+ * is its own encoder path, independent of the data-class and sum emitters, so
+ * a converted type has to reach its representation here too.
+ */
+public fun durationEmit(value: ULong, f: DurationCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.durationEmit(value.toLong(), f.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
 /**

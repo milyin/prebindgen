@@ -30,7 +30,9 @@ pub(crate) fn struct_input_body(
         // fixed-point loop will retry on the next iteration.
         let field_entry = registry.input_entry(&field.ty)?;
         let field_wire = field_entry.destination.clone();
-        let field_conv = field_entry.function.sig.ident.clone();
+        // The field's COMPLETE decode, stages included — a `convert!` type
+        // reaches its Rust value through them (`jlong -> u64 -> Duration`).
+        let field_conv = composed_entry_decode(field_entry, &raw_ident, &fname_ident);
 
         // Projection fields — mirror of `struct_output_body`'s kind branch:
         //  * Handle: read the JNINativeHandle object from the JVM slot,
@@ -61,7 +63,7 @@ pub(crate) fn struct_input_body(
                             .map(|s| s.ident == "Option").unwrap_or(false)
                     );
                     let decode = if field_is_option {
-                        quote! { let #fname_ident = #field_conv(env, &#raw_ident)?; }
+                        quote! { let #fname_ident = #field_conv; }
                     } else {
                         quote! {
                             // Null or closed handle in a required field —
@@ -101,7 +103,7 @@ pub(crate) fn struct_input_body(
                             .and_then(|val| val.l())
                             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
                         let #raw_ident: #field_wire = #tmp_ident.into();
-                        let #fname_ident = #field_conv(env, &#raw_ident)?;
+                        let #fname_ident = #field_conv;
                     });
                 }
                 ProjectionKind::Unsigned64 => {
@@ -110,8 +112,11 @@ pub(crate) fn struct_input_body(
                             proj.strategy,
                             FoldStrategy::Optional(NullableKind::Niche, _)
                         );
-                        let inner_conv =
-                            registry.input_entry(&inner_ty)?.function.sig.ident.clone();
+                        let inner_conv = composed_entry_decode(
+                            registry.input_entry(&inner_ty)?,
+                            &raw_ident,
+                            &fname_ident,
+                        );
                         let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                         let decode = if niche {
                             // The Kotlin data-class property is still `ULong?`
@@ -119,10 +124,10 @@ pub(crate) fn struct_input_body(
                             // JNI converter is niche-keyed on primitive jlong.
                             // Run the complete field converter so every custom
                             // semantic stage (e.g. u64 -> Duration) is applied.
-                            quote! { #field_conv(env, &#raw_ident)? }
+                            quote! { #field_conv }
                         } else {
                             quote! {
-                                ::core::option::Option::Some(#inner_conv(env, &#raw_ident)?)
+                                ::core::option::Option::Some(#inner_conv)
                             }
                         };
                         field_preludes.push(quote! {
@@ -146,7 +151,7 @@ pub(crate) fn struct_input_body(
                                 .get_field(v, #camel, "J")
                                 .and_then(|val| val.j())
                                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            let #fname_ident = #field_conv(env, &#raw_ident)?;
+                            let #fname_ident = #field_conv;
                         });
                     }
                 }
@@ -168,7 +173,11 @@ pub(crate) fn struct_input_body(
                 .map(|v| v.to_string())
             {
                 let sig = format!("L{};", fqn.replace('.', "/"));
-                let inner_conv = registry.input_entry(&f_inner)?.function.sig.ident.clone();
+                let inner_conv = composed_entry_decode(
+                    registry.input_entry(&f_inner)?,
+                    &raw_ident,
+                    &fname_ident,
+                );
                 let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                 let decode = if option_inner_type(&field.ty).is_some() {
                     quote! {
@@ -178,7 +187,7 @@ pub(crate) fn struct_input_body(
                             let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
                                 .and_then(|val| val.i())
                                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                            ::core::option::Option::Some(#inner_conv(env, &#raw_ident)?)
+                            ::core::option::Option::Some(#inner_conv)
                         };
                     }
                 } else {
@@ -186,7 +195,7 @@ pub(crate) fn struct_input_body(
                         let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
                             .and_then(|val| val.i())
                             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        let #fname_ident = #inner_conv(env, &#raw_ident)?;
+                        let #fname_ident = #inner_conv;
                     }
                 };
                 field_preludes.push(quote! {
@@ -206,7 +215,7 @@ pub(crate) fn struct_input_body(
                     let #raw_ident: #field_wire = env.get_field(v, #camel, #sig)
                         .and_then(|val| val.#accessor())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))? as _;
-                    let #fname_ident = #field_conv(env, &#raw_ident)?;
+                    let #fname_ident = #field_conv;
                 });
             }
             Some((sig, _, true)) => {
@@ -216,7 +225,7 @@ pub(crate) fn struct_input_body(
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
                     let #raw_ident: #field_wire = #tmp_ident.into();
-                    let #fname_ident = #field_conv(env, &#raw_ident)?;
+                    let #fname_ident = #field_conv;
                 });
             }
             None => {
@@ -255,7 +264,7 @@ pub(crate) fn struct_input_body(
                     let #raw_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #fname_ident = #field_conv(env, &#raw_ident)?;
+                    let #fname_ident = #field_conv;
                 });
             }
         }
@@ -393,8 +402,13 @@ fn read_kotlin_property(
 ) -> Option<(TokenStream, TokenStream)> {
     let entry = registry.input_entry(ty)?;
     let wire = entry.destination.clone();
-    let conv = entry.function.sig.ident.clone();
     let raw = format_ident!("{}_raw", bind);
+    // The COMPLETE wire → Rust chain, not just the wire-facing converter: a
+    // `convert!`-declared type reaches its Rust value through the rust-side
+    // stages that follow (`jlong → u64 → Duration`). Stage bindings are named
+    // off `bind`, so two payloads of the same type in one variant do not
+    // collide.
+    let conv = composed_property_decode(entry, bind);
 
     // A handle property is a `NativeHandle` object whose raw pointer comes
     // from `peek()`; an enum property is the Kotlin enum class, decoded
@@ -413,7 +427,7 @@ fn read_kotlin_property(
             // `Option<_>` keeps the niche-aware converter (jlong 0 ⇒ `None`).
             let closed_msg = "Operation on a closed native handle.";
             let decode = if option_inner_type(ty).is_some() {
-                quote! { let #bind = #conv(env, &#raw)?; }
+                quote! { let #bind = #conv; }
             } else {
                 quote! {
                     if #raw == 0 || (#raw & 1) == 1 {
@@ -462,12 +476,7 @@ fn read_kotlin_property(
         // Under `Option`, JVM null is `None` and the INNER converter decodes
         // the discriminant; the outer converter would expect a boxed Integer.
         let decode = if option_inner_type(ty).is_some() {
-            let inner_conv = registry
-                .input_entry(&enum_inner)?
-                .function
-                .sig
-                .ident
-                .clone();
+            let inner_conv = composed_entry_decode(registry.input_entry(&enum_inner)?, &raw, bind);
             quote! {
                 let #bind = if #obj.is_null() {
                     ::core::option::Option::None
@@ -475,7 +484,7 @@ fn read_kotlin_property(
                     let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
                         .and_then(|val| val.i())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    ::core::option::Option::Some(#inner_conv(env, &#raw)?)
+                    ::core::option::Option::Some(#inner_conv)
                 };
             }
         } else {
@@ -483,7 +492,7 @@ fn read_kotlin_property(
                 let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
                     .and_then(|val| val.i())
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                let #bind = #conv(env, &#raw)?;
+                let #bind = #conv;
             }
         };
         return Some((
@@ -502,7 +511,7 @@ fn read_kotlin_property(
                 let #raw: #wire = env.get_field(#receiver, #prop, #sig)
                     .and_then(|val| val.#accessor())
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))? as _;
-                let #bind = #conv(env, &#raw)?;
+                let #bind = #conv;
             },
             quote!(#bind),
         )),
@@ -514,7 +523,7 @@ fn read_kotlin_property(
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
                     let #raw: #wire = #obj.into();
-                    let #bind = #conv(env, &#raw)?;
+                    let #bind = #conv;
                 },
                 quote!(#bind),
             ))
@@ -535,12 +544,62 @@ fn read_kotlin_property(
                     let #raw: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #bind = #conv(env, &#raw)?;
+                    let #bind = #conv;
                 },
                 quote!(#bind),
             ))
         }
     }
+}
+
+/// The complete `wire -> Rust` decode of one value read out of a JVM object:
+/// the wire-facing converter applied to `raw`, followed by the rust-side
+/// stages a custom [`convert!`](crate::convert) declaration inserts.
+///
+/// The mirror of [`ConvChain::call`](super::super::struct_plan::ConvChain) on
+/// the output side, and of the structural wrappers' own chain composition:
+/// stopping at [`TypeEntry::converter_ident`] would bind the *representation*
+/// (`u64`) where the Rust value (`Duration`) is required, which does not
+/// compile.
+///
+/// Every converter invocation in this module's whole-object decoders goes
+/// through here — a data-class field, a sealed-class property, and the inner
+/// converter an `Option`/enum slot delegates to — so a chain cannot be dropped
+/// by one branch happening not to have been the one under test. Stage bindings
+/// derive from `stage_base`, so two values of the same type in one scope get
+/// distinct names.
+fn composed_entry_decode(
+    entry: &crate::core::TypeEntry<KotlinMeta>,
+    raw: &syn::Ident,
+    stage_base: &syn::Ident,
+) -> TokenStream {
+    let converter = entry.converter_ident();
+    if entry.pre_stages.is_empty() {
+        return quote!(#converter(env, &#raw)?);
+    }
+    let s0 = format_ident!("{}_s0", stage_base);
+    let mut body = quote! { let #s0 = #converter(env, &#raw)?; };
+    let mut previous = s0;
+    for (order, (_, stage)) in entry.input_stage_order().enumerate() {
+        let stage_fn = &stage.function.sig.ident;
+        let next = format_ident!("{}_s{}", stage_base, order + 1);
+        body.extend(quote! {
+            let #next = #stage_fn(env, #previous)
+                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
+                    __e.to_string()))?;
+        });
+        previous = next;
+    }
+    quote!({ #body #previous })
+}
+
+/// [`composed_entry_decode`] for a sealed-class property, whose raw binding is
+/// `<bind>_raw` by construction.
+fn composed_property_decode(
+    entry: &crate::core::TypeEntry<KotlinMeta>,
+    bind: &syn::Ident,
+) -> TokenStream {
+    composed_entry_decode(entry, &format_ident!("{}_raw", bind), bind)
 }
 
 // ──────────────────────────────────────────────────────────────────────

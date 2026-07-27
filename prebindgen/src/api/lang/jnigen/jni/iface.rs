@@ -787,13 +787,22 @@ fn leaf_iface_param(
                 if nullable && !raw.is_nullable() {
                     raw = raw.nullable();
                 }
+                // The niche sentinel IS the absent representation, so it means
+                // something only where the leaf can be absent. A non-optional
+                // leaf (a required sum payload, say) owns the whole domain:
+                // mapping its sentinel to null would both invent an absence the
+                // type does not have and contradict the non-nullable typed view
+                // this same param declares.
+                let niche_sentinel = if builder_kt.is_nullable() {
+                    projection_leaf_sentinel(proj?)
+                } else {
+                    None
+                };
                 return Some(IfaceParam {
                     name,
                     typed: builder_kt.clone(),
                     raw,
-                    wrap: WrapKind::Unsigned64 {
-                        niche_sentinel: projection_leaf_sentinel(proj?),
-                    },
+                    wrap: WrapKind::Unsigned64 { niche_sentinel },
                 });
             }
             ProjectionKind::Handle => {}

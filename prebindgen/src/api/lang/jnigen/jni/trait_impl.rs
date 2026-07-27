@@ -720,7 +720,13 @@ impl JniGen {
         if !is_jobject_shaped_wire(&inner_wire) {
             return None;
         }
-        let inner_conv = inner.function.sig.ident.clone();
+        // The element's COMPLETE wire -> Rust chain: a `convert!` element
+        // (`Label` -> `String`) reaches its value through the rust-side stages,
+        // not through the wire-facing converter alone.
+        let inner_conv = crate::api::lang::jnigen::jni::emit::composed_inner_input(
+            inner,
+            quote::quote!(&__elem_wire),
+        );
         let outer_ty: syn::Type = syn::parse_quote!(Vec<#t1>);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let body: syn::Expr = syn::parse_quote!({
@@ -733,7 +739,7 @@ impl JniGen {
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-next: {}", e)))?
             {
                 let __elem_wire: #inner_wire = __obj.into();
-                let __elem: #t1 = #inner_conv(env, &__elem_wire)?;
+                let __elem: #t1 = #inner_conv;
                 __out.push(__elem);
             }
             __out
@@ -2156,7 +2162,11 @@ impl JniGen {
             if !is_jobject_shaped_wire(&inner_wire) {
                 return None;
             }
-            let inner_conv = inner.function.sig.ident.clone();
+            // The element's COMPLETE Rust -> wire chain (see the input peer).
+            let inner_conv = crate::api::lang::jnigen::jni::emit::composed_inner_output(
+                inner,
+                quote::quote!(__elem),
+            );
             let outer_ty: syn::Type = syn::parse_quote!(Vec<#t1>);
             let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
             let body: syn::Expr = syn::parse_quote!({
@@ -2166,7 +2176,7 @@ impl JniGen {
                 let __list = jni::objects::JList::from_env(env, &__list_obj)
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-from-env: {}", e)))?;
                 for __elem in v.into_iter() {
-                    let __elem_wire = #inner_conv(env, __elem)?;
+                    let __elem_wire = #inner_conv;
                     let __elem_obj: jni::objects::JObject = __elem_wire.into();
                     __list.add(env, &__elem_obj)
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-add: {}", e)))?;
@@ -2230,7 +2240,11 @@ impl JniGen {
         if !is_jobject_shaped_wire(&inner_wire) {
             return None;
         }
-        let inner_conv = inner.function.sig.ident.clone();
+        // The element's COMPLETE Rust -> wire chain (see the `Vec<_>` peer).
+        let inner_conv = crate::api::lang::jnigen::jni::emit::composed_inner_output(
+            inner,
+            quote::quote!(::core::clone::Clone::clone(__elem)),
+        );
         let outer_ty: syn::Type = syn::parse_quote!(&[#elem]);
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let body: syn::Expr = syn::parse_quote!({
@@ -2240,7 +2254,7 @@ impl JniGen {
             let __list = jni::objects::JList::from_env(env, &__list_obj)
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: list-from-env: {}", e)))?;
             for __elem in v.iter() {
-                let __elem_wire = #inner_conv(env, ::core::clone::Clone::clone(__elem))?;
+                let __elem_wire = #inner_conv;
                 let __elem_obj: jni::objects::JObject = __elem_wire.into();
                 __list.add(env, &__elem_obj)
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: list-add: {}", e)))?;

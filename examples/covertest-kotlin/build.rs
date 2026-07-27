@@ -240,6 +240,11 @@ fn main() {
                 // resources: one alternative carries an opaque handle, one
                 // carries nothing at all.
                 .class(sealed_class!(Lookup))
+                // `Hold`'s payload is a CONVERTED type, so its leaf crosses
+                // through the `convert!(Duration)` chain; `HoldPolicy` puts
+                // that same payload in the data-class-field position.
+                .class(sealed_class!(Hold))
+                .class(data_class!(HoldPolicy))
                 // `Observation` carries that sum as a data-class FIELD —
                 // required (`reading`) and optional (`fallback`) — beside
                 // ordinary flattened leaves, so the tag-gated groups must
@@ -448,6 +453,7 @@ fn main() {
                 .fun(fun!(percent_optional))
                 .fun(fun!(percent_invalid_output))
                 .fun(fun!(label_reverse))
+                .fun(fun!(label_series_echo))
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_alternate_value))
                 .fun(fun!(annotated_ttl))
@@ -480,6 +486,12 @@ fn main() {
                 .fun(fun!(archive_set_reading))
                 .fun(fun!(archive_reading))
                 .fun(fun!(archive_reading_maybe))
+                // A sum payload that is a CONVERTED type (`convert!(Duration)`),
+                // so its boundary conversion is a chain rather than one wire
+                // converter — exercised as the function's own return and as a
+                // (required + optional) data-class field, the two encoders.
+                .fun(fun!(hold_echo))
+                .fun(fun!(hold_policy_echo))
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))
@@ -491,6 +503,10 @@ fn main() {
                 .fun(fun!(unsigned_series))
                 .fun(fun!(duration_optional))
                 .fun(fun!(duration_boundary_echo))
+                // The converted analogue of `unsigned_emit`: a whole-value
+                // callback argument, which encodes on its own path rather than
+                // through the data-class or sum emitters.
+                .fun(fun!(duration_emit))
                 .fun(fun!(duration_out_of_range)),
         )
         // analytics: the param-variant / return-field matrix (type default /
