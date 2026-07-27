@@ -675,17 +675,18 @@ fun main() {
         check(s1.toString().contains("bytes=[")) { "toString must render bytes, got ${s1}" }
 
         // A data class with a DIRECT `ByteArray` field plus a NESTED value
-        // blob — the two shapes that broke downstream.
-        val b1 = blobValueNew(byteArrayOf(1, 2, 3), 9L, 7L, boom)
-        val b2 = blobValueNew(byteArrayOf(1, 2, 3), 9L, 7L, boom)
+        // blob — the two shapes that broke downstream. The bytes sit LAST, so
+        // this also covers the `31 * result + …contentHashCode()` fold form
+        // that a real value (`Timestamp(ntp64, id)`) produces.
+        val b1 = blobValueNew(7L, byteArrayOf(1, 2, 3), boom)
+        val b2 = blobValueNew(7L, byteArrayOf(1, 2, 3), boom)
         check(b1 == b2) { "array-backed data class must compare by content: $b1 vs $b2" }
         check(b1.hashCode() == b2.hashCode())
         check(hashSetOf(b1, b2).size == 1)
-        // Each component must actually participate — a comparison that ignored
-        // one of them would still pass the equality checks above.
-        check(blobValueNew(byteArrayOf(1, 2, 4), 9L, 7L, boom) != b1) { "id must matter" }
-        check(blobValueNew(byteArrayOf(1, 2, 3), 8L, 7L, boom) != b1) { "n must matter" }
-        check(blobValueNew(byteArrayOf(1, 2, 3), 9L, 8L, boom) != b1) { "nested blob must matter" }
+        // Both components must actually participate — a comparison that ignored
+        // either would still pass the equality checks above.
+        check(blobValueNew(7L, byteArrayOf(1, 2, 4), boom) != b1) { "id must matter" }
+        check(blobValueNew(8L, byteArrayOf(1, 2, 3), boom) != b1) { "nested blob must matter" }
         check(b1.toString().contains("id=[1, 2, 3]")) { "toString must render bytes, got $b1" }
     }
 

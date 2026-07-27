@@ -212,33 +212,40 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
 
 /**
  * A value whose equality is **array-backed** on the JVM side: a raw-bytes
- * field beside an ordinary scalar, plus a nested value blob.
+ * field beside a nested value blob.
  *
  * Kotlin arrays compare by identity, so both the direct `Vec<u8>` field and
  * the nested [`Stamp`] would make two equal-content values compare unequal
  * unless the binding emits content-based operators. This mirrors the two
  * shapes that broke downstream (a `Vec<u8>` struct field, and a struct
- * carrying a value blob), which nothing else here exercised.
+ * carrying a value blob), which nothing else here exercised. Two fields are
+ * enough: one array-backed and one not covers both comparison branches, and
+ * a third of either kind would only repeat an emitted form.
+ *
+ * Field ORDER is deliberate: the raw bytes come last, so the generated
+ * `hashCode` folds them as `31 * result + id.contentHashCode()` rather than
+ * seeding the accumulator with them. That is the shape a real value takes
+ * (`Timestamp(ntp64, id)`), and it is a different emitted form from the
+ * array-first one.
  */
-public data class BlobValue(val id: ByteArray, val n: Long, val stamp: Stamp) {
+public data class BlobValue(val stamp: Stamp, val id: ByteArray) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is BlobValue) return false
-        return id.contentEquals(other.id) && n == other.n && stamp == other.stamp
+        return stamp == other.stamp && id.contentEquals(other.id)
     }
 
     override fun hashCode(): Int {
-        var result = id.contentHashCode()
-        result = 31 * result + n.hashCode()
-        result = 31 * result + stamp.hashCode()
+        var result = stamp.hashCode()
+        result = 31 * result + id.contentHashCode()
         return result
     }
 
-    override fun toString(): String = "BlobValue(id=${id.contentToString()}, n=$n, stamp=$stamp)"
+    override fun toString(): String = "BlobValue(stamp=$stamp, id=${id.contentToString()})"
 
     public companion object {
         @JvmStatic
-        public fun fromParts(id: ByteArray, n: Long, stamp: ByteArray): BlobValue = BlobValue(id, n, Stamp(stamp))
+        public fun fromParts(stamp: ByteArray, id: ByteArray): BlobValue = BlobValue(Stamp(stamp), id)
     }
 }
 
@@ -1576,14 +1583,9 @@ public fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong> {
 }
 
 /** Build a [`BlobValue`] (its equality is asserted from Kotlin). */
-public fun blobValueNew(
-    id: ByteArray,
-    n: Long,
-    secs: Long,
-    onError: JniErrorHandler<BlobValue>,
-): BlobValue {
+public fun blobValueNew(secs: Long, id: ByteArray, onError: JniErrorHandler<BlobValue>): BlobValue {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.blobValueNew(id, n, secs, __bcap)
+    val __ret = CovNative.blobValueNew(secs, id, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

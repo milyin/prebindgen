@@ -701,7 +701,7 @@ internal object CovNative {
         errorSink: Any,
     )
 
-    external fun blobValueNew(id: ByteArray, n: Long, secs: Long, errorSink: Any): BlobValue
+    external fun blobValueNew(secs: Long, id: ByteArray, errorSink: Any): BlobValue
 
     external fun cacheConfigWeight(
         cachePresent: Boolean,

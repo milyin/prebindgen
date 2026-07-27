@@ -57,7 +57,7 @@ Base package: `io.prebindgen.covertest`
 - `archive_reading_maybe` — `fun archiveReadingMaybe(a: SummaryVault, onError: JniErrorHandler<Reading?>): Reading?`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
 - `archive_set_reading` — `fun archiveSetReading(a: SummaryVault, which: Int, onError: JniErrorHandler<Unit>)`
-- `blob_value_new` — `fun blobValueNew(id: ByteArray, n: Long, secs: Long, onError: JniErrorHandler<BlobValue>): BlobValue`
+- `blob_value_new` — `fun blobValueNew(secs: Long, id: ByteArray, onError: JniErrorHandler<BlobValue>): BlobValue`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`

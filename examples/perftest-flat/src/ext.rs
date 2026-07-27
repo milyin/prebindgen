@@ -329,28 +329,34 @@ pub fn stamp_secs(s: &Stamp) -> i64 {
 }
 
 /// A value whose equality is **array-backed** on the JVM side: a raw-bytes
-/// field beside an ordinary scalar, plus a nested value blob.
+/// field beside a nested value blob.
 ///
 /// Kotlin arrays compare by identity, so both the direct `Vec<u8>` field and
 /// the nested [`Stamp`] would make two equal-content values compare unequal
 /// unless the binding emits content-based operators. This mirrors the two
 /// shapes that broke downstream (a `Vec<u8>` struct field, and a struct
-/// carrying a value blob), which nothing else here exercised.
+/// carrying a value blob), which nothing else here exercised. Two fields are
+/// enough: one array-backed and one not covers both comparison branches, and
+/// a third of either kind would only repeat an emitted form.
+///
+/// Field ORDER is deliberate: the raw bytes come last, so the generated
+/// `hashCode` folds them as `31 * result + id.contentHashCode()` rather than
+/// seeding the accumulator with them. That is the shape a real value takes
+/// (`Timestamp(ntp64, id)`), and it is a different emitted form from the
+/// array-first one.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlobValue {
-    pub id: Vec<u8>,
-    pub n: i64,
     pub stamp: Stamp,
+    pub id: Vec<u8>,
 }
 
 /// Build a [`BlobValue`] (its equality is asserted from Kotlin).
 #[prebindgen]
-pub fn blob_value_new(id: Vec<u8>, n: i64, secs: i64) -> BlobValue {
+pub fn blob_value_new(secs: i64, id: Vec<u8>) -> BlobValue {
     BlobValue {
-        id,
-        n,
         stamp: Stamp { secs, nanos: 0 },
+        id,
     }
 }
 
