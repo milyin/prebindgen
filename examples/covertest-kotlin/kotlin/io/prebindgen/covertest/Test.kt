@@ -21,6 +21,7 @@ import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.Arrays
 import io.prebindgen.covertest.model.CacheConfig
 import io.prebindgen.covertest.model.RepliesConfig
 import io.prebindgen.covertest.model.DurationBoundary
@@ -41,6 +42,7 @@ import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
+import io.prebindgen.covertest.model.arraysEcho
 import io.prebindgen.covertest.model.blobValueEcho
 import io.prebindgen.covertest.model.blobValueNew
 import io.prebindgen.covertest.model.annotatedAlternateValue
@@ -665,15 +667,16 @@ fun main() {
     // special-case arrays, its `equals` does not), so `==` is the assertion
     // that matters and `hashCode` alone would not have caught the defect.
     section("array-backed value equality (content, not identity)") {
-        // A value blob: two independently-built values with equal bytes.
+        // The NEGATIVE case first: a data class with no array property must keep
+        // the compiler's own equality. The generator emits nothing for it, so
+        // this pins that the content operators do not churn ordinary classes.
         val s1 = stampNew(7L, 42L, boom)
         val s2 = stampNew(7L, 42L, boom)
-        check(s1 == s2) { "value blob must compare by content: $s1 vs $s2" }
+        check(s1 == s2) { "scalar data class must compare by value: $s1 vs $s2" }
         check(s1.hashCode() == s2.hashCode())
         check(stampNew(8L, 42L, boom) != s1) { "different content must not compare equal" }
-        // The whole contract, not just `==`: a hash container must de-duplicate.
-        check(hashSetOf(s1, s2).size == 1) { "value blob must de-duplicate in a HashSet" }
-        check(s1.toString().contains("bytes=[")) { "toString must render bytes, got ${s1}" }
+        check(hashSetOf(s1, s2).size == 1)
+        check(s1.toString() == "Stamp(secs=7, nanos=42)") { "got $s1" }
 
         // A data class with a DIRECT `ByteArray` field plus a NESTED value
         // blob — the two shapes that broke downstream. The bytes sit LAST, so
@@ -703,6 +706,49 @@ fun main() {
         check(b1.toString().contains("id=[1, 2, 3]")) { "toString must render bytes, got $b1" }
         check(b1.toString().contains("chunks=[[9], [8, 7]]")) {
             "toString must render nested bytes, got $b1"
+        }
+
+        // ── fixed-size arrays -> Kotlin primitive arrays ─────────────────────
+        // Every `[T; N]` crosses as the matching primitive array (bulk-copied,
+        // nothing boxed), and every one of them compares by IDENTITY in Kotlin
+        // — so each needs the content operators, not just the byte case.
+        val a1 = Arrays(
+            byteArrayOf(1, 2, 3, 4),
+            shortArrayOf(-1, 2),
+            intArrayOf(3, -4, 5),
+            longArrayOf(6, -7),
+            doubleArrayOf(0.5, -1.25),
+            booleanArrayOf(true, false, true),
+            longArrayOf(-1L, 0L), // [u64; 2] carries raw bits: -1L == u64::MAX
+        )
+        val a2 = arraysEcho(a1, boom)
+        check(a2 == a1) { "fixed-size arrays must round-trip by content: $a2 vs $a1" }
+        check(a2.hashCode() == a1.hashCode())
+        check(hashSetOf(a1, a2).size == 1)
+        // The round trip must preserve VALUES, not just shapes — a per-element
+        // cast error would survive an equality-only check between two echoes.
+        check(a2.bytes.contentEquals(byteArrayOf(1, 2, 3, 4)))
+        check(a2.shorts.contentEquals(shortArrayOf(-1, 2)))
+        check(a2.ints.contentEquals(intArrayOf(3, -4, 5)))
+        check(a2.longs.contentEquals(longArrayOf(6, -7)))
+        check(a2.doubles.contentEquals(doubleArrayOf(0.5, -1.25)))
+        check(a2.flags.contentEquals(booleanArrayOf(true, false, true)))
+        // `u64::MAX` survives as the raw bit pattern rather than saturating.
+        check(a2.raw.contentEquals(longArrayOf(-1L, 0L))) { "raw bits: ${a2.raw.toList()}" }
+        // Each component participates in equality.
+        check(arraysEcho(a1.copy(ints = intArrayOf(3, -4, 6)), boom) != a1) { "ints must matter" }
+        check(arraysEcho(a1.copy(flags = booleanArrayOf(true, true, true)), boom) != a1) {
+            "flags must matter"
+        }
+        check(a1.toString().contains("flags=[true, false, true]")) { "got $a1" }
+
+        // Wrong length is a BINDING ERROR, not a panic — the decode's `try_into`
+        // is the length check (the fixed-size-array successor to the value
+        // blob's byte-length guard).
+        var lenErr: String? = null
+        arraysEcho(a1.copy(ints = intArrayOf(1, 2))) { je -> lenErr = je; a1 }
+        check(lenErr?.contains("fixed-size array decode") == true) {
+            "wrong-length array must report a binding error, got: $lenErr"
         }
 
         // WHOLE-OBJECT input decode (`.jobject_input()`): the decoder reads each
@@ -1033,7 +1079,7 @@ fun main() {
     // ── #45: both channels of ONE fallible wrapper, each fires independently ──
     section("two-caller split storageTryFromStamp") {
         // Happy path: neither channel fires.
-        val ok = storageTryFromStamp(stampNew(5L, 0L, boom), boom, boomStorage)
+        val ok = storageTryFromStamp(stampNew(5L, 0L, boom), byteArrayOf(1, 2), boom, boomStorage)
         check(ok.len(boom) == 1L)
         ok.close()
 
@@ -1042,6 +1088,7 @@ fun main() {
         var domainMsg: String? = null
         val domainRet = storageTryFromStamp(
             stampNew(-1L, 0L, boom),
+            byteArrayOf(1, 2),
             JniErrorHandler<Storage> { je ->
                 throw AssertionError("binding channel must not fire on a domain error: $je")
             },
@@ -1055,11 +1102,12 @@ fun main() {
         check(domainMsg == "stamp secs must be positive") { "domain onError did not fire: $domainMsg" }
         domainRet.close()
 
-        // BINDING error (malformed Stamp value-blob): `onBindingError` fires,
+        // BINDING error (wrong-length `tag` array): `onBindingError` fires,
         // the domain `onError` must NOT.
         var bindingJe: String? = null
         val bindingRet = storageTryFromStamp(
-            Stamp(ByteArray(3)),   // Stamp is 16 bytes; 3 must be rejected on decode
+            Stamp(1L, 0L),
+            byteArrayOf(1, 2, 3),   // `tag` is [u8; 2]; 3 must be rejected on decode
             JniErrorHandler<Storage> { je ->
                 bindingJe = je
                 storageNew(boom)
@@ -1069,7 +1117,7 @@ fun main() {
                 throw AssertionError("domain channel must not fire on a binding error")
             },
         )
-        check(bindingJe != null && bindingJe!!.contains("wrong byte length")) {
+        check(bindingJe != null && bindingJe!!.contains("fixed-size array decode")) {
             "binding onBindingError did not fire: $bindingJe"
         }
         bindingRet.close()
@@ -1285,16 +1333,22 @@ fun main() {
         s.close()
     }
 
-    // ── binding error: je != null (value-blob length guard) ──────────────────
-    section("binding error je != null (malformed Stamp bytes)") {
-        val bogus = Stamp(ByteArray(3))   // Stamp is 16 bytes; 3 must be rejected
+    // ── binding error: je != null (fixed-size array length guard) ───────────
+    section("binding error je != null (wrong-length fixed-size array)") {
         var je: String? = null
-        val fallback = bogus.secs(JniErrorHandler { e ->
-            je = e
-            -1L
-        })
-        check(fallback == -1L)
-        check(je != null && je!!.contains("wrong byte length")) { "unexpected je: $je" }
+        val fallback = storageTryFromStamp(
+            stampNew(1L, 0L, boom),
+            byteArrayOf(1, 2, 3),   // `tag` is [u8; 2]; 3 is rejected on decode
+            JniErrorHandler { e ->
+                je = e
+                storageNew(boom)
+            },
+            StorageErrorHandler { _, handle ->
+                throw AssertionError("domain channel must not fire on a decode failure")
+            },
+        )
+        fallback.close()
+        check(je != null && je!!.contains("fixed-size array decode")) { "unexpected je: $je" }
     }
 
     // ── callback exceptions: swallowed per upcall (no-throw contract) ────────

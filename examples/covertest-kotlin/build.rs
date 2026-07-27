@@ -286,18 +286,22 @@ fn main() {
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
                 .class(data_class!(Unsigned))
-                // `Stamp` as a by-value blob over its raw bytes; its readers
-                // become instance methods (`secs()` / `nanos()`), and `Vec<Stamp>`
-                // surfaces as `List<ByteArray>`.
+                // `Stamp` is a small `Copy` struct of two scalars, so it crosses
+                // as its FIELDS — no array, no raw-memory image. Its readers stay
+                // instance methods (`secs()` / `nanos()`) whose receiver crosses
+                // as those field leaves, and `Vec<Stamp>` surfaces as
+                // `List<Stamp>`.
                 .class(
-                    value_class!(Stamp)
+                    data_class!(Stamp)
                         .method(fun!(stamp_secs))
                         .method(fun!(stamp_nanos)),
                 )
                 // `BlobValue` is the array-backed EQUALITY probe: a raw-bytes
                 // field beside a scalar, plus a nested value blob. Both compare
                 // by identity in Kotlin unless the binding says otherwise.
-                .class(data_class!(BlobValue).jobject_input()),
+                .class(data_class!(BlobValue).jobject_input())
+                // Fixed-size arrays of every JNI-primitive element.
+                .class(data_class!(Arrays)),
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
         .package(package!("errors").class(
@@ -507,6 +511,7 @@ fn main() {
                 .fun(fun!(unsigned_series))
                 .fun(fun!(blob_value_new))
                 .fun(fun!(blob_value_echo))
+                .fun(fun!(arrays_echo))
                 .fun(fun!(duration_optional))
                 .fun(fun!(duration_boundary_echo))
                 // The converted analogue of `unsigned_emit`: a whole-value

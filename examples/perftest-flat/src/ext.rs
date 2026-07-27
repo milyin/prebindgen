@@ -365,6 +365,34 @@ pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue
     }
 }
 
+/// Fixed-size arrays of every JNI-primitive element type.
+///
+/// Each crosses as the matching Kotlin primitive array — bulk-copied, nothing
+/// boxed — rather than through the `Vec<T>` -> `List<T>` path. The wider
+/// unsigned field (`raw`) pins the raw-bit-pattern rule: `[u64; N]` carries its
+/// bits in a `LongArray`, exactly as a scalar `u64` crosses as a raw `jlong`.
+///
+/// `flags` is the one element type that is NOT a cast: a `jboolean` is a `u8`,
+/// and reinterpreting an out-of-range byte as a Rust `bool` would be undefined
+/// behavior, so the decode normalizes instead.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Arrays {
+    pub bytes: [u8; 4],
+    pub shorts: [i16; 2],
+    pub ints: [i32; 3],
+    pub longs: [i64; 2],
+    pub doubles: [f64; 2],
+    pub flags: [bool; 3],
+    pub raw: [u64; 2],
+}
+
+/// Round-trip every fixed-size array shape, both directions.
+#[prebindgen]
+pub fn arrays_echo(a: Arrays) -> Arrays {
+    a
+}
+
 /// Round-trip a [`BlobValue`] through the WHOLE-OBJECT input decoder.
 ///
 /// The binding marks this class `.jobject_input()`, so the decoder reads each
@@ -432,13 +460,18 @@ pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
 }
 
 /// Build a storage stamped with `s`, **failing** on a non-positive `secs` (a
-/// domain [`StorageError`]). This takes a `Stamp` **by value** (a value-blob
-/// input), so a malformed `Stamp` blob fails the input decode FIRST — the
-/// binding channel — while a well-formed but rejected value fails in the domain
+/// domain [`StorageError`]).
+///
+/// `tag` is a fixed-size array purely so the two error channels stay separately
+/// provable: a wrong-length array fails the input DECODE first — the binding
+/// channel — while a well-formed but rejected `secs` fails in the domain
 /// channel. It is the covertest exercise for issue #45's two-caller split: one
-/// wrapper, both `onBindingError` and `onError` provable independently.
+/// wrapper, both `onBindingError` and `onError` provable independently. (The
+/// binding-side failure used to come from a malformed value blob; the
+/// fixed-size-array length guard is its successor.)
 #[prebindgen]
-pub fn storage_try_from_stamp(s: Stamp) -> Result<Storage, StorageError> {
+pub fn storage_try_from_stamp(s: Stamp, tag: [u8; 2]) -> Result<Storage, StorageError> {
+    let _ = tag;
     if s.secs <= 0 {
         return Err(StorageError {
             message: "stamp secs must be positive".to_string(),

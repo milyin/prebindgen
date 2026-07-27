@@ -57,8 +57,12 @@ Base package: `io.prebindgen.covertest`
 - `archive_reading_maybe` — `fun archiveReadingMaybe(a: SummaryVault, onError: JniErrorHandler<Reading?>): Reading?`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
 - `archive_set_reading` — `fun archiveSetReading(a: SummaryVault, which: Int, onError: JniErrorHandler<Unit>)`
+- `arrays_echo` — `fun arraysEcho(a: Arrays, onError: JniErrorHandler<Arrays>): Arrays`
+  - shaped by: return `Arrays` decomposed → [bytes, shorts, ints, longs, doubles, flags, raw] (Callback delivery)
 - `blob_value_echo` — `fun blobValueEcho(value: BlobValue, onError: JniErrorHandler<BlobValue>): BlobValue`
+  - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
 - `blob_value_new` — `fun blobValueNew(secs: Long, id: ByteArray, chunks: List<ByteArray>, onError: JniErrorHandler<BlobValue>): BlobValue`
+  - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`
@@ -93,8 +97,9 @@ Base package: `io.prebindgen.covertest`
 - `reading_series` — `fun readingSeries(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading>`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
 - `stamp_new` — `fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp`
+  - shaped by: return `Stamp` decomposed → [secs, nanos] (Callback delivery)
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp>`
-  - shaped by: return `Stamp` decomposed → [] (Callback delivery)
+  - shaped by: return `Stamp` decomposed → [secs, nanos] (Callback delivery)
 - `tagged_new` — `fun taggedNew(which: Int, onError: JniErrorHandler<Tagged>): Tagged`
 - `tagged_rank` — `fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int`
 - `unsigned_data_maybe` — `fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong?`
@@ -130,7 +135,7 @@ Base package: `io.prebindgen.covertest`
 - `storage_shards_opt` — `fun storageShardsOpt(count: Long, each: Long, onError: JniErrorHandler<List<Storage>?>): List<Storage>?`
   - shaped by: return `Storage` decomposed → [] (Callback delivery)
 - `storage_total_len` — `fun storageTotalLen(a: Storage, b: Storage, c: Storage, onError: JniErrorHandler<Long>): Long`
-- `storage_try_from_stamp` — `fun storageTryFromStamp(s: Stamp, onBindingError: JniErrorHandler<Storage>, onError: StorageErrorHandler<Storage>): Storage`
+- `storage_try_from_stamp` — `fun storageTryFromStamp(s: Stamp, tag: ByteArray, onBindingError: JniErrorHandler<Storage>, onError: StorageErrorHandler<Storage>): Storage`
   - shaped by: domain error `StorageError` decomposed → onError [message, handle] (binding failures → onBindingError)
 - `storage_try_with_label` — `fun storageTryWithLabel(label: String, onBindingError: JniErrorHandler<Storage>, onError: StorageErrorHandler<Storage>): Storage`
   - shaped by: domain error `StorageError` decomposed → onError [message, handle] (binding failures → onBindingError)
@@ -144,7 +149,7 @@ Base package: `io.prebindgen.covertest`
 
 - `payload_label_len` — `fun labelLen(onError: JniErrorHandler<Long?>): Long?`
 
-## class `io.prebindgen.covertest.model.Stamp` (value_class, Rust `Stamp`)
+## class `io.prebindgen.covertest.model.Stamp` (data_class, Rust `Stamp`)
 
 - `stamp_nanos` — `fun nanos(onError: JniErrorHandler<Long>): Long`
 - `stamp_secs` — `fun secs(onError: JniErrorHandler<Long>): Long`
@@ -172,6 +177,7 @@ Base package: `io.prebindgen.covertest`
 
 - `Annotated`: data_class → `io.prebindgen.covertest.model.Annotated` (wire `jni :: objects :: JObject`)
 - `Archive`: ptr_class → `io.prebindgen.covertest.analytics.SummaryVault` (wire `jni :: sys :: jlong`)
+- `Arrays`: data_class → `io.prebindgen.covertest.model.Arrays` (wire `jni :: objects :: JObject`)
 - `BlobValue`: data_class → `io.prebindgen.covertest.model.BlobValue` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `CacheConfig`: data_class → `io.prebindgen.covertest.model.CacheConfig` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
@@ -196,7 +202,7 @@ Base package: `io.prebindgen.covertest`
 - `Priority`: enum_class → `io.prebindgen.covertest.model.Priority` (wire `jni :: sys :: jint`)
 - `Reading`: sealed_class → `io.prebindgen.covertest.model.Reading` (wire `?`)
 - `RepliesConfig`: data_class → `io.prebindgen.covertest.model.RepliesConfig` (wire `jni :: objects :: JObject`)
-- `Stamp`: value_class → `io.prebindgen.covertest.model.Stamp` (wire `jni :: objects :: JByteArray`)
+- `Stamp`: data_class → `io.prebindgen.covertest.model.Stamp` (wire `jni :: objects :: JObject`)
 - `Storage`: ptr_class → `io.prebindgen.covertest.Storage` (wire `jni :: sys :: jlong`)
 - `StorageError`: ptr_class → `io.prebindgen.covertest.errors.StorageError` (wire `jni :: sys :: jlong`)
 - `StorageHandler`: ptr_class → `io.prebindgen.covertest.StorageHandler` (wire `jni :: sys :: jlong`)

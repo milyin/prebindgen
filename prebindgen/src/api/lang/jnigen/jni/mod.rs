@@ -585,6 +585,7 @@ mod emit;
 mod equality;
 mod iface;
 mod prim;
+mod prim_array;
 mod selector;
 #[cfg(test)]
 mod tests;

@@ -365,15 +365,7 @@ pub(crate) fn is_jobject_wire(wire: &syn::Type) -> bool {
 /// all impl `is_null()` and accept `JObject::null().into()` for
 /// construction.
 pub(crate) fn is_jobject_shaped_wire(wire: &syn::Type) -> bool {
-    if let syn::Type::Path(tp) = wire {
-        if let Some(last) = tp.path.segments.last() {
-            return matches!(
-                last.ident.to_string().as_str(),
-                "JObject" | "JString" | "JByteArray" | "JClass"
-            );
-        }
-    }
-    false
+    crate::api::lang::jnigen::jni::wire_access::is_jni_reference_wire(wire)
 }
 
 /// Default niche set for a JNI wrapper wire: every `J*` handle has a

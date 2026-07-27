@@ -343,16 +343,10 @@ pub(crate) fn classify_field(
                     .or_else(|| {
                         if pat_match_top(&slot_ty, "Vec") {
                             Some("Ljava/util/List;".to_string())
-                        } else if let syn::Type::Path(tp) = &wire {
-                            tp.path.segments.last().and_then(|seg| {
-                                match seg.ident.to_string().as_str() {
-                                    "JString" => Some("Ljava/lang/String;".to_string()),
-                                    "JByteArray" => Some("[B".to_string()),
-                                    _ => None,
-                                }
-                            })
                         } else {
-                            None
+                            // The wire table already names every reference wire's
+                            // descriptor — String and the eight primitive arrays.
+                            jni_field_access(&wire).map(|(sig, _, _)| sig.to_string())
                         }
                     })
                     .unwrap_or_else(|| "Ljava/lang/Object;".to_string());

@@ -82,11 +82,8 @@ pub(crate) fn annotate_borrow_with_lifetime(ty: &syn::Type, life: &str) -> syn::
 pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {
     if let syn::Type::Path(tp) = ty {
         if let Some(last) = tp.path.segments.last() {
-            let name = last.ident.to_string();
-            if matches!(
-                name.as_str(),
-                "JObject" | "JString" | "JByteArray" | "JClass"
-            ) && matches!(last.arguments, syn::PathArguments::None)
+            if crate::api::lang::jnigen::jni::wire_access::is_jni_reference_wire(ty)
+                && matches!(last.arguments, syn::PathArguments::None)
             {
                 let mut new = tp.clone();
                 if let Some(last) = new.path.segments.last_mut() {

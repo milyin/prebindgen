@@ -592,10 +592,13 @@ fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> String {
                 p.descriptor().to_string()
             };
         }
+        if let Some(d) = crate::api::lang::jnigen::jni::wire_access::kotlin_array_descriptor(simple)
+        {
+            return d.to_string();
+        }
         return match simple {
             "Unit" => "V".to_string(),
             "String" => "Ljava/lang/String;".to_string(),
-            "ByteArray" => "[B".to_string(),
             "List" | "MutableList" => "Ljava/util/List;".to_string(),
             "Any" => "Ljava/lang/Object;".to_string(),
             // A dot-free non-builtin: a generated class with no package

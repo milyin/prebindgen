@@ -1639,31 +1639,13 @@ impl JniGen {
                 return Some(self.opaque_handle_input(ty));
             }
         }
-        // `value_blob`-declared `Copy` types: decode the raw memory blob out
-        // of a `JByteArray` (length-checked, `read_unaligned` since the byte
-        // array isn't aligned to the type). Returns owned `T`, so `&T` /
-        // by-value / `Vec<T>` / `Option<T>` all compose through the existing
-        // handlers. `T: Copy` ⇒ reading the value out is sound (no double
-        // drop); the `Copy` bound itself is enforced by the assertion in
-        // `prerequisites`.
-        if self.types.get(&key).is_some_and(|c| c.is_value_blob()) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
-            let body: syn::Expr = syn::parse_quote!({
-                let __bytes = env.convert_byte_array(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "value-blob decode: {}",
-                        e
-                    ))
-                })?;
-                if __bytes.len() != ::core::mem::size_of::<#ty>() {
-                    return ::core::result::Result::Err(
-                        <__JniErr as ::core::convert::From<String>>::from(
-                            "value-blob decode: wrong byte length".to_string(),
-                        ),
-                    );
-                }
-                unsafe { ::core::ptr::read_unaligned(__bytes.as_ptr() as *const #ty) }
-            });
+        // Fixed-size array of JNI primitives — dual of the output branch.
+        // The `try_into` IS the length check: a JVM array of the wrong size
+        // becomes a binding error naming the type, never a panic.
+        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(ty) {
+            let body = crate::api::lang::jnigen::jni::prim_array::input_body(ty, &spec);
+            let wire = spec.wire.clone();
+            let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -1671,16 +1653,7 @@ impl JniGen {
                 function: self.build_input_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: KotlinMeta {
-                    projection: Some(Projection {
-                        leaf_key: key.clone(),
-                        owned: false,
-                        strategy: FoldStrategy::Base,
-                        kind: ProjectionKind::ValueBlob,
-                        niche_sentinels: Vec::new(),
-                    }),
-                    ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
-                },
+                metadata: self.framework_meta(kotlin_name),
             });
         }
         // `enum_class`-declared enums: jint wire, `TryFrom<i32>` decode.
@@ -1881,28 +1854,13 @@ impl JniGen {
                 return Some(self.opaque_handle_output(ty));
             }
         }
-        // `value_blob`-declared `Copy` types: encode the value's raw memory
-        // bytes into a fresh `JByteArray` (the value-level peer of an opaque
-        // handle's `jlong`). `v: #ty` is owned and `Copy`, so reading its
-        // bytes and letting it drop normally is sound. Wire is `JByteArray`
-        // (jobject-shaped), so `Vec<T>` / `Option<T>` compose through the
-        // existing handlers — `Vec<value-blob>` surfaces as `List<ByteArray>`.
-        if self.types.get(&key).is_some_and(|c| c.is_value_blob()) {
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
-            let body: syn::Expr = syn::parse_quote!({
-                let __bytes: &[u8] = unsafe {
-                    ::core::slice::from_raw_parts(
-                        (&v as *const #ty) as *const u8,
-                        ::core::mem::size_of::<#ty>(),
-                    )
-                };
-                env.byte_array_from_slice(__bytes).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "value-blob encode: {}",
-                        e
-                    ))
-                })?
-            });
+        // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
+        // `[i64; N]` -> `LongArray`, ... Bulk-copied, nothing boxed. See
+        // [`prim_array`]; this replaced the raw-memory value blob.
+        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(ty) {
+            let body = crate::api::lang::jnigen::jni::prim_array::output_body(&spec);
+            let wire = spec.wire.clone();
+            let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -1910,16 +1868,7 @@ impl JniGen {
                 function: self.build_output_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: KotlinMeta {
-                    projection: Some(Projection {
-                        leaf_key: key.clone(),
-                        owned: false,
-                        strategy: FoldStrategy::Base,
-                        kind: ProjectionKind::ValueBlob,
-                        niche_sentinels: Vec::new(),
-                    }),
-                    ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
-                },
+                metadata: self.framework_meta(kotlin_name),
             });
         }
         // `enum_class`-declared enums: jint wire, `as jni::sys::jint`

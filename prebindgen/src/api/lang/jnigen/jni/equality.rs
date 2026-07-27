@@ -44,10 +44,17 @@ use super::*;
 fn array_bearing(ty: &kt::KtType) -> bool {
     match ty {
         kt::KtType::Named { fqn, args, .. } => {
-            fqn.rsplit('.').next().unwrap_or(fqn) == "ByteArray" || args.iter().any(array_bearing)
+            is_kotlin_array(fqn.rsplit('.').next().unwrap_or(fqn)) || args.iter().any(array_bearing)
         }
         kt::KtType::Function { .. } => false,
     }
+}
+
+/// Every Kotlin primitive array. All of them compare by identity, so a
+/// fixed-size Rust array field needs the content operators whatever its element
+/// type is — not only `[u8; N]`.
+fn is_kotlin_array(name: &str) -> bool {
+    crate::api::lang::jnigen::jni::wire_access::kotlin_array_descriptor(name).is_some()
 }
 
 /// The element type of a single-argument container (`List<T>` -> `T`).

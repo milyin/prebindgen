@@ -849,8 +849,16 @@ pub(crate) fn kt_leaf_default(sig: &str, nullable: bool) -> Option<String> {
             "F" => "0.0f",
             "D" => "0.0",
             "Ljava/lang/String;" => "\"\"",
-            "[B" => "ByteArray(0)",
-            _ => "null",
+            other => {
+                // An inert primitive-array slot is an EMPTY array of its own
+                // type, never null — the slot is non-nullable in the factory.
+                if let Some(n) =
+                    crate::api::lang::jnigen::jni::wire_access::kotlin_array_of_descriptor(other)
+                {
+                    return Some(format!("{n}(0)"));
+                }
+                "null"
+            }
         }
         .to_string(),
     )
