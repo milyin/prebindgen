@@ -625,6 +625,47 @@ pub fn duration_boundary_echo(value: &DurationBoundary) -> DurationBoundary {
     value.clone()
 }
 
+/// How long something is held: for an explicit period, or indefinitely.
+///
+/// A **sum whose payload is a converted type**. `Duration` crosses through the
+/// binding's `convert!` declaration, so this payload's boundary conversion is
+/// two steps (`Duration -> u64 -> jlong`, and back) rather than the single
+/// wire converter every other sum payload here uses — the position where an
+/// emitter that reads only the wire-facing converter builds code that hands
+/// the semantic value where the representation is expected.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Hold {
+    /// Held with no end — the payload-less group.
+    Indefinite,
+    /// Held for this long.
+    For(Duration),
+}
+
+/// A retention policy: a required converted-payload sum beside an optional one.
+///
+/// The data-class position for [`Hold`], so the converted payload is exercised
+/// both as a top-level sum and as a tag-gated group inside a `fromParts`
+/// bridge — the two encoders are separate code paths.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HoldPolicy {
+    pub hold: Hold,
+    pub grace: Option<Hold>,
+}
+
+/// Round-trip a converted-payload sum, whole.
+#[prebindgen]
+pub fn hold_echo(h: Hold) -> Hold {
+    h
+}
+
+/// Round-trip a data class carrying converted-payload sums.
+#[prebindgen]
+pub fn hold_policy_echo(p: HoldPolicy) -> HoldPolicy {
+    p
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // convert! source-kind fixtures — one type per conversion source. Like
 // `Millis`, none of these types is `#[prebindgen]`-marked: each crosses the

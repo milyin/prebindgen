@@ -40,26 +40,73 @@ pub(crate) enum LeafForm {
     Object,
 }
 
+/// The COMPLETE Rust → wire conversion of one leaf: the rust-side stages a
+/// custom [`convert!`](crate::convert) declaration inserts (`Duration → u64`)
+/// followed by the wire-facing converter (`u64 → jlong`).
+///
+/// A leaf must carry the whole chain, not just
+/// [`TypeEntry::converter_ident`](crate::core::TypeEntry::converter_ident):
+/// calling only the wire-facing function would hand it the *semantic* value
+/// (a `Duration`) where it expects the *representation* (a `u64`), which does
+/// not compile. Structural wrappers (`Option<_>`, `Vec<_>`) already compose
+/// the chain; this is the same composition for the positions the flattened
+/// `fromParts` bridge encodes itself.
+pub(crate) struct ConvChain {
+    /// Rust-side stages in output execution order — each consumes the
+    /// previous one's result, the first consumes the Rust value.
+    pub stages: Vec<syn::Ident>,
+    /// The wire-facing converter, applied last.
+    pub function: syn::Ident,
+}
+
+impl ConvChain {
+    /// Read the chain off a resolved output entry.
+    fn of(entry: &crate::core::TypeEntry<KotlinMeta>) -> Self {
+        ConvChain {
+            stages: entry
+                .output_stage_order()
+                .map(|(_, stage)| stage.function.sig.ident.clone())
+                .collect(),
+            function: entry.converter_ident().clone(),
+        }
+    }
+
+    /// The expression converting `value` (a Rust value expression) to this
+    /// leaf's wire form, propagating any stage error with `?`.
+    pub(crate) fn call(&self, env: &TokenStream, value: &TokenStream, base: &str) -> TokenStream {
+        let function = &self.function;
+        if self.stages.is_empty() {
+            return quote! { #function(#env, #value.clone())? };
+        }
+        let mut body = TokenStream::new();
+        let mut previous = quote!(#value.clone());
+        for (order, stage) in self.stages.iter().enumerate() {
+            let next = format_ident!("__{}_s{}", base, order);
+            body.extend(quote! {
+                let #next = #stage(#env, #previous)
+                    .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
+                        __e.to_string()))?;
+            });
+            previous = quote!(#next);
+        }
+        quote!({ #body #function(#env, #previous)? })
+    }
+}
+
 pub(crate) enum PlanFieldKind {
     /// Opaque-handle / value-blob leaf. Wire slot: `jlong` (`"J"`) for a
     /// handle, `ByteArray` (`"[B"`) for a blob; the factory rebuilds the
     /// typed value from `fqn`.
     Projection {
-        conv: syn::Ident,
+        conv: ConvChain,
         proj: Projection,
         fqn: String,
     },
     /// Bare enum → `jint` discriminant (`"I"`); factory calls `fromInt`.
-    Enum {
-        conv: syn::Ident,
-        kotlin: kt::KtType,
-    },
+    Enum { conv: ConvChain, kotlin: kt::KtType },
     /// `Option<enum>` → `box_jint`-boxed discriminant
     /// (`"Ljava/lang/Integer;"`, JVM null = `None`); factory takes `Int?`.
-    OptionEnum {
-        conv: syn::Ident,
-        kotlin: kt::KtType,
-    },
+    OptionEnum { conv: ConvChain, kotlin: kt::KtType },
     /// Nested plain data-class: its leaves inline here. `optional` prepends
     /// a `present: Boolean` flag (`"Z"`) and defaults the child slots in the
     /// `None` arm; the factory guards `Child.fromParts(…)` on the flag.
@@ -93,7 +140,7 @@ pub(crate) enum PlanFieldKind {
     },
     /// Simple leaf with its own output converter.
     Leaf {
-        conv: syn::Ident,
+        conv: ConvChain,
         /// The converter's destination wire type (boxed: `syn::Type` is the
         /// enum's size outlier).
         wire: Box<syn::Type>,
@@ -210,7 +257,7 @@ pub(crate) fn classify_field(
     }
 
     let field_entry = registry.output_entry(&effective_ty)?;
-    let conv = field_entry.function.sig.ident.clone();
+    let conv = ConvChain::of(field_entry);
 
     {
         // Projection leaf (opaque handle / value blob).

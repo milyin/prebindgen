@@ -393,8 +393,13 @@ fn read_kotlin_property(
 ) -> Option<(TokenStream, TokenStream)> {
     let entry = registry.input_entry(ty)?;
     let wire = entry.destination.clone();
-    let conv = entry.function.sig.ident.clone();
     let raw = format_ident!("{}_raw", bind);
+    // The COMPLETE wire → Rust chain, not just the wire-facing converter: a
+    // `convert!`-declared type reaches its Rust value through the rust-side
+    // stages that follow (`jlong → u64 → Duration`). Stage bindings are named
+    // off `bind`, so two payloads of the same type in one variant do not
+    // collide.
+    let conv = composed_property_decode(entry, bind);
 
     // A handle property is a `NativeHandle` object whose raw pointer comes
     // from `peek()`; an enum property is the Kotlin enum class, decoded
@@ -413,7 +418,7 @@ fn read_kotlin_property(
             // `Option<_>` keeps the niche-aware converter (jlong 0 ⇒ `None`).
             let closed_msg = "Operation on a closed native handle.";
             let decode = if option_inner_type(ty).is_some() {
-                quote! { let #bind = #conv(env, &#raw)?; }
+                quote! { let #bind = #conv; }
             } else {
                 quote! {
                     if #raw == 0 || (#raw & 1) == 1 {
@@ -483,7 +488,7 @@ fn read_kotlin_property(
                 let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
                     .and_then(|val| val.i())
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                let #bind = #conv(env, &#raw)?;
+                let #bind = #conv;
             }
         };
         return Some((
@@ -502,7 +507,7 @@ fn read_kotlin_property(
                 let #raw: #wire = env.get_field(#receiver, #prop, #sig)
                     .and_then(|val| val.#accessor())
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))? as _;
-                let #bind = #conv(env, &#raw)?;
+                let #bind = #conv;
             },
             quote!(#bind),
         )),
@@ -514,7 +519,7 @@ fn read_kotlin_property(
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
                     let #raw: #wire = #obj.into();
-                    let #bind = #conv(env, &#raw)?;
+                    let #bind = #conv;
                 },
                 quote!(#bind),
             ))
@@ -535,12 +540,47 @@ fn read_kotlin_property(
                     let #raw: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #bind = #conv(env, &#raw)?;
+                    let #bind = #conv;
                 },
                 quote!(#bind),
             ))
         }
     }
+}
+
+/// The complete `wire -> Rust` decode of one property: the wire-facing
+/// converter applied to `<bind>_raw`, followed by the rust-side stages a
+/// custom [`convert!`](crate::convert) declaration inserts.
+///
+/// The mirror of [`ConvChain::call`](super::super::struct_plan::ConvChain) on
+/// the output side, and of the structural wrappers' own chain composition:
+/// stopping at [`TypeEntry::converter_ident`] would bind the *representation*
+/// (`u64`) where the Rust value (`Duration`) is required, which does not
+/// compile. Stage bindings are derived from `bind`, so two properties of the
+/// same type in one scope get distinct names.
+fn composed_property_decode(
+    entry: &crate::core::TypeEntry<KotlinMeta>,
+    bind: &syn::Ident,
+) -> TokenStream {
+    let raw = format_ident!("{}_raw", bind);
+    let converter = entry.converter_ident();
+    if entry.pre_stages.is_empty() {
+        return quote!(#converter(env, &#raw)?);
+    }
+    let s0 = format_ident!("{}_s0", bind);
+    let mut body = quote! { let #s0 = #converter(env, &#raw)?; };
+    let mut previous = s0;
+    for (order, (_, stage)) in entry.input_stage_order().enumerate() {
+        let stage_fn = &stage.function.sig.ident;
+        let next = format_ident!("{}_s{}", bind, order + 1);
+        body.extend(quote! {
+            let #next = #stage_fn(env, #previous)
+                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(
+                    __e.to_string()))?;
+        });
+        previous = next;
+    }
+    quote!({ #body #previous })
 }
 
 // ──────────────────────────────────────────────────────────────────────

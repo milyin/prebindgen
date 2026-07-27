@@ -63,6 +63,9 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `DurationBoundary` decomposed → [delay] (Callback delivery)
 - `duration_optional` — `fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
 - `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
+- `hold_echo` — `fun holdEcho(h: Hold, onError: JniErrorHandler<Hold>): Hold`
+  - shaped by: return `Hold` decomposed → [tag, for_v0] (Callback delivery)
+- `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy>): HoldPolicy`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
 - `lookup_each` — `fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: JniErrorHandler<Unit>)`
 - `lookup_of` — `fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>): Lookup`
@@ -168,6 +171,8 @@ Base package: `io.prebindgen.covertest`
 - `CacheConfig`: data_class → `io.prebindgen.covertest.model.CacheConfig` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
+- `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
+- `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)

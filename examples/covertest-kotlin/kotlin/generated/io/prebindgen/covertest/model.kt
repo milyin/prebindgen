@@ -36,6 +36,36 @@ public enum class Priority(public override val value: Int) : PriorityKind, Ranke
 }
 
 /**
+ * How long something is held: for an explicit period, or indefinitely.
+ *
+ * A **sum whose payload is a converted type**. `Duration` crosses through the
+ * binding's `convert!` declaration, so this payload's boundary conversion is
+ * two steps (`Duration -> u64 -> jlong`, and back) rather than the single
+ * wire converter every other sum payload here uses — the position where an
+ * emitter that reads only the wire-facing converter builds code that hands
+ * the semantic value where the representation is expected.
+ *
+ * JVM-side surface for the native Rust `Hold` sum: exactly one alternative is live.
+ */
+public sealed interface Hold {
+    /** Held with no end — the payload-less group. */
+    public data object Indefinite : Hold
+
+    /** Held for this long. */
+    public data class For(public val v0: ULong) : Hold
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Int, for_v0: ULong): Hold =
+            when (tag) {
+                0 -> Indefinite
+                1 -> For(for_v0)
+                else -> throw IllegalArgumentException("Hold: invalid tag $tag")
+            }
+    }
+}
+
+/**
  * A sum whose alternatives are a **payload-less** variant and one carrying an
  * opaque **handle** — the shape a real lookup/reply result takes, and the one
  * that proves a tag-gated group can own a native resource: the live group
@@ -206,6 +236,26 @@ public data class DurationBoundary(val delay: ULong?) {
     public companion object {
         @JvmStatic
         public fun fromParts(delay: Long): DurationBoundary = DurationBoundary(if (delay == -1L) null else delay.toULong())
+    }
+}
+
+/**
+ * A retention policy: a required converted-payload sum beside an optional one.
+ *
+ * The data-class position for [`Hold`], so the converted payload is exercised
+ * both as a top-level sum and as a tag-gated group inside a `fromParts`
+ * bridge — the two encoders are separate code paths.
+ */
+public data class HoldPolicy(val hold: Hold, val grace: Hold?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            hold__tag: Int,
+            hold_for_v0: Long,
+            grace__present: Boolean,
+            grace__tag: Int,
+            grace_for_v0: Long,
+        ): HoldPolicy = HoldPolicy(when (hold__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(hold_for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $hold__tag") }, if (grace__present) when (grace__tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(grace_for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $grace__tag") } else null)
     }
 }
 
@@ -765,6 +815,15 @@ public fun interface DurationBoundaryBuilderRaw<out R> {
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
 DurationBoundaryBuilderRaw { delay -> DurationBoundary.fromParts(delay) }
 
+public fun interface HoldBuilderRaw<out R> {
+    public fun run(tag: Int, for_v0: Long): R
+}
+
+internal val __HoldBuilderRaw: HoldBuilderRaw<Hold> =
+HoldBuilderRaw { tag, for_v0 ->
+    when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
+}
+
 public fun interface LookupBuilderRaw<out R> {
     public fun run(tag: Int, found_v0: Long, failed_v0: String?): R
 }
@@ -1318,6 +1377,27 @@ public fun archiveReadingMaybe(a: SummaryVault, onError: JniErrorHandler<Reading
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as Reading?
+}
+
+/**
+ * Round-trip a converted-payload sum, whole.
+ *
+ * The Rust `Hold` result is delivered decomposed: the builder callback receives (`tag`, `for_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold>): Hold {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.holdEcho(h, __HoldBuilderRaw, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Hold
+}
+
+/** Round-trip a data class carrying converted-payload sums. */
+public fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy>): HoldPolicy {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
 }
 
 /**

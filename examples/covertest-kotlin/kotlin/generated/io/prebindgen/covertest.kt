@@ -3,6 +3,8 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.DurationBoundary
+import io.prebindgen.covertest.model.Hold
+import io.prebindgen.covertest.model.HoldPolicy
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.Observation
@@ -703,6 +705,14 @@ internal object CovNative {
     external fun escapeProbeNew(value: Long, errorSink: Any): Long
 
     external fun escape_probe_value(p: Long, errorSink: Any): Long
+
+    external fun holdEcho(h: Hold, build: Any, errorSink: Any): Any?
+
+    external fun holdPolicyEcho(
+        pHold: Hold,
+        pGrace: io.prebindgen.covertest.model.Hold?,
+        errorSink: Any,
+    ): HoldPolicy
 
     external fun labelReverse(l: String, errorSink: Any): String
 

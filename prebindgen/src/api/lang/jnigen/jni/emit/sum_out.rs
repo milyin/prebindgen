@@ -302,18 +302,37 @@ fn encode_group_leaf(
             TypeKey::from_type(&leaf.out_ty)
         )
     });
-    let conv = out_entry.function.sig.ident.clone();
     let wire = out_entry.destination.clone();
     let conv_fail = fail(quote!(__e.to_string()));
     let enc = format_ident!("__enc_{}", obj_ident);
-    let encode = quote! {
-        let #enc = match #conv(&mut env, #bind.clone()) {
+    // The payload's COMPLETE chain: a `convert!`-declared type reaches the
+    // wire through its rust-side stages first (`Duration → u64 → jlong`).
+    // Stopping at the wire-facing converter would hand it the semantic value
+    // where it expects the representation.
+    let mut encode = TokenStream::new();
+    let mut previous = quote!(#bind.clone());
+    for (order, (_, stage)) in out_entry.output_stage_order().enumerate() {
+        let stage_fn = &stage.function.sig.ident;
+        let next = format_ident!("__enc_{}_s{}", obj_ident, order);
+        encode.extend(quote! {
+            let #next = match #stage_fn(&mut env, #previous) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    #conv_fail
+                }
+            };
+        });
+        previous = quote!(#next);
+    }
+    let conv = out_entry.converter_ident();
+    encode.extend(quote! {
+        let #enc = match #conv(&mut env, #previous) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
                 #conv_fail
             }
         };
-    };
+    });
     if prim {
         let letter = jni_field_access(&wire)
             .expect("leaf_is_prim guarantees a primitive wire")
