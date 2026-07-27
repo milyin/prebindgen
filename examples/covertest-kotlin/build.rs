@@ -453,6 +453,7 @@ fn main() {
                 .fun(fun!(percent_optional))
                 .fun(fun!(percent_invalid_output))
                 .fun(fun!(label_reverse))
+                .fun(fun!(label_series_echo))
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_alternate_value))
                 .fun(fun!(annotated_ttl))
@@ -502,6 +503,10 @@ fn main() {
                 .fun(fun!(unsigned_series))
                 .fun(fun!(duration_optional))
                 .fun(fun!(duration_boundary_echo))
+                // The converted analogue of `unsigned_emit`: a whole-value
+                // callback argument, which encodes on its own path rather than
+                // through the data-class or sum emitters.
+                .fun(fun!(duration_emit))
                 .fun(fun!(duration_out_of_range)),
         )
         // analytics: the param-variant / return-field matrix (type default /

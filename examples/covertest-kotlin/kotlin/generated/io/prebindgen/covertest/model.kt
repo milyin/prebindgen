@@ -2,6 +2,7 @@
 package io.prebindgen.covertest.model
 
 import io.prebindgen.covertest.CovNative
+import io.prebindgen.covertest.DurationCallback
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.Payload
@@ -1010,6 +1011,27 @@ public fun labelReverse(l: String, onError: JniErrorHandler<String>): String {
 }
 
 /**
+ * Round-trip a collection of labels — a `Vec` whose ELEMENT is a converted
+ * type.
+ *
+ * `Duration` cannot take this path (a `Vec` needs a JObject-shaped element
+ * wire, and its representation is a primitive `jlong`, so `Vec<Duration>` is
+ * refused at resolve time), but `Label` lowers to `String` and therefore does.
+ * The `Vec` converters build their element conversion inline, in both
+ * directions, so each has to compose the element's chain rather than call its
+ * wire-facing converter alone.
+ */
+public fun labelSeriesEcho(
+    labels: List<String>,
+    onError: JniErrorHandler<List<String>>,
+): List<String> {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.labelSeriesEcho(labels, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * Assemble an [`Annotated`] (nested data-class **output** + bare
  * `Option<scalar>` / `Option<enum>` inputs).
  */
@@ -1532,6 +1554,20 @@ public fun durationBoundaryEcho(
     val __ret = CovNative.durationBoundaryEcho(value, __DurationBoundaryBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as DurationBoundary
+}
+
+/**
+ * Deliver a converted value through the generated typed/raw callback twin —
+ * the converted analogue of [`unsigned_emit`].
+ *
+ * A callback argument that crosses WHOLE (no deconstructor, so no leaf plan)
+ * is its own encoder path, independent of the data-class and sum emitters, so
+ * a converted type has to reach its representation here too.
+ */
+public fun durationEmit(value: ULong, f: DurationCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.durationEmit(value.toLong(), f.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
 /**

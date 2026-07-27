@@ -476,12 +476,7 @@ fn read_kotlin_property(
         // Under `Option`, JVM null is `None` and the INNER converter decodes
         // the discriminant; the outer converter would expect a boxed Integer.
         let decode = if option_inner_type(ty).is_some() {
-            let inner_conv = registry
-                .input_entry(&enum_inner)?
-                .function
-                .sig
-                .ident
-                .clone();
+            let inner_conv = composed_entry_decode(registry.input_entry(&enum_inner)?, &raw, bind);
             quote! {
                 let #bind = if #obj.is_null() {
                     ::core::option::Option::None
@@ -489,7 +484,7 @@ fn read_kotlin_property(
                     let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
                         .and_then(|val| val.i())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    ::core::option::Option::Some(#inner_conv(env, &#raw)?)
+                    ::core::option::Option::Some(#inner_conv)
                 };
             }
         } else {

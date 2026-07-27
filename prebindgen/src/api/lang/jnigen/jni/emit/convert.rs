@@ -172,7 +172,7 @@ pub(crate) fn primitive_output(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)>
 /// conversions may carry semantic steps in `pre_stages` (for example
 /// `jlong -> u64 -> Duration`). Keep those steps inside the `Some` arm so a
 /// niche discriminator is tested before any conversion runs.
-fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn::Expr {
+pub(crate) fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn::Expr {
     let converter = inner.converter_ident();
     if inner.pre_stages.is_empty() {
         return syn::parse2(quote!(#converter(env, #wire)?))
@@ -197,7 +197,10 @@ fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn
 
 /// Invoke an inner output converter's complete `Rust -> wire` chain.
 /// Mirror of [`composed_inner_input`].
-fn composed_inner_output(inner: &TypeEntry<KotlinMeta>, value: TokenStream) -> syn::Expr {
+pub(crate) fn composed_inner_output(
+    inner: &TypeEntry<KotlinMeta>,
+    value: TokenStream,
+) -> syn::Expr {
     let converter = inner.converter_ident();
     if inner.pre_stages.is_empty() {
         return syn::parse2(quote!(#converter(env, #value)?))

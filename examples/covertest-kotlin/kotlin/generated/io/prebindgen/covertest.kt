@@ -379,6 +379,22 @@ public fun interface PayloadListCallback {
     public fun run(arg0: List<Payload>)
 }
 
+public fun interface DurationCallback {
+    public fun run(duration: ULong)
+}
+
+public fun interface DurationCallbackRaw {
+    public fun run(duration: Long)
+}
+
+public fun DurationCallback.asRaw(): DurationCallbackRaw =
+    DurationCallbackRaw {
+        duration ->
+        run(
+            duration.toULong()
+        )
+    }
+
 public fun interface StorageCallback {
     public fun run(storage: Storage)
 }
@@ -698,6 +714,8 @@ internal object CovNative {
 
     external fun durationBoundaryEcho(value: DurationBoundary, build: Any, errorSink: Any): Any?
 
+    external fun durationEmit(value: Long, f: Any, errorSink: Any)
+
     external fun durationOptional(value: Long, errorSink: Any): Long
 
     external fun durationOutOfRange(errorSink: Any): Long
@@ -715,6 +733,8 @@ internal object CovNative {
     ): HoldPolicy
 
     external fun labelReverse(l: String, errorSink: Any): String
+
+    external fun labelSeriesEcho(labels: List<String>, errorSink: Any): List<String>
 
     external fun lookupEach(n: Long, total: Double, sink: Any, errorSink: Any)
 

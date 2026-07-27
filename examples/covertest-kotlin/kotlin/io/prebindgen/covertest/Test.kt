@@ -45,10 +45,12 @@ import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
+import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.holdEcho
 import io.prebindgen.covertest.model.holdPolicyEcho
 import io.prebindgen.covertest.model.labelReverse
+import io.prebindgen.covertest.model.labelSeriesEcho
 import io.prebindgen.covertest.model.percentInvalidOutput
 import io.prebindgen.covertest.model.percentOptional
 import io.prebindgen.covertest.model.percentScale
@@ -261,6 +263,16 @@ fun main() {
             durationBoundaryEcho(DurationBoundary(86_400_000uL, 1uL), boom) ==
                 DurationBoundary(86_400_000uL, 1uL),
         )
+
+        // A whole-value CALLBACK argument is a third encoder path, independent
+        // of the data-class and sum emitters above: the trampoline encodes the
+        // arg itself, with no leaf plan to carry the chain. The converted
+        // analogue of `unsignedEmit`.
+        var emittedDuration = 0uL
+        durationEmit(12_345uL, DurationCallback { emittedDuration = it }, boom)
+        check(emittedDuration == 12_345uL)
+        durationEmit(86_400_000uL, DurationCallback { emittedDuration = it }, boom)
+        check(emittedDuration == 86_400_000uL)
 
         var inputError: String? = null
         val inputFallback = durationOptional(86_400_001uL) { je ->
@@ -1055,6 +1067,15 @@ fun main() {
         check(msg?.contains("label must not be empty") == true) {
             "labelReverse(\"\") must report the empty-label error, got: $msg"
         }
+
+        // `Vec<Label>` — a collection whose ELEMENT is a converted type. The
+        // `Vec` converters build the element conversion inline in both
+        // directions, so each has to run the element's chain rather than its
+        // wire-facing converter alone. (`Vec<Duration>` cannot probe this: a
+        // `Vec` needs a JObject-shaped element wire and a bounded duration's
+        // is a primitive `Long`, so it is refused at resolve time.)
+        check(labelSeriesEcho(listOf("alpha", "beta"), boom) == listOf("alpha", "beta"))
+        check(labelSeriesEcho(emptyList(), boom) == emptyList<String>())
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────

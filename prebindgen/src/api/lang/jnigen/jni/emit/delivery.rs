@@ -144,7 +144,35 @@ pub(crate) fn emit_unfold_delivery(
                     TypeKey::from_type(element)
                 )
             });
-            let elem_conv = out_entry.function.sig.ident.clone();
+            // The element's COMPLETE Rust -> wire chain. No `convert!` type is
+            // known to reach THIS path today (a fold element is single-leaf and
+            // whole, and the collection converters claim the shapes a converted
+            // element can take), but composing keeps the invariant uniform: a
+            // chain-less entry emits exactly the same call it did before. This
+            // is an extern body, so errors route to the sink rather than `?`.
+            let elem_conv = {
+                let step = |f: &syn::Ident, arg: TokenStream| {
+                    quote! {
+                        match #f(&mut env, #arg) {
+                            ::core::result::Result::Ok(__w) => __w,
+                            ::core::result::Result::Err(__e) => {
+                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                                return #on_err;
+                            }
+                        }
+                    }
+                };
+                let mut body = TokenStream::new();
+                let mut previous = quote!(__elem);
+                for (order, (_, stage)) in out_entry.output_stage_order().enumerate() {
+                    let next = format_ident!("__es{}", order);
+                    let call = step(&stage.function.sig.ident, previous);
+                    body.extend(quote! { let #next = #call; });
+                    previous = quote!(#next);
+                }
+                let last = step(out_entry.converter_ident(), previous);
+                quote!({ #body #last })
+            };
             let elem_wire = out_entry.destination.clone();
             // Primitive-wire elements (including an opaque **handle**, whose wire
             // is `jlong`) cross as a raw typed jvalue; object wires (String /
@@ -168,13 +196,7 @@ pub(crate) fn emit_unfold_delivery(
             };
             let invoke = fold_invoke(&[arg_expr]);
             quote! {
-                let __enc = match #elem_conv(&mut env, __elem) {
-                    ::core::result::Result::Ok(__w) => __w,
-                    ::core::result::Result::Err(__e) => {
-                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                        return #on_err;
-                    }
-                };
+                let __enc = #elem_conv;
                 #bind_obj
                 #invoke
             }

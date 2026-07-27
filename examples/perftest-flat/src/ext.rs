@@ -631,6 +631,17 @@ pub fn duration_boundary_echo(value: &DurationBoundary) -> DurationBoundary {
     value.clone()
 }
 
+/// Deliver a converted value through the generated typed/raw callback twin —
+/// the converted analogue of [`unsigned_emit`].
+///
+/// A callback argument that crosses WHOLE (no deconstructor, so no leaf plan)
+/// is its own encoder path, independent of the data-class and sum emitters, so
+/// a converted type has to reach its representation here too.
+#[prebindgen]
+pub fn duration_emit(value: Duration, f: impl Fn(Duration) + Send + Sync + 'static) {
+    f(value)
+}
+
 /// How long something is held: for an explicit period, or indefinitely.
 ///
 /// A **sum whose payload is a converted type**. `Duration` crosses through the
@@ -756,6 +767,20 @@ pub struct Label(pub String);
 #[prebindgen]
 pub fn label_reverse(l: Label) -> Label {
     Label(l.0.chars().rev().collect())
+}
+
+/// Round-trip a collection of labels — a `Vec` whose ELEMENT is a converted
+/// type.
+///
+/// `Duration` cannot take this path (a `Vec` needs a JObject-shaped element
+/// wire, and its representation is a primitive `jlong`, so `Vec<Duration>` is
+/// refused at resolve time), but `Label` lowers to `String` and therefore does.
+/// The `Vec` converters build their element conversion inline, in both
+/// directions, so each has to compose the element's chain rather than call its
+/// wire-facing converter alone.
+#[prebindgen]
+pub fn label_series_echo(labels: Vec<Label>) -> Vec<Label> {
+    labels
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
