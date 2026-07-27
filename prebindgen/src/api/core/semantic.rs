@@ -111,12 +111,35 @@ pub enum SourceUse {
     ExclusiveRef,
 }
 
+/// The declared length of a [`SequenceKind::Array`], as the source spells it.
+///
+/// Kept in the shape rather than left for a consumer to re-read off the type,
+/// because the length is *needed*: packing a small fixed array into scalar
+/// slots ([#208](https://github.com/milyin/prebindgen/issues/208)) is a Tier 1
+/// decision that cannot be taken without it.
+///
+/// Split by what a consumer can actually do with it. A literal is actionable
+/// immediately; a named const has to be resolved against the registry first —
+/// `[u8; ZENOH_ID_MAX_SIZE]` is the real spelling in zenoh-flat, so "the length
+/// is a literal" is not an assumption this tier may make.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ArrayLen {
+    /// `[u8; 16]`.
+    Literal(usize),
+    /// `[u8; ZENOH_ID_MAX_SIZE]` — a const the registry may index.
+    Named(syn::Ident),
+    /// Anything else (an arithmetic expression, a generic const parameter),
+    /// recorded verbatim so nothing is silently dropped.
+    Other(String),
+}
+
 /// Which sequence spelling a [`SemanticShape::Sequence`] layer came from.
 ///
-/// Kept distinct because the three differ in what the *source* says about
-/// ownership of the backing storage, which is an input to Tier 1's decision
-/// even though the decision itself is not made here.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// Kept distinct because they differ in what the *source* says about ownership
+/// of the backing storage — and, for [`Array`](Self::Array), about its length —
+/// which is an input to Tier 1's decision even though the decision itself is
+/// not made here.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SequenceKind {
     /// `Vec<T>` — owned, growable.
     Vec,
@@ -124,6 +147,19 @@ pub enum SequenceKind {
     Slice,
     /// `Cow<'_, [T]>` — borrowed or owned, decided at runtime.
     CowSlice,
+    /// `[T; N]` — owned, inline, statically sized.
+    ///
+    /// Added after the fact: Stage T's spec enumerated only the three
+    /// unbounded spellings, so a fixed array fell through to a
+    /// [`Leaf`](SemanticShape::Leaf) — which hid its element type from the tier
+    /// whose job is structure, the same objection that put `Result` in as a
+    /// `Choice` rather than an opaque leaf.
+    ///
+    /// It was invisible while nothing crossed the boundary as an array;
+    /// [#209](https://github.com/milyin/prebindgen/pull/209) makes `[T; N]` a
+    /// first-class boundary shape (a Kotlin primitive array), so the gap became
+    /// load-bearing.
+    Array(ArrayLen),
 }
 
 /// A use-qualified edge to a child shape.
@@ -449,6 +485,12 @@ impl ShapeGraph {
                 elem: self.intern_use(&s.elem, registry),
             };
         }
+        if let syn::Type::Array(a) = ty {
+            return SemanticShape::Sequence {
+                kind: SequenceKind::Array(array_len(&a.len)),
+                elem: self.intern_use(&a.elem, registry),
+            };
+        }
         if let Some(inner) = cow_slice_elem(ty) {
             return SemanticShape::Sequence {
                 kind: SequenceKind::CowSlice,
@@ -676,6 +718,34 @@ fn strip_transparent(ty: &syn::Type) -> syn::Type {
         }
     }
     ty.clone()
+}
+
+/// Classify an array-length expression by what a consumer can do with it — see
+/// [`ArrayLen`].
+fn array_len(expr: &syn::Expr) -> ArrayLen {
+    match expr {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(i),
+            ..
+        }) => i
+            .base10_parse::<usize>()
+            .map(ArrayLen::Literal)
+            .unwrap_or_else(|_| {
+                ArrayLen::Other(quote::ToTokens::to_token_stream(expr).to_string())
+            }),
+        // A bare const ident. A qualified path is `Other`: this tier does not
+        // guess which namespace it names, the same rule `source_item_ident`
+        // applies to types.
+        syn::Expr::Path(p)
+            if p.qself.is_none()
+                && p.path.leading_colon.is_none()
+                && p.path.segments.len() == 1
+                && matches!(p.path.segments[0].arguments, syn::PathArguments::None) =>
+        {
+            ArrayLen::Named(p.path.segments[0].ident.clone())
+        }
+        other => ArrayLen::Other(quote::ToTokens::to_token_stream(other).to_string()),
+    }
 }
 
 /// The element of a `Cow<'_, [E]>`, if `ty` is one.

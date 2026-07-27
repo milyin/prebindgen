@@ -157,6 +157,86 @@ fn sequence_kinds_are_distinguished_but_share_a_node_kind() {
     }
 }
 
+/// A **fixed-size array is a `Sequence`**, not a `Leaf`.
+///
+/// Stage T's spec enumerated only the three unbounded spellings, so `[T; N]`
+/// fell through to a leaf — hiding its element type from the tier whose job is
+/// structure, which is the objection that put `Result` in as a `Choice`. It was
+/// invisible while nothing crossed as an array; #209 makes `[T; N]` a
+/// first-class boundary shape.
+#[test]
+fn fixed_size_arrays_are_sequences() {
+    let (g, root) = graph_of(&["pub struct Rec { pub id: u64 }"], "[Rec; 4]");
+    let SemanticShape::Sequence { kind, elem } = g.get(root.shape) else {
+        panic!("`[Rec; 4]` must be a sequence, got {:?}", g.get(root.shape));
+    };
+    assert_eq!(kind, &SequenceKind::Array(ArrayLen::Literal(4)));
+    assert_eq!(elem.source, SourceUse::Value);
+    // The element keeps its structure — the whole point of not being a leaf.
+    assert!(matches!(g.get(elem.shape), SemanticShape::Product { .. }));
+
+    // Element use is qualified like any other sequence's.
+    let (g2, root2) = graph_of(&["pub struct Rec { pub id: u64 }"], "[&'static Rec; 2]");
+    let SemanticShape::Sequence { elem, .. } = g2.get(root2.shape) else {
+        panic!("expected a sequence");
+    };
+    assert_eq!(elem.source, SourceUse::SharedRef);
+}
+
+/// The length is **carried**, split by what a consumer can do with it.
+///
+/// `[u8; ZENOH_ID_MAX_SIZE]` is the real spelling in zenoh-flat, so "the length
+/// is a literal" is not an assumption this tier may make — and #208 (packing a
+/// small array into scalar slots) cannot be decided without knowing which it is.
+#[test]
+fn an_array_length_records_what_the_source_spells() {
+    for (spelling, want) in [
+        ("[u8; 16]", ArrayLen::Literal(16)),
+        (
+            "[u8; ZENOH_ID_MAX_SIZE]",
+            ArrayLen::Named(syn::Ident::new(
+                "ZENOH_ID_MAX_SIZE",
+                proc_macro2::Span::call_site(),
+            )),
+        ),
+        ("[u8; 2 * 8]", ArrayLen::Other("2 * 8".to_string())),
+        // A qualified path is not assumed to name a registry const, the same
+        // rule `source_item_ident` applies to types.
+        (
+            "[u8; other::LEN]",
+            ArrayLen::Other("other :: LEN".to_string()),
+        ),
+    ] {
+        let (g, root) = graph_of(&[], spelling);
+        let SemanticShape::Sequence { kind, .. } = g.get(root.shape) else {
+            panic!(
+                "`{spelling}` must be a sequence, got {:?}",
+                g.get(root.shape)
+            );
+        };
+        assert_eq!(kind, &SequenceKind::Array(want), "for `{spelling}`");
+    }
+}
+
+/// Two arrays of the same element but different lengths are different shapes,
+/// so they must not collapse onto one node.
+#[test]
+fn arrays_of_different_lengths_are_distinct_nodes() {
+    let (g, _) = graph_of(
+        &["pub struct Holder { pub a: [u8; 4], pub b: [u8; 8], pub c: [u8; 4] }"],
+        "Holder",
+    );
+    let a = g.id_of(&key("[u8; 4]")).expect("[u8; 4] interned");
+    let b = g.id_of(&key("[u8; 8]")).expect("[u8; 8] interned");
+    assert_ne!(a, b);
+    // …and the repeated one interns once, like every other type.
+    let SemanticShape::Product { fields, .. } = g.get(g.id_of(&key("Holder")).unwrap()) else {
+        panic!("expected a product");
+    };
+    assert_eq!(fields[0].uses.shape, fields[2].uses.shape);
+    assert_ne!(fields[0].uses.shape, fields[1].uses.shape);
+}
+
 /// `Option<T>` is a layer, not a property of the thing it wraps.
 #[test]
 fn option_is_a_layer() {
