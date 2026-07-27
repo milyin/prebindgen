@@ -540,7 +540,6 @@ fn emit_input_param(
         // ordinary converter chain.
         InputKind::Callback { .. }
         | InputKind::Handle { .. }
-        | InputKind::ValueUnwrap { .. }
         | InputKind::Unsigned64 { .. }
         | InputKind::Plain => {
             let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {

@@ -59,7 +59,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
     // clash"); distinct signatures are legitimate overloads and pass.
     let mut overloads: BTreeMap<(String, String, JvmSignature), String> = BTreeMap::new();
     let mut add_overload = |scope: &str, f: &kt::KtFun, origin: &str, errors: &mut Vec<String>| {
-        let sig = jvm_signature(ext, f);
+        let sig = jvm_signature(f);
         let key = (scope.to_string(), f.name.clone(), sig.clone());
         if let Some(prev) = overloads.insert(key, origin.to_string()) {
             errors.push(format!(
@@ -470,12 +470,10 @@ fn boxed_primitive(simple: &str) -> Option<&'static str> {
 ///   the boxed `kotlin.ULong` class;
 /// * `String` / `ByteArray` / `Any` → their JVM types (object nullability is
 ///   irrelevant to the descriptor);
-/// * a `@JvmInline value class` → its underlying wire (`byte[]`), so two
-///   distinct value classes clash;
 /// * a generic type → its raw class (`List<T>` → `List`), arguments erased;
 /// * any other class → its FQN (distinct classes stay distinct);
 /// * a function type → `kotlin.Function<arity>`.
-pub(crate) fn erase_kt_type(ext: &JniGen, generics: &[String], ty: &kt::KtType) -> ErasedJvmType {
+pub(crate) fn erase_kt_type(generics: &[String], ty: &kt::KtType) -> ErasedJvmType {
     use kt::KtType;
     let token = match ty {
         KtType::Function { params, .. } => format!("kotlin.Function{}", params.len()),
@@ -483,8 +481,6 @@ pub(crate) fn erase_kt_type(ext: &JniGen, generics: &[String], ty: &kt::KtType) 
             let simple = ty.simple_name().unwrap_or(fqn);
             if generics.iter().any(|g| g == fqn) {
                 "java.lang.Object".to_string()
-            } else if ext.is_value_blob_kotlin(simple) {
-                "byte[]".to_string()
             } else if simple == "ULong" {
                 if *nullable {
                     "kotlin.ULong".to_string()
@@ -517,11 +513,11 @@ pub(crate) fn erase_kt_type(ext: &JniGen, generics: &[String], ty: &kt::KtType) 
 /// The [`JvmSignature`] of a generated wrapper (`render_wrapper_fn` /
 /// `render_param_overloads` output): each parameter erased through
 /// [`erase_kt_type`] under the function's own generic type variables.
-pub(crate) fn jvm_signature(ext: &JniGen, f: &kt::KtFun) -> JvmSignature {
+pub(crate) fn jvm_signature(f: &kt::KtFun) -> JvmSignature {
     JvmSignature(
         f.params
             .iter()
-            .map(|p| erase_kt_type(ext, &f.generics, &p.ty))
+            .map(|p| erase_kt_type(&f.generics, &p.ty))
             .collect(),
     )
 }
@@ -543,15 +539,12 @@ impl NativeSymbol {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        erase_kt_type, is_valid_kotlin_ident, mangle_kotlin_ident, mangle_package, JniGen,
-    };
+    use super::{erase_kt_type, is_valid_kotlin_ident, mangle_kotlin_ident, mangle_package};
     use crate::api::gen::kotlin as kt;
 
     fn erase(generics: &[&str], ty: kt::KtType) -> String {
-        let ext = JniGen::new();
         let gs: Vec<String> = generics.iter().map(|s| s.to_string()).collect();
-        erase_kt_type(&ext, &gs, &ty).to_string()
+        erase_kt_type(&gs, &ty).to_string()
     }
 
     #[test]

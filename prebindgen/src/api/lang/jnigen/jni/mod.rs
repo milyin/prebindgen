@@ -171,11 +171,6 @@ pub(crate) enum DeclaredKind {
     /// class`, flattened field-by-field at the boundary. The kind with no
     /// options of its own.
     Data,
-    /// `value_class!` — a `Copy` Rust type passed **by value as its raw
-    /// memory blob** in a `JByteArray` (wire), the value-level peer of an
-    /// opaque handle's `jlong`. Surfaces as a `@JvmInline value class`
-    /// erased to `ByteArray`.
-    Value,
 }
 
 /// All configuration the structured builder accumulates for one
@@ -258,11 +253,6 @@ impl TypeConfig {
             _ => None,
         }
     }
-
-    /// `true` if this type is a `value_class`-declared `Copy` value blob.
-    pub(crate) fn is_value_blob(&self) -> bool {
-        matches!(self.kind, DeclaredKind::Value)
-    }
 }
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
@@ -309,7 +299,7 @@ pub(crate) enum MemberKind {
 }
 
 /// One `#[prebindgen]` function attached to a declared class (`ptr_class` /
-/// `value_class` / `data_class`) via a declaration's `.method(...)` /
+/// `data_class`) via a declaration's `.method(...)` /
 /// `.constructor(...)`. Methods become **instance methods** (receiver
 /// dropped→`this`); constructors become **companion factory** methods. Each
 /// is also a real `#[prebindgen]` wrapper (Rust extern + `JNINative` extern +

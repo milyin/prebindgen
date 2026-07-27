@@ -16,7 +16,6 @@ impl DeclaredKind {
             DeclaredKind::Enum(_) => "enum_class",
             DeclaredKind::Sealed(_) => "sealed_class",
             DeclaredKind::Data => "data_class",
-            DeclaredKind::Value => "value_class",
         }
     }
 
@@ -55,7 +54,7 @@ impl DeclaredKind {
                 have.variant_names.extend(add.variant_names);
             }
             // Kinds with no payload of their own: nothing to merge.
-            (DeclaredKind::Enum(_), _) | (DeclaredKind::Data, _) | (DeclaredKind::Value, _) => {}
+            (DeclaredKind::Enum(_), _) | (DeclaredKind::Data, _) => {}
             // The discriminants were just checked equal, so no mixed pair
             // reaches this arm — landing here means a kind carrying options
             // was added above without a merge rule.
@@ -347,7 +346,6 @@ impl JniGen {
             ClassDecl::Enum(d) => self.accept_enum_class(subpackage, d),
             ClassDecl::Sealed(d) => self.accept_sealed_class(subpackage, d),
             ClassDecl::Data(d) => self.accept_data_class(subpackage, d),
-            ClassDecl::Value(d) => self.accept_value_class(subpackage, d),
         }
     }
 
@@ -501,17 +499,8 @@ impl JniGen {
         self.accept_members(&key, decl.members);
     }
 
-    fn accept_value_class(&mut self, subpackage: &str, decl: ValueClassDecl) {
-        let short = rust_short_name(&decl.key);
-        let key = decl.key;
-        let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
-        self.register_class(&key, DeclaredKind::Value, spec);
-        self.store_iface_opts(&key, decl.iface);
-        self.accept_members(&key, decl.members);
-    }
-
-    /// Shared tail of the member-bearing class kinds (`ptr` / `value` /
-    /// `data` — every kind whose instance can re-enter Rust): each member's
+    /// Shared tail of the member-bearing class kinds (`ptr` / `data` —
+    /// every kind whose instance can re-enter Rust): each member's
     /// per-fn expand overrides apply exactly as a free function's would; a
     /// constructor member's return is additionally never output-flattened
     /// (it's a factory); then the members join the class's registered set.

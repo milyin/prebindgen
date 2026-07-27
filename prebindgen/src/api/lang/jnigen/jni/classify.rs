@@ -8,7 +8,7 @@ use super::*;
 /// Rust type: the declared [`DeclaredKind`] when the type is declared to this
 /// adapter, else a registered source struct, else everything else.
 ///
-/// The four special kinds cannot overlap — a type stores exactly one
+/// The three special kinds cannot overlap — a type stores exactly one
 /// [`DeclaredKind`], so this is a lookup, not a precedence chain.
 /// `DataStruct` is any struct captured from the source crate — `cfg` tells
 /// whether it was also declared to the builder (a `data_class` candidate) or
@@ -22,8 +22,6 @@ pub(crate) enum TypeKind<'r, 'c> {
     /// one leaf group per variant, surfacing as a Kotlin `sealed interface`.
     /// It has no single wire of its own; it crosses flattened.
     Sum,
-    /// Declared via `value_class` — raw-memory `JByteArray` wire.
-    ValueBlob,
     /// A `#[prebindgen]` struct from the source crate that is none of the
     /// special kinds; flattens field-by-field when emitters support it.
     DataStruct {
@@ -35,8 +33,8 @@ pub(crate) enum TypeKind<'r, 'c> {
 }
 
 impl TypeConfig {
-    /// Declared as one of the four non-data-class kinds (`ptr_class` /
-    /// `enum_class` / `sealed_class` / `value_class`) — types with their own
+    /// Declared as one of the three non-data-class kinds (`ptr_class` /
+    /// `enum_class` / `sealed_class`) — types with their own
     /// dedicated Kotlin emitters, never flattened as data classes.
     pub(crate) fn special_decl(&self) -> bool {
         !matches!(self.kind, DeclaredKind::Data)
@@ -58,7 +56,6 @@ impl JniGen {
                 DeclaredKind::Ptr(_) => return TypeKind::Handle,
                 DeclaredKind::Enum(_) => return TypeKind::Enum,
                 DeclaredKind::Sealed(_) => return TypeKind::Sum,
-                DeclaredKind::Value => return TypeKind::ValueBlob,
                 // A data class is exactly a declared source struct — fall
                 // through to the registry probe below, which supplies the
                 // `syn::ItemStruct` its emitters flatten.

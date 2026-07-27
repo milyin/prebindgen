@@ -175,8 +175,8 @@ pub(crate) fn emit_unfold_delivery(
             };
             let elem_wire = out_entry.destination.clone();
             // Primitive-wire elements (including an opaque **handle**, whose wire
-            // is `jlong`) cross as a raw typed jvalue; object wires (String /
-            // value blob) cross as a `JObject`. Keyed purely on the wire shape —
+            // is `jlong`) cross as a raw typed jvalue; object wires (String,
+            // arrays) cross as a `JObject`. Keyed purely on the wire shape —
             // a handle's `Some(Handle)` projection still rides its `jlong`, and
             // the folder interface declares the matching `Long` (raw) param.
             let elem_is_prim = matches!(jni_field_access(&elem_wire), Some((_, _, false)));
@@ -500,16 +500,13 @@ pub(crate) fn encode_plan_leaves(
             // typed class in bytecode — a native `new_object` would cost a
             // descriptor parse + FindClass + GetMethodID + NewObjectA per
             // delivery). A nullable handle (an `Option` nesting step on the
-            // path) boxes to `java.lang.Long` / null. A `value_blob` (`Copy`)
-            // is delivered by copy via its value-blob converter
-            // (→ `JByteArray`); the Kotlin adapter wraps it (Rust can't box a
-            // `@JvmInline value class`). The whole path is `Option`-unwrapped
+            // path) boxes to `java.lang.Long` / null. The whole path is `Option`-unwrapped
             // (`unwrap_last`): an optional nesting step makes the leaf null
             // when the value is absent.
             let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
-                     `.accessor_record_id()` requires a ptr_class or value_blob type",
+                     `.accessor_record_id()` requires a ptr_class type",
                     TypeKey::from_type(&leaf.out_ty)
                 )
             });
@@ -570,42 +567,6 @@ pub(crate) fn encode_plan_leaves(
                                             #box_fail
                                         }
                                     }
-                                }}
-                            },
-                        );
-                        stmts.extend(bind_obj(obj_ident, expr));
-                    }
-                }
-                ProjectionKind::ValueBlob => {
-                    // The value_blob converter takes the value owned (`Copy`).
-                    // Owned at the root; reached-by-`&` elsewhere ⇒ deref-copy.
-                    let wire = out_entry.destination.clone();
-                    let enc_ident = format_ident!("__enc{}", idx);
-                    let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
-                    if leaf.path.is_empty() && !by_ref {
-                        let __encoded = conv(quote!(#value));
-
-                        stmts.extend(bind_obj(
-                            obj_ident,
-                            quote! {{
-                                let #enc_ident = #__encoded;
-                                #cast
-                            }},
-                        ));
-                    } else {
-                        let expr = reach_leaf(
-                            &qualify,
-                            &leaf.path,
-                            &returns_option,
-                            value.clone(),
-                            by_ref,
-                            true,
-                            0,
-                            &|reached| {
-                                let __encoded = conv(quote!(*#reached));
-                                quote! {{
-                                    let #enc_ident = #__encoded;
-                                    #cast
                                 }}
                             },
                         );
@@ -737,7 +698,7 @@ pub(crate) fn encode_plan_leaves(
 }
 
 /// True when a plan leaf crosses the typed `run` as a **raw primitive**
-/// `jvalue`: non-nullable, no projection (not a handle / value-blob), and a
+/// `jvalue`: non-nullable, no projection (not a handle), and a
 /// primitive JNI wire. Must agree with the descriptor chunk
 /// [`crate::api::lang::jnigen::jni::iface`] derives for the same leaf — a
 /// nullable primitive boxes (object chunk), object wires pass as objects.

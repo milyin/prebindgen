@@ -38,11 +38,6 @@ pub(crate) fn struct_input_body(
         //  * Handle: read the JNINativeHandle object from the JVM slot,
         //    `peek()` the raw jlong, then run the per-field input converter
         //    (jlong-keyed; null handle ⇒ jlong 0 ⇒ `None` via the niche path).
-        //  * ValueBlob: the class is JVM-erased to its `bytes: ByteArray`, so
-        //    the slot is the `[B` descriptor; read it as a JObject, coerce to
-        //    the inner wire, and run the per-field converter. (Without this
-        //    branch a value-blob field would be mis-decoded as a handle —
-        //    peeking a non-handle object.)
         if let Some(proj) = &field_entry.metadata.projection {
             match proj.kind {
                 ProjectionKind::Handle => {
@@ -93,41 +88,6 @@ pub(crate) fn struct_input_body(
                                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
                         };
                         #decode
-                    });
-                }
-                ProjectionKind::ValueBlob => {
-                    // The JVM slot is the WRAPPER class, then its `bytes`. It
-                    // was `[B` while a value blob was `@JvmInline`-erased; the
-                    // wrapper is a real class now (it has to be, to carry value
-                    // equality), so reading `[B` here raises
-                    // `NoSuchFieldError` at the first decode.
-                    let fqn = ext
-                        .kotlin_fqn(&proj.leaf_key)
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "value_blob field `{struct_name}.{fname}`: no Kotlin FQN for `{}`",
-                                proj.leaf_key
-                            )
-                        });
-                    let sig = format!("L{};", fqn.replace('.', "/"));
-                    let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                    let bytes_ident = format_ident!("__{}_bytes", fname_ident);
-                    field_preludes.push(quote! {
-                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                        // A null wrapper stays a null `[B`, so the field's own
-                        // converter carves `None` exactly as it did before.
-                        let #bytes_ident: jni::objects::JObject = if #tmp_ident.is_null() {
-                            jni::objects::JObject::null()
-                        } else {
-                            env.get_field(&#tmp_ident, "bytes", "[B")
-                                .and_then(|val| val.l())
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
-                        };
-                        let #raw_ident: #field_wire = #bytes_ident.into();
-                        let #fname_ident = #field_conv;
                     });
                 }
                 ProjectionKind::Unsigned64 => {
@@ -479,32 +439,6 @@ fn read_kotlin_property(
                             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
                     };
                     #decode
-                },
-                quote!(#bind),
-            ));
-        }
-        // A value blob's JVM slot is the WRAPPER class, then its `bytes` — it
-        // was `[B` only while the wrapper was `@JvmInline`-erased. Same
-        // correction as the data-class field path in `struct_input_body`.
-        if matches!(proj.kind, ProjectionKind::ValueBlob) {
-            let fqn = ext.kotlin_fqn(&proj.leaf_key).map(|v| v.to_string())?;
-            let sig = format!("L{};", fqn.replace('.', "/"));
-            let obj = format_ident!("{}_obj", bind);
-            let wire = entry.destination.clone();
-            return Some((
-                quote! {
-                    let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
-                        .and_then(|val| val.l())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                    let #raw: #wire = if #obj.is_null() {
-                        jni::objects::JObject::null().into()
-                    } else {
-                        env.get_field(&#obj, "bytes", "[B")
-                            .and_then(|val| val.l())
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
-                            .into()
-                    };
-                    let #bind = #conv;
                 },
                 quote!(#bind),
             ));
@@ -974,7 +908,7 @@ fn build_flat_sum_field(
         let mut fields = Vec::new();
         for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
             let entry = registry.input_entry(&item_field.ty)?;
-            // A projection payload (handle / value blob) carries ownership
+            // A projection payload (handle) carries ownership
             // and locking rules the tag-gated group does not model yet.
             if entry.metadata.projection.is_some() {
                 return None;
@@ -1490,34 +1424,6 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: true,
                         optional_handle,
-                        rust_ty: Box::new(field.ty.clone()),
-                    });
-                    continue;
-                }
-                ProjectionKind::ValueBlob => {
-                    let is_opt = option_inner_type(&field.ty).is_some();
-                    let mut access = if is_opt || nullable_context {
-                        format!("{field_ref}?.bytes")
-                    } else {
-                        format!("{field_ref}.bytes")
-                    };
-                    if nullable_context && !is_opt {
-                        access.push_str(" ?: ByteArray(0)");
-                    }
-                    let value_index = push_value_leaf(
-                        leaves,
-                        &child_native,
-                        fident.clone(),
-                        fentry,
-                        access,
-                        is_opt,
-                    );
-                    fields.push(FlatFieldNode::Value {
-                        field: fident,
-                        value_leaf: value_index,
-                        present_leaf: None,
-                        direct_handle: false,
-                        optional_handle: false,
                         rust_ty: Box::new(field.ty.clone()),
                     });
                     continue;

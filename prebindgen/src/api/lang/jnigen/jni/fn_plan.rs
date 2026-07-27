@@ -110,9 +110,6 @@ pub(crate) enum InputKind {
     /// [`KotlinMeta::is_direct_handle`] — `true` only for the bare
     /// `T`/`&T` shape, the by-value consume fast-path trigger.
     Handle { direct: bool },
-    /// Non-lockable value projection (`value_blob`): the call site passes the
-    /// unwrapped inline-class `field`; the extern keeps the erased wire.
-    ValueUnwrap { field: String },
     /// Rust `u64`: typed Kotlin `ULong`, raw JNI `Long`. The wrapper passes
     /// the bit-preserving `toLong()` representation and takes no lock.
     Unsigned64 { niche: Option<String> },
@@ -197,7 +194,7 @@ pub(crate) enum ReturnSurface {
     Skip,
     /// Unit return, including the canonical peel (`ZResult<()>`).
     Unit,
-    /// Projection return (opaque handle / value class). `leaf_fqn` is the
+    /// Projection return (opaque handle / `ULong`). `leaf_fqn` is the
     /// resolved Kotlin FQN; `None` = unregistered (the adapter panics).
     Projected {
         projection: Projection,
@@ -479,15 +476,13 @@ impl JniFunctionPlan {
                 InputKind::OptionScalar(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
-                InputKind::ValueUnwrap { .. } | InputKind::Unsigned64 { .. } | InputKind::Plain => {
-                    registry
-                        .input_entry(&leaf.ty)
-                        .and_then(|entry| JniPrim::from_wire(&entry.destination))
-                        .map_or(1, |prim| match prim {
-                            JniPrim::Long | JniPrim::Double => 2,
-                            _ => 1,
-                        })
-                }
+                InputKind::Unsigned64 { .. } | InputKind::Plain => registry
+                    .input_entry(&leaf.ty)
+                    .and_then(|entry| JniPrim::from_wire(&entry.destination))
+                    .map_or(1, |prim| match prim {
+                        JniPrim::Long | JniPrim::Double => 2,
+                        _ => 1,
+                    }),
             };
         }
         slots += match &self.output {
@@ -573,23 +568,6 @@ fn classify_leaf(
             Some(ProjectionKind::Handle) => InputKind::Handle {
                 direct: entry.metadata.is_direct_handle(),
             },
-            Some(ProjectionKind::ValueBlob) => {
-                let proj = entry.metadata.projection.as_ref().expect("checked above");
-                if matches!(proj.strategy, FoldStrategy::Iterable(_)) {
-                    panic!(
-                        "render_wrapper_fn: value-blob `Vec<_>` params aren't \
-                         supported yet (param `{kt_name}`); add array codegen to lift this guard."
-                    );
-                }
-                let field =
-                    value_projection_field_for_leaf(ext, &proj.leaf_key).unwrap_or_else(|| {
-                        panic!(
-                            "render_wrapper_fn: cannot determine inline-class field for value \
-                     projection param `{kt_name}`"
-                        )
-                    });
-                InputKind::ValueUnwrap { field }
-            }
             Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
                 niche: entry.metadata.projection.as_ref().and_then(|p| {
                     is_option_type(ty)
@@ -749,7 +727,7 @@ impl ReturnSurface {
         if crate::api::lang::jnigen::util::is_unit(&canonical) {
             return (Self::Unit, canonical);
         }
-        // Projection return (opaque handle or value class): read the folded
+        // Projection return (opaque handle or `ULong`): read the folded
         // `Projection` the type-unfolding mechanism propagated onto this
         // return type's converter metadata — one source of truth, no
         // shape-specific peeling.

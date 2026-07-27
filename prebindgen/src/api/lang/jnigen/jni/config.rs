@@ -25,7 +25,7 @@
 //! | [`set_harness_name_mangle`](JniGen::set_harness_name_mangle) | the centralized externs object | `"JNINative"` | identity |
 //! | [`set_fun_name_mangle`](JniGen::set_fun_name_mangle) | top-level package functions | package, camelCased Rust fn name (`put_publisher` → `"putPublisher"`) | identity |
 //! | [`set_ptr_class_name_mangle`](JniGen::set_ptr_class_name_mangle) | `ptr_class` Kotlin classes | package, Rust type short name (`"KeyExpr"`) | identity |
-//! | [`set_data_class_name_mangle`](JniGen::set_data_class_name_mangle) | `data_class` + `value_class` Kotlin classes | package, Rust type short name | identity |
+//! | [`set_data_class_name_mangle`](JniGen::set_data_class_name_mangle) | `data_class` Kotlin classes | package, Rust type short name | identity |
 //! | [`set_enum_name_mangle`](JniGen::set_enum_name_mangle) | `enum_class` Kotlin classes | package, Rust type short name | identity |
 //! | [`set_method_name_mangle`](JniGen::set_method_name_mangle) | class methods/factories and JNI extern methods | package, final class name, full camelCase Rust fn name | identity |
 //!
@@ -156,7 +156,7 @@ impl JniGen {
     }
 
     /// Set the closure that mangles Kotlin data-class names declared via a
-    /// `DataClassDecl` (and value classes, which reuse this hook). Receives
+    /// `DataClassDecl`. Receives
     /// the target package and Rust short name. Default = identity (see the
     /// module-level table).
     pub fn set_data_class_name_mangle<F>(mut self, f: F) -> Self

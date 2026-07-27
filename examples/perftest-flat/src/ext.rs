@@ -11,8 +11,8 @@
 //! "introspection / analytics" helpers:
 //!
 //! * [`Priority`] — a `#[repr(i32)]` enum (→ Kotlin `enum class`).
-//! * [`Stamp`] — a small `Copy` value (→ Kotlin `@JvmInline value class` over a
-//!   `ByteArray`); `Vec<Stamp>` surfaces as `List<ByteArray>`.
+//! * [`Stamp`] — a small `Copy` value crossing as its scalar fields (→ Kotlin
+//!   `data class`); `Vec<Stamp>` surfaces as `List<Stamp>`.
 //! * [`StorageError`] — the `E` of a fallible `Result` (→ the `onError` channel).
 //! * [`Summary`] — an opaque handle whose fields decompose at the boundary
 //!   (→ flatten-input / flatten-output).
@@ -302,12 +302,12 @@ pub fn observation_which(o: Observation) -> i32 {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stamp — a small `Copy` value type (→ Kotlin value class over raw bytes).
+// Stamp — a small `Copy` value type (→ Kotlin data class over its fields).
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// A plain `Copy` timestamp. Declared `value_class` in the binding, so it
-/// crosses **by value as its raw bytes** in a `ByteArray` (no heap handle, no
-/// `close()`), and `Vec<Stamp>` surfaces as `List<ByteArray>`.
+/// A plain `Copy` timestamp. Declared `data_class` in the binding, so it
+/// crosses **by value as its two scalar fields** (no heap handle, no
+/// `close()`), and `Vec<Stamp>` surfaces as `List<Stamp>`.
 #[prebindgen]
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -316,34 +316,34 @@ pub struct Stamp {
     pub nanos: i64,
 }
 
-/// Build a [`Stamp`] (value-class **return**).
+/// Build a [`Stamp`] (data-class **return**).
 #[prebindgen]
 pub fn stamp_new(secs: i64, nanos: i64) -> Stamp {
     Stamp { secs, nanos }
 }
 
-/// Seconds component (value-class **accessor**, receiver = the value bytes).
+/// Seconds component (data-class **accessor**, receiver = its field leaves).
 #[prebindgen]
 pub fn stamp_secs(s: &Stamp) -> i64 {
     s.secs
 }
 
-/// A value whose equality is **array-backed** on the JVM side: a raw-bytes
-/// field beside a nested value blob.
+/// A value whose equality is **array-backed** on the JVM side: a byte-array
+/// field beside a nested data class.
 ///
-/// Kotlin arrays compare by identity, so both the direct `Vec<u8>` field and
-/// the nested [`Stamp`] would make two equal-content values compare unequal
-/// unless the binding emits content-based operators. This mirrors the two
-/// shapes that broke downstream (a `Vec<u8>` struct field, and a struct
-/// carrying a value blob), which nothing else here exercised. Two fields are
-/// enough: one array-backed and one not covers both comparison branches, and
-/// a third of either kind would only repeat an emitted form.
+/// Kotlin arrays compare by identity, so the `Vec<u8>` field would make two
+/// equal-content values compare unequal unless the binding emits content-based
+/// operators. This mirrors the shape that broke downstream (a `Vec<u8>` struct
+/// field), which nothing else here exercised. Two fields are enough: `id` is
+/// array-backed and the nested [`Stamp`] — which itself crosses as its scalar
+/// fields — is not, so both comparison branches are covered, and a third of
+/// either kind would only repeat an emitted form.
 ///
-/// Field ORDER is deliberate: the raw bytes come last, so the generated
-/// `hashCode` folds them as `31 * result + id.contentHashCode()` rather than
-/// seeding the accumulator with them. That is the shape a real value takes
-/// (`Timestamp(ntp64, id)`), and it is a different emitted form from the
-/// array-first one.
+/// Field ORDER is deliberate: the array-backed fields come after `stamp`, so
+/// the generated `hashCode` folds them as `31 * result + id.contentHashCode()`
+/// rather than seeding the accumulator with them. That is the shape a real
+/// value takes (`Timestamp(ntp64, id)`), and it is a different emitted form
+/// from the array-first one.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlobValue {
@@ -396,23 +396,23 @@ pub fn arrays_echo(a: Arrays) -> Arrays {
 /// Round-trip a [`BlobValue`] through the WHOLE-OBJECT input decoder.
 ///
 /// The binding marks this class `.jobject_input()`, so the decoder reads each
-/// field off the Kotlin object by JVM descriptor. A value-blob field's slot is
-/// the wrapper class (it stopped being `@JvmInline`-erased when it gained value
-/// equality), which the old `[B` lookup got wrong — `NoSuchFieldError` on the
-/// first decode.
+/// field off the Kotlin object by JVM descriptor — including the nested
+/// [`Stamp`], whose slot is its own class rather than the scalar leaves it
+/// flattens to everywhere else. Getting that descriptor wrong is a
+/// `NoSuchFieldError` on the first decode.
 #[prebindgen]
 pub fn blob_value_echo(value: BlobValue) -> BlobValue {
     value
 }
 
-/// Nanoseconds component (value-class **accessor**).
+/// Nanoseconds component (data-class **accessor**).
 #[prebindgen]
 pub fn stamp_nanos(s: &Stamp) -> i64 {
     s.nanos
 }
 
-/// A monotonically increasing run of stamps (`Vec<value-class>` →
-/// `List<ByteArray>`).
+/// A monotonically increasing run of stamps (`Vec<data-class>` →
+/// `List<Stamp>`).
 #[prebindgen]
 pub fn stamp_series(count: i64) -> Vec<Stamp> {
     (0..count.max(0))
@@ -466,9 +466,7 @@ pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
 /// provable: a wrong-length array fails the input DECODE first — the binding
 /// channel — while a well-formed but rejected `secs` fails in the domain
 /// channel. It is the covertest exercise for issue #45's two-caller split: one
-/// wrapper, both `onBindingError` and `onError` provable independently. (The
-/// binding-side failure used to come from a malformed value blob; the
-/// fixed-size-array length guard is its successor.)
+/// wrapper, both `onBindingError` and `onError` provable independently.
 #[prebindgen]
 pub fn storage_try_from_stamp(s: Stamp, tag: [u8; 2]) -> Result<Storage, StorageError> {
     let _ = tag;

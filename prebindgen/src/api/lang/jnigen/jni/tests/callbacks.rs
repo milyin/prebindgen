@@ -294,7 +294,7 @@ fn callback_double_option_unwrap_pipeline() {
         })
         .collect();
     // `ZId` is the value leaf of the outer `Option`; it needs a real struct so
-    // it can be a `data_class!` (it was a raw-memory value blob before).
+    // it can be a `data_class!`.
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct ZId {
@@ -402,8 +402,8 @@ fn callback_double_option_unwrap_pipeline() {
 
     // Kotlin tier: the generated callback `fun interface` carries the typed
     // params — ok-arm and err-arm leaves nullable (the value may be absent),
-    // the discriminator non-null; the value-blob leaf surfaces as its raw
-    // (nullable) ByteArray wire, NOT the value class — the SDK wraps.
+    // the discriminator non-null; the nested `ZId` data class surfaces as its
+    // typed (nullable) Kotlin class.
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let iface_file = paths

@@ -72,11 +72,11 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 ///
 /// Returns `None` (⇒ the type keeps the whole-value `fromParts` path) when a
 /// field needs a transform this fixed builder can't yet forward verbatim — a
-/// **projection** (opaque handle / value blob), an **enum**, or a nested
+/// **projection** (opaque handle), an **enum**, or a nested
 /// data-class behind `Option` / `Vec`. (Those are handled by the slower
 /// [`struct_output_body`] until the synthesizer is widened to wrap them.)
 ///
-/// Classification reads only `ext.types` (`opaque`/`enum_cfg`/`value_blob`) and
+/// Classification reads only `ext.types` (`opaque`/`enum_cfg`) and
 /// `registry.structs` — both populated before `resolve` — never the output
 /// converter table (not yet built at this stage).
 pub(crate) fn synth_value_struct_leaves(
@@ -107,7 +107,7 @@ pub(crate) fn synth_value_struct_leaves(
         let mut path = path_prefix.to_vec();
         path.push(fname);
 
-        // A projection field (opaque handle / `value_blob`) or an enum field
+        // A projection field (opaque handle) or an enum field
         // is delivered with a transform the fixed builder can't forward yet.
         // A nested data-class field (a *declared* plain struct) inlines when
         // non-optional (recurse); `Option`/`Vec`-wrapped nesting is deferred
@@ -122,7 +122,7 @@ pub(crate) fn synth_value_struct_leaves(
             // leaf whose `out_ty` is the sum and then REQUIRE an output
             // converter for it, failing the resolve with the sum named rather
             // than the unsupported position.
-            TypeKind::Handle | TypeKind::Enum | TypeKind::ValueBlob | TypeKind::Sum => return None,
+            TypeKind::Handle | TypeKind::Enum | TypeKind::Sum => return None,
             TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
             _ => None,
         };
@@ -160,8 +160,8 @@ pub(crate) fn synth_value_struct_leaves(
 /// `call_static_method`). Nested non-optional data-class fields are inlined;
 /// nested `Option<data-class>` fields emit a `present` `jboolean` slot followed
 /// by the child's leaves (encoded in the `Some` arm, defaulted in the `None`
-/// arm). Leaves (primitives, handles→`jlong`, value classes/blobs→`ByteArray`,
-/// enums→`jint`, strings, `Vec`) terminate the recursion.
+/// arm). Leaves (primitives, handles→`jlong`, enums→`jint`, strings, arrays,
+/// `Vec`) terminate the recursion.
 ///
 /// The field classification is the shared [`build_struct_plan`] — the same
 /// plan `flatten_struct_factory` walks for the Kotlin side, so the slot
@@ -226,7 +226,7 @@ fn encode_field(
         // rust-side stages first (`Duration → u64 → jlong`).
         let conv_value = |conv: &ConvChain| -> TokenStream { conv.call(env_expr, value, base) };
         match kind {
-            // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
+            // Projection leaf (opaque handle → jlong, `ULong` → jlong).
             PlanFieldKind::Projection { conv, proj, .. } => {
                 let value_expr = conv_value(conv);
                 match proj.kind {
@@ -238,18 +238,6 @@ fn encode_field(
                             descriptor: "J".to_string(),
                             is_object: false,
                             default: quote!(0i64),
-                        });
-                    }
-                    ProjectionKind::ValueBlob => {
-                        preludes.extend(
-                            quote! { let #id: jni::objects::JObject = { #value_expr }.into(); },
-                        );
-                        slots.push(EncSlot {
-                            ident: id,
-                            wire_ty: quote!(jni::objects::JObject),
-                            descriptor: "[B".to_string(),
-                            is_object: true,
-                            default: quote!(jni::objects::JObject::null()),
                         });
                     }
                     ProjectionKind::Unsigned64 => match proj.strategy {

@@ -24,7 +24,7 @@ pub(crate) fn slice_or_vec_elem(arg_ty: &syn::Type) -> Option<(syn::Type, bool)>
 /// conservative leaf set [`build_flat_input_plan`] accepts, so each element can
 /// cross as decoupled raw params and be rebuilt on the Rust side with no
 /// `env.get_field(...)`. `None` for any other shape (opaque handles, enums,
-/// value blobs, nested-`Option` structs), which keep the `input_vec` path.
+/// nested-`Option` structs), which keep the `input_vec` path.
 ///
 /// This is the single detection seam shared by `emit_input_param`, the param
 /// classifier, `render_extern_decl`, and the synthetic-extern emitter so all

@@ -496,15 +496,11 @@ pub(crate) fn render_extern_decl(
             // An opaque-**handle** projection (direct `&T`/`T`, `Option<&T>`,
             // or by-value `Option<T>`) crosses the JNI wire as a primitive
             // `jlong` with `0` encoding `None` — a non-null `Long`; the `?`
-            // lives only on the typed-wrapper surface. (`value_blob`
-            // projections are NOT handles; they keep their erased wire.)
+            // lives only on the typed-wrapper surface.
             InputKind::Handle { .. } => {
                 params.push(kt::KtParam::new(name, kt::KtType::long()));
             }
-            InputKind::Callback { .. }
-            | InputKind::ValueUnwrap { .. }
-            | InputKind::Unsigned64 { .. }
-            | InputKind::Plain => {
+            InputKind::Callback { .. } | InputKind::Unsigned64 { .. } | InputKind::Plain => {
                 let ty = if leaf.as_enum_value {
                     // Enum (incl. `Option<enum>`) crosses as jint → Kotlin
                     // `Int`; the wrapper passes `.value` / `?.value`. The Rust
@@ -553,9 +549,8 @@ pub(crate) fn render_extern_decl(
             // The plan classified the declared surface once — `convert_out_ty`
             // for a `convert_output` (Return), else the function's own return.
             let (kt_return, projection) = render_return_surface(&v.surface)?;
-            // JNI extern's wire return: handle projections wire as `Long`;
-            // value-class projections wire as their inner converter's type
-            // folded through the projection strategy; enums wire as `Int`
+            // JNI extern's wire return: projections wire as `Long` folded
+            // through the projection strategy; enums wire as `Int`
             // (`Int?` under `Option`); everything else is the declared return.
             match &projection {
                 Some(p) => Some(projection_wire_return(p)),
@@ -602,14 +597,6 @@ enum ParamMode {
     /// present. The Rust converter consumes the `Box` to `Option<T>`.
     ConsumeNullable,
     PassThrough,
-    /// Value-projection param (`value_blob`): a Kotlin `@JvmInline value class`
-    /// that is **not** a lockable handle. The Kotlin param type is the
-    /// value-class FQN; the call site passes the unwrapped inline-class field
-    /// (`<name>.<field>`) so the `JNINative` extern receives the erased inner
-    /// wire (e.g. `ByteArray`). No lock.
-    ValueUnwrap {
-        field: String,
-    },
     /// Kotlin `ULong` projected to its raw JNI `Long` bit pattern.
     Unsigned64 {
         niche: Option<String>,
@@ -641,8 +628,7 @@ enum ParamMode {
     /// `impl Fn(args)` callback param: typed Kotlin lambda over the flattened
     /// leaves of each arg's callback plan (whole arg when plan-less), erased to
     /// `Any` at the extern tier — the same shape as the unfold `build`/`onError`
-    /// lambdas. `call_arg` is the call-site expression: the param itself, or a
-    /// value-blob rebuilding adapter.
+    /// lambdas. `call_arg` is the call-site expression.
     Callback {
         call_arg: String,
     },
@@ -718,8 +704,8 @@ pub(crate) fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
 /// When `receiver_key` is `Some(class_key)` the function is emitted as an
 /// **instance method** of that class: the first parameter whose (peeled) Rust
 /// type equals `class_key` is dropped from the signature and bound to `this`
-/// (the inherited `NativeHandle` scope for a `ptr_class` — `this.ptr` + lock —
-/// or `this.bytes` for a `value_class` blob). The JNINative extern/call is
+/// (the inherited `NativeHandle` scope for a `ptr_class` — `this.ptr` + lock).
+/// The JNINative extern/call is
 /// unchanged (keyed on the Rust ident), so only the Kotlin wrapper relocates.
 /// The Kotlin surface of a wrapper: the assembled `KtFun` with every
 /// parameter/return type in place but **no body**, plus the emission
@@ -1016,7 +1002,7 @@ fn render_val_over_helper(
 /// agree on.
 struct OutputPlan {
     kt_return: Option<kt::KtType>,
-    /// Kotlin-newtype return (opaque handle / value class) — the wrap the
+    /// Kotlin-newtype return (opaque handle / `ULong`) — the wrap the
     /// call expression folds around the extern result.
     projection: Option<Projection>,
     /// Trailing **lambda** param (`build` / `fold`) of an output expansion.
@@ -1104,8 +1090,7 @@ fn classify_params(
         // (`<ArgShorts>Callback`) whose `run` parameters are the flattened
         // leaves of each arg's callback plan (the arg whole when plan-less).
         // The extern receives it erased (`Any`) and the native trampoline
-        // calls the typed `run` — value-blob leaves surface as their raw
-        // `ByteArray` wire (the SDK wraps), so no call-site adapter exists.
+        // calls the typed `run`, so no call-site adapter exists.
         // Lambda-literal call sites SAM-convert unchanged.
         if let InputKind::Callback { iface, .. } = &leaf.kind {
             let spec = iface.as_deref()?;
@@ -1225,12 +1210,6 @@ fn classify_params(
                     ParamMode::Consume
                 }
             }
-            // `@JvmInline value class` (value_blob) param: pass the erased
-            // inner field (`<name>.bytes`, or `<name>?.bytes` when Option) to
-            // the extern, no lock.
-            InputKind::ValueUnwrap { field } => ParamMode::ValueUnwrap {
-                field: field.clone(),
-            },
             InputKind::Unsigned64 { niche } => ParamMode::Unsigned64 {
                 niche: niche.clone(),
             },
@@ -1266,11 +1245,11 @@ fn classify_params(
 ///   * `Iterable` (M4 whole / M5 decomposed): per element, fold
 ///     `(acc, leaves…) -> acc`; `<A>`, returns `A`, threads the accumulator.
 ///
-/// Each leaf is delivered with its final Kotlin type; a **value_blob** leaf
-/// (`@JvmInline value class`) can't be constructed Rust-side, so the wrapper
-/// installs an **adapter** that applies the Kotlin-side projection wrap
-/// (`ZZenohId(raw)`) before the user callback. Leaves with no value_blob ⇒
-/// the callback is passed directly (M1–M4 unchanged).
+/// Each leaf is delivered with its final Kotlin type; a leaf whose typed form
+/// can't be constructed Rust-side makes the wrapper install an **adapter** that
+/// applies the Kotlin-side projection wrap before the user callback. Leaves
+/// with no such projection ⇒ the callback is passed directly (M1–M4
+/// unchanged).
 fn classify_output(
     ext: &JniGen,
     f: &syn::ItemFn,
@@ -1297,7 +1276,7 @@ fn classify_output(
         // (`convert_out_ty` for a convert, the signature's own output
         // otherwise). No callback param, no generic, no extra call args; the
         // extern returns the real wire and `build_call` applies the
-        // projection wrap (value_blob/handle) below.
+        // projection wrap (handle) below.
         render_return_surface(&v.surface)?
     } else if let (
         FnOutputPlan::Unfold(
@@ -1318,8 +1297,8 @@ fn classify_output(
         // `Vec<data_class>` fold, a `List<Class>` composed on the Kotlin side.
         // The concrete element/return Kotlin type. For a decomposed `data_class`
         // builder/fold it is the data class (`plan.source`'s registered FQN); for
-        // a **whole-element leaf** fold (`plan.element` set — String / value blob
-        // / handle) `plan.source` (e.g. `String`) has no class FQN, so take the
+        // a **whole-element leaf** fold (`plan.element` set — String / handle)
+        // `plan.source` (e.g. `String`) has no class FQN, so take the
         // element's typed view from the folder interface's element param instead.
         // Full-FQN class type: the render-time `ImportSet` shortens it (and
         // handles simple-name collisions) when it renders the return type. The
@@ -1372,9 +1351,8 @@ fn classify_output(
     } else if let (FnOutputPlan::Unfold(u), Some(_)) = (&fplan.output, unfold) {
         // The builder / fold params are generated typed `fun interface`s
         // (`<Source>Builder<out R>` / `<Element>Folder<A>`); the native side
-        // calls their typed `run` with raw jvalues (value-blob leaves surface
-        // as `ByteArray` — no call-site adapter). Lambda-literal call sites
-        // SAM-convert unchanged.
+        // calls their typed `run` with raw jvalues (no call-site adapter).
+        // Lambda-literal call sites SAM-convert unchanged.
         generic = u.generic.map(str::to_string);
         // An `Iterable` fold — bare or `Optional`-wrapped — folds with `<A>`
         // (`acc` lead + `fold` lambda). The wrapped form returns `A?`: `None`
@@ -1481,16 +1459,6 @@ fn build_native_call(
             | ParamMode::Consume
             | ParamMode::BorrowNullable
             | ParamMode::ConsumeNullable => format!("{}_ptr", p.kt_name),
-            ParamMode::ValueUnwrap { field } => {
-                // Inline value class → pass its erased inner field to the
-                // extern (e.g. `z.bytes`: a `ByteArray`). A nullable value
-                // class (`ZBytes?`) safe-navigates so it stays `ByteArray?`.
-                if p.kt_type.is_nullable() {
-                    format!("{}?.{}", p.kt_name, field)
-                } else {
-                    format!("{}.{}", p.kt_name, field)
-                }
-            }
             ParamMode::Unsigned64 { niche } => {
                 if p.kt_type.is_nullable() {
                     match niche {
@@ -1515,7 +1483,7 @@ fn build_native_call(
                 }
             }
             // Callback lambda → the param itself (the extern takes the
-            // erased `Any`), or its value-blob rebuilding adapter.
+            // erased `Any`).
             ParamMode::Callback { call_arg } => call_arg.clone(),
             ParamMode::FlattenStruct { .. } => {
                 unreachable!("FlattenStruct expanded before the single-arg match")
@@ -1554,8 +1522,8 @@ fn build_native_call(
 fn build_success_return(ext: &JniGen, out: &OutputPlan, raw: &str) -> String {
     if let Some(p) = &out.projection {
         // Fold the wrap through the projection strategy. The wrap class is
-        // the projection leaf's typed short name (Handle's typed-handle
-        // class or value-class wrapper). The sentinel is the Kotlin
+        // the projection leaf's typed short name (a Handle's typed-handle
+        // class, or `ULong`). The sentinel is the Kotlin
         // null-representation literal for the leaf wire — used only by
         // the `Niche+primitive` arm of `fold_projection_wrap`.
         let leaf_fqn = ext
@@ -2024,8 +1992,8 @@ fn render_body(
 /// The Kotlin typing of one delivered lambda leaf: `(builder_kt, wire_kt,
 /// wrap, is_value_projection)` — the type the *user's* lambda sees, the type the
 /// extern delivers, and the expression rebuilding the former from the latter
-/// (`pk` is the adapter's parameter name; passthrough unless the leaf is a
-/// `value_blob`, whose `@JvmInline value class` can't be built Rust-side).
+/// (`pk` is the adapter's parameter name; passthrough unless the leaf carries a
+/// value projection that can't be built Rust-side).
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
 pub(crate) fn unfold_leaf_kt(
     ext: &JniGen,
@@ -2042,13 +2010,12 @@ pub(crate) fn unfold_leaf_kt(
         .map(|p| {
             matches!(
                 p.kind,
-                crate::api::lang::jnigen::jni::ProjectionKind::ValueBlob
-                    | crate::api::lang::jnigen::jni::ProjectionKind::Unsigned64
+                crate::api::lang::jnigen::jni::ProjectionKind::Unsigned64
             )
         })
         .unwrap_or(false);
     // builder_kt: enum → Int; otherwise the normal classified type
-    // (handle class / value class / String / ByteArray / Long …).
+    // (handle class / String / ByteArray / Long …).
     let builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
         kt::KtType::int()
     } else {
@@ -2161,12 +2128,11 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 /// * `kt_return` is the declared Kotlin return type written in the
 ///   wrapper's signature (empty for `Unit`).
 /// * `projection` is `Some(Projection)` when the return is a Kotlin newtype
-///   (opaque handle or value class) reached through 0+ wrappers. The
+///   (opaque handle or unsigned scalar) reached through 0+ wrappers. The
 ///   wrapper body uses it to fold the wrap call (`W(x)` for `Direct`,
 ///   `?.let { W(it) }` for `Nullable`, `.map { W(it) }` for `Iterable`)
-///   and pick the JNI extern's wire return (`Long` for `Handle`,
-///   the inner wire's Kotlin name for `ValueClass`). `None` for plain
-///   non-projection returns.
+///   and pick the JNI extern's wire return (`Long` for `Handle`). `None` for
+///   plain non-projection returns.
 pub(crate) fn classify_return(
     ext: &JniGen,
     output: &syn::ReturnType,
@@ -2200,9 +2166,8 @@ pub(crate) fn render_return_surface(
         } => {
             let fqn = leaf_fqn.clone().unwrap_or_else(|| {
                 panic!(
-                    "classify_return: projection return type `{}` has no Kotlin FQN registered \
-                     — every opaque/value class must be declared via `JniGen::ptr_class(...)` \
-                     / `JniGen::value_class(...)`.",
+                    "classify_return: projection return type `{}` has no Kotlin FQN \
+                     registered — every opaque class must be declared via `ptr_class!(...)`.",
                     projection.leaf_key
                 )
             });

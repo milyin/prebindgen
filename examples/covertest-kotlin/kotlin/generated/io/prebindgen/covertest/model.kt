@@ -257,22 +257,22 @@ public data class Arrays(val bytes: ByteArray, val shorts: ShortArray, val ints:
 }
 
 /**
- * A value whose equality is **array-backed** on the JVM side: a raw-bytes
- * field beside a nested value blob.
+ * A value whose equality is **array-backed** on the JVM side: a byte-array
+ * field beside a nested data class.
  *
- * Kotlin arrays compare by identity, so both the direct `Vec<u8>` field and
- * the nested [`Stamp`] would make two equal-content values compare unequal
- * unless the binding emits content-based operators. This mirrors the two
- * shapes that broke downstream (a `Vec<u8>` struct field, and a struct
- * carrying a value blob), which nothing else here exercised. Two fields are
- * enough: one array-backed and one not covers both comparison branches, and
- * a third of either kind would only repeat an emitted form.
+ * Kotlin arrays compare by identity, so the `Vec<u8>` field would make two
+ * equal-content values compare unequal unless the binding emits content-based
+ * operators. This mirrors the shape that broke downstream (a `Vec<u8>` struct
+ * field), which nothing else here exercised. Two fields are enough: `id` is
+ * array-backed and the nested [`Stamp`] — which itself crosses as its scalar
+ * fields — is not, so both comparison branches are covered, and a third of
+ * either kind would only repeat an emitted form.
  *
- * Field ORDER is deliberate: the raw bytes come last, so the generated
- * `hashCode` folds them as `31 * result + id.contentHashCode()` rather than
- * seeding the accumulator with them. That is the shape a real value takes
- * (`Timestamp(ntp64, id)`), and it is a different emitted form from the
- * array-first one.
+ * Field ORDER is deliberate: the array-backed fields come after `stamp`, so
+ * the generated `hashCode` folds them as `31 * result + id.contentHashCode()`
+ * rather than seeding the accumulator with them. That is the shape a real
+ * value takes (`Timestamp(ntp64, id)`), and it is a different emitted form
+ * from the array-first one.
  */
 public data class BlobValue(val stamp: Stamp, val id: ByteArray, val chunks: List<ByteArray>) {
     override fun equals(other: Any?): Boolean {
@@ -805,12 +805,12 @@ public data class RepliesConfig(val priority: Priority, val maxSamples: Long) {
 }
 
 /**
- * A plain `Copy` timestamp. Declared `value_class` in the binding, so it
- * crosses **by value as its raw bytes** in a `ByteArray` (no heap handle, no
- * `close()`), and `Vec<Stamp>` surfaces as `List<ByteArray>`.
+ * A plain `Copy` timestamp. Declared `data_class` in the binding, so it
+ * crosses **by value as its two scalar fields** (no heap handle, no
+ * `close()`), and `Vec<Stamp>` surfaces as `List<Stamp>`.
  */
 public data class Stamp(val secs: Long, val nanos: Long) {
-    /** Seconds component (value-class **accessor**, receiver = the value bytes). */
+    /** Seconds component (data-class **accessor**, receiver = its field leaves). */
     public fun secs(onError: JniErrorHandler<Long>): Long {
         val __bcap = JniErrorHandlerCapture.acquire()
         val __ret = CovNative.stampSecs(this.secs, this.nanos, __bcap)
@@ -818,7 +818,7 @@ public data class Stamp(val secs: Long, val nanos: Long) {
         return __ret
     }
 
-    /** Nanoseconds component (value-class **accessor**). */
+    /** Nanoseconds component (data-class **accessor**). */
     public fun nanos(onError: JniErrorHandler<Long>): Long {
         val __bcap = JniErrorHandlerCapture.acquire()
         val __ret = CovNative.stampNanos(this.secs, this.nanos, __bcap)
@@ -1051,7 +1051,7 @@ public fun priorityOr(
 }
 
 /**
- * Build a [`Stamp`] (value-class **return**).
+ * Build a [`Stamp`] (data-class **return**).
  *
  * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).
  */
@@ -1064,8 +1064,8 @@ public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): S
 }
 
 /**
- * A monotonically increasing run of stamps (`Vec<value-class>` →
- * `List<ByteArray>`).
+ * A monotonically increasing run of stamps (`Vec<data-class>` →
+ * `List<Stamp>`).
  *
  * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).
  */
@@ -1678,10 +1678,10 @@ public fun blobValueNew(
  * Round-trip a [`BlobValue`] through the WHOLE-OBJECT input decoder.
  *
  * The binding marks this class `.jobject_input()`, so the decoder reads each
- * field off the Kotlin object by JVM descriptor. A value-blob field's slot is
- * the wrapper class (it stopped being `@JvmInline`-erased when it gained value
- * equality), which the old `[B` lookup got wrong — `NoSuchFieldError` on the
- * first decode.
+ * field off the Kotlin object by JVM descriptor — including the nested
+ * [`Stamp`], whose slot is its own class rather than the scalar leaves it
+ * flattens to everywhere else. Getting that descriptor wrong is a
+ * `NoSuchFieldError` on the first decode.
  *
  * The Rust `BlobValue` result is delivered decomposed: the builder callback receives (`stamp__secs`, `stamp__nanos`, `id`, `chunks`).
  */

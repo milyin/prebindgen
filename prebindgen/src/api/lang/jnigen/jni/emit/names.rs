@@ -45,6 +45,10 @@ pub(crate) struct QualifyEmittedTypes<'a> {
     /// Bare type name → the module it is reachable under (the item's origin
     /// crate, or the registry's default module).
     pub(crate) source_names: &'a std::collections::HashMap<String, syn::Path>,
+    /// Bare **const** name → the same. Kept separate from `source_names`
+    /// because it qualifies EXPRESSION paths, where a blanket rename would
+    /// also hit every local variable — see [`Self::visit_expr_path_mut`].
+    pub(crate) const_names: &'a std::collections::HashMap<String, syn::Path>,
 }
 
 impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
@@ -58,6 +62,26 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
             }
         }
         syn::visit_mut::visit_type_path_mut(self, tp);
+    }
+
+    /// Qualify a bare `#[prebindgen]` **const** reference.
+    ///
+    /// A const can appear inside a TYPE — an array length, `[u8; MAX_SIZE]` —
+    /// which `syn` models as an expression, so `visit_type_path_mut` never sees
+    /// it and the generated file references a const that is not in scope. Only
+    /// idents the registry indexes as consts are rewritten: expression paths
+    /// are also every local variable and function name in a converter body, and
+    /// qualifying those indiscriminately would rewrite `v` or `env`.
+    fn visit_expr_path_mut(&mut self, ep: &mut syn::ExprPath) {
+        if ep.qself.is_none() && ep.path.leading_colon.is_none() && ep.path.segments.len() == 1 {
+            let ident = ep.path.segments[0].ident.to_string();
+            if let Some(module) = self.const_names.get(&ident) {
+                let mut qualified = module.clone();
+                qualified.segments.push(ep.path.segments[0].clone());
+                ep.path = qualified;
+            }
+        }
+        syn::visit_mut::visit_expr_path_mut(self, ep);
     }
 }
 
@@ -145,19 +169,6 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
         return None;
     };
     Some(r.mutability.is_some())
-}
-
-/// Inline-class field name for a value projection identified by its folded
-/// [`Projection::leaf_key`] (e.g. `"ZZenohId"`) rather than by a raw param type.
-/// Used for `Option<value-blob>` params where the written type isn't the bare
-/// value class but the projection still resolves the leaf — so the wrapper
-/// knows which inline field to unwrap (`<name>.bytes`).
-pub(crate) fn value_projection_field_for_leaf(ext: &JniGen, leaf_key: &TypeKey) -> Option<String> {
-    let cfg = ext.types.get(leaf_key)?;
-    if cfg.is_value_blob() {
-        return Some("bytes".to_string());
-    }
-    None
 }
 
 /// INPUT: wire → rust. Format `<wire_id>_to_<rust_id>_<hash>` (including

@@ -258,9 +258,7 @@ public fun storageTryWithLabel(
  * provable: a wrong-length array fails the input DECODE first — the binding
  * channel — while a well-formed but rejected `secs` fails in the domain
  * channel. It is the covertest exercise for issue #45's two-caller split: one
- * wrapper, both `onBindingError` and `onError` provable independently. (The
- * binding-side failure used to come from a malformed value blob; the
- * fixed-size-array length guard is its successor.)
+ * wrapper, both `onBindingError` and `onError` provable independently.
  *
  * On a domain error `onError` receives the decomposed Rust `StorageError` error (`message`, `handle`); a binding/system failure goes to `onBindingError` instead.
  */

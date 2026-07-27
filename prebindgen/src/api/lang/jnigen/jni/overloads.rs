@@ -33,21 +33,6 @@ use super::*;
 use crate::api::core::expand::{FoldArg, FoldPlan};
 
 impl JniGen {
-    /// `true` if `simple` is the Kotlin simple name of a `value_blob`
-    /// (`@JvmInline value class`) type — which erases to `ByteArray` on the
-    /// JVM, so two distinct such classes share one method descriptor.
-    pub(crate) fn is_value_blob_kotlin(&self, simple: &str) -> bool {
-        self.types.values().any(|c| {
-            c.is_value_blob()
-                && c.name_spec
-                    .as_ref()
-                    .map(|s| self.fqn_of(s))
-                    .and_then(|fqn| fqn.rsplit('.').next().map(str::to_string))
-                    .as_deref()
-                    == Some(simple)
-        })
-    }
-
     /// Proactively verify every multi-variant `expand_param!` declaration is
     /// splittable (its arms have pairwise-distinct JVM-erased signatures), so
     /// [`FunctionDecl::split_on_param`](crate::fun) can emit unambiguous
@@ -144,8 +129,8 @@ fn arm_erased_sig(
 
 /// The [`ErasedJvmType`] a Rust arm type surfaces as: map it to its Kotlin
 /// surface type (a declared class's FQN, else the resolved converter's Kotlin
-/// name) and run the shared [`erase_kt_type`]; a value class folds to `byte[]`
-/// and a plain class to its FQN there. Falls back to the token string for a
+/// name) and run the shared [`erase_kt_type`]; a plain class folds to its FQN
+/// there. Falls back to the token string for a
 /// type with no resolved surface. References are peeled first (`&T` erases
 /// like `T`).
 fn rust_type_erased(
@@ -160,14 +145,14 @@ fn rust_type_erased(
     let key = TypeKey::from_type(peeled);
     if ext.types.get(&key).is_some_and(|c| c.name_spec.is_some()) {
         if let Some(fqn) = ext.kotlin_fqn(&key) {
-            return erase_kt_type(ext, &[], &kt::KtType::cls(fqn));
+            return erase_kt_type(&[], &kt::KtType::cls(fqn));
         }
     }
     if let Some(kt) = registry
         .input_entry(peeled)
         .and_then(|e| e.metadata.kotlin_name.clone())
     {
-        return erase_kt_type(ext, &[], &kt);
+        return erase_kt_type(&[], &kt);
     }
     ErasedJvmType::raw(peeled.to_token_stream().to_string())
 }

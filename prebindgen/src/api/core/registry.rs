@@ -1394,7 +1394,7 @@ impl<M> Registry<M> {
             crate::api::core::unfold::apply_sum_returns(self, sum_decons, &declared.functions)?;
         }
         // Single-leaf `Vec<T>`/`&[T]` whole-element folds — the dual of the
-        // `data_class` folds above, for String / value-blob / handle elements
+        // `data_class` folds above, for String / scalar / handle elements
         // (so the list is built on the foreign side, not via a Rust ArrayList).
         let leaf_elements = ext.leaf_vec_fold_elements(self);
         if !leaf_elements.is_empty() {
