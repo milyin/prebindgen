@@ -8,6 +8,12 @@ tier invariants, the non-goals, and the completion criteria live there and are n
 restated here. This file is the branch's own map — what has landed, what each child
 PR is, and how the chain is reviewed and merged.
 
+The design discussion that produced #187 is archived verbatim in
+[`boundary-planning-review-log.md`](boundary-planning-review-log.md). It was moved
+out of the issue so #187's body stays the thing you read when you open it, and
+several stage issues cite decisions taken in that thread rather than in their
+own.
+
 ## Why a branch rather than a series onto `main`
 
 The refactor is nine ordered stages that move the same code repeatedly. Landing
