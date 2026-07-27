@@ -634,3 +634,72 @@ fn delegated_property_renders_by_clause() {
         "{src}"
     );
 }
+
+/// Every position that now holds an `ExprSlot` must have its `Code::import`
+/// collected by the file's raw-import prepass.
+///
+/// A `Legacy(Code)` renders raw text, and `Code::import` is the **only** place
+/// its FQNs are recorded — so a position the prepass skips renders
+/// `Factory.make()` and never emits `import io.example.Factory`, i.e.
+/// uncompilable Kotlin. These are the rows the walk previously missed:
+/// function-parameter defaults, constructor-parameter defaults, supertype
+/// constructor arguments, enum-entry arguments, and a `fun interface`'s method.
+#[test]
+fn every_expression_slot_contributes_its_raw_imports() {
+    // One helper, generic over the slot's payload — the positions differ
+    // (`KtExpr` vs `Vec<KtExpr>`) but the `Legacy` arm is the same `Code`.
+    fn slot<T>(text: &str, fqn: &str) -> ExprSlot<T> {
+        ExprSlot::legacy(Code::new().line(text).import(fqn))
+    }
+
+    // fn param default
+    let mut f = KtFun::new("withDefault").vis(Vis::Public);
+    let mut p = KtParam::new("factory", KtType::cls("Any"));
+    p.default = Some(slot("Factory.make()", "io.example.Factory"));
+    f = f.param(p);
+
+    // fun interface whose METHOD has a defaulted param
+    let mut im = KtFun::new("run");
+    let mut ip = KtParam::new("codec", KtType::cls("Any"));
+    ip.default = Some(slot("Codec.utf8()", "io.example.Codec"));
+    im = im.param(ip);
+    let iface = KtFunInterface::new("Handler", im).vis(Vis::Public);
+
+    // ctor param default + supertype ctor args
+    let mut cp = KtCtorParam::new("seed", KtType::long());
+    cp.default = Some(slot("Seed.zero()", "io.example.Seed"));
+    let mut cls = KtClass::new(ClassKind::Plain, "Holder")
+        .vis(Vis::Public)
+        .ctor_param(cp);
+    cls.supertypes.push((
+        KtType::cls("Base"),
+        Some(slot("Anchor.of(1)", "io.example.Anchor")),
+    ));
+
+    // enum entry args
+    let entries = vec![KtEnumEntry {
+        name: "FIRST".into(),
+        args: Some(slot("Weight.one()", "io.example.Weight")),
+    }];
+    let enum_cls = KtClass::new(ClassKind::Enum(entries), "Kind").vis(Vis::Public);
+
+    let src = KtFile::new("io.test")
+        .decl(f)
+        .decl(iface)
+        .decl(cls)
+        .decl(enum_cls)
+        .render();
+
+    for fqn in [
+        "io.example.Factory",
+        "io.example.Codec",
+        "io.example.Seed",
+        "io.example.Anchor",
+        "io.example.Weight",
+    ] {
+        assert!(
+            src.contains(&format!("import {fqn}")),
+            "missing `import {fqn}` — that slot's raw imports were dropped\n{src}"
+        );
+    }
+}

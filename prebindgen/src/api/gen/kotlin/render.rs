@@ -67,24 +67,49 @@ impl KtFile {
     }
 }
 
+/// Gather the imports a declaration's **expression slots** reference.
+///
+/// Every position that can hold an `ExprSlot` has to be visited, not only the
+/// bodies. A `Legacy(Code)` renders raw text, and `Code::import` is the *only*
+/// place its FQNs are recorded — so a `KtParam::default` holding
+/// `Code::new().line("Factory.make()").import("io.example.Factory")` renders
+/// `Factory.make()` and, if this walk skips it, never emits the import. The
+/// `Ast` arm answers from its own tree, so both arms are covered by asking the
+/// slot rather than by inspecting it here.
+///
+/// The walk therefore mirrors the slot table in [`super::slot`] exactly: miss a
+/// row and that position silently loses its imports.
 fn collect_decl_imports(d: &KtDecl, sink: &mut Vec<String>) {
     match d {
         KtDecl::Class(c) => {
+            for p in &c.ctor_params {
+                if let Some(default) = &p.default {
+                    default.collect_imports(sink);
+                }
+            }
+            for (_, args) in &c.supertypes {
+                if let Some(args) = args {
+                    args.collect_imports(sink);
+                }
+            }
+            if let ClassKind::Enum(entries) = &c.kind {
+                for e in entries {
+                    if let Some(args) = &e.args {
+                        args.collect_imports(sink);
+                    }
+                }
+            }
             for m in &c.members {
                 collect_decl_imports(m, sink);
             }
             if let Some(comp) = &c.companion {
-                for m in &comp.members {
-                    collect_decl_imports(m, sink);
-                }
+                collect_decl_imports(&KtDecl::Class((**comp).clone()), sink);
             }
         }
-        KtDecl::Fun(f) => match &f.body {
-            KtBody::Expr(c) => c.collect_imports(sink),
-            KtBody::Block(c) => c.collect_imports(sink),
-            KtBody::None => {}
-        },
-        KtDecl::FunInterface(_) => {}
+        KtDecl::Fun(f) => collect_fun_imports(f, sink),
+        // A `fun interface`'s method is a whole `KtFun` — its parameters can
+        // carry defaults like any other.
+        KtDecl::FunInterface(i) => collect_fun_imports(&i.method, sink),
         KtDecl::Property(p) => {
             p.value.collect_imports(sink);
             if let Some(a) = &p.accessors {
@@ -93,6 +118,19 @@ fn collect_decl_imports(d: &KtDecl, sink: &mut Vec<String>) {
         }
         KtDecl::TypeAlias { .. } => {}
         KtDecl::Raw { code, .. } => code.collect_imports(sink),
+    }
+}
+
+fn collect_fun_imports(f: &KtFun, sink: &mut Vec<String>) {
+    match &f.body {
+        KtBody::Expr(c) => c.collect_imports(sink),
+        KtBody::Block(c) => c.collect_imports(sink),
+        KtBody::None => {}
+    }
+    for p in &f.params {
+        if let Some(default) = &p.default {
+            default.collect_imports(sink);
+        }
     }
 }
 

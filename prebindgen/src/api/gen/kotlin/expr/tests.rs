@@ -1161,44 +1161,44 @@ fn static_annotation_text_constructors_are_pinned_crate_wide() {
 }
 
 /// `KtExpr::Raw` exists only if migration needs it, and **enumerating its
-/// construction sites is the mechanical check** behind #199's global exit.
+/// producers is the mechanical check** behind #199's global exit.
+///
+/// Scanned **crate-wide**, not over a hand-listed set of files: `KtExpr` is
+/// re-exported for JniGen and visible throughout it, so a
+/// `kt::KtExpr::Raw(...)` in `api/lang/jnigen/…` would pass a `gen/kotlin`-only
+/// audit and the asserted exit would drift silently. Same visibility-boundary
+/// problem `crate_sources` already solves for `StaticAnnotationText`.
 ///
 /// The AST's own definition, traversal and renderer necessarily *name* the
-/// variant — in a declaration and in `match` arms. What must stay empty is
-/// every other module: no producer builds one. Today that set is empty, so the
-/// variant is reachable from tests only and #199 can delete it outright.
+/// variant — in a declaration and in `match` arms — so those three files are
+/// the allow-list. Every other file in the crate must not mention it. Today
+/// that set is empty, so the variant is reachable from tests only and #199 can
+/// delete it outright.
 #[test]
-fn ktexpr_raw_has_no_producers() {
-    // The three files allowed to name the variant at all.
-    let allowed = [
-        include_str!("../expr.rs"),
-        include_str!("render.rs"),
-        include_str!("tests.rs"),
+fn ktexpr_raw_has_no_producers_crate_wide() {
+    const ALLOWED: [&str; 3] = [
+        "kotlin/expr.rs",
+        "kotlin/expr/render.rs",
+        "kotlin/expr/tests.rs",
     ];
-    for src in allowed {
-        assert!(
-            src.contains("Raw"),
-            "the allow-list should name files that actually mention the variant"
-        );
-    }
-    // …and no other file of the Kotlin generator may reference it in *code*.
-    // Doc comments discussing the contract are the point, not a violation, so
-    // they are stripped first — with the same scanner Tier 0's module-boundary
-    // test uses, which handles `/* … */` as well as `//` and leaves string
-    // literals alone.
-    let mut offenders = Vec::new();
-    for (name, src) in [
-        ("slot.rs", include_str!("../slot.rs")),
-        ("model.rs", include_str!("../model.rs")),
-        ("render.rs", include_str!("../render.rs")),
-        ("code.rs", include_str!("../code.rs")),
-        ("file.rs", include_str!("../file.rs")),
-        ("types.rs", include_str!("../types.rs")),
-    ] {
-        if code_without_comments(src).contains("KtExpr::Raw") {
-            offenders.push(name);
+    let mut offenders: Vec<String> = Vec::new();
+    let mut allowed_seen = 0usize;
+    for (path, code) in crate_sources() {
+        let normalized = path.replace('\\', "/");
+        if ALLOWED.iter().any(|a| normalized.ends_with(a)) {
+            allowed_seen += 1;
+            continue;
+        }
+        if code.contains("KtExpr::Raw") {
+            offenders.push(normalized);
         }
     }
+    // `crate_sources` skips the auditing file itself, so two of the three
+    // allow-listed files are actually walked.
+    assert_eq!(
+        allowed_seen, 2,
+        "the allow-list should name files the walk actually visits"
+    );
     assert!(
         offenders.is_empty(),
         "KtExpr::Raw is referenced outside the AST itself: {offenders:?} — every site is a #199 \
