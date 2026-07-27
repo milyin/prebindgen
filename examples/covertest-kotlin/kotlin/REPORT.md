@@ -60,7 +60,7 @@ Base package: `io.prebindgen.covertest`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`
-  - shaped by: return `DurationBoundary` decomposed → [delay] (Callback delivery)
+  - shaped by: return `DurationBoundary` decomposed → [required, delay] (Callback delivery)
 - `duration_optional` — `fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
 - `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
 - `hold_echo` — `fun holdEcho(h: Hold, onError: JniErrorHandler<Hold>): Hold`

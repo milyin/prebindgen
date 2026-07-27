@@ -231,18 +231,35 @@ fun main() {
         check(durationOptional(0uL, boom) == 0uL)
         check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
 
-        // The data-class property is semantic `ULong?`, while its native
-        // output factory receives primitive Long + niche. The echo's explicit
-        // object input also executes the complete ULong -> Duration decoder.
+        // The data-class properties are semantic `ULong` / `ULong?`, while the
+        // native output factory receives primitive Longs (the optional one
+        // niche-encoded). The echo's explicit object input also executes the
+        // complete ULong -> Duration decoder.
+        //
+        // `required` and `delay` take DIFFERENT emitter paths: `delay` rides
+        // the `Option<_>` wrapper, which composes its inner conversion chain
+        // itself, while `required` is a bare leaf the whole-object decoder and
+        // the leaf encoder each have to compose for. Both fields therefore
+        // have to round-trip, not just the nullable one.
         val fromParts = DurationBoundary::class.java.getDeclaredMethod(
             "fromParts",
             java.lang.Long.TYPE,
+            java.lang.Long.TYPE,
         )
-        check(fromParts.parameterTypes.single() == java.lang.Long.TYPE)
-        check(durationBoundaryEcho(DurationBoundary(null), boom) == DurationBoundary(null))
+        check(fromParts.parameterTypes.all { it == java.lang.Long.TYPE })
         check(
-            durationBoundaryEcho(DurationBoundary(12_345uL), boom) ==
-                DurationBoundary(12_345uL),
+            durationBoundaryEcho(DurationBoundary(0uL, null), boom) ==
+                DurationBoundary(0uL, null),
+        )
+        check(
+            durationBoundaryEcho(DurationBoundary(7uL, 12_345uL), boom) ==
+                DurationBoundary(7uL, 12_345uL),
+        )
+        // The required field carries its own value rather than mirroring the
+        // optional one — a chain wired to the wrong binding would cross them.
+        check(
+            durationBoundaryEcho(DurationBoundary(86_400_000uL, 1uL), boom) ==
+                DurationBoundary(86_400_000uL, 1uL),
         )
 
         var inputError: String? = null

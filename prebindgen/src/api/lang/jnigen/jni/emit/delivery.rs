@@ -425,8 +425,43 @@ pub(crate) fn encode_plan_leaves(
                 TypeKey::from_type(&leaf.out_ty)
             )
         });
-        let conv = out_entry.function.sig.ident.clone();
         let conv_fail = fail(quote!(__e.to_string()));
+        // The leaf's COMPLETE Rust -> wire chain: the rust-side stages a custom
+        // `convert!` declaration inserts (`Duration -> u64`), then the
+        // wire-facing converter (`u64 -> jlong`). Calling only the latter would
+        // hand it the semantic value where it expects the representation.
+        // Stage locals are keyed on the leaf index, so sibling leaves of the
+        // same type cannot collide.
+        let conv_stages: Vec<syn::Ident> = out_entry
+            .output_stage_order()
+            .map(|(_, stage)| stage.function.sig.ident.clone())
+            .collect();
+        let conv_fn = out_entry.converter_ident().clone();
+        let conv = |input: TokenStream| -> TokenStream {
+            let step = |f: &syn::Ident, arg: TokenStream| {
+                quote! {
+                    match #f(&mut env, #arg) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            #conv_fail
+                        }
+                    }
+                }
+            };
+            if conv_stages.is_empty() {
+                return step(&conv_fn, input);
+            }
+            let mut body = TokenStream::new();
+            let mut previous = input;
+            for (order, stage_fn) in conv_stages.iter().enumerate() {
+                let next = format_ident!("__cs{}_{}", idx, order);
+                let call = step(stage_fn, previous);
+                body.extend(quote! { let #next = #call; });
+                previous = quote!(#next);
+            }
+            let last = step(&conv_fn, previous);
+            quote!({ #body #last })
+        };
 
         // Bind `obj_ident` to a JObject-yielding `expr`.
         let bind_obj = |obj_ident: &syn::Ident, expr: TokenStream| -> TokenStream {
@@ -480,13 +515,9 @@ pub(crate) fn encode_plan_leaves(
                             true,
                             0,
                             &|reached| {
+                                let __encoded = conv(quote!(#reached));
                                 quote! {{
-                                    let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
-                                        ::core::result::Result::Ok(__w) => __w,
-                                        ::core::result::Result::Err(__e) => {
-                                            #conv_fail
-                                        }
-                                    };
+                                    let #handle_ident: jni::sys::jlong = #__encoded;
                                     jni::sys::jvalue { j: #handle_ident }
                                 }}
                             },
@@ -508,13 +539,9 @@ pub(crate) fn encode_plan_leaves(
                             true,
                             0,
                             &|reached| {
+                                let __encoded = conv(quote!(#reached));
                                 quote! {{
-                                    let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
-                                        ::core::result::Result::Ok(__w) => __w,
-                                        ::core::result::Result::Err(__e) => {
-                                            #conv_fail
-                                        }
-                                    };
+                                    let #handle_ident: jni::sys::jlong = #__encoded;
                                     match ::prebindgen::lang::box_jlong(&mut env, #handle_ident) {
                                         ::core::result::Result::Ok(__o) => __o,
                                         ::core::result::Result::Err(__e) => {
@@ -534,15 +561,12 @@ pub(crate) fn encode_plan_leaves(
                     let enc_ident = format_ident!("__enc{}", idx);
                     let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
                     if leaf.path.is_empty() && !by_ref {
+                        let __encoded = conv(quote!(#value));
+
                         stmts.extend(bind_obj(
                             obj_ident,
                             quote! {{
-                                let #enc_ident = match #conv(&mut env, #value) {
-                                    ::core::result::Result::Ok(__w) => __w,
-                                    ::core::result::Result::Err(__e) => {
-                                        #conv_fail
-                                    }
-                                };
+                                let #enc_ident = #__encoded;
                                 #cast
                             }},
                         ));
@@ -556,13 +580,9 @@ pub(crate) fn encode_plan_leaves(
                             true,
                             0,
                             &|reached| {
+                                let __encoded = conv(quote!(*#reached));
                                 quote! {{
-                                    let #enc_ident = match #conv(&mut env, *#reached) {
-                                        ::core::result::Result::Ok(__w) => __w,
-                                        ::core::result::Result::Err(__e) => {
-                                            #conv_fail
-                                        }
-                                    };
+                                    let #enc_ident = #__encoded;
                                     #cast
                                 }}
                             },
@@ -573,13 +593,9 @@ pub(crate) fn encode_plan_leaves(
                 ProjectionKind::Unsigned64 => {
                     let enc_ident = format_ident!("__enc{}", idx);
                     let encode = |reached: TokenStream| {
+                        let encoded = conv(reached);
                         quote! {{
-                            let #enc_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
-                                ::core::result::Result::Ok(__w) => __w,
-                                ::core::result::Result::Err(__e) => {
-                                    #conv_fail
-                                }
-                            };
+                            let #enc_ident: jni::sys::jlong = #encoded;
                             jni::sys::jvalue { j: #enc_ident }
                         }}
                     };
@@ -609,13 +625,9 @@ pub(crate) fn encode_plan_leaves(
                             true,
                             0,
                             &|reached| {
+                                let __encoded = conv(quote!(*#reached));
                                 quote! {{
-                                    let #enc_ident: jni::sys::jlong = match #conv(&mut env, *#reached) {
-                                        ::core::result::Result::Ok(__w) => __w,
-                                        ::core::result::Result::Err(__e) => {
-                                            #conv_fail
-                                        }
-                                    };
+                                    let #enc_ident: jni::sys::jlong = #__encoded;
                                     match ::prebindgen::lang::box_jlong(&mut env, #enc_ident) {
                                         ::core::result::Result::Ok(__o) => __o,
                                         ::core::result::Result::Err(__e) => {
@@ -678,13 +690,9 @@ pub(crate) fn encode_plan_leaves(
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
             let expr = reach(&|reached| {
+                let __encoded = conv(quote!(#reached));
                 quote! {{
-                    let #enc_ident = match #conv(&mut env, #reached) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            #conv_fail
-                        }
-                    };
+                    let #enc_ident = #__encoded;
                     jni::sys::jvalue { #letter: #enc_ident }
                 }}
             });
@@ -695,13 +703,9 @@ pub(crate) fn encode_plan_leaves(
         }
         let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
         let expr = reach(&|reached| {
+            let __encoded = conv(quote!(#reached));
             quote! {{
-                let #enc_ident = match #conv(&mut env, #reached) {
-                    ::core::result::Result::Ok(__w) => __w,
-                    ::core::result::Result::Err(__e) => {
-                        #conv_fail
-                    }
-                };
+                let #enc_ident = #__encoded;
                 #cast
             }}
         });

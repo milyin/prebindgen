@@ -613,9 +613,15 @@ pub fn duration_out_of_range() -> Option<Duration> {
 /// its echo executes both the whole-object input decoder and the `fromParts`
 /// output encoder; the nullable duration itself still uses the raw `jlong`
 /// niche whenever it crosses a generated JNI call boundary.
+///
+/// The two fields are the two shapes a converted leaf takes, and they exercise
+/// DIFFERENT emitter paths: `delay` goes through the `Option<_>` wrapper, which
+/// composes its inner conversion chain itself, while `required` is a bare leaf
+/// the data-class encoder/decoder has to compose for.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DurationBoundary {
+    pub required: Duration,
     pub delay: Option<Duration>,
 }
 

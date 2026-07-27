@@ -231,11 +231,16 @@ public data class CacheConfig(val replies: RepliesConfig, val ttl: Long) {
  * its echo executes both the whole-object input decoder and the `fromParts`
  * output encoder; the nullable duration itself still uses the raw `jlong`
  * niche whenever it crosses a generated JNI call boundary.
+ *
+ * The two fields are the two shapes a converted leaf takes, and they exercise
+ * DIFFERENT emitter paths: `delay` goes through the `Option<_>` wrapper, which
+ * composes its inner conversion chain itself, while `required` is a bare leaf
+ * the data-class encoder/decoder has to compose for.
  */
-public data class DurationBoundary(val delay: ULong?) {
+public data class DurationBoundary(val required: ULong, val delay: ULong?) {
     public companion object {
         @JvmStatic
-        public fun fromParts(delay: Long): DurationBoundary = DurationBoundary(if (delay == -1L) null else delay.toULong())
+        public fun fromParts(required: Long, delay: Long): DurationBoundary = DurationBoundary(required.toULong(), if (delay == -1L) null else delay.toULong())
     }
 }
 
@@ -809,11 +814,11 @@ public fun ReadingCallback.asRaw(): ReadingCallbackRaw =
     }
 
 public fun interface DurationBoundaryBuilderRaw<out R> {
-    public fun run(delay: Long): R
+    public fun run(required: Long, delay: Long): R
 }
 
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
-DurationBoundaryBuilderRaw { delay -> DurationBoundary.fromParts(delay) }
+DurationBoundaryBuilderRaw { required, delay -> DurationBoundary.fromParts(required, delay) }
 
 public fun interface HoldBuilderRaw<out R> {
     public fun run(tag: Int, for_v0: Long): R
@@ -1516,7 +1521,7 @@ public fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): UL
 /**
  * Round-trip [`DurationBoundary`] through the explicit object-input bridge.
  *
- * The Rust `DurationBoundary` result is delivered decomposed: the builder callback receives (`delay`).
+ * The Rust `DurationBoundary` result is delivered decomposed: the builder callback receives (`required`, `delay`).
  */
 @Suppress("UNCHECKED_CAST")
 public fun durationBoundaryEcho(
