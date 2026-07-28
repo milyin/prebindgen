@@ -59,22 +59,28 @@ impl Cbindgen {
         let mut subs: Vec<syn::Type> = Vec::new();
         let mut fallible = false;
         for (fname, fty) in &fields {
-            let fty = &fty.to_syn();
-            if is_string(fty) {
+            // Shape from the model; identity (`is this a declared tagged_union`)
+            // from the projection's `TypeKey`, which is the registry's key until
+            // F4 rekeys it.
+            if matches!(fty, SourceType::Str) {
                 inits.push(quote!(#fname: if v.#fname.is_null() {
                     ::std::string::String::new()
                 } else {
                     ::std::ffi::CStr::from_ptr(v.#fname).to_string_lossy().into_owned()
                 }));
-            } else if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
+            } else if self
+                .tagged_unions
+                .contains_key(&TypeKey::from_type(&fty.to_syn()))
+            {
                 // A sum field crosses by value as its mirror; its own converter
                 // validates the tag and rebuilds the live arm, which is what
                 // makes this whole decode fallible.
-                let conv = Self::in_name(fty);
-                subs.push(fty.clone());
+                let fty = fty.to_syn();
+                let conv = Self::in_name(&fty);
+                subs.push(fty);
                 fallible = true;
                 inits.push(quote!(#fname: #conv(v.#fname)?));
-            } else if is_bool(fty) {
+            } else if matches!(fty, SourceType::Scalar(ScalarKind::Bool)) {
                 // #170 instance 2: the field's wire is `MaybeUninit<bool>`, so
                 // the byte C wrote is normalised here — a Rust `bool` never
                 // holds it unchecked.
@@ -130,11 +136,16 @@ impl Cbindgen {
         }
         let mut idents = Vec::new();
         for (fname, fty) in self.struct_fields(registry, ty)? {
-            let fty = fty.to_syn();
             // An owned-pointer field is one whose mirror wire is a raw pointer
             // (`Option<Box<T>>` / `Box<T>` → `*mut t_t`); scalars/enums are not.
-            if matches!(self.mirror_field_wire(&fty), Some(syn::Type::Ptr(_))) {
-                if !is_option(&fty) {
+            // `mirror_field_wire` still takes syntax: it is shared with the
+            // tagged-union payload path, whose variant fields the frontend does
+            // not model yet (F2 covers structs only).
+            if matches!(
+                self.mirror_field_wire(&fty.to_syn()),
+                Some(syn::Type::Ptr(_))
+            ) {
+                if !matches!(fty, SourceType::Optional(_)) {
                     return None; // bare `Box<T>`: cannot be nulled (invalid `Box`)
                 }
                 idents.push(fname);
@@ -574,13 +585,12 @@ impl Cbindgen {
             let c_struct = self.c_type_ident(&ty);
             let mut field_defs: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
-                let sty = fty.to_syn();
-                let wire = self.data_field_wire(&sty).unwrap_or_else(|| {
+                let wire = self.data_field_wire(fty).unwrap_or_else(|| {
                     panic!(
                         "Cbindgen: field `{}` of data struct `{}` has unsupported type `{}`",
                         fname,
                         type_short(&ty),
-                        sty.to_token_stream()
+                        fty.to_syn().to_token_stream()
                     )
                 });
                 // An array extent that named a const keeps the NAME here — see
@@ -1837,14 +1847,17 @@ impl Cbindgen {
             let mut inits: Vec<TokenStream> = Vec::new();
             let mut subs: Vec<syn::Type> = Vec::new();
             for (fname, fty) in &fields {
-                let fty = &fty.to_syn();
-                if is_string(fty) {
+                if matches!(fty, SourceType::Str) {
                     inits.push(quote!(#fname: __cbg_alloc_cstr(v.#fname)));
-                } else if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
-                    let conv = Self::out_name(fty);
-                    subs.push(fty.clone());
+                } else if self
+                    .tagged_unions
+                    .contains_key(&TypeKey::from_type(&fty.to_syn()))
+                {
+                    let fty = fty.to_syn();
+                    let conv = Self::out_name(&fty);
+                    subs.push(fty);
                     inits.push(quote!(#fname: #conv(v.#fname)));
-                } else if is_bool(fty) {
+                } else if matches!(fty, SourceType::Scalar(ScalarKind::Bool)) {
                     let wrap = bool_out_expr(quote!(v.#fname));
                     inits.push(quote!(#fname: #wrap));
                 } else {

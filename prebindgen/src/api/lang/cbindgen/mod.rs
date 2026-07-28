@@ -108,7 +108,7 @@ pub(crate) use crate::api::core::types_util::{
 };
 use crate::api::{
     core::{
-        frontend::model::SourceType,
+        frontend::model::{ScalarKind, SourceType},
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
         registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
@@ -720,24 +720,26 @@ fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {
 /// C-ABI wire type for a struct field. `String` → `*mut c_char`; `bool` →
 /// [`bool_wire`]; the remaining FFI-safe scalars pass through. `None` for
 /// anything else (unsupported this increment).
-fn c_field_wire(ty: &syn::Type) -> Option<syn::Type> {
-    if is_string(ty) {
-        return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
-    }
-    // #170 instance 2: the field arrives from C by value, so it may not be a
-    // Rust `bool` until the byte has been normalised.
-    if is_bool(ty) {
-        return Some(bool_wire());
-    }
-    if is_scalar(ty) {
-        return Some(ty.clone());
-    }
-    if is_scalar_array(ty) {
+///
+/// The question asked here is a **shape** question, so it is asked of the
+/// frontend's [`SourceType`] rather than of a `syn::Type`: the model already
+/// decided that this field is a `String`, a `bool`, or an array of scalars, and
+/// re-deriving that from `to_syn()` would be a second authority on the same
+/// fact — the drift #211 exists to stop. Contrast the *identity* questions the
+/// callers still ask (`is this type a declared tagged_union?`), which are
+/// registry lookups keyed by `TypeKey` and stay on `syn` until F4.
+fn c_field_wire(ty: &SourceType) -> Option<syn::Type> {
+    match ty {
+        SourceType::Str => Some(syn::parse_quote!(*mut ::core::ffi::c_char)),
+        // #170 instance 2: the field arrives from C by value, so it may not be
+        // a Rust `bool` until the byte has been normalised.
+        SourceType::Scalar(ScalarKind::Bool) => Some(bool_wire()),
+        SourceType::Scalar(_) => Some(ty.to_syn()),
         // `[T; N]` is already `#[repr(C)]`-compatible and C sees `T x[N]`, so
         // the array IS its own wire and the field copies with no conversion.
-        return Some(ty.clone());
+        SourceType::Array { .. } if is_scalar_array(ty) => Some(ty.to_syn()),
+        _ => None,
     }
-    None
 }
 
 /// `true` for `[T; N]` (nested included) whose element is a scalar **other than
@@ -748,12 +750,13 @@ fn c_field_wire(ty: &syn::Type) -> Option<syn::Type> {
 /// with no per-element hook, so a byte C wrote could become an invalid Rust
 /// `bool` before any generated code could look. Every other scalar holds any
 /// bit pattern legally.
-fn is_scalar_array(ty: &syn::Type) -> bool {
-    let syn::Type::Array(a) = ty else {
+fn is_scalar_array(ty: &SourceType) -> bool {
+    let SourceType::Array { elem, .. } = ty else {
         return false;
     };
-    if is_bool(&a.elem) {
-        return false;
+    match &**elem {
+        SourceType::Scalar(ScalarKind::Bool) => false,
+        SourceType::Scalar(_) => true,
+        nested => is_scalar_array(nested),
     }
-    is_scalar(&a.elem) || is_scalar_array(&a.elem)
 }

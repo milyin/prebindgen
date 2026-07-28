@@ -175,9 +175,18 @@ impl Cbindgen {
     /// [`::core::mem::MaybeUninit`]: one mirror struct serves both directions,
     /// and on the way in its bytes are C's, so the field may not be a Rust enum
     /// until its tag has been validated. Invisible in C either way.
-    pub(super) fn data_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
-        if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+    ///
+    /// The `tagged_union` test is an **identity** question — is this the type
+    /// the binding declared? — so it stays a `TypeKey` lookup on the projection
+    /// until the registry itself is keyed by the model (F4). Everything below it
+    /// is a shape question and is answered by [`c_field_wire`] from the model.
+    pub(super) fn data_field_wire(&self, fty: &SourceType) -> Option<syn::Type> {
+        let syn_ty = fty.to_syn();
+        if self
+            .tagged_unions
+            .contains_key(&TypeKey::from_type(&syn_ty))
+        {
+            let c = self.c_type_ident(&syn_ty);
             return Some(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         c_field_wire(fty)
@@ -238,8 +247,8 @@ impl Cbindgen {
         self.struct_fields(registry, fty)
             .unwrap_or_default()
             .into_iter()
-            .map(|(name, fty)| (name, fty.to_syn()))
             .filter(|(_, fty)| self.data_field_owns(fty, registry))
+            .map(|(name, fty)| (name, fty.to_syn()))
             .collect()
     }
 
@@ -247,11 +256,11 @@ impl Cbindgen {
     /// is a pointer (`String` → `char *`), or it is a declared
     /// [`Cbindgen::tagged_union`] with an owning arm — which crosses by value,
     /// so the pointer it owns is one level further down.
-    fn data_field_owns(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
+    fn data_field_owns(&self, fty: &SourceType, registry: &Registry<()>) -> bool {
         if matches!(self.data_field_wire(fty), Some(syn::Type::Ptr(_))) {
             return true;
         }
-        self.tagged_union_has_drop(fty, registry)
+        self.tagged_union_has_drop(&fty.to_syn(), registry)
     }
 
     /// Whether a declared `tagged_union` gets a typed `<base>_drop` — i.e. it is
@@ -306,9 +315,25 @@ impl Cbindgen {
     /// `syn` item could only have recovered that by parsing source syntax,
     /// which is what issue #211 exists to stop.
     ///
-    /// The per-field *classification* (is it a `String`, a declared enum, an
-    /// opaque pointer) still runs on [`SourceType::to_syn`]; migrating that off
-    /// `syn` is stage F5 of the umbrella, not this change.
+    /// What callers may and may not do with a field, the split stage F5
+    /// established:
+    ///
+    /// * **Shape comes from the model.** Is this field a `String`, a `bool`, an
+    ///   array of scalars? The frontend decided that already, so match the
+    ///   [`SourceType`] — see [`c_field_wire`], [`Self::data_field_wire`],
+    ///   [`Self::restricted_validity_field`]. Re-deriving it from
+    ///   [`SourceType::to_syn`] would make the projection a second authority on
+    ///   one fact, which is the drift #211 exists to stop.
+    /// * **Identity may still project.** Is this the type the binding declared
+    ///   as a `tagged_union` / `enum_type` / `opaque_ptr`? That is a registry
+    ///   lookup keyed by [`TypeKey`], i.e. by a `syn::Type`. Rekeying the
+    ///   registry is stage F4; until then those sites call `to_syn()` and say so.
+    ///
+    /// One shape consumer is deliberately still on syntax:
+    /// [`Self::mirror_field_wire`] is a single policy shared with the
+    /// tagged-union payload path, whose **variant** fields the frontend does not
+    /// model yet. Splitting it in two would duplicate the policy rather than
+    /// remove it, so it waits on F2 modeling enums.
     pub(super) fn struct_fields(
         &self,
         registry: &Registry<()>,
@@ -408,11 +433,11 @@ impl Cbindgen {
     /// value already exists. Wrapping the mirror field in `MaybeUninit` moves
     /// the problem rather than solving it — the transmute's *output* still has
     /// the real field.
-    pub(super) fn restricted_validity_field(&self, fty: &syn::Type) -> Option<&'static str> {
-        if is_bool(fty) {
+    pub(super) fn restricted_validity_field(&self, fty: &SourceType) -> Option<&'static str> {
+        if matches!(fty, SourceType::Scalar(ScalarKind::Bool)) {
             return Some("`bool` — only `0` and `1` are valid");
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+        if self.enums.contains_key(&TypeKey::from_type(&fty.to_syn())) {
             return Some("a declared `enum_type` — only its declared discriminants are valid");
         }
         None
@@ -430,7 +455,7 @@ impl Cbindgen {
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(fname, fty)| {
-                self.restricted_validity_field(&fty.to_syn())
+                self.restricted_validity_field(&fty)
                     .map(|reason| (fname, reason))
             })
             .collect()
