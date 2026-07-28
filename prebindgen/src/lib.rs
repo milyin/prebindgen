@@ -298,11 +298,12 @@ pub mod core {
     /// The Rust frontend: the single authority for what captured
     /// `#[prebindgen]` source means. See `docs/source-language.md` for the
     /// accepted subset.
+    ///
+    /// The frontend runs as part of [`Registry::from_items`]; what is public
+    /// here is the model it decides and the diagnostics it raises, not the
+    /// lowering machinery.
     pub mod frontend {
-        pub use crate::api::core::frontend::{
-            lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ArrayLenResolver,
-            NameIndex, UnsupportedArrayLen,
-        };
+        pub use crate::api::core::frontend::{ArrayLen, ArrayLenReason, UnsupportedArrayLen};
     }
 }
 

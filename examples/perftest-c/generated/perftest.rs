@@ -754,10 +754,14 @@ pub unsafe extern "C" fn string_new(s: *const ::core::ffi::c_char) -> *mut strin
 /// LENGTH.
 ///
 /// It is deliberately NOT declared to any binding: a length is a compile-time
-/// namespace, not part of a destination language's surface, so resolving it
-/// must not depend on the binding exposing it. Being `#[prebindgen]` is what
-/// matters — an unmarked const is invisible to the registry, would be emitted
-/// bare, and would not resolve in the generated crate.
+/// value, not part of a destination language's surface, so evaluating it must
+/// not depend on the binding exposing it. Being `#[prebindgen]` is what matters
+/// — the frontend reads the value from the captured item, and an unmarked const
+/// is not captured at all.
+///
+/// The value must be a plain integer literal. A generator runs in `build.rs`
+/// and cannot evaluate Rust, and a destination language that groups a small
+/// array into scalars needs the count as a number.
 pub const ARRAY_BYTES: usize = perftest_flat::ARRAY_BYTES;
 /// The storage capacity limit advertised to bindings (a primitive const).
 pub const COVER_MAGIC: i64 = perftest_flat::COVER_MAGIC;

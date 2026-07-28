@@ -752,11 +752,11 @@ fun main() {
         }
 
         // `bytes` is `[u8; ARRAY_BYTES]` — sized by a `#[prebindgen]` const, not
-        // a literal. That this crate COMPILES is most of the check: the frontend
-        // resolved the length to `perftest_flat::ARRAY_BYTES`, a path the
-        // generated crate can name; a bare `ARRAY_BYTES` would not build here.
-        // The rest is that the resolved const still means 4 at runtime, so the
-        // length guard fires on 3 and passes on 4.
+        // a literal. The frontend EVALUATES that const at generation time, so
+        // the check is the value: if it read anything but 4, the round trip
+        // below would reject a 4-byte array and accept a 3-byte one. Nothing in
+        // the generated Rust names the const, which is why this has to be a
+        // runtime assertion rather than a source grep.
         check(a2.bytes.size == 4) { "const-sized length must be 4, got ${a2.bytes.size}" }
         var constLenErr: String? = null
         arraysEcho(a1.copy(bytes = byteArrayOf(1, 2, 3))) { je -> constLenErr = je; a1 }

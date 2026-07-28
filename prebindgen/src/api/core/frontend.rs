@@ -35,7 +35,15 @@ mod array_len;
 #[cfg(test)]
 mod tests;
 
-pub use self::array_len::{
-    lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ArrayLenResolver, ItemRole,
-    NameIndex, UnsupportedArrayLen,
-};
+pub(crate) use self::array_len::{resolve_array_lengths, ConstIndex};
+/// The frontend's **public** surface is the decided model and its diagnostics —
+/// what a consumer of the IR needs.
+///
+/// Lowering itself is crate-private on purpose. The entry point is
+/// [`Registry::from_items`](crate::api::core::registry::Registry::from_items),
+/// which runs the frontend over the whole stream; there is no supported way to
+/// lower one construct in isolation, because the decisions need the complete
+/// name index and the item's origin. Exposing the machinery would offer callers
+/// a second, unvalidated route to a `SourceModel` — the very thing #211 exists
+/// to prevent.
+pub use self::array_len::{ArrayLen, ArrayLenReason, UnsupportedArrayLen};

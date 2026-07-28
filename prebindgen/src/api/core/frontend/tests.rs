@@ -5,41 +5,48 @@
 //! test — which is the difference between this and the characterization tests it
 //! replaces, each of which was written one defect at a time (issue #210).
 
-use std::collections::HashMap;
-
 use quote::ToTokens;
 
 use super::{
-    lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ItemRole, NameIndex,
+    array_len::lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ConstIndex,
 };
 
-/// The namespace every row below resolves against, in `myflat`:
+/// The consts every row below resolves against, all marked in `myflat`:
 ///
-/// * `MAX` — a free const, and `N` — a second one, present only so the
-///   `Holder::N` rows prove the OWNER wins over a same-named free const;
-/// * `Holder` — a struct owning an associated const;
-/// * `array_len` — a `const fn`;
-/// * `limits` — a const that SHARES ITS NAME with an intermediate module, the
-///   one case where a module and an indexed item can collide (Rust puts modules
-///   and types in one namespace, consts in another).
-fn names() -> NameIndex {
-    let module: syn::Path = syn::parse_quote!(myflat);
-    let names: HashMap<String, (syn::Path, ItemRole)> = [
-        ("MAX", ItemRole::Leaf),
-        ("N", ItemRole::Leaf),
-        ("Holder", ItemRole::Owner),
-        ("array_len", ItemRole::Leaf),
-        ("limits", ItemRole::Leaf),
-    ]
-    .into_iter()
-    .map(|(n, role)| (n.to_string(), (module.clone(), role)))
-    .collect();
-    NameIndex::new(names, &["myflat".to_string()])
+/// * `MAX` — an ordinary literal-valued const;
+/// * `SUFFIXED` — the same, written with a suffix;
+/// * `COMPUTED` — marked, but its value is an expression `build.rs` cannot
+///   evaluate;
+/// * `OTHER_MAX` — marked in a DIFFERENT source crate, for the provenance rows.
+fn consts() -> ConstIndex {
+    ConstIndex::new([
+        (
+            "MAX".to_string(),
+            syn::parse_quote!(4),
+            Some("myflat".to_string()),
+        ),
+        (
+            "SUFFIXED".to_string(),
+            syn::parse_quote!(16usize),
+            Some("myflat".to_string()),
+        ),
+        (
+            "COMPUTED".to_string(),
+            syn::parse_quote!(2 * 4),
+            Some("myflat".to_string()),
+        ),
+        (
+            "OTHER_MAX".to_string(),
+            syn::parse_quote!(8),
+            Some("helpers".to_string()),
+        ),
+    ])
 }
 
+/// Lower as if written inside an item from `myflat`.
 fn lower(src: &str) -> Result<ArrayLen, ArrayLenReason> {
     let expr: syn::Expr = syn::parse_str(src).expect("test input must parse");
-    lower_array_len(&expr, "[u8 ; …]", &names()).map_err(|e| e.reason)
+    lower_array_len(&expr, "[u8 ; …]", Some("myflat"), &consts()).map_err(|e| e.reason)
 }
 
 /// Render a lowered length the way it will be spelled in generated code.
@@ -49,200 +56,108 @@ fn spelled(len: &ArrayLen) -> String {
 
 /// ACCEPTED shapes: what each lowers to, and how it is then spelled.
 ///
+/// Every accepted length is a NUMBER — that is the contract, not an
+/// implementation detail. A generator runs in `build.rs` and cannot evaluate
+/// Rust, and a destination language that groups a small array into scalars needs
+/// the count literally.
+///
 /// The spelling column is the half that used to be a separate walk. Pairing it
 /// with acceptance in one table is the point: a row cannot say "accepted"
-/// without also saying what it resolves to.
+/// without also saying what it emits.
 #[test]
 fn accepted_array_lengths() {
     let cases: &[(&str, ArrayLen, &str)] = &[
-        // Integer literals, including a suffixed one.
         ("4", ArrayLen::Literal(4), "4"),
         ("0", ArrayLen::Literal(0), "0"),
         ("16usize", ArrayLen::Literal(16), "16"),
-        // A free const: the whole path is the name.
+        // A marked const is evaluated here and emitted as its VALUE, so nothing
+        // in generated code is a path and there is nothing to qualify.
         (
             "MAX",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::MAX),
+            ArrayLen::Const {
+                name: syn::parse_quote!(MAX),
+                value: 4,
             },
-            "myflat :: MAX",
-        ),
-        // An associated const: only the OWNER is qualified — `::N` is relative
-        // to it, so `myflat::Holder::myflat::N` must not be constructible.
-        (
-            "Holder::N",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::Holder::N),
-            },
-            "myflat :: Holder :: N",
-        ),
-        // Already-qualified captured spellings resolve to the same value as the
-        // bare ones, so a source crate that writes `crate::MAX` is not speaking
-        // a different language from one that writes `MAX`.
-        (
-            "crate::MAX",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::MAX),
-            },
-            "myflat :: MAX",
+            "4",
         ),
         (
-            "myflat::MAX",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::MAX),
+            "SUFFIXED",
+            ArrayLen::Const {
+                name: syn::parse_quote!(SUFFIXED),
+                value: 16,
             },
-            "myflat :: MAX",
-        ),
-        // The OWNER is kept, unlike type-path reduction, which would collapse
-        // this to `N` — and `N` is itself an indexed free const here, so this
-        // also pins that the LEFTMOST anchor wins.
-        (
-            "myflat::Holder::N",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::Holder::N),
-            },
-            "myflat :: Holder :: N",
-        ),
-        // An INTERMEDIATE MODULE between the source head and the item. The
-        // module prefix carries no information — a `#[prebindgen]` item is
-        // reachable as `<crate>::<bare name>` — so it is replaced wholesale and
-        // this means exactly the same length as a bare `MAX`.
-        (
-            "crate::limits::MAX",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::MAX),
-            },
-            "myflat :: MAX",
-        ),
-        (
-            "myflat::limits::MAX",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::MAX),
-            },
-            "myflat :: MAX",
-        ),
-        // ...including when the item is an associated const behind a module.
-        (
-            "crate::limits::Holder::N",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::Holder::N),
-            },
-            "myflat :: Holder :: N",
-        ),
-        // `limits` is BOTH an intermediate module and an indexed const. A const
-        // owns nothing, so it cannot be the anchor with segments following it;
-        // the scan skips it and `MAX` anchors. Without the role check this
-        // would emit `myflat::limits::MAX` — the const, not the module.
-        (
-            "limits::MAX",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::MAX),
-            },
-            "myflat :: MAX",
-        ),
-        // ...and as the FINAL segment the same name is the const itself.
-        (
-            "crate::limits",
-            ArrayLen::SourceConst {
-                path: syn::parse_quote!(myflat::limits),
-            },
-            "myflat :: limits",
-        ),
-        // Not a source item: emitted verbatim. Prefixing an origin module here
-        // would be a guess, and `usize` has none.
-        (
-            "usize::MAX",
-            ArrayLen::ExternalConst {
-                path: syn::parse_quote!(usize::MAX),
-            },
-            "usize :: MAX",
-        ),
-        // A foreign crate's path is left ALONE even though its tail segment
-        // happens to name an indexed item. The registry has no index of a
-        // foreign namespace, so `other::Holder` and `myflat::Holder` may be
-        // genuinely different things — the same rule `normalize_type` applies
-        // to types.
-        (
-            "other_crate::Holder::N",
-            ArrayLen::ExternalConst {
-                path: syn::parse_quote!(other_crate::Holder::N),
-            },
-            "other_crate :: Holder :: N",
-        ),
-        // A const the source crate did not mark `#[prebindgen]` is, to the
-        // registry, indistinguishable from a foreign one — it lands here and
-        // will not resolve in the generated crate. Marking it is the fix.
-        (
-            "UNMARKED",
-            ArrayLen::ExternalConst {
-                path: syn::parse_quote!(UNMARKED),
-            },
-            "UNMARKED",
+            "16",
         ),
     ];
     for (src, expect, spell) in cases {
         let got = lower(src).unwrap_or_else(|r| panic!("`{src}` was refused: {r:?}"));
         assert_eq!(&got, expect, "`{src}` lowered to the wrong value");
         assert_eq!(&spelled(&got), spell, "`{src}` is spelled wrong");
+        assert_eq!(got.value(), expect.value(), "`{src}` has the wrong value");
     }
 }
 
 /// REFUSED shapes and why.
 ///
-/// Everything that is not a literal or a plain path, plus the path forms that
-/// carry no resolvable anchor. There is no separate list of
-/// accepted forms for this to drift from — a shape absent from the table above
-/// is refused by construction.
+/// There is no separate list of accepted forms for this to drift from — a shape
+/// absent from the table above is refused by construction.
 #[test]
 fn refused_array_lengths() {
     let cases: &[(&str, ArrayLenReason)] = &[
-        // Issue #210, defect #8: a qualified self was ACCEPTED by the old
-        // whitelist and silently declined by the old rewriter, emitting
-        // `<Holder>::N` into a crate where `Holder` is not in scope. One walk
-        // makes accepted-but-unqualified unrepresentable.
-        ("<Holder>::N", ArrayLenReason::QualifiedSelf),
-        ("<Holder as Trait>::N", ArrayLenReason::QualifiedSelf),
-        // Rooted at the crate root: names a dependency of the GENERATED crate,
-        // which the frontend cannot see.
-        ("::MAX", ArrayLenReason::CrateRootPath),
-        // Source-relative but naming no indexed item. It cannot be emitted
-        // verbatim — the generated crate is a DIFFERENT crate, where
-        // `crate::limits::UNMARKED` resolves to something else or to nothing —
-        // and there is no module to qualify it with. This is the loud form of
-        // the missing-`#[prebindgen]` trap; the bare spelling below is the
-        // quiet one.
-        (
-            "crate::limits::UNMARKED",
-            ArrayLenReason::UnresolvedSourcePath,
-        ),
-        ("myflat::UNMARKED", ArrayLenReason::UnresolvedSourcePath),
-        ("self::UNMARKED", ArrayLenReason::UnresolvedSourcePath),
-        // Const arithmetic and casts — deliberately out of the language.
-        ("MAX + 1", ArrayLenReason::NotLiteralOrPath),
-        ("-1", ArrayLenReason::NotLiteralOrPath),
-        ("MAX as usize", ArrayLenReason::NotLiteralOrPath),
-        ("(MAX)", ArrayLenReason::NotLiteralOrPath),
-        // A `const fn` call. Its callee is an indexed item, but the call is
-        // structure the flat grammar does not have.
-        ("array_len()", ArrayLenReason::NotLiteralOrPath),
-        // Anything that can BIND a name. A local shadowing a source item would
-        // otherwise be rewritten into it — `array_len` the local becoming
-        // `myflat::array_len` the function.
+        // ── not a bare name ──────────────────────────────────────────────
+        // Every one of these was a live defect or a live ambiguity while the
+        // grammar still admitted paths. A `#[prebindgen]` const is addressed by
+        // its bare name in one flat namespace, so a longer path either restates
+        // that or reaches somewhere the frontend cannot follow.
+        //
+        // Issue #210 defect #8: accepted by the old whitelist, silently NOT
+        // qualified by the old rewriter.
+        ("<Holder>::N", ArrayLenReason::NotABareName),
+        ("<Holder as Trait>::N", ArrayLenReason::NotABareName),
+        // An associated const. prebindgen never captures `impl` blocks, so its
+        // value is unknowable — supporting the spelling could only ever have
+        // produced a path, never a number.
+        ("Holder::N", ArrayLenReason::NotABareName),
+        // A module path. Indistinguishable from an external crate path without
+        // indexing modules, and redundant when the const IS marked.
+        ("crate::limits::MAX", ArrayLenReason::NotABareName),
+        ("myflat::limits::MAX", ArrayLenReason::NotABareName),
+        ("limits::MAX", ArrayLenReason::NotABareName),
+        ("crate::MAX", ArrayLenReason::NotABareName),
+        // An external path. `usize::MAX` is not even a fixed number — it is
+        // platform dependent, which is the whole hazard in miniature.
+        ("usize::MAX", ArrayLenReason::NotABareName),
+        ("other_crate::Holder::N", ArrayLenReason::NotABareName),
+        ("::MAX", ArrayLenReason::NotABareName),
+        // ── a bare name that is not a usable const ───────────────────────
+        // The generated crate sees ONLY what the macro exposed, so an unmarked
+        // const does not exist downstream. This used to be emitted verbatim and
+        // failed later, at rustc; it is a frontend error now.
+        ("UNMARKED", ArrayLenReason::NotAMarkedConst),
+        // Marked, but `build.rs` cannot evaluate it.
+        ("COMPUTED", ArrayLenReason::ConstIsNotALiteral),
+        // ── not a literal or a name ──────────────────────────────────────
+        ("MAX + 1", ArrayLenReason::NotLiteralOrName),
+        ("-1", ArrayLenReason::NotLiteralOrName),
+        ("MAX as usize", ArrayLenReason::NotLiteralOrName),
+        ("(MAX)", ArrayLenReason::NotLiteralOrName),
+        ("array_len()", ArrayLenReason::NotLiteralOrName),
+        // Anything that can BIND a name.
         (
             "const { let array_len = 3; array_len }",
-            ArrayLenReason::NotLiteralOrPath,
+            ArrayLenReason::NotLiteralOrName,
         ),
-        ("{ 3 }", ArrayLenReason::NotLiteralOrPath),
+        ("{ 3 }", ArrayLenReason::NotLiteralOrName),
         (
             "match 3 { array_len => array_len }",
-            ArrayLenReason::NotLiteralOrPath,
+            ArrayLenReason::NotLiteralOrName,
         ),
         (
             "if let array_len = 3 { array_len } else { 0 }",
-            ArrayLenReason::NotLiteralOrPath,
+            ArrayLenReason::NotLiteralOrName,
         ),
-        ("|| 3", ArrayLenReason::NotLiteralOrPath),
-        // Literals that are not lengths.
+        ("|| 3", ArrayLenReason::NotLiteralOrName),
+        // ── literals that are not lengths ────────────────────────────────
         ("\"4\"", ArrayLenReason::NotAnIntegerLiteral),
         ("true", ArrayLenReason::NotAnIntegerLiteral),
         (
@@ -258,17 +173,60 @@ fn refused_array_lengths() {
     }
 }
 
+/// A bare name must be a const from the item's OWN source crate.
+///
+/// Uniqueness holds across the **marked** namespace only. A source crate may
+/// have an unmarked `MAX` of its own and mean that one, while another chained
+/// source has a marked `MAX` — and the marked one is the only thing the frontend
+/// can see. Resolving to it would silently change the length rather than fail.
+///
+/// The value is deliberately *available* for the foreign const, so this pins
+/// provenance rather than incidental unresolvability.
+#[test]
+fn a_length_must_name_a_const_from_its_own_crate() {
+    let expr: syn::Expr = syn::parse_quote!(OTHER_MAX);
+    let err = lower_array_len(&expr, "[u8 ; OTHER_MAX]", Some("myflat"), &consts()).unwrap_err();
+    assert_eq!(
+        err.reason,
+        ArrayLenReason::ForeignSourceConst {
+            const_crate: "helpers".to_string(),
+            item_crate: "myflat".to_string(),
+        }
+    );
+    // ...and from `helpers` itself the same name is fine.
+    let got = lower_array_len(&expr, "[u8 ; OTHER_MAX]", Some("helpers"), &consts()).unwrap();
+    assert_eq!(got.value(), 8);
+}
+
+/// An origin-less stream is one anonymous crate, so provenance matches
+/// trivially. Core supports hand-built item streams with no
+/// `SourceLocation::crate_name`, and they must not be collateral of the
+/// provenance rule.
+#[test]
+fn origin_less_streams_resolve_against_themselves() {
+    let consts = ConstIndex::new([("MAX".to_string(), syn::parse_quote!(4), None)]);
+    let expr: syn::Expr = syn::parse_quote!(MAX);
+    let got = lower_array_len(&expr, "[u8 ; MAX]", None, &consts).unwrap();
+    assert_eq!(got.value(), 4);
+    // A stamped item may not reach an unstamped const either — same rule.
+    let err = lower_array_len(&expr, "[u8 ; MAX]", Some("myflat"), &consts).unwrap_err();
+    assert!(matches!(
+        err.reason,
+        ArrayLenReason::ForeignSourceConst { .. }
+    ));
+}
+
 /// The diagnostic names the offending sub-expression, not just the array — a
 /// caller with several arrays in one struct has to be told which one.
 #[test]
 fn rejection_names_the_offending_expression() {
     let expr: syn::Expr = syn::parse_quote!(MAX + 1);
-    let err = lower_array_len(&expr, "[u8 ; MAX + 1]", &names()).unwrap_err();
+    let err = lower_array_len(&expr, "[u8 ; MAX + 1]", Some("myflat"), &consts()).unwrap_err();
     assert_eq!(err.offending, "MAX + 1");
     assert_eq!(err.array, "[u8 ; MAX + 1]");
     let msg = err.to_string();
     assert!(msg.contains("MAX + 1"), "{msg}");
-    assert!(msg.contains("hoist"), "{msg}");
+    assert!(msg.contains("integer literal"), "{msg}");
 }
 
 /// A refused length leaves the node untouched — no half-rewritten model reaches
@@ -282,7 +240,7 @@ fn rejection_is_transactional() {
         }
     );
     let before = item.to_token_stream().to_string();
-    let err = resolve_array_lengths(&mut item, &names(), |r, s| {
+    let err = resolve_array_lengths(&mut item, &consts(), Some("myflat"), |r, s| {
         syn::visit_mut::VisitMut::visit_item_struct_mut(r, s)
     })
     .unwrap_err();
@@ -299,70 +257,50 @@ fn rejection_is_transactional() {
 fn nested_arrays_resolve_at_every_level() {
     let mut item: syn::ItemStruct = syn::parse_quote!(
         pub struct Grid {
-            pub cells: [[u8; MAX]; Holder::N],
+            pub cells: [[u8; MAX]; SUFFIXED],
         }
     );
-    let found = resolve_array_lengths(&mut item, &names(), |r, s| {
+    let found = resolve_array_lengths(&mut item, &consts(), Some("myflat"), |r, s| {
         syn::visit_mut::VisitMut::visit_item_struct_mut(r, s)
     })
     .unwrap();
     let rendered = item.to_token_stream().to_string().replace(' ', "");
-    assert!(
-        rendered.contains("[[u8;myflat::MAX];myflat::Holder::N]"),
-        "{rendered}"
-    );
+    assert!(rendered.contains("[[u8;4];16]"), "{rendered}");
     // Inner first, and the outer type is recorded in its REWRITTEN spelling —
     // a consumer keying on it never sees the captured one.
     let keys: Vec<String> = found
         .iter()
         .map(|(ty, _)| ty.to_token_stream().to_string().replace(' ', ""))
         .collect();
-    assert_eq!(
-        keys,
-        vec![
-            "[u8;myflat::MAX]".to_string(),
-            "[[u8;myflat::MAX];myflat::Holder::N]".to_string(),
-        ]
-    );
+    assert_eq!(keys, vec!["[u8;4]".to_string(), "[[u8;4];16]".to_string()]);
 }
 
 /// A length is resolved wherever a type can appear, not only in a struct field.
 #[test]
 fn lengths_resolve_in_function_signatures() {
     let mut item: syn::ItemFn = syn::parse_quote!(
-        pub fn echo(v: [u8; MAX]) -> [u8; Holder::N] {
+        pub fn echo(v: [u8; MAX]) -> [u8; SUFFIXED] {
             unimplemented!()
         }
     );
-    resolve_array_lengths(&mut item, &names(), |r, f| {
+    resolve_array_lengths(&mut item, &consts(), Some("myflat"), |r, f| {
         syn::visit_mut::VisitMut::visit_item_fn_mut(r, f)
     })
     .unwrap();
     let rendered = item.to_token_stream().to_string().replace(' ', "");
-    assert!(rendered.contains("v:[u8;myflat::MAX]"), "{rendered}");
-    assert!(rendered.contains("->[u8;myflat::Holder::N]"), "{rendered}");
+    assert!(rendered.contains("v:[u8;4]"), "{rendered}");
+    assert!(rendered.contains("->[u8;16]"), "{rendered}");
 }
 
-/// An origin-less stream documents `crate` as its module, so the same source
-/// spelling resolves to `crate::MAX` there. Both are pinned because deriving the
-/// name set from the origin map — which holds only stamped items — silently
-/// emitted every length bare for these streams.
+/// A const length and the same number written literally are ONE type, and
+/// therefore one converter. They always were in Rust; evaluating the length
+/// makes the frontend agree.
 #[test]
-fn origin_less_streams_resolve_against_the_crate_root() {
-    let names = NameIndex::new(
-        [(
-            "MAX".to_string(),
-            (syn::parse_quote!(crate), ItemRole::Leaf),
-        )]
-        .into_iter()
-        .collect(),
-        &[],
-    );
-    let expr: syn::Expr = syn::parse_quote!(MAX);
-    let got = lower_array_len(&expr, "[u8 ; MAX]", &names).unwrap();
-    assert_eq!(spelled(&got), "crate :: MAX");
-    // `crate::MAX` in the source is the same length, not a different one.
-    let expr: syn::Expr = syn::parse_quote!(crate::MAX);
-    let got = lower_array_len(&expr, "[u8 ; crate::MAX]", &names).unwrap();
-    assert_eq!(spelled(&got), "crate :: MAX");
+fn a_const_length_and_its_literal_are_the_same_type() {
+    let from_const: syn::Expr = syn::parse_quote!(MAX);
+    let from_literal: syn::Expr = syn::parse_quote!(4);
+    let a = lower_array_len(&from_const, "[u8 ; MAX]", Some("myflat"), &consts()).unwrap();
+    let b = lower_array_len(&from_literal, "[u8 ; 4]", Some("myflat"), &consts()).unwrap();
+    assert_ne!(a, b, "the spellings stay distinguishable in the model");
+    assert_eq!(spelled(&a), spelled(&b), "but they emit one type");
 }

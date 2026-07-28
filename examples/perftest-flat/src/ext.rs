@@ -369,10 +369,14 @@ pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue
 /// LENGTH.
 ///
 /// It is deliberately NOT declared to any binding: a length is a compile-time
-/// namespace, not part of a destination language's surface, so resolving it
-/// must not depend on the binding exposing it. Being `#[prebindgen]` is what
-/// matters — an unmarked const is invisible to the registry, would be emitted
-/// bare, and would not resolve in the generated crate.
+/// value, not part of a destination language's surface, so evaluating it must
+/// not depend on the binding exposing it. Being `#[prebindgen]` is what matters
+/// — the frontend reads the value from the captured item, and an unmarked const
+/// is not captured at all.
+///
+/// The value must be a plain integer literal. A generator runs in `build.rs`
+/// and cannot evaluate Rust, and a destination language that groups a small
+/// array into scalars needs the count as a number.
 #[prebindgen]
 pub const ARRAY_BYTES: usize = 4;
 
@@ -388,9 +392,10 @@ pub const ARRAY_BYTES: usize = 4;
 /// behavior, so the decode normalizes instead.
 ///
 /// `bytes` is deliberately sized by a named `const` ([`ARRAY_BYTES`]) rather
-/// than a literal: a length is a source-language fact, and the frontend must
-/// resolve it to a path the GENERATED crate can name. A literal would prove
-/// nothing about that.
+/// than a literal: a length is a source-language fact the frontend has to
+/// evaluate, and only a named const exercises that. It emits as `[u8; 4]` —
+/// identical to the literal spelling, which is the point: one type, one
+/// converter, whichever way the source wrote it.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Arrays {

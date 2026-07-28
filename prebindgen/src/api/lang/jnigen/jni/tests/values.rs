@@ -1436,42 +1436,34 @@ fn data_class_properties_match_their_from_parts_params() {
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 }
 
-/// End-to-end proof that the frontend's array-length resolution
+/// End-to-end proof that the frontend's array-length evaluation
 /// ([`crate::api::core::frontend`]) survives all the way into emitted code, and
-/// that it reaches ONLY the length — never a converter body's locals.
+/// that it touches ONLY the length — never a converter body's locals.
 ///
 /// The exhaustive shape-by-shape coverage lives in the frontend's acceptance
-/// matrix; what only an end-to-end test can show is the locals invariant below,
-/// which is about generated converter bodies.
+/// matrix; what only an end-to-end test can show is the locals invariant, which
+/// is about generated converter bodies.
 ///
-/// Neither owner is declared to JniGen: each is a compile-time namespace, not a
-/// boundary type, so qualification must not depend on a Kotlin class existing
-/// for it.
+/// The const is deliberately named `env`, which is also the name of the `JNIEnv`
+/// local every generated converter uses. A source crate may legally declare it
+/// (`#[allow(non_upper_case_globals)] pub const env`), so a whole-item
+/// expression pass would rewrite `env.get_java_vm()` to `4.get_java_vm()` —
+/// thousands of `no method named get_java_vm found`. Scoping the pass to
+/// `TypeArray::len` is what keeps the two apart.
 ///
-/// The const here is deliberately named `env`, which is also the name of the
-/// `JNIEnv` local every generated converter uses. A source crate may legally
-/// declare it (`#[allow(non_upper_case_globals)] pub const env`), so a
-/// whole-item expression pass would rewrite `env.get_java_vm()` to
-/// `myflat::env.get_java_vm()` even when restricted to registered const idents
-/// — thousands of `no method named get_java_vm found for type usize`. Scoping
-/// the pass to `TypeArray::len` is what makes the two cases distinguishable.
+/// The const is NEVER declared to JniGen: a length is a compile-time value, not
+/// part of the Kotlin surface, so evaluating it must not depend on a Kotlin
+/// `val` existing for it.
 #[test]
-fn array_length_const_is_qualified_without_touching_locals() {
-    // Stamped stream: names qualify with the origin crate's module.
-    check_array_length_qualification(myflat_loc(), "myflat");
+fn array_length_const_is_evaluated_without_touching_locals() {
+    // A stamped stream, and an origin-less one. A length carries no module now,
+    // so the two must produce IDENTICAL output — which is the point: evaluating
+    // the const removed provenance from the emitted length entirely.
+    check_array_length_evaluation(myflat_loc());
+    check_array_length_evaluation(SourceLocation::default());
 }
 
-/// The same contract for an ORIGIN-LESS stream. Core supports hand-built item
-/// streams with no `SourceLocation::crate_name` and documents `crate` as their
-/// module, so the name set must not be derived from the origin map — those
-/// items are absent from it entirely, and deriving from it silently emitted
-/// every length bare.
-#[test]
-fn array_length_qualification_falls_back_to_crate_without_an_origin() {
-    check_array_length_qualification(SourceLocation::default(), "crate");
-}
-
-fn check_array_length_qualification(loc: SourceLocation, module: &str) {
+fn check_array_length_evaluation(loc: SourceLocation) {
     let mut items: Vec<(syn::Item, SourceLocation)> = Vec::new();
     items.push((
         syn::Item::Const(syn::parse_quote!(
@@ -1480,31 +1472,10 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         )),
         loc.clone(),
     ));
-    // A type owning an ASSOCIATED const, used as the other length below. It is
-    // deliberately NEVER declared to JniGen: it is only the Rust namespace for
-    // a compile-time length, not a boundary type, so qualification must not
-    // require a Kotlin class to exist for it.
-    items.push((
-        syn::Item::Struct(syn::parse_quote!(
-            pub struct Holder {
-                pub marker: u8,
-            }
-        )),
-        loc.clone(),
-    ));
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Blob {
                 pub bytes: [u8; env],
-                pub assoc: [u8; Holder::N],
-                // The same const reached through the module it is DECLARED in.
-                // A source crate may spell a length however it likes; the
-                // module prefix carries no information, because a
-                // `#[prebindgen]` item is reachable as `<crate>::<bare name>`.
-                // So this must emit the identical length to `bytes` above —
-                // not `limits::env`, which names nothing in the generated
-                // crate.
-                pub nested: [u8; crate::limits::env],
             }
         )),
         loc.clone(),
@@ -1523,7 +1494,7 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
             .class(crate::data_class!(Blob))
             .fun(crate::fun!(blob_echo)),
     );
-    let dir = unique_test_dir(&format!("jnigen_array_len_const_{module}"));
+    let dir = unique_test_dir("jnigen_array_len_const");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let generation = registry.resolve(jni).unwrap();
@@ -1531,50 +1502,16 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
-    // The length IS qualified — otherwise the generated file names a const
-    // that is not in scope.
-    assert!(rc.contains(&format!("[u8;{module}::env]")), "{rust}");
-    // ...and the identically-named LOCAL is untouched. These two assertions
-    // fail in opposite directions, so neither alone pins the behavior: the
-    // `env` here is the `&mut JNIEnv` every converter body threads through.
+    // The length is the VALUE. Emitting the const's name instead would put a
+    // path into a crate that may not have it in scope; emitting the number is
+    // what makes the length independent of the generated crate's namespace.
+    assert!(rc.contains("[u8;4]"), "{rust}");
+    assert!(!rc.contains("[u8;env]"), "{rust}");
+    // ...and the identically-named LOCAL is untouched. These assertions fail in
+    // opposite directions, so neither alone pins the behavior: the `env` here is
+    // the `&mut JNIEnv` every converter body threads through.
     assert!(rc.contains("env.byte_array_from_slice"), "{rust}");
-    assert!(
-        !rc.contains(&format!("{module}::env.byte_array_from_slice")),
-        "{rust}"
-    );
-    assert!(!rc.contains(&format!("{module}::env,")), "{rust}");
-    assert!(!rc.contains(&format!("&mut{module}::env")), "{rust}");
-
-    // `crate::limits::env` collapses onto the SAME length as the bare `env`:
-    // one converter, not two, since both spellings denote one const. The
-    // intermediate module must not survive — `limits` names nothing in the
-    // generated crate, and emitting it either fails to compile or binds a
-    // consumer-side module.
-    assert!(!rc.contains("limits"), "{rust}");
-
-    // An ASSOCIATED const qualifies its leading TYPE segment and leaves the
-    // rest of the path relative to it — `myflat::Holder::N`, never
-    // `myflat::Holder::myflat::N`. `Holder` is UNDECLARED, so this also pins
-    // that qualification reads the registry rather than the declared surface.
-    // Asserted at the two CODE positions (return type and param type); the bare
-    // spelling legitimately survives inside the decode's diagnostic string,
-    // which names the type as the source wrote it.
-    assert!(
-        rc.contains(&format!("Result<[u8;{module}::Holder::N]")),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(&format!("v:[u8;{module}::Holder::N]")),
-        "{rust}"
-    );
-    assert!(!rc.contains("Result<[u8;Holder::N]"), "{rust}");
-    assert!(!rc.contains("v:[u8;Holder::N]"), "{rust}");
-    // The leading segment is rewritten ONCE — the associated item stays
-    // relative to the type it belongs to.
-    assert!(
-        !rc.contains(&format!("{module}::Holder::{module}")),
-        "{rust}"
-    );
+    assert!(!rc.contains("4.byte_array_from_slice"), "{rust}");
 }
 
 /// A length outside the accepted subgrammar is refused, and refused **before
@@ -1606,6 +1543,10 @@ fn array_length_outside_the_grammar_is_rejected_at_ingest() {
     // A `const fn` CALL. Deliberately no longer in the language: hoist the value
     // into a named `const` and use that.
     check_array_length_rejected(syn::parse_quote!([u8; array_len()]));
+    // An UNMARKED const. The generated crate sees only what the macro exposed,
+    // so this names nothing there — the length has to fail here rather than at
+    // the consumer's rustc, or worse, bind to something else.
+    check_array_length_rejected(syn::parse_quote!([u8; UNMARKED]));
 }
 
 fn check_array_length_rejected(field_ty: syn::Type) {
@@ -1643,7 +1584,7 @@ fn check_array_length_rejected(field_ty: syn::Type) {
         matches!(err, crate::core::ScanError::UnsupportedArrayLength { .. }),
         "{err}"
     );
-    // The diagnostic names the fix, so the message is actionable without
-    // reading the generator.
-    assert!(err.to_string().contains("hoist"), "{err}");
+    // The diagnostic states the accepted form, so the message is actionable
+    // without reading the generator.
+    assert!(err.to_string().contains("integer literal"), "{err}");
 }

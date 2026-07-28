@@ -718,20 +718,17 @@ impl<M> Registry<M> {
     fn resolve_array_lengths(&mut self) -> Result<(), ScanError> {
         use syn::visit_mut::VisitMut;
 
-        use crate::api::core::frontend::{resolve_array_lengths, ItemRole, NameIndex};
+        use crate::api::core::frontend::{resolve_array_lengths, ConstIndex};
 
-        let crate_root: syn::Path = syn::parse_quote!(crate);
-        let default_module = self.default_module().unwrap_or(crate_root);
-        let names: HashMap<String, (syn::Path, ItemRole)> = self
-            .named_items()
-            .map(|(ident, role)| {
-                let module = self
-                    .origin_module(ident)
-                    .unwrap_or_else(|| default_module.clone());
-                (ident.to_string(), (module, role))
-            })
-            .collect();
-        let names = NameIndex::new(names, &self.source_modules);
+        // Only consts can be a length, so only consts are indexed — the
+        // grammar is a bare name, and nothing else can answer it.
+        let consts = ConstIndex::new(self.consts.iter().map(|(ident, (item, loc))| {
+            (
+                ident.to_string(),
+                (*item.expr).clone(),
+                loc.crate_name.clone(),
+            )
+        }));
 
         let mut lens: HashMap<TypeKey, crate::api::core::frontend::ArrayLen> = HashMap::new();
         // One accumulator for every map, so a length means the same thing
@@ -750,69 +747,27 @@ impl<M> Registry<M> {
             );
             Ok(())
         };
-        for (item, loc) in self.functions.values_mut() {
-            let found = resolve_array_lengths(item, &names, |r, f| r.visit_item_fn_mut(f));
-            record(found, loc)?;
+        // Each item is lowered against ITS OWN origin: a bare name must be a
+        // const marked in the same crate. Uniqueness holds across the marked
+        // namespace only, so without this a source crate's unmarked const
+        // silently binds to another crate's marked one of the same name.
+        macro_rules! resolve_map {
+            ($map:expr, $visit:ident) => {
+                for (item, loc) in $map {
+                    let origin = loc.crate_name.clone();
+                    let found =
+                        resolve_array_lengths(item, &consts, origin.as_deref(), |r, n| r.$visit(n));
+                    record(found, loc)?;
+                }
+            };
         }
-        for (item, loc) in self.structs.values_mut() {
-            let found = resolve_array_lengths(item, &names, |r, s| r.visit_item_struct_mut(s));
-            record(found, loc)?;
-        }
-        for (item, loc) in self.enums.values_mut() {
-            let found = resolve_array_lengths(item, &names, |r, e| r.visit_item_enum_mut(e));
-            record(found, loc)?;
-        }
-        for (item, loc) in self.consts.values_mut() {
-            let found = resolve_array_lengths(item, &names, |r, c| r.visit_item_const_mut(c));
-            record(found, loc)?;
-        }
-        for (item, loc) in self.passthrough.iter_mut() {
-            let found = resolve_array_lengths(item, &names, |r, i| r.visit_item_mut(i));
-            record(found, loc)?;
-        }
+        resolve_map!(self.functions.values_mut(), visit_item_fn_mut);
+        resolve_map!(self.structs.values_mut(), visit_item_struct_mut);
+        resolve_map!(self.enums.values_mut(), visit_item_enum_mut);
+        resolve_map!(self.consts.values_mut(), visit_item_const_mut);
+        resolve_map!(self.passthrough.iter_mut(), visit_item_mut);
         self.array_lens = lens;
         Ok(())
-    }
-
-    /// The origin crate's **module path** for an item ingested via
-    /// the item's [`SourceLocation`] stamp, or `None` when unknown —
-    /// callers then fall
-    /// back to [`Self::default_module`].
-    /// Every **named** item the registry indexes — functions, structs, enums,
-    /// consts — regardless of whether the stream carried an origin stamp.
-    ///
-    /// Lives here, beside the maps, so an adapter that needs "anything the
-    /// source crate defines" does not enumerate item kinds itself: a new kind
-    /// is added once, here, instead of drifting in each adapter. Deliberately
-    /// NOT keyed off [`Self::item_origins`], which holds only the items whose
-    /// [`SourceLocation::crate_name`] was set — an origin-less hand-built
-    /// stream indexes items that map never sees, and callers are expected to
-    /// pair this with `origin_module(..).unwrap_or_else(default_module)`.
-    pub fn named_item_idents(&self) -> impl Iterator<Item = &syn::Ident> {
-        self.named_items().map(|(ident, _)| ident)
-    }
-
-    /// [`Self::named_item_idents`] plus what each item may be inside a source
-    /// path: a struct or enum can own the segments that follow it
-    /// (`Holder::N`), a const or function can only be the last one.
-    ///
-    /// The single enumeration of item kinds — [`Self::named_item_idents`] is
-    /// derived from it, so a new kind is still added exactly once.
-    pub fn named_items(
-        &self,
-    ) -> impl Iterator<Item = (&syn::Ident, crate::api::core::frontend::ItemRole)> {
-        use crate::api::core::frontend::ItemRole;
-        let owners = self
-            .structs
-            .keys()
-            .chain(self.enums.keys())
-            .map(|i| (i, ItemRole::Owner));
-        let leaves = self
-            .functions
-            .keys()
-            .chain(self.consts.keys())
-            .map(|i| (i, ItemRole::Leaf));
-        owners.chain(leaves)
     }
 
     /// The frontend-decided length of a fixed-size array type, or `None` if
@@ -826,6 +781,9 @@ impl<M> Registry<M> {
         self.array_lens.get(key)
     }
 
+    /// The origin crate's **module path** for an item ingested via the item's
+    /// [`SourceLocation`] stamp, or `None` when unknown — callers then fall
+    /// back to [`Self::default_module`].
     pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
         let crate_name = self.item_origins.get(ident)?;
         let module = crate_name.replace('-', "_");
