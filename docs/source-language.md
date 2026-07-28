@@ -162,7 +162,12 @@ An explicit higher-ranked binder is *reserved* too, and for a subtler reason:
 the accepted `impl Fn(&u8)` **is** higher-ranked — it desugars to
 `impl for<'a> Fn(&'a u8)`, and the two are mutually substitutable. So the two
 spellings are one type, and this is simply the last such pair not yet
-canonicalized. Write the elided form.
+canonicalized.
+
+Rewriting with elision is exact **only when every bound lifetime is used once**.
+Elision binds each input separately, so `Fn(&T, &T)` is `for<'a, 'b> Fn(&'a T,
+&'b T)` — a signature that ties two inputs to one lifetime has no accepted
+spelling yet, and rewriting it would change its meaning.
 
 ## Array lengths
 

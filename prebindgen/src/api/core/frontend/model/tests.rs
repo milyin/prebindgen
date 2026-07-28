@@ -239,8 +239,9 @@ fn refused_types() {
             "impl Fn(u8) -> impl Fn(u8) + Send + Sync + 'static + Send + Sync + 'static",
             UnsupportedTypeReason::DisallowedImplTrait(CallbackReject::ReturnsCallback),
         ),
-        // UNSUPPORTED: no FFI boundary can be generic over a lifetime, so this
-        // one is not waiting on machinery.
+        // RESERVED: the elided `impl Fn(&u8)` IS higher-ranked, so this is the
+        // last two-spellings-one-type case rather than an impossibility — it
+        // waits on the exact elision rule in #222, not on any wire.
         (
             "impl for<'a> Fn(&'a u8) + Send + Sync + 'static",
             UnsupportedTypeReason::DisallowedImplTrait(CallbackReject::HigherRankedBinder),

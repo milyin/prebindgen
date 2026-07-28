@@ -1731,9 +1731,12 @@ impl CallbackReject {
                  struct nested in a closure struct"
             }
             Self::HigherRankedBinder => {
-                "an explicit higher-ranked binder (`for<'a>`) is not yet supported — write the \
-                 elided form instead (`Fn(&T)`, which means exactly the same thing and is \
-                 accepted); tracked by https://github.com/milyin/prebindgen/issues/222"
+                "an explicit higher-ranked binder (`for<'a>`) is not yet supported. If every \
+                 bound lifetime is used exactly once, the elided form means the same thing and \
+                 is accepted (`for<'a> Fn(&'a T)` is `Fn(&T)`). If any is used twice, elision \
+                 does NOT preserve it — `Fn(&T, &T)` binds each input separately — so that \
+                 signature has no accepted spelling yet; tracked by \
+                 https://github.com/milyin/prebindgen/issues/222"
             }
         }
     }
