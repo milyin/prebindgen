@@ -40,6 +40,10 @@
 mod array_len;
 pub mod model;
 
+/// The mechanical boundary check (#211 completion criterion 6): a committed
+/// ledger of every classification site outside this module.
+#[cfg(test)]
+mod boundary;
 #[cfg(test)]
 mod tests;
 

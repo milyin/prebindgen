@@ -1,0 +1,68 @@
+# prebindgen source-syntax boundary ledger — issue #211, stage F8.
+#
+# One line per file OUTSIDE `api/core/frontend/`, counting how many times a
+# variant of a watched syn syntax enum is named in production code:
+#
+#     syn::Type::Reference(r) => ...        <- one site
+#     matches!(ty, syn::Expr::Lit(_))       <- one site
+#
+# Watched enums: syn::Type, syn::Expr. Test code is excluded.
+#
+# Every one of these is a place that independently decides what captured Rust
+# MEANS. #211 says only `core::frontend` may do that, so this file freezes the
+# population: any change fails `cargo test -p prebindgen boundary_ledger`.
+#
+# To change it deliberately:
+#
+#     UPDATE_BOUNDARY_LEDGER=1 cargo test -p prebindgen boundary_ledger
+#     git diff prebindgen/src/api/core/frontend/boundary.ledger
+#
+# A count going DOWN is the goal (a classifier moved into the frontend) and is
+# still a ledger edit, so the win shows up in the diff.
+#
+# KNOWN BLIND SPOTS — classification this check cannot see, because it never
+# writes a `syn::` path. Each is a candidate addition to WATCHED (see F1):
+#
+#   * token-string classification, e.g. `core/domain.rs` matching
+#     `ty.to_token_stream().to_string()` against "i8" / "f32";
+#   * ident-name classification, e.g. `seg.ident == "Option"`;
+#   * helper delegation — `jnigen/jni/classify.rs` is a whole classifier with
+#     zero watched sites;
+#   * syn enums outside WATCHED: Item, Fields, FnArg, ReturnType,
+#     GenericArgument, Pat, ...;
+#   * `types_util::match_pattern` unification against `parse_quote!(_)`
+#     patterns, which adds a shape rule with no watched site at all.
+#
+# A check that silently under-reports is worse than no check, which is why the
+# gaps are listed here rather than implied away.
+
+4	api/core/expand.rs
+14	api/core/registry.rs
+41	api/core/types_util.rs
+15	api/core/unfold.rs
+8	api/lang/cbindgen/builder.rs
+1	api/lang/cbindgen/convert.rs
+5	api/lang/cbindgen/emit.rs
+6	api/lang/cbindgen/mod.rs
+6	api/lang/cbindgen/trait_impl.rs
+13	api/lang/jnigen/jni/builder.rs
+1	api/lang/jnigen/jni/emit/callback.rs
+4	api/lang/jnigen/jni/emit/convert.rs
+1	api/lang/jnigen/jni/emit/delivery.rs
+10	api/lang/jnigen/jni/emit/flat_input.rs
+9	api/lang/jnigen/jni/emit/names.rs
+2	api/lang/jnigen/jni/emit/vec_build.rs
+11	api/lang/jnigen/jni/emit/wrapper.rs
+3	api/lang/jnigen/jni/fold.rs
+5	api/lang/jnigen/jni/iface.rs
+2	api/lang/jnigen/jni/kotlin_emit.rs
+2	api/lang/jnigen/jni/overloads.rs
+1	api/lang/jnigen/jni/prim.rs
+3	api/lang/jnigen/jni/prim_array.rs
+8	api/lang/jnigen/jni/render.rs
+7	api/lang/jnigen/jni/selector.rs
+11	api/lang/jnigen/jni/trait_impl.rs
+2	api/lang/jnigen/jni/wire_access.rs
+1	api/lang/jnigen/util.rs
+
+# total: 196
