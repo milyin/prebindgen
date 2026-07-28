@@ -285,12 +285,25 @@ macro_rules! ident {
 /// The supported JNI / Kotlin adapter ships in [`mod@lang`] as
 /// [`lang::JniGen`]. The C / cbindgen proof of concept is available separately
 /// with the `unstable-cbindgen` feature.
+///
+/// Which Rust forms a `#[prebindgen]` source crate may use is specified in
+/// `docs/source-language.md`; [`core::frontend`] is the module that decides it.
 pub mod core {
     pub use crate::api::core::{
-        ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot, Niches,
-        Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,
-        TypeEntry, TypeKey, WriteRustError,
+        ArrayLen, ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot,
+        Niches, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage,
+        Transmute, TypeEntry, TypeKey, UnsupportedArrayLen, WriteRustError,
     };
+
+    /// The Rust frontend: the single authority for what captured
+    /// `#[prebindgen]` source means. See `docs/source-language.md` for the
+    /// accepted subset.
+    pub mod frontend {
+        pub use crate::api::core::frontend::{
+            lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ArrayLenResolver,
+            NameIndex, UnsupportedArrayLen,
+        };
+    }
 }
 
 /// Runtime traits implemented by inline-opaque (`value_opaque`) FFI counterpart

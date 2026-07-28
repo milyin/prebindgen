@@ -372,36 +372,8 @@ impl JniGen {
     /// site having to remember to qualify.
     fn qualify_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
         let source_names = self.emitted_source_type_names(registry);
-        // Names reachable from an array LENGTH (`[u8; MAX]`, `[u8; Holder::N]`).
-        //
-        // Registry-wide, NOT the declared-surface `source_names`: a length's
-        // owner is a compile-time namespace, not a boundary type. Requiring it
-        // to be declared would force an otherwise-unused Kotlin class into
-        // existence just to make the generated Rust compile, and would be
-        // asymmetric with consts, which qualify whether or not JniGen declared
-        // them.
-        // EVERY named item the registry indexes. A length is an arbitrary const
-        // expression, so it can name a const, the type owning an associated
-        // const, or a `const fn` — and enumerating item KINDS here missed one
-        // of those three twice, so the enumeration lives in core
-        // (`named_item_idents`) where a new kind is added once.
-        //
-        // The NAME SET is independent of origin stamps and the VALUE falls back
-        // to the default module: an origin-less hand-built stream indexes items
-        // that `item_origins` never sees, and those still need qualifying (core
-        // documents `crate` as their module).
-        let length_names: std::collections::HashMap<String, syn::Path> = registry
-            .named_item_idents()
-            .map(|ident| {
-                let module = registry
-                    .origin_module(ident)
-                    .unwrap_or_else(|| self.default_module(registry));
-                (ident.to_string(), module)
-            })
-            .collect();
         let mut visitor = QualifyEmittedTypes {
             source_names: &source_names,
-            length_names: &length_names,
         };
         syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
     }

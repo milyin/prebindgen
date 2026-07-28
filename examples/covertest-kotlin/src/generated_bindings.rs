@@ -510,7 +510,7 @@ pub(crate) unsafe fn Arrays_to_JObject_71120c08<'a>(
     v: perftest_flat::Arrays,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        let ___bytes: jni::objects::JObject = u8_4_to_JByteArray_39abedfa(
+        let ___bytes: jni::objects::JObject = u8_perftest_flat_ARRAY_BYTES_to_JByteArray_5c8f23fa(
                 env,
                 v.bytes.clone(),
             )?
@@ -989,10 +989,10 @@ pub(crate) unsafe fn JByteArray_to_u8_2_9ca14e44<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JByteArray_to_u8_4_39abedfa<'env, 'v>(
+pub(crate) unsafe fn JByteArray_to_u8_perftest_flat_ARRAY_BYTES_5c8f23fa<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JByteArray<'v>,
-) -> ::core::result::Result<[u8; 4], __JniErr> {
+) -> ::core::result::Result<[u8; perftest_flat::ARRAY_BYTES], __JniErr> {
     Ok({
         let __buf = env
             .convert_byte_array(v)
@@ -1001,14 +1001,14 @@ pub(crate) unsafe fn JByteArray_to_u8_4_39abedfa<'env, 'v>(
                     String,
                 >>::from(format!("fixed-size array decode: {}", e))
             })?;
-        let __arr: [u8; 4] = __buf
+        let __arr: [u8; perftest_flat::ARRAY_BYTES] = __buf
             .as_slice()
             .try_into()
             .map_err(|_| {
                 <__JniErr as ::core::convert::From<
                     String,
                 >>::from(
-                    "fixed-size array decode: `[u8 ; 4]` expects a different length"
+                    "fixed-size array decode: `[u8 ; perftest_flat :: ARRAY_BYTES]` expects a different length"
                         .to_string(),
                 )
             })?;
@@ -1290,7 +1290,10 @@ pub(crate) unsafe fn JObject_to_Arrays_71120c08<'env, 'v>(
                 String,
             >>::from(format!("Arrays.bytes: {}", e)))?;
         let __bytes_raw: jni::objects::JByteArray = __bytes_jobj.into();
-        let bytes = JByteArray_to_u8_4_39abedfa(env, &__bytes_raw)?;
+        let bytes = JByteArray_to_u8_perftest_flat_ARRAY_BYTES_5c8f23fa(
+            env,
+            &__bytes_raw,
+        )?;
         let __shorts_jobj: jni::objects::JObject = env
             .get_field(v, "shorts", "[S")
             .and_then(|val| val.l())
@@ -8540,9 +8543,9 @@ pub(crate) unsafe fn u64_to_jlong_4384a5d6<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn u8_4_to_JByteArray_39abedfa<'a>(
+pub(crate) unsafe fn u8_perftest_flat_ARRAY_BYTES_to_JByteArray_5c8f23fa<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: [u8; 4],
+    v: [u8; perftest_flat::ARRAY_BYTES],
 ) -> ::core::result::Result<jni::objects::JByteArray<'a>, __JniErr> {
     Ok({
         env.byte_array_from_slice(&v)
@@ -10609,7 +10612,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_arraysEcho<'a>(
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __flat_a_bytes = match JByteArray_to_u8_4_39abedfa(&mut env, &a_bytes) {
+    let __flat_a_bytes = match JByteArray_to_u8_perftest_flat_ARRAY_BYTES_5c8f23fa(
+        &mut env,
+        &a_bytes,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -10723,7 +10729,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_arraysEcho<'a>(
     const __CB_DESCR: &str = "([B[S[I[J[D[Z[J)Ljava/lang/Object;";
     let __out = perftest_flat::arrays_echo(a);
     let __obj0: jni::objects::JObject = {
-        let __enc0 = match u8_4_to_JByteArray_39abedfa(&mut env, __out.bytes.clone()) {
+        let __enc0 = match u8_perftest_flat_ARRAY_BYTES_to_JByteArray_5c8f23fa(
+            &mut env,
+            __out.bytes.clone(),
+        ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
                 signal_binding_error(

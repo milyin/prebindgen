@@ -365,6 +365,17 @@ pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue
     }
 }
 
+/// Width of [`Arrays::bytes`] — a `#[prebindgen]` const used as an ARRAY
+/// LENGTH.
+///
+/// It is deliberately NOT declared to any binding: a length is a compile-time
+/// namespace, not part of a destination language's surface, so resolving it
+/// must not depend on the binding exposing it. Being `#[prebindgen]` is what
+/// matters — an unmarked const is invisible to the registry, would be emitted
+/// bare, and would not resolve in the generated crate.
+#[prebindgen]
+pub const ARRAY_BYTES: usize = 4;
+
 /// Fixed-size arrays of every JNI-primitive element type.
 ///
 /// Each crosses as the matching Kotlin primitive array — bulk-copied, nothing
@@ -375,10 +386,15 @@ pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue
 /// `flags` is the one element type that is NOT a cast: a `jboolean` is a `u8`,
 /// and reinterpreting an out-of-range byte as a Rust `bool` would be undefined
 /// behavior, so the decode normalizes instead.
+///
+/// `bytes` is deliberately sized by a named `const` ([`ARRAY_BYTES`]) rather
+/// than a literal: a length is a source-language fact, and the frontend must
+/// resolve it to a path the GENERATED crate can name. A literal would prove
+/// nothing about that.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Arrays {
-    pub bytes: [u8; 4],
+    pub bytes: [u8; ARRAY_BYTES],
     pub shorts: [i16; 2],
     pub ints: [i32; 3],
     pub longs: [i64; 2],

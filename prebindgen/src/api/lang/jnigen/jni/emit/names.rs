@@ -41,13 +41,17 @@ pub(crate) fn rust_short_name_opt(key: &TypeKey) -> Option<String> {
 /// the full AST — function signatures, generic args, type ascriptions,
 /// casts, turbofish — so any emitted item passes through one universal pass
 /// instead of each emit site having to remember to qualify.
+///
+/// Array LENGTHS are deliberately absent: `syn` models a length as an
+/// expression, and this pass would have to tell a source const apart from a
+/// converter body's local. That decision belongs to the source language, not to
+/// emission, and is made once at ingest by
+/// [`crate::api::core::frontend::resolve_array_lengths`] — by the time an item
+/// reaches here every length is already absolute.
 pub(crate) struct QualifyEmittedTypes<'a> {
     /// Bare type name → the module it is reachable under (the item's origin
     /// crate, or the registry's default module).
     pub(crate) source_names: &'a std::collections::HashMap<String, syn::Path>,
-    /// Every indexed source name (consts, structs, enums) → the same. Applied
-    /// ONLY inside an array length — see [`QualifyLengthPaths`].
-    pub(crate) length_names: &'a std::collections::HashMap<String, syn::Path>,
 }
 
 impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
@@ -61,129 +65,6 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
             }
         }
         syn::visit_mut::visit_type_path_mut(self, tp);
-    }
-
-    /// Qualify a `#[prebindgen]` const used as an ARRAY LENGTH (`[u8; MAX]`).
-    ///
-    /// `syn` models the length as an expression, so `visit_type_path_mut` never
-    /// sees it and the generated file would reference a const that is not in
-    /// scope. The rewrite is confined to `arr.len` on purpose: a generated
-    /// converter body is full of expression paths that are LOCALS (`v`, `env`),
-    /// and a source crate may legally declare `pub const env: usize` — so a
-    /// whole-item expression pass would rewrite those locals to
-    /// `mycrate::env` even when restricted to registered const idents. An array
-    /// length cannot contain a local, which is what makes this scope safe.
-    fn visit_type_array_mut(&mut self, arr: &mut syn::TypeArray) {
-        syn::visit_mut::visit_type_mut(self, &mut arr.elem);
-        reject_unsupported_array_length(arr);
-        let mut lengths = QualifyLengthPaths {
-            length_names: self.length_names,
-        };
-        syn::visit_mut::visit_expr_mut(&mut lengths, &mut arr.len);
-    }
-}
-
-/// Refuse an array length built from anything but a small, closed set of
-/// expression forms.
-///
-/// [`QualifyLengthPaths`] rewrites a bare path to its origin module, which is
-/// sound only while every path in the length names a source ITEM. Anything that
-/// can bind a name breaks that premise — a local shadowing a source item gets
-/// rewritten into it:
-///
-/// ```ignore
-/// [u8; const { let array_len = 3; array_len }]   // `array_len` is a LOCAL
-/// [u8; match 3 { array_len => array_len }]       // ...so is this one
-/// ```
-///
-/// Qualifying either yields `myflat::array_len`, a function item where a
-/// `usize` was meant; a same-typed collision would compile and silently change
-/// the length.
-///
-/// This is a WHITELIST on purpose. Listing the binding forms instead means
-/// every omitted or newly added `syn::Expr` variant silently reopens the hole —
-/// which is exactly how `match` and `if let` slipped past the first attempt.
-/// Inverting it makes the failure mode "a legitimate length is refused", which
-/// is loud and trivially worked around by hoisting the value into a named
-/// `const`.
-fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
-    // Rendered before the mutable walk below borrows the length.
-    let rendered = quote::ToTokens::to_token_stream(&*arr).to_string();
-    struct Check(Option<&'static str>);
-    // `VisitMut` rather than `Visit`: syn's immutable visitor is behind a
-    // feature this crate does not enable, and the walk mutates nothing.
-    impl syn::visit_mut::VisitMut for Check {
-        fn visit_expr_mut(&mut self, e: &mut syn::Expr) {
-            let ok = matches!(
-                e,
-                // A literal length, `[u8; 4]`.
-                syn::Expr::Lit(_)
-                    // The names this pass exists to qualify: `MAX`,
-                    // `Holder::N`, and the callee of `array_len()`.
-                    | syn::Expr::Path(_)
-                    // Const arithmetic over those: `A + 1`, `-1`, `(A) * 2`,
-                    // `A as usize`, `array_len()`.
-                    | syn::Expr::Binary(_)
-                    | syn::Expr::Unary(_)
-                    | syn::Expr::Paren(_)
-                    | syn::Expr::Group(_)
-                    | syn::Expr::Cast(_)
-                    | syn::Expr::Call(_)
-            );
-            if !ok && self.0.is_none() {
-                self.0 = Some("an unsupported expression form");
-            }
-            syn::visit_mut::visit_expr_mut(self, e);
-        }
-    }
-    let mut check = Check(None);
-    syn::visit_mut::VisitMut::visit_expr_mut(&mut check, &mut arr.len);
-    if let Some(what) = check.0 {
-        panic!(
-            "fixed-size array `{rendered}`: the length uses {what}. Only a literal, a path, a \
-             call, and const arithmetic over those are supported — anything that can bind a name \
-             (`const {{ … }}`, `match`, `if let`, a closure, a loop) would let a LOCAL be \
-             mistaken for a source item, because this generator qualifies the length's paths \
-             against their source module. Hoist the value into a named `const` and use that as \
-             the length."
-        );
-    }
-}
-
-/// Qualifies the source-crate paths in an array's LENGTH expression, run only
-/// by [`QualifyEmittedTypes::visit_type_array_mut`]. Separate from the type
-/// visitor so it can never reach a converter body's locals.
-///
-/// A length is an ordinary Rust const expression, so it reaches the source
-/// crate two ways and both need the origin module prefixed:
-///
-/// * a **free const**, `[u8; MAX]` — the whole path is the name;
-/// * an **associated const**, `[u8; Holder::N]` — the LEADING segment is the
-///   owning type. Only that segment is rewritten; the rest (`::N`, and any
-///   further associated item) is relative to it and must be left alone.
-///
-/// Both look up the same registry-wide map, so an owner that exists only as a
-/// compile-time namespace does not have to be declared to the binding: forcing
-/// that would emit a dead Kotlin class purely to make the generated Rust
-/// compile.
-struct QualifyLengthPaths<'a> {
-    length_names: &'a std::collections::HashMap<String, syn::Path>,
-}
-
-impl syn::visit_mut::VisitMut for QualifyLengthPaths<'_> {
-    fn visit_expr_path_mut(&mut self, ep: &mut syn::ExprPath) {
-        if ep.qself.is_none() && ep.path.leading_colon.is_none() {
-            // One segment names the const itself; more than one means the
-            // leading segment is the type that owns it. Either way it is the
-            // leading segment that carries the origin module.
-            let ident = ep.path.segments[0].ident.to_string();
-            if let Some(module) = self.length_names.get(&ident) {
-                let mut qualified = module.clone();
-                qualified.segments.extend(ep.path.segments.iter().cloned());
-                ep.path = qualified;
-            }
-        }
-        syn::visit_mut::visit_expr_path_mut(self, ep);
     }
 }
 

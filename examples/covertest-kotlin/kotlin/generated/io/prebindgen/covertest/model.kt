@@ -221,6 +221,11 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
  * `flags` is the one element type that is NOT a cast: a `jboolean` is a `u8`,
  * and reinterpreting an out-of-range byte as a Rust `bool` would be undefined
  * behavior, so the decode normalizes instead.
+ *
+ * `bytes` is deliberately sized by a named `const` ([`ARRAY_BYTES`]) rather
+ * than a literal: a length is a source-language fact, and the frontend must
+ * resolve it to a path the GENERATED crate can name. A literal would prove
+ * nothing about that.
  */
 public data class Arrays(val bytes: ByteArray, val shorts: ShortArray, val ints: IntArray, val longs: LongArray, val doubles: DoubleArray, val flags: BooleanArray, val raw: LongArray) {
     override fun equals(other: Any?): Boolean {

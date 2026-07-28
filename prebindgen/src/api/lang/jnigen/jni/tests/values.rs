@@ -1436,13 +1436,17 @@ fn data_class_properties_match_their_from_parts_params() {
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 }
 
-/// Every shape an array length can take — a FREE const, an ASSOCIATED const,
-/// and a `const fn` CALL — is qualified against its origin module, and that
-/// rewrite reaches ONLY the length, never a converter body's locals.
+/// End-to-end proof that the frontend's array-length resolution
+/// ([`crate::api::core::frontend`]) survives all the way into emitted code, and
+/// that it reaches ONLY the length — never a converter body's locals.
 ///
-/// None of the three owners is declared to JniGen: each is a compile-time
-/// namespace, not a boundary type, so qualification must not depend on a
-/// Kotlin class existing for it.
+/// The exhaustive shape-by-shape coverage lives in the frontend's acceptance
+/// matrix; what only an end-to-end test can show is the locals invariant below,
+/// which is about generated converter bodies.
+///
+/// Neither owner is declared to JniGen: each is a compile-time namespace, not a
+/// boundary type, so qualification must not depend on a Kotlin class existing
+/// for it.
 ///
 /// The const here is deliberately named `env`, which is also the name of the
 /// `JNIEnv` local every generated converter uses. A source crate may legally
@@ -1488,23 +1492,11 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         )),
         loc.clone(),
     ));
-    // A `const fn` whose CALL is a length. Also never declared: its result
-    // determines an array size, which is no reason to put it in the Kotlin
-    // surface.
-    items.push((
-        syn::Item::Fn(syn::parse_quote!(
-            pub const fn array_len() -> usize {
-                4
-            }
-        )),
-        loc.clone(),
-    ));
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Blob {
                 pub bytes: [u8; env],
                 pub assoc: [u8; Holder::N],
-                pub called: [u8; array_len()],
             }
         )),
         loc.clone(),
@@ -1568,63 +1560,37 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         !rc.contains(&format!("{module}::Holder::{module}")),
         "{rust}"
     );
-
-    // A `const fn` CALL is a third shape a length can take, and its callee is
-    // an indexed item like the other two. Also undeclared.
-    assert!(
-        rc.contains(&format!("Result<[u8;{module}::array_len()]")),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(&format!("v:[u8;{module}::array_len()]")),
-        "{rust}"
-    );
-    assert!(!rc.contains("Result<[u8;array_len()]"), "{rust}");
-    assert!(!rc.contains("v:[u8;array_len()]"), "{rust}");
 }
 
-/// An array length whose expression form is not on the supported whitelist is
-/// REJECTED, not qualified.
+/// A length outside the accepted subgrammar is refused, and refused **before
+/// JniGen exists** — the failure comes out of `Registry::from_items`, so no
+/// adapter gets the chance to interpret it differently.
 ///
-/// An inline `const { … }` block may bind locals, and this generator qualifies
-/// a length's bare paths against their source module — so a local shadowing a
-/// source item would be rewritten into it (`array_len` the local becoming
-/// `myflat::array_len` the fn). Scope tracking is the general answer; the shape
-/// has no place in an FFI boundary type, so the whole family is refused with a
-/// message naming the type and the fix. Silently mis-qualifying is the
-/// alternative this exists to prevent.
+/// That placement is the point. These shapes used to be caught by a whitelist
+/// inside this adapter, one walk away from the rewriter that qualified them;
+/// every defect in issue #210 was the two disagreeing. The exhaustive per-shape
+/// table lives in the frontend's acceptance matrix — what this pins is that the
+/// decision is made at ingest and reaches the adapter as a hard error.
 #[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_inline_const_block_is_rejected() {
-    // A local bound by an inline const block, shadowing the indexed fn.
+fn array_length_outside_the_grammar_is_rejected_at_ingest() {
+    // A local bound by an inline const block, shadowing the indexed `array_len`
+    // fn. Qualifying it would silently turn a `usize` into a function item.
     check_array_length_rejected(syn::parse_quote!(
         [u8; const {
             let array_len = 3;
             array_len
         }]
     ));
-}
-
-/// `match` arms bind their patterns directly, with no `Expr::Block` node in
-/// between — which is how this form slipped past the first, blacklist-shaped
-/// attempt. The whitelist refuses it because `match` is simply not on the list.
-#[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_match_arm_binding_is_rejected() {
+    // A `match` arm binds its pattern directly, with no `Expr::Block` node in
+    // between — which is how this shape slipped past a blacklist-shaped check.
     check_array_length_rejected(syn::parse_quote!(
         [u8; match 3 {
             array_len => array_len,
         }]
     ));
-}
-
-/// `if let` likewise binds without an intervening block node.
-#[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_if_let_binding_is_rejected() {
-    check_array_length_rejected(syn::parse_quote!(
-        [u8; if let array_len = 3 { array_len } else { 0 }]
-    ));
+    // A `const fn` CALL. Deliberately no longer in the language: hoist the value
+    // into a named `const` and use that.
+    check_array_length_rejected(syn::parse_quote!([u8; array_len()]));
 }
 
 fn check_array_length_rejected(field_ty: syn::Type) {
@@ -1655,15 +1621,14 @@ fn check_array_length_rejected(field_ty: syn::Type) {
         )),
         loc.clone(),
     ));
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("blob")
-            .class(crate::data_class!(Blob))
-            .fun(crate::fun!(blob_echo)),
+    let Err(err) = Registry::<KotlinMeta>::from_items(items) else {
+        panic!("the frontend accepted `{}`", quote::quote!(#field_ty));
+    };
+    assert!(
+        matches!(err, crate::core::ScanError::UnsupportedArrayLength { .. }),
+        "{err}"
     );
-    let dir = unique_test_dir("jnigen_array_len_scope");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).unwrap();
-    generation.write_rust(dir.join("gen.rs")).unwrap();
+    // The diagnostic names the fix, so the message is actionable without
+    // reading the generator.
+    assert!(err.to_string().contains("hoist"), "{err}");
 }

@@ -21,6 +21,7 @@
 
 pub mod domain;
 pub mod expand;
+pub mod frontend;
 pub mod gravestone;
 pub mod niches;
 pub mod prebindgen;
@@ -33,6 +34,7 @@ pub(crate) mod write;
 
 pub use self::{
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
+    frontend::{ArrayLen, UnsupportedArrayLen},
     gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},

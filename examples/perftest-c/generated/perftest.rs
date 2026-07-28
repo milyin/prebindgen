@@ -750,6 +750,15 @@ pub unsafe extern "C" fn string_new(s: *const ::core::ffi::c_char) -> *mut strin
     __ret = __cbg_out_String(__v);
     __ret
 }
+/// Width of [`Arrays::bytes`] — a `#[prebindgen]` const used as an ARRAY
+/// LENGTH.
+///
+/// It is deliberately NOT declared to any binding: a length is a compile-time
+/// namespace, not part of a destination language's surface, so resolving it
+/// must not depend on the binding exposing it. Being `#[prebindgen]` is what
+/// matters — an unmarked const is invisible to the registry, would be emitted
+/// bare, and would not resolve in the generated crate.
+pub const ARRAY_BYTES: usize = perftest_flat::ARRAY_BYTES;
 /// The storage capacity limit advertised to bindings (a primitive const).
 pub const COVER_MAGIC: i64 = perftest_flat::COVER_MAGIC;
 /// The coverage surface's tag string (a string const).

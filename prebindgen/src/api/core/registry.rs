@@ -254,6 +254,17 @@ pub struct Registry<M = ()> {
     /// back to `crate`.
     pub(crate) source_modules: Vec<String>,
 
+    /// Every fixed-size array type the source defines, mapped to its
+    /// frontend-decided length. Filled at ingest by
+    /// [`crate::api::core::frontend::resolve_array_lengths`]; keyed by the
+    /// array type AFTER that rewrite, which is the only spelling anything
+    /// downstream sees.
+    ///
+    /// This is the single source of `N`: a consumer that needs the length —
+    /// planning, or an adapter deciding how an array crosses its boundary —
+    /// reads it from here instead of re-parsing `syn::TypeArray::len`.
+    pub(crate) array_lens: HashMap<TypeKey, crate::api::core::frontend::ArrayLen>,
+
     /// Type tables, one per direction. Each scanned type maps to its resolved
     /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
     /// resolver fills it.
@@ -318,6 +329,7 @@ impl<M> Default for Registry<M> {
             passthrough: Vec::new(),
             item_origins: HashMap::new(),
             source_modules: Vec::new(),
+            array_lens: HashMap::new(),
             input_types: Default::default(),
             output_types: Default::default(),
             type_locations: HashMap::new(),
@@ -391,6 +403,13 @@ pub enum ScanError {
         /// `(qualified spelling, bare fix-it name)` pairs.
         entries: Vec<(String, String)>,
     },
+    /// A fixed-size array's length is not in the accepted source subgrammar —
+    /// see [`crate::api::core::frontend::ArrayLen`]. Raised at ingest, before
+    /// any adapter runs, so every generator refuses the same input.
+    UnsupportedArrayLength {
+        error: Box<crate::api::core::frontend::UnsupportedArrayLen>,
+        loc: SourceLocation,
+    },
 }
 
 impl fmt::Display for ScanError {
@@ -463,6 +482,9 @@ impl fmt::Display for ScanError {
                     "source items live in one flat namespace keyed by their bare name; \
                      a crate-qualified spelling never matches captured signatures"
                 )
+            }
+            ScanError::UnsupportedArrayLength { error, loc } => {
+                write!(f, "{error} (at {loc})")
             }
         }
     }
@@ -678,7 +700,78 @@ impl<M> Registry<M> {
                 Err(e) => return Err(e),
             }
         }
+        // Pass 3: hand every indexed item to the frontend's array-length
+        // lowering. It runs here, not at emit time, because it needs the
+        // COMPLETE name index — a length may name any source item, including
+        // one from a later-chained stream — and because a source-language fact
+        // must be decided before any adapter sees the item (issue #211).
+        registry.resolve_array_lengths()?;
         Ok(registry)
+    }
+
+    /// Lower every fixed-size array length in every indexed item, rewriting
+    /// each to the spelling that resolves in the generated crate and recording
+    /// it in [`Self::array_lens`].
+    ///
+    /// Passthrough items are included: they are emitted verbatim, so their
+    /// lengths need the same qualification as a scanned signature's.
+    fn resolve_array_lengths(&mut self) -> Result<(), ScanError> {
+        use syn::visit_mut::VisitMut;
+
+        use crate::api::core::frontend::{resolve_array_lengths, NameIndex};
+
+        let crate_root: syn::Path = syn::parse_quote!(crate);
+        let default_module = self.default_module().unwrap_or(crate_root);
+        let names: HashMap<String, syn::Path> = self
+            .named_item_idents()
+            .map(|ident| {
+                let module = self
+                    .origin_module(ident)
+                    .unwrap_or_else(|| default_module.clone());
+                (ident.to_string(), module)
+            })
+            .collect();
+        let names = NameIndex::new(names, &self.source_modules);
+
+        let mut lens: HashMap<TypeKey, crate::api::core::frontend::ArrayLen> = HashMap::new();
+        // One accumulator for every map, so a length means the same thing
+        // whichever item kind it was written in.
+        let mut record = |found: Result<Vec<(syn::Type, _)>, _>,
+                          loc: &SourceLocation|
+         -> Result<(), ScanError> {
+            let found = found.map_err(|error| ScanError::UnsupportedArrayLength {
+                error: Box::new(error),
+                loc: loc.clone(),
+            })?;
+            lens.extend(
+                found
+                    .into_iter()
+                    .map(|(ty, len)| (TypeKey::from_type(&ty), len)),
+            );
+            Ok(())
+        };
+        for (item, loc) in self.functions.values_mut() {
+            let found = resolve_array_lengths(item, &names, |r, f| r.visit_item_fn_mut(f));
+            record(found, loc)?;
+        }
+        for (item, loc) in self.structs.values_mut() {
+            let found = resolve_array_lengths(item, &names, |r, s| r.visit_item_struct_mut(s));
+            record(found, loc)?;
+        }
+        for (item, loc) in self.enums.values_mut() {
+            let found = resolve_array_lengths(item, &names, |r, e| r.visit_item_enum_mut(e));
+            record(found, loc)?;
+        }
+        for (item, loc) in self.consts.values_mut() {
+            let found = resolve_array_lengths(item, &names, |r, c| r.visit_item_const_mut(c));
+            record(found, loc)?;
+        }
+        for (item, loc) in self.passthrough.iter_mut() {
+            let found = resolve_array_lengths(item, &names, |r, i| r.visit_item_mut(i));
+            record(found, loc)?;
+        }
+        self.array_lens = lens;
+        Ok(())
     }
 
     /// The origin crate's **module path** for an item ingested via
@@ -701,6 +794,17 @@ impl<M> Registry<M> {
             .chain(self.structs.keys())
             .chain(self.enums.keys())
             .chain(self.consts.keys())
+    }
+
+    /// The frontend-decided length of a fixed-size array type, or `None` if
+    /// `key` is not one the source defines.
+    ///
+    /// The single source of `N`. Read this rather than re-parsing
+    /// `syn::TypeArray::len`: the length has already been validated and
+    /// resolved once, and a second reading is where the two-authority drift
+    /// that issue #211 is about starts.
+    pub fn array_len(&self, key: &TypeKey) -> Option<&crate::api::core::frontend::ArrayLen> {
+        self.array_lens.get(key)
     }
 
     pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
