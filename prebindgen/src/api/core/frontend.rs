@@ -36,6 +36,6 @@ mod array_len;
 mod tests;
 
 pub use self::array_len::{
-    lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ArrayLenResolver, NameIndex,
-    UnsupportedArrayLen,
+    lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ArrayLenResolver, ItemRole,
+    NameIndex, UnsupportedArrayLen,
 };

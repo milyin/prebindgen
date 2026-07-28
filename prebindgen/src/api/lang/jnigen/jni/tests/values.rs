@@ -1497,6 +1497,14 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
             pub struct Blob {
                 pub bytes: [u8; env],
                 pub assoc: [u8; Holder::N],
+                // The same const reached through the module it is DECLARED in.
+                // A source crate may spell a length however it likes; the
+                // module prefix carries no information, because a
+                // `#[prebindgen]` item is reachable as `<crate>::<bare name>`.
+                // So this must emit the identical length to `bytes` above —
+                // not `limits::env`, which names nothing in the generated
+                // crate.
+                pub nested: [u8; crate::limits::env],
             }
         )),
         loc.clone(),
@@ -1536,6 +1544,13 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     );
     assert!(!rc.contains(&format!("{module}::env,")), "{rust}");
     assert!(!rc.contains(&format!("&mut{module}::env")), "{rust}");
+
+    // `crate::limits::env` collapses onto the SAME length as the bare `env`:
+    // one converter, not two, since both spellings denote one const. The
+    // intermediate module must not survive — `limits` names nothing in the
+    // generated crate, and emitting it either fails to compile or binds a
+    // consumer-side module.
+    assert!(!rc.contains("limits"), "{rust}");
 
     // An ASSOCIATED const qualifies its leading TYPE segment and leaves the
     // rest of the path relative to it — `myflat::Holder::N`, never

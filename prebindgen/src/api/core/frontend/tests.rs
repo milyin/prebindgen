@@ -9,17 +9,31 @@ use std::collections::HashMap;
 
 use quote::ToTokens;
 
-use super::{lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, NameIndex};
+use super::{
+    lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ItemRole, NameIndex,
+};
 
-/// The namespace every row below resolves against: a free const `MAX`, a type
-/// `Holder` owning an associated const, and a `const fn` `array_len` — the three
-/// item kinds a length could plausibly name. All three live in `myflat`.
+/// The namespace every row below resolves against, in `myflat`:
+///
+/// * `MAX` — a free const, and `N` — a second one, present only so the
+///   `Holder::N` rows prove the OWNER wins over a same-named free const;
+/// * `Holder` — a struct owning an associated const;
+/// * `array_len` — a `const fn`;
+/// * `limits` — a const that SHARES ITS NAME with an intermediate module, the
+///   one case where a module and an indexed item can collide (Rust puts modules
+///   and types in one namespace, consts in another).
 fn names() -> NameIndex {
     let module: syn::Path = syn::parse_quote!(myflat);
-    let names: HashMap<String, syn::Path> = ["MAX", "Holder", "array_len"]
-        .into_iter()
-        .map(|n| (n.to_string(), module.clone()))
-        .collect();
+    let names: HashMap<String, (syn::Path, ItemRole)> = [
+        ("MAX", ItemRole::Leaf),
+        ("N", ItemRole::Leaf),
+        ("Holder", ItemRole::Owner),
+        ("array_len", ItemRole::Leaf),
+        ("limits", ItemRole::Leaf),
+    ]
+    .into_iter()
+    .map(|(n, role)| (n.to_string(), (module.clone(), role)))
+    .collect();
     NameIndex::new(names, &["myflat".to_string()])
 }
 
@@ -79,14 +93,60 @@ fn accepted_array_lengths() {
             },
             "myflat :: MAX",
         ),
-        // Stripping the source head keeps the OWNER, unlike type-path
-        // reduction, which would collapse this to `N`.
+        // The OWNER is kept, unlike type-path reduction, which would collapse
+        // this to `N` — and `N` is itself an indexed free const here, so this
+        // also pins that the LEFTMOST anchor wins.
         (
             "myflat::Holder::N",
             ArrayLen::SourceConst {
                 path: syn::parse_quote!(myflat::Holder::N),
             },
             "myflat :: Holder :: N",
+        ),
+        // An INTERMEDIATE MODULE between the source head and the item. The
+        // module prefix carries no information — a `#[prebindgen]` item is
+        // reachable as `<crate>::<bare name>` — so it is replaced wholesale and
+        // this means exactly the same length as a bare `MAX`.
+        (
+            "crate::limits::MAX",
+            ArrayLen::SourceConst {
+                path: syn::parse_quote!(myflat::MAX),
+            },
+            "myflat :: MAX",
+        ),
+        (
+            "myflat::limits::MAX",
+            ArrayLen::SourceConst {
+                path: syn::parse_quote!(myflat::MAX),
+            },
+            "myflat :: MAX",
+        ),
+        // ...including when the item is an associated const behind a module.
+        (
+            "crate::limits::Holder::N",
+            ArrayLen::SourceConst {
+                path: syn::parse_quote!(myflat::Holder::N),
+            },
+            "myflat :: Holder :: N",
+        ),
+        // `limits` is BOTH an intermediate module and an indexed const. A const
+        // owns nothing, so it cannot be the anchor with segments following it;
+        // the scan skips it and `MAX` anchors. Without the role check this
+        // would emit `myflat::limits::MAX` — the const, not the module.
+        (
+            "limits::MAX",
+            ArrayLen::SourceConst {
+                path: syn::parse_quote!(myflat::MAX),
+            },
+            "myflat :: MAX",
+        ),
+        // ...and as the FINAL segment the same name is the const itself.
+        (
+            "crate::limits",
+            ArrayLen::SourceConst {
+                path: syn::parse_quote!(myflat::limits),
+            },
+            "myflat :: limits",
         ),
         // Not a source item: emitted verbatim. Prefixing an origin module here
         // would be a guess, and `usize` has none.
@@ -96,6 +156,18 @@ fn accepted_array_lengths() {
                 path: syn::parse_quote!(usize::MAX),
             },
             "usize :: MAX",
+        ),
+        // A foreign crate's path is left ALONE even though its tail segment
+        // happens to name an indexed item. The registry has no index of a
+        // foreign namespace, so `other::Holder` and `myflat::Holder` may be
+        // genuinely different things — the same rule `normalize_type` applies
+        // to types.
+        (
+            "other_crate::Holder::N",
+            ArrayLen::ExternalConst {
+                path: syn::parse_quote!(other_crate::Holder::N),
+            },
+            "other_crate :: Holder :: N",
         ),
         // A const the source crate did not mark `#[prebindgen]` is, to the
         // registry, indistinguishable from a foreign one — it lands here and
@@ -117,8 +189,8 @@ fn accepted_array_lengths() {
 
 /// REFUSED shapes and why.
 ///
-/// Everything that is not a literal or a plain path, plus the two path forms
-/// that carry no resolvable leading segment. There is no separate list of
+/// Everything that is not a literal or a plain path, plus the path forms that
+/// carry no resolvable anchor. There is no separate list of
 /// accepted forms for this to drift from — a shape absent from the table above
 /// is refused by construction.
 #[test]
@@ -133,6 +205,18 @@ fn refused_array_lengths() {
         // Rooted at the crate root: names a dependency of the GENERATED crate,
         // which the frontend cannot see.
         ("::MAX", ArrayLenReason::CrateRootPath),
+        // Source-relative but naming no indexed item. It cannot be emitted
+        // verbatim — the generated crate is a DIFFERENT crate, where
+        // `crate::limits::UNMARKED` resolves to something else or to nothing —
+        // and there is no module to qualify it with. This is the loud form of
+        // the missing-`#[prebindgen]` trap; the bare spelling below is the
+        // quiet one.
+        (
+            "crate::limits::UNMARKED",
+            ArrayLenReason::UnresolvedSourcePath,
+        ),
+        ("myflat::UNMARKED", ArrayLenReason::UnresolvedSourcePath),
+        ("self::UNMARKED", ArrayLenReason::UnresolvedSourcePath),
         // Const arithmetic and casts — deliberately out of the language.
         ("MAX + 1", ArrayLenReason::NotLiteralOrPath),
         ("-1", ArrayLenReason::NotLiteralOrPath),
@@ -266,9 +350,12 @@ fn lengths_resolve_in_function_signatures() {
 #[test]
 fn origin_less_streams_resolve_against_the_crate_root() {
     let names = NameIndex::new(
-        [("MAX".to_string(), syn::parse_quote!(crate))]
-            .into_iter()
-            .collect(),
+        [(
+            "MAX".to_string(),
+            (syn::parse_quote!(crate), ItemRole::Leaf),
+        )]
+        .into_iter()
+        .collect(),
         &[],
     );
     let expr: syn::Expr = syn::parse_quote!(MAX);

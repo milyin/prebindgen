@@ -112,17 +112,59 @@ A length is a literal or a plain path, and nothing else:
 enum ArrayLen {
     Literal(usize),
     SourceConst  { path },   // resolved to a #[prebindgen] item, stored absolute
-    ExternalConst { path },  // names nothing the registry indexes; emitted verbatim
+    ExternalConst { path },  // not a source path; emitted verbatim
 }
 ```
+
+### How a path is resolved
+
+The source crate may spell a path **however it likes** — bare, `crate`-rooted,
+through the module the item is declared in. Lowering is two decisions, in this
+order:
+
+**1. Is the path source-relative?** Yes if its head segment is `crate`, `self`,
+an ingested source crate's module name, or an indexed item's name. Everything
+else is `ExternalConst` and is emitted **verbatim, exactly as written**.
+
+Classification comes first, before any rewriting, so the verbatim guarantee
+actually holds. It also mirrors the type rule: a foreign crate's path is never
+touched, because the registry has no index of a foreign namespace and
+`a::Holder` and `b::Holder` may be genuinely different things. So
+`other_crate::Holder::N` stays put even though `Holder` happens to name an
+indexed item.
+
+**2. Which segment names the item?** The **leftmost** segment that names an
+indexed item — skipping a const or function that has segments after it, since
+nothing is reachable *through* a const.
+
+Everything before that anchor is a module path **within the source crate** and
+is replaced wholesale by the item's origin module. Everything after it is
+relative to the item and is kept.
+
+Replacing the prefix is sound because prebindgen items live in **one flat,
+uniquely named namespace**, so the bare name already identifies the item and the
+module prefix carries no information. That is the same invariant
+`normalize_type` relies on for types.
+
+> **This requires the item to be reachable as `<crate>::<bare name>`.** An item
+> declared in a private or nested module must be re-exported at the source
+> crate's root. `zenoh-flat` does exactly this: `ZENOH_ID_MAX_SIZE` lives in
+> `base::config::zenoh_id` and is re-exported from `lib.rs`.
+
+Leftmost-first matters: in `Holder::N` where a free const `N` is *also* indexed,
+`Holder` is the anchor and `N` is its associated const — not the other way
+round.
 
 | Form | Status | Lowers to |
 |---|---|---|
 | `[u8; 4]`, `[u8; 16usize]` | supported | `Literal` |
 | `[u8; MAX]` — a `#[prebindgen]` const | supported | `SourceConst`, spelled `myflat::MAX` |
-| `[u8; Holder::N]` — an associated const | supported | `SourceConst`, spelled `myflat::Holder::N`; only the **owner** is qualified |
+| `[u8; Holder::N]` — an associated const | supported | `SourceConst`, `myflat::Holder::N`; segments after the item are kept |
 | `[u8; crate::MAX]`, `[u8; myflat::MAX]` | supported | Same value as the bare spelling |
-| `[u8; usize::MAX]` | supported | `ExternalConst`, verbatim |
+| `[u8; crate::limits::MAX]`, `[u8; myflat::limits::MAX]` | supported | Same value again — the intermediate module is dropped |
+| `[u8; crate::limits::Holder::N]` | supported | `myflat::Holder::N` |
+| `[u8; usize::MAX]`, `[u8; other_crate::X]` | supported | `ExternalConst`, verbatim |
+| `[u8; crate::limits::UNMARKED]` | **refused** | `UnresolvedSourcePath` — claims a source item, names none |
 | `[u8; <Holder>::N]`, `[u8; <Holder as Tr>::N]` | **refused** | `QualifiedSelf` |
 | `[u8; ::MAX]` | **refused** | `CrateRootPath` |
 | `[u8; A + 1]`, `[u8; -1]`, `[u8; A as usize]`, `[u8; (A)]` | **refused** | Const arithmetic is not in the language |
@@ -130,8 +172,9 @@ enum ArrayLen {
 | `[u8; const { … }]`, `[u8; match … ]`, `[u8; if let … ]`, `[u8; \|\| 3]` | **refused** | Anything that can bind a name |
 | a non-integer or oversized literal | **refused** | |
 
-Everything refused has the same fix: **hoist the value into a named `const`**
-and use that as the length.
+Everything refused for *shape* has the same fix: **hoist the value into a named
+`const`** and use that as the length. `UnresolvedSourcePath` has a different
+one: mark the intended item `#[prebindgen]`.
 
 ### The `#[prebindgen]` trap
 
@@ -147,12 +190,21 @@ pub struct Arrays {
 }
 ```
 
-Without it the registry never indexes the const, so the length lowers to
-`ExternalConst` and is emitted **bare** — and the generated crate, which is not
-the source crate, cannot resolve it. The const does **not** have to be declared
-to the binding: a length is a compile-time namespace, not part of any
-destination language's surface. The covertest fixture in
-`examples/perftest-flat/src/ext.rs` pins exactly this arrangement.
+Without it the registry never indexes the const, and what happens depends on how
+the length was spelled:
+
+* **source-relative** (`crate::limits::UNMARKED`, `myflat::UNMARKED`) — a **hard
+  frontend error**. The path claims to name a source item and names none, so
+  there is nothing to qualify it with.
+* **bare** (`UNMARKED`) — indistinguishable from an external namespace, so it
+  lowers to `ExternalConst` and is emitted verbatim. The generated crate, which
+  is not the source crate, then fails to resolve it. This is the one remaining
+  quiet case; prefer the `crate::`-rooted spelling if you want the loud one.
+
+The const does **not** have to be declared to the binding: a length is a
+compile-time namespace, not part of any destination language's surface. The
+covertest fixture in `examples/perftest-flat/src/ext.rs` pins exactly this
+arrangement.
 
 ### Why this one is closed
 

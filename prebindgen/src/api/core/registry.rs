@@ -718,17 +718,17 @@ impl<M> Registry<M> {
     fn resolve_array_lengths(&mut self) -> Result<(), ScanError> {
         use syn::visit_mut::VisitMut;
 
-        use crate::api::core::frontend::{resolve_array_lengths, NameIndex};
+        use crate::api::core::frontend::{resolve_array_lengths, ItemRole, NameIndex};
 
         let crate_root: syn::Path = syn::parse_quote!(crate);
         let default_module = self.default_module().unwrap_or(crate_root);
-        let names: HashMap<String, syn::Path> = self
-            .named_item_idents()
-            .map(|ident| {
+        let names: HashMap<String, (syn::Path, ItemRole)> = self
+            .named_items()
+            .map(|(ident, role)| {
                 let module = self
                     .origin_module(ident)
                     .unwrap_or_else(|| default_module.clone());
-                (ident.to_string(), module)
+                (ident.to_string(), (module, role))
             })
             .collect();
         let names = NameIndex::new(names, &self.source_modules);
@@ -789,11 +789,30 @@ impl<M> Registry<M> {
     /// stream indexes items that map never sees, and callers are expected to
     /// pair this with `origin_module(..).unwrap_or_else(default_module)`.
     pub fn named_item_idents(&self) -> impl Iterator<Item = &syn::Ident> {
-        self.functions
+        self.named_items().map(|(ident, _)| ident)
+    }
+
+    /// [`Self::named_item_idents`] plus what each item may be inside a source
+    /// path: a struct or enum can own the segments that follow it
+    /// (`Holder::N`), a const or function can only be the last one.
+    ///
+    /// The single enumeration of item kinds — [`Self::named_item_idents`] is
+    /// derived from it, so a new kind is still added exactly once.
+    pub fn named_items(
+        &self,
+    ) -> impl Iterator<Item = (&syn::Ident, crate::api::core::frontend::ItemRole)> {
+        use crate::api::core::frontend::ItemRole;
+        let owners = self
+            .structs
             .keys()
-            .chain(self.structs.keys())
             .chain(self.enums.keys())
+            .map(|i| (i, ItemRole::Owner));
+        let leaves = self
+            .functions
+            .keys()
             .chain(self.consts.keys())
+            .map(|i| (i, ItemRole::Leaf));
+        owners.chain(leaves)
     }
 
     /// The frontend-decided length of a fixed-size array type, or `None` if

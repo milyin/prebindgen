@@ -23,21 +23,31 @@ use quote::ToTokens;
 pub enum ArrayLen {
     /// An integer literal — `[u8; 4]`.
     Literal(usize),
-    /// A path naming a `#[prebindgen]` item, stored **absolute**: the leading
-    /// segment carries the item's origin module, so the length resolves in the
-    /// generated crate.
+    /// A path naming a `#[prebindgen]` item, stored **absolute**: the item's
+    /// origin module replaces whatever module prefix the source wrote, so the
+    /// length resolves in the generated crate.
     ///
-    /// Covers a free const (`MAX` → `myflat::MAX`) and an associated const
-    /// (`Holder::N` → `myflat::Holder::N`, where only the OWNER is qualified —
-    /// `::N` is relative to it).
+    /// Replacing rather than preserving the prefix is sound because prebindgen
+    /// items live in one flat, uniquely-named namespace and are reachable as
+    /// `<origin crate>::<bare name>` — the same invariant `normalize_type`
+    /// already relies on for types. So every spelling of one item collapses to
+    /// one value:
+    ///
+    /// * `MAX`, `crate::MAX`, `myflat::MAX`, `crate::limits::MAX` →
+    ///   `myflat::MAX`;
+    /// * `Holder::N`, `crate::limits::Holder::N` → `myflat::Holder::N`, where
+    ///   the segments AFTER the item are relative to it and are kept.
     SourceConst { path: syn::Path },
-    /// A path naming nothing the registry indexes — `usize::MAX`, `u8::BITS`.
-    /// Emitted verbatim: it is not a source item, so there is no origin module
-    /// to prefix and rewriting it would be a guess.
+    /// A path that does not name anything in a source crate — `usize::MAX`,
+    /// `u8::BITS`, a foreign crate's path. Emitted **verbatim**, exactly as
+    /// written: there is no origin module to prefix, and rewriting it would be
+    /// a guess.
     ///
-    /// A `#[prebindgen]`-less const in the source crate lands here and will not
-    /// resolve in the generated crate. Mark it `#[prebindgen]` so the registry
-    /// indexes it.
+    /// A `#[prebindgen]`-less const referred to by its bare name lands here and
+    /// will not resolve in the generated crate. Mark it `#[prebindgen]` so the
+    /// registry indexes it. (Referred to *source-relatively* —
+    /// `crate::limits::UNMARKED` — it is a hard error instead; see
+    /// [`ArrayLenReason::UnresolvedSourcePath`].)
     ExternalConst { path: syn::Path },
 }
 
@@ -94,6 +104,14 @@ pub enum ArrayLenReason {
     /// A path rooted at the crate root — `::MAX`. In the generated crate that
     /// names a dependency of the CONSUMER, which the frontend cannot see.
     CrateRootPath,
+    /// A **source-relative** path — one headed by `crate` / `self` / a source
+    /// crate's module — none of whose segments names a `#[prebindgen]` item.
+    ///
+    /// It claims to name something in the source crate, so it cannot be
+    /// emitted verbatim: the generated crate is a different crate, where the
+    /// same spelling resolves to something else or to nothing. Marking the
+    /// intended item `#[prebindgen]` is the fix.
+    UnresolvedSourcePath,
 }
 
 impl fmt::Display for UnsupportedArrayLen {
@@ -112,6 +130,10 @@ impl fmt::Display for UnsupportedArrayLen {
                 "is rooted at `::`, which names a dependency of the generated crate rather than \
                  a `#[prebindgen]` item"
             }
+            ArrayLenReason::UnresolvedSourcePath => {
+                "is a source-relative path that names no `#[prebindgen]` item, so there is no \
+                 module it can be qualified with — mark the intended item `#[prebindgen]`"
+            }
         };
         write!(
             f,
@@ -125,6 +147,18 @@ impl fmt::Display for UnsupportedArrayLen {
 
 impl std::error::Error for UnsupportedArrayLen {}
 
+/// What an indexed item may be within a length path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ItemRole {
+    /// A struct or enum: may own the segments that follow it (`Holder::N`), or
+    /// stand alone.
+    Owner,
+    /// A const or function: can only be the FINAL segment. Nothing is reachable
+    /// *through* it, so a const named `limits` can never be the `limits` of
+    /// `crate::limits::MAX` — that one is a module.
+    Leaf,
+}
+
 /// The source namespace a length is resolved against.
 ///
 /// Built once per registry, from every named item the registry indexes — a
@@ -133,18 +167,18 @@ impl std::error::Error for UnsupportedArrayLen {}
 /// exists to remove.
 pub struct NameIndex {
     /// Indexed item name → the module it is reachable under (its origin crate,
-    /// or the registry's default module).
-    names: HashMap<String, syn::Path>,
-    /// Path heads a captured length may already carry: `crate`, `self`, and
-    /// every ingested source crate's module name. Stripped before resolution —
-    /// see [`NameIndex::strip_source_head`].
+    /// or the registry's default module) and what it may be in a path.
+    names: HashMap<String, (syn::Path, ItemRole)>,
+    /// Path heads that make a path SOURCE-RELATIVE: `crate`, `self`, and every
+    /// ingested source crate's module name.
     module_heads: Vec<String>,
 }
 
 impl NameIndex {
     /// `names` maps each indexed item's ident to the module it is reachable
-    /// under; `source_modules` is the registry's ingested-source module list.
-    pub fn new(names: HashMap<String, syn::Path>, source_modules: &[String]) -> Self {
+    /// under and its role; `source_modules` is the registry's ingested-source
+    /// module list.
+    pub fn new(names: HashMap<String, (syn::Path, ItemRole)>, source_modules: &[String]) -> Self {
         let mut module_heads = vec!["crate".to_string(), "self".to_string()];
         module_heads.extend(source_modules.iter().cloned());
         Self {
@@ -153,30 +187,51 @@ impl NameIndex {
         }
     }
 
-    /// Drop a leading `crate` / `self` / source-crate segment, so a captured
-    /// `crate::MAX` and a captured `MAX` resolve identically.
+    /// Does this path claim to name something in a `#[prebindgen]` source
+    /// crate?
     ///
-    /// The expression-path analogue of `normalize_type`'s path reduction, and
-    /// deliberately NOT the same rule: that one reduces to the FINAL segment,
-    /// which is right for a type (the last segment is the type name) and wrong
-    /// here (`myflat::Holder::N` must keep its `Holder`, the owner of `N`).
-    fn strip_source_head(&self, path: &syn::Path) -> syn::Path {
-        if path.segments.len() < 2 {
-            return path.clone();
-        }
+    /// True when the head is `crate` / `self` / a source crate's module, or is
+    /// itself an indexed item. Everything else — `usize::MAX`, `u8::BITS`, a
+    /// foreign crate's path — is external and is left alone.
+    ///
+    /// This is the FIRST decision, before anything is rewritten, so that
+    /// [`ArrayLen::ExternalConst`]'s verbatim guarantee actually holds. It also
+    /// mirrors `normalize_type`'s rule for types: an unknown crate path is
+    /// never touched, because the registry has no index of a foreign namespace
+    /// and `a::Holder` and `b::Holder` may be genuinely different things.
+    fn is_source_relative(&self, path: &syn::Path) -> bool {
         let head = path.segments[0].ident.to_string();
-        if !self.module_heads.contains(&head) {
-            return path.clone();
-        }
-        let mut stripped = path.clone();
-        stripped.segments = stripped.segments.into_iter().skip(1).collect();
-        stripped
+        self.module_heads.contains(&head) || self.names.contains_key(&head)
     }
 
-    /// The module an indexed item is reachable under, or `None` when the name
-    /// is not a source item.
+    /// Index of the segment that names the `#[prebindgen]` item this path
+    /// denotes, or `None` if no segment does.
+    ///
+    /// Everything BEFORE the anchor is a module path within the source crate;
+    /// everything after is relative to the item. Because prebindgen items live
+    /// in one flat, uniquely-named namespace and are reachable as
+    /// `<origin crate>::<bare name>`, the module prefix carries no information
+    /// and is replaced wholesale — which is what lets `crate::limits::MAX`,
+    /// `myflat::limits::MAX` and a bare `MAX` all mean the same length.
+    ///
+    /// Scanning is **leftmost-first** because a later segment may be an
+    /// associated item rather than the anchor: in `Holder::N` with a free const
+    /// `N` also indexed, `Holder` is the anchor and `N` is its associated
+    /// const. A `Leaf` item is skipped when segments follow it, since nothing
+    /// is reachable through a const or a function — that is the only case where
+    /// a module and an indexed item can share a name, Rust putting modules and
+    /// types in one namespace but consts in another.
+    fn anchor(&self, path: &syn::Path) -> Option<usize> {
+        let last = path.segments.len() - 1;
+        path.segments.iter().enumerate().find_map(|(i, seg)| {
+            let (_, role) = self.names.get(&seg.ident.to_string())?;
+            (i == last || *role == ItemRole::Owner).then_some(i)
+        })
+    }
+
+    /// The module an indexed item is reachable under.
     fn module_of(&self, ident: &str) -> Option<&syn::Path> {
-        self.names.get(ident)
+        self.names.get(ident).map(|(module, _)| module)
     }
 }
 
@@ -217,20 +272,27 @@ pub fn lower_array_len(
             if ep.path.leading_colon.is_some() {
                 return Err(fail(ArrayLenReason::CrateRootPath));
             }
-            let path = names.strip_source_head(&ep.path);
-            // One segment names the const itself; more than one means the
-            // leading segment is the type that owns it. Either way it is the
-            // leading segment that carries the origin module, and the rest is
-            // relative to it.
-            let head = path.segments[0].ident.to_string();
-            match names.module_of(&head) {
-                Some(module) => {
-                    let mut qualified = module.clone();
-                    qualified.segments.extend(path.segments.iter().cloned());
-                    Ok(ArrayLen::SourceConst { path: qualified })
-                }
-                None => Ok(ArrayLen::ExternalConst { path }),
+            // Classify BEFORE rewriting anything: an external path is returned
+            // byte-for-byte as written, which is the whole of its contract.
+            if !names.is_source_relative(&ep.path) {
+                return Ok(ArrayLen::ExternalConst {
+                    path: ep.path.clone(),
+                });
             }
+            // Source-relative: find the segment that names the item, drop the
+            // module prefix, keep everything after it.
+            let Some(at) = names.anchor(&ep.path) else {
+                return Err(fail(ArrayLenReason::UnresolvedSourcePath));
+            };
+            let anchor = ep.path.segments[at].ident.to_string();
+            let Some(module) = names.module_of(&anchor) else {
+                return Err(fail(ArrayLenReason::UnresolvedSourcePath));
+            };
+            let mut qualified = module.clone();
+            qualified
+                .segments
+                .extend(ep.path.segments.iter().skip(at).cloned());
+            Ok(ArrayLen::SourceConst { path: qualified })
         }
         _ => Err(fail(ArrayLenReason::NotLiteralOrPath)),
     }
