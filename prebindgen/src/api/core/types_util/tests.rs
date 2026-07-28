@@ -330,3 +330,32 @@ fn discriminants_non_literal_rejected() {
     };
     let _ = discriminants(e);
 }
+
+/// Turbofish and a trailing generic comma are punctuation, not identity, so
+/// they collapse before any `TypeKey` is formed.
+///
+/// This has to happen HERE rather than in a consumer: a key's identity is the
+/// normalized token string, so otherwise one type has two keys — and during the
+/// frontend migration they split by POSITION, a modeled struct field getting
+/// one and a function signature the other.
+#[test]
+fn normalize_drops_turbofish_and_trailing_comma() {
+    let canon = |s: &str| {
+        let mut t = ty(s);
+        normalize_type(&mut t, &[]);
+        t.to_token_stream().to_string()
+    };
+    let want = canon("Wrapper<u8>");
+    assert_eq!(canon("Wrapper::<u8>"), want);
+    assert_eq!(canon("Wrapper<u8,>"), want);
+    assert_eq!(canon("Wrapper::<u8,>"), want);
+    // Nested, and through the peelers a field type actually takes.
+    assert_eq!(
+        canon("Option<Wrapper::<u8,>>"),
+        canon("Option<Wrapper<u8>>")
+    );
+    assert_eq!(canon("Vec::<u8,>"), canon("Vec<u8>"));
+    // A lifetime argument is identity and survives — only punctuation goes.
+    assert_eq!(canon("Foo::<'static,>"), canon("Foo<'static>"));
+    assert_ne!(canon("Foo<'static>"), canon("Foo"));
+}

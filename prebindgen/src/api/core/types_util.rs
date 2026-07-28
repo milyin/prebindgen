@@ -36,7 +36,9 @@ pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
 ///    paths (`zenoh::KeyExpr`) are NEVER touched — the registry has no
 ///    index of a foreign namespace, so `a::KeyExpr` and `b::KeyExpr` may be
 ///    genuinely distinct types and their spelling is their identity.
-/// 5. Lifetimes are NOT normalized (`&'a T` ≠ `&T`, `Foo<'static>` ≠ `Foo`)
+/// 5. Generic punctuation that carries no meaning is dropped: the turbofish
+///    (`Foo::<T>` ≡ `Foo<T>`) and a trailing comma (`Foo<T,>` ≡ `Foo<T>`).
+/// 6. Lifetimes are NOT normalized (`&'a T` ≠ `&T`, `Foo<'static>` ≠ `Foo`)
 ///    — [`match_pattern`] treats lifetimes as fixed structure and
 ///    foreign-type declarations (`ptr_class!(ZKeyExpr<'static>)`) rely on
 ///    the verbatim spelling.
@@ -65,6 +67,24 @@ pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
                 }
             }
             syn::visit_mut::visit_type_mut(self, ty);
+        }
+
+        /// Drop generic punctuation that carries no meaning: the turbofish
+        /// (`Foo::<T>` ≡ `Foo<T>`) and a trailing comma (`Foo<T,>` ≡ `Foo<T>`).
+        ///
+        /// It belongs here rather than in any consumer because [`TypeKey`]'s
+        /// identity is the normalized token string, so two spellings of one type
+        /// would otherwise be two keys — and during the frontend migration they
+        /// would split by POSITION, a modeled struct field getting one key and a
+        /// function signature the other.
+        fn visit_path_arguments_mut(&mut self, args: &mut syn::PathArguments) {
+            if let syn::PathArguments::AngleBracketed(ab) = args {
+                ab.colon2_token = None;
+                if ab.args.trailing_punct() {
+                    ab.args = std::mem::take(&mut ab.args).into_iter().collect();
+                }
+            }
+            syn::visit_mut::visit_path_arguments_mut(self, args);
         }
     }
     Normalizer {

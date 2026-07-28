@@ -278,6 +278,10 @@ fn the_projection_preserves_type_identity() {
         "foreign::Option<u8>",
         "a::b::Foo<u8>",
         "::root::Foo",
+        // Punctuation, not identity: `normalize_type` collapses both before a
+        // key is formed, so the projection agrees with every other position.
+        "Wrapper::<u8>",
+        "Wrapper<u8,>",
         // Neighbours of those, to pin that the fix did not overshoot.
         "&Foo",
         "&mut Foo",
