@@ -5,6 +5,7 @@ import io.prebindgen.covertest.CovNative
 import io.prebindgen.covertest.DurationCallback
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
+import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
 import io.prebindgen.covertest.__u64FolderRawHolder
@@ -858,6 +859,30 @@ public data class Unsigned(val byte: Int, val short: Int, val int: Long, val lon
     }
 }
 
+/** Typed handle for a native Zenoh `Report`. */
+public class Report(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Report {
+        val p = ptr
+        ptr = p or 1L
+        return Report(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
 public fun interface LookupCallback {
     public fun run(lookup: Lookup)
 }
@@ -903,6 +928,54 @@ public fun ReadingCallback.asRaw(): ReadingCallbackRaw =
         companion_v0 ->
         run(
             when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
+        )
+    }
+
+public fun interface ReportCallback {
+    public fun run(
+        summary__count: Long,
+        summary__total: Double,
+        taken: Stamp?,
+        origin__secs: Long,
+        origin__nanos: Long,
+        outcome: Lookup,
+        label: String,
+    )
+}
+
+public fun interface ReportCallbackRaw {
+    public fun run(
+        summary__count: Long,
+        summary__total: Double,
+        taken: Stamp?,
+        origin__secs: Long,
+        origin__nanos: Long,
+        outcome__tag: Int,
+        outcome__found_v0: Long,
+        outcome__failed_v0: String?,
+        label: String,
+    )
+}
+
+public fun ReportCallback.asRaw(): ReportCallbackRaw =
+    ReportCallbackRaw {
+        summary__count,
+        summary__total,
+        taken,
+        origin__secs,
+        origin__nanos,
+        outcome__tag,
+        outcome__found_v0,
+        outcome__failed_v0,
+        label ->
+        run(
+            summary__count,
+            summary__total,
+            taken,
+            origin__secs,
+            origin__nanos,
+            when (outcome__tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(outcome__found_v0)); 2 -> Lookup.Failed(outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $outcome__tag") },
+            label
         )
     }
 
@@ -1476,6 +1549,17 @@ public fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>
 public fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: JniErrorHandler<Unit>) {
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.lookupEach(n, total, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Deliver a [`Report`] to a callback — the decomposed value form arriving in
+ * ONE crossing, which is the whole point of deriving the boundary rather than
+ * handing over a handle the receiver must then query field by field.
+ */
+public fun reportEach(n: Long, sink: ReportCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.reportEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
