@@ -31,7 +31,7 @@ impl Cbindgen {
                     .map(|vs| {
                         vs.iter()
                             .flat_map(|v| v.fields.iter())
-                            .any(|f| is_string(&f.ty))
+                            .any(|f| matches!(f.ty, SourceType::Str))
                     })
                     .unwrap_or(false)
         }) {
@@ -47,16 +47,19 @@ impl Cbindgen {
         })
     }
 
-    /// Variants of a declared enum, looked up from the registry's indexed
-    /// enums. `None` if the type isn't an indexed enum.
+    /// Variants of a declared enum, read from the frontend's **source model**.
+    /// `None` if the type isn't an indexed enum.
+    ///
+    /// The enum counterpart of [`Self::struct_fields`], and it carries the same
+    /// rule: a payload's shape comes from [`SourceVariantField::ty`], while an
+    /// identity question about it is still a `TypeKey` lookup (F4).
     pub(super) fn enum_variants(
         &self,
         registry: &Registry<()>,
         ty: &syn::Type,
-    ) -> Option<Vec<syn::Variant>> {
+    ) -> Option<Vec<SourceVariant>> {
         let ident = type_path_tail(ty)?;
-        let (item, _) = registry.enums.get(&ident)?;
-        Some(item.variants.iter().cloned().collect())
+        Some(registry.source_enum(&ident)?.variants.clone())
     }
 
     /// Wire type of one **tagged-union payload field**: the
@@ -82,31 +85,34 @@ impl Cbindgen {
     /// `bool` parameter now share (#170).
     pub(super) fn payload_field_wire(
         &self,
-        fty: &syn::Type,
+        fty: &SourceType,
         registry: &Registry<()>,
     ) -> Result<syn::Type, String> {
+        // Shape from the model; identity (declared `enum_type`, resolved
+        // converters) still keyed by `TypeKey` on the projection until F4.
+        let syn_ty = fty.to_syn();
         // `String` is the one type whose two directions disagree on the wire
         // (`*const c_char` in, `*mut c_char` out), so the union field fixes the
         // OWNING form and the per-arm expressions convert by hand.
-        if is_string(fty) {
+        if matches!(fty, SourceType::Str) {
             return Ok(syn::parse_quote!(*mut ::core::ffi::c_char));
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+        if self.enums.contains_key(&TypeKey::from_type(&syn_ty)) {
+            let c = self.c_type_ident(&syn_ty);
             return Ok(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         // `bool` is the one scalar with a restricted domain: `2` is a byte a C
         // caller can write into the union and NOT a Rust `bool`, so holding it
         // in the mirror is the same UB an out-of-range discriminant is. Same
         // remedy everywhere C writes a `bool` — see `bool_wire`.
-        if is_bool(fty) {
+        if matches!(fty, SourceType::Scalar(ScalarKind::Bool)) {
             return Ok(bool_wire());
         }
         // A `Vec` payload needs TWO C wires (pointer + length) and one union
         // field can carry only one, so its length would be silently dropped.
         // Rejected explicitly, because the converter-destination rule below
         // would otherwise hand back the pointer alone and look like it worked.
-        if is_vec(fty) {
+        if matches!(fty, SourceType::Sequence(_)) {
             return Err(
                 "a `Vec` needs TWO C wires (pointer + length) and one union field carries only \
                  one, so its length would be silently dropped — hand the sequence over through \
@@ -131,7 +137,7 @@ impl Cbindgen {
         // legitimately differ (a `String`'s const-ness above), which is why a
         // disagreement is `None` — a rejection naming the payload — rather
         // than a silent pick of one side.
-        let out_entry = registry.output_entry(fty).ok_or_else(|| {
+        let out_entry = registry.output_entry(&syn_ty).ok_or_else(|| {
             "no resolved OUTPUT converter — a payload crosses as its converter's destination, so \
              it must be a scalar, a `String`, or a type this binding declares (`enum_type`, \
              `data_struct`, `opaque_ptr`, or a `convert!` conversion)"
@@ -148,7 +154,7 @@ impl Cbindgen {
             );
         }
         let out = out_entry.destination.clone();
-        if let Some(inp) = registry.input_entry(fty) {
+        if let Some(inp) = registry.input_entry(&syn_ty) {
             if TypeKey::from_type(&inp.destination) != TypeKey::from_type(&out) {
                 return Err(format!(
                     "its input and output converters disagree on the wire (`{}` in, `{}` out) \
@@ -204,14 +210,16 @@ impl Cbindgen {
     /// zenoh-flat#30 needs.
     pub(super) fn payload_wire_owns(
         &self,
-        fty: &syn::Type,
+        fty: &SourceType,
         wire: &syn::Type,
         registry: &Registry<()>,
     ) -> bool {
         if matches!(wire, syn::Type::Ptr(_)) {
             return true;
         }
-        !self.owning_data_struct_fields(fty, registry).is_empty()
+        !self
+            .owning_data_struct_fields(&fty.to_syn(), registry)
+            .is_empty()
     }
 
     /// Whether a tagged-union payload crosses through a converter of its own,
@@ -222,11 +230,14 @@ impl Cbindgen {
     /// dependency so its converter exists by the time the union's own is
     /// emitted; without that it silently degrades to a passthrough and the
     /// generated code does not compile.
-    pub(super) fn payload_needs_converter(&self, fty: &syn::Type) -> bool {
-        if is_string(fty) || is_scalar(fty) || is_vec(fty) {
+    pub(super) fn payload_needs_converter(&self, fty: &SourceType) -> bool {
+        if matches!(
+            fty,
+            SourceType::Str | SourceType::Scalar(_) | SourceType::Sequence(_)
+        ) {
             return false;
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+        if self.enums.contains_key(&TypeKey::from_type(&fty.to_syn())) {
             return true;
         }
         // `Box<T>` / `Option<Box<T>>` opaque pointers are built inline from the
@@ -390,22 +401,27 @@ impl Cbindgen {
     /// from C's bytes with no chance to check them. That gap is audited
     /// separately by [`Self::restricted_validity_field`] — this function keeps
     /// answering what the layout is.
-    pub(super) fn mirror_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
-        if is_scalar(fty) {
-            return Some(fty.clone());
+    pub(super) fn mirror_field_wire(&self, fty: &SourceType) -> Option<syn::Type> {
+        if matches!(fty, SourceType::Scalar(_)) {
+            return Some(fty.to_syn());
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+        let syn_ty = fty.to_syn();
+        if self.enums.contains_key(&TypeKey::from_type(&syn_ty)) {
+            let c = self.c_type_ident(&syn_ty);
             return Some(syn::parse_quote!(#c));
         }
         // Opaque pointer: `Option<Box<T>>` (nullable, null-niche ↔ NULL) or `Box<T>`
         // where `T` is a declared `opaque_ptr` → `*mut t_t`.
-        let boxed = if is_option(fty) {
-            first_type_arg(fty).and_then(|inner| box_inner(&inner))
-        } else {
-            box_inner(fty)
+        let boxed = match fty {
+            SourceType::Optional(inner) => match &**inner {
+                SourceType::Boxed(b) => Some(&**b),
+                _ => None,
+            },
+            SourceType::Boxed(b) => Some(&**b),
+            _ => None,
         };
         if let Some(inner) = boxed {
+            let inner = inner.to_syn();
             if self.opaque.contains_key(&TypeKey::from_type(&inner)) {
                 let c = self.c_type_ident(&inner);
                 return Some(syn::parse_quote!(*mut #c));

@@ -470,8 +470,6 @@ fn sum_plan_kind(
     optional: bool,
     depth: usize,
 ) -> Option<PlanFieldKind> {
-    use crate::api::core::types_util::SumSpec;
-
     // Sum expansion needs its OWN depth guard. A sum whose payload is a sum
     // never passes through `build_struct_plan`, so that function's assert —
     // the only one on this recursion before now — cannot see a chain made
@@ -505,15 +503,15 @@ fn sum_plan_kind(
         .map(|s| ext.fqn_of(s))
         .unwrap_or_else(|| panic!("fromParts bridge: sealed class `{ident}` has no Kotlin name"));
 
-    let spec = SumSpec::from_item_enum(item_enum);
+    let spec = sum_model(registry, item_enum);
     let mut variants: Vec<SumPlanVariant> = Vec::new();
     for (v, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.ident);
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.name);
         let mut fields: Vec<SumPlanField> = Vec::new();
         for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
             let prop = sum_field_prop_name(f);
             let slot = sum_slot_fragment(&kotlin_name, &prop);
-            let owner = format!("{ident}::{}.{prop}", v.ident);
+            let owner = format!("{ident}::{}.{prop}", v.name);
             // `?` — a payload whose converter has not resolved yet defers the
             // whole plan to the next iteration, it does not fail the build.
             let kind = classify_field(ext, registry, &item_field.ty, &owner, depth + 1)?;
@@ -524,7 +522,7 @@ fn sum_plan_kind(
             });
         }
         variants.push(SumPlanVariant {
-            rust_ident: v.ident.clone(),
+            rust_ident: v.name.clone(),
             kotlin_name,
             fields,
         });
@@ -544,7 +542,9 @@ fn sum_plan_kind(
 /// Kotlin property name of one sum payload field — a named field keeps its
 /// camelCased name, a tuple field becomes `v0`, `v1`. Must agree with the
 /// sealed-interface emitter, which is why both call this.
-pub(crate) fn sum_field_prop_name(field: &crate::api::core::types_util::SumField) -> String {
+pub(crate) fn sum_field_prop_name(
+    field: &crate::api::core::frontend::model::SourceVariantField,
+) -> String {
     match &field.member {
         syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
         syn::Member::Unnamed(i) => format!("v{}", i.index),

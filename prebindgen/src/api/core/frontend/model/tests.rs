@@ -6,8 +6,8 @@
 use quote::ToTokens;
 
 use super::{
-    lower_type, ArrayExtent, ConstId, ExtentSource, NamedArg, ScalarKind, SourceType,
-    UnsupportedTypeReason,
+    lower_enum, lower_type, ArrayExtent, ConstId, DiscriminantSource, ExtentSource, NamedArg,
+    ScalarKind, SourceEnum, SourceType, UnsupportedTypeReason, VariantShape,
 };
 use crate::api::core::{frontend::ConstIndex, registry::CallbackReject, TypeKey};
 
@@ -358,4 +358,235 @@ fn a_builtin_must_be_spelled_bare() {
     }
     // A user type ending in a scalar's name is not that scalar either.
     assert!(matches!(lower("mycrate::u8"), Ok(SourceType::Named { .. })));
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────
+
+fn lower_e(src: proc_macro2::TokenStream) -> SourceEnum {
+    let e: syn::ItemEnum = syn::parse_quote!(#src);
+    lower_enum(&e, &consts(), Some("myflat")).expect("lowers")
+}
+
+/// The shape question every adapter used to ask `syn::Fields` itself.
+#[test]
+fn shape_classifies_unit_and_payload() {
+    assert!(lower_e(quote::quote! { enum E { A, B = 7, C } }).is_unit());
+    // An empty enum has no payload variant, so it is the degenerate unit
+    // case — not a sum.
+    assert!(lower_e(quote::quote! { enum E {} }).is_unit());
+
+    // One payload variant is enough, whatever the shape of the others.
+    for src in [
+        quote::quote! { enum E { A(u32), B } },
+        quote::quote! { enum E { A, B { x: u32 } } },
+        // An empty tuple/brace variant carries no field, so it is a unit
+        // group like any other — `Fields::Unnamed` with nothing in it says
+        // nothing the model needs.
+        quote::quote! { enum E { A, B(u32), C() } },
+    ] {
+        let e = lower_e(src.clone());
+        assert!(!e.is_unit(), "for `{src}`");
+        assert!(e.first_payload_variant().is_some(), "for `{src}`");
+    }
+}
+
+/// The offending variant an adapter names in its rejection message is the
+/// **first** payload one, in declaration order.
+#[test]
+fn first_payload_variant_is_the_first_in_declaration_order() {
+    let e = lower_e(quote::quote! { enum E { A, B(u32), C { x: u8 } } });
+    assert_eq!(
+        e.first_payload_variant().expect("payload variant").name,
+        "B"
+    );
+}
+
+/// Tags are declaration order `0..N-1` and never the discriminant. The two
+/// numberings are independent, and this is the pair that proves it.
+#[test]
+fn tags_are_declaration_order_and_ignore_discriminants() {
+    let e = lower_e(quote::quote! { enum E { A(u32), B, C { x: u8 } } });
+    assert_eq!(e.name, "E");
+    assert_eq!(
+        e.variants
+            .iter()
+            .map(|v| (v.name.to_string(), v.tag))
+            .collect::<Vec<_>>(),
+        vec![
+            ("A".to_string(), 0),
+            ("B".to_string(), 1),
+            ("C".to_string(), 2)
+        ]
+    );
+    assert!(e.variants[1].is_unit());
+    assert!(!e.variants[0].is_unit());
+
+    let e = lower_e(quote::quote! { enum E { A = 5, B = 9 } });
+    assert_eq!(
+        e.variants.iter().map(|v| v.tag).collect::<Vec<_>>(),
+        vec![0, 1]
+    );
+    assert_eq!(
+        e.discriminant_values()
+            .expect("literal discriminants")
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect::<Vec<_>>(),
+        vec![5, 9]
+    );
+}
+
+/// Leaf names follow the nested-prefix convention: `<variant_snake>_<field>`,
+/// tuple fields `<variant_snake>_<i>`. Members address the field in a pattern.
+#[test]
+fn leaf_names_members_and_shape() {
+    let e = lower_e(quote::quote! {
+        enum RecoveryMode {
+            PeriodicQueries(Duration),
+            Heartbeat,
+            Windowed { size: u32, ratio: f64 },
+            Pair(u8, u8),
+        }
+    });
+
+    let names: Vec<Vec<String>> = e
+        .variants
+        .iter()
+        .map(|v| v.fields.iter().map(|f| f.leaf_name.clone()).collect())
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            vec!["periodic_queries_0".to_string()],
+            vec![],
+            vec!["windowed_size".to_string(), "windowed_ratio".to_string()],
+            vec!["pair_0".to_string(), "pair_1".to_string()],
+        ]
+    );
+
+    assert_eq!(
+        e.variants.iter().map(|v| v.shape()).collect::<Vec<_>>(),
+        vec![
+            VariantShape::Tuple,
+            VariantShape::Unit,
+            VariantShape::Named,
+            VariantShape::Tuple
+        ]
+    );
+
+    let named = &e.variants[2].fields[0].member;
+    assert!(matches!(named, syn::Member::Named(id) if id == "size"));
+    let unnamed = &e.variants[3].fields[1].member;
+    assert!(matches!(unnamed, syn::Member::Unnamed(i) if i.index == 1));
+
+    // A payload type is LOWERED, not carried verbatim — that is what lets an
+    // adapter ask the model instead of re-reading the field's syntax.
+    assert!(matches!(
+        &e.variants[0].fields[0].ty,
+        SourceType::Named { .. }
+    ));
+    assert!(matches!(
+        e.variants[2].fields[0].ty,
+        SourceType::Scalar(ScalarKind::U32)
+    ));
+}
+
+/// A unit-only enum is the degenerate sum: every group is empty, so a lowering
+/// written for the general case collapses to "just a tag".
+#[test]
+fn unit_enum_is_all_empty_groups() {
+    let e = lower_e(quote::quote! { enum E { A, B, C } });
+    assert_eq!(e.variants.len(), 3);
+    assert!(e.variants.iter().all(|v| v.is_unit()));
+
+    let e = lower_e(quote::quote! { enum E { Only(String) } });
+    assert_eq!(e.variants.len(), 1);
+    assert_eq!(e.variants[0].tag, 0);
+    assert_eq!(e.variants[0].fields[0].leaf_name, "only_0");
+}
+
+/// A payload the type grammar refuses is refused HERE, naming the variant and
+/// field, rather than reaching an adapter.
+#[test]
+fn a_refused_payload_type_names_its_variant_and_field() {
+    let e: syn::ItemEnum = syn::parse_quote! { enum E { A, B { bad: (u8, u8) } } };
+    let (variant, field, err) = lower_enum(&e, &consts(), Some("myflat")).expect_err("refused");
+    assert_eq!(variant, "B");
+    assert_eq!(field.expect("named field"), "bad");
+    assert!(matches!(
+        err.reason,
+        UnsupportedTypeReason::UnsupportedTuple
+    ));
+
+    // A tuple variant has no field name to report, only a position.
+    let e: syn::ItemEnum = syn::parse_quote! { enum E { A((u8, u8)) } };
+    let (variant, field, _) = lower_enum(&e, &consts(), Some("myflat")).expect_err("refused");
+    assert_eq!(variant, "A");
+    assert!(field.is_none());
+}
+
+// ── Discriminants ──────────────────────────────────────────────────────
+
+fn discriminants(src: proc_macro2::TokenStream) -> Vec<(String, i64)> {
+    lower_e(src)
+        .discriminant_values()
+        .expect("literal discriminants")
+        .into_iter()
+        .map(|(ident, value)| (ident.to_string(), value))
+        .collect()
+}
+
+#[test]
+fn discriminants_follow_rusts_own_rule() {
+    // Implicit C-like enum: 0, 1, 2.
+    assert_eq!(
+        discriminants(quote::quote! { enum E { A, B, C } }),
+        vec![("A".into(), 0), ("B".into(), 1), ("C".into(), 2)]
+    );
+    assert_eq!(
+        discriminants(quote::quote! { enum E { A = 1, B = 2, C = 7 } }),
+        vec![("A".into(), 1), ("B".into(), 2), ("C".into(), 7)]
+    );
+    // Explicit sets the value; the next implicit variant is prev + 1.
+    assert_eq!(
+        discriminants(quote::quote! { enum E { A = 5, B, C = 1, D } }),
+        vec![
+            ("A".into(), 5),
+            ("B".into(), 6),
+            ("C".into(), 1),
+            ("D".into(), 2),
+        ]
+    );
+    assert_eq!(
+        discriminants(quote::quote! { enum E { A = -1, B } }),
+        vec![("A".into(), -1), ("B".into(), 0)]
+    );
+}
+
+/// An unevaluable discriminant is **not** a lowering failure: a C mirror
+/// re-emits the spelling and never needs the number. It surfaces only when a
+/// consumer asks for values, and then it names the offender.
+#[test]
+fn an_unevaluable_discriminant_is_carried_not_refused() {
+    let e = lower_e(quote::quote! { enum E { A = OTHER, B } });
+    assert!(matches!(
+        e.variants[0].discriminant.source,
+        DiscriminantSource::Explicit(_)
+    ));
+    assert!(e.variants[0].discriminant.value.is_none());
+    // The chain is broken from there: B has no computable value either.
+    assert!(e.variants[1].discriminant.value.is_none());
+    assert_eq!(e.discriminant_values().expect_err("no values"), "A");
+}
+
+/// The spelling survives exactly, which is what lets a C header keep `0x07`
+/// rather than re-rendering it as `7`.
+#[test]
+fn an_explicit_discriminant_keeps_its_spelling() {
+    let e = lower_e(quote::quote! { enum E { A = 0x07 } });
+    let DiscriminantSource::Explicit(expr) = &e.variants[0].discriminant.source else {
+        panic!("explicit");
+    };
+    assert_eq!(expr.to_token_stream().to_string(), "0x07");
+    assert_eq!(e.variants[0].discriminant.value, Some(7));
 }

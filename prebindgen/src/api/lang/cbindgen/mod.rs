@@ -108,7 +108,10 @@ pub(crate) use crate::api::core::types_util::{
 };
 use crate::api::{
     core::{
-        frontend::model::{ScalarKind, SourceType},
+        frontend::model::{
+            DiscriminantSource, ScalarKind, SourceEnum, SourceType, SourceVariant,
+            SourceVariantField, VariantShape,
+        },
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
         registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
@@ -391,10 +394,15 @@ fn type_short(ty: &syn::Type) -> String {
         .unwrap_or_else(|| sanitize(&TypeKey::from_type(ty)))
 }
 
-/// The indexed `syn::ItemEnum` for a declared enum type, by tail ident.
-fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
+/// The frontend's model of a declared enum type, by tail ident.
+///
+/// The replacement for reading `registry.enums`' `syn::ItemEnum`: variant
+/// shape, payload types, declaration-order tag and discriminant spelling all
+/// come from one decided place, so this back end grows no enum classifier of
+/// its own (#211).
+fn enum_model<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r SourceEnum> {
     let ident = type_path_tail(ty)?;
-    registry.enums.get(&ident).map(|(e, _)| e)
+    registry.source_enum(&ident)
 }
 
 /// Hard error when a `.tagged_union()`-declared enum is unit-only. The
@@ -402,13 +410,12 @@ fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::
 /// discriminant, so it belongs to `.enum_type()` — declaring it here would
 /// emit a `union` with no bodies and a needlessly indirect C surface. Neither
 /// declarator silently accepts the other's shape.
-fn assert_payload_enum(e: &syn::ItemEnum) {
-    use crate::api::core::types_util::{enum_shape, EnumShape};
-    if enum_shape(e) == EnumShape::Unit {
+fn assert_payload_enum(e: &SourceEnum) {
+    if e.is_unit() {
         panic!(
             "Cbindgen: `{}` has no payload variants: declare it with `.enum_type()`, \
              not `.tagged_union()` — a fieldless enum crosses as a plain C `enum`",
-            e.ident
+            e.name
         );
     }
 }
@@ -438,20 +445,20 @@ fn cname_ty(cname: &syn::Ident) -> syn::Type {
 /// both directions, so the two sides always destructure the same way.
 fn variant_pattern(
     enum_path: &impl ToTokens,
-    variant: &syn::Ident,
-    fields: &syn::Fields,
+    variant: &SourceVariant,
     binds: &[syn::Ident],
 ) -> TokenStream {
-    match fields {
-        syn::Fields::Unit => quote!(#enum_path::#variant),
-        syn::Fields::Named(named) => {
-            let pairs = named.named.iter().zip(binds).map(|(f, b)| {
-                let n = f.ident.as_ref().expect("named field");
+    let name = &variant.name;
+    match variant.shape() {
+        VariantShape::Unit => quote!(#enum_path::#name),
+        VariantShape::Named => {
+            let pairs = variant.fields.iter().zip(binds).map(|(f, b)| {
+                let n = &f.member;
                 quote!(#n: #b)
             });
-            quote!(#enum_path::#variant { #(#pairs),* })
+            quote!(#enum_path::#name { #(#pairs),* })
         }
-        syn::Fields::Unnamed(_) => quote!(#enum_path::#variant(#(#binds),*)),
+        VariantShape::Tuple => quote!(#enum_path::#name(#(#binds),*)),
     }
 }
 
@@ -459,39 +466,39 @@ fn variant_pattern(
 /// from already-converted field expressions.
 fn variant_ctor(
     enum_path: &impl ToTokens,
-    variant: &syn::Ident,
-    fields: &syn::Fields,
+    variant: &SourceVariant,
     exprs: &[TokenStream],
 ) -> TokenStream {
-    match fields {
-        syn::Fields::Unit => quote!(#enum_path::#variant),
-        syn::Fields::Named(named) => {
-            let pairs = named.named.iter().zip(exprs).map(|(f, e)| {
-                let n = f.ident.as_ref().expect("named field");
+    let name = &variant.name;
+    match variant.shape() {
+        VariantShape::Unit => quote!(#enum_path::#name),
+        VariantShape::Named => {
+            let pairs = variant.fields.iter().zip(exprs).map(|(f, e)| {
+                let n = &f.member;
                 quote!(#n: #e)
             });
-            quote!(#enum_path::#variant { #(#pairs),* })
+            quote!(#enum_path::#name { #(#pairs),* })
         }
-        syn::Fields::Unnamed(_) => quote!(#enum_path::#variant(#(#exprs),*)),
+        VariantShape::Tuple => quote!(#enum_path::#name(#(#exprs),*)),
     }
 }
 
 /// Hard error when an `.enum_type()`-declared enum is not the shape that
 /// declarator describes. A plain C `enum` is exactly a discriminant, which
-/// is [`EnumShape::Unit`]; a data-carrying enum crosses as a tag plus a
+/// is a fieldless enum; a data-carrying enum crosses as a tag plus a
 /// `union` and is reached through a different declarator, so this names
 /// that declarator rather than asserting on `syn::Fields`.
-fn assert_unit_enum(e: &syn::ItemEnum) {
-    use crate::api::core::types_util::{enum_shape, first_payload_variant, EnumShape};
-    if enum_shape(e) == EnumShape::Sum {
-        let offender = first_payload_variant(e)
-            .map(|v| v.ident.to_string())
+fn assert_unit_enum(e: &SourceEnum) {
+    if !e.is_unit() {
+        let offender = e
+            .first_payload_variant()
+            .map(|v| v.name.to_string())
             .unwrap_or_default();
         panic!(
             "Cbindgen: `{}` is a data-carrying enum (variant `{}` has fields): \
              declare it with `.tagged_union()`, not `.enum_type()` — a C `enum` \
              is a bare discriminant and has no room for a payload",
-            e.ident, offender
+            e.name, offender
         );
     }
 }

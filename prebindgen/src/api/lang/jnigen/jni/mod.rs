@@ -109,7 +109,7 @@ pub(crate) struct EnumConfig {}
 /// **data-carrying** enum as mirrored by a
 /// Kotlin `sealed interface`. The tag/leaf-group structure itself is read
 /// from the source enum through the neutral
-/// [`SumSpec`](crate::api::core::types_util::SumSpec) — only what the
+/// [`SourceEnum`](crate::api::core::frontend::model::SourceEnum) — only what the
 /// declaration adds lives here.
 #[derive(Clone, Default)]
 pub(crate) struct SumConfig {
@@ -604,3 +604,41 @@ pub(crate) use prim::*;
 pub(crate) use render::*;
 pub(crate) use struct_plan::*;
 pub(crate) use symbols::*;
+
+/// The frontend's model of an indexed enum.
+///
+/// Every indexed enum is modeled at ingest, so a miss here means the enum was
+/// never indexed — a generator bug, not a user error. Reading the model rather
+/// than re-walking `syn::ItemEnum` is what keeps this back end from growing its
+/// own enum classifier (#211).
+pub(crate) fn sum_model<'r, M>(
+    registry: &'r Registry<M>,
+    item_enum: &syn::ItemEnum,
+) -> &'r crate::api::core::frontend::model::SourceEnum {
+    registry
+        .source_enum(&item_enum.ident)
+        .unwrap_or_else(|| panic!("no source model for indexed enum `{}`", item_enum.ident))
+}
+
+/// The variant→value numbering an `enum_class` needs, or a hard error naming
+/// the variant whose discriminant could not be evaluated.
+///
+/// `enum_class` puts the number in two places — a Kotlin `NAME(n)` entry and
+/// the generated `jint → variant` decode — so a value it cannot compute is a
+/// declaration error, not something to guess at. A C mirror re-emits the
+/// spelling instead and never reaches this.
+pub(crate) fn discriminant_values_or_panic<'r, M>(
+    registry: &'r Registry<M>,
+    item_enum: &syn::ItemEnum,
+) -> Vec<(&'r syn::Ident, i64)> {
+    sum_model(registry, item_enum)
+        .discriminant_values()
+        .unwrap_or_else(|variant| {
+            panic!(
+                "enum `{}` variant `{variant}` has a discriminant this generator cannot \
+                 evaluate; `enum_class!` needs the number for its Kotlin entry and its decode, \
+                 so use a literal integer (e.g. `= 1`) or an implicit discriminant",
+                item_enum.ident
+            )
+        })
+}

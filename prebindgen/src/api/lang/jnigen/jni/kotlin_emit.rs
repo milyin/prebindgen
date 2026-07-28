@@ -421,9 +421,11 @@ impl JniGen {
 
 /// Kotlin property name of one sum payload field: a named field keeps its
 /// (camelCased) name, a tuple field becomes `v0`, `v1`, …. Derived from the
-/// neutral [`SumField`](crate::api::core::types_util::SumField)'s `member`,
+/// neutral [`SourceVariantField`](crate::api::core::frontend::model::SourceVariantField)'s `member`,
 /// so core's leaf naming and the Kotlin surface cannot drift apart.
-fn sum_field_property_name(field: &crate::api::core::types_util::SumField) -> String {
+fn sum_field_property_name(
+    field: &crate::api::core::frontend::model::SourceVariantField,
+) -> String {
     match &field.member {
         syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
         syn::Member::Unnamed(i) => format!("v{}", i.index),
@@ -499,7 +501,7 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            let mut class = build_enum_class(&class_name, item_enum);
+            let mut class = build_enum_class(&class_name, registry, item_enum);
             let mut file = kt::KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
@@ -515,7 +517,7 @@ impl JniGen {
     /// the surface of a sum where the target language has sums natively.
     ///
     /// The shape follows the neutral
-    /// [`SumSpec`](crate::api::core::types_util::SumSpec) directly: a variant
+    /// [`SourceEnum`](crate::api::core::frontend::model::SourceEnum) directly: a variant
     /// with an empty leaf group becomes a `data object`, one with a payload a
     /// `data class`, both **nested inside** the interface so variant names
     /// cannot collide package-wide. The `fromParts(tag, …slots)` companion is
@@ -530,8 +532,6 @@ impl JniGen {
         &self,
         registry: &Registry<KotlinMeta>,
     ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
-        use crate::api::core::types_util::{enum_shape, EnumShape, SumSpec};
-
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -552,7 +552,7 @@ impl JniGen {
                 continue;
             };
             assert!(
-                enum_shape(item_enum) == EnumShape::Sum,
+                !sum_model(registry, item_enum).is_unit(),
                 "`{}` has no payload variants: declare it with `enum_class!({})`, not \
                  `sealed_class!({})` — a fieldless enum crosses as a bare discriminant and \
                  needs no sealed hierarchy",
@@ -561,12 +561,12 @@ impl JniGen {
                 ident
             );
 
-            let spec = SumSpec::from_item_enum(item_enum);
+            let spec = sum_model(registry, item_enum);
             // Every declared `.variant(...)` must name a real variant —
             // a typo would otherwise silently do nothing.
             for declared in sum_cfg.variant_names.keys() {
                 assert!(
-                    spec.variants.iter().any(|v| v.ident == declared),
+                    spec.variants.iter().any(|v| v.name == declared),
                     "sealed_class!({ident}): variant!({declared}) does not name a variant of \
                      `{ident}`"
                 );
@@ -577,7 +577,7 @@ impl JniGen {
                 None => (String::new(), kotlin_fqn.clone()),
             };
             let mut class =
-                self.build_sealed_class(registry, &class_name, item_enum, &spec, sum_cfg);
+                self.build_sealed_class(registry, &class_name, item_enum, spec, sum_cfg);
             let mut file = kt::KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
@@ -599,7 +599,7 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
         class_name: &str,
         item_enum: &syn::ItemEnum,
-        spec: &crate::api::core::types_util::SumSpec,
+        spec: &crate::api::core::frontend::model::SourceEnum,
         sum_cfg: &SumConfig,
     ) -> KtClass {
         let framework_line = format!(
@@ -616,7 +616,7 @@ impl JniGen {
 
         // Nested variant classes, in declaration (tag) order.
         for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+            let vname = self.sum_variant_class_name(sum_cfg, &variant.name);
             let mut vclass = if variant.is_unit() {
                 KtClass::new(ClassKind::DataObject, &vname)
             } else {
@@ -630,13 +630,8 @@ impl JniGen {
             let mut vprops: Vec<(String, KtType)> = Vec::new();
             for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
                 let prop = sum_field_property_name(field);
-                let ty = self.sum_payload_kt_type(
-                    registry,
-                    item_enum,
-                    &variant.ident,
-                    &prop,
-                    item_field,
-                );
+                let ty =
+                    self.sum_payload_kt_type(registry, item_enum, &variant.name, &prop, item_field);
                 vprops.push((prop.clone(), ty.clone()));
                 vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
             }
@@ -660,23 +655,18 @@ impl JniGen {
             .param(KtParam::new("tag", KtType::int()))
             .returns(KtType::cls(class_name));
         for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+            let vname = self.sum_variant_class_name(sum_cfg, &variant.name);
             for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
                 let prop = sum_field_property_name(field);
-                let ty = self.sum_payload_kt_type(
-                    registry,
-                    item_enum,
-                    &variant.ident,
-                    &prop,
-                    item_field,
-                );
+                let ty =
+                    self.sum_payload_kt_type(registry, item_enum, &variant.name, &prop, item_field);
                 factory = factory.param(KtParam::new(sum_slot_name(&vname, &prop), ty));
             }
         }
         let mut body = Code::new();
         body = body.blk("when (tag) {", |mut w| {
             for variant in &spec.variants {
-                let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+                let vname = self.sum_variant_class_name(sum_cfg, &variant.name);
                 let args: Vec<String> = variant
                     .fields
                     .iter()
@@ -1424,8 +1414,6 @@ impl JniGen {
         names: &[String],
         imports: &mut BTreeSet<String>,
     ) -> (String, String) {
-        use crate::api::core::types_util::SumSpec;
-
         let key = TypeKey::from_type(source);
         let iface_fqn = self
             .kotlin_fqn(&key)
@@ -1440,12 +1428,12 @@ impl JniGen {
         let sum_cfg = self.types[&key]
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
-        let spec = SumSpec::from_item_enum(item_enum);
+        let spec = sum_model(registry, item_enum);
         let tag = &names[0];
 
         let mut arms: Vec<String> = Vec::new();
         for variant in &spec.variants {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+            let vname = self.sum_variant_class_name(sum_cfg, &variant.name);
             let args: Vec<String> = leaves
                 .iter()
                 .zip(params)

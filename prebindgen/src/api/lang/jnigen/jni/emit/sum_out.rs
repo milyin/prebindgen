@@ -39,17 +39,15 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 /// pair the sealed-interface emitter and the struct-field bridge use, so a
 /// `variant!(V).name(...)` rename carries through to the builder's parameter
 /// names too.
-pub(crate) fn synth_sum_leaves(
+pub(crate) fn synth_sum_leaves<M>(
     ext: &JniGen,
+    registry: &Registry<M>,
     sum_cfg: &SumConfig,
     item_enum: &syn::ItemEnum,
 ) -> Vec<crate::api::core::unfold::UnfoldLeaf> {
-    use crate::api::core::{
-        types_util::SumSpec,
-        unfold::{LeafSource, UnfoldLeaf},
-    };
+    use crate::api::core::unfold::{LeafSource, UnfoldLeaf};
 
-    let spec = SumSpec::from_item_enum(item_enum);
+    let spec = sum_model(registry, item_enum);
     // The selector rides ahead of the groups it chooses between. Its `out_ty`
     // documents the wire (`i32` → `jint` → Kotlin `Int`); nothing looks up a
     // converter for it, because there is no value to convert — the emitter
@@ -64,17 +62,17 @@ pub(crate) fn synth_sum_leaves(
         group: None,
     }];
     for variant in &spec.variants {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &variant.ident);
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &variant.name);
         for field in &variant.fields {
             let prop = sum_field_prop_name(field);
             leaves.push(UnfoldLeaf {
                 name: sum_slot_fragment(&kotlin_name, &prop),
                 path: Vec::new(),
-                out_ty: field.ty.clone(),
+                out_ty: field.ty.to_syn(),
                 identity: false,
                 nullable: false,
                 source: LeafSource::VariantField {
-                    variant: variant.ident.clone(),
+                    variant: variant.name.clone(),
                     member: field.member.clone(),
                 },
                 group: Some(variant.tag),
@@ -201,7 +199,7 @@ pub(crate) fn encode_sum_leaves(
     let (item_enum, _) = registry.enums.get(&ident).unwrap_or_else(|| {
         panic!("jnigen sum unfold: no indexed enum `{ident}` for the decomposed sum")
     });
-    let spec = crate::api::core::types_util::SumSpec::from_item_enum(item_enum);
+    let spec = sum_model(registry, item_enum);
 
     let arms: Vec<TokenStream> = spec
         .variants
@@ -218,7 +216,7 @@ pub(crate) fn encode_sum_leaves(
                 .enumerate()
                 .map(|(k, _)| format_ident!("__sv{}", k))
                 .collect();
-            let vident = &variant.ident;
+            let vident = &variant.name;
             let pattern = match variant.fields.first().map(|f| &f.member) {
                 None => quote!(#source::#vident),
                 Some(syn::Member::Named(_)) => {

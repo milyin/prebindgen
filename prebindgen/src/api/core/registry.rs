@@ -282,6 +282,16 @@ pub struct Registry<M = ()> {
     /// of it rather than a second source of truth.
     pub(crate) source_structs: HashMap<syn::Ident, crate::api::core::frontend::model::SourceStruct>,
 
+    /// The typed source model of every indexed enum.
+    ///
+    /// The counterpart of [`Self::source_structs`], and it carries the same
+    /// contract: the `syn` payload types in [`Self::enums`] are written from
+    /// this model, so they are a projection of it. It also carries the one enum
+    /// fact that cannot survive a projection — how each discriminant was
+    /// spelled, which is what lets a C mirror re-emit a `const`-driven value it
+    /// cannot evaluate.
+    pub(crate) source_enums: HashMap<syn::Ident, crate::api::core::frontend::model::SourceEnum>,
+
     /// `#[prebindgen]` consts that a struct field's array extent named.
     ///
     /// An adapter that spells such an extent symbolically — the C mirror emits
@@ -356,6 +366,7 @@ impl<M> Default for Registry<M> {
             source_modules: Vec::new(),
             array_lens: HashMap::new(),
             source_structs: HashMap::new(),
+            source_enums: HashMap::new(),
             extent_consts: HashSet::new(),
             input_types: Default::default(),
             output_types: Default::default(),
@@ -434,8 +445,8 @@ pub enum ScanError {
         entries: Vec<(String, String)>,
     },
     /// A fixed-size array's length is not in the accepted source subgrammar —
-    /// see [`crate::api::core::frontend::ArrayLen`]. Raised at ingest, before
-    /// any adapter runs, so every generator refuses the same input.
+    /// see [`crate::api::core::frontend::ArrayLenReason`]. Raised at ingest,
+    /// before any adapter runs, so every generator refuses the same input.
     UnsupportedArrayLength {
         error: Box<crate::api::core::frontend::UnsupportedArrayLen>,
         loc: SourceLocation,
@@ -449,6 +460,23 @@ pub enum ScanError {
         error: Box<crate::api::core::frontend::model::UnsupportedType>,
         loc: SourceLocation,
     },
+    /// An enum variant's payload type is not in the accepted source grammar.
+    /// The counterpart of [`Self::UnsupportedFieldType`], also raised at
+    /// ingest. Boxed whole, like [`Self::DuplicateName`]: it carries the most
+    /// context of any variant, and `ScanError` is the `Err` of every ingest
+    /// path.
+    UnsupportedVariantFieldType(Box<UnsupportedVariantFieldError>),
+}
+
+/// The payload of [`ScanError::UnsupportedVariantFieldType`]. `field` is `None`
+/// for a tuple variant, whose payload is addressed by position.
+#[derive(Debug)]
+pub struct UnsupportedVariantFieldError {
+    pub item: syn::Ident,
+    pub variant: syn::Ident,
+    pub field: Option<syn::Ident>,
+    pub error: Box<crate::api::core::frontend::model::UnsupportedType>,
+    pub loc: SourceLocation,
 }
 
 impl fmt::Display for ScanError {
@@ -534,6 +562,22 @@ impl fmt::Display for ScanError {
                 loc,
             } => {
                 write!(f, "field `{item}::{field}`: {error} (at {loc})")
+            }
+            ScanError::UnsupportedVariantFieldType(e) => {
+                let UnsupportedVariantFieldError {
+                    item,
+                    variant,
+                    field,
+                    error,
+                    loc,
+                } = &**e;
+                // A tuple variant's payload has no name to print; the variant
+                // path is still enough to find it.
+                let field = field
+                    .as_ref()
+                    .map(|f| format!(".{f}"))
+                    .unwrap_or_else(|| " payload".to_string());
+                write!(f, "variant `{item}::{variant}`{field}: {error} (at {loc})")
             }
         }
     }
@@ -768,7 +812,7 @@ impl<M> Registry<M> {
         use syn::visit_mut::VisitMut;
 
         use crate::api::core::frontend::{
-            model::{lower_type, SourceField, SourceStruct},
+            model::{lower_enum, lower_type, SourceEnum, SourceField, SourceStruct},
             resolve_array_lengths, ConstIndex,
         };
 
@@ -784,6 +828,7 @@ impl<M> Registry<M> {
 
         let mut lens: HashMap<TypeKey, usize> = HashMap::new();
         let mut source_structs: HashMap<syn::Ident, SourceStruct> = HashMap::new();
+        let mut source_enums: HashMap<syn::Ident, SourceEnum> = HashMap::new();
         let mut extent_consts: HashSet<syn::Ident> = HashSet::new();
         // One accumulator for every map, so a length means the same thing
         // whichever item kind it was written in.
@@ -820,9 +865,43 @@ impl<M> Registry<M> {
             };
         }
         resolve_map!(self.functions.values_mut(), visit_item_fn_mut);
-        resolve_map!(self.enums.values_mut(), visit_item_enum_mut);
         resolve_map!(self.consts.values_mut(), visit_item_const_mut);
         resolve_map!(self.passthrough.iter_mut(), visit_item_mut);
+
+        // Enums, like structs, go through the MODEL rather than the length
+        // walk: a variant's payload is a boundary surface (cbindgen overlays it
+        // as a `#[repr(C)]` union, jnigen as a sealed hierarchy), so it needs
+        // the full typed IR. Same write-back rule — the `syn` payload types are
+        // a projection of the model, never a second copy.
+        for (ident, (item, loc)) in self.enums.iter_mut() {
+            let origin = loc.crate_name.clone();
+            let modeled = lower_enum(item, &consts, origin.as_deref()).map_err(
+                |(variant, field, error)| {
+                    ScanError::UnsupportedVariantFieldType(Box::new(UnsupportedVariantFieldError {
+                        item: ident.clone(),
+                        variant,
+                        field,
+                        error: Box::new(error),
+                        loc: loc.clone(),
+                    }))
+                },
+            )?;
+            for (v, mv) in item.variants.iter_mut().zip(&modeled.variants) {
+                for (f, mf) in v.fields.iter_mut().zip(&mv.fields) {
+                    f.ty = mf.ty.to_syn();
+                    if let Some(extent) = mf.ty.array_extent() {
+                        lens.insert(TypeKey::from_type(&f.ty), extent.value);
+                    }
+                    for extent in mf.ty.extents() {
+                        if let Some(id) = extent.const_id() {
+                            extent_consts
+                                .insert(syn::Ident::new(&id.name, proc_macro2::Span::call_site()));
+                        }
+                    }
+                }
+            }
+            source_enums.insert(ident.clone(), modeled);
+        }
 
         // Structs go through the MODEL rather than the length walk: their
         // fields are the one surface an adapter consumes as source (the C
@@ -864,6 +943,7 @@ impl<M> Registry<M> {
 
         self.array_lens = lens;
         self.source_structs = source_structs;
+        self.source_enums = source_enums;
         self.extent_consts = extent_consts;
         Ok(())
     }
@@ -879,16 +959,24 @@ impl<M> Registry<M> {
         self.array_lens.get(key).copied()
     }
 
-    /// The typed source model of an indexed struct, or `None` when `ident` is
-    /// not an indexed struct with named fields.
-    ///
-    /// An adapter reads this when it needs a fact about the SOURCE — which
-    /// const an extent named — rather than the semantic type. It must not
-    /// re-derive such facts from `syn`; that is the whole point of #211.
     /// Whether `ident` is a `#[prebindgen]` const that a struct field's array
     /// extent named — see [`Self::extent_consts`].
     pub fn is_extent_const(&self, ident: &syn::Ident) -> bool {
         self.extent_consts.contains(ident)
+    }
+
+    /// The typed source model of an indexed enum, or `None` when `ident` is not
+    /// an indexed enum.
+    ///
+    /// The counterpart of [`Self::source_struct`]. An adapter reads this rather
+    /// than walking `syn::ItemEnum`: it answers variant shape, payload types,
+    /// declaration-order tag and discriminant from one place, which is what
+    /// stops each adapter from growing its own enum classifier.
+    pub fn source_enum(
+        &self,
+        ident: &syn::Ident,
+    ) -> Option<&crate::api::core::frontend::model::SourceEnum> {
+        self.source_enums.get(ident)
     }
 
     pub fn source_struct(
