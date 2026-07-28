@@ -6,9 +6,10 @@
 use quote::ToTokens;
 
 use super::{
-    lower_type, ArrayExtent, ConstId, ExtentSource, ScalarKind, SourceType, UnsupportedTypeReason,
+    lower_type, ArrayExtent, ConstId, ExtentSource, NamedArg, ScalarKind, SourceType,
+    UnsupportedTypeReason,
 };
-use crate::api::core::frontend::ConstIndex;
+use crate::api::core::{frontend::ConstIndex, TypeKey};
 
 fn consts() -> ConstIndex {
     ConstIndex::new([
@@ -36,7 +37,7 @@ fn named(src: &str) -> SourceType {
         panic!("not a path")
     };
     SourceType::Named {
-        name: tp.path,
+        path: tp,
         args: Vec::new(),
     }
 }
@@ -79,15 +80,23 @@ fn accepted_types() {
         (
             "Wrapper<u8>",
             SourceType::Named {
-                name: syn::parse_quote!(Wrapper),
-                args: vec![SourceType::Scalar(ScalarKind::U8)],
+                path: syn::parse_quote!(Wrapper),
+                args: vec![NamedArg::Type(SourceType::Scalar(ScalarKind::U8))],
             },
         ),
-        // A lifetime is part of the spelling, not modeled structure.
-        ("KeyExpr<'static>", named("KeyExpr")),
+        // A lifetime is kept VERBATIM as an argument: part of the spelling, not
+        // modeled structure — and `Foo<'static>` is not `Foo`.
+        (
+            "KeyExpr<'static>",
+            SourceType::Named {
+                path: syn::parse_quote!(KeyExpr),
+                args: vec![NamedArg::Lifetime(syn::parse_quote!('static))],
+            },
+        ),
         (
             "&u8",
             SourceType::Ref {
+                lifetime: None,
                 mutable: false,
                 inner: Box::new(SourceType::Scalar(ScalarKind::U8)),
             },
@@ -95,6 +104,7 @@ fn accepted_types() {
         (
             "&mut Foo",
             SourceType::Ref {
+                lifetime: None,
                 mutable: true,
                 inner: Box::new(named("Foo")),
             },
@@ -102,6 +112,7 @@ fn accepted_types() {
         (
             "&[u8]",
             SourceType::Ref {
+                lifetime: None,
                 mutable: false,
                 inner: Box::new(SourceType::Slice(Box::new(SourceType::Scalar(
                     ScalarKind::U8,
@@ -114,10 +125,6 @@ fn accepted_types() {
                 mutable: false,
                 inner: Box::new(SourceType::Scalar(ScalarKind::U8)),
             },
-        ),
-        (
-            "(u8, String)",
-            SourceType::Tuple(vec![SourceType::Scalar(ScalarKind::U8), SourceType::Str]),
         ),
         (
             "impl Fn(u8) + Send + Sync + 'static",
@@ -211,6 +218,16 @@ fn refused_types() {
             "Result<u8>",
             UnsupportedTypeReason::WrongGenericArity { expected: 2 },
         ),
+        // Only `()` is in the language. No adapter has ever lowered a tuple —
+        // every `Type::Tuple` site in both of them is the unit case or a
+        // generic walk — so accepting one only deferred the failure to a late
+        // "unresolved type".
+        ("(u8, String)", UnsupportedTypeReason::UnsupportedTuple),
+        ("(Foo,)", UnsupportedTypeReason::UnsupportedTuple),
+        // An associated type: `#[prebindgen]` never captures `impl` blocks, so
+        // what this resolves to is unknowable here.
+        ("<T as Trait>::Assoc", UnsupportedTypeReason::AssociatedType),
+        ("<Holder>::N", UnsupportedTypeReason::AssociatedType),
     ];
     for (src, reason) in cases {
         match lower(src) {
@@ -227,43 +244,90 @@ fn refused_types() {
     );
 }
 
-/// `to_syn` round-trips: the projection of a lowered type re-lowers to itself.
+/// **The projection preserves type IDENTITY.**
 ///
-/// This is what makes the `syn` field types stored on an item a projection
-/// rather than a second source of truth — they cannot say something the model
-/// does not.
+/// For every accepted form, the `TypeKey` of the normalized original equals the
+/// `TypeKey` of its projection — so writing `field.ty = ty.to_syn()` in pass 3
+/// cannot change what a type *is*.
+///
+/// This compares against the **normalized original**, which is what makes it
+/// detect loss. Its predecessor projected an already-projected type and so only
+/// proved a lossy function idempotent; it passed while `&'static Foo` became
+/// `&Foo`, `Foo<'static>` became `Foo`, and `foreign::Option<u8>` became the
+/// prelude `Option<u8>`.
+///
+/// Arrays are the one deliberate exception — the extent becomes its number —
+/// so they are asserted against the expected numeric form instead.
 #[test]
-fn to_syn_round_trips() {
-    for src in [
+fn the_projection_preserves_type_identity() {
+    let identity = [
         "u8",
+        "bool",
         "String",
         "()",
         "Option<Vec<u8>>",
         "Box<Foo>",
         "Result<u8, String>",
+        "Foo",
         "Wrapper<u8>",
+        // The five the review found. Each was silently rewritten before.
+        "& 'static Foo",
+        "&'a mut Foo",
+        "Foo<'static>",
+        "Foo<'a, u8>",
+        "foreign::Option<u8>",
+        "a::b::Foo<u8>",
+        "::root::Foo",
+        // Neighbours of those, to pin that the fix did not overshoot.
+        "&Foo",
         "&mut Foo",
         "&[u8]",
         "*mut u8",
-        "(u8, String)",
-        "[u8; 4]",
-        "[[u8; N]; M]",
         "impl Fn(u8) + Send + Sync + 'static",
-    ] {
-        let once = lower(src).unwrap_or_else(|r| panic!("`{src}` refused: {r:?}"));
-        let projected = once.to_syn();
-        let twice = lower_type(&projected, &consts(), Some("myflat")).unwrap_or_else(|e| {
-            panic!(
-                "`{src}` projection `{}` refused: {e}",
-                projected.to_token_stream()
-            )
-        });
-        // The extent's SPELLING is deliberately not in the projection, so
-        // compare the semantic form.
+    ];
+    for src in identity {
+        let ty: syn::Type = syn::parse_str(src).unwrap_or_else(|e| panic!("`{src}`: {e}"));
+        let lowered = lower(src).unwrap_or_else(|r| panic!("`{src}` was refused: {r:?}"));
         assert_eq!(
-            twice.to_syn().to_token_stream().to_string(),
-            projected.to_token_stream().to_string(),
-            "`{src}` did not round-trip"
+            TypeKey::from_type(&ty),
+            TypeKey::from_type(&lowered.to_syn()),
+            "`{src}` lost identity: projected as `{}`",
+            lowered.to_syn().to_token_stream()
         );
     }
+
+    // An extent is deliberately projected as its value, and nothing else moves.
+    let arr = lower("[u8; N]").unwrap();
+    assert_eq!(
+        TypeKey::from_type(&arr.to_syn()),
+        TypeKey::from_type(&syn::parse_quote!([u8; 4]))
+    );
+    let nested = lower("Option<[[u8; N]; M]>").unwrap();
+    assert_eq!(
+        TypeKey::from_type(&nested.to_syn()),
+        TypeKey::from_type(&syn::parse_quote!(Option<[[u8; 4]; 2]>))
+    );
+}
+
+/// A builtin must be spelled BARE. `foreign::Option` merely shares a name with
+/// the prelude type and is a different type; collapsing it would silently
+/// retype the field and pick the wrong converter.
+///
+/// `normalize_type` is what makes this safe to demand: it reduces the real std
+/// paths to bare form at ingest and deliberately leaves unknown crate paths
+/// alone.
+#[test]
+fn a_builtin_must_be_spelled_bare() {
+    assert!(matches!(lower("Option<u8>"), Ok(SourceType::Optional(_))));
+    assert!(matches!(lower("Vec<u8>"), Ok(SourceType::Sequence(_))));
+    assert!(matches!(lower("String"), Ok(SourceType::Str)));
+
+    for foreign in ["foreign::Option<u8>", "foreign::Vec<u8>", "foreign::String"] {
+        assert!(
+            matches!(lower(foreign), Ok(SourceType::Named { .. })),
+            "`{foreign}` must stay a foreign named type"
+        );
+    }
+    // A user type ending in a scalar's name is not that scalar either.
+    assert!(matches!(lower("mycrate::u8"), Ok(SourceType::Named { .. })));
 }

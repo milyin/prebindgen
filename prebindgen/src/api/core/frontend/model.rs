@@ -65,28 +65,33 @@ pub enum SourceType {
     /// Any other named type: a `#[prebindgen]` struct or enum, or a foreign
     /// path.
     ///
-    /// `name` is the normalized spelling WITHOUT generic arguments — the type's
-    /// identity, not syntax to re-inspect; the arguments are modeled in `args`.
-    /// A lifetime argument survives in `name` alone, since it is part of the
-    /// spelling but carries no structure.
+    /// `path` carries the type's **identity** — leading `::`, every segment,
+    /// and the final ident — with the last segment's generic arguments stripped
+    /// out into `args`. Keeping them in both places would be two
+    /// representations of one fact.
+    ///
+    /// `args` preserves the arguments **in source order**, lifetimes included,
+    /// which is what makes the projection reconstruct `Foo<'a, T>` exactly. A
+    /// lifetime is part of the spelling and nothing more: it is carried
+    /// verbatim, never modeled as structure, because it means nothing to a
+    /// destination language.
     Named {
-        name: syn::Path,
-        args: Vec<SourceType>,
+        path: syn::TypePath,
+        args: Vec<NamedArg>,
     },
     /// `[T; N]`. The extent carries how it was written — see [`ArrayExtent`].
     Array {
         elem: Box<SourceType>,
         extent: ArrayExtent,
     },
-    /// `&T` / `&mut T`.
+    /// `&T` / `&'a T` / `&mut T`.
     Ref {
+        lifetime: Option<syn::Lifetime>,
         mutable: bool,
         inner: Box<SourceType>,
     },
     /// `[T]`, only ever behind a [`SourceType::Ref`].
     Slice(Box<SourceType>),
-    /// `(A, B, …)`; the empty tuple is [`SourceType::Unit`].
-    Tuple(Vec<SourceType>),
     /// `*const T` / `*mut T`.
     Ptr {
         mutable: bool,
@@ -96,6 +101,17 @@ pub enum SourceType {
     Callback { args: Vec<SourceType> },
     /// `()`.
     Unit,
+}
+
+/// One generic argument of a [`SourceType::Named`], in source order.
+///
+/// A lifetime is kept verbatim rather than modeled: it is part of the type's
+/// spelling — `Foo<'static>` is not `Foo` — but carries nothing a destination
+/// language can act on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NamedArg {
+    Lifetime(syn::Lifetime),
+    Type(SourceType),
 }
 
 /// The primitives the source language accepts. Mirrors the set every adapter
@@ -246,6 +262,16 @@ pub enum UnsupportedTypeReason {
     /// A generic that takes a fixed arity and did not get it — `Option` with no
     /// argument, `Result` with one.
     WrongGenericArity { expected: usize },
+    /// A non-empty tuple. Only `()` is in the language: no adapter has ever
+    /// lowered a tuple, so accepting one would defer the failure to a late
+    /// "unresolved type" instead of naming it here.
+    UnsupportedTuple,
+    /// A path with a qualified self — `<T as Trait>::Assoc`.
+    ///
+    /// The frontend never captures `impl` blocks, so it cannot know what an
+    /// associated type resolves to; carrying the spelling would only move the
+    /// failure downstream.
+    AssociatedType,
     /// A lifetime or const generic argument in a position the model does not
     /// represent.
     UnsupportedGenericArgument,
@@ -272,6 +298,18 @@ impl fmt::Display for UnsupportedType {
             UnsupportedTypeReason::WrongGenericArity { expected } => write!(
                 f,
                 "type `{}` needs exactly {expected} type argument(s)",
+                self.offending
+            ),
+            UnsupportedTypeReason::UnsupportedTuple => write!(
+                f,
+                "type `{}` is a tuple; only the unit `()` is supported — return the \
+                 components separately, or wrap them in a `#[prebindgen]` struct",
+                self.offending
+            ),
+            UnsupportedTypeReason::AssociatedType => write!(
+                f,
+                "type `{}` is an associated type; `#[prebindgen]` never captures `impl` \
+                 blocks, so its resolution is unknowable here — name the concrete type",
                 self.offending
             ),
             UnsupportedTypeReason::UnsupportedGenericArgument => write!(
@@ -325,6 +363,7 @@ pub(crate) fn lower_type(
         syn::Type::Group(g) => lower_type(&g.elem, consts, item_crate),
         syn::Type::Paren(p) => lower_type(&p.elem, consts, item_crate),
         syn::Type::Reference(r) => Ok(SourceType::Ref {
+            lifetime: r.lifetime.clone(),
             mutable: r.mutability.is_some(),
             inner: Box::new(lower_type(&r.elem, consts, item_crate)?),
         }),
@@ -336,12 +375,9 @@ pub(crate) fn lower_type(
             inner: Box::new(lower_type(&p.elem, consts, item_crate)?),
         }),
         syn::Type::Tuple(t) if t.elems.is_empty() => Ok(SourceType::Unit),
-        syn::Type::Tuple(t) => Ok(SourceType::Tuple(
-            t.elems
-                .iter()
-                .map(|e| lower_type(e, consts, item_crate))
-                .collect::<Result<_, _>>()?,
-        )),
+        // Only the unit is in the language. Refusing here names the type;
+        // accepting would defer the failure to an "unresolved type" much later.
+        syn::Type::Tuple(_) => Err(fail(UnsupportedTypeReason::UnsupportedTuple)),
         syn::Type::Array(a) => {
             let rendered = a.to_token_stream().to_string();
             let extent = lower_array_len(&a.len, &rendered, item_crate, consts)
@@ -375,22 +411,30 @@ fn lower_path(
         offending: ty.to_token_stream().to_string(),
         reason,
     };
-    // A qualified self (`<T as Trait>::Assoc`) is never normalized and has no
-    // modeled meaning; its spelling is its identity, so it stays a named type.
+    // An associated type is refused rather than carried: the frontend never
+    // captures `impl` blocks, so what `<T as Trait>::Assoc` resolves to is
+    // unknowable here, and keeping the spelling would only move the failure
+    // downstream.
+    if tp.qself.is_some() {
+        return Err(fail(UnsupportedTypeReason::AssociatedType));
+    }
     let Some(last) = tp.path.segments.last() else {
         return Err(fail(UnsupportedTypeReason::UnsupportedForm));
     };
     let name = last.ident.to_string();
-    let args: Vec<SourceType> = match &last.arguments {
+
+    // Arguments in SOURCE ORDER, lifetimes kept verbatim. Order and lifetimes
+    // are what make the projection reconstruct the type exactly.
+    let args: Vec<NamedArg> = match &last.arguments {
         syn::PathArguments::None => Vec::new(),
         syn::PathArguments::AngleBracketed(ab) => {
             let mut out = Vec::new();
             for a in &ab.args {
                 match a {
-                    syn::GenericArgument::Type(t) => out.push(lower_type(t, consts, item_crate)?),
-                    // A lifetime is part of a type's identity but carries no
-                    // structure to model; it survives in `name`'s spelling.
-                    syn::GenericArgument::Lifetime(_) => {}
+                    syn::GenericArgument::Type(t) => {
+                        out.push(NamedArg::Type(lower_type(t, consts, item_crate)?))
+                    }
+                    syn::GenericArgument::Lifetime(lt) => out.push(NamedArg::Lifetime(lt.clone())),
                     _ => return Err(fail(UnsupportedTypeReason::UnsupportedGenericArgument)),
                 }
             }
@@ -401,58 +445,71 @@ fn lower_path(
         }
     };
 
-    let arity = |n: usize| {
-        if args.len() == n {
-            Ok(())
-        } else {
-            Err(fail(UnsupportedTypeReason::WrongGenericArity {
-                expected: n,
-            }))
-        }
-    };
-    let one = |mut args: Vec<SourceType>| Box::new(args.remove(0));
-
-    // A bare primitive, before anything else. Guarded on `qself`/args so a
-    // user type that happens to end in `u8` cannot be mistaken for one.
-    if tp.qself.is_none() && tp.path.segments.len() == 1 && args.is_empty() {
-        if let Some(kind) = ScalarKind::from_name(&name) {
-            return Ok(SourceType::Scalar(kind));
-        }
-    }
-    // Only bare / prelude-normalized spellings reach here: `normalize_type` has
-    // already reduced `std::option::Option` and friends at ingest.
-    match name.as_str() {
-        "String" if args.is_empty() => Ok(SourceType::Str),
-        "Option" => {
-            arity(1)?;
-            Ok(SourceType::Optional(one(args)))
-        }
-        "Vec" => {
-            arity(1)?;
-            Ok(SourceType::Sequence(one(args)))
-        }
-        "Box" => {
-            arity(1)?;
-            Ok(SourceType::Boxed(one(args)))
-        }
-        "Result" => {
-            arity(2)?;
-            let mut args = args;
-            let err = Box::new(args.remove(1));
-            let ok = Box::new(args.remove(0));
-            Ok(SourceType::Fallible { ok, err })
-        }
-        _ => {
-            // The name is the type's IDENTITY and nothing else: the generic
-            // arguments live in `args`, modeled, so keeping a copy of them in
-            // the path too would be two representations of one fact.
-            let mut name = tp.path.clone();
-            if let Some(last) = name.segments.last_mut() {
-                last.arguments = syn::PathArguments::None;
+    // A builtin must be spelled BARE. `normalize_type` has already reduced the
+    // real std paths (`std::option::Option` → `Option`) at ingest and
+    // deliberately leaves unknown crate paths alone, so anything still carrying
+    // a prefix is a foreign type that merely shares a name — `foreign::Option`
+    // is not `Option`, and collapsing it would silently retype the field.
+    let is_bare = tp.path.leading_colon.is_none() && tp.path.segments.len() == 1;
+    if is_bare {
+        if args.is_empty() {
+            if let Some(kind) = ScalarKind::from_name(&name) {
+                return Ok(SourceType::Scalar(kind));
             }
-            Ok(SourceType::Named { name, args })
+            if name == "String" {
+                return Ok(SourceType::Str);
+            }
+        }
+        // A builtin generic takes types only; a lifetime argument on one is not
+        // a shape this language has.
+        let types: Option<Vec<SourceType>> = args
+            .iter()
+            .map(|a| match a {
+                NamedArg::Type(t) => Some(t.clone()),
+                NamedArg::Lifetime(_) => None,
+            })
+            .collect();
+        if let Some(mut types) = types {
+            let arity = |n: usize| {
+                if types.len() == n {
+                    Ok(())
+                } else {
+                    Err(fail(UnsupportedTypeReason::WrongGenericArity {
+                        expected: n,
+                    }))
+                }
+            };
+            match name.as_str() {
+                "Option" => {
+                    arity(1)?;
+                    return Ok(SourceType::Optional(Box::new(types.remove(0))));
+                }
+                "Vec" => {
+                    arity(1)?;
+                    return Ok(SourceType::Sequence(Box::new(types.remove(0))));
+                }
+                "Box" => {
+                    arity(1)?;
+                    return Ok(SourceType::Boxed(Box::new(types.remove(0))));
+                }
+                "Result" => {
+                    arity(2)?;
+                    let err = Box::new(types.remove(1));
+                    let ok = Box::new(types.remove(0));
+                    return Ok(SourceType::Fallible { ok, err });
+                }
+                _ => {}
+            }
         }
     }
+
+    // Everything else keeps its full path as identity, with the last segment's
+    // arguments stripped out into `args` so one fact has one representation.
+    let mut path = tp.clone();
+    if let Some(last) = path.path.segments.last_mut() {
+        last.arguments = syn::PathArguments::None;
+    }
+    Ok(SourceType::Named { path, args })
 }
 
 impl SourceType {
@@ -484,36 +541,49 @@ impl SourceType {
                 let (o, e) = (ok.to_syn(), err.to_syn());
                 syn::parse_quote!(Result<#o, #e>)
             }
-            SourceType::Named { name, args } => {
-                let mut path = name.clone();
+            SourceType::Named { path, args } => {
+                let mut out = path.clone();
                 if !args.is_empty() {
-                    if let Some(last) = path.segments.last_mut() {
-                        let ts: Vec<syn::Type> = args.iter().map(|a| a.to_syn()).collect();
-                        let ab: syn::AngleBracketedGenericArguments = syn::parse_quote!(<#(#ts),*>);
+                    if let Some(last) = out.path.segments.last_mut() {
+                        // Rebuilt in SOURCE ORDER, lifetimes included, so
+                        // `Foo<'a, T>` comes back exactly as written.
+                        let rendered: Vec<proc_macro2::TokenStream> = args
+                            .iter()
+                            .map(|a| match a {
+                                NamedArg::Lifetime(lt) => quote::quote!(#lt),
+                                NamedArg::Type(t) => {
+                                    let t = t.to_syn();
+                                    quote::quote!(#t)
+                                }
+                            })
+                            .collect();
+                        let ab: syn::AngleBracketedGenericArguments =
+                            syn::parse_quote!(<#(#rendered),*>);
                         last.arguments = syn::PathArguments::AngleBracketed(ab);
                     }
                 }
-                syn::Type::Path(syn::TypePath { qself: None, path })
+                syn::Type::Path(out)
             }
             SourceType::Array { elem, extent } => {
                 let (t, n) = (elem.to_syn(), extent.to_expr());
                 syn::parse_quote!([#t; #n])
             }
-            SourceType::Ref { mutable, inner } => {
+            SourceType::Ref {
+                lifetime,
+                mutable,
+                inner,
+            } => {
                 let t = inner.to_syn();
-                if *mutable {
-                    syn::parse_quote!(&mut #t)
-                } else {
-                    syn::parse_quote!(&#t)
+                match (lifetime, mutable) {
+                    (Some(lt), true) => syn::parse_quote!(&#lt mut #t),
+                    (Some(lt), false) => syn::parse_quote!(&#lt #t),
+                    (None, true) => syn::parse_quote!(&mut #t),
+                    (None, false) => syn::parse_quote!(&#t),
                 }
             }
             SourceType::Slice(inner) => {
                 let t = inner.to_syn();
                 syn::parse_quote!([#t])
-            }
-            SourceType::Tuple(elems) => {
-                let ts: Vec<syn::Type> = elems.iter().map(|e| e.to_syn()).collect();
-                syn::parse_quote!((#(#ts),*))
             }
             SourceType::Ptr { mutable, inner } => {
                 let t = inner.to_syn();
@@ -568,10 +638,12 @@ impl SourceType {
                 ok.collect_extents(out);
                 err.collect_extents(out);
             }
-            SourceType::Tuple(ts) | SourceType::Callback { args: ts } => {
-                ts.iter().for_each(|t| t.collect_extents(out))
-            }
-            SourceType::Named { args, .. } => args.iter().for_each(|t| t.collect_extents(out)),
+            SourceType::Callback { args } => args.iter().for_each(|t| t.collect_extents(out)),
+            SourceType::Named { args, .. } => args.iter().for_each(|a| {
+                if let NamedArg::Type(t) = a {
+                    t.collect_extents(out)
+                }
+            }),
             SourceType::Scalar(_) | SourceType::Str | SourceType::Unit => {}
         }
     }

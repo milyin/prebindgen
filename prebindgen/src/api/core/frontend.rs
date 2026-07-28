@@ -26,9 +26,16 @@
 //!
 //! ## Scope today
 //!
-//! Only the fixed-size-array length subgrammar has moved here so far
-//! ([`array_len`]); issue #211 tracks migrating the rest. Constructs not listed
-//! in `docs/source-language.md` are still classified at their use sites.
+//! * [`array_len`] — the fixed-size-array length subgrammar.
+//! * [`model`] — a closed [`SourceType`](model::SourceType) covering the type
+//!   grammar in `docs/source-language.md`, plus
+//!   [`SourceStruct`](model::SourceStruct) for indexed structs. A struct
+//!   field's `syn` type is written from the model, so the model is authoritative
+//!   and the syntax is a projection of it.
+//!
+//! Functions and enums still keep their `syn` items, and every adapter except
+//! cbindgen's struct-field path still classifies types at its use site. Issue
+//! #211 tracks migrating the rest.
 
 mod array_len;
 pub mod model;
@@ -50,8 +57,10 @@ pub(crate) use self::array_len::{resolve_array_lengths, ConstIndex};
 /// callers a second, unvalidated route to a `SourceModel` — the very thing #211
 /// exists to prevent.
 ///
-/// A length's decided model is a bare `usize`. Which spelling produced it —
-/// `[u8; A]` versus `[u8; 4]` — is deliberately not carried; see
-/// `array_len::len_expr` for that policy and where provenance would go if it
-/// were ever wanted.
+/// A length's decided model is an
+/// [`ArrayExtent`](model::ArrayExtent): its **value**, and which const — if any
+/// — the use site named. The value is what a type-keyed table stores, since
+/// equal-valued lengths are one Rust type; the spelling lives on the use site
+/// in [`SourceStruct`](model::SourceStruct), which is what lets a C header emit
+/// `uint8_t tag[MARKER_TAG_LEN]`.
 pub use self::array_len::{ArrayLenReason, UnsupportedArrayLen};

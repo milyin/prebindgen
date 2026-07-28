@@ -8,12 +8,16 @@ It is the contract between the source crate and every generator: what a form
 *means* is decided once, by the frontend; how it *crosses a boundary* is decided
 per adapter.
 
-> **Read this first:** only the [array-length subgrammar](#array-lengths) has
-> actually moved into `core::frontend` so far. Every other row below records
-> where the decision is made *today*, which is often inside an adapter. #211
-> tracks moving them. Rows marked **frontend** are decided once and are
-> identical for every generator; rows marked with a site are not, and may differ
-> between C and JNI until they migrate.
+> **Read this first:** the [type grammar](#types) and the
+> [array-length subgrammar](#array-lengths) have moved into `core::frontend`,
+> but they are enforced there **only in modeled positions** — today, the fields
+> of a `#[prebindgen]` struct. Item kinds, function signatures and every other
+> type position are still decided at their use sites, often inside an adapter,
+> and #211 tracks moving them.
+>
+> So a row below can be refused by the frontend in a struct field and reach an
+> adapter unexamined in a function parameter. Where that distinction matters it
+> is stated on the row.
 
 Anything not listed here is **unspecified**. A form that happens to work is not
 thereby part of the language, and the frontend may start refusing it.
@@ -62,21 +66,43 @@ to JNI is the adapter's job.
 
 ## Types
 
-Type positions are walked by `immediate_subtype_positions`
-(`prebindgen/src/api/core/registry.rs`) and canonicalized at ingest by
-`types_util::normalize_type`.
+**Decided by the frontend** in modeled positions —
+`core::frontend::model::lower_type` produces a closed `SourceType`, and lowering
+is total: a form with no variant is refused. Elsewhere, type positions are
+walked by `immediate_subtype_positions` (`prebindgen/src/api/core/registry.rs`)
+and canonicalized at ingest by `types_util::normalize_type`.
 
 | Form | Status | Notes |
 |---|---|---|
 | path type (`Foo`, `Vec<u8>`, `Option<&T>`) | supported | |
-| reference (`&T`, `&mut T`) | supported | |
+| reference (`&T`, `&'a T`, `&mut T`) | supported | |
 | slice (`&[T]`) | supported | |
 | fixed-size array (`[T; N]`) | supported | Length: see [below](#array-lengths). |
-| tuple | supported | |
+| the unit `()` | supported | |
+| a non-empty tuple | **refused** | No adapter has ever lowered one; only `()` is in the language. |
 | raw pointer | walked, adapter-dependent | |
 | `impl Fn(…)` | supported in a parameter position | |
 | any other `impl Trait` | refused | |
-| a path with a qualified self (`<T as Trait>::Assoc`) | left verbatim | Never normalized; its spelling is its identity. |
+| a path with a qualified self (`<T as Trait>::Assoc`) | **refused** | `#[prebindgen]` never captures `impl` blocks, so what it resolves to is unknowable. Outside modeled positions `normalize_type` still leaves it verbatim. |
+
+### Lifetimes are part of a type's name
+
+A lifetime is preserved exactly — `Foo<'static>` is **not** `Foo`, and
+`&'static T` is not `&T` — but it is never modeled as structure, because it
+means nothing to a destination language. The model keeps it verbatim so the
+projection reconstructs the type it came from.
+
+That matters beyond spelling: declarations are matched against the normalized
+form, so `ptr_class!(ZKeyExpr<'static>)` only ever matches a captured
+`ZKeyExpr<'static>`.
+
+### A builtin must be spelled bare
+
+`String` / `Option` / `Vec` / `Box` / `Result` are recognized only as a bare,
+single-segment path. `normalize_type` has already reduced the genuine std
+spellings at ingest and deliberately leaves unknown crate paths alone, so
+`foreign::Option<u8>` is a **foreign named type** that merely shares a name —
+collapsing it would silently retype the value and select the wrong converter.
 
 ### Path normalization
 
