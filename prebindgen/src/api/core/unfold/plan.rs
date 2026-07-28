@@ -205,17 +205,34 @@ pub struct UnfoldPlan {
     /// generic over `R`/`A` — it returns the concrete type). `false` for the
     /// accessor-declared deconstructors, whose builder is caller-supplied.
     pub fixed_builder: bool,
-    /// Path prefixes that must be evaluated **once** and bound to a local, each
-    /// ending in a value-form [`PathStep::Call`] (`DeconRecord::Fields`).
-    /// Every leaf below such a prefix reaches off that local — otherwise each
-    /// field would rebuild the whole struct, cloning all of it once per leaf.
+    /// Value forms that must be evaluated **once** and bound to a local. Every
+    /// leaf below one reaches off that local — otherwise each field would
+    /// rebuild the whole struct, cloning all of it once per leaf.
     ///
     /// A list rather than a single accessor because value forms **compose**: a
     /// field may splice a child type whose own boundary is derived from *its*
     /// value form, and that child call is a second hoist nested under the
     /// first. Ordered outermost-first, so a hoist can be composed from the
     /// longest already-bound prefix of itself.
-    pub hoists: Vec<Vec<PathStep>>,
+    pub hoists: Vec<Hoist>,
+}
+
+/// One hoisted value form: where it sits, and whether it **consumes** the value
+/// it decomposes.
+#[derive(Clone)]
+pub struct Hoist {
+    /// The path prefix to bind, ending in the value form's
+    /// [`PathStep::Call`] (`DeconRecord::Fields`).
+    pub prefix: Vec<PathStep>,
+    /// `true` when the accessor takes its receiver **by value**
+    /// (`f(v: T) -> TStruct`), so the value is moved in and each field can be
+    /// moved *out* into its leaf instead of cloned — the whole point of a
+    /// consuming value form.
+    ///
+    /// Carried on the hoist rather than on [`PathStep::Call`] because only a
+    /// value-form root can consume: the ordinary accessor-chain steps are
+    /// always borrows.
+    pub consuming: bool,
 }
 
 /// One flattened output leaf of a decomposed return value.

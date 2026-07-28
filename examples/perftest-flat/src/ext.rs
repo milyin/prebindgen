@@ -1449,6 +1449,27 @@ pub fn report_to_struct(r: &Report) -> ReportStruct {
     }
 }
 
+/// The **consuming** value form of [`Report`] — the same fields, reached by
+/// destroying the report instead of cloning out of a borrow.
+///
+/// This is the shape a hot receive path wants. Every callback hands its value
+/// over **owned** (`impl Fn(Report)`), so there is nothing to preserve: moving
+/// the fields out costs nothing, while [`report_to_struct`] pays a clone per
+/// handle field for a value it is about to drop. The binding picks whichever
+/// form it declares; `expand_return!(Report).fields(fields!(report_into_struct))`
+/// selects this one and the generated code then **moves** each field into its
+/// leaf rather than cloning it.
+#[prebindgen]
+pub fn report_into_struct(r: Report) -> ReportStruct {
+    ReportStruct {
+        summary: r.summary,
+        taken: r.taken,
+        origin: r.origin,
+        outcome: r.outcome,
+        label: r.label,
+    }
+}
+
 /// Deliver a [`Report`] to a callback — the decomposed value form arriving in
 /// ONE crossing, which is the whole point of deriving the boundary rather than
 /// handing over a handle the receiver must then query field by field.

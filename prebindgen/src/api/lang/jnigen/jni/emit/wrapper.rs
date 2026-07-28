@@ -210,30 +210,13 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         let uplan = unfold_plan.expect("is_convert ⇒ plan");
         let leaf = &uplan.leaves[0];
         let by_ref = uplan.by_ref;
+        // One derivation, shared with the multi-leaf encoder — see
+        // [`reach_leaf_flat`]. Deriving it a second time here is what let the
+        // two drift apart, so the reach lives beside `reach_leaf` and both
+        // callers read the same code.
+        let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
         let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
-            use crate::api::core::unfold::{LeafSource, PathStep};
-            let mut e = if base_is_ref { base } else { quote!(&#base) };
-            for step in &leaf.path {
-                let a = step.ident();
-                e = match step {
-                    PathStep::Call { .. } => {
-                        let m = ext.fn_module(registry, a);
-                        quote!(#m::#a(#e))
-                    }
-                    PathStep::Field { .. } => quote!(&(#e).#a),
-                };
-            }
-            // A field leaf's converter takes the field type as WRITTEN (owned),
-            // so the reached place is cloned out — the same treatment
-            // `encode_plan_leaves` gives it. Without this the single-leaf
-            // shortcut hands `&F` to an `F` converter, and a non-`Copy` field
-            // additionally borrows out of the temporary the value-form call
-            // returned. An identity leaf stays borrowed: its own converter is
-            // the borrowed-opaque clone.
-            if leaf.source == LeafSource::Field {
-                e = quote!((#e).clone());
-            }
-            e
+            reach_leaf_flat(&qualify, leaf, base, base_is_ref)
         };
         match &uplan.shape {
             UnfoldShape::Optional((), _) => {

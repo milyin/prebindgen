@@ -37,7 +37,7 @@ mod plan;
 
 pub use self::{
     error::{UnfoldDeclError, UnfoldError},
-    plan::{DeconId, DeconSpec, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan, UnfoldShape},
+    plan::{DeconId, DeconSpec, Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan, UnfoldShape},
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -1197,7 +1197,7 @@ fn build_plan<M>(
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
     let mut visited: HashSet<TypeKey> = HashSet::new();
     visited.insert(TypeKey::from_type(source));
-    let mut hoists: Vec<Vec<PathStep>> = Vec::new();
+    let mut hoists: Vec<Hoist> = Vec::new();
     flatten(
         acc,
         registry,
@@ -1284,7 +1284,7 @@ fn flatten<M>(
     nullable: bool,
     visited: &mut HashSet<TypeKey>,
     leaves: &mut Vec<UnfoldLeaf>,
-    hoists: &mut Vec<Vec<PathStep>>,
+    hoists: &mut Vec<Hoist>,
 ) -> Result<(), UnfoldError> {
     let source_key = TypeKey::from_type(source);
     // The author-supplied (literal) leaf-name segment at this level, appended
@@ -1352,13 +1352,42 @@ fn flatten<M>(
                                  value-form hoisting is not implemented",
                     });
                 }
+                // A by-value receiver means the value form DESTROYS the value
+                // into its parts; the emitter then moves each field out instead
+                // of cloning it. Two shapes cannot survive that move:
+                let consuming = accessor_consumes(registry, func);
+                if consuming {
+                    // A sibling record — `.field_self()` or another `.field()` —
+                    // reads the value the form just consumed.
+                    if records.len() > 1 {
+                        return Err(UnfoldError::Unsupported {
+                            func: func.clone(),
+                            reason: "a consuming value form must be the only record of its \
+                                     declaration — it moves the value, so `.field_self()` or \
+                                     a sibling `.field()` would read a moved value",
+                        });
+                    }
+                    // Nested, it would move a field out of the parent's local,
+                    // breaking every sibling leaf that still reads that local.
+                    if !path_prefix.is_empty() {
+                        return Err(UnfoldError::Unsupported {
+                            func: func.clone(),
+                            reason: "a consuming value form cannot be reached through another \
+                                     value form — it would move a field out from under the \
+                                     parent's other leaves",
+                        });
+                    }
+                }
                 // Evaluate this value form ONCE. Recorded at the prefix it sits
                 // at rather than as a lone accessor, so a nested value form
                 // (this record reached through another one's field) gets its own
                 // hoist instead of being rebuilt per child leaf. `path_prefix`
                 // grows as `flatten` descends, so the list comes out
                 // outermost-first.
-                hoists.push(root_path.clone());
+                hoists.push(Hoist {
+                    prefix: root_path.clone(),
+                    consuming,
+                });
 
                 for fr in fields {
                     // A field's own `Option` makes everything under it nullable,
@@ -1628,6 +1657,26 @@ fn accessor_signature<M>(
         syn::ReturnType::Type(_, t) => (**t).clone(),
     };
     Ok((takes, ret))
+}
+
+/// Whether an accessor takes its receiver **by value** — a *consuming* value
+/// form, which destroys the object into its parts instead of cloning them out
+/// of a borrow.
+///
+/// Asked separately because [`accessor_signature`] peels the `&` in order to
+/// compare target types, so `f(v: T)` and `f(v: &T)` are indistinguishable
+/// there by design.
+fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
+    registry.functions.get(func).is_some_and(|(f, _)| {
+        f.sig
+            .inputs
+            .iter()
+            .find_map(|input| match input {
+                syn::FnArg::Typed(pt) => Some(!matches!(*pt.ty, syn::Type::Reference(_))),
+                _ => None,
+            })
+            .unwrap_or(false)
+    })
 }
 
 fn check_takes(

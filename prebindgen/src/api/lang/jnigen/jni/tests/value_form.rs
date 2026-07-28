@@ -896,3 +896,192 @@ fn a_vec_field_override_must_name_the_whole_vec_type() {
         "the error names the field, its whole Vec type, and the declared element type: {msg}"
     );
 }
+
+// ── Consuming value forms ────────────────────────────────────────────────────
+
+/// A value form whose accessor takes its receiver **by value** destroys the
+/// object into its parts, so nothing needs cloning. Fixture mirrors the
+/// borrowing one; `zc_owned` / `zc_borrowed` give an owned and a `&T` plan of
+/// the same type, since one declaration serves both.
+fn consuming_items() -> Vec<(syn::Item, crate::SourceLocation)> {
+    let loc = myflat_loc();
+    vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZCarrierStruct {
+                    pub label: String,
+                    pub count: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zc_into_struct(c: ZCarrier) -> ZCarrierStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zc_to_struct(c: &ZCarrier) -> ZCarrierStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zc_sub(cb: impl Fn(ZCarrier) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]
+}
+
+fn consuming_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> String {
+    let registry = Registry::<KotlinMeta>::from_items(consuming_items()).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .fun(crate::fun!(zc_sub)),
+        )
+        .expand(decl);
+    let dir = unique_test_dir(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust")
+}
+
+/// The headline: a consuming value form is handed the value itself, and each
+/// field is **moved** into its leaf. The clones the borrowing form pays — one
+/// per field, on a value it is about to drop — simply are not emitted.
+#[test]
+fn a_consuming_value_form_moves_its_fields() {
+    let rust = consuming_gen(
+        "jnigen_vf_consume",
+        crate::expand_return!(ZCarrier).fields(crate::fields!(zc_into_struct)),
+    );
+    assert!(
+        rust.contains("zc_into_struct(__cb_arg0)"),
+        "the value is passed BY MOVE, not borrowed:\n{rust}"
+    );
+    assert!(
+        rust.contains("__vf0.label") && rust.contains("__vf0.count"),
+        "each field is read off the one hoisted local:\n{rust}"
+    );
+    assert!(
+        !rust.contains("__vf0.label.clone()") && !rust.contains("__vf0.count.clone()"),
+        "and MOVED out of it — a consuming form exists precisely to drop these \
+         clones:\n{rust}"
+    );
+}
+
+/// The borrowing form is untouched: same declaration shape, still borrows, still
+/// clones. Consuming-ness is inferred per accessor, so one does not disturb the
+/// other.
+#[test]
+fn the_borrowing_value_form_still_clones() {
+    let rust = consuming_gen(
+        "jnigen_vf_borrow",
+        crate::expand_return!(ZCarrier).fields(crate::fields!(zc_to_struct)),
+    );
+    assert!(
+        rust.contains("zc_to_struct(&__cb_arg0)"),
+        "a `&T` accessor is still handed a borrow:\n{rust}"
+    );
+    assert!(
+        rust.contains("__vf0.label.clone()"),
+        "and its fields are still cloned out:\n{rust}"
+    );
+}
+
+/// One declaration is reached by BOTH owned and borrowed plans of the same type
+/// (records are type-level, `by_ref` is per-function). A borrowed plan has no
+/// value to give up, so it clones once up front rather than being rejected —
+/// the same cost the borrowing form of the accessor would have paid.
+#[test]
+fn a_borrowed_plan_clones_before_consuming() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn zc_borrowed(v: &ZVault) -> Option<&ZCarrier> {
+                unimplemented!()
+            }
+        )),
+        loc,
+    ));
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZVault))
+                .fun(crate::fun!(zc_sub))
+                .fun(crate::fun!(zc_borrowed)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_into_struct)));
+    let dir = unique_test_dir("jnigen_vf_consume_ref");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+    assert!(
+        rust.contains("zc_into_struct(__inner.clone())"),
+        "a borrowed plan clones the value, then consumes the clone:\n{rust}"
+    );
+}
+
+/// A consuming form moves the value, so anything else reading it is broken by
+/// construction — refused at declaration time rather than emitted as Rust that
+/// cannot compile in the consumer's crate.
+#[test]
+fn a_consuming_value_form_rejects_shapes_that_outlive_the_move() {
+    let build = |decl: crate::lang::ExpandReturnDecl| -> String {
+        let registry = Registry::<KotlinMeta>::from_items(consuming_items()).expect("index");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZCarrier))
+                    .fun(crate::fun!(zc_sub)),
+            )
+            .expand(decl);
+        match registry.resolve(jni) {
+            Ok(_) => String::new(),
+            Err(e) => e.to_string(),
+        }
+    };
+
+    // `.field_self()` beside it would deliver the handle the form just consumed.
+    let msg = build(
+        crate::expand_return!(ZCarrier)
+            .fields(crate::fields!(zc_into_struct))
+            .field_self(),
+    );
+    assert!(
+        msg.contains("only record") && msg.contains("zc_into_struct"),
+        "a sibling record must be refused, naming the rule and the accessor: {msg:?}"
+    );
+
+    // A plain `.field()` sibling has the same problem.
+    let msg = build(
+        crate::expand_return!(ZCarrier)
+            .fields(crate::fields!(zc_into_struct))
+            .field(crate::fun!(zc_to_struct)),
+    );
+    assert!(
+        msg.contains("only record"),
+        "any sibling record is refused, not just the identity one: {msg:?}"
+    );
+}

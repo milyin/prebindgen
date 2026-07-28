@@ -737,8 +737,8 @@ impl ExpandReturnDecl {
     }
 
     /// Take the fields from the type's **value form** — a `#[prebindgen]`
-    /// accessor `f(&Self) -> SelfStruct` returning "this type's own accessors
-    /// gathered into one struct" — instead of restating them.
+    /// accessor returning "this type's own accessors gathered into one struct"
+    /// — instead of restating them.
     ///
     /// `.fields(fields!(f))` is exactly `.field(...)` applied to each field of
     /// that struct, so it has the same configurability (per-field overrides and
@@ -757,7 +757,31 @@ impl ExpandReturnDecl {
     ///     .fields(prebindgen::fields!(sample_to_struct));
     /// ```
     ///
-    /// Mixes with the other declarators — `.fields(...).field_self()` delivers
+    /// # Borrowing or consuming
+    ///
+    /// The accessor's receiver decides how the fields are read, and the choice
+    /// is **inferred from its signature** so it cannot drift from it:
+    ///
+    /// * `f(v: &Self) -> SelfStruct` — **borrowing**. The struct is built from
+    ///   a borrow, so each field is cloned into it, and the leaves clone again
+    ///   out of the struct.
+    /// * `f(v: Self) -> SelfStruct` — **consuming**. The value is moved in and
+    ///   each field is moved *out* into its leaf. No clones at all.
+    ///
+    /// Prefer the consuming form wherever the value is delivered owned — a
+    /// callback argument (`impl Fn(Sample)`) or an owned return — which is the
+    /// hot path this whole declarator exists to make cheap. There is nothing to
+    /// preserve there: the borrowing form clones fields out of a value it is
+    /// about to drop.
+    ///
+    /// Because a consuming form moves the value, it must be the decl's **only**
+    /// record (no `.field_self()`, no sibling `.field()` — they would read a
+    /// moved value) and it cannot be reached through another value form. Both
+    /// are declaration-time errors. A function returning `&Self` clones once up
+    /// front and consumes the clone, so one declaration still serves owned and
+    /// borrowed returns alike.
+    ///
+    /// A **borrowing** form mixes freely — `.fields(...).field_self()` delivers
     /// the value form's fields *and* the live handle. At most one per decl.
     pub fn fields(mut self, decl: FieldsDecl) -> Self {
         assert!(

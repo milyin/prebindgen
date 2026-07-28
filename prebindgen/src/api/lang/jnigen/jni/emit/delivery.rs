@@ -315,7 +315,7 @@ pub(crate) fn cast_wire_to_jobject(
 /// A `Call` applies its accessor (origin-qualified); a `Field` reads the field
 /// and re-borrows, so the result is a reference either way and steps chain
 /// uniformly.
-fn compose_step(
+pub(crate) fn compose_step(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
     step: &PathStep,
     e: TokenStream,
@@ -326,6 +326,73 @@ fn compose_step(
             quote!(#m::#ident(#e))
         }
         PathStep::Field { ident, .. } => quote!(&(#e).#ident),
+    }
+}
+
+/// Start a reach from `base`, projecting the **leading run of plain field
+/// steps** directly (`&base.a.b`) instead of through a borrow of the base
+/// (`&(&base).a.b`). Returns the expression and how many steps it consumed.
+///
+/// The two forms name the same value, but the second borrows the base **as a
+/// whole**, which the borrow checker rejects once a sibling leaf has moved a
+/// different field out of it. Projecting directly makes each leaf's borrow
+/// disjoint, so a consuming value form's field moves are order-independent
+/// rather than compiling only while the borrowing leaves happen to be declared
+/// first.
+fn project_leading_fields(
+    base: &TokenStream,
+    base_is_ref: bool,
+    path: &[PathStep],
+) -> (TokenStream, usize) {
+    if base_is_ref {
+        return (base.clone(), 0);
+    }
+    let n = path.iter().take_while(|s| s.is_plain_field()).count();
+    if n == 0 {
+        return (quote!(&#base), 0);
+    }
+    let segs: Vec<&syn::Ident> = path[..n].iter().map(PathStep::ident).collect();
+    (quote!(&#base #(.#segs)*), n)
+}
+
+/// Fold a leaf's whole `path` over `base` with no optional-step handling, then
+/// apply the terminal treatment its [`LeafSource`] calls for: a `Field` leaf is
+/// **cloned** out of the place it reached, because its converter takes the field
+/// type as written (owned); every other leaf keeps the borrow its converter
+/// expects.
+///
+/// This is the derivation the single-leaf [`Delivery::Return`] shortcut uses
+/// (`emit/wrapper.rs`). It exists here, beside [`reach_leaf`], so the two are
+/// read and changed together: they drifted once already — the shortcut was
+/// missing the `Field` clone and handed `&F` to an `F` converter.
+///
+/// [`Delivery::Return`]: crate::api::core::unfold::Delivery::Return
+pub(crate) fn reach_leaf_flat(
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    leaf: &crate::api::core::unfold::UnfoldLeaf,
+    base: TokenStream,
+    base_is_ref: bool,
+) -> TokenStream {
+    use crate::api::core::unfold::LeafSource;
+    // An optional step BEFORE the last one needs a `match` whose `None` arm has
+    // somewhere to go. This derivation has none — it yields a plain Rust value,
+    // not a `JObject` that could be null — so the shape is refused here rather
+    // than composed into code that cannot type-check in the consumer's crate.
+    assert!(
+        !leaf.path.iter().rev().skip(1).any(PathStep::is_optional),
+        "jnigen unfold: leaf `{}` reaches through an optional step but is \
+         delivered as a single return value, which has no `None` arm — this \
+         shape needs callback delivery",
+        leaf.name,
+    );
+    let (mut e, lead) = project_leading_fields(&base, base_is_ref, &leaf.path);
+    for step in &leaf.path[lead..] {
+        e = compose_step(qualify, step, e);
+    }
+    if leaf.source == LeafSource::Field {
+        quote!((#e).clone())
+    } else {
+        e
     }
 }
 
@@ -353,17 +420,17 @@ fn reach_leaf(
     } else {
         path.len().saturating_sub(1)
     };
-    let mut e = if base_is_ref { base } else { quote!(&#base) };
-    match (0..limit).find(|&i| path[i].is_optional()) {
+    let (mut e, lead) = project_leading_fields(&base, base_is_ref, path);
+    match (lead..limit).find(|&i| path[i].is_optional()) {
         // No (more) optional nesting steps: compose the rest plainly.
         None => {
-            for step in path {
+            for step in &path[lead..] {
                 e = compose_step(qualify, step, e);
             }
             body(e)
         }
         Some(k) => {
-            for step in &path[..k] {
+            for step in &path[lead..k] {
                 e = compose_step(qualify, step, e);
             }
             let opt_e = compose_step(qualify, &path[k], e);
@@ -444,19 +511,36 @@ pub(crate) fn encode_plan_leaves(
                 .max_by_key(|(p, _)| p.len())
                 .map(|(p, id)| (p.len(), id.clone()))
         };
-    for (i, prefix) in plan.hoists.iter().enumerate() {
+    for (i, h) in plan.hoists.iter().enumerate() {
         let local = format_ident!("__vf{}", i);
-        let (from, mut expr) = match longest_bound(&bound, prefix) {
+        let (from, mut expr) = match longest_bound(&bound, &h.prefix) {
             Some((at, outer)) => (at, quote!(&#outer)),
+            // A CONSUMING value form is handed the value itself, so its fields
+            // move out instead of being cloned out of a borrow. A borrowed plan
+            // has no value to give up, so it clones first — the same cost the
+            // borrowing form of the accessor would have paid, which keeps one
+            // declaration usable by both owned and `&T` returns of the type.
+            None if h.consuming && by_ref => (0, quote!(#value.clone())),
+            None if h.consuming => (0, value.clone()),
             None if by_ref => (0, value.clone()),
             None => (0, quote!(&#value)),
         };
-        for step in &prefix[from..] {
+        for step in &h.prefix[from..] {
             expr = compose_step(&qualify, step, expr);
         }
         stmts.extend(quote! { let #local = #expr; });
-        bound.push((prefix.as_slice(), local));
+        bound.push((h.prefix.as_slice(), local));
     }
+
+    // Whether the innermost value form a leaf sits under CONSUMED its value —
+    // so the leaf owns its field and may move it out rather than clone it.
+    let hoist_consumes = |path: &[PathStep]| -> bool {
+        plan.hoists
+            .iter()
+            .filter(|h| h.prefix.len() < path.len() && path.starts_with(&h.prefix))
+            .max_by_key(|h| h.prefix.len())
+            .is_some_and(|h| h.consuming)
+    };
 
     // Reach a leaf off the innermost value form it sits under, with that
     // prefix's steps already consumed; a leaf under none of them (a sibling
@@ -491,8 +575,15 @@ pub(crate) fn encode_plan_leaves(
         // The value to `match` on. The selector's own path reaches the sum
         // (empty when the sum IS the value); no step on it is optional, since
         // an optional sum is refused where the leaves are built.
-        let mut matched = if base_is_ref { base } else { quote!(&#base) };
-        for step in &path {
+        //
+        // A plain field chain is borrowed DIRECTLY (`&base.a.b`) rather than
+        // through the base (`&(&base).a.b`). The two are the same value, but
+        // the second borrows the base as a whole, which the borrow checker
+        // rejects once a sibling leaf has moved another field out of it — and
+        // borrowing this field while sibling fields move is exactly what a
+        // consuming value form does.
+        let (mut matched, lead) = project_leading_fields(&base, base_is_ref, &path);
+        for step in &path[lead..] {
             matched = compose_step(&qualify, step, matched);
         }
         let (group_stmts, group_args) = encode_sum_group(
@@ -519,6 +610,7 @@ pub(crate) fn encode_plan_leaves(
         let leaf = &plan.leaves[idx];
         let obj_ident = &obj_idents[idx];
         let (value, by_ref, path) = rebase(leaf);
+        let consuming = hoist_consumes(&leaf.path);
         let value = &value;
         let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
@@ -714,6 +806,16 @@ pub(crate) fn encode_plan_leaves(
             match &leaf.source {
                 LeafSource::Accessor => {
                     reach_leaf(&qualify, &path, value.clone(), by_ref, false, 0, body)
+                }
+                // Under a CONSUMING value form the leaf owns its field, so it
+                // is **moved** out; the whole point of consuming is that this
+                // clone disappears. Each field is read by exactly one leaf, so
+                // the partial moves are disjoint — but nothing may then borrow
+                // the local as a whole, which is why the reach below projects
+                // the field directly rather than through `&(&local)`.
+                LeafSource::Field if consuming && path.iter().all(PathStep::is_plain_field) => {
+                    let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
+                    body(quote!(#value #(.#segs)*))
                 }
                 LeafSource::Field if path.iter().all(PathStep::is_plain_field) => {
                     let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
