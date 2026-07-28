@@ -40,8 +40,8 @@ pub struct ReplyStruct {
 
 A caller who sets both `RecoveryConfig` fields gets `heartbeat` ignored with no diagnostic; a caller
 who checks only `ReplyStruct::sample` reads an error reply as an empty success. These are
-[zenoh-flat #31](https://github.com/ZettaScaleLabs/zenoh-flat/issues/31) and
-[#30](https://github.com/ZettaScaleLabs/zenoh-flat/issues/30). flat's README already forbids bending
+[zenoh-flat #31](https://github.com/eclipse-zenoh/zenoh-flat/issues/31) and
+[#30](https://github.com/eclipse-zenoh/zenoh-flat/issues/30). flat's README already forbids bending
 its shapes to generator limits (§*Bindings choose; flat stays neutral*), so the fix belongs here.
 
 Sum types are also not exotic: Kotlin, Swift, Rust, TypeScript and Python (tagged unions) all express

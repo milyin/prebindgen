@@ -37,7 +37,7 @@ mod plan;
 
 pub use self::{
     error::{UnfoldDeclError, UnfoldError},
-    plan::{DeconId, DeconSpec, LeafSource, UnfoldLeaf, UnfoldPlan, UnfoldShape},
+    plan::{DeconId, DeconSpec, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan, UnfoldShape},
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -73,6 +73,36 @@ pub enum DeconRecord {
     /// moved for an owned `T`). At most one per
     /// deconstructor.
     Identity,
+    /// Read the fields of the type's **value form**: call `func` once
+    /// (`f(&T) -> TStruct`) and contribute one record per [`FieldRecord`],
+    /// reached by field access on the returned struct. The language adapter
+    /// builds the field list (it knows which structs are declared classes and
+    /// therefore inline); this record only says how to get there.
+    ///
+    /// Each field then decomposes exactly like an [`Acc`](Self::Acc) record's
+    /// return does — its own [`records`](FieldRecord::records) if the
+    /// declaration overrode it, else its type's own deconstructor if it has
+    /// one, else one leaf — so a value form and a hand-written field list
+    /// produce the same leaves.
+    Fields {
+        func: syn::Ident,
+        fields: Vec<FieldRecord>,
+    },
+}
+
+/// One field of a value form (see [`DeconRecord::Fields`]).
+#[derive(Clone)]
+pub struct FieldRecord {
+    /// Field-access chain from the value form's returned struct. More than one
+    /// element when the adapter inlined a nested declared class.
+    pub members: Vec<syn::Ident>,
+    /// The leaf name (already `__`-joined across inlined nesting).
+    pub name: String,
+    /// The field's type as written, `Option` / `Vec` layers included.
+    pub ty: syn::Type,
+    /// Explicit per-field records replacing the type's default decomposition;
+    /// `None` = decompose by the field type's own deconstructor, or one leaf.
+    pub records: Option<Vec<DeconRecord>>,
 }
 
 impl DeconRecord {
@@ -230,23 +260,7 @@ pub fn apply<M>(
     // Binding-local records skip the gate — there is no `#[prebindgen]` item
     // behind them — but keep the reserved-separator name check.
     for d in &acc.deconstructors {
-        for rec in &d.records {
-            let (func, name) = match rec {
-                DeconRecord::Acc { func, name } => (Some(func), name),
-                DeconRecord::LocalAcc { name, .. } => (None, name),
-                DeconRecord::Identity => continue,
-            };
-            // `"__"` is the reserved nesting/chain separator — author leaf names
-            // must not contain it.
-            if name.contains("__") {
-                return Err(UnfoldError::ReservedSeparator { name: name.clone() });
-            }
-            if let Some(func) = func {
-                if !accessor_fns.contains(func) {
-                    return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
-                }
-            }
-        }
+        check_records(&d.records, accessor_fns)?;
     }
 
     // Explicit decls first; they take precedence over (and suppress) a default
@@ -624,6 +638,7 @@ fn wire_fixed_returns<M>(
             delivery: Delivery::Callback,
             convert_out_ty: None,
             fixed_builder: true,
+            root_call: None,
         };
         registry.unfold_plans.insert(func.clone(), plan);
     }
@@ -690,6 +705,7 @@ fn wire_fixed_callbacks<M>(
                     delivery: Delivery::Callback,
                     convert_out_ty: None,
                     fixed_builder: true,
+                    root_call: None,
                 };
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -804,11 +820,57 @@ fn whole_leaf_fold_plan(vec_elem: &syn::Type, shape: UnfoldShape) -> UnfoldPlan 
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
+        root_call: None,
     }
 }
 
+/// The deconstructor gate: every accessor-function record must be a declared
+/// `.fun_accessor` (the single source of truth for "accessor"), and no author
+/// leaf name may contain the reserved `"__"` chain separator. Binding-local
+/// records skip the accessor check — there is no `#[prebindgen]` item behind
+/// them — but keep the name check.
+///
+/// Recurses into a value form's per-field override records, so an override is
+/// held to the same rules as the declaration it replaces.
+fn check_records(
+    records: &[DeconRecord],
+    accessor_fns: &HashSet<syn::Ident>,
+) -> Result<(), UnfoldError> {
+    for rec in records {
+        let (func, name) = match rec {
+            DeconRecord::Acc { func, name } => (Some(func), name),
+            DeconRecord::LocalAcc { name, .. } => (None, name),
+            DeconRecord::Identity => continue,
+            // A value form's field names come from struct idents, not from the
+            // author, so the `"__"` in an inlined nested name is the separator
+            // doing its job. An author-supplied rename is checked where it is
+            // declared.
+            DeconRecord::Fields { func, fields } => {
+                if !accessor_fns.contains(func) {
+                    return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
+                }
+                for fr in fields {
+                    if let Some(recs) = &fr.records {
+                        check_records(recs, accessor_fns)?;
+                    }
+                }
+                continue;
+            }
+        };
+        if name.contains("__") {
+            return Err(UnfoldError::ReservedSeparator { name: name.clone() });
+        }
+        if let Some(func) = func {
+            if !accessor_fns.contains(func) {
+                return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Strip a single leading `&` (one level) from a type.
-fn peel_ref(ty: &syn::Type) -> syn::Type {
+pub(crate) fn peel_ref(ty: &syn::Type) -> syn::Type {
     match ty {
         syn::Type::Reference(r) => (*r.elem).clone(),
         other => other.clone(),
@@ -949,6 +1011,7 @@ fn process_decl<M>(
                     delivery: ed.delivery,
                     convert_out_ty: None,
                     fixed_builder: false,
+                    root_call: None,
                 }
             }
         } else {
@@ -1141,6 +1204,12 @@ fn build_plan<M>(
         delivery: ed.delivery,
         convert_out_ty: None,
         fixed_builder: false,
+        // At most one value form per declaration (`ExpandReturnDecl::fields`
+        // enforces it), so the hoist is a single accessor, not a table.
+        root_call: records.iter().find_map(|r| match r {
+            DeconRecord::Fields { func, .. } => Some(func.clone()),
+            _ => None,
+        }),
     })
 }
 
@@ -1194,7 +1263,7 @@ fn flatten<M>(
     registry: &Registry<M>,
     records: &[DeconRecord],
     source: &syn::Type,
-    path_prefix: &[syn::Ident],
+    path_prefix: &[PathStep],
     name_prefix: &[String],
     by_ref: bool,
     nullable: bool,
@@ -1245,6 +1314,93 @@ fn flatten<M>(
                     group: None,
                 });
             }
+            DeconRecord::Fields { func, fields } => {
+                // The value form is called once; every field hangs off that one
+                // call, so the whole record shares a single `Call` step and the
+                // emitter can hoist it.
+                let (takes, _ret) = accessor_signature(registry, func)?;
+                check_takes(func, &takes, source)?;
+                let mut root_path = path_prefix.to_vec();
+                root_path.push(PathStep::call(func.clone(), false));
+
+                for fr in fields {
+                    // A field's own `Option` makes everything under it nullable,
+                    // exactly as an `Option`-returning accessor step does.
+                    let (opt, core) = match option_inner_type(&fr.ty) {
+                        Some(inner) => (true, inner),
+                        None => (false, fr.ty.clone()),
+                    };
+                    let child_ty = peel_ref(&core);
+                    let child_key = TypeKey::from_type(&child_ty);
+
+                    // Same three-way choice a `.field()` record makes: declared
+                    // override, else the field type's own deconstructor, else
+                    // one leaf.
+                    let child_records = match &fr.records {
+                        Some(recs) => Some(recs.clone()),
+                        None => match find_deconstructor_by_type(acc, &child_key) {
+                            Some(child_decl) if !visited.contains(&child_key) => {
+                                Some(child_decl.records.clone())
+                            }
+                            Some(_) => {
+                                return Err(UnfoldError::Cycle {
+                                    target: child_key.to_string(),
+                                });
+                            }
+                            None => None,
+                        },
+                    };
+
+                    // The field's own `Option` is a nullable NESTING step only
+                    // when something is decomposed below it. For a plain leaf
+                    // the whole `Option<F>` is what the converter takes — the
+                    // same rule that makes a terminal accessor's `Option` ride
+                    // its converter instead of being unwrapped.
+                    let mut field_path = root_path.clone();
+                    let (last, lead) = fr
+                        .members
+                        .split_last()
+                        .expect("a field record addresses at least one member");
+                    // Only the LAST member can be optional — an inlined nested
+                    // class is reached directly, never through an `Option`.
+                    field_path.extend(lead.iter().map(|m| PathStep::field(m.clone(), false)));
+                    field_path.push(PathStep::field(
+                        last.clone(),
+                        opt && child_records.is_some(),
+                    ));
+
+                    if let Some(child_records) = child_records {
+                        visited.insert(child_key.clone());
+                        flatten(
+                            acc,
+                            registry,
+                            &child_records,
+                            &child_ty,
+                            &field_path,
+                            &seg_name(&fr.name),
+                            by_ref,
+                            nullable || opt,
+                            visited,
+                            leaves,
+                        )?;
+                        visited.remove(&child_key);
+                    } else {
+                        // A plain field leaf: the value is CLONED out of the
+                        // struct, so its converter takes the owned field type as
+                        // written — `Option` and all, which is why a terminal
+                        // `Option` step is not a nesting step for it.
+                        leaves.push(UnfoldLeaf {
+                            name: seg_name(&fr.name).join("__"),
+                            path: field_path,
+                            out_ty: fr.ty.clone(),
+                            identity: false,
+                            nullable,
+                            source: LeafSource::Field,
+                            group: None,
+                        });
+                    }
+                }
+            }
             DeconRecord::Acc { name, .. } | DeconRecord::LocalAcc { name, .. } => {
                 // A binding-local record resolves through its synthesized
                 // registry entry (see `synthesize_local_accessors`), so both
@@ -1253,7 +1409,7 @@ fn flatten<M>(
                 let (func, local) = match rec {
                     DeconRecord::Acc { func, .. } => (func.clone(), false),
                     DeconRecord::LocalAcc { path, .. } => (DeconRecord::local_ident(path), true),
-                    DeconRecord::Identity => unreachable!(),
+                    DeconRecord::Identity | DeconRecord::Fields { .. } => unreachable!(),
                 };
                 let (takes, ret) = accessor_signature(registry, &func)?;
                 check_takes(&func, &takes, source)?;
@@ -1288,7 +1444,7 @@ fn flatten<M>(
                     visited.insert(child_key.clone());
                     let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
-                    child_path.push(func.clone());
+                    child_path.push(PathStep::call(func.clone(), opt));
                     flatten(
                         acc,
                         registry,
@@ -1332,7 +1488,7 @@ fn flatten<M>(
                         (ret, nullable, false)
                     };
                     let mut path = path_prefix.to_vec();
-                    path.push(func.clone());
+                    path.push(PathStep::call(func.clone(), opt));
                     leaves.push(UnfoldLeaf {
                         name: seg_name(name).join("__"),
                         path,

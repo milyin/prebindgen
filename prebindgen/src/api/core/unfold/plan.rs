@@ -58,6 +58,71 @@ pub struct DeconSpec {
     pub leaves: Vec<UnfoldLeaf>,
 }
 
+/// One step of a leaf's [`UnfoldLeaf::path`] — how to get from the value
+/// reached so far to the next one.
+///
+/// A step is typed rather than a bare ident because a single path may **mix**
+/// the two: an `expand_return!(T).fields(fields!(t_to_struct))` leaf calls the
+/// value-form accessor, reads a struct field, and may then call that field
+/// type's own accessor — `Call(t_to_struct)`, `Field(key_expr)`,
+/// `Call(keyexpr_as_str)`. [`LeafSource`] still says what *kind* of leaf sits
+/// at the end of the path; the steps say how it is reached.
+///
+/// Each step also records whether it is **optional** — its accessor returns
+/// `Option<…>`, or its field is typed `Option<…>`. A `true` on a step *before*
+/// the last makes it a nullable nesting step: the emitter matches on it and the
+/// `None` arm short-circuits the whole leaf to null. The flag is carried rather
+/// than re-derived so both kinds answer the question the same way and the
+/// emitter needs no type walk (an accessor's `Option` was already peeled where
+/// the step was built).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum PathStep {
+    /// Call a `#[prebindgen]` accessor on the value reached so far:
+    /// `source_module::f(&value)`.
+    Call { ident: syn::Ident, optional: bool },
+    /// Read a struct field of the value reached so far: `value.f`.
+    Field { ident: syn::Ident, optional: bool },
+}
+
+impl PathStep {
+    /// An accessor call step.
+    pub fn call(ident: syn::Ident, optional: bool) -> Self {
+        Self::Call { ident, optional }
+    }
+
+    /// A struct-field read step.
+    pub fn field(ident: syn::Ident, optional: bool) -> Self {
+        Self::Field { ident, optional }
+    }
+
+    /// The step's ident, whichever kind it is.
+    pub fn ident(&self) -> &syn::Ident {
+        match self {
+            Self::Call { ident, .. } | Self::Field { ident, .. } => ident,
+        }
+    }
+
+    /// Whether the step yields an `Option` — a nullable nesting step when it is
+    /// not the last on the path.
+    pub fn is_optional(&self) -> bool {
+        match self {
+            Self::Call { optional, .. } | Self::Field { optional, .. } => *optional,
+        }
+    }
+
+    /// Whether the step is a plain (non-optional) field read — a path made only
+    /// of these renders as `value.a.b`, needing no nesting `match`.
+    pub fn is_plain_field(&self) -> bool {
+        matches!(
+            self,
+            Self::Field {
+                optional: false,
+                ..
+            }
+        )
+    }
+}
+
 /// How a leaf's [`UnfoldLeaf::path`] is reached from the decomposed value.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum LeafSource {
@@ -140,6 +205,12 @@ pub struct UnfoldPlan {
     /// generic over `R`/`A` — it returns the concrete type). `false` for the
     /// accessor-declared deconstructors, whose builder is caller-supplied.
     pub fixed_builder: bool,
+    /// The **value-form accessor** every `.fields()` leaf reaches through
+    /// (`DeconRecord::Fields`), when the plan has one. Those leaves all begin
+    /// with the same [`PathStep::Call`], so the emitter binds one
+    /// `let __vf = f(value);` and reaches each leaf off it — otherwise every
+    /// field would rebuild the whole struct, cloning all of it once per leaf.
+    pub root_call: Option<syn::Ident>,
 }
 
 /// One flattened output leaf of a decomposed return value.
@@ -151,9 +222,10 @@ pub struct UnfoldLeaf {
     /// `"keyExpr"` → `"sample__keyExpr"`); a root identity leaf is `"handle"`.
     /// Names are unique within a deconstructor (a duplicate is a hard error).
     pub name: String,
-    /// Accessor-call chain from the root value (`[]` = the identity/root
-    /// itself; `[f]` = `f(&root)`; longer = nested records, M3).
-    pub path: Vec<syn::Ident>,
+    /// Reach chain from the root value (`[]` = the identity/root itself;
+    /// `[Call(f)]` = `f(&root)`; longer = nested records, M3). Steps of both
+    /// kinds may mix — see [`PathStep`].
+    pub path: Vec<PathStep>,
     /// Type whose resolved **output** converter encodes this leaf — a
     /// reference type for accessors (`&str`, `&F`), `&Source` for the identity
     /// leaf (so the borrowed-opaque clone converter / projection is reused).

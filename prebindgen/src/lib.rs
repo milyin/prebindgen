@@ -142,7 +142,7 @@
 //!   [`try_from!`](crate::try_from), [`into!`](crate::into),
 //!   [`try_into!`](crate::try_into)
 //! - Boundary expansion: [`expand_param!`](crate::expand_param),
-//!   [`expand_return!`](crate::expand_return)
+//!   [`expand_return!`](crate::expand_return), [`fields!`](crate::fields)
 //!
 //! **Syntax helpers** produce a bare `syn` node — `Type` / `Path` / `Expr` /
 //! `Signature` / `Ident` — to hand to a declaration method that requires one.
@@ -322,8 +322,8 @@ pub mod lang {
         box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string, matching,
         null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
         ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
-        ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, KotlinFile,
-        PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl, WriteKotlinError,
+        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen,
+        KotlinFile, PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl, WriteKotlinError,
     };
 }
 

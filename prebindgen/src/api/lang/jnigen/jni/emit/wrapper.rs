@@ -212,9 +212,15 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         let by_ref = uplan.by_ref;
         let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
             let mut e = if base_is_ref { base } else { quote!(&#base) };
-            for a in &leaf.path {
-                let m = ext.fn_module(registry, a);
-                e = quote!(#m::#a(#e));
+            for step in &leaf.path {
+                let a = step.ident();
+                e = match step {
+                    crate::api::core::unfold::PathStep::Call { .. } => {
+                        let m = ext.fn_module(registry, a);
+                        quote!(#m::#a(#e))
+                    }
+                    crate::api::core::unfold::PathStep::Field { .. } => quote!(&(#e).#a),
+                };
             }
             e
         };

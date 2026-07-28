@@ -88,7 +88,10 @@ fn accessor_optional_primitive() {
     );
     assert_eq!(plan.leaves.len(), 1);
     assert!(!plan.leaves[0].identity);
-    assert_eq!(plan.leaves[0].path[0].to_string(), "z_timestamp_ntp64");
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_timestamp_ntp64"
+    );
     assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "i64");
     assert!(reg
         .required_outputs_scan
@@ -150,7 +153,10 @@ fn accessor_plan_byref() {
     // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
     assert!(!plan.leaves[1].identity);
     assert_eq!(plan.leaves[1].path.len(), 1);
-    assert_eq!(plan.leaves[1].path[0].to_string(), "z_keyexpr_as_str");
+    assert_eq!(
+        plan.leaves[1].path[0].ident().to_string(),
+        "z_keyexpr_as_str"
+    );
     assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "& str");
 
     // Leaf out_tys registered as required outputs so the resolver builds
@@ -484,7 +490,7 @@ fn nested_accessor_flatten() {
     let path = |l: &UnfoldLeaf| {
         l.path
             .iter()
-            .map(|i| i.to_string())
+            .map(|i| i.ident().to_string())
             .collect::<Vec<_>>()
             .join(".")
     };
@@ -627,7 +633,7 @@ fn reply_product_double_option_flatten() {
     let path = |l: &UnfoldLeaf| {
         l.path
             .iter()
-            .map(|i| i.to_string())
+            .map(|i| i.ident().to_string())
             .collect::<Vec<_>>()
             .join(".")
     };
@@ -797,7 +803,10 @@ fn iterable_decomposed_plan() {
     assert!(matches!(&plan.shape, UnfoldShape::Iterable(_)));
     assert!(plan.element.is_none(), "decomposed: element not used");
     assert_eq!(plan.leaves.len(), 2);
-    assert_eq!(plan.leaves[0].path[0].to_string(), "z_zenoh_id_to_string");
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_zenoh_id_to_string"
+    );
     assert_eq!(
         plan.leaves[0].out_ty.to_token_stream().to_string(),
         "String"
@@ -1067,7 +1076,7 @@ fn value_struct_vec_is_fixed_iterable_fold() {
         reg_with(&["fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> { todo!() }"]);
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
-        path: vec![ident(name)],
+        path: vec![PathStep::field(ident(name), false)],
         out_ty: ty,
         identity: false,
         nullable: false,
@@ -1120,7 +1129,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     ]);
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
-        path: vec![ident(name)],
+        path: vec![PathStep::field(ident(name), false)],
         out_ty: ty,
         identity: false,
         nullable: false,
@@ -1328,13 +1337,16 @@ fn callback_arg_plan_derived() {
     assert_eq!(plan.leaves.len(), 3);
     // Nested keyexpr identity (borrowed: non-root) + string + direct enum.
     assert!(plan.leaves[0].identity);
-    assert_eq!(plan.leaves[0].path[0].to_string(), "z_sample_key_expr");
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_sample_key_expr"
+    );
     assert_eq!(
         plan.leaves[0].out_ty.to_token_stream().to_string(),
         "& ZKeyExpr"
     );
     assert_eq!(
-        plan.leaves[1].path.last().unwrap().to_string(),
+        plan.leaves[1].path.last().unwrap().ident().to_string(),
         "z_keyexpr_as_str"
     );
     assert_eq!(
@@ -1412,7 +1424,10 @@ fn callback_arg_borrowed_decomposed() {
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 3);
     assert!(plan.leaves[0].identity);
-    assert_eq!(plan.leaves[0].path[0].to_string(), "z_sample_key_expr");
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_sample_key_expr"
+    );
     assert_eq!(
         plan.leaves[2].out_ty.to_token_stream().to_string(),
         "SampleKind"
@@ -1561,6 +1576,7 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
         delivery: Delivery::Return,
         convert_out_ty: None,
         fixed_builder: false,
+        root_call: None,
     };
     reg.unfold_plans.insert(ident("strings"), sentinel);
     apply_leaf_vec_folds(&mut reg, vec![syn::parse_quote!(String)], &declared)

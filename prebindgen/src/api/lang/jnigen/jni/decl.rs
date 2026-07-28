@@ -51,6 +51,11 @@ pub(crate) enum LocalField {
         sig: syn::Signature,
         name_override: Option<String>,
     },
+    /// Include **every field of the type's value form** — the struct returned
+    /// by the named accessor — each as its own field. Expands to the same
+    /// records the fields would produce if named one by one; see
+    /// [`ExpandReturnDecl::fields`].
+    Fields(FieldsDecl),
 }
 
 // Class members are stored as the full `(FunctionDecl, MemberKind)` pair —
@@ -289,6 +294,16 @@ macro_rules! try_into {
 macro_rules! expand_return {
     ($t:ty) => {
         $crate::lang::ExpandReturnDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+    };
+}
+
+/// Build a [`FieldsDecl`] from the ident of a **value-form accessor** —
+/// `fields!(sample_to_struct)` is `FieldsDecl::new(prebindgen::ident!(sample_to_struct))`.
+/// The argument of [`ExpandReturnDecl::fields`](crate::lang::ExpandReturnDecl::fields).
+#[macro_export]
+macro_rules! fields {
+    ($name:ident) => {
+        $crate::lang::FieldsDecl::new($crate::ident!($name))
     };
 }
 
@@ -718,6 +733,115 @@ impl ExpandReturnDecl {
     /// so the generated Rust moves the value only after those borrows.
     pub fn field_self(mut self) -> Self {
         self.fields.push(LocalField::SelfField);
+        self
+    }
+
+    /// Take the fields from the type's **value form** — a `#[prebindgen]`
+    /// accessor `f(&Self) -> SelfStruct` returning "this type's own accessors
+    /// gathered into one struct" — instead of restating them.
+    ///
+    /// `.fields(fields!(f))` is exactly `.field(...)` applied to each field of
+    /// that struct, so it has the same configurability (per-field overrides and
+    /// renames live on the [`FieldsDecl`]) and, crucially, the same
+    /// decomposition rule: **each field crosses by its own type's default
+    /// output boundary**. A field whose type has its own `expand_return!` is
+    /// decomposed by it (a `KeyExpr` field still crosses as its string, not as
+    /// a handle); a declared `data_class!` field expands into its fields; a
+    /// field behind `Option` / `Vec` stays one leaf. So swapping a hand-written
+    /// field list for `.fields(...)` keeps the boundary shape it already had —
+    /// what changes is that the list can no longer drift from the struct.
+    ///
+    /// ```
+    /// // Instead of restating SampleStruct's fields one by one:
+    /// let _ = prebindgen::expand_return!(Sample)
+    ///     .fields(prebindgen::fields!(sample_to_struct));
+    /// ```
+    ///
+    /// Mixes with the other declarators — `.fields(...).field_self()` delivers
+    /// the value form's fields *and* the live handle. At most one per decl.
+    pub fn fields(mut self, decl: FieldsDecl) -> Self {
+        assert!(
+            !self
+                .fields
+                .iter()
+                .any(|f| matches!(f, LocalField::Fields(_))),
+            "expand_return!({}).fields(fields!({})): the decl already expands a value form — \
+             one value form states the whole field set",
+            self.key.as_str(),
+            decl.func
+        );
+        self.fields.push(LocalField::Fields(decl));
+        self
+    }
+}
+
+/// A **value-form expansion**: the accessor whose returned struct supplies the
+/// fields, plus the per-field adjustments. Built with
+/// [`fields!`](crate::fields) and handed to
+/// [`ExpandReturnDecl::fields`].
+///
+/// Both adjusters key on the **Rust struct field name**, mirroring
+/// [`FunctionDecl::expand_param`]'s Rust-parameter-name key: an unknown field
+/// name or a repeated one is a hard error, so a field renamed upstream is
+/// caught rather than silently ignored.
+#[derive(Clone)]
+pub struct FieldsDecl {
+    pub(crate) func: syn::Ident,
+    pub(crate) overrides: Vec<(String, ExpandReturnDecl)>,
+    pub(crate) names: Vec<(String, String)>,
+}
+
+impl FieldsDecl {
+    pub fn new(func: syn::Ident) -> Self {
+        Self {
+            func,
+            overrides: Vec::new(),
+            names: Vec::new(),
+        }
+    }
+
+    /// Replace **one** field's decomposition, with the same
+    /// [`ExpandReturnDecl`] a type-level default uses — so the complete-set
+    /// rule applies here too: the decl states that field's entire leaf set.
+    /// Use it where the field's type default is not what this boundary wants
+    /// (a lone `.field_self()` keeps the raw handle instead of decomposing it).
+    pub fn field(mut self, field: impl AsRef<str>, decl: ExpandReturnDecl) -> Self {
+        let field = field.as_ref().to_string();
+        assert!(
+            !self.overrides.iter().any(|(f, _)| *f == field),
+            "fields!({}).field(\"{}\", ...): field already has an override — declare its \
+             complete field set in ONE decl",
+            self.func,
+            field
+        );
+        self.overrides.push((field, decl));
+        self
+    }
+
+    /// Rename **one** field's leaf, overriding the name derived from the struct
+    /// field ident. The literal Kotlin name, like `fun!(f).name(...)`.
+    pub fn name(mut self, field: impl AsRef<str>, kotlin_name: impl Into<String>) -> Self {
+        let field = field.as_ref().to_string();
+        let kotlin_name = kotlin_name.into();
+        assert!(
+            !self.names.iter().any(|(f, _)| *f == field),
+            "fields!({}).name(\"{}\", ...): field is already renamed",
+            self.func,
+            field
+        );
+        // The derived names of inlined nested fields are joined with `"__"`, so
+        // an author name carrying one would forge a nesting that isn't there.
+        // (Core rejects it for a `.field()` name; here the name never reaches
+        // that check, so it is made at the point of declaration.)
+        assert!(
+            !kotlin_name.contains("__"),
+            "fields!({}).name(\"{}\", \"{}\"): `__` is the reserved chain separator \
+             and cannot appear in a leaf name",
+            self.func,
+            field,
+            kotlin_name,
+        );
+        self.names.push((field, kotlin_name));
         self
     }
 }
