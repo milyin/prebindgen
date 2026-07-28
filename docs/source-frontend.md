@@ -37,8 +37,8 @@ i.e. places that classify source shape today:
 |---|---|---|---|
 | `api/core` | 67 | 67 | 74 |
 | `api/lang/jnigen` | 97 | 97 | 96 |
-| `api/lang/cbindgen` | 25 | 26 | 26 |
-| **total** | 189 | 190 | **196** |
+| `api/lang/cbindgen` | 25 | 26 | 26 → 25 |
+| **total** | 189 | 190 | **196 → 195** |
 
 The first two columns were counted by hand and are wrong in both directions — a
 recount gives 69/96/26, a token-level count a third answer. **The `After F8`
@@ -69,7 +69,7 @@ number.
 | F2 | `SourceModel` — the language-neutral item model | **partial** — types complete, items structs-only |
 | F3 | Move the type-shape classifiers into the frontend | not started |
 | F4 | `Registry` consumes `SourceModel` | not started |
-| F5 | Migrate `Cbindgen` | not started |
+| F5 | Migrate `Cbindgen` | **partial** — struct fields classify off the model; params/returns blocked on F2 |
 | F6 | Migrate `JniGen` *(the long pole — 97 sites)* | not started |
 | F7 | Close the open-syntax boundary in the `Prebindgen` trait | not started |
 | F8 | Mechanical boundary check | **done** — landed early, on purpose (see below) |
@@ -153,9 +153,15 @@ what syntax reaches the adapter.
 
 - [x] Cbindgen gains array support — `[T; N]` of non-`bool` scalars is its own C wire; `[bool; N]` is refused for the restricted-validity reason (#212)
 - [x] The struct-field path reads `SourceType` from `Registry::source_struct` (#212)
-- [ ] The per-field **classification** still runs on `SourceType::to_syn()`: `is_scalar` / `is_string` / `is_vec` / `box_inner` are re-derived from the projection instead of matching the model. This is the duplicate F5 exists to delete
-- [ ] `lang/cbindgen/{trait_impl,convert,emit,builder,mod}.rs` consume `SourceModel` for parameters and returns too, not only struct fields
-- [ ] Generated C artifacts byte-identical, except where previously-accepted ambiguous syntax becomes an intentional frontend error
+- [x] The per-field **classification** now matches the model: `c_field_wire`, `is_scalar_array`, `data_field_wire`, `data_field_owns`, `restricted_validity_field`, and the `in_data_struct` / `out_data_struct` field loops take a `SourceType` and match it, instead of re-deriving the shape from `to_syn()`
+
+  The rule this established, and the one later stages should follow: **shape from the model, identity from the registry.** "Is this field a `String`, a `bool`, an array of scalars?" is a source fact the frontend already decided, so asking it again of syntax is the duplicate authority #211 forbids. "Is this the type the binding declared as a `tagged_union`?" is a registry lookup that happens to be keyed by `TypeKey`, i.e. by a `syn::Type` — that key is F4's to change, not F5's, so those call sites project and say why.
+
+  Effect on the ledger: `api/lang/cbindgen/mod.rs` 6 → 5, the first entry to come off it. The other predicates in that file (`is_string`, `is_bool`, `is_scalar`) were never *in* it — they classify by ident name, one of the blind spots the header lists — which is precisely why a count alone is not the measure.
+
+- [ ] `mirror_field_wire` still classifies syntax (`is_scalar` / `box_inner` / `is_option`). It is one policy shared by the `repr_c_struct` mirror path, which has a model, and the tagged-union payload path, whose **variant** fields the frontend does not model yet. Splitting it in two would duplicate the policy — the exact thing #211 forbids — so it waits on F2 modeling enums
+- [ ] `lang/cbindgen/{trait_impl,convert,emit,builder,mod}.rs` consume `SourceModel` for parameters and returns too, not only struct fields — also blocked on F2 (functions are still `syn` items)
+- [x] Generated C artifacts byte-identical, except where previously-accepted ambiguous syntax becomes an intentional frontend error — `regen-check.sh` clean across the field-classification migration
 
 ### F6 — migrate `JniGen`
 
