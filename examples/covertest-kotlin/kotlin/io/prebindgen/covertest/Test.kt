@@ -751,6 +751,19 @@ fun main() {
             "wrong-length array must report a binding error, got: $lenErr"
         }
 
+        // `bytes` is `[u8; ARRAY_BYTES]` — sized by a `#[prebindgen]` const, not
+        // a literal. The frontend EVALUATES that const at generation time, so
+        // the check is the value: if it read anything but 4, the round trip
+        // below would reject a 4-byte array and accept a 3-byte one. Nothing in
+        // the generated Rust names the const, which is why this has to be a
+        // runtime assertion rather than a source grep.
+        check(a2.bytes.size == 4) { "const-sized length must be 4, got ${a2.bytes.size}" }
+        var constLenErr: String? = null
+        arraysEcho(a1.copy(bytes = byteArrayOf(1, 2, 3))) { je -> constLenErr = je; a1 }
+        check(constLenErr?.contains("fixed-size array decode") == true) {
+            "wrong-length const-sized array must report a binding error, got: $constLenErr"
+        }
+
         // WHOLE-OBJECT input decode (`.jobject_input()`): the decoder reads each
         // field off the Kotlin object by JVM descriptor. A value-blob field's
         // slot is the wrapper class, not `[B` — reading the old descriptor threw

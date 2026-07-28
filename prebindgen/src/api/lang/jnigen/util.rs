@@ -63,10 +63,5 @@ pub(crate) fn camel_to_screaming_snake(s: &str) -> String {
     out
 }
 
-/// True iff `ty` is the unit type `()`.
-pub(crate) fn is_unit(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
-}
-
 #[cfg(test)]
 mod tests;

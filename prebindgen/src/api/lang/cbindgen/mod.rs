@@ -108,6 +108,7 @@ pub(crate) use crate::api::core::types_util::{
 };
 use crate::api::{
     core::{
+        frontend::model::SourceType,
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
         registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
@@ -731,5 +732,28 @@ fn c_field_wire(ty: &syn::Type) -> Option<syn::Type> {
     if is_scalar(ty) {
         return Some(ty.clone());
     }
+    if is_scalar_array(ty) {
+        // `[T; N]` is already `#[repr(C)]`-compatible and C sees `T x[N]`, so
+        // the array IS its own wire and the field copies with no conversion.
+        return Some(ty.clone());
+    }
     None
+}
+
+/// `true` for `[T; N]` (nested included) whose element is a scalar **other than
+/// `bool`**.
+///
+/// `bool` is excluded for the reason [`Cbindgen::restricted_validity_field`]
+/// gives: its domain is `0`/`1`, and a struct mirror is reinterpreted wholesale
+/// with no per-element hook, so a byte C wrote could become an invalid Rust
+/// `bool` before any generated code could look. Every other scalar holds any
+/// bit pattern legally.
+fn is_scalar_array(ty: &syn::Type) -> bool {
+    let syn::Type::Array(a) = ty else {
+        return false;
+    };
+    if is_bool(&a.elem) {
+        return false;
+    }
+    is_scalar(&a.elem) || is_scalar_array(&a.elem)
 }

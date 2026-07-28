@@ -36,7 +36,12 @@ pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
 ///    paths (`zenoh::KeyExpr`) are NEVER touched — the registry has no
 ///    index of a foreign namespace, so `a::KeyExpr` and `b::KeyExpr` may be
 ///    genuinely distinct types and their spelling is their identity.
-/// 5. Lifetimes are NOT normalized (`&'a T` ≠ `&T`, `Foo<'static>` ≠ `Foo`)
+/// 5. Punctuation and ordering that carry no meaning are canonicalized: the
+///    turbofish (`Foo::<T>` ≡ `Foo<T>`), a trailing comma in either argument
+///    list (`Foo<T,>` ≡ `Foo<T>`, `Fn(T,)` ≡ `Fn(T)`), an explicitly-spelled
+///    unit return (`Fn(T) -> ()` ≡ `Fn(T)`), and `impl Trait` bound order
+///    (`Send + Sync` ≡ `Sync + Send`; lifetime bounds sort last).
+/// 6. Lifetimes are NOT normalized (`&'a T` ≠ `&T`, `Foo<'static>` ≠ `Foo`)
 ///    — [`match_pattern`] treats lifetimes as fixed structure and
 ///    foreign-type declarations (`ptr_class!(ZKeyExpr<'static>)`) rely on
 ///    the verbatim spelling.
@@ -65,6 +70,66 @@ pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
                 }
             }
             syn::visit_mut::visit_type_mut(self, ty);
+        }
+
+        /// Drop argument punctuation that carries no meaning: the turbofish
+        /// (`Foo::<T>` ≡ `Foo<T>`), a trailing comma in either list, and an
+        /// explicitly-spelled unit return (`Fn(T) -> ()` ≡ `Fn(T)`).
+        ///
+        /// It belongs here rather than in any consumer because [`TypeKey`]'s
+        /// identity is the normalized token string, so two spellings of one type
+        /// would otherwise be two keys — and during the frontend migration they
+        /// would split by POSITION, a modeled struct field getting one key and a
+        /// function signature the other.
+        fn visit_path_arguments_mut(&mut self, args: &mut syn::PathArguments) {
+            // Children FIRST, then canonicalize. The unit-return test below
+            // reads the return type, and it is this recursion that unwraps
+            // `Paren` — so testing first left `-> (())` needing a second pass
+            // to reach `Fn(u8)`, and a key could then depend on whether its
+            // input had already been normalized.
+            syn::visit_mut::visit_path_arguments_mut(self, args);
+            match args {
+                syn::PathArguments::AngleBracketed(ab) => {
+                    ab.colon2_token = None;
+                    if ab.args.trailing_punct() {
+                        ab.args = std::mem::take(&mut ab.args).into_iter().collect();
+                    }
+                }
+                // `Fn(..)`'s inputs are a different punctuation list with the
+                // same problem, plus an output that may spell unit explicitly:
+                // `Fn(u8,) -> ()` is `Fn(u8)`.
+                syn::PathArguments::Parenthesized(p) => {
+                    if p.inputs.trailing_punct() {
+                        p.inputs = std::mem::take(&mut p.inputs).into_iter().collect();
+                    }
+                    if let syn::ReturnType::Type(_, ret) = &p.output {
+                        if matches!(&**ret, syn::Type::Tuple(t) if t.elems.is_empty()) {
+                            p.output = syn::ReturnType::Default;
+                        }
+                    }
+                }
+                syn::PathArguments::None => {}
+            }
+        }
+
+        /// Put `impl Trait` bounds in one order: traits sorted by their token
+        /// string, lifetime bounds last.
+        ///
+        /// Bound order is semantically irrelevant in Rust and the callback gate
+        /// already accepts any order, so without this `Send + Sync` and
+        /// `Sync + Send` are one type with two keys. Lifetimes stay last
+        /// because a bound list may not begin with one.
+        fn visit_type_impl_trait_mut(&mut self, it: &mut syn::TypeImplTrait) {
+            syn::visit_mut::visit_type_impl_trait_mut(self, it);
+            let mut bounds: Vec<syn::TypeParamBound> =
+                std::mem::take(&mut it.bounds).into_iter().collect();
+            bounds.sort_by_key(|b| {
+                (
+                    matches!(b, syn::TypeParamBound::Lifetime(_)),
+                    b.to_token_stream().to_string(),
+                )
+            });
+            it.bounds = bounds.into_iter().collect();
         }
     }
     Normalizer {
@@ -375,7 +440,10 @@ pub fn is_result_type(ty: &syn::Type) -> bool {
 }
 
 /// True when `ty` is the unit type `()`.
-#[cfg(feature = "unstable-cbindgen")]
+///
+/// Lives in core, not in an adapter: it is a source-language fact — a callback
+/// must return unit — and core deciding that by reaching into one adapter is
+/// the dependency inversion issue #211 exists to prevent.
 pub fn is_unit(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }

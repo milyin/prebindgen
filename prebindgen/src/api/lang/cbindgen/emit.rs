@@ -42,7 +42,7 @@ impl Cbindgen {
             registry.output_entry(&ty).is_some()
                 && self
                     .struct_fields(registry, &ty)
-                    .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
+                    .map(|fields| fields.iter().any(|(_, fty)| matches!(fty, SourceType::Str)))
                     .unwrap_or(false)
         })
     }
@@ -238,6 +238,7 @@ impl Cbindgen {
         self.struct_fields(registry, fty)
             .unwrap_or_default()
             .into_iter()
+            .map(|(name, fty)| (name, fty.to_syn()))
             .filter(|(_, fty)| self.data_field_owns(fty, registry))
             .collect()
     }
@@ -294,27 +295,62 @@ impl Cbindgen {
         })
     }
 
-    /// Fields (`name`, `type`) of a declared data struct, looked up from the
-    /// registry's indexed structs. `None` if the type isn't an indexed named
+    /// Fields (`name`, modeled type) of a declared data struct, read from the
+    /// frontend's **source model**. `None` if the type isn't an indexed named
     /// struct.
+    ///
+    /// Sourced from [`Registry::source_struct`] rather than from the
+    /// `syn::ItemStruct`, so a field carries the facts the frontend decided —
+    /// notably an array's [`ArrayExtent`], which is how the C mirror knows to
+    /// emit `uint8_t tag[MARKER_TAG_LEN]` instead of `[4]`. Re-reading the
+    /// `syn` item could only have recovered that by parsing source syntax,
+    /// which is what issue #211 exists to stop.
+    ///
+    /// The per-field *classification* (is it a `String`, a declared enum, an
+    /// opaque pointer) still runs on [`SourceType::to_syn`]; migrating that off
+    /// `syn` is stage F5 of the umbrella, not this change.
     pub(super) fn struct_fields(
         &self,
         registry: &Registry<()>,
         ty: &syn::Type,
-    ) -> Option<Vec<(syn::Ident, syn::Type)>> {
+    ) -> Option<Vec<(syn::Ident, SourceType)>> {
         let ident = type_path_tail(ty)?;
-        let (item, _) = registry.structs.get(&ident)?;
-        if let syn::Fields::Named(named) = &item.fields {
-            Some(
-                named
-                    .named
-                    .iter()
-                    .map(|f| (f.ident.clone().unwrap(), f.ty.clone()))
-                    .collect(),
-            )
-        } else {
-            None
+        let model = registry.source_struct(&ident)?;
+        Some(
+            model
+                .fields
+                .iter()
+                .map(|f| (f.name.clone(), f.ty.clone()))
+                .collect(),
+        )
+    }
+
+    /// How the C mirror spells a field's wire.
+    ///
+    /// Identical to `wire` except for an array whose extent named a const: that
+    /// keeps the **name**, because a symbolic extent is part of the C API's
+    /// meaning — changing the size stays one edit instead of a hunt through
+    /// literals. Recurses, so `[[u8; A]; B]` keeps both.
+    ///
+    /// The const is in scope in the generated crate because
+    /// [`Prebindgen::on_const`] re-emits it there with its literal value; see
+    /// `Cbindgen::on_const`.
+    pub(super) fn spell_field_wire(&self, fty: &SourceType, wire: &syn::Type) -> syn::Type {
+        fn spell(ty: &SourceType) -> Option<syn::Type> {
+            let SourceType::Array { elem, extent } = ty else {
+                return None;
+            };
+            let inner = spell(elem).unwrap_or_else(|| elem.to_syn());
+            let n: syn::Expr = match extent.const_id() {
+                Some(id) => {
+                    let ident = format_ident!("{}", id.name);
+                    syn::parse_quote!(#ident)
+                }
+                None => extent.to_expr(),
+            };
+            Some(syn::parse_quote!([#inner; #n]))
         }
+        spell(fty).unwrap_or_else(|| wire.clone())
     }
 
     /// Wire type of a `repr_c_struct` field in the generated **visible** mirror: a
@@ -394,7 +430,7 @@ impl Cbindgen {
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(fname, fty)| {
-                self.restricted_validity_field(&fty)
+                self.restricted_validity_field(&fty.to_syn())
                     .map(|reason| (fname, reason))
             })
             .collect()

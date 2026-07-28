@@ -189,3 +189,5 @@ See example projects in the [examples directory](https://github.com/milyin/prebi
 
 - **prebindgen API Reference**: [docs.rs/prebindgen](https://docs.rs/prebindgen)
 - **prebindgen-proc-macro API Reference**: [docs.rs/prebindgen-proc-macro](https://docs.rs/prebindgen-proc-macro)
+- **The source language**: [docs/source-language.md](docs/source-language.md) — which Rust forms a `#[prebindgen]` crate may use
+- **Data-carrying enums**: [docs/sum-types.md](docs/sum-types.md)

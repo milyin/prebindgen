@@ -365,6 +365,22 @@ pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue
     }
 }
 
+/// Width of [`Arrays::bytes`] — a `#[prebindgen]` const used as an ARRAY
+/// LENGTH.
+///
+/// It is deliberately NOT declared to any binding: an extent is a compile-time
+/// value, not something a binding has to name, so resolving it must not depend
+/// on the binding exposing it. Being `#[prebindgen]` is what matters — the
+/// frontend reads the value from the captured item, and an unmarked const is
+/// not captured at all.
+///
+/// The value must be a plain integer literal. A generator runs in `build.rs`
+/// and cannot evaluate Rust; the JNI side needs the count as a number because
+/// Kotlin cannot reference a Rust const, and the C side needs it to define the
+/// symbol its headers spell the extent with.
+#[prebindgen]
+pub const ARRAY_BYTES: usize = 4;
+
 /// Fixed-size arrays of every JNI-primitive element type.
 ///
 /// Each crosses as the matching Kotlin primitive array — bulk-copied, nothing
@@ -375,10 +391,16 @@ pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue
 /// `flags` is the one element type that is NOT a cast: a `jboolean` is a `u8`,
 /// and reinterpreting an out-of-range byte as a Rust `bool` would be undefined
 /// behavior, so the decode normalizes instead.
+///
+/// `bytes` is deliberately sized by a named `const` ([`ARRAY_BYTES`]) rather
+/// than a literal: a length is a source-language fact the frontend has to
+/// evaluate, and only a named const exercises that. It emits as `[u8; 4]` —
+/// identical to the literal spelling, which is the point: one type, one
+/// converter, whichever way the source wrote it.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Arrays {
-    pub bytes: [u8; 4],
+    pub bytes: [u8; ARRAY_BYTES],
     pub shorts: [i16; 2],
     pub ints: [i32; 3],
     pub longs: [i64; 2],

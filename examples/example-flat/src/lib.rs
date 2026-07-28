@@ -491,3 +491,48 @@ pub fn inside_foo_default() -> InsideFoo {
 pub fn inside_foo_value(x: InsideFoo) -> i32 {
     x as i32
 }
+
+/// Width of [`Marker::tag`] — a `#[prebindgen]` const used as an ARRAY EXTENT.
+///
+/// The value must be a plain integer literal: a generator runs in `build.rs`,
+/// where it cannot evaluate Rust, and the C header needs the number to define
+/// the symbol. Being `#[prebindgen]` is what makes it visible at all — the
+/// generated crate sees only what the macro exposed.
+#[prebindgen]
+pub const MARKER_TAG_LEN: usize = 4;
+
+/// A data struct with a fixed-size array field, sized by a NAMED const.
+///
+/// The const spelling is the point. `tag` must surface in C as
+/// `uint8_t tag[MARKER_TAG_LEN]`, not `uint8_t tag[4]`: a symbolic extent is
+/// part of the API's meaning, because it makes changing the size one edit
+/// rather than a hunt through literals. Carrying that fact from the source to
+/// the header is what the frontend's typed model exists for — the adapter reads
+/// the extent as a decided fact, never by re-parsing Rust syntax.
+///
+/// `[u8; N]` is already `#[repr(C)]`-compatible, so the array is its own C wire
+/// and the field copies with no conversion. An array of `bool` deliberately is
+/// NOT supported: its domain is `0`/`1`, and a mirror is reinterpreted wholesale
+/// with no per-element hook to normalise what C wrote.
+#[prebindgen]
+#[derive(Debug, Clone, PartialEq)]
+pub struct Marker {
+    pub tag: [u8; MARKER_TAG_LEN],
+    pub weight: u32,
+}
+
+/// Build a [`Marker`] from its bytes.
+#[prebindgen]
+pub fn marker_new(b0: u8, b1: u8, b2: u8, b3: u8, weight: u32) -> Marker {
+    Marker {
+        tag: [b0, b1, b2, b3],
+        weight,
+    }
+}
+
+/// Sum a [`Marker`]'s tag bytes (consumes it by value, so the array crosses
+/// both ways).
+#[prebindgen]
+pub fn marker_tag_sum(m: Marker) -> u32 {
+    m.tag.iter().map(|b| *b as u32).sum::<u32>() + m.weight
+}

@@ -59,6 +59,7 @@ impl Cbindgen {
         let mut subs: Vec<syn::Type> = Vec::new();
         let mut fallible = false;
         for (fname, fty) in &fields {
+            let fty = &fty.to_syn();
             if is_string(fty) {
                 inits.push(quote!(#fname: if v.#fname.is_null() {
                     ::std::string::String::new()
@@ -129,6 +130,7 @@ impl Cbindgen {
         }
         let mut idents = Vec::new();
         for (fname, fty) in self.struct_fields(registry, ty)? {
+            let fty = fty.to_syn();
             // An owned-pointer field is one whose mirror wire is a raw pointer
             // (`Option<Box<T>>` / `Box<T>` → `*mut t_t`); scalars/enums are not.
             if matches!(self.mirror_field_wire(&fty), Some(syn::Type::Ptr(_))) {
@@ -572,14 +574,19 @@ impl Cbindgen {
             let c_struct = self.c_type_ident(&ty);
             let mut field_defs: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
-                let wire = self.data_field_wire(fty).unwrap_or_else(|| {
+                let sty = fty.to_syn();
+                let wire = self.data_field_wire(&sty).unwrap_or_else(|| {
                     panic!(
                         "Cbindgen: field `{}` of data struct `{}` has unsupported type `{}`",
                         fname,
                         type_short(&ty),
-                        fty.to_token_stream()
+                        sty.to_token_stream()
                     )
                 });
+                // An array extent that named a const keeps the NAME here — see
+                // `spell_field_wire`. This is the one place a SOURCE fact
+                // reaches emission, and it comes from the model.
+                let wire = self.spell_field_wire(fty, &wire);
                 field_defs.push(quote!(pub #fname: #wire));
             }
             items.push(syn::parse_quote!(
@@ -658,16 +665,18 @@ impl Cbindgen {
                 let field_defs: Vec<TokenStream> = fields
                     .iter()
                     .map(|(fname, fty)| {
-                        let wire = self.mirror_field_wire(fty).unwrap_or_else(|| {
+                        let sty = fty.to_syn();
+                        let wire = self.mirror_field_wire(&sty).unwrap_or_else(|| {
                             panic!(
                                 "Cbindgen::repr_c_struct: field `{}` of `{}` has unsupported \
                                  type `{}` (expected a scalar, a declared `enum_type`, or an \
                                  opaque pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
                                 fname,
                                 type_short(&ty),
-                                fty.to_token_stream()
+                                sty.to_token_stream()
                             )
                         });
+                        let wire = self.spell_field_wire(fty, &wire);
                         quote!(pub #fname: #wire)
                     })
                     .collect();
@@ -1446,13 +1455,32 @@ impl Prebindgen for Cbindgen {
     type Metadata = ();
 
     // Consts have no declaration mechanism here (`declared_consts` stays
-    // `None`), so every indexed const re-emits through the default
-    // `on_const` — a path-alias against this source module, keeping consts
-    // with non-portable initializers valid in the generated file. (cbindgen
-    // cannot evaluate a path initializer, so aliased consts don't surface
-    // as `#define`s in the C header.)
+    // `None`), so every indexed const re-emits through `on_const` below.
     fn source_module(&self) -> Option<&syn::Path> {
         self.source_module.as_ref()
+    }
+
+    /// Re-emit a const as a **path alias** against the source module — except
+    /// one an array extent named, which is emitted **verbatim**, keeping its
+    /// literal initializer.
+    ///
+    /// The distinction is forced by cbindgen: it cannot evaluate a path
+    /// initializer, so an aliased const produces no `#define`. That is fine
+    /// while nothing references it, and fatal once the C mirror spells an
+    /// extent symbolically — `uint8_t tag[MARKER_TAG_LEN]` beside no
+    /// `#define MARKER_TAG_LEN` is a header that does not compile.
+    ///
+    /// Only extent consts change, so every other const keeps the alias and its
+    /// link to the source crate. An extent const is always an integer literal
+    /// (the frontend refuses any other kind as a length), so emitting it
+    /// verbatim is exact rather than a re-derivation.
+    fn on_const(&self, c: &syn::ItemConst, registry: &Registry<()>) -> TokenStream {
+        match self.source_module() {
+            Some(m) if c.ident != "_" && !registry.is_extent_const(&c.ident) => {
+                crate::api::core::prebindgen::const_path_alias(c, m)
+            }
+            _ => c.to_token_stream(),
+        }
     }
 
     // ── Structural type resolution ──────────────────────────────────────
@@ -1809,6 +1837,7 @@ impl Cbindgen {
             let mut inits: Vec<TokenStream> = Vec::new();
             let mut subs: Vec<syn::Type> = Vec::new();
             for (fname, fty) in &fields {
+                let fty = &fty.to_syn();
                 if is_string(fty) {
                     inits.push(quote!(#fname: __cbg_alloc_cstr(v.#fname)));
                 } else if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {

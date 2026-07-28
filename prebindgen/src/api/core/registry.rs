@@ -254,6 +254,42 @@ pub struct Registry<M = ()> {
     /// back to `crate`.
     pub(crate) source_modules: Vec<String>,
 
+    /// Every fixed-size array type the source defines, mapped to its
+    /// frontend-decided length. Filled at ingest by
+    /// [`crate::api::core::frontend::resolve_array_lengths`].
+    ///
+    /// **The value is a number, and only a number.** This table is keyed by
+    /// `TypeKey`, and `TypeKey` has already collapsed every source spelling of
+    /// one array type: `[u8; A]`, `[u8; B]` and `[u8; 4]` are one key when
+    /// `A == B == 4`, because they are one Rust type. So a type-keyed table can
+    /// answer "the length is 4" and cannot answer "the source wrote `A`" —
+    /// that second statement is false for the other occupants of the key.
+    /// Storing the spelling here would make the answer depend on which
+    /// occurrence happened to be inserted last.
+    ///
+    /// Source-use provenance is per occurrence, not per type; it belongs to a
+    /// per-use source model (issue #211's `SourceModel`), keyed by the use
+    /// site.
+    pub(crate) array_lens: HashMap<TypeKey, usize>,
+
+    /// The typed source model of every indexed struct with named fields — the
+    /// beginning of issue #211's `SourceModel`.
+    ///
+    /// This is what an adapter consumes when it needs a **source** fact rather
+    /// than a semantic type: which const an array's extent named, so a C header
+    /// can emit `uint8_t tag[MARKER_TAG_LEN]`. The `syn` field types in
+    /// [`Self::structs`] are written from this model, so they are a projection
+    /// of it rather than a second source of truth.
+    pub(crate) source_structs: HashMap<syn::Ident, crate::api::core::frontend::model::SourceStruct>,
+
+    /// `#[prebindgen]` consts that a struct field's array extent named.
+    ///
+    /// An adapter that spells such an extent symbolically — the C mirror emits
+    /// `uint8_t tag[MARKER_TAG_LEN]` — must also make the const reachable in
+    /// the destination language, or the emitted code names something that does
+    /// not exist. This is the set that has to be carried across.
+    pub(crate) extent_consts: HashSet<syn::Ident>,
+
     /// Type tables, one per direction. Each scanned type maps to its resolved
     /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
     /// resolver fills it.
@@ -318,6 +354,9 @@ impl<M> Default for Registry<M> {
             passthrough: Vec::new(),
             item_origins: HashMap::new(),
             source_modules: Vec::new(),
+            array_lens: HashMap::new(),
+            source_structs: HashMap::new(),
+            extent_consts: HashSet::new(),
             input_types: Default::default(),
             output_types: Default::default(),
             type_locations: HashMap::new(),
@@ -359,6 +398,9 @@ pub enum ScanError {
     },
     DisallowedImplTrait {
         ty: String,
+        /// Which callback rule was broken — and whether it is reserved for a
+        /// future release or cannot work at all.
+        reason: CallbackReject,
         loc: SourceLocation,
     },
     UnsupportedReceiver {
@@ -391,6 +433,22 @@ pub enum ScanError {
         /// `(qualified spelling, bare fix-it name)` pairs.
         entries: Vec<(String, String)>,
     },
+    /// A fixed-size array's length is not in the accepted source subgrammar —
+    /// see [`crate::api::core::frontend::ArrayLen`]. Raised at ingest, before
+    /// any adapter runs, so every generator refuses the same input.
+    UnsupportedArrayLength {
+        error: Box<crate::api::core::frontend::UnsupportedArrayLen>,
+        loc: SourceLocation,
+    },
+    /// A struct field's type is not in the accepted source grammar — see
+    /// [`crate::api::core::frontend::model::SourceType`]. Raised at ingest,
+    /// before any adapter runs.
+    UnsupportedFieldType {
+        item: syn::Ident,
+        field: syn::Ident,
+        error: Box<crate::api::core::frontend::model::UnsupportedType>,
+        loc: SourceLocation,
+    },
 }
 
 impl fmt::Display for ScanError {
@@ -412,23 +470,25 @@ impl fmt::Display for ScanError {
                     e.second
                 )
             }
-            ScanError::ConflictingFunctionIntent { name } => write!(
+            ScanError::ConflictingFunctionIntent { name } => {
+                write!(f, "function `{}` cannot be both declared and ignored", name)
+            }
+            ScanError::ConflictingTypeIntent { key } => {
+                write!(f, "type `{}` cannot be both declared and ignored", key)
+            }
+            ScanError::DisallowedImplTrait { ty, reason, loc } => write!(
                 f,
-                "function `{}` cannot be both declared and ignored",
-                name
-            ),
-            ScanError::ConflictingTypeIntent { key } => write!(
-                f,
-                "type `{}` cannot be both declared and ignored",
-                key
-            ),
-            ScanError::DisallowedImplTrait { ty, loc } => write!(
-                f,
-                "`impl Trait` is not allowed at {}: `{}` (only `impl Fn(...) + Send + Sync + 'static` is supported)",
-                loc, ty
+                "`impl Trait` is not allowed at {}: `{}` — {}",
+                loc,
+                ty,
+                reason.describe()
             ),
             ScanError::UnsupportedReceiver { loc } => {
-                write!(f, "method receiver (`self`) parameters are not supported at {}", loc)
+                write!(
+                    f,
+                    "method receiver (`self`) parameters are not supported at {}",
+                    loc
+                )
             }
             ScanError::UnsupportedParamPattern { loc } => {
                 write!(f, "non-ident parameter pattern is not supported at {}", loc)
@@ -463,6 +523,17 @@ impl fmt::Display for ScanError {
                     "source items live in one flat namespace keyed by their bare name; \
                      a crate-qualified spelling never matches captured signatures"
                 )
+            }
+            ScanError::UnsupportedArrayLength { error, loc } => {
+                write!(f, "{error} (at {loc})")
+            }
+            ScanError::UnsupportedFieldType {
+                item,
+                field,
+                error,
+                loc,
+            } => {
+                write!(f, "field `{item}::{field}`: {error} (at {loc})")
             }
         }
     }
@@ -678,31 +749,158 @@ impl<M> Registry<M> {
                 Err(e) => return Err(e),
             }
         }
+        // Pass 3: hand every indexed item to the frontend's array-length
+        // lowering. It runs here, not at emit time, because it needs the
+        // COMPLETE name index — a length may name any source item, including
+        // one from a later-chained stream — and because a source-language fact
+        // must be decided before any adapter sees the item (issue #211).
+        registry.resolve_array_lengths()?;
         Ok(registry)
     }
 
-    /// The origin crate's **module path** for an item ingested via
-    /// the item's [`SourceLocation`] stamp, or `None` when unknown —
-    /// callers then fall
-    /// back to [`Self::default_module`].
-    /// Every **named** item the registry indexes — functions, structs, enums,
-    /// consts — regardless of whether the stream carried an origin stamp.
+    /// Lower every fixed-size array length in every indexed item, rewriting
+    /// each to the spelling that resolves in the generated crate and recording
+    /// it in [`Self::array_lens`].
     ///
-    /// Lives here, beside the maps, so an adapter that needs "anything the
-    /// source crate defines" does not enumerate item kinds itself: a new kind
-    /// is added once, here, instead of drifting in each adapter. Deliberately
-    /// NOT keyed off [`Self::item_origins`], which holds only the items whose
-    /// [`SourceLocation::crate_name`] was set — an origin-less hand-built
-    /// stream indexes items that map never sees, and callers are expected to
-    /// pair this with `origin_module(..).unwrap_or_else(default_module)`.
-    pub fn named_item_idents(&self) -> impl Iterator<Item = &syn::Ident> {
-        self.functions
-            .keys()
-            .chain(self.structs.keys())
-            .chain(self.enums.keys())
-            .chain(self.consts.keys())
+    /// Passthrough items are included: they are emitted verbatim, so their
+    /// lengths need the same qualification as a scanned signature's.
+    fn resolve_array_lengths(&mut self) -> Result<(), ScanError> {
+        use syn::visit_mut::VisitMut;
+
+        use crate::api::core::frontend::{
+            model::{lower_type, SourceField, SourceStruct},
+            resolve_array_lengths, ConstIndex,
+        };
+
+        // Only consts can be a length, so only consts are indexed — the
+        // grammar is a bare name, and nothing else can answer it.
+        let consts = ConstIndex::new(self.consts.iter().map(|(ident, (item, loc))| {
+            (
+                ident.to_string(),
+                (*item.expr).clone(),
+                loc.crate_name.clone(),
+            )
+        }));
+
+        let mut lens: HashMap<TypeKey, usize> = HashMap::new();
+        let mut source_structs: HashMap<syn::Ident, SourceStruct> = HashMap::new();
+        let mut extent_consts: HashSet<syn::Ident> = HashSet::new();
+        // One accumulator for every map, so a length means the same thing
+        // whichever item kind it was written in.
+        //
+        // Equal-valued lengths share a key, because they share a Rust type.
+        // See `Self::array_lens`.
+        let mut record = |found: Result<Vec<(syn::Type, _)>, _>,
+                          loc: &SourceLocation|
+         -> Result<(), ScanError> {
+            let found: Vec<(syn::Type, crate::api::core::frontend::model::ArrayExtent)> = found
+                .map_err(|error| ScanError::UnsupportedArrayLength {
+                    error: Box::new(error),
+                    loc: loc.clone(),
+                })?;
+            lens.extend(
+                found
+                    .into_iter()
+                    .map(|(ty, extent)| (TypeKey::from_type(&ty), extent.value)),
+            );
+            Ok(())
+        };
+        // Each item is lowered against ITS OWN origin: a bare name must be a
+        // const marked in the same crate. Uniqueness holds across the marked
+        // namespace only, so without this a source crate's unmarked const
+        // silently binds to another crate's marked one of the same name.
+        macro_rules! resolve_map {
+            ($map:expr, $visit:ident) => {
+                for (item, loc) in $map {
+                    let origin = loc.crate_name.clone();
+                    let found =
+                        resolve_array_lengths(item, &consts, origin.as_deref(), |r, n| r.$visit(n));
+                    record(found, loc)?;
+                }
+            };
+        }
+        resolve_map!(self.functions.values_mut(), visit_item_fn_mut);
+        resolve_map!(self.enums.values_mut(), visit_item_enum_mut);
+        resolve_map!(self.consts.values_mut(), visit_item_const_mut);
+        resolve_map!(self.passthrough.iter_mut(), visit_item_mut);
+
+        // Structs go through the MODEL rather than the length walk: their
+        // fields are the one surface an adapter consumes as source (the C
+        // mirror), so they need the full typed IR, not just resolved extents.
+        // The `syn` field types are then written back from the model, so the
+        // two can never disagree — `to_syn` is a projection, not a copy.
+        for (ident, (item, loc)) in self.structs.iter_mut() {
+            let origin = loc.crate_name.clone();
+            let syn::Fields::Named(named) = &mut item.fields else {
+                continue;
+            };
+            let mut fields = Vec::with_capacity(named.named.len());
+            for field in named.named.iter_mut() {
+                let Some(name) = field.ident.clone() else {
+                    continue;
+                };
+                let ty = lower_type(&field.ty, &consts, origin.as_deref()).map_err(|error| {
+                    ScanError::UnsupportedFieldType {
+                        item: ident.clone(),
+                        field: name.clone(),
+                        error: Box::new(error),
+                        loc: loc.clone(),
+                    }
+                })?;
+                field.ty = ty.to_syn();
+                if let Some(extent) = ty.array_extent() {
+                    lens.insert(TypeKey::from_type(&field.ty), extent.value);
+                }
+                for extent in ty.extents() {
+                    if let Some(id) = extent.const_id() {
+                        extent_consts
+                            .insert(syn::Ident::new(&id.name, proc_macro2::Span::call_site()));
+                    }
+                }
+                fields.push(SourceField { name, ty });
+            }
+            source_structs.insert(ident.clone(), SourceStruct { fields });
+        }
+
+        self.array_lens = lens;
+        self.source_structs = source_structs;
+        self.extent_consts = extent_consts;
+        Ok(())
     }
 
+    /// The frontend-decided length of a fixed-size array type, or `None` if
+    /// `key` is not one the source defines.
+    ///
+    /// The single source of `N`. Read this rather than re-parsing
+    /// `syn::TypeArray::len`: the length has already been validated and
+    /// resolved once, and a second reading is where the two-authority drift
+    /// that issue #211 is about starts.
+    pub fn array_len(&self, key: &TypeKey) -> Option<usize> {
+        self.array_lens.get(key).copied()
+    }
+
+    /// The typed source model of an indexed struct, or `None` when `ident` is
+    /// not an indexed struct with named fields.
+    ///
+    /// An adapter reads this when it needs a fact about the SOURCE — which
+    /// const an extent named — rather than the semantic type. It must not
+    /// re-derive such facts from `syn`; that is the whole point of #211.
+    /// Whether `ident` is a `#[prebindgen]` const that a struct field's array
+    /// extent named — see [`Self::extent_consts`].
+    pub fn is_extent_const(&self, ident: &syn::Ident) -> bool {
+        self.extent_consts.contains(ident)
+    }
+
+    pub fn source_struct(
+        &self,
+        ident: &syn::Ident,
+    ) -> Option<&crate::api::core::frontend::model::SourceStruct> {
+        self.source_structs.get(ident)
+    }
+
+    /// The origin crate's **module path** for an item ingested via the item's
+    /// [`SourceLocation`] stamp, or `None` when unknown — callers then fall
+    /// back to [`Self::default_module`].
     pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
         let crate_name = self.item_origins.get(ident)?;
         let module = crate_name.replace('-', "_");
@@ -1230,9 +1428,10 @@ impl<M> Registry<M> {
     ) -> Result<(), ScanError> {
         // Reject `impl Trait` except `impl Fn(...) + Send + Sync + 'static`.
         if let syn::Type::ImplTrait(it) = ty {
-            if extract_fn_trait_args(ty).is_none() {
+            if let Err(reason) = extract_fn_trait_sig(ty) {
                 return Err(ScanError::DisallowedImplTrait {
                     ty: it.to_token_stream().to_string(),
+                    reason,
                     loc: loc.clone(),
                 });
             }
@@ -1483,11 +1682,77 @@ pub fn immediate_subtype_positions(ty: &syn::Type) -> Vec<syn::Type> {
     }
 }
 
-/// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the
-/// `Fn` argument types in declaration order. Otherwise None.
-pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
+/// Why a type that looks like the callback form is not one.
+///
+/// Split into two kinds on purpose. A refusal that only says *no* leaves the
+/// author guessing whether to redesign the API or wait for a release, and those
+/// are opposite responses — so each variant states which it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallbackReject {
+    /// Not the callback shape at all — not an `impl Trait`, or its bounds are
+    /// not exactly `Fn(..) + Send + Sync + 'static`.
+    NotCallbackShape,
+    /// **Reserved.** `impl Fn(..) -> R` with `R` not `()`. Every callback wire
+    /// is void-shaped today — C's `call` has no return, and jnigen's `run`
+    /// returns void — so the result would be dropped. Tracked by issue #216.
+    NonUnitReturn,
+    /// **Reserved.** A callback whose result is itself a callback: it would
+    /// need a closure struct nested in a closure struct. No use for it yet.
+    ReturnsCallback,
+    /// **Reserved.** An explicit higher-ranked binder, `impl for<'a> Fn(&'a T)`.
+    ///
+    /// Not an impossibility: the accepted elided spelling `impl Fn(&T)` IS
+    /// higher-ranked — it desugars to exactly this — and the two are mutually
+    /// substitutable in Rust. The binder constrains the Rust closure and is not
+    /// carried on any wire.
+    ///
+    /// So this is the last two-spellings-one-type case, refused only because
+    /// the canonicalization is not written: elision gives each elided input
+    /// lifetime its OWN fresh binder, so `for<'a> Fn(&'a T, &'a T)` is NOT
+    /// `Fn(&T, &T)`, and collapsing the equivalent form needs an exact rule.
+    /// Tracked by issue #222.
+    HigherRankedBinder,
+}
+
+impl CallbackReject {
+    /// The half of the diagnostic that says which rule was broken, and whether
+    /// waiting would help.
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::NotCallbackShape => "only `impl Fn(...) + Send + Sync + 'static` is supported",
+            Self::NonUnitReturn => {
+                "a callback returning a value is not yet supported — every callback wire is \
+                 void-shaped today, so the result would be dropped (tracked by \
+                 https://github.com/milyin/prebindgen/issues/216); take the result through an \
+                 argument, or return `()`"
+            }
+            Self::ReturnsCallback => {
+                "a callback returning a callback is not yet supported — it would need a closure \
+                 struct nested in a closure struct"
+            }
+            Self::HigherRankedBinder => {
+                "an explicit higher-ranked binder (`for<'a>`) is not yet supported. If every \
+                 bound lifetime is used exactly once, the elided form means the same thing and \
+                 is accepted (`for<'a> Fn(&'a T)` is `Fn(&T)`). If any is used twice, elision \
+                 does NOT preserve it — `Fn(&T, &T)` binds each input separately — so that \
+                 signature has no accepted spelling yet; tracked by \
+                 https://github.com/milyin/prebindgen/issues/222"
+            }
+        }
+    }
+}
+
+/// The `Fn` argument types of `impl Fn(T1, T2, ...) + Send + Sync + 'static`,
+/// in declaration order.
+///
+/// **The single acceptance gate for callbacks.** Every caller that only needs
+/// the shape goes through [`extract_fn_trait_args`]; this one exists so the two
+/// error-reporting sites can say *why*. One function decides — a separate
+/// "why did it fail" helper beside an `Option`-returning gate is the
+/// two-authority drift issue #211 exists to remove.
+pub fn extract_fn_trait_sig(ty: &syn::Type) -> Result<Vec<syn::Type>, CallbackReject> {
     let syn::Type::ImplTrait(it) = ty else {
-        return None;
+        return Err(CallbackReject::NotCallbackShape);
     };
     let mut args: Option<Vec<syn::Type>> = None;
     let mut has_send = false;
@@ -1496,29 +1761,59 @@ pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
     for bound in &it.bounds {
         match bound {
             syn::TypeParamBound::Trait(tb) => {
-                let last = tb.path.segments.last()?;
+                // `for<'a> Fn(..)`. Checked before the path so the binder is
+                // reported as itself rather than as a shape mismatch.
+                if tb.lifetimes.is_some() {
+                    return Err(CallbackReject::HigherRankedBinder);
+                }
+                let last = tb
+                    .path
+                    .segments
+                    .last()
+                    .ok_or(CallbackReject::NotCallbackShape)?;
                 let name = last.ident.to_string();
                 match name.as_str() {
                     "Fn" => {
                         let syn::PathArguments::Parenthesized(p) = &last.arguments else {
-                            return None;
+                            return Err(CallbackReject::NotCallbackShape);
                         };
+                        // The return was previously not read at all, so a
+                        // declared result was accepted and then dropped.
+                        if let syn::ReturnType::Type(_, ret) = &p.output {
+                            if !crate::api::core::types_util::is_unit(ret) {
+                                // An `impl Trait` return is the nested-callback
+                                // case whether or not its own bounds are
+                                // complete — `Fn() -> impl Fn()` parses with the
+                                // trailing bounds attached to the OUTER list, so
+                                // asking whether the return is itself an
+                                // accepted callback would miss it.
+                                return Err(match &**ret {
+                                    syn::Type::ImplTrait(_) => CallbackReject::ReturnsCallback,
+                                    _ => CallbackReject::NonUnitReturn,
+                                });
+                            }
+                        }
                         args = Some(p.inputs.iter().cloned().collect());
                     }
                     "Send" => has_send = true,
                     "Sync" => has_sync = true,
-                    _ => return None,
+                    _ => return Err(CallbackReject::NotCallbackShape),
                 }
             }
             syn::TypeParamBound::Lifetime(lt) if lt.ident == "static" => has_static = true,
-            _ => return None,
+            _ => return Err(CallbackReject::NotCallbackShape),
         }
     }
-    if has_send && has_sync && has_static {
-        args
-    } else {
-        None
+    match args {
+        Some(args) if has_send && has_sync && has_static => Ok(args),
+        _ => Err(CallbackReject::NotCallbackShape),
     }
+}
+
+/// Shape-only view of [`extract_fn_trait_sig`] — `None` for anything that is
+/// not an accepted callback, whatever the reason.
+pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
+    extract_fn_trait_sig(ty).ok()
 }
 
 /// A **resolved** binding generation: the [`Registry`] after
