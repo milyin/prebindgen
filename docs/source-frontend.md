@@ -33,16 +33,23 @@ Child PRs target **`source-frontend`**.
 `syn::Type::` / `syn::Expr::` match sites outside tests and outside the frontend,
 i.e. places that classify source shape today:
 
-| Where | Sites |
-|---|---|
-| `api/core` | 67 |
-| `api/lang/jnigen` | 97 |
-| `api/lang/cbindgen` | 25 |
+| Where | At F0 | After F2-partial (#212) |
+|---|---|---|
+| `api/core` | 67 | 67 |
+| `api/lang/jnigen` | 97 | 97 |
+| `api/lang/cbindgen` | 25 | 26 |
 
 Not all of these are *source*-syntax classifiers — many inspect types the adapter
 itself synthesized (wire types, converter signatures), which is legitimately the
 adapter's business. Separating the two populations is F1's job, and the number is
 here as a scale marker, not a target.
+
+**The count did not go down, and that is expected.** #212 *added* `SourceType`
+(inside `frontend/`, so outside this count) without deleting the classifiers it
+will eventually replace: cbindgen's struct-field path now reads the model, but
+still asks `is_scalar`/`is_string`/`is_vec` of the `to_syn()` projection. Removal
+is F5/F6. Until then this table measures duplication that exists, not progress —
+which is why it is reported per stage rather than as one number.
 
 ## Stages
 
@@ -50,7 +57,7 @@ here as a scale marker, not a target.
 |---|---|---|
 | F0 | Array-length subgrammar; the `core::frontend` seed | **done** — [#212](https://github.com/milyin/prebindgen/pull/212), closes #210 |
 | F1 | Complete the source-language specification and classify the 189 sites | not started |
-| F2 | `SourceModel` — the language-neutral item model | not started |
+| F2 | `SourceModel` — the language-neutral item model | **partial** — types complete, items structs-only |
 | F3 | Move the type-shape classifiers into the frontend | not started |
 | F4 | `Registry` consumes `SourceModel` | not started |
 | F5 | Migrate `Cbindgen` | not started |
@@ -91,12 +98,26 @@ adapter.
 - [ ] Decide the currently-unspecified rows: tuple-struct fields, `union`, `type` alias, generic parameters, raw pointers
 - [ ] Nail down what a *passthrough* item may contain — today it is emitted verbatim and uninterpreted
 
-### F2 — `SourceModel`
+### F2 — `SourceModel` — partially landed in #212
 
-- [ ] A language-neutral item model: identity, origin, fields, variants, parameters, returns, ownership, borrows
-- [ ] Preserve source locations and produce useful diagnostics
+Started earlier than planned, and for a concrete reason worth recording: a C
+header must be able to emit `uint8_t tag[MARKER_TAG_LEN]`, and the only honest
+way to carry "this extent named that const" to an adapter is a **node in the
+IR**. The tempting shortcut — stash the original `syn::Type` and let cbindgen
+re-read it — would have violated invariants 5 and 6 in one move.
+
+That is the general lesson, not a detail of this construct: whenever an adapter
+turns out to need a source fact, the answer is to model the fact, never to widen
+what syntax reaches the adapter.
+
+- [x] `SourceType` — a closed, language-neutral type model; lowering is **total** over the documented grammar, so acceptance is a consequence of lowering
+- [x] `ArrayExtent { value, source }` carried per **use site**, never keyed by `TypeKey`
+- [x] `SourceStruct` for indexed structs; the `syn` field types are a projection (`to_syn`), never a second source of truth
+- [x] Diagnostics: `UnsupportedType`, surfaced as `ScanError::UnsupportedFieldType` naming item and field
+- [ ] Functions and enums — still `syn` items
+- [ ] Parameters, returns, variants, ownership and borrows as modeled positions
+- [ ] Source locations on model nodes
 - [ ] One public frontend entry point from captured records to `SourceModel` (completion criterion 1)
-- [ ] `ArrayLen` folds into it rather than sitting beside it
 
 ### F3 — move the type-shape classifiers into the frontend
 
@@ -115,9 +136,11 @@ adapter.
 
 ### F5 — migrate `Cbindgen`
 
-- [ ] `lang/cbindgen/{trait_impl,convert,emit,builder,mod}.rs` consume `SourceModel`
+- [x] Cbindgen gains array support — `[T; N]` of non-`bool` scalars is its own C wire; `[bool; N]` is refused for the restricted-validity reason (#212)
+- [x] The struct-field path reads `SourceType` from `Registry::source_struct` (#212)
+- [ ] The per-field **classification** still runs on `SourceType::to_syn()`: `is_scalar` / `is_string` / `is_vec` / `box_inner` are re-derived from the projection instead of matching the model. This is the duplicate F5 exists to delete
+- [ ] `lang/cbindgen/{trait_impl,convert,emit,builder,mod}.rs` consume `SourceModel` for parameters and returns too, not only struct fields
 - [ ] Generated C artifacts byte-identical, except where previously-accepted ambiguous syntax becomes an intentional frontend error
-- [ ] Cbindgen gains array support, or refuses arrays explicitly — today it has neither
 
 ### F6 — migrate `JniGen`
 
