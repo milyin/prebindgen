@@ -315,9 +315,25 @@ impl Cbindgen {
     /// `syn` item could only have recovered that by parsing source syntax,
     /// which is what issue #211 exists to stop.
     ///
-    /// The per-field *classification* (is it a `String`, a declared enum, an
-    /// opaque pointer) still runs on [`SourceType::to_syn`]; migrating that off
-    /// `syn` is stage F5 of the umbrella, not this change.
+    /// What callers may and may not do with a field, the split stage F5
+    /// established:
+    ///
+    /// * **Shape comes from the model.** Is this field a `String`, a `bool`, an
+    ///   array of scalars? The frontend decided that already, so match the
+    ///   [`SourceType`] — see [`c_field_wire`], [`Self::data_field_wire`],
+    ///   [`Self::restricted_validity_field`]. Re-deriving it from
+    ///   [`SourceType::to_syn`] would make the projection a second authority on
+    ///   one fact, which is the drift #211 exists to stop.
+    /// * **Identity may still project.** Is this the type the binding declared
+    ///   as a `tagged_union` / `enum_type` / `opaque_ptr`? That is a registry
+    ///   lookup keyed by [`TypeKey`], i.e. by a `syn::Type`. Rekeying the
+    ///   registry is stage F4; until then those sites call `to_syn()` and say so.
+    ///
+    /// One shape consumer is deliberately still on syntax:
+    /// [`Self::mirror_field_wire`] is a single policy shared with the
+    /// tagged-union payload path, whose **variant** fields the frontend does not
+    /// model yet. Splitting it in two would duplicate the policy rather than
+    /// remove it, so it waits on F2 modeling enums.
     pub(super) fn struct_fields(
         &self,
         registry: &Registry<()>,
