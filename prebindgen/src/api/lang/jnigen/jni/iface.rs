@@ -22,7 +22,7 @@
 //! determinism is a checked invariant rather than a convention.
 
 use super::*;
-use crate::api::core::unfold::{dedup_names, DeconId, UnfoldPlan};
+use crate::api::core::unfold::{dedup_names, DeconId, LeafSource, UnfoldPlan};
 
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
@@ -1141,15 +1141,54 @@ pub(crate) fn callback_iface_spec(
                 });
             } else {
                 // Accessor-plan arg: each leaf is its own passthrough group, so
-                // the user callback still sees the flattened leaves (unchanged).
-                for n in &leaf_names {
-                    groups.push(GroupDesc {
-                        name: n.clone(),
-                        typed: None,
-                        reassemble: None,
-                        imports: Vec::new(),
-                        leaf_count: 1,
-                    });
+                // the user callback still sees the flattened leaves (unchanged)
+                // — EXCEPT a sum segment, whose selector and group slots are one
+                // value and collapse into a single typed parameter rebuilt by a
+                // `when` over the tag. Handing those slots over raw would defeat
+                // the `sealed_class!` the sum was declared as.
+                let mut k = 0usize;
+                while k < plan.leaves.len() {
+                    let leaf = &plan.leaves[k];
+                    let seg = if leaf.source == LeafSource::SumTag {
+                        (k + 1..plan.leaves.len())
+                            .take_while(|&j| plan.leaves[j].group.is_some())
+                            .last()
+                            .map_or(k + 1, |j| j + 1)
+                    } else {
+                        k + 1
+                    };
+                    if leaf.source == LeafSource::SumTag {
+                        any_fixed = true;
+                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(&leaf.out_ty))?;
+                        let (reassemble, imports) = fixed_reassembly(
+                            ext,
+                            registry,
+                            &leaf.out_ty,
+                            &plan.leaves[k..seg],
+                            &fqn,
+                        );
+                        groups.push(GroupDesc {
+                            // The tag leaf is named `<field>__tag`; the value it
+                            // selects over is that field.
+                            name: leaf_names[k]
+                                .strip_suffix(&format!("__{SUM_TAG_LEAF}"))
+                                .unwrap_or(&leaf_names[k])
+                                .to_string(),
+                            typed: Some(kt::KtType::cls(fqn.to_string())),
+                            reassemble: Some(reassemble),
+                            imports,
+                            leaf_count: seg - k,
+                        });
+                    } else {
+                        groups.push(GroupDesc {
+                            name: leaf_names[k].clone(),
+                            typed: None,
+                            reassemble: None,
+                            imports: Vec::new(),
+                            leaf_count: 1,
+                        });
+                    }
+                    k = seg;
                 }
             }
         } else {

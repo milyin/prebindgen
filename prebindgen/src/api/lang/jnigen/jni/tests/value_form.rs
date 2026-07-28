@@ -328,6 +328,183 @@ fn fields_mixes_with_field_self() {
     );
 }
 
+/// A **sum** field decomposes into its selector plus one group per
+/// alternative, right there among its sibling fields — a sum has no
+/// whole-value converter, so this is the only way it can cross at all. The
+/// `ReplyStruct { result: ReplyResult, .. }` shape.
+fn sum_field_gen(tag: &str) -> (String, String) {
+    let loc = myflat_loc();
+    let mut items = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum ZOutcome {
+                    Empty,
+                    Ok(ZBytes),
+                    Failed(String),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZReplyStruct {
+                    pub result: ZOutcome,
+                    pub seq: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_reply_to_struct(r: &ZReply) -> ZReplyStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_reply_sub(cb: impl Fn(ZReply) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc,
+    ));
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZReply))
+                .class(crate::ptr_class!(ZBytes))
+                .class(crate::sealed_class!(ZOutcome))
+                .fun(crate::fun!(z_reply_sub)),
+        )
+        .expand(crate::expand_return!(ZReply).fields(crate::fields!(z_reply_to_struct)));
+
+    let dir = unique_test_dir(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    (rust, kotlin)
+}
+
+#[test]
+fn a_sum_field_crosses_as_its_selector_and_groups() {
+    let (rust, kotlin) = sum_field_gen("jnigen_vf_sum");
+    assert!(
+        kotlin.contains("result__tag: Int"),
+        "the sum field contributes its selector, prefixed by the field:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("result__ok_v0: Long") && kotlin.contains("result__failed_v0: String?"),
+        "one group slot per alternative payload, object slots nullable \
+         (an inert group arrives as null):\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("seq: Long"),
+        "a sibling field is unaffected:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("ZOutcome.Ok(") && kotlin.contains("ZOutcome.Failed("),
+        "the receiver rebuilds the live alternative from the tag:\n{kotlin}"
+    );
+    assert!(
+        rust.contains("myflat::ZOutcome::Ok") && rust.contains("myflat::ZOutcome::Failed"),
+        "Rust matches the sum once, filling every group's slots:\n{rust}"
+    );
+}
+
+/// A sum's slots sit at a FIXED position in the leaf list, so the two shapes
+/// that would move or repeat them are refused by name rather than mis-emitted:
+/// `Vec<sum>` has variable arity, and `Option<sum>` would need a present flag
+/// beside the tag that an output leaf list cannot carry.
+#[test]
+fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| {
+        let items = vec![
+            (
+                syn::Item::Enum(syn::parse_quote!(
+                    pub enum ZOutcome {
+                        Empty,
+                        Failed(String),
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZReplyStruct {
+                        pub result: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_reply_to_struct(r: &ZReply) -> ZReplyStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_reply_sub(cb: impl Fn(ZReply) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZReply))
+                    .class(crate::sealed_class!(ZOutcome))
+                    .fun(crate::fun!(z_reply_sub)),
+            )
+            .expand(crate::expand_return!(ZReply).fields(crate::fields!(z_reply_to_struct)));
+        let dir = unique_test_dir("jnigen_vf_sum_reject");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _ = registry
+            .resolve(jni)
+            .map(|g| g.write_rust(dir.join("g.rs")));
+    };
+
+    for (ty, want) in [
+        (syn::parse_quote!(Vec<ZOutcome>), "variable arity"),
+        (syn::parse_quote!(Option<ZOutcome>), "present flag"),
+    ] {
+        let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build(ty)))
+            .expect_err("a sum behind Option/Vec must be rejected");
+        let msg = err
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_default();
+        assert!(msg.contains(want), "expected `{want}` in: {msg}");
+        assert!(
+            msg.contains("ZReplyStruct.result"),
+            "the message names the offending field: {msg}"
+        );
+    }
+}
+
 /// Naming a field the value form does not have is the very drift this
 /// declarator exists to catch, so it is an error rather than a silent no-op.
 #[test]

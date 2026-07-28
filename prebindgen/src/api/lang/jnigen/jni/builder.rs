@@ -889,7 +889,7 @@ impl JniGen {
         depth: usize,
         out: &mut Vec<crate::api::core::unfold::FieldRecord>,
     ) {
-        use crate::api::core::unfold::FieldRecord;
+        use crate::api::core::unfold::{FieldDecon, FieldRecord};
         let syn::Fields::Named(named) = &st.fields else {
             panic!(
                 "expand_return!({}).fields(fields!({})): `{}` has no named fields — a value \
@@ -940,7 +940,7 @@ impl JniGen {
                     members: member_path,
                     name,
                     ty: field.ty.clone(),
-                    records: Some(self.lower_fields(registry, &ovr.key, &ovr.fields)),
+                    decon: FieldDecon::Records(self.lower_fields(registry, &ovr.key, &ovr.fields)),
                 });
                 continue;
             }
@@ -948,29 +948,86 @@ impl JniGen {
             // A nested `data_class!` inlines when it is reached directly; behind
             // `Option` / `Vec` it stays one leaf, whose own converter builds the
             // object (the rule `synth_value_struct_leaves` already follows).
-            let nested = match self.type_kind(registry, &field.ty) {
-                TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
-                _ => None,
-            };
-            if let Some(child) = nested {
-                self.walk_value_form(
-                    registry,
-                    key,
-                    decl,
-                    &child,
-                    &member_path,
-                    &name,
-                    depth + 1,
-                    out,
-                );
-                continue;
+            // A `sealed_class!` field has no whole-value converter at all, so it
+            // must decompose into its selector and groups wherever it appears.
+            let bare = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+            let probe = vec_inner_type(&bare).unwrap_or_else(|| bare.clone());
+            match self.type_kind(registry, &probe) {
+                TypeKind::DataStruct { st, cfg: Some(_) }
+                    if option_inner_type(&field.ty).is_none()
+                        && vec_inner_type(&field.ty).is_none() =>
+                {
+                    let child = st.clone();
+                    self.walk_value_form(
+                        registry,
+                        key,
+                        decl,
+                        &child,
+                        &member_path,
+                        &name,
+                        depth + 1,
+                        out,
+                    );
+                    continue;
+                }
+                TypeKind::Sum => {
+                    // A sum's leaves are a selector plus one group per
+                    // alternative, laid out side by side at a FIXED position.
+                    // A `Vec` of them has variable arity; an `Option` of one
+                    // needs a present flag the unfold leaf list has no notion of
+                    // (the `fromParts` bridge's `PlanFieldKind::Sum` does — a
+                    // data-class field can be `Option<sum>`).
+                    assert!(
+                        vec_inner_type(&bare).is_none(),
+                        "expand_return!({}).fields(fields!({})): field `{}.{}` is a \
+                         `Vec<{}>` — a sequence of tag-gated groups has variable arity and \
+                         cannot be laid out in a fixed leaf list",
+                        key.as_str(),
+                        decl.func,
+                        st.ident,
+                        dotted,
+                        probe.to_token_stream(),
+                    );
+                    assert!(
+                        option_inner_type(&field.ty).is_none(),
+                        "expand_return!({}).fields(fields!({})): field `{}.{}` is an \
+                         `Option<{}>` — an optional sum would need a present flag beside its \
+                         tag, which an output leaf list cannot carry. Give the field a \
+                         payload-less alternative instead of wrapping the sum in `Option`, \
+                         or override it with .field(\"{}\", ...)",
+                        key.as_str(),
+                        decl.func,
+                        st.ident,
+                        dotted,
+                        probe.to_token_stream(),
+                        dotted,
+                    );
+                    let ident = bare_path_ident(&probe).expect("a sum type is a path type");
+                    let (item_enum, _) = registry
+                        .enums
+                        .get(&ident)
+                        .expect("TypeKind::Sum implies an indexed enum");
+                    let sum_cfg = self.types[&TypeKey::from_type(&probe)]
+                        .sum()
+                        .expect("TypeKind::Sum implies a sealed-class config");
+                    out.push(FieldRecord {
+                        members: member_path,
+                        name,
+                        ty: field.ty.clone(),
+                        decon: FieldDecon::Leaves(crate::api::lang::jnigen::jni::synth_sum_leaves(
+                            self, sum_cfg, item_enum,
+                        )),
+                    });
+                    continue;
+                }
+                _ => {}
             }
 
             out.push(FieldRecord {
                 members: member_path,
                 name,
                 ty: field.ty.clone(),
-                records: None,
+                decon: FieldDecon::Default,
             });
         }
     }

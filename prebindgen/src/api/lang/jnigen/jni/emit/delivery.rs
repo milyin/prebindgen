@@ -407,13 +407,6 @@ pub(crate) fn encode_plan_leaves(
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> (TokenStream, Vec<TokenStream>) {
-    // A decomposed **sum** is the one plan whose leaves are not independent:
-    // only one group is live per value, so the whole list is emitted as ONE
-    // `match` rather than per-leaf expressions. Same contract, different
-    // emitter — see [`encode_sum_leaves`].
-    if is_sum_leaves(&plan.leaves) {
-        return encode_sum_leaves(ext, registry, plan, obj_idents, value, fail);
-    }
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
     let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
@@ -466,8 +459,51 @@ pub(crate) fn encode_plan_leaves(
             }
         };
 
-    let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
-    order.extend((0..n).filter(|&i| plan.leaves[i].identity));
+    // A decomposed **sum** is the one shape whose leaves are not independent:
+    // only one group is live per value, so its whole segment — the selector
+    // leaf plus the group leaves that follow it — is emitted as ONE `match`
+    // instead of per-leaf expressions. A plan may carry several: a sum that IS
+    // the returned value is the degenerate case of one segment covering
+    // everything, while a value form contributes one per sum-typed field.
+    let sum_segments: Vec<std::ops::Range<usize>> = (0..n)
+        .filter(|&i| plan.leaves[i].source == crate::api::core::unfold::LeafSource::SumTag)
+        .map(|start| {
+            let end = (start + 1..n)
+                .take_while(|&i| plan.leaves[i].group.is_some())
+                .last()
+                .map_or(start + 1, |i| i + 1);
+            start..end
+        })
+        .collect();
+    for seg in &sum_segments {
+        let leaf = &plan.leaves[seg.start];
+        let (base, base_is_ref, path) = rebase(leaf);
+        // The value to `match` on. The selector's own path reaches the sum
+        // (empty when the sum IS the value); no step on it is optional, since
+        // an optional sum is refused where the leaves are built.
+        let mut matched = if base_is_ref { base } else { quote!(&#base) };
+        for step in &path {
+            matched = compose_step(&qualify, step, matched);
+        }
+        let (group_stmts, group_args) = encode_sum_group(
+            ext,
+            registry,
+            &plan.leaves[seg.clone()],
+            &obj_idents[seg.clone()],
+            matched,
+            fail,
+        );
+        stmts.extend(group_stmts);
+        for (k, e) in group_args.into_iter().enumerate() {
+            arg_exprs[seg.start + k] = e;
+        }
+    }
+
+    let in_sum = |i: usize| sum_segments.iter().any(|s| s.contains(&i));
+    let mut order: Vec<usize> = (0..n)
+        .filter(|&i| !plan.leaves[i].identity && !in_sum(i))
+        .collect();
+    order.extend((0..n).filter(|&i| plan.leaves[i].identity && !in_sum(i)));
 
     for idx in order {
         let leaf = &plan.leaves[idx];

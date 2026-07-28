@@ -100,9 +100,24 @@ pub struct FieldRecord {
     pub name: String,
     /// The field's type as written, `Option` / `Vec` layers included.
     pub ty: syn::Type,
-    /// Explicit per-field records replacing the type's default decomposition;
-    /// `None` = decompose by the field type's own deconstructor, or one leaf.
-    pub records: Option<Vec<DeconRecord>>,
+    /// How this field decomposes.
+    pub decon: FieldDecon,
+}
+
+/// How one [`FieldRecord`] decomposes.
+#[derive(Clone)]
+pub enum FieldDecon {
+    /// By the field type's own deconstructor if it has one, else one leaf —
+    /// the same default a [`DeconRecord::Acc`] record's return follows.
+    Default,
+    /// Explicit records, replacing the type default wholesale (the declaration
+    /// stated this field's complete leaf set).
+    Records(Vec<DeconRecord>),
+    /// Leaves the **adapter** built, appended with this field's path and name
+    /// prefixed onto each. For shapes whose leaf structure only the adapter
+    /// knows — a decomposed sum, which is a selector plus one group per
+    /// alternative rather than a product of records.
+    Leaves(Vec<UnfoldLeaf>),
 }
 
 impl DeconRecord {
@@ -850,7 +865,7 @@ fn check_records(
                     return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
                 }
                 for fr in fields {
-                    if let Some(recs) = &fr.records {
+                    if let FieldDecon::Records(recs) = &fr.decon {
                         check_records(recs, accessor_fns)?;
                     }
                 }
@@ -1335,10 +1350,12 @@ fn flatten<M>(
 
                     // Same three-way choice a `.field()` record makes: declared
                     // override, else the field type's own deconstructor, else
-                    // one leaf.
-                    let child_records = match &fr.records {
-                        Some(recs) => Some(recs.clone()),
-                        None => match find_deconstructor_by_type(acc, &child_key) {
+                    // one leaf — with the adapter able to pre-build the leaves
+                    // for a shape only it can describe.
+                    let child_records = match &fr.decon {
+                        FieldDecon::Records(recs) => Some(recs.clone()),
+                        FieldDecon::Leaves(_) => None,
+                        FieldDecon::Default => match find_deconstructor_by_type(acc, &child_key) {
                             Some(child_decl) if !visited.contains(&child_key) => {
                                 Some(child_decl.records.clone())
                             }
@@ -1350,6 +1367,8 @@ fn flatten<M>(
                             None => None,
                         },
                     };
+                    let decomposed =
+                        child_records.is_some() || matches!(fr.decon, FieldDecon::Leaves(_));
 
                     // The field's own `Option` is a nullable NESTING step only
                     // when something is decomposed below it. For a plain leaf
@@ -1364,10 +1383,26 @@ fn flatten<M>(
                     // Only the LAST member can be optional — an inlined nested
                     // class is reached directly, never through an `Option`.
                     field_path.extend(lead.iter().map(|m| PathStep::field(m.clone(), false)));
-                    field_path.push(PathStep::field(
-                        last.clone(),
-                        opt && child_records.is_some(),
-                    ));
+                    field_path.push(PathStep::field(last.clone(), opt && decomposed));
+
+                    // Adapter-built leaves: rebase each onto this field's path
+                    // and name. Their internal structure (a selector plus its
+                    // groups) is opaque here and passes through untouched.
+                    if let FieldDecon::Leaves(built) = &fr.decon {
+                        for l in built {
+                            let mut path = field_path.clone();
+                            path.extend(l.path.iter().cloned());
+                            let mut name = seg_name(&fr.name);
+                            name.push(l.name.clone());
+                            leaves.push(UnfoldLeaf {
+                                name: name.join("__"),
+                                path,
+                                nullable: l.nullable || nullable || opt,
+                                ..l.clone()
+                            });
+                        }
+                        continue;
+                    }
 
                     if let Some(child_records) = child_records {
                         visited.insert(child_key.clone());
