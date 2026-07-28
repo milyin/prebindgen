@@ -140,7 +140,7 @@ canonicalized; so are a trailing input comma and an explicit `-> ()`.
 | `impl Fn(u8,) -> () + Sync + Send + 'static` | supported — same type, canonicalized |
 | `impl Fn(u8) -> u16 + …` | **reserved** — issue [#216](https://github.com/milyin/prebindgen/issues/216) |
 | `impl Fn(u8) -> impl Fn(u8) + …` | **reserved** |
-| `impl for<'a> Fn(&'a u8) + …` | **unsupported** |
+| `impl for<'a> Fn(&'a u8) + …` | **reserved** — issue [#222](https://github.com/milyin/prebindgen/issues/222) |
 
 ### Reserved is not the same as unsupported
 
@@ -149,15 +149,20 @@ responses:
 
 * **reserved** — the language intends this and the machinery does not exist
   yet. Wait, or work around it; the diagnostic names the tracking issue.
-* **unsupported** — it cannot work here and will not. Redesign.
+* **unsupported** — it cannot work here and will not. Redesign. A non-empty
+  tuple and an associated type are the examples, above; every *callback*
+  refusal is currently reserved.
 
 A callback returning a value is *reserved*: every callback wire is void-shaped
 today — C's `call` has no return, jnigen's `run` returns void — so the result
 would be dropped. It used to be **accepted** and silently dropped, which is the
 bug this refusal replaces.
 
-A higher-ranked binder is *unsupported*: no FFI boundary can be generic over a
-lifetime, so no adapter could ever carry one.
+An explicit higher-ranked binder is *reserved* too, and for a subtler reason:
+the accepted `impl Fn(&u8)` **is** higher-ranked — it desugars to
+`impl for<'a> Fn(&'a u8)`, and the two are mutually substitutable. So the two
+spellings are one type, and this is simply the last such pair not yet
+canonicalized. Write the elided form.
 
 ## Array lengths
 

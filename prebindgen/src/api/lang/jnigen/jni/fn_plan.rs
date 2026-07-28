@@ -724,7 +724,7 @@ impl ReturnSurface {
             .and_then(|m| m.value_rust_key.as_ref())
             .map(TypeKey::to_type)
             .unwrap_or_else(|| ty.clone());
-        if crate::api::lang::jnigen::util::is_unit(&canonical) {
+        if crate::api::core::types_util::is_unit(&canonical) {
             return (Self::Unit, canonical);
         }
         // Projection return (opaque handle or `ULong`): read the folded

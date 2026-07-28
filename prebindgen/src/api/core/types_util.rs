@@ -82,6 +82,12 @@ pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
         /// would split by POSITION, a modeled struct field getting one key and a
         /// function signature the other.
         fn visit_path_arguments_mut(&mut self, args: &mut syn::PathArguments) {
+            // Children FIRST, then canonicalize. The unit-return test below
+            // reads the return type, and it is this recursion that unwraps
+            // `Paren` — so testing first left `-> (())` needing a second pass
+            // to reach `Fn(u8)`, and a key could then depend on whether its
+            // input had already been normalized.
+            syn::visit_mut::visit_path_arguments_mut(self, args);
             match args {
                 syn::PathArguments::AngleBracketed(ab) => {
                     ab.colon2_token = None;
@@ -104,7 +110,6 @@ pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
                 }
                 syn::PathArguments::None => {}
             }
-            syn::visit_mut::visit_path_arguments_mut(self, args);
         }
 
         /// Put `impl Trait` bounds in one order: traits sorted by their token
@@ -435,7 +440,10 @@ pub fn is_result_type(ty: &syn::Type) -> bool {
 }
 
 /// True when `ty` is the unit type `()`.
-#[cfg(feature = "unstable-cbindgen")]
+///
+/// Lives in core, not in an adapter: it is a source-language fact — a callback
+/// must return unit — and core deciding that by reaching into one adapter is
+/// the dependency inversion issue #211 exists to prevent.
 pub fn is_unit(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }

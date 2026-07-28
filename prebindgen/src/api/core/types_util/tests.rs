@@ -372,4 +372,42 @@ fn normalize_drops_turbofish_and_trailing_comma() {
     assert!(cb.ends_with("'static"), "{cb}");
     // A non-unit return is NOT punctuation and must survive to be refused.
     assert_ne!(canon("impl Fn(u8) -> u16 + Send + Sync + 'static"), cb);
+    // A parenthesized unit return reaches the canonical form in ONE pass: the
+    // recursion that unwraps `Paren` has to run BEFORE the unit test, or this
+    // needs a second pass and the key depends on how many it has had.
+    assert_eq!(canon("impl Fn(u8) -> (()) + Send + Sync + 'static"), cb);
+}
+
+/// Normalization is idempotent: a canonical form is its own canonical form.
+///
+/// Asserted over every spelling the suite exercises rather than for one case,
+/// because the way this breaks is a rule that reads a node the recursion has
+/// not reached yet, and that mistake is not specific to any one rule. It
+/// matters because items are normalized at ingest and `TypeKey::from_type`
+/// normalizes again, while a directly built key normalizes once.
+#[test]
+fn normalize_is_idempotent() {
+    for src in [
+        "Wrapper::<u8>",
+        "Wrapper<u8,>",
+        "Option<Wrapper::<u8,>>",
+        "Foo::<'static,>",
+        "impl Fn(u8,) -> () + Sync + Send + 'static",
+        "impl Fn(u8) -> (()) + Send + Sync + 'static",
+        "impl Fn(u8) -> u16 + Send + Sync + 'static",
+        "crate::a::Foo<T>",
+        "std::option::Option<u8>",
+        "&'static [u8]",
+        "[u8; 4]",
+    ] {
+        let mut once = ty(src);
+        normalize_type(&mut once, &[]);
+        let mut twice = once.clone();
+        normalize_type(&mut twice, &[]);
+        assert_eq!(
+            once.to_token_stream().to_string(),
+            twice.to_token_stream().to_string(),
+            "`{src}` is not idempotent"
+        );
+    }
 }

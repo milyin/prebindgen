@@ -1699,9 +1699,18 @@ pub enum CallbackReject {
     /// **Reserved.** A callback whose result is itself a callback: it would
     /// need a closure struct nested in a closure struct. No use for it yet.
     ReturnsCallback,
-    /// **Unsupported.** A higher-ranked binder, `impl for<'a> Fn(&'a T)`. No
-    /// FFI boundary can be generic over a lifetime, so no adapter could carry
-    /// it — this one is not waiting on machinery.
+    /// **Reserved.** An explicit higher-ranked binder, `impl for<'a> Fn(&'a T)`.
+    ///
+    /// Not an impossibility: the accepted elided spelling `impl Fn(&T)` IS
+    /// higher-ranked — it desugars to exactly this — and the two are mutually
+    /// substitutable in Rust. The binder constrains the Rust closure and is not
+    /// carried on any wire.
+    ///
+    /// So this is the last two-spellings-one-type case, refused only because
+    /// the canonicalization is not written: elision gives each elided input
+    /// lifetime its OWN fresh binder, so `for<'a> Fn(&'a T, &'a T)` is NOT
+    /// `Fn(&T, &T)`, and collapsing the equivalent form needs an exact rule.
+    /// Tracked by issue #222.
     HigherRankedBinder,
 }
 
@@ -1722,8 +1731,9 @@ impl CallbackReject {
                  struct nested in a closure struct"
             }
             Self::HigherRankedBinder => {
-                "a higher-ranked binder (`for<'a>`) cannot cross an FFI boundary, which has no \
-                 way to be generic over a lifetime — use a concrete lifetime"
+                "an explicit higher-ranked binder (`for<'a>`) is not yet supported — write the \
+                 elided form instead (`Fn(&T)`, which means exactly the same thing and is \
+                 accepted); tracked by https://github.com/milyin/prebindgen/issues/222"
             }
         }
     }
@@ -1767,7 +1777,7 @@ pub fn extract_fn_trait_sig(ty: &syn::Type) -> Result<Vec<syn::Type>, CallbackRe
                         // The return was previously not read at all, so a
                         // declared result was accepted and then dropped.
                         if let syn::ReturnType::Type(_, ret) = &p.output {
-                            if !crate::api::lang::jnigen::util::is_unit(ret) {
+                            if !crate::api::core::types_util::is_unit(ret) {
                                 // An `impl Trait` return is the nested-callback
                                 // case whether or not its own bounds are
                                 // complete — `Fn() -> impl Fn()` parses with the
