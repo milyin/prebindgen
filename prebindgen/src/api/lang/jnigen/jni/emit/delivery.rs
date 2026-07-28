@@ -428,34 +428,44 @@ pub(crate) fn encode_plan_leaves(
         }
     }
 
-    // A `.fields()` plan reaches every one of its leaves through ONE call of
-    // the value form: bind it to a local first, so the struct is built once
-    // per delivery rather than once per field.
-    let vf = format_ident!("__vf");
-    let mut stmts = match &plan.root_call {
-        Some(f) => {
-            let m = qualify(f);
-            let base = if by_ref {
-                value.clone()
-            } else {
-                quote!(&#value)
-            };
-            quote! { let #vf = #m::#f(#base); }
+    // Every value form on the plan is evaluated ONCE and bound to a local, so
+    // the struct is built once per delivery rather than once per field. Value
+    // forms compose, so this is a list: each hoist is composed from the longest
+    // hoist that is already a proper prefix of it (they arrive outermost-first),
+    // and from `value` otherwise.
+    let mut stmts = TokenStream::new();
+    let mut bound: Vec<(&[PathStep], syn::Ident)> = Vec::new();
+    // The longest already-bound prefix of `path`, if any.
+    let longest_bound =
+        |bound: &[(&[PathStep], syn::Ident)], path: &[PathStep]| -> Option<(usize, syn::Ident)> {
+            bound
+                .iter()
+                .filter(|(p, _)| p.len() < path.len() && path.starts_with(p))
+                .max_by_key(|(p, _)| p.len())
+                .map(|(p, id)| (p.len(), id.clone()))
+        };
+    for (i, prefix) in plan.hoists.iter().enumerate() {
+        let local = format_ident!("__vf{}", i);
+        let (from, mut expr) = match longest_bound(&bound, prefix) {
+            Some((at, outer)) => (at, quote!(&#outer)),
+            None if by_ref => (0, value.clone()),
+            None => (0, quote!(&#value)),
+        };
+        for step in &prefix[from..] {
+            expr = compose_step(&qualify, step, expr);
         }
-        None => TokenStream::new(),
-    };
-    // Leaves that go through the value form reach off that local with the
-    // shared `Call` step already consumed; a sibling `.field()` / `.field_self()`
-    // leaf still reaches from the value itself.
+        stmts.extend(quote! { let #local = #expr; });
+        bound.push((prefix.as_slice(), local));
+    }
+
+    // Reach a leaf off the innermost value form it sits under, with that
+    // prefix's steps already consumed; a leaf under none of them (a sibling
+    // `.field()` / `.field_self()`) still reaches from the value itself.
     let rebase =
         |leaf: &crate::api::core::unfold::UnfoldLeaf| -> (TokenStream, bool, Vec<PathStep>) {
-            match (&plan.root_call, leaf.path.split_first()) {
-                (Some(rc), Some((PathStep::Call { ident, .. }, rest)))
-                    if ident == rc && !rest.is_empty() =>
-                {
-                    (quote!(#vf), false, rest.to_vec())
-                }
-                _ => (value.clone(), by_ref, leaf.path.clone()),
+            match longest_bound(&bound, &leaf.path) {
+                Some((at, local)) => (quote!(#local), false, leaf.path[at..].to_vec()),
+                None => (value.clone(), by_ref, leaf.path.clone()),
             }
         };
 

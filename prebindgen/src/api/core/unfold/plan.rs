@@ -205,12 +205,17 @@ pub struct UnfoldPlan {
     /// generic over `R`/`A` — it returns the concrete type). `false` for the
     /// accessor-declared deconstructors, whose builder is caller-supplied.
     pub fixed_builder: bool,
-    /// The **value-form accessor** every `.fields()` leaf reaches through
-    /// (`DeconRecord::Fields`), when the plan has one. Those leaves all begin
-    /// with the same [`PathStep::Call`], so the emitter binds one
-    /// `let __vf = f(value);` and reaches each leaf off it — otherwise every
+    /// Path prefixes that must be evaluated **once** and bound to a local, each
+    /// ending in a value-form [`PathStep::Call`] (`DeconRecord::Fields`).
+    /// Every leaf below such a prefix reaches off that local — otherwise each
     /// field would rebuild the whole struct, cloning all of it once per leaf.
-    pub root_call: Option<syn::Ident>,
+    ///
+    /// A list rather than a single accessor because value forms **compose**: a
+    /// field may splice a child type whose own boundary is derived from *its*
+    /// value form, and that child call is a second hoist nested under the
+    /// first. Ordered outermost-first, so a hoist can be composed from the
+    /// longest already-bound prefix of itself.
+    pub hoists: Vec<Vec<PathStep>>,
 }
 
 /// One flattened output leaf of a decomposed return value.

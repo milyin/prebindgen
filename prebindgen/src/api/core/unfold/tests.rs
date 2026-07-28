@@ -1576,7 +1576,7 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
         delivery: Delivery::Return,
         convert_out_ty: None,
         fixed_builder: false,
-        root_call: None,
+        hoists: Vec::new(),
     };
     reg.unfold_plans.insert(ident("strings"), sentinel);
     apply_leaf_vec_folds(&mut reg, vec![syn::parse_quote!(String)], &declared)

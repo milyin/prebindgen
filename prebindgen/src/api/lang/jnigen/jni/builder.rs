@@ -936,6 +936,27 @@ impl JniGen {
             // An explicit override replaces the field type's default
             // decomposition wholesale — including any nesting it would have had.
             if let Some((_, ovr)) = decl.overrides.iter().find(|(f, _)| *f == dotted) {
+                // The override states the field's type, so it is cross-checked
+                // against the field the same way a per-fn `.expand_param` /
+                // `.expand_return` decl is checked against its parameter or
+                // return. Without this an override outlives an upstream
+                // field-type change — the very drift `.fields()` exists to
+                // catch — and two same-shaped handle types silently swap.
+                let peeled = vec_inner_type(&field.ty)
+                    .or_else(|| option_inner_type(&field.ty))
+                    .map(|t| crate::api::core::unfold::peel_ref(&t))
+                    .unwrap_or_else(|| crate::api::core::unfold::peel_ref(&field.ty));
+                let actual = TypeKey::from_type(&peeled);
+                assert!(
+                    actual == ovr.key,
+                    "fields!({}).field(\"{dotted}\", expand_return!({})): `{}.{dotted}` is \
+                     `{}`, not `{}` — a per-field override names the field's own type",
+                    decl.func,
+                    ovr.key.as_str(),
+                    st.ident,
+                    actual.as_str(),
+                    ovr.key.as_str(),
+                );
                 out.push(FieldRecord {
                     members: member_path,
                     name,

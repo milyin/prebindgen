@@ -653,7 +653,7 @@ fn wire_fixed_returns<M>(
             delivery: Delivery::Callback,
             convert_out_ty: None,
             fixed_builder: true,
-            root_call: None,
+            hoists: Vec::new(),
         };
         registry.unfold_plans.insert(func.clone(), plan);
     }
@@ -720,7 +720,7 @@ fn wire_fixed_callbacks<M>(
                     delivery: Delivery::Callback,
                     convert_out_ty: None,
                     fixed_builder: true,
-                    root_call: None,
+                    hoists: Vec::new(),
                 };
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -835,7 +835,7 @@ fn whole_leaf_fold_plan(vec_elem: &syn::Type, shape: UnfoldShape) -> UnfoldPlan 
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
-        root_call: None,
+        hoists: Vec::new(),
     }
 }
 
@@ -1026,7 +1026,7 @@ fn process_decl<M>(
                     delivery: ed.delivery,
                     convert_out_ty: None,
                     fixed_builder: false,
-                    root_call: None,
+                    hoists: Vec::new(),
                 }
             }
         } else {
@@ -1130,6 +1130,9 @@ fn register_decon_spec<M>(
         false,
         &mut visited,
         &mut leaves,
+        // A `DeconSpec` describes the leaf list only — signature artifacts are
+        // derived from it, never emitted code — so its hoists are discarded.
+        &mut Vec::new(),
     )?;
     require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
@@ -1194,6 +1197,7 @@ fn build_plan<M>(
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
     let mut visited: HashSet<TypeKey> = HashSet::new();
     visited.insert(TypeKey::from_type(source));
+    let mut hoists: Vec<Vec<PathStep>> = Vec::new();
     flatten(
         acc,
         registry,
@@ -1205,6 +1209,7 @@ fn build_plan<M>(
         false,
         &mut visited,
         &mut leaves,
+        &mut hoists,
     )?;
     require_unique_leaf_names(source, &leaves)?;
     require_root_identity_last(by_ref, source, &leaves)?;
@@ -1219,12 +1224,7 @@ fn build_plan<M>(
         delivery: ed.delivery,
         convert_out_ty: None,
         fixed_builder: false,
-        // At most one value form per declaration (`ExpandReturnDecl::fields`
-        // enforces it), so the hoist is a single accessor, not a table.
-        root_call: records.iter().find_map(|r| match r {
-            DeconRecord::Fields { func, .. } => Some(func.clone()),
-            _ => None,
-        }),
+        hoists,
     })
 }
 
@@ -1284,6 +1284,7 @@ fn flatten<M>(
     nullable: bool,
     visited: &mut HashSet<TypeKey>,
     leaves: &mut Vec<UnfoldLeaf>,
+    hoists: &mut Vec<Vec<PathStep>>,
 ) -> Result<(), UnfoldError> {
     let source_key = TypeKey::from_type(source);
     // The author-supplied (literal) leaf-name segment at this level, appended
@@ -1337,6 +1338,13 @@ fn flatten<M>(
                 check_takes(func, &takes, source)?;
                 let mut root_path = path_prefix.to_vec();
                 root_path.push(PathStep::call(func.clone(), false));
+                // Evaluate this value form ONCE. Recorded at the prefix it sits
+                // at rather than as a lone accessor, so a nested value form
+                // (this record reached through another one's field) gets its own
+                // hoist instead of being rebuilt per child leaf. `path_prefix`
+                // grows as `flatten` descends, so the list comes out
+                // outermost-first.
+                hoists.push(root_path.clone());
 
                 for fr in fields {
                     // A field's own `Option` makes everything under it nullable,
@@ -1417,6 +1425,7 @@ fn flatten<M>(
                             nullable || opt,
                             visited,
                             leaves,
+                            hoists,
                         )?;
                         visited.remove(&child_key);
                     } else {
@@ -1491,6 +1500,7 @@ fn flatten<M>(
                         nullable || opt,
                         visited,
                         leaves,
+                        hoists,
                     )?;
                     visited.remove(&child_key);
                 } else {

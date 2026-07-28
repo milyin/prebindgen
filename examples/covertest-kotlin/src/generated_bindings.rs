@@ -3934,11 +3934,11 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                         String,
                     >>::from(format!("push local frame for {}: {}", "Fn(Report)", e)))?;
                 let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
-                    let __vf = perftest_flat::report_to_struct(&__cb_arg0);
+                    let __vf0 = perftest_flat::report_to_struct(&__cb_arg0);
                     let __cb0_obj5: jni::sys::jvalue;
                     let __cb0_obj6: jni::sys::jvalue;
                     let __cb0_obj7: jni::objects::JObject;
-                    match &(&__vf).outcome {
+                    match &(&__vf0).outcome {
                         perftest_flat::Lookup::Absent => {
                             __cb0_obj5 = jni::sys::jvalue { i: 0 };
                             __cb0_obj6 = jni::sys::jvalue { j: 0i64 };
@@ -3986,7 +3986,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                     let __cb0_obj0: jni::sys::jvalue = {
                         let __enc0 = match i64_to_jlong_fbf9a9bc(
                             &mut env,
-                            perftest_flat::summary_count(&(&__vf).summary),
+                            perftest_flat::summary_count(&(&__vf0).summary),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -4002,7 +4002,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                     let __cb0_obj1: jni::sys::jvalue = {
                         let __enc1 = match f64_to_jdouble_9e4a8f70(
                             &mut env,
-                            perftest_flat::summary_total(&(&__vf).summary),
+                            perftest_flat::summary_total(&(&__vf0).summary),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -4018,7 +4018,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                     let __cb0_obj2: jni::objects::JObject = {
                         let __enc2 = match Option_Stamp_to_JObject_6375b503(
                             &mut env,
-                            __vf.taken.clone(),
+                            __vf0.taken.clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -4034,7 +4034,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                     let __cb0_obj3: jni::sys::jvalue = {
                         let __enc3 = match i64_to_jlong_fbf9a9bc(
                             &mut env,
-                            __vf.origin.secs.clone(),
+                            __vf0.origin.secs.clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -4050,7 +4050,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                     let __cb0_obj4: jni::sys::jvalue = {
                         let __enc4 = match i64_to_jlong_fbf9a9bc(
                             &mut env,
-                            __vf.origin.nanos.clone(),
+                            __vf0.origin.nanos.clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
@@ -4066,7 +4066,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
                     let __cb0_obj8: jni::objects::JObject = {
                         let __enc8 = match String_to_JString_c7f3ca43(
                             &mut env,
-                            __vf.label.clone(),
+                            __vf0.label.clone(),
                         ) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {

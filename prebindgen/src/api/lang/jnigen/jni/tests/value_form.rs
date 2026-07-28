@@ -173,13 +173,13 @@ fn an_optional_field_reaches_its_converter_whole() {
     );
     for field in ["stamp", "attachment"] {
         assert!(
-            rust.contains(&format!("__vf.{field}.clone()")),
+            rust.contains(&format!(".{field}.clone()")),
             "`{field}` must be cloned whole, not matched open:\n{rust}"
         );
         assert!(
-            !rust.contains(&format!("match &(&__vf).{field}")),
+            !rust.contains(&format!(".{field} {{")),
             "`{field}` has nothing decomposed below it, so it is not a nesting \
-             step:\n{rust}"
+             step — no `match` on it:\n{rust}"
         );
     }
 }
@@ -578,4 +578,207 @@ fn a_repeated_override_is_an_error() {
 #[should_panic(expected = "reserved")]
 fn a_rename_may_not_contain_the_chain_separator() {
     let _ = crate::fields!(z_sample_to_struct).name("express", "a__b");
+}
+
+// ── Review findings on #221 ──────────────────────────────────────────────────
+
+/// A **single-leaf** value form takes the `Delivery::Return` shortcut, whose
+/// reach is composed separately from the multi-leaf encoder
+/// (`emit/wrapper.rs`'s `is_convert` path). That path must still give a plain
+/// field leaf the owned value its converter is typed for: composing the field
+/// as a borrow feeds `&i64` to the `i64` converter, and for a non-`Copy` field
+/// borrows out of the temporary the value-form call returned.
+#[test]
+fn a_single_leaf_value_form_delivers_an_owned_field() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOneStruct {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_to_struct(o: &ZOne) -> ZOneStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_make(n: i64) -> ZOne {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .fun(crate::fun!(z_one_make)),
+        )
+        .expand(crate::expand_return!(ZOne).fields(crate::fields!(z_one_to_struct)));
+    let dir = unique_test_dir("jnigen_vf_single");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains(".label).clone()"),
+        "the single leaf is CLONED out of the value form, matching the owned \
+         `String` its converter takes — composing it as a borrow would feed \
+         `&String` to a `String` converter:\n{rust}"
+    );
+}
+
+/// A per-field `.field(name, expand_return!(T))` override states the field's
+/// type, so it has to be checked against the field. Otherwise the override
+/// silently survives an upstream field-type change — which is exactly the drift
+/// this declarator exists to catch — and two same-shaped handle types are
+/// interchangeable by accident.
+#[test]
+fn a_per_field_override_must_name_the_field_s_own_type() {
+    let build = || {
+        let registry = Registry::<KotlinMeta>::from_items(value_form_items()).expect("index");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZSample))
+                    .class(crate::ptr_class!(ZKeyExpr))
+                    .class(crate::ptr_class!(ZBytes))
+                    .class(crate::data_class!(ZStamp))
+                    .class(crate::data_class!(ZOrigin))
+                    .fun(crate::fun!(z_sample_sub)),
+            )
+            .expand(crate::expand_return!(ZKeyExpr).field(crate::fun!(z_keyexpr_as_str)))
+            .expand(
+                crate::expand_return!(ZSample).fields(
+                    // `key_expr` is a `ZKeyExpr`, not a `ZBytes`.
+                    crate::fields!(z_sample_to_struct)
+                        .field("key_expr", crate::expand_return!(ZBytes).field_self()),
+                ),
+            );
+        let dir = unique_test_dir("jnigen_vf_ovr_ty");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _ = registry
+            .resolve(jni)
+            .map(|g| g.write_rust(dir.join("g.rs")));
+    };
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(build))
+        .expect_err("a mistyped override must be rejected");
+    let msg = err
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_default();
+    assert!(
+        msg.contains("key_expr"),
+        "the message names the field: {msg}"
+    );
+    assert!(
+        msg.contains("ZBytes") && msg.contains("ZKeyExpr"),
+        "the message names the declared type and the real one: {msg}"
+    );
+}
+
+/// The "called once per delivery" contract has to survive **composition**: when
+/// a value form's field splices a child type whose own boundary is also derived
+/// from a value form, the child accessor is a second hoist, not a call repeated
+/// once per child leaf.
+#[test]
+fn a_nested_value_form_is_hoisted_too() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZInnerStruct {
+                    pub a: i64,
+                    pub b: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOuterStruct {
+                    pub inner: ZInner,
+                    pub tag: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_inner_to_struct(i: &ZInner) -> ZInnerStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_outer_to_struct(o: &ZOuter) -> ZOuterStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_outer_sub(cb: impl Fn(ZOuter) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOuter))
+                .class(crate::ptr_class!(ZInner))
+                .fun(crate::fun!(z_outer_sub)),
+        )
+        .expand(crate::expand_return!(ZInner).fields(crate::fields!(z_inner_to_struct)))
+        .expand(crate::expand_return!(ZOuter).fields(crate::fields!(z_outer_to_struct)));
+    let dir = unique_test_dir("jnigen_vf_nested");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert!(
+        kotlin.contains("inner__a: Long") && kotlin.contains("inner__b: Long"),
+        "the child value form's fields splice in, prefixed:\n{kotlin}"
+    );
+    for f in ["z_outer_to_struct", "z_inner_to_struct"] {
+        let calls = rust.matches(f).count();
+        assert_eq!(
+            calls, 1,
+            "`{f}` is bound to one local and every leaf below it reaches off \
+             that local; found {calls} calls in:\n{rust}"
+        );
+    }
 }
