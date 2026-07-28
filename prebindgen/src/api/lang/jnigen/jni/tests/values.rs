@@ -1580,11 +1580,20 @@ fn check_array_length_rejected(field_ty: syn::Type) {
     let Err(err) = Registry::<KotlinMeta>::from_items(items) else {
         panic!("the frontend accepted `{}`", quote::quote!(#field_ty));
     };
+    // A struct field is lowered through the source MODEL, so its refusal names
+    // the field; a length elsewhere (a signature, an enum variant) still comes
+    // from the length walk alone. Either way it is a frontend error raised
+    // before JniGen exists.
     assert!(
-        matches!(err, crate::core::ScanError::UnsupportedArrayLength { .. }),
+        matches!(
+            err,
+            crate::core::ScanError::UnsupportedFieldType { .. }
+                | crate::core::ScanError::UnsupportedArrayLength { .. }
+        ),
         "{err}"
     );
     // The diagnostic states the accepted form, so the message is actionable
     // without reading the generator.
     assert!(err.to_string().contains("integer literal"), "{err}");
+    assert!(err.to_string().contains("Blob::local"), "{err}");
 }

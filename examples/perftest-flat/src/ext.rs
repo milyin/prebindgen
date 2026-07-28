@@ -368,15 +368,16 @@ pub fn blob_value_new(secs: i64, id: Vec<u8>, chunks: Vec<Vec<u8>>) -> BlobValue
 /// Width of [`Arrays::bytes`] — a `#[prebindgen]` const used as an ARRAY
 /// LENGTH.
 ///
-/// It is deliberately NOT declared to any binding: a length is a compile-time
-/// value, not part of a destination language's surface, so evaluating it must
-/// not depend on the binding exposing it. Being `#[prebindgen]` is what matters
-/// — the frontend reads the value from the captured item, and an unmarked const
-/// is not captured at all.
+/// It is deliberately NOT declared to any binding: an extent is a compile-time
+/// value, not something a binding has to name, so resolving it must not depend
+/// on the binding exposing it. Being `#[prebindgen]` is what matters — the
+/// frontend reads the value from the captured item, and an unmarked const is
+/// not captured at all.
 ///
 /// The value must be a plain integer literal. A generator runs in `build.rs`
-/// and cannot evaluate Rust, and a destination language that groups a small
-/// array into scalars needs the count as a number.
+/// and cannot evaluate Rust; the JNI side needs the count as a number because
+/// Kotlin cannot reference a Rust const, and the C side needs it to define the
+/// symbol its headers spell the extent with.
 #[prebindgen]
 pub const ARRAY_BYTES: usize = 4;
 

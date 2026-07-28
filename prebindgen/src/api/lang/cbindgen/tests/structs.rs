@@ -641,3 +641,105 @@ fn repr_c_struct_restricted_validity_field_audited_even_when_output_only() {
     let compact: String = src.split_whitespace().collect();
     assert!(compact.contains("pubflag:bool"), "{src}");
 }
+
+/// A `data_struct` field that is a fixed-size array sized by a `#[prebindgen]`
+/// const keeps the CONST NAME in the C mirror, and the const is re-emitted with
+/// its literal value so cbindgen can define the symbol.
+///
+/// Both halves are the point, and they fail in opposite directions: emitting
+/// `[u8; 4]` loses a symbolic extent that is part of the C API's meaning, while
+/// emitting `[u8; TAG_LEN]` without the const reaching the header names
+/// something undefined. Only the pair compiles AND reads correctly.
+///
+/// The mirror spells the name because the frontend's source model TOLD the
+/// adapter the extent named a const — not because the adapter re-read the
+/// source syntax, which issue #211 forbids.
+#[test]
+fn data_struct_const_sized_array_keeps_the_const_name() {
+    let loc = SourceLocation::default();
+    let items = [
+        (
+            syn::Item::Const(syn::parse_quote!(
+                pub const TAG_LEN: usize = 4;
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Marker {
+                    pub tag: [u8; TAG_LEN],
+                    pub plain: [u8; 2],
+                    pub weight: u32,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn marker_echo(m: Marker) -> Marker {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<()>::from_items(items).expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .data_struct(syn::parse_quote!(Marker))
+        .function(syn::parse_quote!(marker_echo));
+
+    let src = write(cbindgen, registry, "const_sized_array");
+    let compact: String = src.split_whitespace().collect();
+
+    // The mirror keeps the NAME for the const-sized field...
+    assert!(compact.contains("pubtag:[u8;TAG_LEN]"), "{src}");
+    // ...and the number for the one the source wrote as a literal.
+    assert!(compact.contains("pubplain:[u8;2]"), "{src}");
+
+    // The const reaches the generated crate with its VALUE, not as a path
+    // alias — cbindgen cannot evaluate `myflat::TAG_LEN`, so an alias would
+    // produce no `#define` and the mirror above would name an undefined symbol.
+    assert!(compact.contains("constTAG_LEN:usize=4;"), "{src}");
+    assert!(!compact.contains("TAG_LEN:usize=myflat::TAG_LEN"), "{src}");
+
+    // The array is its own wire, so the converters copy it with no conversion.
+    assert!(compact.contains("tag:v.tag"), "{src}");
+}
+
+/// An array of `bool` is refused, naming the field.
+///
+/// `bool`'s domain is `0`/`1` and a `data_struct` mirror is reinterpreted
+/// wholesale, so there is no per-element hook to normalise a byte C wrote —
+/// the same restricted-validity hazard that keeps a bare `bool` field on the
+/// `MaybeUninit` wire.
+#[test]
+#[should_panic(expected = "flags")]
+fn data_struct_bool_array_field_is_refused() {
+    let loc = SourceLocation::default();
+    let items = [
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Flags {
+                    pub flags: [bool; 3],
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn flags_echo(f: Flags) -> Flags {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<()>::from_items(items).expect("index items");
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .data_struct(syn::parse_quote!(Flags))
+        .function(syn::parse_quote!(flags_echo));
+    write(cbindgen, registry, "bool_array");
+}

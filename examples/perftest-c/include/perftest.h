@@ -12,7 +12,22 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-
+/**
+ * Width of [`Arrays::bytes`] — a `#[prebindgen]` const used as an ARRAY
+ * LENGTH.
+ *
+ * It is deliberately NOT declared to any binding: an extent is a compile-time
+ * value, not something a binding has to name, so resolving it must not depend
+ * on the binding exposing it. Being `#[prebindgen]` is what matters — the
+ * frontend reads the value from the captured item, and an unmarked const is
+ * not captured at all.
+ *
+ * The value must be a plain integer literal. A generator runs in `build.rs`
+ * and cannot evaluate Rust; the JNI side needs the count as a number because
+ * Kotlin cannot reference a Rust const, and the C side needs it to define the
+ * symbol its headers spell the extent with.
+ */
+#define ARRAY_BYTES 4
 
 
 

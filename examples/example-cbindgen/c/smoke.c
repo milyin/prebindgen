@@ -340,6 +340,37 @@ static void test_alias_preflight(void) {
     calculator_drop(merged);
 }
 
+/* A fixed-size array field sized by a NAMED const.
+ *
+ * The header must define `MARKER_TAG_LEN` and spell the field
+ * `uint8_t tag[MARKER_TAG_LEN]` — a symbolic extent is part of the C API's
+ * meaning, since it makes changing the size one edit rather than a hunt through
+ * literals. Most of this test is that it COMPILES: using the macro below would
+ * be an error if cbindgen had emitted `uint8_t tag[4]` with no `#define`, which
+ * is exactly what a path-aliased const produces.
+ *
+ * The rest is that the array crosses by value in both directions with no
+ * conversion — `[u8; N]` is already `#[repr(C)]`-compatible. */
+static void test_const_sized_array_field(void) {
+    marker_t m = marker_new(1, 2, 3, 4, 100);
+
+    /* The extent is the symbol, and the symbol is the right number. */
+    CHECK(sizeof(m.tag) == MARKER_TAG_LEN);
+    CHECK(MARKER_TAG_LEN == 4);
+
+    CHECK(m.tag[0] == 1);
+    CHECK(m.tag[3] == 4);
+    CHECK(m.weight == 100);
+
+    /* Back across by value: 1+2+3+4+100. */
+    CHECK(marker_tag_sum(m) == 110);
+
+    /* A C-side edit survives the round trip, so the bytes are really copied
+     * rather than the struct being rebuilt from somewhere else. */
+    m.tag[0] = 11;
+    CHECK(marker_tag_sum(m) == 120);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
@@ -350,6 +381,7 @@ int main(void) {
     test_out_of_domain_bool_data_struct_field();
     test_nested_union_payload();
     test_alias_preflight();
+    test_const_sized_array_field();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
@@ -357,6 +389,7 @@ int main(void) {
     }
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
            "converter-derived payloads, out-of-domain bool payload and "
-           "data-struct field, nested union payload, alias preflight\n");
+           "data-struct field, nested union payload, alias preflight, "
+           "const-sized array field\n");
     return 0;
 }

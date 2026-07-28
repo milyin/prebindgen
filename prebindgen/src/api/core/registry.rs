@@ -272,6 +272,24 @@ pub struct Registry<M = ()> {
     /// site.
     pub(crate) array_lens: HashMap<TypeKey, usize>,
 
+    /// The typed source model of every indexed struct with named fields — the
+    /// beginning of issue #211's `SourceModel`.
+    ///
+    /// This is what an adapter consumes when it needs a **source** fact rather
+    /// than a semantic type: which const an array's extent named, so a C header
+    /// can emit `uint8_t tag[MARKER_TAG_LEN]`. The `syn` field types in
+    /// [`Self::structs`] are written from this model, so they are a projection
+    /// of it rather than a second source of truth.
+    pub(crate) source_structs: HashMap<syn::Ident, crate::api::core::frontend::model::SourceStruct>,
+
+    /// `#[prebindgen]` consts that a struct field's array extent named.
+    ///
+    /// An adapter that spells such an extent symbolically — the C mirror emits
+    /// `uint8_t tag[MARKER_TAG_LEN]` — must also make the const reachable in
+    /// the destination language, or the emitted code names something that does
+    /// not exist. This is the set that has to be carried across.
+    pub(crate) extent_consts: HashSet<syn::Ident>,
+
     /// Type tables, one per direction. Each scanned type maps to its resolved
     /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
     /// resolver fills it.
@@ -337,6 +355,8 @@ impl<M> Default for Registry<M> {
             item_origins: HashMap::new(),
             source_modules: Vec::new(),
             array_lens: HashMap::new(),
+            source_structs: HashMap::new(),
+            extent_consts: HashSet::new(),
             input_types: Default::default(),
             output_types: Default::default(),
             type_locations: HashMap::new(),
@@ -417,6 +437,15 @@ pub enum ScanError {
         error: Box<crate::api::core::frontend::UnsupportedArrayLen>,
         loc: SourceLocation,
     },
+    /// A struct field's type is not in the accepted source grammar — see
+    /// [`crate::api::core::frontend::model::SourceType`]. Raised at ingest,
+    /// before any adapter runs.
+    UnsupportedFieldType {
+        item: syn::Ident,
+        field: syn::Ident,
+        error: Box<crate::api::core::frontend::model::UnsupportedType>,
+        loc: SourceLocation,
+    },
 }
 
 impl fmt::Display for ScanError {
@@ -492,6 +521,14 @@ impl fmt::Display for ScanError {
             }
             ScanError::UnsupportedArrayLength { error, loc } => {
                 write!(f, "{error} (at {loc})")
+            }
+            ScanError::UnsupportedFieldType {
+                item,
+                field,
+                error,
+                loc,
+            } => {
+                write!(f, "field `{item}::{field}`: {error} (at {loc})")
             }
         }
     }
@@ -725,7 +762,10 @@ impl<M> Registry<M> {
     fn resolve_array_lengths(&mut self) -> Result<(), ScanError> {
         use syn::visit_mut::VisitMut;
 
-        use crate::api::core::frontend::{resolve_array_lengths, ConstIndex};
+        use crate::api::core::frontend::{
+            model::{lower_type, SourceField, SourceStruct},
+            resolve_array_lengths, ConstIndex,
+        };
 
         // Only consts can be a length, so only consts are indexed — the
         // grammar is a bare name, and nothing else can answer it.
@@ -738,6 +778,8 @@ impl<M> Registry<M> {
         }));
 
         let mut lens: HashMap<TypeKey, usize> = HashMap::new();
+        let mut source_structs: HashMap<syn::Ident, SourceStruct> = HashMap::new();
+        let mut extent_consts: HashSet<syn::Ident> = HashSet::new();
         // One accumulator for every map, so a length means the same thing
         // whichever item kind it was written in.
         //
@@ -746,15 +788,15 @@ impl<M> Registry<M> {
         let mut record = |found: Result<Vec<(syn::Type, _)>, _>,
                           loc: &SourceLocation|
          -> Result<(), ScanError> {
-            let found: Vec<(syn::Type, usize)> =
-                found.map_err(|error| ScanError::UnsupportedArrayLength {
+            let found: Vec<(syn::Type, crate::api::core::frontend::model::ArrayExtent)> = found
+                .map_err(|error| ScanError::UnsupportedArrayLength {
                     error: Box::new(error),
                     loc: loc.clone(),
                 })?;
             lens.extend(
                 found
                     .into_iter()
-                    .map(|(ty, len)| (TypeKey::from_type(&ty), len)),
+                    .map(|(ty, extent)| (TypeKey::from_type(&ty), extent.value)),
             );
             Ok(())
         };
@@ -773,11 +815,51 @@ impl<M> Registry<M> {
             };
         }
         resolve_map!(self.functions.values_mut(), visit_item_fn_mut);
-        resolve_map!(self.structs.values_mut(), visit_item_struct_mut);
         resolve_map!(self.enums.values_mut(), visit_item_enum_mut);
         resolve_map!(self.consts.values_mut(), visit_item_const_mut);
         resolve_map!(self.passthrough.iter_mut(), visit_item_mut);
+
+        // Structs go through the MODEL rather than the length walk: their
+        // fields are the one surface an adapter consumes as source (the C
+        // mirror), so they need the full typed IR, not just resolved extents.
+        // The `syn` field types are then written back from the model, so the
+        // two can never disagree — `to_syn` is a projection, not a copy.
+        for (ident, (item, loc)) in self.structs.iter_mut() {
+            let origin = loc.crate_name.clone();
+            let syn::Fields::Named(named) = &mut item.fields else {
+                continue;
+            };
+            let mut fields = Vec::with_capacity(named.named.len());
+            for field in named.named.iter_mut() {
+                let Some(name) = field.ident.clone() else {
+                    continue;
+                };
+                let ty = lower_type(&field.ty, &consts, origin.as_deref()).map_err(|error| {
+                    ScanError::UnsupportedFieldType {
+                        item: ident.clone(),
+                        field: name.clone(),
+                        error: Box::new(error),
+                        loc: loc.clone(),
+                    }
+                })?;
+                field.ty = ty.to_syn();
+                if let Some(extent) = ty.array_extent() {
+                    lens.insert(TypeKey::from_type(&field.ty), extent.value);
+                }
+                for extent in ty.extents() {
+                    if let Some(id) = extent.const_id() {
+                        extent_consts
+                            .insert(syn::Ident::new(&id.name, proc_macro2::Span::call_site()));
+                    }
+                }
+                fields.push(SourceField { name, ty });
+            }
+            source_structs.insert(ident.clone(), SourceStruct { fields });
+        }
+
         self.array_lens = lens;
+        self.source_structs = source_structs;
+        self.extent_consts = extent_consts;
         Ok(())
     }
 
@@ -790,6 +872,25 @@ impl<M> Registry<M> {
     /// that issue #211 is about starts.
     pub fn array_len(&self, key: &TypeKey) -> Option<usize> {
         self.array_lens.get(key).copied()
+    }
+
+    /// The typed source model of an indexed struct, or `None` when `ident` is
+    /// not an indexed struct with named fields.
+    ///
+    /// An adapter reads this when it needs a fact about the SOURCE — which
+    /// const an extent named — rather than the semantic type. It must not
+    /// re-derive such facts from `syn`; that is the whole point of #211.
+    /// Whether `ident` is a `#[prebindgen]` const that a struct field's array
+    /// extent named — see [`Self::extent_consts`].
+    pub fn is_extent_const(&self, ident: &syn::Ident) -> bool {
+        self.extent_consts.contains(ident)
+    }
+
+    pub fn source_struct(
+        &self,
+        ident: &syn::Ident,
+    ) -> Option<&crate::api::core::frontend::model::SourceStruct> {
+        self.source_structs.get(ident)
     }
 
     /// The origin crate's **module path** for an item ingested via the item's

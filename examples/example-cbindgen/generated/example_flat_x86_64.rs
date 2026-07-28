@@ -68,6 +68,12 @@ pub struct foo_t {
     pub stable_field: u64,
 }
 #[repr(C)]
+#[allow(non_camel_case_types)]
+pub struct marker_t {
+    pub tag: [u8; MARKER_TAG_LEN],
+    pub weight: u32,
+}
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum inside_foo_t {
@@ -236,6 +242,13 @@ pub(crate) unsafe fn __cbg_in_InsideFoo(
     ::core::result::Result::Err(
         ::std::format!("invalid discriminant {} for `inside_foo_t`", __raw),
     )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_Marker(v: marker_t) -> example_flat::Marker {
+    example_flat::Marker {
+        tag: v.tag,
+        weight: v.weight,
+    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_in_Millis(v: u64) -> example_flat::Millis {
@@ -453,7 +466,15 @@ pub(crate) fn __cbg_in_f64(v: f64) -> f64 {
 #[allow(non_snake_case, dead_code, unused_variables)]
 pub(crate) fn __cbg_in_str() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_in_u32(v: u32) -> u32 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_in_u64(v: u64) -> u64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_in_u8(v: u8) -> u8 {
     v
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -492,6 +513,13 @@ pub(crate) fn __cbg_out_InsideFoo(v: example_flat::InsideFoo) -> inside_foo_t {
     match v {
         example_flat::InsideFoo::DouddleDee => inside_foo_t::DouddleDee,
         example_flat::InsideFoo::DouddleDum => inside_foo_t::DouddleDum,
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_Marker(v: example_flat::Marker) -> marker_t {
+    marker_t {
+        tag: v.tag,
+        weight: v.weight,
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -563,7 +591,15 @@ pub(crate) fn __cbg_out_i32(v: i32) -> i32 {
     v
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_u32(v: u32) -> u32 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_u64(v: u64) -> u64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_u8(v: u8) -> u8 {
     v
 }
 #[allow(non_snake_case, dead_code, unused_variables)]
@@ -992,6 +1028,34 @@ pub unsafe extern "C" fn inside_foo_value(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn marker_new(
+    b0: u8,
+    b1: u8,
+    b2: u8,
+    b3: u8,
+    weight: u32,
+) -> marker_t {
+    let b0 = __cbg_in_u8(b0);
+    let b1 = __cbg_in_u8(b1);
+    let b2 = __cbg_in_u8(b2);
+    let b3 = __cbg_in_u8(b3);
+    let weight = __cbg_in_u32(weight);
+    let __v = example_flat::marker_new(b0, b1, b2, b3, weight);
+    let __ret: marker_t;
+    __ret = __cbg_out_Marker(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn marker_tag_sum(m: marker_t) -> u32 {
+    let m = __cbg_in_Marker(m);
+    let __v = example_flat::marker_tag_sum(m);
+    let __ret: u32;
+    __ret = __cbg_out_u32(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn note_emphatic(n: ::core::mem::MaybeUninit<note_t>) -> bool {
     let n = match __cbg_in_Note(n) {
         ::core::result::Result::Ok(__v) => __v,
@@ -1204,6 +1268,13 @@ pub unsafe extern "C" fn shape_try_area(
         }
     }
 }
+/// Width of [`Marker::tag`] — a `#[prebindgen]` const used as an ARRAY EXTENT.
+///
+/// The value must be a plain integer literal: a generator runs in `build.rs`,
+/// where it cannot evaluate Rust, and the C header needs the number to define
+/// the symbol. Being `#[prebindgen]` is what makes it visible at all — the
+/// generated crate sees only what the macro exposed.
+pub const MARKER_TAG_LEN: usize = 4;
 const _: () = {
     konst::assertc_eq!(
         example_flat::FEATURES, "",

@@ -104,7 +104,7 @@ spelling, declaring a source item with its crate path
 **Decided by the frontend** — `core::frontend::lower_array_len`. This is the
 only subgrammar with an executable acceptance matrix
 (`prebindgen/src/api/core/frontend/tests.rs`); it is closed, and both adapters
-consume the same `ArrayLen`.
+consume the same `ArrayExtent`.
 
 ### A length is always a number
 
@@ -119,17 +119,21 @@ Two spellings reach that number, and nothing else does:
 | Form | Status | Lowers to |
 |---|---|---|
 | `[u8; 4]`, `[u8; 16usize]` | supported | `Literal(4)` / `Literal(16)` |
-| `[u8; N]` where `#[prebindgen] pub const N: usize = 4;` | supported | `Const { name: N, value: 4 }` |
+| `[u8; N]` where `#[prebindgen] pub const N: usize = 4;` | supported | `{ value: 4, source: Const(N) }` |
 | everything else | **refused** | see below |
 
-Both carry the value; the const also keeps its name, for diagnostics. **Emission
-uses the number**, so no length is ever a path in generated code:
-`[u8; ARRAY_BYTES]` emits as `[u8; 4]`.
+Both carry the value, and a const extent also carries **which const**. Which of
+the two an emitter uses is that adapter's choice:
 
-Two consequences worth stating. A const length and the same number written
-literally are **one type and one converter** — they always were in Rust, and the
-frontend now agrees. And a changed const shows up in the diff of a committed
-generated artifact, where echoing the name would have shown nothing at all.
+* generated **Rust** always uses the number, so no length is ever a path there
+  and there is nothing to qualify — `[u8; ARRAY_BYTES]` emits as `[u8; 4]`;
+* a **C header** uses the name — `uint8_t tag[MARKER_TAG_LEN]` — because a
+  symbolic extent is part of that API's meaning;
+* **Kotlin** has nowhere to put an extent at all.
+
+The value is what makes a const length and the same number written literally
+**one type and one converter** — they always were in Rust, and the frontend
+agrees.
 
 ### Three identities, kept apart
 
@@ -138,7 +142,7 @@ can answer:
 
 ```text
 [u8; A]  where A = 4
-[u8; B]  where B = 4     ──>   [u8; 4]
+[u8; B]  where B = 4     ──>   [u8; 4]     (one Rust type, one converter)
 [u8; 4]
 ```
 
@@ -146,25 +150,29 @@ can answer:
 |---|---|---|
 | const index | const name + origin crate | `A` is `4` in crate X |
 | type table (`Registry::array_len`) | `TypeKey` | this array type's length is `4` |
-| per-use source model *(not built — #211's `SourceModel`)* | use site | field `S::a` was written `[u8; A]` |
+| **source model** (`Registry::source_struct`) | **use site** — struct + field | field `S::a` was written `[u8; A]` |
 
-`Registry::array_len` returns a bare `usize`, and the third row does not exist
-yet. So **the spelling is discarded at the frontend**: after
-`Registry::from_items`, nothing — no type table, no adapter — can tell that
-`S::a` wrote `A`, `S::b` wrote `B`, and `S::literal` wrote `4`.
+`Registry::array_len` returns a bare `usize` and **cannot** report the spelling:
+by the time a `TypeKey` exists that question has more than one true answer, and
+storing one would make it depend on which occurrence was seen last.
 
-That is a **policy decision**, not a consequence of Rust's type equality, so it
-is stated rather than assumed. The reasoning: those three are one Rust type, one
-`TypeKey` and one converter, so letting an adapter render them differently would
-mean two destination representations for a single Rust type — which the
-type-keyed converter table cannot express. The capability would be incoherent
-here even if the provenance were carried.
+The spelling lives on the **use site** instead, in the typed source model, as an
+`ArrayExtent { value, source }`. Both halves have consumers:
 
-The cost is real and bounded: a C header cannot echo `uint8_t x[MAX_SIZE]`, only
-`uint8_t x[16]`. If that becomes wanted, provenance must arrive on the **use
-site** — field, parameter, return — in the per-use `SourceModel`, and never on a
-type-keyed table, where three occupants of one key cannot be told apart by the
-key.
+* `value` is what a destination language needs when it cannot reference a Rust
+  const at all — Kotlin gets `[u8; 4]`;
+* `source` is what a C header needs, because a symbolic extent is part of that
+  API's meaning. `uint8_t tag[MARKER_TAG_LEN]` makes changing the size one edit
+  rather than a hunt through literals.
+
+An adapter reads the extent **as a decided fact**. It must never recover it by
+re-reading `syn` — that is issue #211's invariant 6, and the reason the model
+exists rather than a side channel carrying the original syntax.
+
+A const an extent names is carried into the destination language by the adapter
+that spells it: `lang::Cbindgen` re-emits such a const with its literal value so
+cbindgen produces `#define MARKER_TAG_LEN 4`. Without that the header would name
+a symbol it never defines.
 
 ### What is refused, and why
 

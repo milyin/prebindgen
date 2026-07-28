@@ -103,6 +103,14 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.enum_type(pq!(InsideFoo));
     cbindgen = cbindgen.data_struct(pq!(Foo));
 
+    // A fixed-size array field sized by a NAMED const. The header must carry the
+    // symbolic extent — `uint8_t tag[MARKER_TAG_LEN]` — which is why the
+    // frontend's model records what the source wrote rather than only its value.
+    // `MARKER_TAG_LEN` is never declared here: an extent is a compile-time
+    // value, not part of the C surface, so it must reach the header without the
+    // binding having to name it.
+    cbindgen = cbindgen.data_struct(pq!(Marker));
+
     // The history-replay callback signature -> a `closure_value_t` closure struct
     // (`.base_name` gives the otherwise `f64`-derived struct a descriptive name).
     cbindgen = cbindgen
@@ -126,6 +134,9 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_absorb),
         pq!(foo_new),
         pq!(foo_get_id),
+        // The const-sized array crossing both ways, by value.
+        pq!(marker_new),
+        pq!(marker_tag_sum),
         pq!(inside_foo_default),
         // The tagged union crossing OUT: constructed and returned. Nothing to
         // validate on this side — Rust always writes a live arm.

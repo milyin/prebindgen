@@ -48,7 +48,9 @@ fn consts() -> ConstIndex {
 /// Lower as if written inside an item from `myflat`.
 fn lower(src: &str) -> Result<usize, ArrayLenReason> {
     let expr: syn::Expr = syn::parse_str(src).expect("test input must parse");
-    lower_array_len(&expr, "[u8 ; …]", Some("myflat"), &consts()).map_err(|e| e.reason)
+    lower_array_len(&expr, "[u8 ; …]", Some("myflat"), &consts())
+        .map(|e| e.value)
+        .map_err(|e| e.reason)
 }
 
 /// ACCEPTED shapes and the number each denotes.
@@ -173,7 +175,7 @@ fn a_length_must_name_a_const_from_its_own_crate() {
     );
     // ...and from `helpers` itself the same name is fine.
     let got = lower_array_len(&expr, "[u8 ; OTHER_MAX]", Some("helpers"), &consts()).unwrap();
-    assert_eq!(got, 8);
+    assert_eq!(got.value, 8);
 }
 
 /// An origin-less stream is one anonymous crate, so provenance matches
@@ -185,7 +187,7 @@ fn origin_less_streams_resolve_against_themselves() {
     let consts = ConstIndex::new([("MAX".to_string(), syn::parse_quote!(4), None)]);
     let expr: syn::Expr = syn::parse_quote!(MAX);
     let got = lower_array_len(&expr, "[u8 ; MAX]", None, &consts).unwrap();
-    assert_eq!(got, 4);
+    assert_eq!(got.value, 4);
     // A stamped item may not reach an unstamped const either — same rule.
     let err = lower_array_len(&expr, "[u8 ; MAX]", Some("myflat"), &consts).unwrap_err();
     assert!(matches!(
@@ -270,22 +272,21 @@ fn lengths_resolve_in_function_signatures() {
     assert!(rendered.contains("->[u8;16]"), "{rendered}");
 }
 
-/// Equal-valued lengths are ONE type after ingest, and that is all any
-/// downstream consumer can see.
+/// Equal-valued lengths are ONE type after ingest — and the source model still
+/// knows which spelling each use wrote.
 ///
 /// This is the state **after `Registry::from_items`** — the boundary every
 /// adapter actually meets — not the interior of the lowering call. It pins both
-/// halves of the policy:
+/// halves, which fail in opposite directions:
 ///
-/// * all three uses resolve to semantic length 4 and share one type, so they
-///   share one converter;
-/// * nothing downstream can tell that `S::a` wrote `A`, `S::b` wrote `B`, and
-///   `S::literal` wrote `4`. The spelling is discarded at the frontend, on
-///   purpose — see `array_len::len_expr`.
+/// * all three uses resolve to semantic length 4 and share one type-keyed row,
+///   so they share one converter;
+/// * the model reports `A`, `B` and a literal per FIELD, so a C header can emit
+///   `uint8_t a[A]` while the converter stays `[u8; 4]`.
 ///
-/// If that policy is ever reversed, the provenance has to arrive on a per-USE
-/// record in a `SourceModel` (issue #211), never on this type-keyed table: three
-/// occupants of one key cannot be told apart by the key.
+/// The second half is why provenance lives on the use site and never on the
+/// type-keyed table: three occupants of one key cannot be told apart by the
+/// key, so a type-keyed answer would depend on which was stored last.
 #[test]
 fn equal_lengths_collapse_to_one_type_after_ingest() {
     let loc = SourceLocation {
@@ -338,4 +339,34 @@ fn equal_lengths_collapse_to_one_type_after_ingest() {
         1,
         "three uses of one type must be one row"
     );
+
+    // ...and per USE, the spelling survives.
+    let model = registry
+        .source_struct(&syn::parse_quote!(S))
+        .expect("S is modeled");
+    let spellings: Vec<(String, Option<String>)> = model
+        .fields
+        .iter()
+        .map(|f| {
+            let extent = f.ty.array_extent().expect("every field is an array");
+            assert_eq!(extent.value, 4, "one semantic length");
+            (
+                f.name.to_string(),
+                extent.const_id().map(|c| c.name.clone()),
+            )
+        })
+        .collect();
+    assert_eq!(
+        spellings,
+        vec![
+            ("a".to_string(), Some("A".to_string())),
+            ("b".to_string(), Some("B".to_string())),
+            ("literal".to_string(), None),
+        ],
+        "the model must distinguish uses the type key cannot"
+    );
+
+    // Both consts are recorded as ones an adapter may have to carry across.
+    assert!(registry.is_extent_const(&syn::parse_quote!(A)));
+    assert!(registry.is_extent_const(&syn::parse_quote!(B)));
 }

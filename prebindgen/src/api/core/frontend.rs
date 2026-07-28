@@ -31,6 +31,7 @@
 //! in `docs/source-language.md` are still classified at their use sites.
 
 mod array_len;
+pub mod model;
 
 #[cfg(test)]
 mod tests;

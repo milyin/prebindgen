@@ -12,6 +12,16 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * Width of [`Marker::tag`] — a `#[prebindgen]` const used as an ARRAY EXTENT.
+ *
+ * The value must be a plain integer literal: a generator runs in `build.rs`,
+ * where it cannot evaluate Rust, and the C header needs the number to define
+ * the symbol. Being `#[prebindgen]` is what makes it visible at all — the
+ * generated crate sees only what the macro exposed.
+ */
+#define MARKER_TAG_LEN 4
+
 typedef enum operation_t {
   Add = 0,
   Sub = 1,
@@ -105,6 +115,11 @@ typedef struct foo_t {
   uint64_t stable_field;
 } foo_t;
 
+typedef struct marker_t {
+  uint8_t tag[MARKER_TAG_LEN];
+  uint32_t weight;
+} marker_t;
+
 extern void *malloc(uintptr_t size);
 
 extern void free(void *ptr);
@@ -158,6 +173,10 @@ struct foo_t foo_new(uint64_t id);
 enum inside_foo_t inside_foo_default(void);
 
 int32_t inside_foo_value(enum inside_foo_t x);
+
+struct marker_t marker_new(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3, uint32_t weight);
+
+uint32_t marker_tag_sum(struct marker_t m);
 
 bool note_emphatic(struct note_t n);
 
