@@ -295,6 +295,11 @@ fn lengths_resolve_in_function_signatures() {
 /// A const length and the same number written literally are ONE type, and
 /// therefore one converter. They always were in Rust; evaluating the length
 /// makes the frontend agree.
+///
+/// The two halves are the layering: [`ArrayLen`] distinguishes the spellings
+/// because it models one OCCURRENCE, and the emitted type does not because it
+/// models the type. Anything keyed by type must take the second answer — see
+/// [`equal_lengths_collapse_to_one_typed_entry`].
 #[test]
 fn a_const_length_and_its_literal_are_the_same_type() {
     let from_const: syn::Expr = syn::parse_quote!(MAX);
@@ -303,4 +308,52 @@ fn a_const_length_and_its_literal_are_the_same_type() {
     let b = lower_array_len(&from_literal, "[u8 ; 4]", Some("myflat"), &consts()).unwrap();
     assert_ne!(a, b, "the spellings stay distinguishable in the model");
     assert_eq!(spelled(&a), spelled(&b), "but they emit one type");
+}
+
+/// Distinct source spellings of equal length produce ONE type and therefore one
+/// registry entry — so what a type-keyed table can hold is the number, and not
+/// which spelling produced it.
+///
+/// Three fields, two of them const-spelled with the same value: every one is
+/// `[u8; 4]` after lowering. If the registry's table carried the occurrence
+/// model, the stored answer would be whichever field the iteration reached last
+/// — silently order dependent, and false for the other two either way.
+#[test]
+fn equal_lengths_collapse_to_one_typed_entry() {
+    let mut item: syn::ItemStruct = syn::parse_quote!(
+        pub struct S {
+            pub a: [u8; MAX],
+            pub b: [u8; ALSO_FOUR],
+            pub literal: [u8; 4],
+        }
+    );
+    let index = ConstIndex::new([
+        (
+            "MAX".to_string(),
+            syn::parse_quote!(4),
+            Some("myflat".to_string()),
+        ),
+        (
+            "ALSO_FOUR".to_string(),
+            syn::parse_quote!(4),
+            Some("myflat".to_string()),
+        ),
+    ]);
+    let found = resolve_array_lengths(&mut item, &index, Some("myflat"), |r, s| {
+        syn::visit_mut::VisitMut::visit_item_struct_mut(r, s)
+    })
+    .unwrap();
+
+    // Three occurrences, each remembering its own spelling...
+    assert_eq!(found.len(), 3);
+    assert!(matches!(found[0].1, ArrayLen::Const { .. }));
+    assert!(matches!(found[2].1, ArrayLen::Literal(4)));
+    // ...but one type between them, so a type-keyed table has one row.
+    let types: std::collections::BTreeSet<String> = found
+        .iter()
+        .map(|(ty, _)| ty.to_token_stream().to_string().replace(' ', ""))
+        .collect();
+    assert_eq!(types, ["[u8;4]".to_string()].into_iter().collect());
+    // Every occurrence agrees on the only thing that table can store.
+    assert!(found.iter().all(|(_, len)| len.value() == 4));
 }

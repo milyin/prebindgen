@@ -10,6 +10,14 @@ use quote::ToTokens;
 
 /// A fixed-size array's length, after the frontend has decided it.
 ///
+/// **This models one OCCURRENCE, not a type.** It records which spelling was
+/// written, which is a property of the use site — `[u8; A]` and `[u8; 4]` are
+/// the same Rust type and the same [`TypeKey`](crate::api::core::TypeKey) when
+/// `A == 4`, so a table keyed by type cannot carry this without its answer
+/// depending on which occurrence was stored last. That is why the registry's
+/// type-keyed table holds a bare `usize` and this stays crate-private: source-
+/// use provenance belongs to a per-use model (issue #211's `SourceModel`).
+///
 /// **A length is always a known number.** That is the whole design: a binding
 /// generator runs in `build.rs`, where it cannot evaluate arbitrary Rust, and
 /// some destination languages cannot reference a Rust const at all — a Kotlin
@@ -24,13 +32,13 @@ use quote::ToTokens;
 ///   integer literal — `[u8; ARRAY_BYTES]` where
 ///   `#[prebindgen] pub const ARRAY_BYTES: usize = 4`.
 ///
-/// Both carry the value; the const also keeps its name, for diagnostics and for
-/// generators that want to echo it. Emission uses the number
+/// Both carry the value; the const also keeps its name, for diagnostics at the
+/// site that lowered it. Emission uses the number
 /// ([`ArrayLen::to_expr`]), so no length is ever a path in generated code and
 /// there is nothing to qualify — the class of defect that produced issues #209
 /// and #210 is gone rather than fixed.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ArrayLen {
+pub(crate) enum ArrayLen {
     /// Written as an integer literal.
     Literal(usize),
     /// Written as the bare name of a `#[prebindgen]` const, evaluated here.
@@ -39,7 +47,7 @@ pub enum ArrayLen {
 
 impl ArrayLen {
     /// The number of elements. Total — every accepted length has one.
-    pub fn value(&self) -> usize {
+    pub(crate) fn value(&self) -> usize {
         match self {
             ArrayLen::Literal(n) => *n,
             ArrayLen::Const { value, .. } => *value,
@@ -52,7 +60,7 @@ impl ArrayLen {
     /// independent of the generated crate's namespace. It also makes a changed
     /// const **visible** in the diff of a committed generated artifact, where
     /// echoing the name would have shown nothing at all.
-    pub fn to_expr(&self) -> syn::Expr {
+    pub(crate) fn to_expr(&self) -> syn::Expr {
         let lit = syn::LitInt::new(&self.value().to_string(), proc_macro2::Span::call_site());
         syn::Expr::Lit(syn::ExprLit {
             attrs: Vec::new(),

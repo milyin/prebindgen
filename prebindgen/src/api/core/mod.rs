@@ -34,7 +34,7 @@ pub(crate) mod write;
 
 pub use self::{
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
-    frontend::{ArrayLen, UnsupportedArrayLen},
+    frontend::UnsupportedArrayLen,
     gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},

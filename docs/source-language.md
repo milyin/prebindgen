@@ -131,6 +131,30 @@ literally are **one type and one converter** — they always were in Rust, and t
 frontend now agrees. And a changed const shows up in the diff of a committed
 generated artifact, where echoing the name would have shown nothing at all.
 
+### Three identities, kept apart
+
+Normalization is deliberately lossy, and that dictates which question each layer
+can answer:
+
+```text
+[u8; A]  where A = 4
+[u8; B]  where B = 4     ──>   [u8; 4]
+[u8; 4]
+```
+
+| Layer | Keyed by | Answers |
+|---|---|---|
+| const index | const name + origin crate | `A` is `4` in crate X |
+| type table (`Registry::array_len`) | `TypeKey` | this array type's length is `4` |
+| per-use source model *(not built yet — #211's `SourceModel`)* | use site | field `S::a` was written `[u8; A]` |
+
+So `Registry::array_len` returns a bare `usize`. It **cannot** report which
+spelling produced the type, because by the time a `TypeKey` exists that question
+has more than one true answer — and storing one would make it depend on which
+occurrence was seen last. The occurrence model that does know the spelling is
+crate-private for exactly that reason: there is no type-keyed table it could be
+handed out through honestly.
+
 ### What is refused, and why
 
 | Form | Reason |

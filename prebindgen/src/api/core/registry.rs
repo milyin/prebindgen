@@ -256,14 +256,21 @@ pub struct Registry<M = ()> {
 
     /// Every fixed-size array type the source defines, mapped to its
     /// frontend-decided length. Filled at ingest by
-    /// [`crate::api::core::frontend::resolve_array_lengths`]; keyed by the
-    /// array type AFTER that rewrite, which is the only spelling anything
-    /// downstream sees.
+    /// [`crate::api::core::frontend::resolve_array_lengths`].
     ///
-    /// This is the single source of `N`: a consumer that needs the length —
-    /// planning, or an adapter deciding how an array crosses its boundary —
-    /// reads it from here instead of re-parsing `syn::TypeArray::len`.
-    pub(crate) array_lens: HashMap<TypeKey, crate::api::core::frontend::ArrayLen>,
+    /// **The value is a number, and only a number.** This table is keyed by
+    /// `TypeKey`, and `TypeKey` has already collapsed every source spelling of
+    /// one array type: `[u8; A]`, `[u8; B]` and `[u8; 4]` are one key when
+    /// `A == B == 4`, because they are one Rust type. So a type-keyed table can
+    /// answer "the length is 4" and cannot answer "the source wrote `A`" —
+    /// that second statement is false for the other occupants of the key.
+    /// Storing the spelling here would make the answer depend on which
+    /// occurrence happened to be inserted last.
+    ///
+    /// Source-use provenance is per occurrence, not per type; it belongs to a
+    /// per-use source model (issue #211's `SourceModel`), keyed by the use
+    /// site.
+    pub(crate) array_lens: HashMap<TypeKey, usize>,
 
     /// Type tables, one per direction. Each scanned type maps to its resolved
     /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
@@ -730,20 +737,26 @@ impl<M> Registry<M> {
             )
         }));
 
-        let mut lens: HashMap<TypeKey, crate::api::core::frontend::ArrayLen> = HashMap::new();
+        let mut lens: HashMap<TypeKey, usize> = HashMap::new();
         // One accumulator for every map, so a length means the same thing
         // whichever item kind it was written in.
+        //
+        // Only the VALUE is kept. `ArrayLen` models one occurrence and knows
+        // which spelling produced it; `TypeKey` has already collapsed the
+        // spellings, so carrying it across this boundary would make the stored
+        // answer depend on iteration order. See `Self::array_lens`.
         let mut record = |found: Result<Vec<(syn::Type, _)>, _>,
                           loc: &SourceLocation|
          -> Result<(), ScanError> {
-            let found = found.map_err(|error| ScanError::UnsupportedArrayLength {
-                error: Box::new(error),
-                loc: loc.clone(),
-            })?;
+            let found: Vec<(syn::Type, crate::api::core::frontend::ArrayLen)> =
+                found.map_err(|error| ScanError::UnsupportedArrayLength {
+                    error: Box::new(error),
+                    loc: loc.clone(),
+                })?;
             lens.extend(
                 found
                     .into_iter()
-                    .map(|(ty, len)| (TypeKey::from_type(&ty), len)),
+                    .map(|(ty, len)| (TypeKey::from_type(&ty), len.value())),
             );
             Ok(())
         };
@@ -777,8 +790,8 @@ impl<M> Registry<M> {
     /// `syn::TypeArray::len`: the length has already been validated and
     /// resolved once, and a second reading is where the two-authority drift
     /// that issue #211 is about starts.
-    pub fn array_len(&self, key: &TypeKey) -> Option<&crate::api::core::frontend::ArrayLen> {
-        self.array_lens.get(key)
+    pub fn array_len(&self, key: &TypeKey) -> Option<usize> {
+        self.array_lens.get(key).copied()
     }
 
     /// The origin crate's **module path** for an item ingested via the item's

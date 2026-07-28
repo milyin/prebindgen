@@ -35,15 +35,22 @@ mod array_len;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use self::array_len::{resolve_array_lengths, ConstIndex};
-/// The frontend's **public** surface is the decided model and its diagnostics —
-/// what a consumer of the IR needs.
+pub(crate) use self::array_len::{resolve_array_lengths, ArrayLen, ConstIndex};
+/// The frontend's **public** surface is the diagnostics — what a caller has to
+/// handle. The decided values are read from the registry
+/// ([`Registry::array_len`](crate::api::core::registry::Registry::array_len)),
+/// not from here.
 ///
 /// Lowering itself is crate-private on purpose. The entry point is
 /// [`Registry::from_items`](crate::api::core::registry::Registry::from_items),
 /// which runs the frontend over the whole stream; there is no supported way to
 /// lower one construct in isolation, because the decisions need the complete
-/// name index and the item's origin. Exposing the machinery would offer callers
-/// a second, unvalidated route to a `SourceModel` — the very thing #211 exists
-/// to prevent.
-pub use self::array_len::{ArrayLen, ArrayLenReason, UnsupportedArrayLen};
+/// const index and the item's origin. Exposing the machinery would offer
+/// callers a second, unvalidated route to a `SourceModel` — the very thing #211
+/// exists to prevent.
+///
+/// [`ArrayLen`] is crate-private for a sharper reason: it models ONE
+/// OCCURRENCE, including which spelling produced it, and there is no public
+/// table it could be handed out through without a key that has already
+/// collapsed the spellings.
+pub use self::array_len::{ArrayLenReason, UnsupportedArrayLen};

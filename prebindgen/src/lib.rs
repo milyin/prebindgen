@@ -290,9 +290,9 @@ macro_rules! ident {
 /// `docs/source-language.md`; [`core::frontend`] is the module that decides it.
 pub mod core {
     pub use crate::api::core::{
-        ArrayLen, ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot,
-        Niches, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage,
-        Transmute, TypeEntry, TypeKey, UnsupportedArrayLen, WriteRustError,
+        ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot, Niches,
+        Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,
+        TypeEntry, TypeKey, UnsupportedArrayLen, WriteRustError,
     };
 
     /// The Rust frontend: the single authority for what captured
@@ -303,7 +303,7 @@ pub mod core {
     /// here is the model it decides and the diagnostics it raises, not the
     /// lowering machinery.
     pub mod frontend {
-        pub use crate::api::core::frontend::{ArrayLen, ArrayLenReason, UnsupportedArrayLen};
+        pub use crate::api::core::frontend::{ArrayLenReason, UnsupportedArrayLen};
     }
 }
 
