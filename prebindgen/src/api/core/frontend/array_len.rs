@@ -8,22 +8,14 @@ use std::{collections::HashMap, fmt};
 
 use quote::ToTokens;
 
-/// A fixed-size array's length, after the frontend has decided it.
+/// A fixed-size array's length is **a number, and nothing else** — that is the
+/// decided model, and `usize` is its whole representation.
 ///
-/// **This models one OCCURRENCE, not a type.** It records which spelling was
-/// written, which is a property of the use site — `[u8; A]` and `[u8; 4]` are
-/// the same Rust type and the same [`TypeKey`](crate::api::core::TypeKey) when
-/// `A == 4`, so a table keyed by type cannot carry this without its answer
-/// depending on which occurrence was stored last. That is why the registry's
-/// type-keyed table holds a bare `usize` and this stays crate-private: source-
-/// use provenance belongs to a per-use model (issue #211's `SourceModel`).
-///
-/// **A length is always a known number.** That is the whole design: a binding
-/// generator runs in `build.rs`, where it cannot evaluate arbitrary Rust, and
-/// some destination languages cannot reference a Rust const at all — a Kotlin
-/// surface that groups a small array into scalars needs the count literally.
-/// A length that the frontend cannot reduce to a `usize` is therefore not a
-/// length prebindgen accepts.
+/// A binding generator runs in `build.rs`, where it cannot evaluate arbitrary
+/// Rust, and some destination languages cannot reference a Rust const at all —
+/// a surface that groups a small array into scalars needs the count literally.
+/// A length the frontend cannot reduce to a `usize` is therefore not a length
+/// prebindgen accepts.
 ///
 /// Two spellings reach that number, and nothing else does:
 ///
@@ -32,41 +24,30 @@ use quote::ToTokens;
 ///   integer literal — `[u8; ARRAY_BYTES]` where
 ///   `#[prebindgen] pub const ARRAY_BYTES: usize = 4`.
 ///
-/// Both carry the value; the const also keeps its name, for diagnostics at the
-/// site that lowered it. Emission uses the number
-/// ([`ArrayLen::to_expr`]), so no length is ever a path in generated code and
-/// there is nothing to qualify — the class of defect that produced issues #209
-/// and #210 is gone rather than fixed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ArrayLen {
-    /// Written as an integer literal.
-    Literal(usize),
-    /// Written as the bare name of a `#[prebindgen]` const, evaluated here.
-    Const { name: syn::Ident, value: usize },
-}
-
-impl ArrayLen {
-    /// The number of elements. Total — every accepted length has one.
-    pub(crate) fn value(&self) -> usize {
-        match self {
-            ArrayLen::Literal(n) => *n,
-            ArrayLen::Const { value, .. } => *value,
-        }
-    }
-
-    /// The length as it is spelled in generated code: always the literal.
-    ///
-    /// Emitting the number rather than the const path is what makes a length
-    /// independent of the generated crate's namespace. It also makes a changed
-    /// const **visible** in the diff of a committed generated artifact, where
-    /// echoing the name would have shown nothing at all.
-    pub(crate) fn to_expr(&self) -> syn::Expr {
-        let lit = syn::LitInt::new(&self.value().to_string(), proc_macro2::Span::call_site());
-        syn::Expr::Lit(syn::ExprLit {
-            attrs: Vec::new(),
-            lit: syn::Lit::Int(lit),
-        })
-    }
+/// # The spelling is deliberately discarded
+///
+/// This is a **frontend policy decision**, not a consequence of Rust's type
+/// equality, so it is stated rather than assumed: which spelling a use site
+/// wrote is not part of an array's meaning, and no adapter is offered it.
+///
+/// `[u8; A]` and `[u8; B]` with `A == B == 4` are one Rust type, one `TypeKey`
+/// and one converter. Letting an adapter render them differently would mean two
+/// destination representations for a single Rust type, which the type-keyed
+/// converter table cannot express — so the capability would be incoherent here
+/// even if the provenance were carried.
+///
+/// The cost is real and bounded: a C header cannot echo `uint8_t x[MAX_SIZE]`,
+/// only `uint8_t x[16]`. If that becomes wanted, provenance must be keyed by
+/// **use site** — field, parameter, return — in issue #211's per-use
+/// `SourceModel`, never by `TypeKey`, which has already collapsed the spellings.
+/// Reintroducing a name into any type-keyed table makes the stored answer depend
+/// on which occurrence was seen last.
+fn len_expr(n: usize) -> syn::Expr {
+    let lit = syn::LitInt::new(&n.to_string(), proc_macro2::Span::call_site());
+    syn::Expr::Lit(syn::ExprLit {
+        attrs: Vec::new(),
+        lit: syn::Lit::Int(lit),
+    })
 }
 
 /// A length the prebindgen source language does not accept.
@@ -246,7 +227,7 @@ pub(crate) fn lower_array_len(
     array: &str,
     item_crate: Option<&str>,
     consts: &ConstIndex,
-) -> Result<ArrayLen, UnsupportedArrayLen> {
+) -> Result<usize, UnsupportedArrayLen> {
     let fail = |reason| UnsupportedArrayLen {
         array: array.to_string(),
         offending: len.to_token_stream().to_string(),
@@ -254,7 +235,7 @@ pub(crate) fn lower_array_len(
     };
     match len {
         syn::Expr::Lit(_) => match int_literal(len) {
-            Some(n) => Ok(ArrayLen::Literal(n)),
+            Some(n) => Ok(n),
             None => Err(fail(match len {
                 // Told apart so an out-of-range integer does not report as
                 // "not an integer".
@@ -272,8 +253,10 @@ pub(crate) fn lower_array_len(
             {
                 return Err(fail(ArrayLenReason::NotABareName));
             }
-            let name = ep.path.segments[0].ident.clone();
-            let Some(entry) = consts.consts.get(&name.to_string()) else {
+            // Only the const's VALUE leaves this function; which name carried
+            // it is not part of the length. See `len_expr` for why that is a
+            // stated policy rather than an omission.
+            let Some(entry) = consts.consts.get(&ep.path.segments[0].ident.to_string()) else {
                 return Err(fail(ArrayLenReason::NotAMarkedConst));
             };
             // Provenance before value: a same-named const from another source
@@ -288,7 +271,7 @@ pub(crate) fn lower_array_len(
             let Some(value) = entry.value else {
                 return Err(fail(ArrayLenReason::ConstIsNotALiteral));
             };
-            Ok(ArrayLen::Const { name, value })
+            Ok(value)
         }
         _ => Err(fail(ArrayLenReason::NotLiteralOrName)),
     }
@@ -301,7 +284,7 @@ pub(crate) fn lower_array_len(
 pub(crate) struct ArrayLenResolver<'a> {
     consts: &'a ConstIndex,
     item_crate: Option<&'a str>,
-    found: Vec<(syn::Type, ArrayLen)>,
+    found: Vec<(syn::Type, usize)>,
     error: Option<UnsupportedArrayLen>,
 }
 
@@ -318,7 +301,7 @@ impl<'a> ArrayLenResolver<'a> {
     /// The `(array type, length)` pairs found in walk order — array types in
     /// their rewritten spelling — or the first length that could not be
     /// lowered.
-    pub(crate) fn finish(self) -> Result<Vec<(syn::Type, ArrayLen)>, UnsupportedArrayLen> {
+    pub(crate) fn finish(self) -> Result<Vec<(syn::Type, usize)>, UnsupportedArrayLen> {
         match self.error {
             Some(e) => Err(e),
             None => Ok(self.found),
@@ -340,7 +323,7 @@ impl syn::visit_mut::VisitMut for ArrayLenResolver<'_> {
         let rendered = arr.to_token_stream().to_string();
         match lower_array_len(&arr.len, &rendered, self.item_crate, self.consts) {
             Ok(len) => {
-                arr.len = len.to_expr();
+                arr.len = len_expr(len);
                 self.found.push((syn::Type::Array(arr.clone()), len));
             }
             Err(e) => self.error = Some(e),
@@ -365,7 +348,7 @@ pub(crate) fn resolve_array_lengths<T: Clone>(
     consts: &ConstIndex,
     item_crate: Option<&str>,
     visit: impl FnOnce(&mut ArrayLenResolver<'_>, &mut T),
-) -> Result<Vec<(syn::Type, ArrayLen)>, UnsupportedArrayLen> {
+) -> Result<Vec<(syn::Type, usize)>, UnsupportedArrayLen> {
     let mut candidate = node.clone();
     let mut resolver = ArrayLenResolver::new(consts, item_crate);
     visit(&mut resolver, &mut candidate);

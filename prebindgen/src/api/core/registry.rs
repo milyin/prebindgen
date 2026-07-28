@@ -741,14 +741,12 @@ impl<M> Registry<M> {
         // One accumulator for every map, so a length means the same thing
         // whichever item kind it was written in.
         //
-        // Only the VALUE is kept. `ArrayLen` models one occurrence and knows
-        // which spelling produced it; `TypeKey` has already collapsed the
-        // spellings, so carrying it across this boundary would make the stored
-        // answer depend on iteration order. See `Self::array_lens`.
+        // Equal-valued lengths share a key, because they share a Rust type.
+        // See `Self::array_lens`.
         let mut record = |found: Result<Vec<(syn::Type, _)>, _>,
                           loc: &SourceLocation|
          -> Result<(), ScanError> {
-            let found: Vec<(syn::Type, crate::api::core::frontend::ArrayLen)> =
+            let found: Vec<(syn::Type, usize)> =
                 found.map_err(|error| ScanError::UnsupportedArrayLength {
                     error: Box::new(error),
                     loc: loc.clone(),
@@ -756,7 +754,7 @@ impl<M> Registry<M> {
             lens.extend(
                 found
                     .into_iter()
-                    .map(|(ty, len)| (TypeKey::from_type(&ty), len.value())),
+                    .map(|(ty, len)| (TypeKey::from_type(&ty), len)),
             );
             Ok(())
         };

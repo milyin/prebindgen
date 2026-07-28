@@ -146,14 +146,25 @@ can answer:
 |---|---|---|
 | const index | const name + origin crate | `A` is `4` in crate X |
 | type table (`Registry::array_len`) | `TypeKey` | this array type's length is `4` |
-| per-use source model *(not built yet — #211's `SourceModel`)* | use site | field `S::a` was written `[u8; A]` |
+| per-use source model *(not built — #211's `SourceModel`)* | use site | field `S::a` was written `[u8; A]` |
 
-So `Registry::array_len` returns a bare `usize`. It **cannot** report which
-spelling produced the type, because by the time a `TypeKey` exists that question
-has more than one true answer — and storing one would make it depend on which
-occurrence was seen last. The occurrence model that does know the spelling is
-crate-private for exactly that reason: there is no type-keyed table it could be
-handed out through honestly.
+`Registry::array_len` returns a bare `usize`, and the third row does not exist
+yet. So **the spelling is discarded at the frontend**: after
+`Registry::from_items`, nothing — no type table, no adapter — can tell that
+`S::a` wrote `A`, `S::b` wrote `B`, and `S::literal` wrote `4`.
+
+That is a **policy decision**, not a consequence of Rust's type equality, so it
+is stated rather than assumed. The reasoning: those three are one Rust type, one
+`TypeKey` and one converter, so letting an adapter render them differently would
+mean two destination representations for a single Rust type — which the
+type-keyed converter table cannot express. The capability would be incoherent
+here even if the provenance were carried.
+
+The cost is real and bounded: a C header cannot echo `uint8_t x[MAX_SIZE]`, only
+`uint8_t x[16]`. If that becomes wanted, provenance must arrive on the **use
+site** — field, parameter, return — in the per-use `SourceModel`, and never on a
+type-keyed table, where three occupants of one key cannot be told apart by the
+key.
 
 ### What is refused, and why
 

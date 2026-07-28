@@ -35,7 +35,7 @@ mod array_len;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use self::array_len::{resolve_array_lengths, ArrayLen, ConstIndex};
+pub(crate) use self::array_len::{resolve_array_lengths, ConstIndex};
 /// The frontend's **public** surface is the diagnostics — what a caller has to
 /// handle. The decided values are read from the registry
 /// ([`Registry::array_len`](crate::api::core::registry::Registry::array_len)),
@@ -49,8 +49,8 @@ pub(crate) use self::array_len::{resolve_array_lengths, ArrayLen, ConstIndex};
 /// callers a second, unvalidated route to a `SourceModel` — the very thing #211
 /// exists to prevent.
 ///
-/// [`ArrayLen`] is crate-private for a sharper reason: it models ONE
-/// OCCURRENCE, including which spelling produced it, and there is no public
-/// table it could be handed out through without a key that has already
-/// collapsed the spellings.
+/// A length's decided model is a bare `usize`. Which spelling produced it —
+/// `[u8; A]` versus `[u8; 4]` — is deliberately not carried; see
+/// `array_len::len_expr` for that policy and where provenance would go if it
+/// were ever wanted.
 pub use self::array_len::{ArrayLenReason, UnsupportedArrayLen};

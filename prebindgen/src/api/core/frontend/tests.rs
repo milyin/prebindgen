@@ -7,8 +7,10 @@
 
 use quote::ToTokens;
 
-use super::{
-    array_len::lower_array_len, resolve_array_lengths, ArrayLen, ArrayLenReason, ConstIndex,
+use super::{array_len::lower_array_len, resolve_array_lengths, ArrayLenReason, ConstIndex};
+use crate::{
+    api::core::{Registry, TypeKey},
+    SourceLocation,
 };
 
 /// The consts every row below resolves against, all marked in `myflat`:
@@ -44,56 +46,32 @@ fn consts() -> ConstIndex {
 }
 
 /// Lower as if written inside an item from `myflat`.
-fn lower(src: &str) -> Result<ArrayLen, ArrayLenReason> {
+fn lower(src: &str) -> Result<usize, ArrayLenReason> {
     let expr: syn::Expr = syn::parse_str(src).expect("test input must parse");
     lower_array_len(&expr, "[u8 ; …]", Some("myflat"), &consts()).map_err(|e| e.reason)
 }
 
-/// Render a lowered length the way it will be spelled in generated code.
-fn spelled(len: &ArrayLen) -> String {
-    len.to_expr().to_token_stream().to_string()
-}
-
-/// ACCEPTED shapes: what each lowers to, and how it is then spelled.
+/// ACCEPTED shapes and the number each denotes.
 ///
 /// Every accepted length is a NUMBER — that is the contract, not an
 /// implementation detail. A generator runs in `build.rs` and cannot evaluate
 /// Rust, and a destination language that groups a small array into scalars needs
-/// the count literally.
-///
-/// The spelling column is the half that used to be a separate walk. Pairing it
-/// with acceptance in one table is the point: a row cannot say "accepted"
-/// without also saying what it emits.
+/// the count literally. The lowered model is a `usize` and nothing more, so the
+/// spelling column that used to sit here would only have restated the value.
 #[test]
 fn accepted_array_lengths() {
-    let cases: &[(&str, ArrayLen, &str)] = &[
-        ("4", ArrayLen::Literal(4), "4"),
-        ("0", ArrayLen::Literal(0), "0"),
-        ("16usize", ArrayLen::Literal(16), "16"),
-        // A marked const is evaluated here and emitted as its VALUE, so nothing
-        // in generated code is a path and there is nothing to qualify.
-        (
-            "MAX",
-            ArrayLen::Const {
-                name: syn::parse_quote!(MAX),
-                value: 4,
-            },
-            "4",
-        ),
-        (
-            "SUFFIXED",
-            ArrayLen::Const {
-                name: syn::parse_quote!(SUFFIXED),
-                value: 16,
-            },
-            "16",
-        ),
+    let cases: &[(&str, usize)] = &[
+        ("4", 4),
+        ("0", 0),
+        ("16usize", 16),
+        // A marked const is evaluated here, so nothing in generated code is a
+        // path and there is nothing to qualify.
+        ("MAX", 4),
+        ("SUFFIXED", 16),
     ];
-    for (src, expect, spell) in cases {
+    for (src, expect) in cases {
         let got = lower(src).unwrap_or_else(|r| panic!("`{src}` was refused: {r:?}"));
         assert_eq!(&got, expect, "`{src}` lowered to the wrong value");
-        assert_eq!(&spelled(&got), spell, "`{src}` is spelled wrong");
-        assert_eq!(got.value(), expect.value(), "`{src}` has the wrong value");
     }
 }
 
@@ -195,7 +173,7 @@ fn a_length_must_name_a_const_from_its_own_crate() {
     );
     // ...and from `helpers` itself the same name is fine.
     let got = lower_array_len(&expr, "[u8 ; OTHER_MAX]", Some("helpers"), &consts()).unwrap();
-    assert_eq!(got.value(), 8);
+    assert_eq!(got, 8);
 }
 
 /// An origin-less stream is one anonymous crate, so provenance matches
@@ -207,7 +185,7 @@ fn origin_less_streams_resolve_against_themselves() {
     let consts = ConstIndex::new([("MAX".to_string(), syn::parse_quote!(4), None)]);
     let expr: syn::Expr = syn::parse_quote!(MAX);
     let got = lower_array_len(&expr, "[u8 ; MAX]", None, &consts).unwrap();
-    assert_eq!(got.value(), 4);
+    assert_eq!(got, 4);
     // A stamped item may not reach an unstamped const either — same rule.
     let err = lower_array_len(&expr, "[u8 ; MAX]", Some("myflat"), &consts).unwrap_err();
     assert!(matches!(
@@ -292,68 +270,72 @@ fn lengths_resolve_in_function_signatures() {
     assert!(rendered.contains("->[u8;16]"), "{rendered}");
 }
 
-/// A const length and the same number written literally are ONE type, and
-/// therefore one converter. They always were in Rust; evaluating the length
-/// makes the frontend agree.
+/// Equal-valued lengths are ONE type after ingest, and that is all any
+/// downstream consumer can see.
 ///
-/// The two halves are the layering: [`ArrayLen`] distinguishes the spellings
-/// because it models one OCCURRENCE, and the emitted type does not because it
-/// models the type. Anything keyed by type must take the second answer — see
-/// [`equal_lengths_collapse_to_one_typed_entry`].
+/// This is the state **after `Registry::from_items`** — the boundary every
+/// adapter actually meets — not the interior of the lowering call. It pins both
+/// halves of the policy:
+///
+/// * all three uses resolve to semantic length 4 and share one type, so they
+///   share one converter;
+/// * nothing downstream can tell that `S::a` wrote `A`, `S::b` wrote `B`, and
+///   `S::literal` wrote `4`. The spelling is discarded at the frontend, on
+///   purpose — see `array_len::len_expr`.
+///
+/// If that policy is ever reversed, the provenance has to arrive on a per-USE
+/// record in a `SourceModel` (issue #211), never on this type-keyed table: three
+/// occupants of one key cannot be told apart by the key.
 #[test]
-fn a_const_length_and_its_literal_are_the_same_type() {
-    let from_const: syn::Expr = syn::parse_quote!(MAX);
-    let from_literal: syn::Expr = syn::parse_quote!(4);
-    let a = lower_array_len(&from_const, "[u8 ; MAX]", Some("myflat"), &consts()).unwrap();
-    let b = lower_array_len(&from_literal, "[u8 ; 4]", Some("myflat"), &consts()).unwrap();
-    assert_ne!(a, b, "the spellings stay distinguishable in the model");
-    assert_eq!(spelled(&a), spelled(&b), "but they emit one type");
-}
+fn equal_lengths_collapse_to_one_type_after_ingest() {
+    let loc = SourceLocation {
+        crate_name: Some("myflat".to_string()),
+        ..Default::default()
+    };
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Const(syn::parse_quote!(
+                pub const A: usize = 4;
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Const(syn::parse_quote!(
+                pub const B: usize = 4;
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct S {
+                    pub a: [u8; A],
+                    pub b: [u8; B],
+                    pub literal: [u8; 4],
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<()>::from_items(items).unwrap();
 
-/// Distinct source spellings of equal length produce ONE type and therefore one
-/// registry entry — so what a type-keyed table can hold is the number, and not
-/// which spelling produced it.
-///
-/// Three fields, two of them const-spelled with the same value: every one is
-/// `[u8; 4]` after lowering. If the registry's table carried the occurrence
-/// model, the stored answer would be whichever field the iteration reached last
-/// — silently order dependent, and false for the other two either way.
-#[test]
-fn equal_lengths_collapse_to_one_typed_entry() {
-    let mut item: syn::ItemStruct = syn::parse_quote!(
-        pub struct S {
-            pub a: [u8; MAX],
-            pub b: [u8; ALSO_FOUR],
-            pub literal: [u8; 4],
-        }
+    // Every field is the same type, spelled as the number.
+    let (item, _) = &registry.structs[&syn::parse_quote!(S)];
+    let rendered = item.to_token_stream().to_string().replace(' ', "");
+    assert!(rendered.contains("a:[u8;4]"), "{rendered}");
+    assert!(rendered.contains("b:[u8;4]"), "{rendered}");
+    assert!(rendered.contains("literal:[u8;4]"), "{rendered}");
+    // ...so the const names are gone from the model entirely. Were the spelling
+    // retained anywhere reachable from here, this would be the assertion that
+    // caught it depending on iteration order.
+    assert!(!rendered.contains('A'), "{rendered}");
+    assert!(!rendered.contains('B'), "{rendered}");
+
+    // One type-keyed entry, and its value is stable and correct.
+    let key = TypeKey::parse("[u8; 4]").unwrap();
+    assert_eq!(registry.array_len(&key), Some(4));
+    assert_eq!(
+        registry.array_lens.len(),
+        1,
+        "three uses of one type must be one row"
     );
-    let index = ConstIndex::new([
-        (
-            "MAX".to_string(),
-            syn::parse_quote!(4),
-            Some("myflat".to_string()),
-        ),
-        (
-            "ALSO_FOUR".to_string(),
-            syn::parse_quote!(4),
-            Some("myflat".to_string()),
-        ),
-    ]);
-    let found = resolve_array_lengths(&mut item, &index, Some("myflat"), |r, s| {
-        syn::visit_mut::VisitMut::visit_item_struct_mut(r, s)
-    })
-    .unwrap();
-
-    // Three occurrences, each remembering its own spelling...
-    assert_eq!(found.len(), 3);
-    assert!(matches!(found[0].1, ArrayLen::Const { .. }));
-    assert!(matches!(found[2].1, ArrayLen::Literal(4)));
-    // ...but one type between them, so a type-keyed table has one row.
-    let types: std::collections::BTreeSet<String> = found
-        .iter()
-        .map(|(ty, _)| ty.to_token_stream().to_string().replace(' ', ""))
-        .collect();
-    assert_eq!(types, ["[u8;4]".to_string()].into_iter().collect());
-    // Every occurrence agrees on the only thing that table can store.
-    assert!(found.iter().all(|(_, len)| len.value() == 4));
 }
