@@ -942,8 +942,12 @@ impl JniGen {
                 // return. Without this an override outlives an upstream
                 // field-type change — the very drift `.fields()` exists to
                 // catch — and two same-shaped handle types silently swap.
-                let peeled = vec_inner_type(&field.ty)
-                    .or_else(|| option_inner_type(&field.ty))
+                // Core applies override records to the whole field after
+                // peeling only an outer `Option`: a `Vec<T>` remains `Vec<T>`.
+                // Mirror that exact normalization here; peeling `Vec` would
+                // accept `expand_return!(T)` and only fail later when core
+                // applies its records to `Vec<T>`.
+                let peeled = option_inner_type(&field.ty)
                     .map(|t| crate::api::core::unfold::peel_ref(&t))
                     .unwrap_or_else(|| crate::api::core::unfold::peel_ref(&field.ty));
                 let actual = TypeKey::from_type(&peeled);

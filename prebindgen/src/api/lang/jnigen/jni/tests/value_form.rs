@@ -782,3 +782,117 @@ fn a_nested_value_form_is_hoisted_too() {
         );
     }
 }
+
+// A compact fixture shared by the two follow-up review regressions.
+fn nested_review_items() -> Vec<(syn::Item, crate::SourceLocation)> {
+    let loc = myflat_loc();
+    vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZReviewInnerStruct {
+                    pub value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZReviewOuterStruct {
+                    pub optional: Option<ZReviewInner>,
+                    pub items: Vec<ZReviewInner>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_review_inner_to_struct(i: &ZReviewInner) -> ZReviewInnerStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_review_outer_to_struct(o: &ZReviewOuter) -> ZReviewOuterStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_review_outer_sub(cb: impl Fn(ZReviewOuter) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]
+}
+
+fn nested_review_jni(outer: crate::lang::ExpandReturnDecl) -> JniGen {
+    JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZReviewOuter))
+                .class(crate::ptr_class!(ZReviewInner))
+                .fun(crate::fun!(z_review_outer_sub)),
+        )
+        .expand(
+            crate::expand_return!(ZReviewInner).fields(crate::fields!(z_review_inner_to_struct)),
+        )
+        .expand(outer)
+}
+
+/// A nested value form below an `Option` cannot be emitted as an
+/// unconditional hoist: its accessor takes `&Inner`, not `&Option<Inner>`.
+/// Reject it during planning until conditional hoists can share one `Some`
+/// scope across every descendant leaf.
+#[test]
+fn an_optional_nested_value_form_is_rejected_before_emission() {
+    let registry = Registry::<KotlinMeta>::from_items(nested_review_items()).expect("index items");
+    let jni = nested_review_jni(
+        crate::expand_return!(ZReviewOuter).fields(crate::fields!(z_review_outer_to_struct)),
+    );
+    let err = match registry.resolve(jni) {
+        Ok(_) => panic!("an optional nested value form must be rejected"),
+        Err(e) => e,
+    };
+    let msg = err.to_string();
+    assert!(
+        msg.contains("z_review_inner_to_struct") && msg.contains("Option"),
+        "the error names the unsupported conditional hoist: {msg}"
+    );
+}
+
+/// Override records are applied to a `Vec<T>` field as a whole; a fixed leaf
+/// list cannot apply `T`'s deconstructor once per element. The declaration
+/// check must compare against `Vec<T>`, not peel it to `T`.
+#[test]
+fn a_vec_field_override_must_name_the_whole_vec_type() {
+    let build = || {
+        let registry =
+            Registry::<KotlinMeta>::from_items(nested_review_items()).expect("index items");
+        let jni = nested_review_jni(
+            crate::expand_return!(ZReviewOuter).fields(
+                crate::fields!(z_review_outer_to_struct)
+                    .field("items", crate::expand_return!(ZReviewInner).field_self()),
+            ),
+        );
+        let _ = registry.resolve(jni);
+    };
+
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(build))
+        .expect_err("an element-typed override on a Vec field must be rejected");
+    let msg = err
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_default();
+    assert!(
+        msg.contains("items") && msg.contains("Vec") && msg.contains("ZReviewInner"),
+        "the error names the field, its whole Vec type, and the declared element type: {msg}"
+    );
+}

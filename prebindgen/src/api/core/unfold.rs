@@ -1338,6 +1338,20 @@ fn flatten<M>(
                 check_takes(func, &takes, source)?;
                 let mut root_path = path_prefix.to_vec();
                 root_path.push(PathStep::call(func.clone(), false));
+                // A hoist below an optional step cannot be emitted as an
+                // unconditional local: composing the path directly would pass
+                // `&Option<T>` to the child value-form accessor. The current
+                // flat leaf emitter has no conditional-hoist representation,
+                // so reject the shape instead of generating ill-typed Rust.
+                // A top-level `Option<T>` is represented by
+                // `UnfoldShape::Optional`, not by a path step, and is unaffected.
+                if root_path.iter().any(PathStep::is_optional) {
+                    return Err(UnfoldError::Unsupported {
+                        func: func.clone(),
+                        reason: "a nested value form reached through `Option` — conditional \
+                                 value-form hoisting is not implemented",
+                    });
+                }
                 // Evaluate this value form ONCE. Recorded at the prefix it sits
                 // at rather than as a lone accessor, so a nested value form
                 // (this record reached through another one's field) gets its own
