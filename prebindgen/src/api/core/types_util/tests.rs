@@ -358,4 +358,18 @@ fn normalize_drops_turbofish_and_trailing_comma() {
     // A lifetime argument is identity and survives — only punctuation goes.
     assert_eq!(canon("Foo::<'static,>"), canon("Foo<'static>"));
     assert_ne!(canon("Foo<'static>"), canon("Foo"));
+
+    // `Fn(..)` is a second punctuation list with the same problem, plus a
+    // return that may spell unit explicitly and bounds whose order is
+    // irrelevant. One callback, four spellings, one key.
+    let cb = canon("impl Fn(u8) + Send + Sync + 'static");
+    assert_eq!(canon("impl Fn(u8,) + Send + Sync + 'static"), cb);
+    assert_eq!(canon("impl Fn(u8) -> () + Send + Sync + 'static"), cb);
+    assert_eq!(canon("impl Fn(u8) + Sync + Send + 'static"), cb);
+    assert_eq!(canon("impl Fn(u8,) -> () + Sync + Send + 'static"), cb);
+    // A lifetime bound sorts last, so the canonical form stays valid Rust.
+    assert!(cb.starts_with("impl Fn"), "{cb}");
+    assert!(cb.ends_with("'static"), "{cb}");
+    // A non-unit return is NOT punctuation and must survive to be refused.
+    assert_ne!(canon("impl Fn(u8) -> u16 + Send + Sync + 'static"), cb);
 }

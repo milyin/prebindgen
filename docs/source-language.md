@@ -56,7 +56,7 @@ Decided by `Registry::scan_fn_signature`
 | a `self` receiver | **refused** — `ScanError::UnsupportedReceiver` |
 | a non-ident parameter pattern (`(a, b): (u8, u8)`) | **refused** — `ScanError::UnsupportedParamPattern` |
 | generic parameters / `where` clauses | unspecified |
-| `impl Fn(T, …) + Send + Sync + 'static` parameter | supported — the callback form |
+| `impl Fn(T, …) + Send + Sync + 'static` parameter | supported — the callback form, see [Callbacks](#callbacks) |
 | any other `impl Trait` | **refused** — `ScanError::DisallowedImplTrait` |
 
 A source crate stays **plain idiomatic Rust**: values are returned by value,
@@ -81,7 +81,7 @@ and canonicalized at ingest by `types_util::normalize_type`.
 | the unit `()` | supported | |
 | a non-empty tuple | **refused** | No adapter has ever lowered one; only `()` is in the language. |
 | raw pointer | walked, adapter-dependent | |
-| `impl Fn(…)` | supported in a parameter position | |
+| `impl Fn(…) + Send + Sync + 'static` | supported in a parameter position | Must return `()` — see [Callbacks](#callbacks). |
 | any other `impl Trait` | refused | |
 | a path with a qualified self (`<T as Trait>::Assoc`) | **refused** | `#[prebindgen]` never captures `impl` blocks, so what it resolves to is unknowable. Outside modeled positions `normalize_type` still leaves it verbatim. |
 
@@ -124,6 +124,40 @@ complete rule set is documented on that function; in summary:
 Because a declaration in `build.rs` is matched against the *normalized*
 spelling, declaring a source item with its crate path
 (`ptr_class!(myflat::Foo)`) is a hard error with a fix-it, not a silent miss.
+
+## Callbacks
+
+**Decided by the frontend** — `core::registry::extract_fn_trait_sig`, the single
+acceptance gate for every callback position.
+
+The accepted form is exactly `impl Fn(T, …) + Send + Sync + 'static`, and the
+`Fn` **must return `()`** (elided or written). Bound order is free and
+canonicalized; so are a trailing input comma and an explicit `-> ()`.
+
+| Form | Status |
+|---|---|
+| `impl Fn(u8) + Send + Sync + 'static` | supported |
+| `impl Fn(u8,) -> () + Sync + Send + 'static` | supported — same type, canonicalized |
+| `impl Fn(u8) -> u16 + …` | **reserved** — issue [#216](https://github.com/milyin/prebindgen/issues/216) |
+| `impl Fn(u8) -> impl Fn(u8) + …` | **reserved** |
+| `impl for<'a> Fn(&'a u8) + …` | **unsupported** |
+
+### Reserved is not the same as unsupported
+
+A refusal says which of two things it is, because they call for opposite
+responses:
+
+* **reserved** — the language intends this and the machinery does not exist
+  yet. Wait, or work around it; the diagnostic names the tracking issue.
+* **unsupported** — it cannot work here and will not. Redesign.
+
+A callback returning a value is *reserved*: every callback wire is void-shaped
+today — C's `call` has no return, jnigen's `run` returns void — so the result
+would be dropped. It used to be **accepted** and silently dropped, which is the
+bug this refusal replaces.
+
+A higher-ranked binder is *unsupported*: no FFI boundary can be generic over a
+lifetime, so no adapter could ever carry one.
 
 ## Array lengths
 

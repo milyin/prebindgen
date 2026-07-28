@@ -257,8 +257,11 @@ pub enum UnsupportedTypeReason {
     /// A syntactic form with no place in the language: a bare trait object, a
     /// closure type, a macro, `Self`, a never type, an inferred type.
     UnsupportedForm,
-    /// `impl Trait` that is not `Fn(..) + Send + Sync + 'static`.
-    DisallowedImplTrait,
+    /// `impl Trait` that is not an accepted callback — see
+    /// [`CallbackReject`](crate::api::core::registry::CallbackReject), which
+    /// says whether the form is reserved for a future release or cannot work
+    /// at all.
+    DisallowedImplTrait(crate::api::core::registry::CallbackReject),
     /// A generic that takes a fixed arity and did not get it — `Option` with no
     /// argument, `Result` with one.
     WrongGenericArity { expected: usize },
@@ -289,11 +292,11 @@ impl fmt::Display for UnsupportedType {
                 "type `{}` is a form the prebindgen source language does not accept",
                 self.offending
             ),
-            UnsupportedTypeReason::DisallowedImplTrait => write!(
+            UnsupportedTypeReason::DisallowedImplTrait(reason) => write!(
                 f,
-                "type `{}` is an `impl Trait` other than \
-                 `impl Fn(..) + Send + Sync + 'static`, the only one supported",
-                self.offending
+                "type `{}` is not an accepted callback — {}",
+                self.offending,
+                reason.describe()
             ),
             UnsupportedTypeReason::WrongGenericArity { expected } => write!(
                 f,
@@ -387,14 +390,17 @@ pub(crate) fn lower_type(
                 extent,
             })
         }
-        syn::Type::ImplTrait(_) => match crate::api::core::registry::extract_fn_trait_args(ty) {
-            Some(args) => Ok(SourceType::Callback {
+        // The callback gate lives in `registry` because it is also the live
+        // acceptance check for function parameters, which are not modeled yet.
+        // Mapping its reason through keeps ONE authority.
+        syn::Type::ImplTrait(_) => match crate::api::core::registry::extract_fn_trait_sig(ty) {
+            Ok(args) => Ok(SourceType::Callback {
                 args: args
                     .iter()
                     .map(|a| lower_type(a, consts, item_crate))
                     .collect::<Result<_, _>>()?,
             }),
-            None => Err(fail(UnsupportedTypeReason::DisallowedImplTrait)),
+            Err(reason) => Err(fail(UnsupportedTypeReason::DisallowedImplTrait(reason))),
         },
         syn::Type::Path(tp) => lower_path(ty, tp, consts, item_crate),
         _ => Err(fail(UnsupportedTypeReason::UnsupportedForm)),

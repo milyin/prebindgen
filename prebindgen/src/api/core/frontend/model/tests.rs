@@ -9,7 +9,7 @@ use super::{
     lower_type, ArrayExtent, ConstId, ExtentSource, NamedArg, ScalarKind, SourceType,
     UnsupportedTypeReason,
 };
-use crate::api::core::{frontend::ConstIndex, TypeKey};
+use crate::api::core::{frontend::ConstIndex, registry::CallbackReject, TypeKey};
 
 fn consts() -> ConstIndex {
     ConstIndex::new([
@@ -204,7 +204,7 @@ fn refused_types() {
     let cases: &[(&str, UnsupportedTypeReason)] = &[
         (
             "impl Iterator<Item = u8>",
-            UnsupportedTypeReason::DisallowedImplTrait,
+            UnsupportedTypeReason::DisallowedImplTrait(CallbackReject::NotCallbackShape),
         ),
         ("dyn Fn(u8)", UnsupportedTypeReason::UnsupportedForm),
         ("fn(u8) -> u8", UnsupportedTypeReason::UnsupportedForm),
@@ -228,6 +228,23 @@ fn refused_types() {
         // what this resolves to is unknowable here.
         ("<T as Trait>::Assoc", UnsupportedTypeReason::AssociatedType),
         ("<Holder>::N", UnsupportedTypeReason::AssociatedType),
+        // RESERVED: the language intends these; no wire carries them yet.
+        // Previously the return was not read at all, so it was accepted and
+        // then silently dropped.
+        (
+            "impl Fn(u8) -> u16 + Send + Sync + 'static",
+            UnsupportedTypeReason::DisallowedImplTrait(CallbackReject::NonUnitReturn),
+        ),
+        (
+            "impl Fn(u8) -> impl Fn(u8) + Send + Sync + 'static + Send + Sync + 'static",
+            UnsupportedTypeReason::DisallowedImplTrait(CallbackReject::ReturnsCallback),
+        ),
+        // UNSUPPORTED: no FFI boundary can be generic over a lifetime, so this
+        // one is not waiting on machinery.
+        (
+            "impl for<'a> Fn(&'a u8) + Send + Sync + 'static",
+            UnsupportedTypeReason::DisallowedImplTrait(CallbackReject::HigherRankedBinder),
+        ),
     ];
     for (src, reason) in cases {
         match lower(src) {
@@ -288,6 +305,12 @@ fn the_projection_preserves_type_identity() {
         "&[u8]",
         "*mut u8",
         "impl Fn(u8) + Send + Sync + 'static",
+        // One callback, four spellings. `normalize_type` collapses the
+        // punctuation and the bound order, so all four are one key.
+        "impl Fn(u8,) + Send + Sync + 'static",
+        "impl Fn(u8) -> () + Send + Sync + 'static",
+        "impl Fn(u8) + Sync + Send + 'static",
+        "impl Fn(u8,) -> () + Sync + Send + 'static",
     ];
     for src in identity {
         let ty: syn::Type = syn::parse_str(src).unwrap_or_else(|e| panic!("`{src}`: {e}"));

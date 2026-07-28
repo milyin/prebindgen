@@ -398,6 +398,9 @@ pub enum ScanError {
     },
     DisallowedImplTrait {
         ty: String,
+        /// Which callback rule was broken — and whether it is reserved for a
+        /// future release or cannot work at all.
+        reason: CallbackReject,
         loc: SourceLocation,
     },
     UnsupportedReceiver {
@@ -467,23 +470,25 @@ impl fmt::Display for ScanError {
                     e.second
                 )
             }
-            ScanError::ConflictingFunctionIntent { name } => write!(
+            ScanError::ConflictingFunctionIntent { name } => {
+                write!(f, "function `{}` cannot be both declared and ignored", name)
+            }
+            ScanError::ConflictingTypeIntent { key } => {
+                write!(f, "type `{}` cannot be both declared and ignored", key)
+            }
+            ScanError::DisallowedImplTrait { ty, reason, loc } => write!(
                 f,
-                "function `{}` cannot be both declared and ignored",
-                name
-            ),
-            ScanError::ConflictingTypeIntent { key } => write!(
-                f,
-                "type `{}` cannot be both declared and ignored",
-                key
-            ),
-            ScanError::DisallowedImplTrait { ty, loc } => write!(
-                f,
-                "`impl Trait` is not allowed at {}: `{}` (only `impl Fn(...) + Send + Sync + 'static` is supported)",
-                loc, ty
+                "`impl Trait` is not allowed at {}: `{}` — {}",
+                loc,
+                ty,
+                reason.describe()
             ),
             ScanError::UnsupportedReceiver { loc } => {
-                write!(f, "method receiver (`self`) parameters are not supported at {}", loc)
+                write!(
+                    f,
+                    "method receiver (`self`) parameters are not supported at {}",
+                    loc
+                )
             }
             ScanError::UnsupportedParamPattern { loc } => {
                 write!(f, "non-ident parameter pattern is not supported at {}", loc)
@@ -1423,9 +1428,10 @@ impl<M> Registry<M> {
     ) -> Result<(), ScanError> {
         // Reject `impl Trait` except `impl Fn(...) + Send + Sync + 'static`.
         if let syn::Type::ImplTrait(it) = ty {
-            if extract_fn_trait_args(ty).is_none() {
+            if let Err(reason) = extract_fn_trait_sig(ty) {
                 return Err(ScanError::DisallowedImplTrait {
                     ty: it.to_token_stream().to_string(),
+                    reason,
                     loc: loc.clone(),
                 });
             }
@@ -1676,11 +1682,64 @@ pub fn immediate_subtype_positions(ty: &syn::Type) -> Vec<syn::Type> {
     }
 }
 
-/// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the
-/// `Fn` argument types in declaration order. Otherwise None.
-pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
+/// Why a type that looks like the callback form is not one.
+///
+/// Split into two kinds on purpose. A refusal that only says *no* leaves the
+/// author guessing whether to redesign the API or wait for a release, and those
+/// are opposite responses — so each variant states which it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallbackReject {
+    /// Not the callback shape at all — not an `impl Trait`, or its bounds are
+    /// not exactly `Fn(..) + Send + Sync + 'static`.
+    NotCallbackShape,
+    /// **Reserved.** `impl Fn(..) -> R` with `R` not `()`. Every callback wire
+    /// is void-shaped today — C's `call` has no return, and jnigen's `run`
+    /// returns void — so the result would be dropped. Tracked by issue #216.
+    NonUnitReturn,
+    /// **Reserved.** A callback whose result is itself a callback: it would
+    /// need a closure struct nested in a closure struct. No use for it yet.
+    ReturnsCallback,
+    /// **Unsupported.** A higher-ranked binder, `impl for<'a> Fn(&'a T)`. No
+    /// FFI boundary can be generic over a lifetime, so no adapter could carry
+    /// it — this one is not waiting on machinery.
+    HigherRankedBinder,
+}
+
+impl CallbackReject {
+    /// The half of the diagnostic that says which rule was broken, and whether
+    /// waiting would help.
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::NotCallbackShape => "only `impl Fn(...) + Send + Sync + 'static` is supported",
+            Self::NonUnitReturn => {
+                "a callback returning a value is not yet supported — every callback wire is \
+                 void-shaped today, so the result would be dropped (tracked by \
+                 https://github.com/milyin/prebindgen/issues/216); take the result through an \
+                 argument, or return `()`"
+            }
+            Self::ReturnsCallback => {
+                "a callback returning a callback is not yet supported — it would need a closure \
+                 struct nested in a closure struct"
+            }
+            Self::HigherRankedBinder => {
+                "a higher-ranked binder (`for<'a>`) cannot cross an FFI boundary, which has no \
+                 way to be generic over a lifetime — use a concrete lifetime"
+            }
+        }
+    }
+}
+
+/// The `Fn` argument types of `impl Fn(T1, T2, ...) + Send + Sync + 'static`,
+/// in declaration order.
+///
+/// **The single acceptance gate for callbacks.** Every caller that only needs
+/// the shape goes through [`extract_fn_trait_args`]; this one exists so the two
+/// error-reporting sites can say *why*. One function decides — a separate
+/// "why did it fail" helper beside an `Option`-returning gate is the
+/// two-authority drift issue #211 exists to remove.
+pub fn extract_fn_trait_sig(ty: &syn::Type) -> Result<Vec<syn::Type>, CallbackReject> {
     let syn::Type::ImplTrait(it) = ty else {
-        return None;
+        return Err(CallbackReject::NotCallbackShape);
     };
     let mut args: Option<Vec<syn::Type>> = None;
     let mut has_send = false;
@@ -1689,29 +1748,59 @@ pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
     for bound in &it.bounds {
         match bound {
             syn::TypeParamBound::Trait(tb) => {
-                let last = tb.path.segments.last()?;
+                // `for<'a> Fn(..)`. Checked before the path so the binder is
+                // reported as itself rather than as a shape mismatch.
+                if tb.lifetimes.is_some() {
+                    return Err(CallbackReject::HigherRankedBinder);
+                }
+                let last = tb
+                    .path
+                    .segments
+                    .last()
+                    .ok_or(CallbackReject::NotCallbackShape)?;
                 let name = last.ident.to_string();
                 match name.as_str() {
                     "Fn" => {
                         let syn::PathArguments::Parenthesized(p) = &last.arguments else {
-                            return None;
+                            return Err(CallbackReject::NotCallbackShape);
                         };
+                        // The return was previously not read at all, so a
+                        // declared result was accepted and then dropped.
+                        if let syn::ReturnType::Type(_, ret) = &p.output {
+                            if !crate::api::lang::jnigen::util::is_unit(ret) {
+                                // An `impl Trait` return is the nested-callback
+                                // case whether or not its own bounds are
+                                // complete — `Fn() -> impl Fn()` parses with the
+                                // trailing bounds attached to the OUTER list, so
+                                // asking whether the return is itself an
+                                // accepted callback would miss it.
+                                return Err(match &**ret {
+                                    syn::Type::ImplTrait(_) => CallbackReject::ReturnsCallback,
+                                    _ => CallbackReject::NonUnitReturn,
+                                });
+                            }
+                        }
                         args = Some(p.inputs.iter().cloned().collect());
                     }
                     "Send" => has_send = true,
                     "Sync" => has_sync = true,
-                    _ => return None,
+                    _ => return Err(CallbackReject::NotCallbackShape),
                 }
             }
             syn::TypeParamBound::Lifetime(lt) if lt.ident == "static" => has_static = true,
-            _ => return None,
+            _ => return Err(CallbackReject::NotCallbackShape),
         }
     }
-    if has_send && has_sync && has_static {
-        args
-    } else {
-        None
+    match args {
+        Some(args) if has_send && has_sync && has_static => Ok(args),
+        _ => Err(CallbackReject::NotCallbackShape),
     }
+}
+
+/// Shape-only view of [`extract_fn_trait_sig`] — `None` for anything that is
+/// not an accepted callback, whatever the reason.
+pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
+    extract_fn_trait_sig(ty).ok()
 }
 
 /// A **resolved** binding generation: the [`Registry`] after
