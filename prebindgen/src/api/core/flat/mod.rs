@@ -56,6 +56,8 @@
 //! | `struct S;`, `struct S {}` | zero fields | the delimiters are spelling |
 //! | `enum E { A(u8) }` | [`Variant`] | a sum, identified by position |
 //! | `enum E { A = 7 }` | [`Enum`] | a named integer, identified by its value |
+//! | `type X = ..`, `struct X(..)` | [`Opaque`] | a handle; contents do not cross |
+//! | `MaybeUninit<T>` | [`TypeKind::Uninit`] | an out-param slot the caller supplies |
 //! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
 //! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
 //!
@@ -106,9 +108,18 @@
 //! There is **no verbatim passthrough**, because a `#[prebindgen]` crate marks
 //! the items that cross the boundary and leaves the supporting code to the
 //! consumer. The proc-macro already enforces that — a `use`, `mod`, `impl` or
-//! `macro_rules!` cannot be marked at all — so an item kind this module does
-//! not model is a `union` or a type alias, and it is diagnosed like any other
-//! thing the language cannot express.
+//! `macro_rules!` cannot be marked at all — so the only item kind left that this
+//! module does not model is a `union`, and it is diagnosed like anything else the
+//! language cannot express.
+//!
+//! # Declaring a handle
+//!
+//! `#[prebindgen] pub type X = path::To<Thing>;` declares an [`Opaque`]: it gives
+//! a foreign or crate-private type a **name in the flat API** without claiming
+//! anything about its contents. That is what makes the API closable — a handle
+//! enters it deliberately rather than by being mentioned — and it is why a
+//! reference can be required to resolve. A marked tuple struct declares the same
+//! thing, since no adapter has ever crossed its fields.
 //!
 //! # Shapes that must be refused rather than approximated
 //!
@@ -147,11 +158,11 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Alternative, Const, Element, Enum, EnumValue, Field, Function, Param, Struct, Unsupported,
-        Variant,
+        Alternative, Constant, Element, Enum, EnumValue, Field, Function, Opaque, Param, Struct,
+        Type, Unsupported, Variant,
     },
     origin::Origin,
-    ty::{ScalarKind, Type, TypeId, TypeKind, UnsupportedType, UnsupportedTypeReason},
+    ty::{ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
 
@@ -548,19 +559,27 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
             Err(error) => unsupported(f.sig.ident.clone(), syn::Item::Fn(f), &at, error),
         },
         syn::Item::Struct(s) => match lower_struct(&s, &at, consts) {
-            Ok(st) => Element::Struct(st),
+            Ok(ty) => Element::Type(ty),
             Err(error) => unsupported(s.ident.clone(), syn::Item::Struct(s), &at, error),
         },
         syn::Item::Enum(e) => match lower_enum(&e, &at, consts) {
-            Ok(element) => element,
+            Ok(ty) => Element::Type(ty),
             Err(error) => unsupported(e.ident.clone(), syn::Item::Enum(e), &at, error),
         },
+        // `#[prebindgen] pub type X = path;` DECLARES an opaque type: it gives a
+        // foreign or crate-private type a name in the flat API, without claiming
+        // anything about its contents. That is the only way a handle enters the
+        // API deliberately, and the reason references can be required to resolve.
+        syn::Item::Type(t) => Element::Type(Type::Opaque(Opaque {
+            name: t.ident.clone(),
+            origin: Origin::new(syn::Item::Type(t), at),
+        })),
         // Including the unnamed `const _` each source injects as its feature
         // guard: it is a const, so it is one here. `Element::name` returns
         // `None` for `_`, which is what keeps several sources' guards from
         // colliding in the flat namespace.
         syn::Item::Const(c) => match lower_type(&c.ty, consts, &at) {
-            Ok(ty) => Element::Const(Const {
+            Ok(ty) => Element::Constant(Constant {
                 name: c.ident.clone(),
                 ty,
                 origin: Origin::new(c, at),
@@ -572,15 +591,14 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
                 ItemError::ConstType { source },
             ),
         },
-        // An item kind the language does not model. The proc-macro accepts
-        // only six kinds, so in practice this is a `union` or a type alias —
-        // both named, neither ever written by a source crate. It is diagnosed
-        // rather than carried: a `#[prebindgen]` crate marks what crosses the
-        // boundary, and the code around that belongs to the consumer.
+        // An item kind the language does not model. The proc-macro accepts only
+        // six kinds and the five above cover the rest, so in practice this is a
+        // `union` — never written by any source crate. It is diagnosed rather
+        // than carried: a `#[prebindgen]` crate marks what crosses the boundary,
+        // and the code around that belongs to the consumer.
         other => {
             let (name, kind) = match &other {
                 syn::Item::Union(u) => (Some(u.ident.clone()), "a union"),
-                syn::Item::Type(t) => (Some(t.ident.clone()), "a type alias"),
                 _ => (None, "an item kind"),
             };
             unsupported(name, other, &at, ItemError::UnsupportedItemKind { kind })
@@ -657,7 +675,7 @@ fn lower_fn(
     // says so once, here, instead of leaving every consumer to normalize one to
     // the other — which is what they all do today, in eight separate copies.
     let ret = match &f.sig.output {
-        syn::ReturnType::Default => Type {
+        syn::ReturnType::Default => TypeRef {
             kind: TypeKind::Unit,
             origin: Origin::new(syn::parse_quote!(()), Rc::clone(at)),
         },
@@ -673,11 +691,16 @@ fn lower_fn(
     })
 }
 
+/// Lower a `struct` item to whichever of the two shapes it is.
+///
+/// A **tuple struct** is an [`Opaque`]: no adapter has ever crossed its fields,
+/// so they are deliberately not lowered and a field type outside the grammar is
+/// not an error. Anything else is a product of fields that do cross.
 fn lower_struct(
     s: &syn::ItemStruct,
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-) -> Result<Struct, ItemError> {
+) -> Result<Type, ItemError> {
     reject_generic_params(&s.generics)?;
     let fields = match &s.fields {
         syn::Fields::Named(named) => {
@@ -695,18 +718,22 @@ fn lower_struct(
                     origin: Origin::new(f.clone(), Rc::clone(at)),
                 });
             }
-            Some(out)
+            out
         }
-        // Opaque: a tuple struct's contents are not a boundary surface, so they
-        // are not lowered and a field type outside the grammar is not an error.
-        syn::Fields::Unnamed(_) => None,
-        syn::Fields::Unit => Some(Vec::new()),
+        // Its contents are not a boundary surface, so nothing is lowered.
+        syn::Fields::Unnamed(_) => {
+            return Ok(Type::Opaque(Opaque {
+                name: s.ident.clone(),
+                origin: Origin::new(syn::Item::Struct(s.clone()), Rc::clone(at)),
+            }))
+        }
+        syn::Fields::Unit => Vec::new(),
     };
-    Ok(Struct {
+    Ok(Type::Struct(Struct {
         name: s.ident.clone(),
         fields,
         origin: Origin::new(s.clone(), Rc::clone(at)),
-    })
+    }))
 }
 
 /// Lower an `enum` item to whichever of the two shapes it is.
@@ -723,13 +750,13 @@ fn lower_enum(
     e: &syn::ItemEnum,
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-) -> Result<Element, ItemError> {
+) -> Result<Type, ItemError> {
     reject_generic_params(&e.generics)?;
 
     if e.variants.iter().any(|v| !v.fields.is_empty()) {
-        return Ok(Element::Variant(lower_variant(e, at, consts)?));
+        return Ok(Type::Variant(lower_variant(e, at, consts)?));
     }
-    Ok(Element::Enum(lower_c_enum(e, at)))
+    Ok(Type::Enum(lower_c_enum(e, at)))
 }
 
 /// The payload-carrying shape. Position is the only numbering a sum has, so no

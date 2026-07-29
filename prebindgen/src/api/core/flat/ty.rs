@@ -1,6 +1,6 @@
 //! Types: a closed classification paired with the syntax it was read from.
 //!
-//! [`Type`] is the pattern the whole element model follows — `kind` says what
+//! [`TypeRef`] is the pattern the whole element model follows — `kind` says what
 //! the type *means*, `syntax` is the tokens the source wrote. Consumers
 //! **classify off `kind` and spell off `syntax`**; see the [module docs](super)
 //! for why that split is the point.
@@ -27,7 +27,7 @@ use crate::SourceLocation;
 /// outside Rust all survive there at zero modelling cost, so `kind` can stay
 /// language-neutral and small.
 #[derive(Clone, Debug)]
-pub struct Type {
+pub struct TypeRef {
     /// What the type means — the closed, destination-neutral classification.
     pub kind: TypeKind,
     /// The type as generated Rust must spell it — the source's own tokens,
@@ -41,7 +41,7 @@ pub struct Type {
     pub origin: Origin<syn::Type>,
 }
 
-impl Type {
+impl TypeRef {
     /// The extent of this type when it is an array, else `None`.
     pub fn array_extent(&self) -> Option<&ArrayExtent> {
         match &self.kind {
@@ -67,9 +67,10 @@ impl Type {
                 out.push(extent);
                 elem.collect_extents(out);
             }
-            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
-                t.collect_extents(out)
-            }
+            TypeKind::Optional(t)
+            | TypeKind::Sequence(t)
+            | TypeKind::Uninit(t)
+            | TypeKind::Ref { inner: t, .. } => t.collect_extents(out),
             TypeKind::Fallible { ok, err } => {
                 ok.collect_extents(out);
                 err.collect_extents(out);
@@ -82,12 +83,12 @@ impl Type {
     }
 }
 
-/// What a [`Type`] means. The variants are the accepted type grammar.
+/// What a [`TypeRef`] means. The variants are the accepted type grammar.
 ///
 /// One Rust spelling per concept is **not** the rule here — several are. A
 /// concept earns a variant when a destination language would act on it; a
 /// spelling that changes nothing outside Rust folds into the concept it carries
-/// and survives in [`Type::syntax`]:
+/// and survives in [`TypeRef::origin`]:
 ///
 /// | Spelling | Kind | Why |
 /// |---|---|---|
@@ -105,7 +106,7 @@ pub enum TypeKind {
     /// does by hand.
     Str,
     /// `Option<T>`.
-    Optional(Box<Type>),
+    Optional(Box<TypeRef>),
     /// A run of `T` — `Vec<T>` owned, `[T]` behind a [`Ref`](TypeKind::Ref).
     ///
     /// One variant, because ownership is already the [`Ref`](TypeKind::Ref)
@@ -113,9 +114,9 @@ pub enum TypeKind {
     /// second variant would encode ownership twice and let the two copies
     /// disagree. `[T; N]` is *not* this — a fixed extent is a different
     /// concept, see [`Array`](TypeKind::Array).
-    Sequence(Box<Type>),
+    Sequence(Box<TypeRef>),
     /// `Result<T, E>`.
-    Fallible { ok: Box<Type>, err: Box<Type> },
+    Fallible { ok: Box<TypeRef>, err: Box<TypeRef> },
     /// Any other named type: a `#[prebindgen]` struct or enum, or a foreign
     /// path.
     ///
@@ -123,8 +124,8 @@ pub enum TypeKind {
     /// this module has to take a path apart to learn what a type is. The last
     /// segment's generic arguments live in `args`, and only the *type*
     /// arguments: a lifetime argument says nothing a destination language can
-    /// act on. The full spelling is in [`Type::syntax`] for whoever re-emits it.
-    Named { id: TypeId, args: Vec<Type> },
+    /// act on. The full spelling is in [`TypeRef::origin`] for whoever re-emits it.
+    Named { id: TypeId, args: Vec<TypeRef> },
     /// `[T; N]` — a run of `T` whose length is known at compile time.
     ///
     /// Deliberately not a [`Sequence`](TypeKind::Sequence) with an optional
@@ -132,18 +133,23 @@ pub enum TypeKind {
     /// crosses as a heap collection, and every adapter branches between the two
     /// at every site.
     Array {
-        elem: Box<Type>,
+        elem: Box<TypeRef>,
         extent: ArrayExtent,
     },
     /// A borrow — `&T` / `&'a T` / `&mut T`. The lifetime is spelling, so it
-    /// lives in [`Type::syntax`] rather than here.
+    /// lives in [`TypeRef::origin`] rather than here.
     ///
     /// This is the ownership layer for every concept underneath it: `&str` is
     /// `Ref(Str)`, `&[T]` is `Ref(Sequence)`. A shared-ownership handle
     /// (`Arc<T>`, `Rc<T>`) belongs here too when the language accepts one.
-    Ref { mutable: bool, inner: Box<Type> },
+    Ref { mutable: bool, inner: Box<TypeRef> },
+    /// `MaybeUninit<T>` — storage for a `T` the caller has not written yet.
+    ///
+    /// Only meaningful behind a `&mut`: it is how a boundary expresses an
+    /// out-parameter whose slot the caller supplies and the callee fills.
+    Uninit(Box<TypeRef>),
     /// `impl Fn(A, B, …) + Send + Sync + 'static` — the callback form.
-    Callback { args: Vec<Type> },
+    Callback { args: Vec<TypeRef> },
     /// `()`.
     Unit,
 }
@@ -328,7 +334,7 @@ pub(crate) fn lower_type(
     ty: &syn::Type,
     consts: &ConstIndex,
     at: &Rc<SourceLocation>,
-) -> Result<Type, UnsupportedType> {
+) -> Result<TypeRef, UnsupportedType> {
     let fail = |reason| UnsupportedType {
         offending: ty.to_token_stream().to_string(),
         reason,
@@ -373,7 +379,7 @@ pub(crate) fn lower_type(
         syn::Type::Path(tp) => lower_path(ty, tp, consts, at)?,
         _ => return Err(fail(UnsupportedTypeReason::UnsupportedForm)),
     };
-    Ok(Type {
+    Ok(TypeRef {
         kind,
         origin: Origin::new(ty.clone(), Rc::clone(at)),
     })
@@ -403,9 +409,9 @@ fn lower_path(
 
     // Type arguments only. A lifetime argument is accepted and dropped: it is
     // part of the spelling (`Foo<'a>` is not `Foo`), and the spelling is in
-    // `Type::syntax`, so modelling it would be a second copy of one fact.
+    // `TypeRef::origin`, so modelling it would be a second copy of one fact.
     let mut has_lifetime_arg = false;
-    let args: Vec<Type> = match &last.arguments {
+    let args: Vec<TypeRef> = match &last.arguments {
         syn::PathArguments::None => Vec::new(),
         syn::PathArguments::AngleBracketed(ab) => {
             let mut out = Vec::new();
@@ -466,10 +472,20 @@ fn lower_path(
                     arity(1)?;
                     return Ok(TypeKind::Sequence(Box::new(args.remove(0))));
                 }
+                // An out-parameter the caller supplies uninitialized. A boundary
+                // concept, not a Rust one: cbindgen already models it as exactly
+                // that, and #211 says the classification belongs here rather
+                // than in the adapter. It is also the one foreign generic no
+                // `#[prebindgen] type` alias could name, since a generic alias
+                // is a generic binder.
+                "MaybeUninit" => {
+                    arity(1)?;
+                    return Ok(TypeKind::Uninit(Box::new(args.remove(0))));
+                }
                 // `Box<T>` **is** `T`: an owned value either way, and no
                 // destination language can tell the two apart. So it carries no
                 // kind of its own and classifies as whatever it wraps — the
-                // `Box` survives in `Type::syntax`, which is what generated
+                // `Box` survives in `TypeRef::origin`, which is what generated
                 // Rust spells. (A shared-ownership handle would classify as a
                 // `Ref` for the same reason, when the language accepts one.)
                 "Box" => {
@@ -506,7 +522,7 @@ pub(crate) fn is_unit_type(ty: &syn::Type) -> bool {
 
 /// `Named` with the identity read off the path: every segment joined, minus the
 /// generic arguments, which are already in `args`.
-fn named(tp: &syn::TypePath, args: Vec<Type>) -> TypeKind {
+fn named(tp: &syn::TypePath, args: Vec<TypeRef>) -> TypeKind {
     let name = tp
         .path
         .segments
