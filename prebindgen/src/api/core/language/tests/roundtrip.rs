@@ -324,15 +324,14 @@ fn the_whole_item_survives() {
     assert_eq!(tokens(&element.syntax()), tokens(&syn::Item::Fn(source)));
 }
 
-/// An item the language does not interpret is carried verbatim and classified
-/// as nothing at all.
+/// An item the language cannot express still keeps its tokens, so a diagnosis
+/// can quote the source and nothing is lost by refusing it.
 #[test]
-fn passthrough_is_verbatim() {
+fn an_unsupported_item_keeps_its_tokens() {
     let source: syn::Item = syn::parse_quote!(
         pub type Alias = u32;
     );
     let element = parse_one(source.clone());
-    assert!(matches!(element, Element::Passthrough(_)));
+    assert!(matches!(element, Element::Unsupported(_)));
     assert_eq!(tokens(&element.syntax()), tokens(&source));
-    assert!(element.name().is_none());
 }

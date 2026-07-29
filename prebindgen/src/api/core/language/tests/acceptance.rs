@@ -413,10 +413,11 @@ fn consts_carry_their_type_and_value() {
     assert_eq!(tokens(&c.syntax.expr), "4");
 }
 
-/// An unnamed `const _` — each source's injected feature guard — lives outside
-/// the flat namespace, so several sources may each carry one.
+/// An unnamed `const _` — each source's injected feature guard — is a const
+/// like any other, and simply has no address, so several sources may each carry
+/// one without colliding in the flat namespace.
 #[test]
-fn unnamed_consts_pass_through_ungated() {
+fn an_unnamed_const_is_a_const_without_an_address() {
     let elements = parse(vec![
         syn::parse_quote!(
             const _: () = ();
@@ -425,27 +426,39 @@ fn unnamed_consts_pass_through_ungated() {
             const _: () = ();
         ),
     ]);
-    assert!(elements
-        .iter()
-        .all(|e| matches!(e, Element::Passthrough(_))));
+    assert!(elements.iter().all(|e| matches!(e, Element::Const(_))));
+    assert!(elements.iter().all(|e| e.name().is_none()));
 }
 
+/// An item kind the language does not model is diagnosed, not carried: a
+/// `#[prebindgen]` crate marks what crosses the boundary and leaves the code
+/// around it to the consumer. The proc-macro refuses to mark a `use` at all, so
+/// only a `union` or a type alias can reach here — and both keep their name, so
+/// nothing else can claim it.
 #[test]
-fn item_kinds_the_language_does_not_interpret() {
-    for item in [
-        syn::parse_quote!(
-            pub use foo::Bar;
+fn an_unmodelled_item_kind_is_diagnosed() {
+    for (item, expected) in [
+        (
+            syn::parse_quote!(
+                pub union U {
+                    a: u8,
+                }
+            ),
+            "a union",
         ),
-        syn::parse_quote!(
-            pub union U {
-                a: u8,
-            }
-        ),
-        syn::parse_quote!(
-            pub type Alias = u32;
+        (
+            syn::parse_quote!(
+                pub type Alias = u32;
+            ),
+            "a type alias",
         ),
     ] {
-        assert!(matches!(parse_one(item), Element::Passthrough(_)));
+        let element = parse_one(item);
+        assert!(element.name().is_some(), "keeps its address");
+        assert!(matches!(
+            as_unsupported(&element),
+            ItemError::UnsupportedItemKind { kind } if *kind == expected
+        ));
     }
 }
 

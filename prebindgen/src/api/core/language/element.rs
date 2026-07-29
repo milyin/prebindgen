@@ -14,40 +14,44 @@ use crate::SourceLocation;
 
 /// One structure of the prebindgen source language.
 ///
-/// The variants are the accepted item kinds: anything else is
-/// [`Element::Passthrough`], emitted verbatim and never interpreted.
+/// The four modelled kinds, plus [`Element::Unsupported`] for anything the
+/// language cannot express. There is no verbatim-passthrough variant: a
+/// `#[prebindgen]` crate marks the items that cross the boundary, and the
+/// supporting code around them is the consumer crate's job — the proc-macro
+/// enforces that already, refusing to mark a `use`, `mod`, `impl` or
+/// `macro_rules!` at all.
 #[derive(Clone, Debug)]
 pub enum Element {
     Function(Function),
     Struct(Struct),
     Enum(Enum),
     Const(Const),
-    /// A named item of a kind the language models, whose contents it cannot
-    /// express — a parameter type outside the grammar, a `self` receiver.
+    /// An item the language cannot express — a parameter type outside the
+    /// grammar, a `self` receiver, or a whole item kind it does not model such
+    /// as a `union`.
     ///
     /// Inert: it is indexed under its name so nothing else can claim it, and
     /// the diagnosis rides along, to be raised by whatever declares it. See the
     /// [module docs](super) on where acceptance is enforced.
     Unsupported(Unsupported),
-    /// An item the language does not interpret — `use`, `mod`, `macro_rules!`,
-    /// `union`, a type alias. It is carried so generation can re-emit it, and
-    /// nothing else.
-    Passthrough(Passthrough),
 }
 
 impl Element {
     /// The item's name, which is also its address: `#[prebindgen]` names live
-    /// in one flat namespace across every ingested source crate. `None` for a
-    /// passthrough, which is never addressed by name.
+    /// in one flat namespace across every ingested source crate.
+    ///
+    /// `None` when the item has no address — an unnamed `const _` (each
+    /// source's injected feature guard, so several may coexist), or an item
+    /// kind with no identifier at all.
     pub fn name(&self) -> Option<&syn::Ident> {
-        match self {
+        let named = match self {
             Element::Function(f) => Some(&f.name),
             Element::Struct(s) => Some(&s.name),
             Element::Enum(e) => Some(&e.name),
             Element::Const(c) => Some(&c.name),
-            Element::Unsupported(u) => Some(&u.name),
-            Element::Passthrough(_) => None,
-        }
+            Element::Unsupported(u) => u.name.as_ref(),
+        };
+        named.filter(|id| *id != "_")
     }
 
     /// Where the item was captured, including the crate that marked it.
@@ -58,7 +62,6 @@ impl Element {
             Element::Enum(e) => &e.location,
             Element::Const(c) => &c.location,
             Element::Unsupported(u) => &u.location,
-            Element::Passthrough(p) => &p.location,
         }
     }
 
@@ -70,7 +73,6 @@ impl Element {
             Element::Enum(e) => syn::Item::Enum(e.syntax.clone()),
             Element::Const(c) => syn::Item::Const(c.syntax.clone()),
             Element::Unsupported(u) => u.syntax.clone(),
-            Element::Passthrough(p) => p.syntax.clone(),
         }
     }
 }
@@ -227,6 +229,10 @@ impl Variant {
 }
 
 /// A `#[prebindgen]` const.
+///
+/// Also the home of the unnamed `const _` feature guard each source injects: it
+/// is a const, so it is modelled as one, and [`Element::name`] returning `None`
+/// for `_` is what keeps several of them from colliding in the flat namespace.
 #[derive(Clone, Debug)]
 pub struct Const {
     pub name: syn::Ident,
@@ -237,22 +243,16 @@ pub struct Const {
     pub syntax: syn::ItemConst,
 }
 
-/// A named item the language recognises but cannot express.
+/// An item the language cannot express.
 #[derive(Clone, Debug)]
 pub struct Unsupported {
-    pub name: syn::Ident,
+    /// The item's identifier, or `None` for an item kind that has none.
+    pub name: Option<syn::Ident>,
     pub location: SourceLocation,
     /// What could not be expressed, ready to be raised by whatever declares
     /// this item. Boxed: it is the size outlier among the elements, and this
     /// one is the rare variant.
     pub error: Box<super::ItemError>,
     /// The item as written, so it can still be re-emitted verbatim.
-    pub syntax: syn::Item,
-}
-
-/// An item the language does not interpret.
-#[derive(Clone, Debug)]
-pub struct Passthrough {
-    pub location: SourceLocation,
     pub syntax: syn::Item,
 }

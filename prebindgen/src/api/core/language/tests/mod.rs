@@ -98,7 +98,9 @@ fn describe(e: &Element) -> String {
         Element::Struct(s) => format!("struct `{}`", s.name),
         Element::Enum(en) => format!("enum `{}`", en.name),
         Element::Const(c) => format!("const `{}`", c.name),
-        Element::Unsupported(u) => format!("unsupported `{}` ({})", u.name, u.error),
-        Element::Passthrough(p) => format!("passthrough `{}`", tokens(&p.syntax)),
+        Element::Unsupported(u) => match &u.name {
+            Some(name) => format!("unsupported `{name}` ({})", u.error),
+            None => format!("unsupported ({})", u.error),
+        },
     }
 }

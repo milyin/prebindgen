@@ -73,6 +73,13 @@
 //! until something declares it. Only whole-stream rules — a duplicate name in
 //! the flat namespace — are [`ParseError`]s, because no declaration can make
 //! two items with one name unambiguous.
+//!
+//! There is **no verbatim passthrough**, because a `#[prebindgen]` crate marks
+//! the items that cross the boundary and leaves the supporting code to the
+//! consumer. The proc-macro already enforces that — a `use`, `mod`, `impl` or
+//! `macro_rules!` cannot be marked at all — so an item kind this module does
+//! not model is a `union` or a type alias, and it is diagnosed like any other
+//! thing the language cannot express.
 
 use std::fmt;
 
@@ -91,9 +98,7 @@ mod tests;
 use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
-    element::{
-        Const, Element, Enum, Field, Function, Param, Passthrough, Struct, Unsupported, Variant,
-    },
+    element::{Const, Element, Enum, Field, Function, Param, Struct, Unsupported, Variant},
     ty::{ScalarKind, Type, TypeId, TypeKind, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
@@ -158,8 +163,8 @@ impl Language {
         }
 
         // Pass 1: the consts an array length may name. Unnamed `const _` items
-        // are excluded here for the same reason they are passed through below —
-        // they are not addressable.
+        // are excluded for the same reason `Element::name` skips them — they
+        // are not addressable, so no length can name one.
         let consts = ConstIndex::new(items.iter().filter_map(|(item, loc)| match item {
             syn::Item::Const(c) if c.ident != "_" => Some((
                 c.ident.to_string(),
@@ -296,6 +301,11 @@ pub enum ItemError {
     },
     /// A const's type is not in the language.
     ConstType { source: UnsupportedType },
+    /// A whole item kind the language does not model — a `union`, a type alias.
+    ///
+    /// The proc-macro refuses to mark a `use`, `mod`, `impl` or `macro_rules!`
+    /// at all, so only the kinds it accepts can reach here.
+    UnsupportedItemKind { kind: &'static str },
 }
 
 impl fmt::Display for ItemError {
@@ -321,6 +331,11 @@ impl fmt::Display for ItemError {
                 source,
             } => write!(f, "variant `{variant}` field `{field}`: {source}"),
             ItemError::ConstType { source } => write!(f, "const type: {source}"),
+            ItemError::UnsupportedItemKind { kind } => write!(
+                f,
+                "is {kind}; the prebindgen source language models functions, structs, enums and \
+                 consts — everything else belongs in the consumer crate"
+            ),
         }
     }
 }
@@ -346,13 +361,10 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
             Ok(en) => Element::Enum(en),
             Err(error) => unsupported(e.ident.clone(), syn::Item::Enum(e), loc, error),
         },
-        // Unnamed `const _` items (each source's injected `konst` feature
-        // guard) live outside the flat namespace: several sources may each
-        // carry one, all passed through verbatim.
-        syn::Item::Const(c) if c.ident == "_" => Element::Passthrough(Passthrough {
-            location: loc,
-            syntax: syn::Item::Const(c),
-        }),
+        // Including the unnamed `const _` each source injects as its feature
+        // guard: it is a const, so it is one here. `Element::name` returns
+        // `None` for `_`, which is what keeps several sources' guards from
+        // colliding in the flat namespace.
         syn::Item::Const(c) => match lower_type(&c.ty, consts, crate_ref) {
             Ok(ty) => Element::Const(Const {
                 name: c.ident.clone(),
@@ -367,21 +379,30 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
                 ItemError::ConstType { source },
             ),
         },
-        other => Element::Passthrough(Passthrough {
-            location: loc,
-            syntax: other,
-        }),
+        // An item kind the language does not model. The proc-macro accepts
+        // only six kinds, so in practice this is a `union` or a type alias —
+        // both named, neither ever written by a source crate. It is diagnosed
+        // rather than carried: a `#[prebindgen]` crate marks what crosses the
+        // boundary, and the code around that belongs to the consumer.
+        other => {
+            let (name, kind) = match &other {
+                syn::Item::Union(u) => (Some(u.ident.clone()), "a union"),
+                syn::Item::Type(t) => (Some(t.ident.clone()), "a type alias"),
+                _ => (None, "an item kind"),
+            };
+            unsupported(name, other, loc, ItemError::UnsupportedItemKind { kind })
+        }
     }
 }
 
 fn unsupported(
-    name: syn::Ident,
+    name: impl Into<Option<syn::Ident>>,
     syntax: syn::Item,
     location: SourceLocation,
     error: ItemError,
 ) -> Element {
     Element::Unsupported(Unsupported {
-        name,
+        name: name.into(),
         location,
         error: Box::new(error),
         syntax,
