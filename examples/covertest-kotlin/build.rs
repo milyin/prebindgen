@@ -35,7 +35,7 @@
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
-//! | `expand_return!` `.fields_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
+//! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
@@ -242,7 +242,7 @@ fn main() {
                 // carries nothing at all.
                 .class(sealed_class!(Lookup))
                 // `Report`'s output boundary is DERIVED from its value form
-                // (`.fields_into(fields!(report_into_struct))` below) instead of
+                // (`.fields_self_into(fields!(report_into_struct))` below) instead of
                 // being restated field by field — #213. The form it names is
                 // the CONSUMING one, so the fields are moved, not cloned.
                 .class(ptr_class!(Report))
@@ -392,7 +392,7 @@ fn main() {
         // into `(count, total)` rather than becoming a handle, `origin` inlines
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
-        .expand(expand_return!(Report).fields_into(fields!(report_into_struct)))
+        .expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
         // ── Base-package handle type: `Storage` + scalar members ────────────
         // Back in the base package so the typed handle classes live alongside
         // `Payload`.

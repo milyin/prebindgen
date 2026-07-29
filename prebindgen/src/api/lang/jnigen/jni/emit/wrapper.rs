@@ -215,7 +215,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // same [`reach_leaf_flat`]. Deriving either a second time here is what
         // let the two drift apart: this shortcut used to compose its reach
         // straight off the raw value, which for a value form declared with
-        // `.fields_into(..)` emitted `f(&v)` against a by-value receiver.
+        // `.fields_self_into(..)` emitted `f(&v)` against a by-value receiver.
         let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
         let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
             let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);

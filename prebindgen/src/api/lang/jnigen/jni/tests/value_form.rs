@@ -684,7 +684,7 @@ fn a_single_leaf_consuming_value_form_moves_its_field() {
                 .class(crate::ptr_class!(ZOne))
                 .fun(crate::fun!(z_one_make)),
         )
-        .expand(crate::expand_return!(ZOne).fields_into(crate::fields!(z_one_into_struct)));
+        .expand(crate::expand_return!(ZOne).fields_self_into(crate::fields!(z_one_into_struct)));
     let dir = unique_test_dir("jnigen_vf_single_consume");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -705,7 +705,7 @@ fn a_single_leaf_consuming_value_form_moves_its_field() {
 /// A handle field of a consuming value form is the value form's field like any
 /// other: the form gave its value away, so the handle **moves** into its Box
 /// rather than being cloned through the borrowed-opaque converter — which also
-/// stops `.fields_into(..)` from silently requiring a `Clone` the handle type
+/// stops `.fields_self_into(..)` from silently requiring a `Clone` the handle type
 /// need not have.
 ///
 /// The identity branch computed `consuming` and then returned before using it,
@@ -752,7 +752,8 @@ fn a_handle_field_of_a_consuming_value_form_moves() {
         )
         .expand(crate::expand_return!(ZChild).field_self())
         .expand(
-            crate::expand_return!(ZEnvelope).fields_into(crate::fields!(z_envelope_into_struct)),
+            crate::expand_return!(ZEnvelope)
+                .fields_self_into(crate::fields!(z_envelope_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_handle_field_consume");
     let _ = std::fs::remove_dir_all(&dir);
@@ -822,7 +823,7 @@ fn a_sole_handle_field_of_a_consuming_value_form_moves() {
         .expand(crate::expand_return!(ZChild).field_self())
         .expand(
             crate::expand_return!(ZSingleEnvelope)
-                .fields_into(crate::fields!(z_single_envelope_into_struct)),
+                .fields_self_into(crate::fields!(z_single_envelope_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_sole_handle_consume");
     let _ = std::fs::remove_dir_all(&dir);
@@ -893,7 +894,7 @@ fn an_optional_handle_field_of_a_consuming_value_form_moves() {
         .expand(crate::expand_return!(ZChild).field_self())
         .expand(
             crate::expand_return!(ZOptionalEnvelope)
-                .fields_into(crate::fields!(z_optional_envelope_into_struct)),
+                .fields_self_into(crate::fields!(z_optional_envelope_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_optional_handle_consume");
     let _ = std::fs::remove_dir_all(&dir);
@@ -963,7 +964,7 @@ fn a_sole_optional_handle_field_takes_callback_delivery() {
         .expand(crate::expand_return!(ZChild).field_self())
         .expand(
             crate::expand_return!(ZOptionalSingle)
-                .fields_into(crate::fields!(z_optional_single_into_struct)),
+                .fields_self_into(crate::fields!(z_optional_single_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_sole_optional_handle");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1256,7 +1257,7 @@ fn a_nested_consuming_value_form_moves_the_parent_s_field() {
         (
             "consume",
             true,
-            crate::expand_return!(ZOuter).fields_into(crate::fields!(z_outer_into_struct)),
+            crate::expand_return!(ZOuter).fields_self_into(crate::fields!(z_outer_into_struct)),
         ),
     ] {
         let registry =
@@ -1269,7 +1270,9 @@ fn a_nested_consuming_value_form_moves_the_parent_s_field() {
                     .class(crate::ptr_class!(ZInner))
                     .fun(crate::fun!(z_outer_sub)),
             )
-            .expand(crate::expand_return!(ZInner).fields_into(crate::fields!(z_inner_into_struct)))
+            .expand(
+                crate::expand_return!(ZInner).fields_self_into(crate::fields!(z_inner_into_struct)),
+            )
             .expand(outer);
         let dir = unique_test_dir(&format!("jnigen_vf_nested_consume_{tag}"));
         let _ = std::fs::remove_dir_all(&dir);
@@ -1480,7 +1483,7 @@ fn consuming_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> String {
 fn a_consuming_value_form_moves_its_fields() {
     let rust = consuming_gen(
         "jnigen_vf_consume",
-        crate::expand_return!(ZCarrier).fields_into(crate::fields!(zc_into_struct)),
+        crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)),
     );
     assert!(
         rust.contains("zc_into_struct(__cb_arg0)"),
@@ -1542,7 +1545,7 @@ fn a_borrowed_plan_clones_before_consuming() {
                 .fun(crate::fun!(zc_sub))
                 .fun(crate::fun!(zc_borrowed)),
         )
-        .expand(crate::expand_return!(ZCarrier).fields_into(crate::fields!(zc_into_struct)));
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)));
     let dir = unique_test_dir("jnigen_vf_consume_ref");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1555,7 +1558,7 @@ fn a_borrowed_plan_clones_before_consuming() {
     );
 }
 
-/// `.fields_into(..)` gives the value away, so anything else reading it is
+/// `.fields_self_into(..)` gives the value away, so anything else reading it is
 /// broken by construction. Refused **where it is declared** — the collision is
 /// visible in the decl itself, so it does not need a resolve to be found.
 ///
@@ -1564,7 +1567,7 @@ fn a_borrowed_plan_clones_before_consuming() {
 #[should_panic(expected = "only record")]
 fn a_consuming_value_form_rejects_a_following_sibling() {
     let _ = crate::expand_return!(ZCarrier)
-        .fields_into(crate::fields!(zc_into_struct))
+        .fields_self_into(crate::fields!(zc_into_struct))
         .field_self();
 }
 
@@ -1575,7 +1578,7 @@ fn a_consuming_value_form_rejects_a_following_sibling() {
 fn a_consuming_value_form_rejects_a_preceding_sibling() {
     let _ = crate::expand_return!(ZCarrier)
         .field_self()
-        .fields_into(crate::fields!(zc_into_struct));
+        .fields_self_into(crate::fields!(zc_into_struct));
 }
 
 /// Any sibling record, not just the identity one.
@@ -1583,7 +1586,7 @@ fn a_consuming_value_form_rejects_a_preceding_sibling() {
 #[should_panic(expected = "only record")]
 fn a_consuming_value_form_rejects_a_plain_field_sibling() {
     let _ = crate::expand_return!(ZCarrier)
-        .fields_into(crate::fields!(zc_into_struct))
+        .fields_self_into(crate::fields!(zc_into_struct))
         .field(crate::fun!(zc_to_struct));
 }
 
@@ -1609,10 +1612,10 @@ fn the_declarator_and_the_accessor_s_receiver_must_agree() {
         }
     };
 
-    let msg = build(crate::expand_return!(ZCarrier).fields_into(crate::fields!(zc_to_struct)));
+    let msg = build(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_to_struct)));
     assert!(
         msg.contains("CONSUMING") && msg.contains("zc_to_struct"),
-        "`.fields_into` on a borrowing accessor must be refused, naming it: {msg:?}"
+        "`.fields_self_into` on a borrowing accessor must be refused, naming it: {msg:?}"
     );
 
     let msg = build(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_into_struct)));

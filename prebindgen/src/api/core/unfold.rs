@@ -1370,18 +1370,18 @@ fn flatten<M>(
                 // The declarator states whether the value is given away; the
                 // signature has to agree, or the emitted call would not compile
                 // in the consumer's crate. Checked rather than inferred so that
-                // declaring `.fields_into(..)` on a borrowing accessor is a
+                // declaring `.fields_self_into(..)` on a borrowing accessor is a
                 // named error instead of a silently downgraded boundary.
                 if consuming != accessor_consumes(registry, func) {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
                         reason: if consuming {
-                            "declared as a CONSUMING value form (`.fields_into(..)`) but the \
+                            "declared as a CONSUMING value form (`.fields_self_into(..)`) but the \
                              accessor borrows its receiver — declare it with `.fields(..)`, or \
                              name the by-value accessor"
                         } else {
                             "declared as a BORROWING value form (`.fields(..)`) but the accessor \
-                             takes its receiver by value — declare it with `.fields_into(..)`, or \
+                             takes its receiver by value — declare it with `.fields_self_into(..)`, or \
                              name the `&Self` accessor"
                         },
                     });

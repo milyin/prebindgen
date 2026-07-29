@@ -738,7 +738,7 @@ impl ExpandReturnDecl {
         self
     }
 
-    /// The one rule [`Self::fields_into`] adds: it hands the value **itself**
+    /// The one rule [`Self::fields_self_into`] adds: it hands the value **itself**
     /// over, so nothing else in the decl can still read it.
     fn reject_beside_consuming(&self, what: &str) {
         if let Some(f) = self.fields.iter().find_map(|f| match f {
@@ -746,7 +746,7 @@ impl ExpandReturnDecl {
             _ => None,
         }) {
             panic!(
-                "expand_return!({k}).fields_into(fields!({f})).{what}: `.fields_into(..)` hands \
+                "expand_return!({k}).fields_self_into(fields!({f})).{what}: `.fields_self_into(..)` hands \
                  the value ITSELF over as its fields, so nothing else can read it afterwards — \
                  it must be the decl's only record. Use `.fields(fields!(..))` with the \
                  borrowing form of the accessor if you need both.",
@@ -785,7 +785,7 @@ impl ExpandReturnDecl {
     ///
     /// Where the value is delivered **owned** — a callback argument
     /// (`impl Fn(Sample)`), an owned return — and nothing else needs it, use
-    /// [`fields_into`](Self::fields_into) instead: those clones are being paid
+    /// [`fields_self_into`](Self::fields_self_into) instead: those clones are being paid
     /// on a value that is about to be dropped.
     pub fn fields(mut self, decl: FieldsDecl) -> Self {
         self.reject_beside_consuming("fields(..)");
@@ -800,14 +800,14 @@ impl ExpandReturnDecl {
     ///
     /// This is the same decision [`field_self`](Self::field_self) makes, one
     /// step further: `.field_self()` hands the value over whole,
-    /// `.fields_into(...)` hands *the value itself* over as its parts, and
+    /// `.fields_self_into(...)` hands *the value itself* over as its parts, and
     /// `.fields(...)` hands over a copy of its parts. Use it wherever the value
     /// arrives owned and is not needed afterwards — the hot receive path this
     /// whole declarator exists to make cheap.
     ///
     /// ```
     /// let _ = prebindgen::expand_return!(Sample)
-    ///     .fields_into(prebindgen::fields!(sample_into_struct));
+    ///     .fields_self_into(prebindgen::fields!(sample_into_struct));
     /// ```
     ///
     /// Because it gives the value away it must be the decl's **only** record —
@@ -824,11 +824,11 @@ impl ExpandReturnDecl {
     /// so the emitter clones once up front and consumes the clone — the same
     /// cost the borrowing form would have paid, which keeps one declaration
     /// usable by both owned and `&T` returns of the type.
-    pub fn fields_into(mut self, decl: FieldsDecl) -> Self {
+    pub fn fields_self_into(mut self, decl: FieldsDecl) -> Self {
         self.reject_second_value_form(&decl);
         assert!(
             self.fields.is_empty(),
-            "expand_return!({k}).fields_into(fields!({f})): `.fields_into(..)` hands the value \
+            "expand_return!({k}).fields_self_into(fields!({f})): `.fields_self_into(..)` hands the value \
              ITSELF over as its fields, so it must be the decl's only record — the records \
              already declared would read a value that is gone. Use `.fields(fields!(..))` with \
              the borrowing form of the accessor if you need both.",
@@ -867,7 +867,7 @@ pub struct FieldsDecl {
     pub(crate) func: syn::Ident,
     pub(crate) overrides: Vec<(String, ExpandReturnDecl)>,
     pub(crate) names: Vec<(String, String)>,
-    /// Set by [`ExpandReturnDecl::fields_into`] — the accessor consumes its
+    /// Set by [`ExpandReturnDecl::fields_self_into`] — the accessor consumes its
     /// receiver. Declared rather than read off the signature, because giving
     /// the value away is a boundary decision; the two are cross-checked when
     /// the records are resolved.
