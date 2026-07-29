@@ -93,6 +93,24 @@
 //! `macro_rules!` cannot be marked at all — so an item kind this module does
 //! not model is a `union` or a type alias, and it is diagnosed like any other
 //! thing the language cannot express.
+//!
+//! # Shapes that must be refused rather than approximated
+//!
+//! An [`Element`] holds what it holds: ordinary parameters, a direct return, no
+//! generic binder. A shape with no slot in that structure cannot be *partly*
+//! accepted — the missing piece would simply be dropped, and silently:
+//!
+//! | Shape | Would become | So |
+//! |---|---|---|
+//! | `async fn` | a function returning `()` | the future is dropped and the export's body never runs |
+//! | `fn f(a: u8, ...)` | a function without the tail | the variadic arguments vanish |
+//! | `struct S<T>`, `fn f<T>()`, `struct S<const N: usize>` | `T` as a nominal reference | a parameter is indistinguishable from an item named `T` |
+//!
+//! All three are [`ItemError`]s, inert until declared, like any other refusal. A
+//! **lifetime** binder is not among them: lifetimes are spelling, and the
+//! spelling already travels. Nor is `impl Trait` in argument position — Rust
+//! calls it an anonymous type parameter, but it is not a binder in the syntax,
+//! so the callback form is untouched.
 
 use std::{fmt, rc::Rc};
 
@@ -327,6 +345,33 @@ pub enum ItemError {
     },
     /// A const's type is not in the language.
     ConstType { source: UnsupportedType },
+    /// An `async fn`.
+    ///
+    /// The most dangerous shape to accept quietly: [`Function`] has a direct
+    /// return, so an `async fn ping()` lowers as one returning `()`, and a
+    /// generated wrapper calls it, drops the future and exports a function whose
+    /// body never runs.
+    UnsupportedAsync,
+    /// A C-variadic tail — `fn f(a: u8, ...)`.
+    ///
+    /// [`Function`] holds ordinary parameters only, so the tail would simply be
+    /// dropped from the signature.
+    UnsupportedVariadic,
+    /// A type or const generic parameter on the item.
+    ///
+    /// The elements have no generic binder, so a `T` in a field or parameter
+    /// would lower as [`TypeKind::Named`] — an ordinary nominal reference into
+    /// the flat namespace, indistinguishable from a real item called `T`. That
+    /// loses the scoping every downstream resolver needs, and no destination
+    /// language can express an uninstantiated parameter anyway.
+    ///
+    /// A lifetime parameter is *not* this: lifetimes are spelling and already
+    /// travel in the syntax.
+    UnsupportedGenericParam {
+        param: String,
+        /// `a type parameter` / `a const generic parameter`.
+        kind: &'static str,
+    },
     /// A whole item kind the language does not model — a `union`, a type alias.
     ///
     /// The proc-macro refuses to mark a `use`, `mod`, `impl` or `macro_rules!`
@@ -357,6 +402,24 @@ impl fmt::Display for ItemError {
                 source,
             } => write!(f, "variant `{variant}` field `{field}`: {source}"),
             ItemError::ConstType { source } => write!(f, "const type: {source}"),
+            ItemError::UnsupportedAsync => write!(
+                f,
+                "is an `async fn`; the boundary has no way to drive a future, and the generated \
+                 wrapper would drop it and export a function whose body never runs — expose a \
+                 blocking wrapper instead"
+            ),
+            ItemError::UnsupportedVariadic => write!(
+                f,
+                "has a C-variadic tail, which the prebindgen source language does not model — \
+                 take a slice, or one parameter per value"
+            ),
+            ItemError::UnsupportedGenericParam { param, kind } => write!(
+                f,
+                "declares `{param}`, {kind}: the prebindgen source language has no generic \
+                 binder, so an uninstantiated parameter is indistinguishable from a nominal type \
+                 of the same name and no destination language can express it — write the \
+                 concrete types, one marked item per instantiation (a newtype is the usual way)"
+            ),
             ItemError::UnsupportedItemKind { kind } => write!(
                 f,
                 "is {kind}; the prebindgen source language models functions, structs, enums and \
@@ -434,11 +497,36 @@ fn unsupported(
     })
 }
 
+/// Refuse a type or const generic parameter, naming the first one found.
+///
+/// Lifetimes pass: they say nothing a destination language can act on, and the
+/// spelling that needs them is already in the syntax — the same call
+/// [`lower_type`] makes for a lifetime *argument*.
+fn reject_generic_params(generics: &syn::Generics) -> Result<(), ItemError> {
+    for param in &generics.params {
+        let (name, kind) = match param {
+            syn::GenericParam::Lifetime(_) => continue,
+            syn::GenericParam::Type(t) => (t.ident.to_string(), "a type parameter"),
+            syn::GenericParam::Const(c) => (c.ident.to_string(), "a const generic parameter"),
+        };
+        return Err(ItemError::UnsupportedGenericParam { param: name, kind });
+    }
+    Ok(())
+}
+
 fn lower_fn(
     f: &syn::ItemFn,
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
 ) -> Result<Function, ItemError> {
+    // Shapes `Function` has no slot for, and would therefore drop in silence.
+    if f.sig.asyncness.is_some() {
+        return Err(ItemError::UnsupportedAsync);
+    }
+    if f.sig.variadic.is_some() {
+        return Err(ItemError::UnsupportedVariadic);
+    }
+    reject_generic_params(&f.sig.generics)?;
     let mut params = Vec::with_capacity(f.sig.inputs.len());
     for input in &f.sig.inputs {
         let pt = match input {
@@ -486,6 +574,7 @@ fn lower_struct(
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
 ) -> Result<Struct, ItemError> {
+    reject_generic_params(&s.generics)?;
     let fields = match &s.fields {
         syn::Fields::Named(named) => {
             let mut out = Vec::with_capacity(named.named.len());
@@ -521,6 +610,7 @@ fn lower_enum(
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
 ) -> Result<Enum, ItemError> {
+    reject_generic_params(&e.generics)?;
     let mut variants = Vec::with_capacity(e.variants.len());
     // Rust's own numbering rule: an explicit `= N` sets the value, an implicit
     // variant takes the previous plus one, starting at 0.

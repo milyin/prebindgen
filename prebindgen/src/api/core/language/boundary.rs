@@ -328,12 +328,24 @@ fn skip_item(toks: &[TokenTree], i: &mut usize) {
     }
 }
 
+/// True only for the exact predicate `cfg(test)`.
+///
+/// Deliberately conservative: this check's job is to stop a classifier hiding, so
+/// anything it cannot *prove* is test-only gets counted. Looking for the ident
+/// `test` anywhere in the predicate got that backwards — `cfg(not(test))` and
+/// `cfg(any(test, feature = "x"))` both compile in a production build, and both
+/// were treated as test-only, so a classifier under either evaded the ledger
+/// entirely.
+///
+/// `cfg(all(test, …))` is genuinely test-only and is nonetheless counted. That is
+/// the safe direction to err in, and nothing in the tree writes one; if that
+/// changes, widening this is a deliberate edit with a ledger diff attached.
 fn is_cfg_test(stream: TokenStream) -> bool {
     let mut idents = Vec::new();
     for tt in stream {
         flatten_idents(&tt, &mut idents);
     }
-    idents.first().map(String::as_str) == Some("cfg") && idents.iter().any(|s| s == "test")
+    idents == ["cfg", "test"]
 }
 
 /// A `::` is two `Punct` tokens, so a path separator spans `i` and `i + 1`.
@@ -461,4 +473,23 @@ fn scanner_recognizes_the_shapes_that_matter() {
         1
     );
     assert_eq!(scan_file("#[cfg(test)]\nmod tests;"), 0);
+
+    // But ONLY code proven test-only. Both of these compile in a production
+    // build, and a rule that looked for the ident `test` anywhere let a
+    // classifier under either evade the count.
+    assert_eq!(
+        scan_file("#[cfg(not(test))]\nfn g() { let _ = syn::Type::Ptr(p); }"),
+        1,
+        "cfg(not(test)) is production code"
+    );
+    assert_eq!(
+        scan_file("#[cfg(any(test, feature = \"x\"))]\nfn g() { let _ = syn::Type::Ptr(p); }"),
+        1,
+        "cfg(any(test, ..)) compiles whenever the other arm holds"
+    );
+    // A feature literally named "test" is not the test predicate either.
+    assert_eq!(
+        scan_file("#[cfg(feature = \"test\")]\nfn g() { let _ = syn::Type::Ptr(p); }"),
+        1
+    );
 }

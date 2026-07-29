@@ -594,6 +594,118 @@ fn an_elided_return_is_the_unit() {
     }
 }
 
+/// Function shapes `Function` has no slot for, and would therefore drop in
+/// silence.
+///
+/// `async` is the one that bites: the future would be dropped and the export
+/// would be a function whose body never runs.
+#[test]
+fn function_shapes_outside_the_language() {
+    let element = parse_one(syn::parse_quote!(
+        pub async fn ping() {}
+    ));
+    assert!(matches!(
+        as_unsupported(&element),
+        ItemError::UnsupportedAsync
+    ));
+    // Named, so nothing else can claim the address while it sits inert.
+    assert_eq!(element.name().expect("named"), "ping");
+
+    let element = parse_one(syn::parse_quote!(
+        pub unsafe extern "C" fn log(fmt: u8, ...) {}
+    ));
+    assert!(matches!(
+        as_unsupported(&element),
+        ItemError::UnsupportedVariadic
+    ));
+}
+
+/// A generic binder is refused on every item kind. The elements have no binder,
+/// so a `T` would lower as an ordinary nominal reference into the flat namespace
+/// — indistinguishable from a real item named `T`.
+#[test]
+fn a_generic_parameter_is_outside_the_language() {
+    let cases: Vec<(syn::Item, &str, &str)> = vec![
+        (
+            syn::parse_quote!(
+                pub struct Wrapper<T> {
+                    pub value: T,
+                }
+            ),
+            "T",
+            "a type parameter",
+        ),
+        (
+            syn::parse_quote!(
+                pub fn first<T>(items: Vec<T>) -> T {
+                    unimplemented!()
+                }
+            ),
+            "T",
+            "a type parameter",
+        ),
+        (
+            syn::parse_quote!(
+                pub enum Either<L, R> {
+                    Left(L),
+                    Right(R),
+                }
+            ),
+            "L",
+            "a type parameter",
+        ),
+        (
+            // Unused, and still a binder.
+            syn::parse_quote!(
+                pub struct Padded<const N: usize> {
+                    pub value: u8,
+                }
+            ),
+            "N",
+            "a const generic parameter",
+        ),
+    ];
+    for (item, expected_param, expected_kind) in cases {
+        let element = parse_one(item);
+        let ItemError::UnsupportedGenericParam { param, kind } = as_unsupported(&element) else {
+            panic!(
+                "expected a generic-parameter diagnosis, got {}",
+                describe(&element)
+            );
+        };
+        assert_eq!(param, expected_param);
+        assert_eq!(*kind, expected_kind);
+    }
+}
+
+/// A **lifetime** binder is not a generic parameter for this purpose: lifetimes
+/// say nothing a destination language can act on, and the spelling that needs
+/// them is already in the syntax — the same call made for a lifetime argument.
+#[test]
+fn a_lifetime_binder_is_accepted() {
+    let element = parse_one(syn::parse_quote!(
+        pub struct Borrowed<'a> {
+            pub key: &'a str,
+        }
+    ));
+    let s = as_struct(&element);
+    assert_eq!(s.fields().len(), 1);
+    assert_eq!(tokens(&s.fields()[0].ty.origin.syntax), "& 'a str");
+}
+
+/// `impl Trait` in argument position is an anonymous type parameter in Rust, but
+/// `syn` does not desugar it into the binder list — so the callback form, which
+/// every callback-taking source function uses, is untouched by the generic
+/// refusal. This is the test that says so.
+#[test]
+fn a_callback_parameter_is_not_a_generic_binder() {
+    let element = parse_one(syn::parse_quote!(
+        pub fn for_each(f: impl Fn(u64) + Send + Sync + 'static) {}
+    ));
+    let func = as_fn(&element);
+    assert!(matches!(func.params[0].ty.kind, TypeKind::Callback { .. }));
+}
+
 #[test]
 fn a_receiver_is_not_a_free_function() {
     let element = parse_one(syn::parse_quote!(
