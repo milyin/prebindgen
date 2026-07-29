@@ -37,7 +37,10 @@ mod plan;
 
 pub use self::{
     error::{UnfoldDeclError, UnfoldError},
-    plan::{DeconId, DeconSpec, Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan, UnfoldShape},
+    plan::{
+        steps_are_movable, DeconId, DeconSpec, Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan,
+        UnfoldShape,
+    },
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -1314,11 +1317,15 @@ fn flatten<M>(
                     });
                 }
                 seen_identity = true;
-                // Owned at the root of an owned value (a `Copy` blob copies /
-                // an opaque handle moves); borrowed (clone) otherwise. The
-                // adapter-side type + projection come from this `out_ty`'s
-                // output converter.
-                let out_ty: syn::Type = if path_prefix.is_empty() && !by_ref {
+                // Owned where the value is OURS to give: the root of an owned
+                // plan (a `Copy` blob copies / an opaque handle moves), or a
+                // field of a value form that CONSUMED its value — that form was
+                // handed the value, so its fields move out like every other
+                // field of it. Borrowed (clone) otherwise. The adapter-side type
+                // + projection come from this `out_ty`'s output converter, so
+                // this is what decides whether the leaf is boxed by move or
+                // cloned through the borrowed-opaque one.
+                let out_ty: syn::Type = if place_is_owned(hoists, path_prefix, by_ref) {
                     source.clone()
                 } else {
                     syn::parse_quote!(&#source)
@@ -1679,6 +1686,25 @@ fn accessor_signature<M>(
         syn::ReturnType::Type(_, t) => (**t).clone(),
     };
     Ok((takes, ret))
+}
+
+/// Whether the value sitting at `path_prefix` is the plan's **to give away**:
+/// the root of an owned plan, or a field of a value form that consumed its
+/// value and is reached by a movable run of field steps.
+///
+/// Consulted where a leaf's `out_ty` is chosen, so the ownership decision is
+/// made ONCE, in the plan, rather than re-derived by each emitter — a leaf
+/// whose `out_ty` is the owned type is boxed by move, one whose `out_ty` is a
+/// borrow is cloned through the borrowed-opaque converter.
+fn place_is_owned(hoists: &[Hoist], path_prefix: &[PathStep], by_ref: bool) -> bool {
+    if path_prefix.is_empty() {
+        return !by_ref;
+    }
+    hoists
+        .iter()
+        .filter(|h| h.prefix.len() <= path_prefix.len() && path_prefix.starts_with(&h.prefix))
+        .max_by_key(|h| h.prefix.len())
+        .is_some_and(|h| h.consuming && steps_are_movable(&path_prefix[h.prefix.len()..]))
 }
 
 /// Whether an accessor takes its receiver **by value** — a *consuming* value

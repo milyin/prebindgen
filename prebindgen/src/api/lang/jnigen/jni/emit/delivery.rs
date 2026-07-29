@@ -1,7 +1,7 @@
 //! Output-expansion delivery: unfold plans and leaf encoding.
 
 use super::*;
-use crate::api::core::unfold::PathStep;
+use crate::api::core::unfold::{steps_are_movable, PathStep};
 
 /// Emit the output-expansion delivery body (output phase) for a function
 /// marked `.expand_output()`. The return value (`__out`) is decomposed by the
@@ -387,10 +387,21 @@ pub(crate) fn reach_leaf_flat(
          shape needs callback delivery",
         leaf.name,
     );
-    // Under a CONSUMING value form the leaf OWNS its field, so it is moved out
-    // rather than cloned — the same rule `reach`'s `LeafSource::Field` arm
-    // applies on the multi-leaf path, and the reason both live in this file.
-    if leaf.source == LeafSource::Field && consuming && path.iter().all(PathStep::is_plain_field) {
+    // Under a CONSUMING value form the leaf OWNS what it reaches, so it is
+    // moved out rather than cloned — a field leaf like `reach`'s
+    // `LeafSource::Field` arm on the multi-leaf path, and an IDENTITY leaf
+    // (a handle field decomposed by `.field_self()`) whose `out_ty` the plan
+    // resolved to the owned type precisely so the owning converter boxes the
+    // move instead of the borrowed one cloning it.
+    //
+    // A trailing `Option` step is excluded here, not by `steps_are_movable`:
+    // return delivery has no `None` arm to put the absent case in, so the whole
+    // `Option` would have to reach the converter — which is what the callback
+    // path's nullable branch does with a `match`.
+    if consuming
+        && !matches!(leaf.out_ty, syn::Type::Reference(_))
+        && path.iter().all(PathStep::is_plain_field)
+    {
         let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
         return quote!(#base #(.#segs)*);
     }
@@ -742,34 +753,62 @@ pub(crate) fn encode_plan_leaves(
                     TypeKey::from_type(&leaf.out_ty)
                 )
             });
-            // The place this handle lives, when it is OURS to give away: the
-            // owned root, or a field of a CONSUMING value form — that form
-            // handed its value over, so its handle fields move out like every
-            // other field rather than being cloned through the converter (which
-            // would also demand a `Clone` the type need not have). Reached by a
-            // plain-field run, so nothing borrows the local as a whole; an
-            // `Option` step would make the leaf nullable and is excluded by the
-            // same test.
-            let owned_place: Option<TokenStream> = if path.is_empty() && !by_ref {
-                Some(value.clone())
-            } else if consuming && path.iter().all(PathStep::is_plain_field) {
-                let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                Some(quote!(#value #(.#segs)*))
-            } else {
-                None
-            };
+            // The place this handle lives, when it is OURS to give away — the
+            // owned root, or a field of a CONSUMING value form, which handed its
+            // value over so its handle fields move out like every other field
+            // rather than being cloned through the borrowed converter (which
+            // would also demand a `Clone` the type need not have).
+            //
+            // Which it is was decided in the plan, not here: an owned `out_ty`
+            // IS the statement that this leaf owns what it reaches, and it is
+            // what selected the owning converter. `steps_are_movable` then says
+            // how to project it — a plain-field run directly, a trailing
+            // `Option` through the nullable branch's `match`, which moves the
+            // whole `Option` in rather than borrowing it.
+            let owned_place: Option<TokenStream> =
+                if !matches!(leaf.out_ty, syn::Type::Reference(_)) && steps_are_movable(&path) {
+                    let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
+                    Some(quote!(#value #(.#segs)*))
+                } else {
+                    None
+                };
             match proj.kind {
                 ProjectionKind::Handle => {
                     let handle_ident = format_ident!("__h{}", idx);
-                    if let Some(place) = &owned_place {
-                        // Non-nullable by construction (nullable comes from path
-                        // nesting): move into a Box, raw jlong.
+                    if let (Some(place), false) = (&owned_place, leaf.nullable) {
+                        // Ours, and always present: move into a Box, raw jlong.
                         stmts.extend(quote! {
                             let #obj_ident: jni::sys::jvalue = jni::sys::jvalue {
                                 j: std::boxed::Box::into_raw(std::boxed::Box::new(#place))
                                     as jni::sys::jlong,
                             };
                         });
+                    } else if let Some(place) = &owned_place {
+                        // Ours, behind an `Option`: match the option BY VALUE so
+                        // the present handle is moved into its Box, boxed
+                        // `java.lang.Long` when present / JVM null when absent.
+                        // Matching `&place` here is what used to clone it back
+                        // through the borrowed converter.
+                        let box_fail = fail(quote!(__e.to_string()));
+                        stmts.extend(bind_obj(
+                            obj_ident,
+                            quote! {{
+                                match #place {
+                                    ::core::option::Option::Some(__n) => {
+                                        let #handle_ident: jni::sys::jlong =
+                                            std::boxed::Box::into_raw(std::boxed::Box::new(__n))
+                                                as jni::sys::jlong;
+                                        match ::prebindgen::lang::box_jlong(&mut env, #handle_ident) {
+                                            ::core::result::Result::Ok(__o) => __o,
+                                            ::core::result::Result::Err(__e) => {
+                                                #box_fail
+                                            }
+                                        }
+                                    }
+                                    ::core::option::Option::None => jni::objects::JObject::null(),
+                                }
+                            }},
+                        ));
                     } else if !leaf.nullable {
                         // Reached non-null handle: clone via the converter,
                         // raw jlong (no Option steps on the path).

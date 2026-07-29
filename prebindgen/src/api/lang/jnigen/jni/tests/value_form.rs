@@ -772,6 +772,147 @@ fn a_handle_field_of_a_consuming_value_form_moves() {
     );
 }
 
+/// The cross-product of the two above: a value form whose SOLE field is a
+/// handle. That takes the single-leaf `Delivery::Return` shortcut with an
+/// *identity* leaf, so neither the multi-leaf handle test (which is a callback
+/// plan) nor the single-leaf `String` test (a `Field` leaf) covered it, and the
+/// shortcut handed the borrowed converter `&__vf0.child`.
+///
+/// The fix is in the PLAN, not in the shortcut: an identity leaf under a
+/// consuming form resolves its `out_ty` to the OWNED type, which both selects
+/// the owning converter and tells every emitter it may move.
+#[test]
+fn a_sole_handle_field_of_a_consuming_value_form_moves() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZSingleEnvelopeStruct {
+                    pub child: ZChild,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_single_envelope_into_struct(e: ZSingleEnvelope) -> ZSingleEnvelopeStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_single_envelope_make() -> ZSingleEnvelope {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZSingleEnvelope))
+                .class(crate::ptr_class!(ZChild))
+                .fun(crate::fun!(z_single_envelope_make)),
+        )
+        .expand(crate::expand_return!(ZChild).field_self())
+        .expand(
+            crate::expand_return!(ZSingleEnvelope)
+                .fields_into(crate::fields!(z_single_envelope_into_struct)),
+        );
+    let dir = unique_test_dir("jnigen_vf_sole_handle_consume");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("z_single_envelope_into_struct(__cvsrc)"),
+        "the by-value accessor is handed the value:\n{rust}"
+    );
+    assert!(
+        rust.contains("__vf0.child") && !rust.contains("&__vf0.child"),
+        "and the sole handle field is MOVED out, not borrowed into the \
+         cloning converter:\n{rust}"
+    );
+}
+
+/// An `Option<Handle>` field is the same claim behind an `Option` — and the
+/// commonest shape there is (`SampleStruct.attachment`). The consuming form
+/// owns the whole `Option`, so it is matched BY VALUE and the present handle
+/// moves into its Box; only the *reach* differs from the non-optional case, not
+/// the ownership.
+#[test]
+fn an_optional_handle_field_of_a_consuming_value_form_moves() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOptionalEnvelopeStruct {
+                    pub child: Option<ZChild>,
+                    pub tag: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_optional_envelope_into_struct(
+                    e: ZOptionalEnvelope,
+                ) -> ZOptionalEnvelopeStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_optional_envelope_sub(
+                    cb: impl Fn(ZOptionalEnvelope) + Send + Sync + 'static,
+                ) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOptionalEnvelope))
+                .class(crate::ptr_class!(ZChild))
+                .fun(crate::fun!(z_optional_envelope_sub)),
+        )
+        .expand(crate::expand_return!(ZChild).field_self())
+        .expand(
+            crate::expand_return!(ZOptionalEnvelope)
+                .fields_into(crate::fields!(z_optional_envelope_into_struct)),
+        );
+    let dir = unique_test_dir("jnigen_vf_optional_handle_consume");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("match __vf0.child") && !rust.contains("&__vf0.child"),
+        "the `Option` is matched BY VALUE, not borrowed:\n{rust}"
+    );
+    assert!(
+        rust.contains("Box::new(__n)"),
+        "and the present handle is MOVED into its Box rather than cloned \
+         through the borrowed converter:\n{rust}"
+    );
+}
+
 /// A per-field `.field(name, expand_return!(T))` override states the field's
 /// type, so it has to be checked against the field. Otherwise the override
 /// silently survives an upstream field-type change — which is exactly the drift

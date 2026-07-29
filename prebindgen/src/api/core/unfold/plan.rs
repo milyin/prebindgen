@@ -121,6 +121,28 @@ impl PathStep {
             }
         )
     }
+
+    /// Whether the step is a field read, `Option` or not.
+    pub fn is_field(&self) -> bool {
+        matches!(self, Self::Field { .. })
+    }
+}
+
+/// Whether a run of steps can be **moved** out of the value it hangs off:
+/// field reads only, with an `Option` allowed on the last one — a `None` arm
+/// still hands over the whole `Option` by value, while an `Option` in the
+/// middle would have to be unwrapped and so can only be borrowed through.
+///
+/// This is the one place the rule is written: the resolver uses it to decide
+/// whether a leaf OWNS what it reaches (its `out_ty` then being the owned type
+/// rather than a borrow), and the emitters use it to project that place. Two
+/// readings of it would drift, and the disagreement would be a borrow handed to
+/// an owning converter.
+pub fn steps_are_movable(steps: &[PathStep]) -> bool {
+    steps
+        .iter()
+        .enumerate()
+        .all(|(i, s)| s.is_field() && (!s.is_optional() || i + 1 == steps.len()))
 }
 
 /// How a leaf's [`UnfoldLeaf::path`] is reached from the decomposed value.
