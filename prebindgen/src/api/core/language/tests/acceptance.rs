@@ -328,8 +328,9 @@ fn struct_shapes() {
     assert!(as_struct(&unit).fields().is_empty());
 }
 
-/// Tags are declaration order and are never the discriminant. The two
-/// numberings are independent, and this is the pair that proves it.
+/// A variant's index is its declaration order and is never its discriminant:
+/// one is where the source *put* it, the other is the value Rust *assigns* it.
+/// The two numberings are independent, and this is the pair that proves it.
 #[test]
 fn tags_are_declaration_order() {
     let element = parse_one(syn::parse_quote!(
@@ -340,7 +341,7 @@ fn tags_are_declaration_order() {
     ));
     let e = as_enum(&element);
     assert_eq!(
-        e.variants.iter().map(|v| v.tag).collect::<Vec<_>>(),
+        e.variants.iter().map(|v| v.index).collect::<Vec<_>>(),
         vec![0, 1]
     );
     assert_eq!(

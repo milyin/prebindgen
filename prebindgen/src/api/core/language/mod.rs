@@ -514,7 +514,7 @@ fn lower_enum(
     // Rust's own numbering rule: an explicit `= N` sets the value, an implicit
     // variant takes the previous plus one, starting at 0.
     let mut next: Option<i64> = Some(0);
-    for (tag, v) in e.variants.iter().enumerate() {
+    for (variant_index, v) in e.variants.iter().enumerate() {
         let discriminant = match v.discriminant.as_ref() {
             Some((_, expr)) => int_literal(expr),
             None => next,
@@ -522,7 +522,7 @@ fn lower_enum(
         // `checked_add`: a discriminant at the top of the range is valid Rust
         // (`#[repr(u64)] enum E { A = i64::MAX as u64, B }`), so running out of
         // `i64` ends the numeric chain exactly as an unevaluable spelling does.
-        // The spelling is untouched either way — it is in `Variant::syntax`.
+        // The spelling is untouched either way — it is in `Variant::origin`.
         next = discriminant.and_then(|n| n.checked_add(1));
 
         let mut fields = Vec::with_capacity(v.fields.len());
@@ -545,7 +545,7 @@ fn lower_enum(
         }
         variants.push(Variant {
             name: v.ident.clone(),
-            tag: tag as i32,
+            index: variant_index,
             discriminant,
             fields,
             origin: Origin::new(v.clone(), Rc::clone(at)),

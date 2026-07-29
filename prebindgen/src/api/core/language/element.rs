@@ -132,16 +132,16 @@ impl Struct {
     }
 }
 
-/// A `#[prebindgen]` enum: a **tag** — which alternative is live — plus one
-/// field group per variant.
+/// A `#[prebindgen]` enum: a choice of one alternative, each with its own field
+/// group.
 ///
 /// One model covers both enum shapes on purpose. A fieldless enum is the
 /// degenerate sum whose every group is empty, so a lowering written for the
-/// general case collapses to "just a tag" for it.
+/// general case collapses to "just the selector" for it.
 #[derive(Clone, Debug)]
 pub struct Enum {
     pub name: syn::Ident,
-    /// Variants in declaration order; `variants[i].tag == i as i32`.
+    /// Variants in declaration order; `variants[i].index == i`.
     pub variants: Vec<Variant>,
     pub origin: Origin<syn::ItemEnum>,
 }
@@ -182,12 +182,18 @@ impl Enum {
 #[derive(Clone, Debug)]
 pub struct Variant {
     pub name: syn::Ident,
-    /// Declaration-order tag, `0..N-1`.
+    /// Position within its enum, `0..N-1` — the same fact a [`Field`] carries,
+    /// for the same reason: a node handed out on its own still knows where it
+    /// sits.
     ///
-    /// This is **not** the discriminant. A sum's alternatives are identified by
-    /// position, because the payload mirror an adapter builds carries no `repr`
-    /// and numbers its arms itself.
-    pub tag: i32,
+    /// This is **not** the discriminant. A position is what the source *wrote*;
+    /// a discriminant is the value Rust *assigns*, and the two are independent
+    /// — see [`Self::discriminant`].
+    ///
+    /// What a destination language does with the position is its own business:
+    /// one may transmit it to say which alternative is live, another may send a
+    /// name instead. The language says only where the variant sits.
+    pub index: usize,
     /// The value Rust assigns this variant — an explicit `= N` sets it, an
     /// implicit variant takes the previous value plus one, starting at 0.
     ///
@@ -195,7 +201,7 @@ pub struct Variant {
     /// arithmetic) has broken the chain, or once the chain has run out of `i64`.
     /// That is not a failure: only a consumer that needs the *number* is
     /// affected, and one that re-emits the *spelling* reads
-    /// [`Self::syntax`]`.discriminant` instead.
+    /// [`Self::origin`]`.syntax.discriminant` instead.
     pub discriminant: Option<i64>,
     /// The variant's payload, in declaration order.
     pub fields: Vec<Field>,
@@ -208,8 +214,12 @@ pub struct Variant {
 pub struct Field {
     /// The field's name, or `None` for a positional one.
     pub name: Option<syn::Ident>,
-    /// Position within its struct or variant, `0..N-1`. The address of a
-    /// positional field, and the tie-breaker for a named one.
+    /// Position within its struct or variant, `0..N-1` — the same fact a
+    /// [`Variant`] carries.
+    ///
+    /// The address of a positional field. A named field has one too, and simply
+    /// does not need it: it is addressed by name, so this is available rather
+    /// than used — the same way it carries its item's location.
     pub index: usize,
     pub ty: Type,
     /// The field as written — `pub id: u64`, attributes and docs included.
