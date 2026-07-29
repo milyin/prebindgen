@@ -643,46 +643,53 @@ pub(crate) fn bind_hoists(
             out.optional.push(true);
             continue;
         }
-        let (from, mut expr) = match out.rebase(&h.prefix) {
+        // Where the fold starts, and whether what it starts from is OWNED. The
+        // value form's own boundary is decided below, from what the fold ends
+        // up holding — never from where it began.
+        let (from, start, start_owned) = match out.rebase(&h.prefix) {
             // A NESTED consuming form is handed the parent's field by MOVE: a
             // hoisted value form is an owned struct and its fields are
             // disjoint, so moving one out leaves every sibling leaf readable.
-            // `compose_step` borrows (`&(e).f`), so the field run to that field
-            // is projected here instead of going through it.
-            Some((outer, rest, _)) if h.consuming => {
-                let last = h.prefix.len() - 1;
+            // `compose_step` borrows (`&(e).f`), so a plain field run to that
+            // field is projected here instead of going through it.
+            Some((outer, rest, _))
+                if h.consuming && rest[..rest.len() - 1].iter().all(PathStep::is_plain_field) =>
+            {
                 let lead = &rest[..rest.len() - 1];
-                if lead.iter().all(PathStep::is_plain_field) {
-                    let segs: Vec<&syn::Ident> = lead.iter().map(PathStep::ident).collect();
-                    (last, quote!(#outer #(.#segs)*))
-                } else {
-                    // Reached through an accessor call, so what is in hand is a
-                    // borrow with nothing to give up — clone once and consume
-                    // the clone, exactly as a borrowed root does below.
-                    let e = fold_steps(qualify, lead, quote!(&#outer), false);
-                    (last, quote!((#e).clone()))
-                }
+                let segs: Vec<&syn::Ident> = lead.iter().map(PathStep::ident).collect();
+                (h.prefix.len() - 1, quote!(#outer #(.#segs)*), true)
             }
-            Some((outer, rest, _)) => (h.prefix.len() - rest.len(), quote!(&#outer)),
-            // A CONSUMING value form is handed the value itself, so its fields
-            // move out instead of being cloned out of a borrow. A borrowed plan
-            // has no value to give up, so it clones first — the same cost the
-            // borrowing form of the accessor would have paid, which keeps one
-            // declaration usable by both owned and `&T` returns of the type.
-            None if h.consuming && by_ref => (0, quote!(#value.clone())),
-            None if h.consuming => (0, value.clone()),
-            None if by_ref => (0, value.clone()),
-            None => (0, quote!(&#value)),
+            Some((outer, rest, _)) => (h.prefix.len() - rest.len(), quote!(&#outer), false),
+            None if by_ref => (0, value.clone(), false),
+            None => (0, value.clone(), true),
         };
-        // Every arm above that starts from an OWNED expression does so to hand
-        // it to the trailing by-value value-form call — the move the whole
-        // branch exists for — and positions itself right before it. The rest
-        // start from a reference and fold by the ordinary rule.
-        let tail = &h.prefix[from..];
-        expr = if h.consuming && from + 1 == h.prefix.len() {
-            compose_step(qualify, &tail[0], expr)
-        } else {
-            fold_steps(qualify, tail, expr, false)
+        // Everything before the value form is an ordinary accessor chain.
+        let last = h.prefix.len() - 1;
+        let head = &h.prefix[from..last];
+        let e = fold_steps(qualify, head, start, start_owned);
+        let e_owned = head.last().map_or(start_owned, PathStep::yields_owned);
+        // The value form itself. A CONSUMING one takes its receiver BY VALUE —
+        // that is the move the whole declaration exists for — so it is handed
+        // what the fold holds when that is ours, and a clone when it is not:
+        // the same cost the borrowing form of the accessor would have paid,
+        // which keeps one declaration usable by both owned and `&T` returns.
+        // A borrowing one takes a reference, so an owned value is borrowed.
+        //
+        // Deciding this from the fold's RESULT rather than from its start is
+        // what lets a consuming form sit behind ordinary accessors: the chain
+        // in front borrows, the form itself still moves.
+        let call = &h.prefix[last];
+        let expr = match (h.consuming, e_owned) {
+            (true, true) => {
+                let (m, f) = (qualify(call.ident()), call.ident());
+                quote!(#m::#f(#e))
+            }
+            (true, false) => {
+                let (m, f) = (qualify(call.ident()), call.ident());
+                quote!(#m::#f((#e).clone()))
+            }
+            (false, true) => compose_step(qualify, call, quote!(&#e)),
+            (false, false) => compose_step(qualify, call, e),
         };
         out.stmts.extend(quote! { let #local = #expr; });
         out.bound.push((h.prefix.clone(), local));

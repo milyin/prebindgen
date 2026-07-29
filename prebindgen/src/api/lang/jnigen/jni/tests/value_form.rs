@@ -1590,6 +1590,58 @@ fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
     );
 }
 
+/// A consuming value form reached through ORDINARY accessors: the chain in
+/// front of it folds by the borrowing rule, and the form itself still takes its
+/// receiver by value. Both boundaries are in one expression, and neither may be
+/// decided by the other — `zh_carrier` wants `&ZHolder`, `zc_into_struct` wants
+/// the `ZCarrier` it returns, moved.
+#[test]
+fn a_consuming_value_form_keeps_its_by_value_boundary_behind_accessors() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_carrier(h: &ZHolder) -> ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_carrier)));
+    let dir = unique_test_dir("jnigen_vf_consume_behind_acc");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zc_into_struct(myflat::zh_carrier(&__cb_arg0))"),
+        "the accessor in front borrows its receiver, and its owned result MOVES \
+         into the by-value value form — neither boundary decides the other:\n{rust}"
+    );
+}
+
 /// Ownership has to survive EVERY call on the chain, not just the optional
 /// binding and the value form. An ordinary accessor returning an owned value
 /// leaves that value in hand, and the next accessor takes its receiver by
@@ -1961,7 +2013,10 @@ fn a_borrowed_plan_clones_before_consuming() {
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     assert!(
-        rust.contains("zc_into_struct(__inner.clone())"),
+        // Parenthesized because the clone applies to whatever the fold holds,
+        // which is not always a bare name — `&__out.clone()` would parse as
+        // `&(__out.clone())` and clone the wrong thing.
+        rust.contains("zc_into_struct((__inner).clone())"),
         "a borrowed plan clones the value, then consumes the clone:\n{rust}"
     );
 }
