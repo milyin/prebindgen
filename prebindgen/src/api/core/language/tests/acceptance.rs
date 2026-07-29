@@ -188,6 +188,33 @@ fn the_callback_form() {
     assert_eq!(args.len(), 2);
 }
 
+/// A callback returns nothing, and that is **checked**. `TypeKind::Callback` has
+/// no slot for a return, so accepting `impl Fn() -> u8` would drop a fact a
+/// destination language needs — silently, which is worse than the refusal.
+#[test]
+fn a_callback_must_return_nothing() {
+    // Written out, `-> ()` is the same callback.
+    let TypeKind::Callback { args } =
+        kind(quote::quote!(impl Fn(u32) -> () + Send + Sync + 'static))
+    else {
+        panic!("a callback");
+    };
+    assert_eq!(args.len(), 1);
+
+    // Anything else is not the accepted `impl Trait` form.
+    for spelling in [
+        quote::quote!(impl Fn() -> u8 + Send + Sync + 'static),
+        quote::quote!(impl Fn(u32) -> Sample + Send + Sync + 'static),
+        quote::quote!(impl Fn() -> Option<u8> + Send + Sync + 'static),
+    ] {
+        assert_eq!(
+            reason(spelling),
+            UnsupportedTypeReason::DisallowedImplTrait,
+            "a returning callback is refused, not silently truncated"
+        );
+    }
+}
+
 #[test]
 fn types_outside_the_language() {
     assert_eq!(
@@ -268,6 +295,71 @@ fn an_extent_may_name_a_const_declared_later() {
             .expect("an extent")
             .value,
         4
+    );
+}
+
+/// An extent carries three facts for three questions, and they come apart. No
+/// blanket equality could serve all three, which is why the type provides none:
+/// a consumer projects the one it needs.
+#[test]
+fn the_three_extent_projections_are_independent() {
+    // `A` and `TAG_LEN` are both 4; `0x04` and `4` are the same literal value
+    // spelled differently.
+    let elements = parse(vec![
+        syn::parse_quote!(
+            pub struct Marker {
+                pub by_const: [u8; TAG_LEN],
+                pub by_other_const: [u8; ALSO_FOUR],
+                pub by_literal: [u8; 4],
+                pub by_hex_literal: [u8; 0x04],
+                pub longer: [u8; 8],
+            }
+        ),
+        tag_len_const(),
+        syn::parse_quote!(
+            pub const ALSO_FOUR: usize = 4;
+        ),
+    ]);
+    let fields = as_struct(&elements[0]).fields();
+    let at = |i: usize| fields[i].ty.array_extent().expect("an extent");
+    let (by_const, by_other_const, by_literal, by_hex, longer) =
+        (at(0), at(1), at(2), at(3), at(4));
+
+    // Type identity is the evaluated value: all four fours are ONE type and one
+    // converter, however they were addressed or spelled.
+    for e in [by_const, by_other_const, by_literal, by_hex] {
+        assert_eq!(e.value, 4);
+    }
+    assert_ne!(longer.value, by_literal.value);
+
+    // Declaration spelling is per occurrence, and distinguishes cases the value
+    // cannot: `4` is not `0x04`, and neither is `TAG_LEN`.
+    assert_eq!(tokens(&by_literal.origin.syntax), "4");
+    assert_eq!(tokens(&by_hex.origin.syntax), "0x04");
+    assert_eq!(tokens(&by_const.origin.syntax), "TAG_LEN");
+
+    // Header dependency is the named const, and distinguishes cases the
+    // spelling groups together and the value does not see at all.
+    assert_eq!(
+        by_const.const_id().expect("a const dependency").name,
+        "TAG_LEN"
+    );
+    assert_eq!(
+        by_other_const.const_id().expect("a const dependency").name,
+        "ALSO_FOUR"
+    );
+    assert!(by_literal.const_id().is_none());
+    assert!(by_hex.const_id().is_none());
+
+    // The three really are orthogonal: each pair below agrees on one projection
+    // and differs on another.
+    assert!(by_const.value == by_literal.value && by_const.const_id() != by_literal.const_id());
+    assert!(
+        by_literal.value == by_hex.value
+            && tokens(&by_literal.origin.syntax) != tokens(&by_hex.origin.syntax)
+    );
+    assert!(
+        by_const.const_id() != by_other_const.const_id() && by_const.value == by_other_const.value
     );
 }
 

@@ -130,41 +130,53 @@ impl fmt::Display for UnsupportedArrayLen {
 
 impl std::error::Error for UnsupportedArrayLen {}
 
-/// A fixed-size array's extent: the number, and the const identity when the
-/// source named one.
+/// A fixed-size array's extent: the number, the const identity when the source
+/// named one, and the spelling it was written with.
 ///
-/// Both halves belong to **different consumers**:
+/// # Three facts, three consumers — and no `==`
 ///
-/// * `value` is the semantic length. It is what makes `[u8; A]` and `[u8; 4]`
-///   one Rust type and one converter, and what a destination language needs when
-///   it has no way to reference a Rust const.
-/// * `source` is the identity a C header re-states as `uint8_t tag[TAG_LEN]`,
-///   so changing the size stays one edit rather than a hunt through literals.
+/// The three answer different questions, and **deliberately no equality is
+/// provided**, because there is no single one that could be right. A consumer
+/// projects the fact it actually needs:
+///
+/// | Question | Projection |
+/// |---|---|
+/// | is this the same type / the same converter? | [`Self::value`] |
+/// | how does a C declaration spell it? | [`Self::origin`]`.syntax`, per occurrence |
+/// | which consts must reach the header as a `#define`? | [`Self::const_id`] |
+///
+/// A blanket `==` mixes them and is wrong under either reading: comparing
+/// `source` makes `[u8; A]` differ from `[u8; 4]` when `A == 4` — one Rust type
+/// reported as two — while ignoring the spelling makes `[u8; 4]` equal
+/// `[u8; 0x04]`, whose retained syntax differs. Neither is type identity and
+/// neither is spelling identity, so the choice belongs to whoever is asking.
+///
+/// # Note for a converter table
+///
+/// `value` being the type identity means several occurrences share one
+/// converter, and their spellings differ. A shared converter therefore needs a
+/// **canonical** Rust spelling chosen on purpose — the evaluated literal is the
+/// obvious one — rather than whichever occurrence happened to populate a
+/// deduplicated entry.
 ///
 /// This lives on the **use site** — a field's or parameter's type — and never on
-/// anything keyed by type. Three fields whose extents are equal are one type, so
-/// a type-keyed table could only report whichever was stored last.
-///
-/// Equality is over the length only: `[u8; A]` and `[u8; 4]` are one type
-/// wherever they are written, so [`Self::origin`] — which differs per use site
-/// by construction — is deliberately not compared.
+/// anything keyed by type, for the same reason: two occurrences of one type may
+/// name the length differently, so a type-keyed table could only report
+/// whichever was stored last.
 #[derive(Clone, Debug)]
 pub struct ArrayExtent {
+    /// The evaluated length. The type identity: `[u8; A]` and `[u8; 4]` are one
+    /// Rust type when `A == 4`, and a destination language with no way to name a
+    /// Rust const needs the number.
     pub value: usize,
+    /// How the length was addressed, so a C header can re-state
+    /// `uint8_t tag[TAG_LEN]` and know `TAG_LEN` must reach it.
     pub source: ExtentSource,
-    /// The length expression as written — `4`, `TAG_LEN` — and where it came
-    /// from. So a C header emitting `uint8_t x[TAG_LEN]` spells the length off
-    /// its own slice rather than digging into the enclosing array type.
+    /// The length expression as written — `4`, `0x04`, `TAG_LEN` — and where it
+    /// came from. The spelling of *this* occurrence, which is what a declaration
+    /// re-emits; two occurrences of one type may differ here.
     pub origin: Origin<syn::Expr>,
 }
-
-impl PartialEq for ArrayExtent {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value && self.source == other.source
-    }
-}
-
-impl Eq for ArrayExtent {}
 
 /// How an [`ArrayExtent`] was addressed at its use site.
 #[derive(Clone, Debug, PartialEq, Eq)]

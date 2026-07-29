@@ -351,6 +351,45 @@ fn a_discriminant_at_the_top_of_the_range_does_not_overflow() {
     );
 }
 
+/// The bottom of the range too. `i64::MIN` is a valid Rust discriminant, and its
+/// magnitude is one past `i64::MAX` — so the sign has to be applied before the
+/// range check, not after.
+#[test]
+fn a_discriminant_at_the_bottom_of_the_range_evaluates() {
+    let element = parse_one(syn::parse_quote!(
+        #[repr(i64)]
+        pub enum E {
+            A = -9223372036854775808,
+            B,
+        }
+    ));
+    let e = as_enum(&element);
+    assert_eq!(e.variants[0].discriminant, Some(i64::MIN));
+    assert_eq!(e.variants[1].discriminant, Some(i64::MIN + 1));
+    // And the spelling is still the source's, as for any other discriminant.
+    let (_, expr) = e.variants[0]
+        .origin
+        .syntax
+        .discriminant
+        .as_ref()
+        .expect("explicit");
+    assert_eq!(tokens(expr), "- 9223372036854775808");
+
+    // One step further out is not a number, and ends the chain rather than
+    // panicking — the same contract as an unevaluable spelling.
+    let element = parse_one(syn::parse_quote!(
+        #[repr(i128)]
+        pub enum E {
+            A = -9223372036854775809,
+            B,
+        }
+    ));
+    let e = as_enum(&element);
+    assert_eq!(e.variants[0].discriminant, None);
+    assert_eq!(e.variants[1].discriminant, None);
+    assert_eq!(e.discriminant_values().expect_err("no numbers"), "A");
+}
+
 /// An array's extent is modelled as a number AND the const it named, while the
 /// type's slice keeps the symbolic spelling — the three-way split that lets one
 /// consumer emit `[u8; 4]` and another `uint8_t tag[TAG_LEN]`.

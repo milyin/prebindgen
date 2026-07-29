@@ -346,7 +346,7 @@ pub(crate) fn lower_type(
         },
         // `[T]` is the borrowed spelling of the same concept `Vec<T>` owns.
         syn::Type::Slice(s) => TypeKind::Sequence(Box::new(lower_type(&s.elem, consts, at)?)),
-        syn::Type::Tuple(t) if t.elems.is_empty() => TypeKind::Unit,
+        _ if is_unit_type(ty) => TypeKind::Unit,
         // Only the unit is in the language. Refusing here names the type;
         // accepting would defer the failure to an "unresolved type" much later.
         syn::Type::Tuple(_) => return Err(fail(UnsupportedTypeReason::UnsupportedTuple)),
@@ -487,6 +487,21 @@ fn lower_path(
         }
     }
     Ok(named(tp, args))
+}
+
+/// True when `ty` is the unit type `()`.
+///
+/// The language's one answer to that question: [`lower_type`] classifies it as
+/// [`TypeKind::Unit`], and the callback grammar uses it to insist a callback
+/// returns nothing.
+pub(crate) fn is_unit_type(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Tuple(t) => t.elems.is_empty(),
+        // A parenthesized or grouped `()` is still `()`.
+        syn::Type::Paren(p) => is_unit_type(&p.elem),
+        syn::Type::Group(g) => is_unit_type(&g.elem),
+        _ => false,
+    }
 }
 
 /// `Named` with the identity read off the path: every segment joined, minus the

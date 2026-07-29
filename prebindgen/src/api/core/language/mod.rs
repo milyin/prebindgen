@@ -213,6 +213,12 @@ impl Language {
 /// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the `Fn`
 /// argument types in declaration order. Otherwise `None`.
 ///
+/// A callback **returns nothing**, and that is checked, not assumed: a written
+/// `-> ()` is the same thing spelled out, and any other return is refused.
+/// [`TypeKind::Callback`] has no slot for one, so accepting `impl Fn() -> u8`
+/// would drop a fact a destination language needs — and drop it silently, which
+/// is worse than the refusal.
+///
 /// The callback grammar, and the language's alone: [`TypeKind::Callback`] is
 /// exactly what this accepts, so acceptance cannot drift from classification.
 /// The registry re-exports it for the consumers that have not migrated yet.
@@ -234,6 +240,11 @@ pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
                         let syn::PathArguments::Parenthesized(p) = &last.arguments else {
                             return None;
                         };
+                        match &p.output {
+                            syn::ReturnType::Default => {}
+                            syn::ReturnType::Type(_, t) if ty::is_unit_type(t) => {}
+                            syn::ReturnType::Type(..) => return None,
+                        }
                         args = Some(p.inputs.iter().cloned().collect());
                     }
                     "Send" => has_send = true,
@@ -561,16 +572,28 @@ fn lower_enum(
 /// Pull a signed integer out of a literal expression (`5`, `-3`, `0x07`).
 /// `None` for anything else — a `const`, a path, arithmetic.
 fn int_literal(expr: &syn::Expr) -> Option<i64> {
+    i64::try_from(int_literal_wide(expr)?).ok()
+}
+
+/// [`int_literal`] before the range check.
+///
+/// The magnitude is parsed **wider than the result** so the sign can be applied
+/// first: `-9223372036854775808` is `i64::MIN` and a valid Rust discriminant,
+/// but its magnitude is one past `i64::MAX`, so parsing the digits as `i64`
+/// would reject the whole literal. A magnitude too large for `i128` fails here
+/// and is reported as an unevaluable discriminant, which is the existing
+/// contract for anything the frontend cannot reduce to a number.
+fn int_literal_wide(expr: &syn::Expr) -> Option<i128> {
     match expr {
         syn::Expr::Lit(lit) => match &lit.lit {
-            syn::Lit::Int(int) => int.base10_parse::<i64>().ok(),
+            syn::Lit::Int(int) => int.base10_parse::<i128>().ok(),
             _ => None,
         },
         syn::Expr::Unary(syn::ExprUnary {
             op: syn::UnOp::Neg(_),
             expr,
             ..
-        }) => int_literal(expr).map(|v| -v),
+        }) => int_literal_wide(expr).map(|v| -v),
         _ => None,
     }
 }
