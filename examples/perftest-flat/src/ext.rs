@@ -1382,6 +1382,109 @@ pub fn escape_probe_value(p: &EscapeProbe) -> i64 {
     p.value
 }
 
+// ── Value form: a type's own accessors gathered into one struct (#213) ──────
+
+/// An opaque handle whose output boundary is declared from its **value form**
+/// ([`report_to_struct`]) instead of a restated field list — the
+/// `expand_return!(Report).fields(fields!(report_to_struct))` exercise.
+///
+/// Its fields are chosen so each one lands on a different rule of the
+/// expansion, and so the derived boundary is the same one a hand-written
+/// `.field()` list would have produced:
+///
+/// | field | rule |
+/// |---|---|
+/// | `summary` | its type has its own `expand_return!` ⇒ spliced into `(count, total)`, NOT handed over as a handle |
+/// | `taken` | `Option<data class>` ⇒ stays ONE leaf, its converter builds the object |
+/// | `origin` | a non-optional declared `data class` ⇒ INLINES into its own fields |
+/// | `outcome` | a `sealed_class!` ⇒ its selector plus one group per alternative, with a handle payload |
+/// | `label` | a plain leaf |
+pub struct Report {
+    summary: Summary,
+    taken: Option<Stamp>,
+    origin: Stamp,
+    outcome: Lookup,
+    label: String,
+}
+
+/// The value form of [`Report`]: its fields as data, handles staying handles.
+#[prebindgen]
+pub struct ReportStruct {
+    /// Decomposed by `Summary`'s own boundary decl, not delivered as a handle.
+    pub summary: Summary,
+    /// Absent when the report was never stamped.
+    pub taken: Option<Stamp>,
+    /// Always present, so it inlines into `origin_secs` / `origin_nanos`.
+    pub origin: Stamp,
+    /// A tag-gated group set, one alternative live, carrying a handle.
+    pub outcome: Lookup,
+    /// A plain string leaf beside the rest.
+    pub label: String,
+}
+
+/// Build a [`Report`]. `count < 0` makes the outcome a failure, `0` absent.
+#[prebindgen]
+pub fn report_new(count: i64, total: f64, taken: bool, label: String) -> Report {
+    Report {
+        summary: summary_new(count.max(0), total),
+        taken: taken.then(|| stamp_new(7, 8)),
+        origin: stamp_new(1, 2),
+        outcome: lookup_of(count, total),
+        label,
+    }
+}
+
+/// Decompose a [`Report`] into its value form — the accessor
+/// `expand_return!(Report).fields(fields!(...))` names. Cloning the fields is
+/// what makes this a *value* form; the generated code calls it ONCE per
+/// delivery and reads every leaf off that one result.
+#[prebindgen]
+pub fn report_to_struct(r: &Report) -> ReportStruct {
+    ReportStruct {
+        summary: r.summary.clone(),
+        taken: r.taken,
+        origin: r.origin,
+        outcome: r.outcome.clone(),
+        label: r.label.clone(),
+    }
+}
+
+/// The **consuming** value form of [`Report`] — the same fields, reached by
+/// destroying the report instead of cloning out of a borrow.
+///
+/// This is the shape a hot receive path wants. Every callback hands its value
+/// over **owned** (`impl Fn(Report)`), so there is nothing to preserve: moving
+/// the fields out costs nothing, while [`report_to_struct`] pays a clone per
+/// handle field for a value it is about to drop. The binding picks whichever
+/// form it declares; `expand_return!(Report).fields(fields!(report_into_struct))`
+/// selects this one and the generated code then **moves** each field into its
+/// leaf rather than cloning it.
+#[prebindgen]
+pub fn report_into_struct(r: Report) -> ReportStruct {
+    ReportStruct {
+        summary: r.summary,
+        taken: r.taken,
+        origin: r.origin,
+        outcome: r.outcome,
+        label: r.label,
+    }
+}
+
+/// Deliver a [`Report`] to a callback — the decomposed value form arriving in
+/// ONE crossing, which is the whole point of deriving the boundary rather than
+/// handing over a handle the receiver must then query field by field.
+#[prebindgen]
+pub fn report_each(n: i64, sink: impl Fn(Report) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(report_new(
+            i - 1,
+            10.0 * i as f64,
+            i % 2 == 0,
+            format!("r{i}"),
+        ));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

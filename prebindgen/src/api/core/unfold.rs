@@ -37,7 +37,10 @@ mod plan;
 
 pub use self::{
     error::{UnfoldDeclError, UnfoldError},
-    plan::{DeconId, DeconSpec, LeafSource, UnfoldLeaf, UnfoldPlan, UnfoldShape},
+    plan::{
+        steps_are_movable, DeconId, DeconSpec, Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan,
+        UnfoldShape,
+    },
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -73,6 +76,58 @@ pub enum DeconRecord {
     /// moved for an owned `T`). At most one per
     /// deconstructor.
     Identity,
+    /// Read the fields of the type's **value form**: call `func` once
+    /// (`f(&T) -> TStruct`) and contribute one record per [`FieldRecord`],
+    /// reached by field access on the returned struct. The language adapter
+    /// builds the field list (it knows which structs are declared classes and
+    /// therefore inline); this record only says how to get there.
+    ///
+    /// Each field then decomposes exactly like an [`Acc`](Self::Acc) record's
+    /// return does — its own [`records`](FieldRecord::records) if the
+    /// declaration overrode it, else its type's own deconstructor if it has
+    /// one, else one leaf — so a value form and a hand-written field list
+    /// produce the same leaves.
+    Fields {
+        func: syn::Ident,
+        /// The accessor **consumes** its receiver (`f(T) -> TStruct`): the
+        /// value is moved in and each field moved *out* into its leaf, instead
+        /// of being cloned out of a borrow. Declared by the adapter rather than
+        /// read off the signature — giving the value away is a boundary
+        /// decision — and cross-checked against the signature when the records
+        /// are flattened, so the two cannot drift.
+        consuming: bool,
+        fields: Vec<FieldRecord>,
+    },
+}
+
+/// One field of a value form (see [`DeconRecord::Fields`]).
+#[derive(Clone)]
+pub struct FieldRecord {
+    /// Field-access chain from the value form's returned struct. More than one
+    /// element when the adapter inlined a nested declared class.
+    pub members: Vec<syn::Ident>,
+    /// The leaf name (already `__`-joined across inlined nesting).
+    pub name: String,
+    /// The field's type as written, `Option` / `Vec` layers included.
+    pub ty: syn::Type,
+    /// How this field decomposes.
+    pub decon: FieldDecon,
+}
+
+/// How one [`FieldRecord`] decomposes.
+#[derive(Clone)]
+pub enum FieldDecon {
+    /// By the field type's own deconstructor if it has one, else one leaf —
+    /// the same default a [`DeconRecord::Acc`] record's return follows.
+    Default,
+    /// Explicit records, replacing the type default wholesale (the declaration
+    /// stated this field's complete leaf set).
+    Records(Vec<DeconRecord>),
+    /// Leaves the **adapter** built, appended with this field's path and name
+    /// prefixed onto each. For shapes whose leaf structure only the adapter
+    /// knows — a decomposed sum, which is a selector plus one group per
+    /// alternative rather than a product of records.
+    Leaves(Vec<UnfoldLeaf>),
 }
 
 impl DeconRecord {
@@ -230,23 +285,7 @@ pub fn apply<M>(
     // Binding-local records skip the gate — there is no `#[prebindgen]` item
     // behind them — but keep the reserved-separator name check.
     for d in &acc.deconstructors {
-        for rec in &d.records {
-            let (func, name) = match rec {
-                DeconRecord::Acc { func, name } => (Some(func), name),
-                DeconRecord::LocalAcc { name, .. } => (None, name),
-                DeconRecord::Identity => continue,
-            };
-            // `"__"` is the reserved nesting/chain separator — author leaf names
-            // must not contain it.
-            if name.contains("__") {
-                return Err(UnfoldError::ReservedSeparator { name: name.clone() });
-            }
-            if let Some(func) = func {
-                if !accessor_fns.contains(func) {
-                    return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
-                }
-            }
-        }
+        check_records(&d.records, accessor_fns)?;
     }
 
     // Explicit decls first; they take precedence over (and suppress) a default
@@ -624,6 +663,7 @@ fn wire_fixed_returns<M>(
             delivery: Delivery::Callback,
             convert_out_ty: None,
             fixed_builder: true,
+            hoists: Vec::new(),
         };
         registry.unfold_plans.insert(func.clone(), plan);
     }
@@ -690,6 +730,7 @@ fn wire_fixed_callbacks<M>(
                     delivery: Delivery::Callback,
                     convert_out_ty: None,
                     fixed_builder: true,
+                    hoists: Vec::new(),
                 };
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -804,11 +845,57 @@ fn whole_leaf_fold_plan(vec_elem: &syn::Type, shape: UnfoldShape) -> UnfoldPlan 
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
+        hoists: Vec::new(),
     }
 }
 
+/// The deconstructor gate: every accessor-function record must be a declared
+/// `.fun_accessor` (the single source of truth for "accessor"), and no author
+/// leaf name may contain the reserved `"__"` chain separator. Binding-local
+/// records skip the accessor check — there is no `#[prebindgen]` item behind
+/// them — but keep the name check.
+///
+/// Recurses into a value form's per-field override records, so an override is
+/// held to the same rules as the declaration it replaces.
+fn check_records(
+    records: &[DeconRecord],
+    accessor_fns: &HashSet<syn::Ident>,
+) -> Result<(), UnfoldError> {
+    for rec in records {
+        let (func, name) = match rec {
+            DeconRecord::Acc { func, name } => (Some(func), name),
+            DeconRecord::LocalAcc { name, .. } => (None, name),
+            DeconRecord::Identity => continue,
+            // A value form's field names come from struct idents, not from the
+            // author, so the `"__"` in an inlined nested name is the separator
+            // doing its job. An author-supplied rename is checked where it is
+            // declared.
+            DeconRecord::Fields { func, fields, .. } => {
+                if !accessor_fns.contains(func) {
+                    return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
+                }
+                for fr in fields {
+                    if let FieldDecon::Records(recs) = &fr.decon {
+                        check_records(recs, accessor_fns)?;
+                    }
+                }
+                continue;
+            }
+        };
+        if name.contains("__") {
+            return Err(UnfoldError::ReservedSeparator { name: name.clone() });
+        }
+        if let Some(func) = func {
+            if !accessor_fns.contains(func) {
+                return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Strip a single leading `&` (one level) from a type.
-fn peel_ref(ty: &syn::Type) -> syn::Type {
+pub(crate) fn peel_ref(ty: &syn::Type) -> syn::Type {
     match ty {
         syn::Type::Reference(r) => (*r.elem).clone(),
         other => other.clone(),
@@ -949,6 +1036,7 @@ fn process_decl<M>(
                     delivery: ed.delivery,
                     convert_out_ty: None,
                     fixed_builder: false,
+                    hoists: Vec::new(),
                 }
             }
         } else {
@@ -982,16 +1070,28 @@ fn process_decl<M>(
             plan
         };
         // Delivery is by **leaf count**, not a per-decl flag:
-        //   * Output, single leaf, non-Iterable ⇒ Return (wrapper returns the
-        //     value via its ordinary output converter — `convert_out_ty`).
+        //   * Output, single non-nullable leaf, non-Iterable ⇒ Return (wrapper
+        //     returns the value via its ordinary output converter —
+        //     `convert_out_ty`).
         //   * Output, multiple leaves or Iterable (at any layer — an
         //     `Optional(Iterable)` fold has no single value to return) ⇒
         //     Callback (builder / fold).
         //   * Error ⇒ always Callback-shaped: every leaf is a `ze` arg after the
         //     fixed `je` (no return-value path; `convert_out_ty` stays None).
+        //
+        // A NULLABLE leaf is one whose path passes through an `Option` that
+        // something is decomposed below (`Option<Handle>` reached by
+        // `.field_self()`, a nested value form behind an `Option`). Returning it
+        // has nowhere to put the absent case: a return value is one expression,
+        // so there is no `None` arm, and `convert_out_ty` names the leaf's own
+        // type rather than an optional of it. Callback delivery has that arm
+        // already — the leaf crosses as a boxed `Long` / JVM null — so the
+        // shape goes there instead of being composed into Rust that hands
+        // `&Option<T>` to a converter typed for `T`.
         let single_return = ed.target == DeconTarget::Output
             && !plan.shape.has_iterable_layer()
-            && plan.leaves.len() == 1;
+            && plan.leaves.len() == 1
+            && !plan.leaves[0].nullable;
         let plan = if single_return {
             let leaf_ty = plan.leaves[0].out_ty.clone();
             let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
@@ -1052,6 +1152,9 @@ fn register_decon_spec<M>(
         false,
         &mut visited,
         &mut leaves,
+        // A `DeconSpec` describes the leaf list only — signature artifacts are
+        // derived from it, never emitted code — so its hoists are discarded.
+        &mut Vec::new(),
     )?;
     require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
@@ -1116,6 +1219,7 @@ fn build_plan<M>(
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
     let mut visited: HashSet<TypeKey> = HashSet::new();
     visited.insert(TypeKey::from_type(source));
+    let mut hoists: Vec<Hoist> = Vec::new();
     flatten(
         acc,
         registry,
@@ -1127,6 +1231,7 @@ fn build_plan<M>(
         false,
         &mut visited,
         &mut leaves,
+        &mut hoists,
     )?;
     require_unique_leaf_names(source, &leaves)?;
     require_root_identity_last(by_ref, source, &leaves)?;
@@ -1141,6 +1246,7 @@ fn build_plan<M>(
         delivery: ed.delivery,
         convert_out_ty: None,
         fixed_builder: false,
+        hoists,
     })
 }
 
@@ -1194,12 +1300,13 @@ fn flatten<M>(
     registry: &Registry<M>,
     records: &[DeconRecord],
     source: &syn::Type,
-    path_prefix: &[syn::Ident],
+    path_prefix: &[PathStep],
     name_prefix: &[String],
     by_ref: bool,
     nullable: bool,
     visited: &mut HashSet<TypeKey>,
     leaves: &mut Vec<UnfoldLeaf>,
+    hoists: &mut Vec<Hoist>,
 ) -> Result<(), UnfoldError> {
     let source_key = TypeKey::from_type(source);
     // The author-supplied (literal) leaf-name segment at this level, appended
@@ -1222,11 +1329,15 @@ fn flatten<M>(
                     });
                 }
                 seen_identity = true;
-                // Owned at the root of an owned value (a `Copy` blob copies /
-                // an opaque handle moves); borrowed (clone) otherwise. The
-                // adapter-side type + projection come from this `out_ty`'s
-                // output converter.
-                let out_ty: syn::Type = if path_prefix.is_empty() && !by_ref {
+                // Owned where the value is OURS to give: the root of an owned
+                // plan (a `Copy` blob copies / an opaque handle moves), or a
+                // field of a value form that CONSUMED its value — that form was
+                // handed the value, so its fields move out like every other
+                // field of it. Borrowed (clone) otherwise. The adapter-side type
+                // + projection come from this `out_ty`'s output converter, so
+                // this is what decides whether the leaf is boxed by move or
+                // cloned through the borrowed-opaque one.
+                let out_ty: syn::Type = if place_is_owned(hoists, path_prefix, by_ref) {
                     source.clone()
                 } else {
                     syn::parse_quote!(&#source)
@@ -1245,6 +1356,179 @@ fn flatten<M>(
                     group: None,
                 });
             }
+            DeconRecord::Fields {
+                func,
+                consuming,
+                fields,
+            } => {
+                let consuming = *consuming;
+                // The value form is called once; every field hangs off that one
+                // call, so the whole record shares a single `Call` step and the
+                // emitter can hoist it.
+                let (takes, _ret) = accessor_signature(registry, func)?;
+                check_takes(func, &takes, source)?;
+                // The declarator states whether the value is given away; the
+                // signature has to agree, or the emitted call would not compile
+                // in the consumer's crate. Checked rather than inferred so that
+                // declaring `.fields_self_into(..)` on a borrowing accessor is a
+                // named error instead of a silently downgraded boundary.
+                if consuming != accessor_consumes(registry, func) {
+                    return Err(UnfoldError::Unsupported {
+                        func: func.clone(),
+                        reason: if consuming {
+                            "declared as a CONSUMING value form (`.fields_self_into(..)`) but the \
+                             accessor borrows its receiver — declare it with `.fields(..)`, or \
+                             name the by-value accessor"
+                        } else {
+                            "declared as a BORROWING value form (`.fields(..)`) but the accessor \
+                             takes its receiver by value — declare it with `.fields_self_into(..)`, or \
+                             name the `&Self` accessor"
+                        },
+                    });
+                }
+                let mut root_path = path_prefix.to_vec();
+                root_path.push(PathStep::call(func.clone(), false));
+                // A hoist below an optional step cannot be emitted as an
+                // unconditional local: composing the path directly would pass
+                // `&Option<T>` to the child value-form accessor. The current
+                // flat leaf emitter has no conditional-hoist representation,
+                // so reject the shape instead of generating ill-typed Rust.
+                // A top-level `Option<T>` is represented by
+                // `UnfoldShape::Optional`, not by a path step, and is unaffected.
+                if root_path.iter().any(PathStep::is_optional) {
+                    return Err(UnfoldError::Unsupported {
+                        func: func.clone(),
+                        reason: "a nested value form reached through `Option` — conditional \
+                                 value-form hoisting is not implemented",
+                    });
+                }
+                // A consuming value form DESTROYS the value into its parts, so
+                // a sibling record — `.field_self()` or another `.field()` —
+                // would read what it just gave away. jnigen refuses this in the
+                // declarator, where the author can see it; this is the backstop
+                // for records built directly against core.
+                //
+                // Being reached through ANOTHER value form is fine: a hoisted
+                // value form is an owned struct and its fields are disjoint, so
+                // the parent's field is handed over by move.
+                if consuming && records.len() > 1 {
+                    return Err(UnfoldError::Unsupported {
+                        func: func.clone(),
+                        reason: "a consuming value form must be the only record of its \
+                                 declaration — it moves the value, so `.field_self()` or \
+                                 a sibling `.field()` would read a moved value",
+                    });
+                }
+                // Evaluate this value form ONCE. Recorded at the prefix it sits
+                // at rather than as a lone accessor, so a nested value form
+                // (this record reached through another one's field) gets its own
+                // hoist instead of being rebuilt per child leaf. `path_prefix`
+                // grows as `flatten` descends, so the list comes out
+                // outermost-first.
+                hoists.push(Hoist {
+                    prefix: root_path.clone(),
+                    consuming,
+                });
+
+                for fr in fields {
+                    // A field's own `Option` makes everything under it nullable,
+                    // exactly as an `Option`-returning accessor step does.
+                    let (opt, core) = match option_inner_type(&fr.ty) {
+                        Some(inner) => (true, inner),
+                        None => (false, fr.ty.clone()),
+                    };
+                    let child_ty = peel_ref(&core);
+                    let child_key = TypeKey::from_type(&child_ty);
+
+                    // Same three-way choice a `.field()` record makes: declared
+                    // override, else the field type's own deconstructor, else
+                    // one leaf — with the adapter able to pre-build the leaves
+                    // for a shape only it can describe.
+                    let child_records = match &fr.decon {
+                        FieldDecon::Records(recs) => Some(recs.clone()),
+                        FieldDecon::Leaves(_) => None,
+                        FieldDecon::Default => match find_deconstructor_by_type(acc, &child_key) {
+                            Some(child_decl) if !visited.contains(&child_key) => {
+                                Some(child_decl.records.clone())
+                            }
+                            Some(_) => {
+                                return Err(UnfoldError::Cycle {
+                                    target: child_key.to_string(),
+                                });
+                            }
+                            None => None,
+                        },
+                    };
+                    let decomposed =
+                        child_records.is_some() || matches!(fr.decon, FieldDecon::Leaves(_));
+
+                    // The field's own `Option` is a nullable NESTING step only
+                    // when something is decomposed below it. For a plain leaf
+                    // the whole `Option<F>` is what the converter takes — the
+                    // same rule that makes a terminal accessor's `Option` ride
+                    // its converter instead of being unwrapped.
+                    let mut field_path = root_path.clone();
+                    let (last, lead) = fr
+                        .members
+                        .split_last()
+                        .expect("a field record addresses at least one member");
+                    // Only the LAST member can be optional — an inlined nested
+                    // class is reached directly, never through an `Option`.
+                    field_path.extend(lead.iter().map(|m| PathStep::field(m.clone(), false)));
+                    field_path.push(PathStep::field(last.clone(), opt && decomposed));
+
+                    // Adapter-built leaves: rebase each onto this field's path
+                    // and name. Their internal structure (a selector plus its
+                    // groups) is opaque here and passes through untouched.
+                    if let FieldDecon::Leaves(built) = &fr.decon {
+                        for l in built {
+                            let mut path = field_path.clone();
+                            path.extend(l.path.iter().cloned());
+                            let mut name = seg_name(&fr.name);
+                            name.push(l.name.clone());
+                            leaves.push(UnfoldLeaf {
+                                name: name.join("__"),
+                                path,
+                                nullable: l.nullable || nullable || opt,
+                                ..l.clone()
+                            });
+                        }
+                        continue;
+                    }
+
+                    if let Some(child_records) = child_records {
+                        visited.insert(child_key.clone());
+                        flatten(
+                            acc,
+                            registry,
+                            &child_records,
+                            &child_ty,
+                            &field_path,
+                            &seg_name(&fr.name),
+                            by_ref,
+                            nullable || opt,
+                            visited,
+                            leaves,
+                            hoists,
+                        )?;
+                        visited.remove(&child_key);
+                    } else {
+                        // A plain field leaf: the value is CLONED out of the
+                        // struct, so its converter takes the owned field type as
+                        // written — `Option` and all, which is why a terminal
+                        // `Option` step is not a nesting step for it.
+                        leaves.push(UnfoldLeaf {
+                            name: seg_name(&fr.name).join("__"),
+                            path: field_path,
+                            out_ty: fr.ty.clone(),
+                            identity: false,
+                            nullable,
+                            source: LeafSource::Field,
+                            group: None,
+                        });
+                    }
+                }
+            }
             DeconRecord::Acc { name, .. } | DeconRecord::LocalAcc { name, .. } => {
                 // A binding-local record resolves through its synthesized
                 // registry entry (see `synthesize_local_accessors`), so both
@@ -1253,7 +1537,7 @@ fn flatten<M>(
                 let (func, local) = match rec {
                     DeconRecord::Acc { func, .. } => (func.clone(), false),
                     DeconRecord::LocalAcc { path, .. } => (DeconRecord::local_ident(path), true),
-                    DeconRecord::Identity => unreachable!(),
+                    DeconRecord::Identity | DeconRecord::Fields { .. } => unreachable!(),
                 };
                 let (takes, ret) = accessor_signature(registry, &func)?;
                 check_takes(&func, &takes, source)?;
@@ -1288,7 +1572,7 @@ fn flatten<M>(
                     visited.insert(child_key.clone());
                     let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
-                    child_path.push(func.clone());
+                    child_path.push(PathStep::call(func.clone(), opt));
                     flatten(
                         acc,
                         registry,
@@ -1300,6 +1584,7 @@ fn flatten<M>(
                         nullable || opt,
                         visited,
                         leaves,
+                        hoists,
                     )?;
                     visited.remove(&child_key);
                 } else {
@@ -1332,7 +1617,7 @@ fn flatten<M>(
                         (ret, nullable, false)
                     };
                     let mut path = path_prefix.to_vec();
-                    path.push(func.clone());
+                    path.push(PathStep::call(func.clone(), opt));
                     leaves.push(UnfoldLeaf {
                         name: seg_name(name).join("__"),
                         path,
@@ -1413,6 +1698,45 @@ fn accessor_signature<M>(
         syn::ReturnType::Type(_, t) => (**t).clone(),
     };
     Ok((takes, ret))
+}
+
+/// Whether the value sitting at `path_prefix` is the plan's **to give away**:
+/// the root of an owned plan, or a field of a value form that consumed its
+/// value and is reached by a movable run of field steps.
+///
+/// Consulted where a leaf's `out_ty` is chosen, so the ownership decision is
+/// made ONCE, in the plan, rather than re-derived by each emitter — a leaf
+/// whose `out_ty` is the owned type is boxed by move, one whose `out_ty` is a
+/// borrow is cloned through the borrowed-opaque converter.
+fn place_is_owned(hoists: &[Hoist], path_prefix: &[PathStep], by_ref: bool) -> bool {
+    if path_prefix.is_empty() {
+        return !by_ref;
+    }
+    hoists
+        .iter()
+        .filter(|h| h.prefix.len() <= path_prefix.len() && path_prefix.starts_with(&h.prefix))
+        .max_by_key(|h| h.prefix.len())
+        .is_some_and(|h| h.consuming && steps_are_movable(&path_prefix[h.prefix.len()..]))
+}
+
+/// Whether an accessor takes its receiver **by value** — a *consuming* value
+/// form, which destroys the object into its parts instead of cloning them out
+/// of a borrow.
+///
+/// Asked separately because [`accessor_signature`] peels the `&` in order to
+/// compare target types, so `f(v: T)` and `f(v: &T)` are indistinguishable
+/// there by design.
+fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
+    registry.functions.get(func).is_some_and(|(f, _)| {
+        f.sig
+            .inputs
+            .iter()
+            .find_map(|input| match input {
+                syn::FnArg::Typed(pt) => Some(!matches!(*pt.ty, syn::Type::Reference(_))),
+                _ => None,
+            })
+            .unwrap_or(false)
+    })
 }
 
 fn check_takes(

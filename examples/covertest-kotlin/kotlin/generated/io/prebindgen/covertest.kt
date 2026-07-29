@@ -832,6 +832,8 @@ internal object CovNative {
 
     external fun readingSeries(n: Int, acc: Any?, fold: Any, errorSink: Any): Any?
 
+    external fun reportEach(n: Long, sink: Any, errorSink: Any)
+
     external fun stampNanos(sSecs: Long, sNanos: Long, errorSink: Any): Long
 
     external fun stampNew(secs: Long, nanos: Long, build: Any, errorSink: Any): Any?

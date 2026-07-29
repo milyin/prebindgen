@@ -1395,7 +1395,7 @@ impl<M> Registry<M> {
                 &declared.method_receivers,
             )?;
         }
-        if let Some(dec) = ext.deconstructors() {
+        if let Some(dec) = ext.deconstructors(self) {
             crate::api::core::unfold::apply(self, &dec, &declared.functions, &declared.accessors)?;
         }
         // Synthesized by-value `data_class` decompositions: build the leaves

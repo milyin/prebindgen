@@ -34,6 +34,8 @@
 //! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
 //! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
+//! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
+//! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
@@ -97,8 +99,8 @@
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    from, fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig, try_from,
-    ty, variant,
+    fields, from, fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig,
+    try_from, ty, variant,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -239,6 +241,11 @@ fn main() {
                 // resources: one alternative carries an opaque handle, one
                 // carries nothing at all.
                 .class(sealed_class!(Lookup))
+                // `Report`'s output boundary is DERIVED from its value form
+                // (`.fields_self_into(fields!(report_into_struct))` below) instead of
+                // being restated field by field — #213. The form it names is
+                // the CONSUMING one, so the fields are moved, not cloned.
+                .class(ptr_class!(Report))
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
@@ -378,6 +385,14 @@ fn main() {
                 .field(fun!(summary_count))
                 .field(fun!(summary_total)),
         )
+        // `Report` default output DERIVED from its value form (#213): the
+        // leaves come from `ReportStruct`'s fields, so the list cannot drift
+        // from the struct the way a restated one does. Each field still crosses
+        // by ITS OWN type's boundary — `summary` splices `Summary`'s decl above
+        // into `(count, total)` rather than becoming a handle, `origin` inlines
+        // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
+        // decomposes into a selector plus one group per alternative.
+        .expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
         // ── Base-package handle type: `Storage` + scalar members ────────────
         // Back in the base package so the typed handle classes live alongside
         // `Payload`.
@@ -490,6 +505,11 @@ fn main() {
                 // handle-carrying sum arriving through a CALLBACK, and a sum
                 // returned BORROWED (`&E` / `Option<&E>`).
                 .fun(fun!(lookup_each))
+                // #213: the output boundary DERIVED from the type's value form
+                // rather than restated. `report_each` delivers the decomposed
+                // `Report` in one crossing; the leaf list comes from
+                // `ReportStruct`'s fields, so it cannot drift from it.
+                .fun(fun!(report_each))
                 .fun(fun!(archive_set_reading))
                 .fun(fun!(archive_reading))
                 .fun(fun!(archive_reading_maybe))

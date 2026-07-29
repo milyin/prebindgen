@@ -58,6 +58,93 @@ pub struct DeconSpec {
     pub leaves: Vec<UnfoldLeaf>,
 }
 
+/// One step of a leaf's [`UnfoldLeaf::path`] — how to get from the value
+/// reached so far to the next one.
+///
+/// A step is typed rather than a bare ident because a single path may **mix**
+/// the two: an `expand_return!(T).fields(fields!(t_to_struct))` leaf calls the
+/// value-form accessor, reads a struct field, and may then call that field
+/// type's own accessor — `Call(t_to_struct)`, `Field(key_expr)`,
+/// `Call(keyexpr_as_str)`. [`LeafSource`] still says what *kind* of leaf sits
+/// at the end of the path; the steps say how it is reached.
+///
+/// Each step also records whether it is **optional** — its accessor returns
+/// `Option<…>`, or its field is typed `Option<…>`. A `true` on a step *before*
+/// the last makes it a nullable nesting step: the emitter matches on it and the
+/// `None` arm short-circuits the whole leaf to null. The flag is carried rather
+/// than re-derived so both kinds answer the question the same way and the
+/// emitter needs no type walk (an accessor's `Option` was already peeled where
+/// the step was built).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum PathStep {
+    /// Call a `#[prebindgen]` accessor on the value reached so far:
+    /// `source_module::f(&value)`.
+    Call { ident: syn::Ident, optional: bool },
+    /// Read a struct field of the value reached so far: `value.f`.
+    Field { ident: syn::Ident, optional: bool },
+}
+
+impl PathStep {
+    /// An accessor call step.
+    pub fn call(ident: syn::Ident, optional: bool) -> Self {
+        Self::Call { ident, optional }
+    }
+
+    /// A struct-field read step.
+    pub fn field(ident: syn::Ident, optional: bool) -> Self {
+        Self::Field { ident, optional }
+    }
+
+    /// The step's ident, whichever kind it is.
+    pub fn ident(&self) -> &syn::Ident {
+        match self {
+            Self::Call { ident, .. } | Self::Field { ident, .. } => ident,
+        }
+    }
+
+    /// Whether the step yields an `Option` — a nullable nesting step when it is
+    /// not the last on the path.
+    pub fn is_optional(&self) -> bool {
+        match self {
+            Self::Call { optional, .. } | Self::Field { optional, .. } => *optional,
+        }
+    }
+
+    /// Whether the step is a plain (non-optional) field read — a path made only
+    /// of these renders as `value.a.b`, needing no nesting `match`.
+    pub fn is_plain_field(&self) -> bool {
+        matches!(
+            self,
+            Self::Field {
+                optional: false,
+                ..
+            }
+        )
+    }
+
+    /// Whether the step is a field read, `Option` or not.
+    pub fn is_field(&self) -> bool {
+        matches!(self, Self::Field { .. })
+    }
+}
+
+/// Whether a run of steps can be **moved** out of the value it hangs off:
+/// field reads only, with an `Option` allowed on the last one — a `None` arm
+/// still hands over the whole `Option` by value, while an `Option` in the
+/// middle would have to be unwrapped and so can only be borrowed through.
+///
+/// This is the one place the rule is written: the resolver uses it to decide
+/// whether a leaf OWNS what it reaches (its `out_ty` then being the owned type
+/// rather than a borrow), and the emitters use it to project that place. Two
+/// readings of it would drift, and the disagreement would be a borrow handed to
+/// an owning converter.
+pub fn steps_are_movable(steps: &[PathStep]) -> bool {
+    steps
+        .iter()
+        .enumerate()
+        .all(|(i, s)| s.is_field() && (!s.is_optional() || i + 1 == steps.len()))
+}
+
 /// How a leaf's [`UnfoldLeaf::path`] is reached from the decomposed value.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum LeafSource {
@@ -140,6 +227,34 @@ pub struct UnfoldPlan {
     /// generic over `R`/`A` — it returns the concrete type). `false` for the
     /// accessor-declared deconstructors, whose builder is caller-supplied.
     pub fixed_builder: bool,
+    /// Value forms that must be evaluated **once** and bound to a local. Every
+    /// leaf below one reaches off that local — otherwise each field would
+    /// rebuild the whole struct, cloning all of it once per leaf.
+    ///
+    /// A list rather than a single accessor because value forms **compose**: a
+    /// field may splice a child type whose own boundary is derived from *its*
+    /// value form, and that child call is a second hoist nested under the
+    /// first. Ordered outermost-first, so a hoist can be composed from the
+    /// longest already-bound prefix of itself.
+    pub hoists: Vec<Hoist>,
+}
+
+/// One hoisted value form: where it sits, and whether it **consumes** the value
+/// it decomposes.
+#[derive(Clone)]
+pub struct Hoist {
+    /// The path prefix to bind, ending in the value form's
+    /// [`PathStep::Call`] (`DeconRecord::Fields`).
+    pub prefix: Vec<PathStep>,
+    /// `true` when the accessor takes its receiver **by value**
+    /// (`f(v: T) -> TStruct`), so the value is moved in and each field can be
+    /// moved *out* into its leaf instead of cloned — the whole point of a
+    /// consuming value form.
+    ///
+    /// Carried on the hoist rather than on [`PathStep::Call`] because only a
+    /// value-form root can consume: the ordinary accessor-chain steps are
+    /// always borrows.
+    pub consuming: bool,
 }
 
 /// One flattened output leaf of a decomposed return value.
@@ -151,9 +266,10 @@ pub struct UnfoldLeaf {
     /// `"keyExpr"` → `"sample__keyExpr"`); a root identity leaf is `"handle"`.
     /// Names are unique within a deconstructor (a duplicate is a hard error).
     pub name: String,
-    /// Accessor-call chain from the root value (`[]` = the identity/root
-    /// itself; `[f]` = `f(&root)`; longer = nested records, M3).
-    pub path: Vec<syn::Ident>,
+    /// Reach chain from the root value (`[]` = the identity/root itself;
+    /// `[Call(f)]` = `f(&root)`; longer = nested records, M3). Steps of both
+    /// kinds may mix — see [`PathStep`].
+    pub path: Vec<PathStep>,
     /// Type whose resolved **output** converter encodes this leaf — a
     /// reference type for accessors (`&str`, `&F`), `&Source` for the identity
     /// leaf (so the borrowed-opaque clone converter / projection is reused).

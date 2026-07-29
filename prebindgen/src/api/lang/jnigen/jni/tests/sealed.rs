@@ -1125,6 +1125,115 @@ fn sum_return_group_can_own_a_handle() {
     );
 }
 
+/// The same handle payload as a **data-class field** — the position the
+/// return/callback coverage above does not reach, and the one
+/// `ReplyStruct { result: ReplyResult, .. }` needs (both `ReplyResult`
+/// alternatives carry handles).
+///
+/// The group slot stays the raw `jlong` and the live arm wraps it into the
+/// typed handle class, exactly as in return position — the parent's own
+/// `fromParts` inlining the `when`.
+///
+/// Two consequences of this position, both asserted below so they cannot
+/// change silently:
+///
+/// * The container is **not** `AutoCloseable` — `destructible()` matches only
+///   a `Projection` field, never a `Sum` one. That follows the documented
+///   ownership rule for sum payloads ("who closes a handle payload: the
+///   receiver"), but it does differ from a plain handle field, which *does*
+///   make its class closeable and cascades. The handle stays reachable and
+///   closeable through the variant (`(h.outcome as Lookup.Found).v0.close()`);
+///   what is absent is the cascade.
+/// * A sum field takes its parent off the fixed-builder path onto the
+///   whole-value `fromParts` bridge (`synth_value_struct_leaves` declines
+///   `TypeKind::Sum`), so the value costs a JVM object — a slower shape, not a
+///   broken one.
+#[test]
+fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Lookup {
+                    Absent,
+                    Found(Probe),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    pub id: i64,
+                    pub outcome: Lookup,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_new(id: i64) -> Holder {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::ptr_class!(Probe))
+            .class(crate::sealed_class!(Lookup))
+            .class(crate::data_class!(Holder))
+            .fun(crate::fun!(holder_new)),
+    );
+    let dir = unique_test_dir("jnigen_sum_handle_field");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // The tag keeps the `__` marker; a group slot is prefixed with its field
+    // by the single-underscore nesting convention (`mode_periodicQueries_period`).
+    assert!(
+        kotlin.contains("outcome__tag: Int") && kotlin.contains("outcome_found_v0: Long"),
+        "the selector plus a raw-pointer group slot, both prefixed by the field:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("Lookup.Found(Probe(outcome_found_v0))"),
+        "the parent's fromParts inlines the `when` and wraps the pointer:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("public data class Holder(val id: Long, val outcome: Lookup)"),
+        "the field surfaces as the typed sum:\n{kotlin}"
+    );
+    assert!(
+        !kotlin.contains("Holder(val id: Long, val outcome: Lookup) : AutoCloseable"),
+        "a sum-carried handle is the RECEIVER's to close — the container does \
+         not cascade, unlike a plain handle field:\n{kotlin}"
+    );
+    assert!(
+        rust.contains("Lookup::Found") && rust.contains("Lookup::Absent"),
+        "Rust matches the field's sum, filling every group's slots:\n{rust}"
+    );
+}
+
 /// TWO sums in one callback signature: each contributes its own selector, so
 /// the signature-wide dedup renames the second to `tag2` — and the reassembly
 /// expressions must follow it, including the `$tag` Kotlin string template in
