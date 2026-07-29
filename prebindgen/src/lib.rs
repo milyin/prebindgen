@@ -286,6 +286,11 @@ macro_rules! ident {
 /// [`lang::JniGen`]. The C / cbindgen proof of concept is available separately
 /// with the `unstable-cbindgen` feature.
 pub mod core {
+    /// The prebindgen **source language**: the parser from captured
+    /// `#[prebindgen]` records to [`language::Element`]s, and the element model
+    /// itself. Not to be confused with [`crate::lang`], the *destination*
+    /// adapters.
+    pub use crate::api::core::language;
     pub use crate::api::core::{
         ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot, Niches,
         Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,

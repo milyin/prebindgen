@@ -22,6 +22,7 @@
 pub mod domain;
 pub mod expand;
 pub mod gravestone;
+pub mod language;
 pub mod niches;
 pub mod prebindgen;
 pub mod registry;
