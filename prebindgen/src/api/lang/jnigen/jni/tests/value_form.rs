@@ -641,6 +641,137 @@ fn a_single_leaf_value_form_delivers_an_owned_field() {
     );
 }
 
+/// The same shortcut with a CONSUMING form. It composed its reach straight off
+/// the raw value and never looked at the plan's hoists, so it emitted
+/// `z_one_into_struct(&__cvsrc)` against a by-value receiver — Rust that does
+/// not compile in the consumer's crate — and then cloned a field it owns. Both
+/// paths now bind hoists with the same `bind_hoists`, so neither can drift from
+/// the other again.
+#[test]
+fn a_single_leaf_consuming_value_form_moves_its_field() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOneStruct {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_into_struct(o: ZOne) -> ZOneStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_make(n: i64) -> ZOne {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .fun(crate::fun!(z_one_make)),
+        )
+        .expand(crate::expand_return!(ZOne).fields_into(crate::fields!(z_one_into_struct)));
+    let dir = unique_test_dir("jnigen_vf_single_consume");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("z_one_into_struct(__cvsrc)") && !rust.contains("z_one_into_struct(&"),
+        "the by-value accessor is handed the value, not a borrow of it:\n{rust}"
+    );
+    assert!(
+        rust.contains(".label") && !rust.contains(".label).clone()"),
+        "and the field it owns is MOVED out, not cloned:\n{rust}"
+    );
+}
+
+/// A handle field of a consuming value form is the value form's field like any
+/// other: the form gave its value away, so the handle **moves** into its Box
+/// rather than being cloned through the borrowed-opaque converter — which also
+/// stops `.fields_into(..)` from silently requiring a `Clone` the handle type
+/// need not have.
+///
+/// The identity branch computed `consuming` and then returned before using it,
+/// so every reached handle took the clone arm; only a handle at the owned ROOT
+/// (empty path) moved.
+#[test]
+fn a_handle_field_of_a_consuming_value_form_moves() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZEnvelopeStruct {
+                    pub child: ZChild,
+                    pub tag: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_envelope_into_struct(e: ZEnvelope) -> ZEnvelopeStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_envelope_sub(cb: impl Fn(ZEnvelope) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZEnvelope))
+                .class(crate::ptr_class!(ZChild))
+                .fun(crate::fun!(z_envelope_sub)),
+        )
+        .expand(crate::expand_return!(ZChild).field_self())
+        .expand(
+            crate::expand_return!(ZEnvelope).fields_into(crate::fields!(z_envelope_into_struct)),
+        );
+    let dir = unique_test_dir("jnigen_vf_handle_field_consume");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("Box::new(__vf0.child)"),
+        "the handle field is MOVED into its Box:\n{rust}"
+    );
+    assert!(
+        !rust.contains("&__vf0.child"),
+        "and is not handed to the borrowed-opaque converter, which would clone \
+         it:\n{rust}"
+    );
+}
+
 /// A per-field `.field(name, expand_return!(T))` override states the field's
 /// type, so it has to be checked against the field. Otherwise the override
 /// silently survives an upstream field-type change — which is exactly the drift
