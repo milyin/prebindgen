@@ -118,18 +118,18 @@ fn an_item_and_its_components_share_one_location() {
     };
     assert!(Rc::ptr_eq(item, &elem.origin.location), "element type");
 
-    // Variants, their fields, parameters and extents alike.
+    // Alternatives, their fields, parameters and extents alike.
     let element = parse_one(syn::parse_quote!(
         pub enum E {
             A { x: [u8; 4] },
         }
     ));
-    let e = as_enum(&element);
-    let item = &e.origin.location;
-    let v = &e.variants[0];
-    assert!(Rc::ptr_eq(item, &v.origin.location), "variant");
-    let f = &v.fields[0];
-    assert!(Rc::ptr_eq(item, &f.origin.location), "variant field");
+    let v = as_variant(&element);
+    let item = &v.origin.location;
+    let a = &v.alternatives[0];
+    assert!(Rc::ptr_eq(item, &a.origin.location), "alternative");
+    let f = &a.fields[0];
+    assert!(Rc::ptr_eq(item, &f.origin.location), "alternative field");
     let extent = f.ty.array_extent().expect("an extent");
     assert!(Rc::ptr_eq(item, &extent.origin.location), "extent");
     assert_eq!(tokens(&extent.origin.syntax), "4");
@@ -174,21 +174,42 @@ fn empty_delimiters_survive_and_spell() {
             D(u32),
         }
     ));
-    let e = as_enum(&element);
+    let v = as_variant(&element);
 
     // All four groups, and which of them are empty.
     assert_eq!(
-        e.variants.iter().map(|v| v.is_unit()).collect::<Vec<_>>(),
+        v.alternatives
+            .iter()
+            .map(|a| a.is_empty())
+            .collect::<Vec<_>>(),
         vec![true, true, true, false]
     );
 
-    let spell = |v: &Variant| {
-        let name = &v.name;
-        v.spell(quote::quote!(E::#name), &[]).to_string()
+    let spell = |a: &Alternative| {
+        let name = &a.name;
+        a.spell(quote::quote!(E::#name), &[]).to_string()
     };
-    assert_eq!(spell(&e.variants[0]), "E :: A");
-    assert_eq!(spell(&e.variants[1]), "E :: B ()");
-    assert_eq!(spell(&e.variants[2]), "E :: C { }");
+    assert_eq!(spell(&v.alternatives[0]), "E :: A");
+    assert_eq!(spell(&v.alternatives[1]), "E :: B ()");
+    assert_eq!(spell(&v.alternatives[2]), "E :: C { }");
+
+    // The same in a FIELDLESS enum, where every group is empty and the whole
+    // item is the other shape: the delimiters still have to survive.
+    let element = parse_one(syn::parse_quote!(
+        pub enum F {
+            A,
+            B(),
+            C {},
+        }
+    ));
+    let e = as_enum(&element);
+    let spell = |v: &EnumValue| {
+        let name = &v.name;
+        v.spell(quote::quote!(F::#name), &[]).to_string()
+    };
+    assert_eq!(spell(&e.values[0]), "F :: A");
+    assert_eq!(spell(&e.values[1]), "F :: B ()");
+    assert_eq!(spell(&e.values[2]), "F :: C { }");
 
     // And with payloads, in both addressing modes.
     let element = parse_one(syn::parse_quote!(
@@ -197,19 +218,19 @@ fn empty_delimiters_survive_and_spell() {
             Range { low: i64, high: i64 },
         }
     ));
-    let e = as_enum(&element);
-    let bind = |v: &Variant| {
-        let parts: Vec<_> = v
+    let v = as_variant(&element);
+    let bind = |a: &Alternative| {
+        let parts: Vec<_> = a
             .fields
             .iter()
             .map(|f| f.bind(&quote::format_ident!("__f{}", f.index)))
             .collect();
-        let name = &v.name;
-        v.spell(quote::quote!(Reading::#name), &parts).to_string()
+        let name = &a.name;
+        a.spell(quote::quote!(Reading::#name), &parts).to_string()
     };
-    assert_eq!(bind(&e.variants[0]), "Reading :: Exact (__f0)");
+    assert_eq!(bind(&v.alternatives[0]), "Reading :: Exact (__f0)");
     assert_eq!(
-        bind(&e.variants[1]),
+        bind(&v.alternatives[1]),
         "Reading :: Range { low : __f0 , high : __f1 }"
     );
 }
@@ -287,16 +308,16 @@ fn discriminant_number_and_spelling_both_survive() {
 
     assert_eq!(
         e.discriminant_values().expect("literal discriminants"),
-        vec![(&e.variants[0].name, 7), (&e.variants[1].name, 8)]
+        vec![(&e.values[0].name, 7), (&e.values[1].name, 8)]
     );
-    let (_, expr) = e.variants[0]
+    let (_, expr) = e.values[0]
         .origin
         .syntax
         .discriminant
         .as_ref()
         .expect("an explicit discriminant");
     assert_eq!(tokens(expr), "0x07");
-    assert!(e.variants[1].origin.syntax.discriminant.is_none());
+    assert!(e.values[1].origin.syntax.discriminant.is_none());
 }
 
 /// A discriminant the frontend cannot evaluate breaks the *numeric* chain and
@@ -311,9 +332,9 @@ fn an_unevaluable_discriminant_keeps_its_spelling() {
         }
     ));
     let e = as_enum(&element);
-    assert!(e.variants.iter().all(|v| v.discriminant.is_none()));
+    assert!(e.values.iter().all(|v| v.discriminant.is_none()));
     assert_eq!(e.discriminant_values().expect_err("no numbers"), "A");
-    let (_, expr) = e.variants[0]
+    let (_, expr) = e.values[0]
         .origin
         .syntax
         .discriminant
@@ -336,8 +357,8 @@ fn a_discriminant_at_the_top_of_the_range_does_not_overflow() {
         }
     ));
     let e = as_enum(&element);
-    assert_eq!(e.variants[0].discriminant, Some(i64::MAX));
-    assert_eq!(e.variants[1].discriminant, None);
+    assert_eq!(e.values[0].discriminant, Some(i64::MAX));
+    assert_eq!(e.values[1].discriminant, None);
 
     // The last variant needs no successor, so it must not fail either.
     let element = parse_one(syn::parse_quote!(
@@ -364,10 +385,10 @@ fn a_discriminant_at_the_bottom_of_the_range_evaluates() {
         }
     ));
     let e = as_enum(&element);
-    assert_eq!(e.variants[0].discriminant, Some(i64::MIN));
-    assert_eq!(e.variants[1].discriminant, Some(i64::MIN + 1));
+    assert_eq!(e.values[0].discriminant, Some(i64::MIN));
+    assert_eq!(e.values[1].discriminant, Some(i64::MIN + 1));
     // And the spelling is still the source's, as for any other discriminant.
-    let (_, expr) = e.variants[0]
+    let (_, expr) = e.values[0]
         .origin
         .syntax
         .discriminant
@@ -385,8 +406,8 @@ fn a_discriminant_at_the_bottom_of_the_range_evaluates() {
         }
     ));
     let e = as_enum(&element);
-    assert_eq!(e.variants[0].discriminant, None);
-    assert_eq!(e.variants[1].discriminant, None);
+    assert_eq!(e.values[0].discriminant, None);
+    assert_eq!(e.values[1].discriminant, None);
     assert_eq!(e.discriminant_values().expect_err("no numbers"), "A");
 }
 

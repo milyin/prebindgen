@@ -75,7 +75,14 @@ fn as_struct(e: &Element) -> &Struct {
 fn as_enum(e: &Element) -> &Enum {
     match e {
         Element::Enum(en) => en,
-        other => panic!("expected an enum, got {}", describe(other)),
+        other => panic!("expected a fieldless enum, got {}", describe(other)),
+    }
+}
+
+fn as_variant(e: &Element) -> &Variant {
+    match e {
+        Element::Variant(v) => v,
+        other => panic!("expected a sum, got {}", describe(other)),
     }
 }
 
@@ -100,6 +107,7 @@ fn describe(e: &Element) -> String {
     match e {
         Element::Function(f) => format!("function `{}`", f.name),
         Element::Struct(s) => format!("struct `{}`", s.name),
+        Element::Variant(v) => format!("sum `{}`", v.name),
         Element::Enum(en) => format!("enum `{}`", en.name),
         Element::Const(c) => format!("const `{}`", c.name),
         Element::Unsupported(u) => match &u.name {

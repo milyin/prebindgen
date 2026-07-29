@@ -433,7 +433,7 @@ fn tags_are_declaration_order() {
     ));
     let e = as_enum(&element);
     assert_eq!(
-        e.variants.iter().map(|v| v.index).collect::<Vec<_>>(),
+        e.values.iter().map(|v| v.index).collect::<Vec<_>>(),
         vec![0, 1]
     );
     assert_eq!(
@@ -446,19 +446,37 @@ fn tags_are_declaration_order() {
     );
 }
 
-/// A fieldless enum is the degenerate sum, and `is_unit` is the question the
-/// declarators ask.
+/// The two enum shapes are two entities, and the classification is decided once:
+/// any alternative with a field makes it a sum.
+///
+/// They are not one model with a dead field each. A sum has no discriminant slot,
+/// because its alternatives are identified by position — the mirror an adapter
+/// builds numbers its own arms — and a fieldless enum's identity is exactly the
+/// value Rust assigns.
 #[test]
-fn unit_and_payload_enums() {
-    let unit = parse_one(syn::parse_quote!(
+fn the_two_enum_shapes_are_two_entities() {
+    let fieldless = parse_one(syn::parse_quote!(
         pub enum E {
             A,
             B = 7,
         }
     ));
-    assert!(as_enum(&unit).is_unit());
-    assert!(as_enum(&unit).first_payload_variant().is_none());
+    let e = as_enum(&fieldless);
+    assert_eq!(e.values.len(), 2);
+    assert_eq!(e.values[1].discriminant, Some(7));
 
+    // Empty delimiters are still fieldless — the group question, not the syntax
+    // one — so this is an enum, and `spell` keeps the delimiters.
+    let empty_groups = parse_one(syn::parse_quote!(
+        pub enum E {
+            A,
+            B(),
+            C {},
+        }
+    ));
+    assert_eq!(as_enum(&empty_groups).values.len(), 3);
+
+    // One field anywhere makes it a sum.
     let sum = parse_one(syn::parse_quote!(
         pub enum E {
             A,
@@ -466,14 +484,21 @@ fn unit_and_payload_enums() {
             C { x: u8 },
         }
     ));
-    assert!(!as_enum(&sum).is_unit());
+    let v = as_variant(&sum);
+    assert_eq!(v.alternatives.len(), 3);
+    assert!(v.alternatives[0].is_empty(), "a sum may mix");
+    assert_eq!(v.alternatives[1].fields.len(), 1);
     assert_eq!(
-        as_enum(&sum)
-            .first_payload_variant()
-            .expect("a payload")
-            .name,
-        "B"
+        v.alternatives.iter().map(|a| a.index).collect::<Vec<_>>(),
+        vec![0, 1, 2]
     );
+
+    // No alternatives at all: nothing carries a payload, so it is the degenerate
+    // enum rather than an empty sum.
+    let empty = parse_one(syn::parse_quote!(
+        pub enum E {}
+    ));
+    assert!(as_enum(&empty).values.is_empty());
 }
 
 /// A field is addressed by name or by position, and the model says which
@@ -486,13 +511,13 @@ fn field_members_follow_the_addressing() {
             Range { low: i64 },
         }
     ));
-    let e = as_enum(&element);
+    let v = as_variant(&element);
     assert!(matches!(
-        e.variants[0].fields[1].member(),
+        v.alternatives[0].fields[1].member(),
         syn::Member::Unnamed(i) if i.index == 1
     ));
     assert!(matches!(
-        e.variants[1].fields[0].member(),
+        v.alternatives[1].fields[0].member(),
         syn::Member::Named(id) if id == "low"
     ));
 }

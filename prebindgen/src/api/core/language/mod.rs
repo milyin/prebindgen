@@ -19,9 +19,9 @@
 //!
 //! Two things at once, and that pairing is the whole design:
 //!
-//! * a **closed classification** — [`TypeKind`], the field list, the variant
-//!   list — that says what the source *means*, in terms every destination
-//!   language shares;
+//! * a **closed classification** — [`TypeKind`], the field list, which of the two
+//!   enum shapes an item is — that says what the source *means*, in terms every
+//!   destination language shares;
 //! * one [`Origin`], carrying the **exact syntax** the node was built from and
 //!   the source it arrived in.
 //!
@@ -54,8 +54,20 @@
 //! | `Vec<T>`, `[T]` | [`TypeKind::Sequence`] | a run of `T`; owned vs borrowed is the [`Ref`](TypeKind::Ref) layer's fact |
 //! | `Box<T>` | whatever `T` is | an owned `T` either way |
 //! | `struct S;`, `struct S {}` | zero fields | the delimiters are spelling |
+//! | `enum E { A(u8) }` | [`Variant`] | a sum, identified by position |
+//! | `enum E { A = 7 }` | [`Enum`] | a named integer, identified by its value |
 //! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
 //! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
+//!
+//! The two enum shapes are the clearest case of a *concept* splitting where Rust
+//! has one spelling. Both are `enum` and both keep a `syn::ItemEnum`, but a sum's
+//! alternatives are identified by **position** — the mirror an adapter builds
+//! carries no `repr` and numbers its own arms — while a fieldless enum's members
+//! are identified by the **value Rust assigns**, which a C header re-states and a
+//! Kotlin `enum class` entry carries. Neither numbering means anything for the
+//! other shape, so one model covering both would carry a field that is dead in
+//! each direction, and worse than dead: Rust does assign a discriminant to a
+//! sum's alternatives, and using it would be wrong.
 //!
 //! The identities follow the same rule: a nominal type is a [`TypeId`] — a
 //! name — not a `syn::Path`, so nothing downstream has to take a path apart to
@@ -134,7 +146,10 @@ mod tests;
 use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
-    element::{Const, Element, Enum, Field, Function, Param, Struct, Unsupported, Variant},
+    element::{
+        Alternative, Const, Element, Enum, EnumValue, Field, Function, Param, Struct, Unsupported,
+        Variant,
+    },
     origin::Origin,
     ty::{ScalarKind, Type, TypeId, TypeKind, UnsupportedType, UnsupportedTypeReason},
 };
@@ -537,7 +552,7 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
             Err(error) => unsupported(s.ident.clone(), syn::Item::Struct(s), &at, error),
         },
         syn::Item::Enum(e) => match lower_enum(&e, &at, consts) {
-            Ok(en) => Element::Enum(en),
+            Ok(element) => element,
             Err(error) => unsupported(e.ident.clone(), syn::Item::Enum(e), &at, error),
         },
         // Including the unnamed `const _` each source injects as its feature
@@ -694,17 +709,79 @@ fn lower_struct(
     })
 }
 
+/// Lower an `enum` item to whichever of the two shapes it is.
+///
+/// **The classification**: any alternative with a field makes it a [`Variant`] —
+/// a sum, numbered by position. Otherwise it is an [`Enum`] — a named set of
+/// integers, identified by the value Rust assigns. Both are spelled `enum` in
+/// Rust and both keep the `syn::ItemEnum`; only what a destination language can
+/// do with them differs, and that is what the model records.
+///
+/// `enum E {}` has no alternative carrying anything, so it is the degenerate
+/// `Enum`.
 fn lower_enum(
     e: &syn::ItemEnum,
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-) -> Result<Enum, ItemError> {
+) -> Result<Element, ItemError> {
     reject_generic_params(&e.generics)?;
-    let mut variants = Vec::with_capacity(e.variants.len());
+
+    if e.variants.iter().any(|v| !v.fields.is_empty()) {
+        return Ok(Element::Variant(lower_variant(e, at, consts)?));
+    }
+    Ok(Element::Enum(lower_c_enum(e, at)))
+}
+
+/// The payload-carrying shape. Position is the only numbering a sum has, so no
+/// discriminant is evaluated: the mirror an adapter builds numbers its own arms.
+fn lower_variant(
+    e: &syn::ItemEnum,
+    at: &Rc<SourceLocation>,
+    consts: &ConstIndex,
+) -> Result<Variant, ItemError> {
+    let mut alternatives = Vec::with_capacity(e.variants.len());
+    for (index, v) in e.variants.iter().enumerate() {
+        let mut fields = Vec::with_capacity(v.fields.len());
+        for (field_index, f) in v.fields.iter().enumerate() {
+            let ty =
+                lower_type(&f.ty, consts, at).map_err(|source| ItemError::VariantFieldType {
+                    variant: v.ident.clone(),
+                    field: match &f.ident {
+                        Some(id) => id.to_string(),
+                        None => field_index.to_string(),
+                    },
+                    source,
+                })?;
+            fields.push(Field {
+                name: f.ident.clone(),
+                index: field_index,
+                ty,
+                origin: Origin::new(f.clone(), Rc::clone(at)),
+            });
+        }
+        alternatives.push(Alternative {
+            name: v.ident.clone(),
+            index,
+            fields,
+            origin: Origin::new(v.clone(), Rc::clone(at)),
+        });
+    }
+    Ok(Variant {
+        name: e.ident.clone(),
+        alternatives,
+        origin: Origin::new(e.clone(), Rc::clone(at)),
+    })
+}
+
+/// The fieldless shape. Nothing here can fail to lower — there are no field
+/// types — so an unevaluable discriminant ends the numeric chain rather than
+/// refusing the item.
+fn lower_c_enum(e: &syn::ItemEnum, at: &Rc<SourceLocation>) -> Enum {
+    let mut values = Vec::with_capacity(e.variants.len());
     // Rust's own numbering rule: an explicit `= N` sets the value, an implicit
-    // variant takes the previous plus one, starting at 0.
+    // one takes the previous plus one, starting at 0.
     let mut next: Option<i64> = Some(0);
-    for (variant_index, v) in e.variants.iter().enumerate() {
+    for (index, v) in e.variants.iter().enumerate() {
         let discriminant = match v.discriminant.as_ref() {
             Some((_, expr)) => int_literal(expr),
             None => next,
@@ -712,40 +789,21 @@ fn lower_enum(
         // `checked_add`: a discriminant at the top of the range is valid Rust
         // (`#[repr(u64)] enum E { A = i64::MAX as u64, B }`), so running out of
         // `i64` ends the numeric chain exactly as an unevaluable spelling does.
-        // The spelling is untouched either way — it is in `Variant::origin`.
+        // The spelling is untouched either way — it is in `EnumValue::origin`.
         next = discriminant.and_then(|n| n.checked_add(1));
 
-        let mut fields = Vec::with_capacity(v.fields.len());
-        for (index, f) in v.fields.iter().enumerate() {
-            let ty =
-                lower_type(&f.ty, consts, at).map_err(|source| ItemError::VariantFieldType {
-                    variant: v.ident.clone(),
-                    field: match &f.ident {
-                        Some(id) => id.to_string(),
-                        None => index.to_string(),
-                    },
-                    source,
-                })?;
-            fields.push(Field {
-                name: f.ident.clone(),
-                index,
-                ty,
-                origin: Origin::new(f.clone(), Rc::clone(at)),
-            });
-        }
-        variants.push(Variant {
+        values.push(EnumValue {
             name: v.ident.clone(),
-            index: variant_index,
+            index,
             discriminant,
-            fields,
             origin: Origin::new(v.clone(), Rc::clone(at)),
         });
     }
-    Ok(Enum {
+    Enum {
         name: e.ident.clone(),
-        variants,
+        values,
         origin: Origin::new(e.clone(), Rc::clone(at)),
-    })
+    }
 }
 
 /// Pull a signed integer out of a literal expression (`5`, `-3`, `0x07`).

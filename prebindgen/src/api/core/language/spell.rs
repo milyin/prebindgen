@@ -14,7 +14,7 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use super::element::{Field, Struct, Variant};
+use super::element::{Alternative, EnumValue, Field, Struct};
 
 /// Spell a field group: `head`, `head(parts…)` or `head { parts… }`, following
 /// the delimiters the source wrote.
@@ -34,8 +34,20 @@ pub fn fields(shape: &syn::Fields, head: TokenStream, parts: &[TokenStream]) -> 
     }
 }
 
-impl Variant {
-    /// [`fields`] over this variant's own delimiters.
+impl Alternative {
+    /// [`fields`] over this alternative's own delimiters.
+    pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
+        fields(&self.origin.syntax.fields, head, parts)
+    }
+}
+
+impl EnumValue {
+    /// [`fields`] over this value's own delimiters.
+    ///
+    /// A fieldless alternative still has them: `A`, `B()` and `C {}` carry no
+    /// payload alike, and Rust demands the delimiters wherever the last two are
+    /// named. `parts` is therefore always empty — the signature matches
+    /// [`Alternative::spell`] so one caller can spell either.
     pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
         fields(&self.origin.syntax.fields, head, parts)
     }
