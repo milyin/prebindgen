@@ -142,7 +142,7 @@
 //!   [`try_from!`](crate::try_from), [`into!`](crate::into),
 //!   [`try_into!`](crate::try_into)
 //! - Boundary expansion: [`expand_param!`](crate::expand_param),
-//!   [`expand_return!`](crate::expand_return)
+//!   [`expand_return!`](crate::expand_return), [`fields!`](crate::fields)
 //!
 //! **Syntax helpers** produce a bare `syn` node — `Type` / `Path` / `Expr` /
 //! `Signature` / `Ident` — to hand to a declaration method that requires one.
@@ -286,10 +286,18 @@ macro_rules! ident {
 /// [`lang::JniGen`]. The C / cbindgen proof of concept is available separately
 /// with the `unstable-cbindgen` feature.
 pub mod core {
+    /// The prebindgen **source language**: the parser from captured
+    /// `#[prebindgen]` records to [`language::Element`]s, and the element model
+    /// itself. Not to be confused with [`crate::lang`], the *destination*
+    /// adapters.
+    pub use crate::api::core::language;
+    /// [`Language`] and [`Element`] sit here too, next to [`Registry`]: they are
+    /// what a build script names, and the rest of the element model stays in
+    /// [`mod@language`] where an adapter reaches for it.
     pub use crate::api::core::{
-        ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot, Niches,
-        Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,
-        TypeEntry, TypeKey, WriteRustError,
+        ConverterImpl, Direction, DomainScalar, Element, Generation, Gravestone, Language,
+        NicheSlot, Niches, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError,
+        Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
     };
 }
 
@@ -322,8 +330,8 @@ pub mod lang {
         box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string, matching,
         null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
         ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
-        ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, KotlinFile,
-        PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl, WriteKotlinError,
+        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen,
+        KotlinFile, PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl, WriteKotlinError,
     };
 }
 

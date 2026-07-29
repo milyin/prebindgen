@@ -748,6 +748,7 @@ impl JniGen {
     /// once, on the member), else the camel-cased Rust name.
     fn lower_fields(
         &self,
+        registry: &Registry<KotlinMeta>,
         key: &TypeKey,
         fields: &[LocalField],
     ) -> Vec<crate::api::core::unfold::DeconRecord> {
@@ -755,6 +756,11 @@ impl JniGen {
         fields
             .iter()
             .map(|f| match f {
+                LocalField::Fields(decl) => DeconRecord::Fields {
+                    func: decl.func.clone(),
+                    consuming: decl.consuming,
+                    fields: self.lower_value_form(registry, key, decl),
+                },
                 LocalField::Named(func, name_override) => {
                     let name = name_override
                         .clone()
@@ -782,6 +788,276 @@ impl JniGen {
             .collect()
     }
 
+    /// Expand a `.fields(fields!(f))` declaration into one
+    /// [`FieldRecord`](crate::api::core::unfold::FieldRecord) per field of the
+    /// struct `f` returns — the value form.
+    ///
+    /// The walk is the adapter's job because only it knows which structs are
+    /// declared `data_class!`es: a **non-optional** nested one is inlined (its
+    /// own fields become records with `__`-joined names), matching what
+    /// `synth_value_struct_leaves` does for a by-value data class; everything
+    /// else is one record and core decides whether that record's type splices
+    /// its own `expand_return!`.
+    ///
+    /// Per-field `.field(...)` overrides and `.name(...)` renames key on the
+    /// **Rust field ident**, and both are checked against the struct: naming a
+    /// field the value form doesn't have is a hard error, which is the point —
+    /// a field renamed upstream must not silently lose its adjustment.
+    fn lower_value_form(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        key: &TypeKey,
+        decl: &FieldsDecl,
+    ) -> Vec<crate::api::core::unfold::FieldRecord> {
+        let func = &decl.func;
+        let (item_fn, _) = registry.functions.get(func).unwrap_or_else(|| {
+            panic!(
+                "expand_return!({}).fields(fields!({func})): no `#[prebindgen]` function \
+                 `{func}` — a value form is an accessor `fn {func}(v: &{}) -> {}Struct`",
+                key.as_str(),
+                key.as_str(),
+                key.as_str(),
+            )
+        });
+        let ret: syn::Type = match &item_fn.sig.output {
+            syn::ReturnType::Type(_, t) => crate::api::core::unfold::peel_ref(t),
+            syn::ReturnType::Default => panic!(
+                "expand_return!({}).fields(fields!({func})): `{func}` returns nothing — a \
+                 value form returns the struct holding this type's fields",
+                key.as_str()
+            ),
+        };
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret) else {
+            panic!(
+                "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
+                 not a struct — a value form returns a struct whose fields become the leaves",
+                key.as_str(),
+                ret.to_token_stream(),
+            )
+        };
+        let st = st.clone();
+
+        let mut out = Vec::new();
+        self.walk_value_form(registry, key, decl, &st, &[], "", 0, &mut out);
+
+        // Every adjustment must have found its field. An unknown name is the
+        // drift this whole declarator exists to catch, so it is an error rather
+        // than a no-op.
+        let named: std::collections::HashSet<String> = out
+            .iter()
+            .map(|r: &crate::api::core::unfold::FieldRecord| {
+                r.members
+                    .iter()
+                    .map(|m| m.to_string())
+                    .collect::<Vec<_>>()
+                    .join(".")
+            })
+            .collect();
+        for (field, _) in decl.overrides.iter() {
+            assert!(
+                named.contains(field),
+                "fields!({func}).field(\"{field}\", ...): `{}` has no field `{field}` \
+                 (fields: {})",
+                st.ident,
+                named.iter().cloned().collect::<Vec<_>>().join(", "),
+            );
+        }
+        for (field, _) in decl.names.iter() {
+            assert!(
+                named.contains(field),
+                "fields!({func}).name(\"{field}\", ...): `{}` has no field `{field}` \
+                 (fields: {})",
+                st.ident,
+                named.iter().cloned().collect::<Vec<_>>().join(", "),
+            );
+        }
+        out
+    }
+
+    /// One level of [`Self::lower_value_form`]'s struct walk. `members` /
+    /// `name_prefix` accumulate through inlined nested data classes; an
+    /// override or rename keys on the dotted member path, so a nested field is
+    /// addressed as `"outer.inner"`.
+    #[allow(clippy::too_many_arguments)]
+    fn walk_value_form(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        key: &TypeKey,
+        decl: &FieldsDecl,
+        st: &syn::ItemStruct,
+        members: &[syn::Ident],
+        name_prefix: &str,
+        depth: usize,
+        out: &mut Vec<crate::api::core::unfold::FieldRecord>,
+    ) {
+        use crate::api::core::unfold::{FieldDecon, FieldRecord};
+        let syn::Fields::Named(named) = &st.fields else {
+            panic!(
+                "expand_return!({}).fields(fields!({})): `{}` has no named fields — a value \
+                 form is a plain struct whose fields become the leaves",
+                key.as_str(),
+                decl.func,
+                st.ident,
+            )
+        };
+        // A value form holding itself would expand forever; the cycle rule for
+        // everything reachable BELOW a field is core's `visited` check.
+        assert!(
+            depth <= 16,
+            "expand_return!({}).fields(fields!({})): `{}` nests data classes more than 16 \
+             deep — is a value form holding itself?",
+            key.as_str(),
+            decl.func,
+            st.ident,
+        );
+        for field in &named.named {
+            let Some(fname) = field.ident.as_ref() else {
+                continue;
+            };
+            let mut member_path = members.to_vec();
+            member_path.push(fname.clone());
+            let dotted = member_path
+                .iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(".");
+            let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
+            let name = decl
+                .names
+                .iter()
+                .find(|(f, _)| *f == dotted)
+                .map(|(_, n)| n.clone())
+                .unwrap_or(camel);
+            let name = if name_prefix.is_empty() {
+                name
+            } else {
+                format!("{name_prefix}__{name}")
+            };
+
+            // An explicit override replaces the field type's default
+            // decomposition wholesale — including any nesting it would have had.
+            if let Some((_, ovr)) = decl.overrides.iter().find(|(f, _)| *f == dotted) {
+                // The override states the field's type, so it is cross-checked
+                // against the field the same way a per-fn `.expand_param` /
+                // `.expand_return` decl is checked against its parameter or
+                // return. Without this an override outlives an upstream
+                // field-type change — the very drift `.fields()` exists to
+                // catch — and two same-shaped handle types silently swap.
+                // Core applies override records to the whole field after
+                // peeling only an outer `Option`: a `Vec<T>` remains `Vec<T>`.
+                // Mirror that exact normalization here; peeling `Vec` would
+                // accept `expand_return!(T)` and only fail later when core
+                // applies its records to `Vec<T>`.
+                let peeled = option_inner_type(&field.ty)
+                    .map(|t| crate::api::core::unfold::peel_ref(&t))
+                    .unwrap_or_else(|| crate::api::core::unfold::peel_ref(&field.ty));
+                let actual = TypeKey::from_type(&peeled);
+                assert!(
+                    actual == ovr.key,
+                    "fields!({}).field(\"{dotted}\", expand_return!({})): `{}.{dotted}` is \
+                     `{}`, not `{}` — a per-field override names the field's own type",
+                    decl.func,
+                    ovr.key.as_str(),
+                    st.ident,
+                    actual.as_str(),
+                    ovr.key.as_str(),
+                );
+                out.push(FieldRecord {
+                    members: member_path,
+                    name,
+                    ty: field.ty.clone(),
+                    decon: FieldDecon::Records(self.lower_fields(registry, &ovr.key, &ovr.fields)),
+                });
+                continue;
+            }
+
+            // A nested `data_class!` inlines when it is reached directly; behind
+            // `Option` / `Vec` it stays one leaf, whose own converter builds the
+            // object (the rule `synth_value_struct_leaves` already follows).
+            // A `sealed_class!` field has no whole-value converter at all, so it
+            // must decompose into its selector and groups wherever it appears.
+            let bare = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+            let probe = vec_inner_type(&bare).unwrap_or_else(|| bare.clone());
+            match self.type_kind(registry, &probe) {
+                TypeKind::DataStruct { st, cfg: Some(_) }
+                    if option_inner_type(&field.ty).is_none()
+                        && vec_inner_type(&field.ty).is_none() =>
+                {
+                    let child = st.clone();
+                    self.walk_value_form(
+                        registry,
+                        key,
+                        decl,
+                        &child,
+                        &member_path,
+                        &name,
+                        depth + 1,
+                        out,
+                    );
+                    continue;
+                }
+                TypeKind::Sum => {
+                    // A sum's leaves are a selector plus one group per
+                    // alternative, laid out side by side at a FIXED position.
+                    // A `Vec` of them has variable arity; an `Option` of one
+                    // needs a present flag the unfold leaf list has no notion of
+                    // (the `fromParts` bridge's `PlanFieldKind::Sum` does — a
+                    // data-class field can be `Option<sum>`).
+                    assert!(
+                        vec_inner_type(&bare).is_none(),
+                        "expand_return!({}).fields(fields!({})): field `{}.{}` is a \
+                         `Vec<{}>` — a sequence of tag-gated groups has variable arity and \
+                         cannot be laid out in a fixed leaf list",
+                        key.as_str(),
+                        decl.func,
+                        st.ident,
+                        dotted,
+                        probe.to_token_stream(),
+                    );
+                    assert!(
+                        option_inner_type(&field.ty).is_none(),
+                        "expand_return!({}).fields(fields!({})): field `{}.{}` is an \
+                         `Option<{}>` — an optional sum would need a present flag beside its \
+                         tag, which an output leaf list cannot carry. Give the field a \
+                         payload-less alternative instead of wrapping the sum in `Option`, \
+                         or override it with .field(\"{}\", ...)",
+                        key.as_str(),
+                        decl.func,
+                        st.ident,
+                        dotted,
+                        probe.to_token_stream(),
+                        dotted,
+                    );
+                    let ident = bare_path_ident(&probe).expect("a sum type is a path type");
+                    let (item_enum, _) = registry
+                        .enums
+                        .get(&ident)
+                        .expect("TypeKind::Sum implies an indexed enum");
+                    let sum_cfg = self.types[&TypeKey::from_type(&probe)]
+                        .sum()
+                        .expect("TypeKind::Sum implies a sealed-class config");
+                    out.push(FieldRecord {
+                        members: member_path,
+                        name,
+                        ty: field.ty.clone(),
+                        decon: FieldDecon::Leaves(crate::api::lang::jnigen::jni::synth_sum_leaves(
+                            self, sum_cfg, item_enum,
+                        )),
+                    });
+                    continue;
+                }
+                _ => {}
+            }
+
+            out.push(FieldRecord {
+                members: member_path,
+                name,
+                ty: field.ty.clone(),
+                decon: FieldDecon::Default,
+            });
+        }
+    }
+
     /// Lower the raw [`ExpandReturnDecl`]s into the core's immutable
     /// [`Deconstructors`] record set — the output-side peer of
     /// [`Self::build_expansions`], a pure declaration → record mapping.
@@ -789,7 +1065,10 @@ impl JniGen {
     /// them. `skip_output` is derived from the class members: a
     /// `.constructor()` member's return is a factory, never
     /// output-flattened.
-    pub(crate) fn build_deconstructors(&self) -> crate::api::core::unfold::Deconstructors {
+    pub(crate) fn build_deconstructors(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> crate::api::core::unfold::Deconstructors {
         use crate::api::core::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
         };
@@ -817,7 +1096,7 @@ impl JniGen {
             );
             dec.deconstructors.push(DeconstructorDecl {
                 target: decl.key.to_type(),
-                records: self.lower_fields(&decl.key, &decl.fields),
+                records: self.lower_fields(registry, &decl.key, &decl.fields),
                 default: Some((DeconTarget::Output, Delivery::Callback)),
             });
         }
@@ -838,7 +1117,7 @@ impl JniGen {
             );
             dec.outputs.push(OutputDecl {
                 func: func.clone(),
-                sel: DeconSel::Inline(self.lower_fields(&decl.key, &decl.fields)),
+                sel: DeconSel::Inline(self.lower_fields(registry, &decl.key, &decl.fields)),
                 target: DeconTarget::Output,
                 delivery: Delivery::Callback,
                 declared_source: Some(decl.key.to_type()),
@@ -1001,26 +1280,10 @@ impl JniGen {
                 LocalVariant::Ctor(f) => Some(f.clone()),
                 LocalVariant::SelfIdentity => None,
             });
-        let accessors = self
-            .return_expand_decls
-            .iter()
-            .map(|d| &d.fields)
-            .chain(self.fn_return_expands.iter().map(|(_, d)| &d.fields))
-            .flatten()
-            .filter_map(|f| match f {
-                LocalField::Named(func, _) => Some(func.clone()),
-                // A binding-local field's synthesized fn is helper-only too:
-                // called by the generated code, never externed, and its
-                // synthesized registry entry must not trip the warning.
-                LocalField::Local { path, .. } => Some(
-                    path.segments
-                        .last()
-                        .expect("validated non-empty at decl time")
-                        .ident
-                        .clone(),
-                ),
-                LocalField::SelfField => None,
-            });
+        // Includes a binding-local field's synthesized fn (called by the
+        // generated code, never externed, so its synthesized registry entry
+        // must not trip the warning) and a value form's accessor.
+        let accessors = self.field_referenced_fns().into_iter();
         // Synthesized binding-local fns from every entry form (path-built
         // fun! at fun/method/constructor/convert sites): their registry
         // entries exist only for signature reads — helper-only unless also
@@ -1037,26 +1300,52 @@ impl JniGen {
     /// from parameter composition. Derived from *usage* — a function need not
     /// also be a `.method()` class member to be referenced this way.
     pub(crate) fn field_accessor_fns(&self) -> std::collections::HashSet<syn::Ident> {
-        self.return_expand_decls
+        self.field_referenced_fns().into_iter().collect()
+    }
+
+    /// Every function ident referenced as a field by any `expand_return!` decl
+    /// (type-level or per-fn), recursing into a value form's per-field
+    /// overrides. The one walk behind both [`Self::field_accessor_fns`] and the
+    /// helper-only set in [`Self::boundary_referenced_fns`] — they ask the same
+    /// question of the same declarations, so a new field kind is taught to both
+    /// at once.
+    fn field_referenced_fns(&self) -> Vec<syn::Ident> {
+        fn walk(fields: &[LocalField], out: &mut Vec<syn::Ident>) {
+            for f in fields {
+                match f {
+                    LocalField::Named(func, _) => out.push(func.clone()),
+                    // A binding-local field's synthesized fn IS an accessor —
+                    // excluded from parameter composition, and acknowledged so
+                    // the registry's "skipping undeclared" warning stays quiet.
+                    LocalField::Local { path, .. } => out.push(
+                        path.segments
+                            .last()
+                            .expect("validated non-empty at decl time")
+                            .ident
+                            .clone(),
+                    ),
+                    LocalField::SelfField => {}
+                    // The value form's own accessor, plus whatever its
+                    // per-field overrides reference.
+                    LocalField::Fields(d) => {
+                        out.push(d.func.clone());
+                        for (_, ovr) in &d.overrides {
+                            walk(&ovr.fields, out);
+                        }
+                    }
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for fields in self
+            .return_expand_decls
             .iter()
             .map(|d| &d.fields)
             .chain(self.fn_return_expands.iter().map(|(_, d)| &d.fields))
-            .flatten()
-            .filter_map(|f| match f {
-                LocalField::Named(func, _) => Some(func.clone()),
-                // A binding-local field's synthesized fn IS an accessor —
-                // excluded from parameter composition, and acknowledged so
-                // the registry's "skipping undeclared" warning stays quiet.
-                LocalField::Local { path, .. } => Some(
-                    path.segments
-                        .last()
-                        .expect("validated non-empty at decl time")
-                        .ident
-                        .clone(),
-                ),
-                LocalField::SelfField => None,
-            })
-            .collect()
+        {
+            walk(fields, &mut out);
+        }
+        out
     }
 }
 

@@ -196,10 +196,17 @@ pub trait Prebindgen {
     /// [`crate::api::core::unfold::UnfoldPlan`] on the registry and its leaf
     /// types are registered as required outputs.
     ///
-    /// Returned by value, same as [`Self::expansions`].
+    /// Returned by value, same as [`Self::expansions`]. The registry is
+    /// available because a declaration may name a **value form** (an accessor
+    /// returning "this type's fields in one struct") whose fields have to be
+    /// read off the indexed struct to become records.
     ///
     /// Default: `None`.
-    fn deconstructors(&self) -> Option<crate::api::core::unfold::Deconstructors> {
+    fn deconstructors(
+        &self,
+        registry: &Registry<Self::Metadata>,
+    ) -> Option<crate::api::core::unfold::Deconstructors> {
+        let _ = registry;
         None
     }
 

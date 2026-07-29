@@ -967,8 +967,11 @@ impl Prebindgen for JniGen {
     /// Assembled on demand — field names (member inheritance) resolve here,
     /// against the complete declaration set (see
     /// [`JniGen::build_deconstructors`]).
-    fn deconstructors(&self) -> Option<crate::api::core::unfold::Deconstructors> {
-        Some(self.build_deconstructors())
+    fn deconstructors(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<crate::api::core::unfold::Deconstructors> {
+        Some(self.build_deconstructors(registry))
     }
 
     /// Synthesize a field-decomposition for every `.data_class` type whose

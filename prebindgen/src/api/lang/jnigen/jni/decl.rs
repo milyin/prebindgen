@@ -51,6 +51,11 @@ pub(crate) enum LocalField {
         sig: syn::Signature,
         name_override: Option<String>,
     },
+    /// Include **every field of the type's value form** — the struct returned
+    /// by the named accessor — each as its own field. Expands to the same
+    /// records the fields would produce if named one by one; see
+    /// [`ExpandReturnDecl::fields`].
+    Fields(FieldsDecl),
 }
 
 // Class members are stored as the full `(FunctionDecl, MemberKind)` pair —
@@ -289,6 +294,16 @@ macro_rules! try_into {
 macro_rules! expand_return {
     ($t:ty) => {
         $crate::lang::ExpandReturnDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+    };
+}
+
+/// Build a [`FieldsDecl`] from the ident of a **value-form accessor** —
+/// `fields!(sample_to_struct)` is `FieldsDecl::new(prebindgen::ident!(sample_to_struct))`.
+/// The argument of [`ExpandReturnDecl::fields`](crate::lang::ExpandReturnDecl::fields).
+#[macro_export]
+macro_rules! fields {
+    ($name:ident) => {
+        $crate::lang::FieldsDecl::new($crate::ident!($name))
     };
 }
 
@@ -682,6 +697,7 @@ impl ExpandReturnDecl {
     /// decomposition comes from ITS type's boundary decl, not from the
     /// accessor).
     pub fn field(mut self, accessor: FunctionDecl) -> Self {
+        self.reject_beside_consuming("field(..)");
         assert!(
             accessor.param_expands.is_empty() && accessor.return_expand.is_none(),
             "expand_return!({}).field(fun!({})): expand overrides don't apply to a \
@@ -717,7 +733,204 @@ impl ExpandReturnDecl {
     /// Declare it **last**, after any field that decomposes a nested handle,
     /// so the generated Rust moves the value only after those borrows.
     pub fn field_self(mut self) -> Self {
+        self.reject_beside_consuming("field_self()");
         self.fields.push(LocalField::SelfField);
+        self
+    }
+
+    /// The one rule [`Self::fields_self_into`] adds: it hands the value **itself**
+    /// over, so nothing else in the decl can still read it.
+    fn reject_beside_consuming(&self, what: &str) {
+        if let Some(f) = self.fields.iter().find_map(|f| match f {
+            LocalField::Fields(d) if d.consuming => Some(&d.func),
+            _ => None,
+        }) {
+            panic!(
+                "expand_return!({k}).fields_self_into(fields!({f})).{what}: `.fields_self_into(..)` hands \
+                 the value ITSELF over as its fields, so nothing else can read it afterwards — \
+                 it must be the decl's only record. Use `.fields(fields!(..))` with the \
+                 borrowing form of the accessor if you need both.",
+                k = self.key.as_str(),
+                f = f,
+            );
+        }
+    }
+
+    /// Take the fields from the type's **value form** — a `#[prebindgen]`
+    /// accessor returning "this type's own accessors gathered into one struct"
+    /// — instead of restating them.
+    ///
+    /// `.fields(fields!(f))` is exactly `.field(...)` applied to each field of
+    /// that struct, so it has the same configurability (per-field overrides and
+    /// renames live on the [`FieldsDecl`]) and, crucially, the same
+    /// decomposition rule: **each field crosses by its own type's default
+    /// output boundary**. A field whose type has its own `expand_return!` is
+    /// decomposed by it (a `KeyExpr` field still crosses as its string, not as
+    /// a handle); a declared `data_class!` field expands into its fields; a
+    /// field behind `Option` / `Vec` stays one leaf. So swapping a hand-written
+    /// field list for `.fields(...)` keeps the boundary shape it already had —
+    /// what changes is that the list can no longer drift from the struct.
+    ///
+    /// ```
+    /// // Instead of restating SampleStruct's fields one by one:
+    /// let _ = prebindgen::expand_return!(Sample)
+    ///     .fields(prebindgen::fields!(sample_to_struct));
+    /// ```
+    ///
+    /// The accessor **borrows** its receiver (`f(v: &Self) -> SelfStruct`):
+    /// the struct is built from a borrow, so each field is cloned into it and
+    /// the leaves clone again out of it, and the value survives. It therefore
+    /// mixes freely — `.fields(...).field_self()` delivers the value form's
+    /// fields *and* the live handle. At most one value form per decl.
+    ///
+    /// Where the value is delivered **owned** — a callback argument
+    /// (`impl Fn(Sample)`), an owned return — and nothing else needs it, use
+    /// [`fields_self_into`](Self::fields_self_into) instead: those clones are being paid
+    /// on a value that is about to be dropped.
+    pub fn fields(mut self, decl: FieldsDecl) -> Self {
+        self.reject_beside_consuming("fields(..)");
+        self.reject_second_value_form(&decl);
+        self.fields.push(LocalField::Fields(decl));
+        self
+    }
+
+    /// Like [`fields`](Self::fields), but the accessor **consumes** its
+    /// receiver (`f(v: Self) -> SelfStruct`): the value is moved in and each
+    /// field is moved *out* into its leaf. No clones at all.
+    ///
+    /// This is the same decision [`field_self`](Self::field_self) makes, one
+    /// step further: `.field_self()` hands the value over whole,
+    /// `.fields_self_into(...)` hands *the value itself* over as its parts, and
+    /// `.fields(...)` hands over a copy of its parts. Use it wherever the value
+    /// arrives owned and is not needed afterwards — the hot receive path this
+    /// whole declarator exists to make cheap.
+    ///
+    /// ```
+    /// let _ = prebindgen::expand_return!(Sample)
+    ///     .fields_self_into(prebindgen::fields!(sample_into_struct));
+    /// ```
+    ///
+    /// Because it gives the value away it must be the decl's **only** record —
+    /// a `.field_self()` or a sibling `.field(...)` would read a value that is
+    /// gone — which is a declaration-time panic either way round. It may still
+    /// be reached through *another* value form: the parent's field is handed to
+    /// it by move, since a hoisted value form is an owned struct and its fields
+    /// are disjoint.
+    ///
+    /// The declarator and the accessor's signature must agree; naming a
+    /// `&Self` accessor here (or a by-value one on [`fields`](Self::fields)) is
+    /// an error, so the declared intent cannot drift from the function it
+    /// names. At a **borrowed** delivery position there is no value to give up,
+    /// so the emitter clones once up front and consumes the clone — the same
+    /// cost the borrowing form would have paid, which keeps one declaration
+    /// usable by both owned and `&T` returns of the type.
+    pub fn fields_self_into(mut self, decl: FieldsDecl) -> Self {
+        self.reject_second_value_form(&decl);
+        assert!(
+            self.fields.is_empty(),
+            "expand_return!({k}).fields_self_into(fields!({f})): `.fields_self_into(..)` hands the value \
+             ITSELF over as its fields, so it must be the decl's only record — the records \
+             already declared would read a value that is gone. Use `.fields(fields!(..))` with \
+             the borrowing form of the accessor if you need both.",
+            k = self.key.as_str(),
+            f = decl.func,
+        );
+        self.fields.push(LocalField::Fields(decl.consuming()));
+        self
+    }
+
+    fn reject_second_value_form(&self, decl: &FieldsDecl) {
+        assert!(
+            !self
+                .fields
+                .iter()
+                .any(|f| matches!(f, LocalField::Fields(_))),
+            "expand_return!({}): the decl already expands a value form (fields!({})) — \
+             one value form states the whole field set",
+            self.key.as_str(),
+            decl.func
+        );
+    }
+}
+
+/// A **value-form expansion**: the accessor whose returned struct supplies the
+/// fields, plus the per-field adjustments. Built with
+/// [`fields!`](crate::fields) and handed to
+/// [`ExpandReturnDecl::fields`].
+///
+/// Both adjusters key on the **Rust struct field name**, mirroring
+/// [`FunctionDecl::expand_param`]'s Rust-parameter-name key: an unknown field
+/// name or a repeated one is a hard error, so a field renamed upstream is
+/// caught rather than silently ignored.
+#[derive(Clone)]
+pub struct FieldsDecl {
+    pub(crate) func: syn::Ident,
+    pub(crate) overrides: Vec<(String, ExpandReturnDecl)>,
+    pub(crate) names: Vec<(String, String)>,
+    /// Set by [`ExpandReturnDecl::fields_self_into`] — the accessor consumes its
+    /// receiver. Declared rather than read off the signature, because giving
+    /// the value away is a boundary decision; the two are cross-checked when
+    /// the records are resolved.
+    pub(crate) consuming: bool,
+}
+
+impl FieldsDecl {
+    pub fn new(func: syn::Ident) -> Self {
+        Self {
+            func,
+            overrides: Vec::new(),
+            names: Vec::new(),
+            consuming: false,
+        }
+    }
+
+    pub(crate) fn consuming(mut self) -> Self {
+        self.consuming = true;
+        self
+    }
+
+    /// Replace **one** field's decomposition, with the same
+    /// [`ExpandReturnDecl`] a type-level default uses — so the complete-set
+    /// rule applies here too: the decl states that field's entire leaf set.
+    /// Use it where the field's type default is not what this boundary wants
+    /// (a lone `.field_self()` keeps the raw handle instead of decomposing it).
+    pub fn field(mut self, field: impl AsRef<str>, decl: ExpandReturnDecl) -> Self {
+        let field = field.as_ref().to_string();
+        assert!(
+            !self.overrides.iter().any(|(f, _)| *f == field),
+            "fields!({}).field(\"{}\", ...): field already has an override — declare its \
+             complete field set in ONE decl",
+            self.func,
+            field
+        );
+        self.overrides.push((field, decl));
+        self
+    }
+
+    /// Rename **one** field's leaf, overriding the name derived from the struct
+    /// field ident. The literal Kotlin name, like `fun!(f).name(...)`.
+    pub fn name(mut self, field: impl AsRef<str>, kotlin_name: impl Into<String>) -> Self {
+        let field = field.as_ref().to_string();
+        let kotlin_name = kotlin_name.into();
+        assert!(
+            !self.names.iter().any(|(f, _)| *f == field),
+            "fields!({}).name(\"{}\", ...): field is already renamed",
+            self.func,
+            field
+        );
+        // The derived names of inlined nested fields are joined with `"__"`, so
+        // an author name carrying one would forge a nesting that isn't there.
+        // (Core rejects it for a `.field()` name; here the name never reaches
+        // that check, so it is made at the point of declaration.)
+        assert!(
+            !kotlin_name.contains("__"),
+            "fields!({}).name(\"{}\", \"{}\"): `__` is the reserved chain separator \
+             and cannot appear in a leaf name",
+            self.func,
+            field,
+            kotlin_name,
+        );
+        self.names.push((field, kotlin_name));
         self
     }
 }

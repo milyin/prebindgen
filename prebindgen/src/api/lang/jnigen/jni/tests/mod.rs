@@ -33,6 +33,7 @@ mod niches;
 mod sealed;
 mod snapshots;
 mod symbols;
+mod value_form;
 mod values;
 
 /// Build a `TypeEntry` for use in tests. The function body is not

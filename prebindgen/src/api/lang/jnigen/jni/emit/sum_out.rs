@@ -50,14 +50,17 @@ pub(crate) fn synth_sum_leaves(
     };
 
     let spec = SumSpec::from_item_enum(item_enum);
-    // The selector rides ahead of the groups it chooses between. Its `out_ty`
-    // documents the wire (`i32` → `jint` → Kotlin `Int`); nothing looks up a
-    // converter for it, because there is no value to convert — the emitter
-    // assigns the tag literal per arm.
+    // The selector rides ahead of the groups it chooses between, and carries
+    // **which sum** it selects over as its `out_ty` — that is how the emitter
+    // finds the enum to `match` when the sum is a field rather than the whole
+    // returned value. Nothing looks up a converter for it (`has_converter()` is
+    // false for a `SumTag`): there is no value to convert, the emitter assigns
+    // the tag literal per arm. Its wire is a `jint` by definition.
+    let enum_ident = &item_enum.ident;
     let mut leaves = vec![UnfoldLeaf {
         name: SUM_TAG_LEAF.to_string(),
         path: Vec::new(),
-        out_ty: syn::parse_quote!(i32),
+        out_ty: syn::parse_quote!(#enum_ident),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
@@ -96,27 +99,38 @@ pub(crate) fn is_sum_leaves(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> 
 /// pattern's payload bindings, every other group from the same wire defaults an
 /// absent `Option<nested>` uses.
 ///
+/// `leaves` is ONE sum's segment — its [`LeafSource::SumTag`] selector followed
+/// by that selector's group leaves — with `obj_idents` the matching slice of
+/// slot locals. `matched` is the expression to `match` on (a reference to the
+/// value), which is the whole returned value when the sum IS the return, and
+/// the reached field when a value form carries it.
+///
 /// The signature mirrors [`encode_plan_leaves`](super::encode_plan_leaves), and
 /// the two are interchangeable at the call site: both bind `obj_idents` and
 /// return the per-leaf `jvalue` argument expressions in leaf order. What differs
 /// is that a leaf here is not an independent expression — its slot exists in
 /// every arm and only one arm computes it.
-pub(crate) fn encode_sum_leaves(
+pub(crate) fn encode_sum_group(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
-    plan: &crate::api::core::unfold::UnfoldPlan,
+    leaves: &[crate::api::core::unfold::UnfoldLeaf],
     obj_idents: &[syn::Ident],
-    value: &TokenStream,
+    matched: TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> (TokenStream, Vec<TokenStream>) {
     use crate::api::core::unfold::LeafSource;
 
-    let leaves = &plan.leaves;
-    // Qualified path of the source enum, for the arm patterns.
-    let ident = bare_path_ident(&plan.source).unwrap_or_else(|| {
+    // Which sum this is comes from the selector leaf, not from the plan's
+    // source: the plan's source is the *containing* value when the sum is a
+    // field of a value form.
+    let tag_leaf = leaves
+        .iter()
+        .find(|l| l.source == LeafSource::SumTag)
+        .expect("a sum segment carries its selector leaf");
+    let ident = bare_path_ident(&tag_leaf.out_ty).unwrap_or_else(|| {
         panic!(
-            "jnigen sum unfold: source `{}` is not a path type",
-            TypeKey::from_type(&plan.source)
+            "jnigen sum unfold: selector type `{}` is not a path type",
+            TypeKey::from_type(&tag_leaf.out_ty)
         )
     });
     let module = ext.fn_module(registry, &ident);
@@ -268,14 +282,6 @@ pub(crate) fn encode_sum_leaves(
         })
         .collect();
 
-    // A borrowed value is matched as-is; an owned one is matched by reference
-    // so each payload can be cloned out of it (the same reach a struct field
-    // leaf uses).
-    let matched = if plan.by_ref {
-        value.clone()
-    } else {
-        quote!(&#value)
-    };
     let stmts = quote! {
         #decls
         match #matched { #(#arms)* }

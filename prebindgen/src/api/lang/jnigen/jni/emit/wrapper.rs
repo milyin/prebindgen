@@ -210,13 +210,23 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         let uplan = unfold_plan.expect("is_convert ⇒ plan");
         let leaf = &uplan.leaves[0];
         let by_ref = uplan.by_ref;
+        // One derivation, shared with the multi-leaf encoder — the value forms
+        // are bound by the same [`bind_hoists`] and the leaf reached by the
+        // same [`reach_leaf_flat`]. Deriving either a second time here is what
+        // let the two drift apart: this shortcut used to compose its reach
+        // straight off the raw value, which for a value form declared with
+        // `.fields_self_into(..)` emitted `f(&v)` against a by-value receiver.
+        let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
         let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
-            let mut e = if base_is_ref { base } else { quote!(&#base) };
-            for a in &leaf.path {
-                let m = ext.fn_module(registry, a);
-                e = quote!(#m::#a(#e));
-            }
-            e
+            let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
+            let stmts = &hoisted.stmts;
+            let reached = match hoisted.rebase(&leaf.path) {
+                Some((local, rest, consuming)) => {
+                    reach_leaf_flat(&qualify, leaf, &rest, quote!(#local), false, consuming)
+                }
+                None => reach_leaf_flat(&qualify, leaf, &leaf.path, base, base_is_ref, false),
+            };
+            quote!({ #stmts #reached })
         };
         match &uplan.shape {
             UnfoldShape::Optional((), _) => {

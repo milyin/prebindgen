@@ -67,6 +67,7 @@ import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.observationNew
 import io.prebindgen.covertest.model.observationWhich
 import io.prebindgen.covertest.model.lookupEach
+import io.prebindgen.covertest.model.reportEach
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.archiveReading
 import io.prebindgen.covertest.model.archiveReadingMaybe
@@ -569,6 +570,58 @@ fun main() {
         check(s.count(boom) == 1L)
         s.close()
         check(s.isClosed())
+    }
+
+    // An output boundary DERIVED from the type's value form
+    // (`expand_return!(Report).fields(fields!(report_to_struct))`) instead of a
+    // restated field list — #213. The point is that deriving changes NOTHING
+    // about the wire: each field still crosses by its own type's boundary, all
+    // in ONE crossing, so a binding can swap a hand-written list (which drifts
+    // when the struct gains a field) for the derived one and keep its shape.
+    //
+    // Each parameter below lands on a different rule, and the signature itself
+    // is the assertion — it would not compile if a field had been derived
+    // wrongly:
+    //   summary__count/total  the field's type has its own expand_return! and
+    //                         is spliced by it — NOT handed over as a handle
+    //   taken                 Option<data class> stays ONE leaf
+    //   origin__secs/nanos    a non-optional data class INLINES
+    //   outcome               a sum, typed here, tag + groups on the wire
+    //   label                 a plain leaf
+    section("output boundary derived from a value form") {
+        val rows = mutableListOf<String>()
+        val kept = mutableListOf<Summary>()
+        reportEach(3L, { sCount, sTotal, taken, oSecs, oNanos, outcome, label ->
+            // The value form is called ONCE per delivery, so every leaf below
+            // comes from the same snapshot.
+            check(oSecs == 1L && oNanos == 2L)
+            val stamped = if (taken != null) "@${taken.secs}" else "-"
+            val which = when (outcome) {
+                is Lookup.Failed -> "failed"
+                Lookup.Absent -> "absent"
+                is Lookup.Found -> {
+                    val s = outcome.v0
+                    // A handle carried by a sum group, reached through a value
+                    // form: live, and the receiver's to close.
+                    check(!s.isClosed())
+                    kept.add(s)
+                    "found:${s.count(boom)}"
+                }
+            }
+            rows.add("$label|$sCount|$sTotal|$stamped|$which")
+        }, boom)
+
+        check(
+            rows == listOf(
+                "r0|0|0.0|@7|failed",
+                "r1|0|10.0|-|absent",
+                "r2|1|20.0|@7|found:1",
+            )
+        ) { "derived value-form leaves: $rows" }
+
+        check(kept.size == 1)
+        kept[0].close()
+        check(kept[0].isClosed())
     }
 
     // A sum returned BORROWED (`&Reading` / `Option<&Reading>`). The value stays

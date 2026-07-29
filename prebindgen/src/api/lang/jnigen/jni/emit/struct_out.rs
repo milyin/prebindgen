@@ -83,11 +83,11 @@ pub(crate) fn synth_value_struct_leaves(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
-    path_prefix: &[syn::Ident],
+    path_prefix: &[crate::api::core::unfold::PathStep],
     name_prefix: &str,
     depth: usize,
 ) -> Option<Vec<crate::api::core::unfold::UnfoldLeaf>> {
-    use crate::api::core::unfold::{LeafSource, UnfoldLeaf};
+    use crate::api::core::unfold::{LeafSource, PathStep, UnfoldLeaf};
     if depth > 16 {
         return None;
     }
@@ -105,7 +105,10 @@ pub(crate) fn synth_value_struct_leaves(
             format!("{name_prefix}__{camel}")
         };
         let mut path = path_prefix.to_vec();
-        path.push(fname);
+        // The synthesizer declines `Option`-wrapped nesting below, so an
+        // intermediate step is never optional; a TERMINAL `Option` field is not
+        // a nesting step either (its own converter carries the nullability).
+        path.push(PathStep::field(fname, false));
 
         // A projection field (opaque handle) or an enum field
         // is delivered with a transform the fixed builder can't forward yet.
