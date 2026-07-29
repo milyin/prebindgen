@@ -7,6 +7,8 @@
 //! * [`acceptance`] — source spelling → element, or a diagnosis naming the item
 //!   and the component. The matrix issue #211 asks for.
 
+use std::rc::Rc;
+
 use quote::ToTokens;
 
 use super::*;

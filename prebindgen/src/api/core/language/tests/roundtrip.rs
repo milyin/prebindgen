@@ -28,7 +28,7 @@ fn function_parts_are_the_source_tokens() {
     assert_eq!(
         func.params
             .iter()
-            .map(|p| tokens(&p.syntax))
+            .map(|p| tokens(&p.origin.syntax))
             .collect::<Vec<_>>(),
         vec![
             "key : & 'a KeyExpr",
@@ -37,10 +37,10 @@ fn function_parts_are_the_source_tokens() {
         ]
     );
     // The lifetime is nowhere in the classification, and still survives.
-    assert_eq!(tokens(&func.params[0].ty.syntax), "& 'a KeyExpr");
+    assert_eq!(tokens(&func.params[0].ty.origin.syntax), "& 'a KeyExpr");
     assert!(matches!(func.params[0].ty.kind, TypeKind::Ref { .. }));
 
-    assert_eq!(tokens(&func.ret.syntax), "Result < () , Error >");
+    assert_eq!(tokens(&func.ret.origin.syntax), "Result < () , Error >");
 }
 
 /// A defaulted return and a written `-> ()` are the same function, and both
@@ -60,14 +60,14 @@ fn a_defaulted_return_spells_as_the_unit() {
         let element = parse_one(item);
         let ret = &as_fn(&element).ret;
         assert!(matches!(ret.kind, TypeKind::Unit));
-        assert_eq!(tokens(&ret.syntax), "()");
+        assert_eq!(tokens(&ret.origin.syntax), "()");
     }
 
     let defaulted = parse_one(syn::parse_quote!(
         pub fn a() {}
     ));
     assert!(matches!(
-        as_fn(&defaulted).syntax.sig.output,
+        as_fn(&defaulted).origin.syntax.sig.output,
         syn::ReturnType::Default
     ));
 }
@@ -86,11 +86,78 @@ fn struct_field_slices_keep_attributes() {
     ));
     let fields = as_struct(&element).fields();
     assert_eq!(fields.len(), 2);
-    assert!(tokens(&fields[0].syntax).contains("The key it was published on."));
+    assert!(tokens(&fields[0].origin.syntax).contains("The key it was published on."));
     assert_eq!(
-        tokens(&fields[1].syntax),
+        tokens(&fields[1].origin.syntax),
         "# [allow (dead_code)] pub (crate) seq : u64"
     );
+}
+
+/// One captured record is one item, so an item and every node lowered out of it
+/// point at the **same** location — not equal copies, the same allocation.
+///
+/// That is the model, not an optimisation: a field has no location of its own,
+/// and the honest answer to "where is this field" is "wherever its item is".
+#[test]
+fn an_item_and_its_components_share_one_location() {
+    let element = parse_one(syn::parse_quote!(
+        pub struct Sample {
+            pub key: String,
+            pub tags: Vec<u8>,
+        }
+    ));
+    let s = as_struct(&element);
+    let item = &s.origin.location;
+    for field in s.fields() {
+        assert!(Rc::ptr_eq(item, &field.origin.location), "field");
+        assert!(Rc::ptr_eq(item, &field.ty.origin.location), "field type");
+    }
+    // And down through a nested type's arguments.
+    let TypeKind::Sequence(elem) = &s.fields()[1].ty.kind else {
+        panic!("a sequence");
+    };
+    assert!(Rc::ptr_eq(item, &elem.origin.location), "element type");
+
+    // Variants, their fields, parameters and extents alike.
+    let element = parse_one(syn::parse_quote!(
+        pub enum E {
+            A { x: [u8; 4] },
+        }
+    ));
+    let e = as_enum(&element);
+    let item = &e.origin.location;
+    let v = &e.variants[0];
+    assert!(Rc::ptr_eq(item, &v.origin.location), "variant");
+    let f = &v.fields[0];
+    assert!(Rc::ptr_eq(item, &f.origin.location), "variant field");
+    let extent = f.ty.array_extent().expect("an extent");
+    assert!(Rc::ptr_eq(item, &extent.origin.location), "extent");
+    assert_eq!(tokens(&extent.origin.syntax), "4");
+
+    let element = parse_one(syn::parse_quote!(
+        pub fn f(a: u8) {}
+    ));
+    let func = as_fn(&element);
+    let item = &func.origin.location;
+    assert!(Rc::ptr_eq(item, &func.params[0].origin.location), "param");
+    assert!(Rc::ptr_eq(item, &func.ret.origin.location), "elided return");
+}
+
+/// A component's diagnosis carries the item's location, which is the only one
+/// there is — the record is per-item, so nothing finer was ever captured.
+#[test]
+fn a_component_diagnosis_carries_the_items_location() {
+    let element = parse_one(syn::parse_quote!(
+        pub struct Sample {
+            pub bad: (u8, u8),
+        }
+    ));
+    let Element::Unsupported(u) = &element else {
+        panic!("a tuple field is outside the language");
+    };
+    assert!(matches!(*u.error, ItemError::FieldType { .. }));
+    // The item's own location, reachable the same way as for any other element.
+    assert!(std::ptr::eq(element.location(), &*u.origin.location));
 }
 
 /// The case that motivated the design. `B()` and `C {}` carry no payload and
@@ -223,12 +290,13 @@ fn discriminant_number_and_spelling_both_survive() {
         vec![(&e.variants[0].name, 7), (&e.variants[1].name, 8)]
     );
     let (_, expr) = e.variants[0]
+        .origin
         .syntax
         .discriminant
         .as_ref()
         .expect("an explicit discriminant");
     assert_eq!(tokens(expr), "0x07");
-    assert!(e.variants[1].syntax.discriminant.is_none());
+    assert!(e.variants[1].origin.syntax.discriminant.is_none());
 }
 
 /// A discriminant the frontend cannot evaluate breaks the *numeric* chain and
@@ -246,6 +314,7 @@ fn an_unevaluable_discriminant_keeps_its_spelling() {
     assert!(e.variants.iter().all(|v| v.discriminant.is_none()));
     assert_eq!(e.discriminant_values().expect_err("no numbers"), "A");
     let (_, expr) = e.variants[0]
+        .origin
         .syntax
         .discriminant
         .as_ref()
@@ -301,7 +370,7 @@ fn array_extent_carries_number_const_and_spelling() {
     let named = fields[0].ty.array_extent().expect("an extent");
     assert_eq!(named.value, 4);
     assert_eq!(named.const_id().expect("a const").name, "TAG_LEN");
-    assert_eq!(tokens(&fields[0].ty.syntax), "[u8 ; TAG_LEN]");
+    assert_eq!(tokens(&fields[0].ty.origin.syntax), "[u8 ; TAG_LEN]");
 
     let literal = fields[1].ty.array_extent().expect("an extent");
     assert_eq!(literal.value, 2);
@@ -320,7 +389,7 @@ fn the_whole_item_survives() {
         }
     );
     let element = parse_one(syn::Item::Fn(source.clone()));
-    assert_eq!(tokens(&as_fn(&element).syntax), tokens(&source));
+    assert_eq!(tokens(&as_fn(&element).origin.syntax), tokens(&source));
     assert_eq!(tokens(&element.syntax()), tokens(&syn::Item::Fn(source)));
 }
 

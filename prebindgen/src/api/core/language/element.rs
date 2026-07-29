@@ -1,15 +1,15 @@
-//! The elements: one variant per structure the source language allows, each
-//! carrying the exact syntax it was built from.
+//! The elements: one variant per structure the source language allows.
 //!
-//! Every component — a parameter, a field, a variant, a type — keeps its own
-//! slice, so generated Rust names the source by re-emitting what the source
-//! wrote, and nothing re-parses a whole item to find a part of it.
+//! Every node — an item, a parameter, a field, a variant, a type — carries one
+//! [`Origin`], so generated Rust names the source by re-emitting what the source
+//! wrote, nothing re-parses a whole item to find a part of it, and no level has
+//! to copy a piece of provenance down from the level above.
 //!
 //! **Structure only.** Everything that turns an element back into Rust tokens
 //! lives in [`spell`](super::spell), so the shape of an element says nothing
 //! about the language it came from.
 
-use super::ty::Type;
+use super::{origin::Origin, ty::Type};
 use crate::SourceLocation;
 
 /// One structure of the prebindgen source language.
@@ -55,24 +55,27 @@ impl Element {
     }
 
     /// Where the item was captured, including the crate that marked it.
+    ///
+    /// The same location every component of this item carries — they share one
+    /// [`Origin::location`], because one captured record is one item.
     pub fn location(&self) -> &SourceLocation {
         match self {
-            Element::Function(f) => &f.location,
-            Element::Struct(s) => &s.location,
-            Element::Enum(e) => &e.location,
-            Element::Const(c) => &c.location,
-            Element::Unsupported(u) => &u.location,
+            Element::Function(f) => &f.origin.location,
+            Element::Struct(s) => &s.origin.location,
+            Element::Enum(e) => &e.origin.location,
+            Element::Const(c) => &c.origin.location,
+            Element::Unsupported(u) => &u.origin.location,
         }
     }
 
     /// The whole item as the source wrote it.
     pub fn syntax(&self) -> syn::Item {
         match self {
-            Element::Function(f) => syn::Item::Fn(f.syntax.clone()),
-            Element::Struct(s) => syn::Item::Struct(s.syntax.clone()),
-            Element::Enum(e) => syn::Item::Enum(e.syntax.clone()),
-            Element::Const(c) => syn::Item::Const(c.syntax.clone()),
-            Element::Unsupported(u) => u.syntax.clone(),
+            Element::Function(f) => syn::Item::Fn(f.origin.syntax.clone()),
+            Element::Struct(s) => syn::Item::Struct(s.origin.syntax.clone()),
+            Element::Enum(e) => syn::Item::Enum(e.origin.syntax.clone()),
+            Element::Const(c) => syn::Item::Const(c.origin.syntax.clone()),
+            Element::Unsupported(u) => u.origin.syntax.clone(),
         }
     }
 }
@@ -88,9 +91,8 @@ pub struct Function {
     /// they mean the same thing, differ only in spelling, and every consumer
     /// today already normalizes one to the other on the spot.
     pub ret: Type,
-    pub location: SourceLocation,
     /// The whole item: attributes, `cfg`, doc comments, body.
-    pub syntax: syn::ItemFn,
+    pub origin: Origin<syn::ItemFn>,
 }
 
 /// One parameter of a [`Function`].
@@ -99,7 +101,7 @@ pub struct Param {
     pub name: syn::Ident,
     pub ty: Type,
     /// The parameter as written — `mode: Mode`.
-    pub syntax: syn::PatType,
+    pub origin: Origin<syn::PatType>,
 }
 
 /// A `#[prebindgen]` struct: a product of fields, or an opaque one.
@@ -120,8 +122,7 @@ pub struct Struct {
     /// spelling, read off `syntax` by
     /// [`spell::fields`](super::spell::fields).
     pub fields: Option<Vec<Field>>,
-    pub location: SourceLocation,
-    pub syntax: syn::ItemStruct,
+    pub origin: Origin<syn::ItemStruct>,
 }
 
 impl Struct {
@@ -142,8 +143,7 @@ pub struct Enum {
     pub name: syn::Ident,
     /// Variants in declaration order; `variants[i].tag == i as i32`.
     pub variants: Vec<Variant>,
-    pub location: SourceLocation,
-    pub syntax: syn::ItemEnum,
+    pub origin: Origin<syn::ItemEnum>,
 }
 
 impl Enum {
@@ -200,7 +200,7 @@ pub struct Variant {
     /// The variant's payload, in declaration order.
     pub fields: Vec<Field>,
     /// The variant as written: delimiters, `= 0x07`, attributes, doc comments.
-    pub syntax: syn::Variant,
+    pub origin: Origin<syn::Variant>,
 }
 
 /// One field of a [`Struct`] or of a [`Variant`].
@@ -213,7 +213,7 @@ pub struct Field {
     pub index: usize,
     pub ty: Type,
     /// The field as written — `pub id: u64`, attributes and docs included.
-    pub syntax: syn::Field,
+    pub origin: Origin<syn::Field>,
 }
 
 impl Variant {
@@ -237,10 +237,9 @@ impl Variant {
 pub struct Const {
     pub name: syn::Ident,
     pub ty: Type,
-    pub location: SourceLocation,
     /// The whole item — the initializer expression included, which is where a
     /// consumer that re-emits the value reads it from.
-    pub syntax: syn::ItemConst,
+    pub origin: Origin<syn::ItemConst>,
 }
 
 /// An item the language cannot express.
@@ -248,11 +247,10 @@ pub struct Const {
 pub struct Unsupported {
     /// The item's identifier, or `None` for an item kind that has none.
     pub name: Option<syn::Ident>,
-    pub location: SourceLocation,
     /// What could not be expressed, ready to be raised by whatever declares
     /// this item. Boxed: it is the size outlier among the elements, and this
     /// one is the rare variant.
     pub error: Box<super::ItemError>,
-    /// The item as written, so it can still be re-emitted verbatim.
-    pub syntax: syn::Item,
+    /// The item as written, so a diagnosis can quote the source.
+    pub origin: Origin<syn::Item>,
 }

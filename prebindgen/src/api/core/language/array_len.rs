@@ -15,9 +15,12 @@
 //!
 //! Ported from #212, which introduced it for issue #210.
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, rc::Rc};
 
 use quote::ToTokens;
+
+use super::origin::Origin;
+use crate::SourceLocation;
 
 /// A length the prebindgen source language does not accept.
 ///
@@ -141,11 +144,27 @@ impl std::error::Error for UnsupportedArrayLen {}
 /// This lives on the **use site** — a field's or parameter's type — and never on
 /// anything keyed by type. Three fields whose extents are equal are one type, so
 /// a type-keyed table could only report whichever was stored last.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// Equality is over the length only: `[u8; A]` and `[u8; 4]` are one type
+/// wherever they are written, so [`Self::origin`] — which differs per use site
+/// by construction — is deliberately not compared.
+#[derive(Clone, Debug)]
 pub struct ArrayExtent {
     pub value: usize,
     pub source: ExtentSource,
+    /// The length expression as written — `4`, `TAG_LEN` — and where it came
+    /// from. So a C header emitting `uint8_t x[TAG_LEN]` spells the length off
+    /// its own slice rather than digging into the enclosing array type.
+    pub origin: Origin<syn::Expr>,
 }
+
+impl PartialEq for ArrayExtent {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value && self.source == other.source
+    }
+}
+
+impl Eq for ArrayExtent {}
 
 /// How an [`ArrayExtent`] was addressed at its use site.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -161,8 +180,13 @@ pub enum ExtentSource {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConstId {
     pub name: String,
-    /// Crate the const was marked in; `None` for an origin-less stream.
-    pub origin: Option<String>,
+    /// Crate the const was **declared** in, resolved by looking the name up
+    /// among the captured consts — never assumed from the use site. That is
+    /// what lets an extent refuse a const from another source crate.
+    ///
+    /// A bare crate name, not an [`Origin`]: it describes a *different* item
+    /// than the one being lowered, so it is not that node's provenance.
+    pub crate_name: Option<String>,
 }
 
 impl ArrayExtent {
@@ -181,8 +205,10 @@ struct ConstEntry {
     /// either way, so "not a const" and "not a usable const" stay distinct
     /// diagnostics.
     value: Option<usize>,
-    /// Crate the const was marked in; `None` for an origin-less stream.
-    origin: Option<String>,
+    /// Crate the const was marked in; `None` for an unstamped stream. Named
+    /// for what it is — a crate, not an [`Origin`], which belongs to the node
+    /// being lowered rather than to some other item it names.
+    crate_name: Option<String>,
 }
 
 /// The `#[prebindgen]` consts a length may name.
@@ -205,10 +231,10 @@ impl ConstIndex {
         Self {
             consts: consts
                 .into_iter()
-                .map(|(name, expr, origin)| {
+                .map(|(name, expr, crate_name)| {
                     let entry = ConstEntry {
                         value: int_literal(&expr),
-                        origin,
+                        crate_name,
                     };
                     (name, entry)
                 })
@@ -237,15 +263,17 @@ fn int_literal(expr: &syn::Expr) -> Option<usize> {
 /// (issue #210), where eight defects in a row were two walks disagreeing about
 /// one input.
 ///
-/// `array` is the array type's rendered form and `item_crate` the origin of the
-/// item the length was written in; both are used for diagnostics, and
-/// `item_crate` additionally pins provenance.
+/// `array` is the array type's rendered form, for diagnostics, and `at` the
+/// origin of the item the length was written in — which both becomes the
+/// extent's own origin and pins which crate a named const may come from.
 pub(crate) fn lower_array_len(
     len: &syn::Expr,
     array: &str,
-    item_crate: Option<&str>,
+    at: &Rc<SourceLocation>,
     consts: &ConstIndex,
 ) -> Result<ArrayExtent, UnsupportedArrayLen> {
+    let item_crate = at.crate_name.as_deref();
+    let origin = || Origin::new(len.clone(), Rc::clone(at));
     let fail = |reason| UnsupportedArrayLen {
         array: array.to_string(),
         offending: len.to_token_stream().to_string(),
@@ -256,6 +284,7 @@ pub(crate) fn lower_array_len(
             Some(value) => Ok(ArrayExtent {
                 value,
                 source: ExtentSource::Literal,
+                origin: origin(),
             }),
             None => Err(fail(match len {
                 // Told apart so an out-of-range integer does not report as
@@ -281,9 +310,12 @@ pub(crate) fn lower_array_len(
             // Provenance before value: a same-named const from another source
             // may well be a literal, and using it would be the silent wrong
             // answer rather than an error.
-            if entry.origin.as_deref() != item_crate {
+            if entry.crate_name.as_deref() != item_crate {
                 return Err(fail(ArrayLenReason::ForeignSourceConst {
-                    const_crate: entry.origin.clone().unwrap_or_else(|| "<unstamped>".into()),
+                    const_crate: entry
+                        .crate_name
+                        .clone()
+                        .unwrap_or_else(|| "<unstamped>".into()),
                     item_crate: item_crate.unwrap_or("<unstamped>").to_string(),
                 }));
             }
@@ -294,8 +326,9 @@ pub(crate) fn lower_array_len(
                 value,
                 source: ExtentSource::Const(ConstId {
                     name,
-                    origin: entry.origin.clone(),
+                    crate_name: entry.crate_name.clone(),
                 }),
+                origin: origin(),
             })
         }
         _ => Err(fail(ArrayLenReason::NotLiteralOrName)),

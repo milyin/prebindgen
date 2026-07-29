@@ -8,7 +8,7 @@
 //! ```text
 //! Source(s) ──items──> Language ──Elements──> Registry ──> adapters
 //!   raw records          parse +               indexes       classify off `kind`
-//!   (syn::Item)          validate              elements      spell off `syntax`
+//!   (syn::Item)          validate              elements      spell off `origin`
 //! ```
 //!
 //! # What an element is
@@ -18,17 +18,25 @@
 //! * a **closed classification** — [`TypeKind`], the field list, the variant
 //!   list — that says what the source *means*, in terms every destination
 //!   language shares;
-//! * the **exact syntax** each part was built from, sliced down to the
-//!   parameter, field, variant and type.
+//! * one [`Origin`], carrying the **exact syntax** the node was built from and
+//!   the source it arrived in.
+//!
+//! The `Origin` is uniform: every node has one, at every level — item,
+//! parameter, field, variant, type, array extent. Some levels know less than
+//! others (a field has no line of its own, so it shares its item's), but the
+//! shape does not change with the level, and no level copies a piece of
+//! provenance down from the one above. That copying is what previously let the
+//! same crate name appear under three field names with two meanings.
 //!
 //! So the rule for every consumer is:
 //!
-//! > **Classify off `kind`, spell off `syntax`.**
+//! > **Classify off `kind`, spell off `origin.syntax`.**
 //!
 //! Matching a `syn::Type` or `syn::Expr` variant outside this module is a
 //! classifier, and issue #211 says classification lives here alone. Passing a
-//! `syntax` slice into `quote!` is spelling, and spelling the source is exactly
-//! what generated Rust must do — see [`spell`] for the helpers that do it.
+//! node's [`Origin`] into `quote!` is spelling, and spelling the source is
+//! exactly what generated Rust must do — see [`spell`] for the helpers that do
+//! it.
 //!
 //! # What earns a variant
 //!
@@ -47,7 +55,12 @@
 //!
 //! The identities follow the same rule: a nominal type is a [`TypeId`] — a
 //! name — not a `syn::Path`, so nothing downstream has to take a path apart to
-//! learn what a type is.
+//! learn what a type is. And a name is *all* it is: **a reference carries a
+//! name, the declaration carries the origin**, so the same type never compares
+//! unequal to itself because two source crates mentioned it. The one place a
+//! crate name rides with an identity is [`ConstId`], and that is the const's
+//! *declaring* crate, resolved by lookup — which is exactly what lets an array
+//! extent refuse a const from another source.
 //!
 //! # Why the syntax rides along
 //!
@@ -81,7 +94,7 @@
 //! not model is a `union` or a type alias, and it is diagnosed like any other
 //! thing the language cannot express.
 
-use std::fmt;
+use std::{fmt, rc::Rc};
 
 use quote::ToTokens;
 
@@ -89,6 +102,7 @@ mod array_len;
 #[cfg(test)]
 mod boundary;
 mod element;
+mod origin;
 pub mod spell;
 mod ty;
 
@@ -99,6 +113,7 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{Const, Element, Enum, Field, Function, Param, Struct, Unsupported, Variant},
+    origin::Origin,
     ty::{ScalarKind, Type, TypeId, TypeKind, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
@@ -146,7 +161,7 @@ impl Language {
         // module name first is what makes a cross-source reference in an
         // earlier item normalize the same as in a later one.
         //
-        // The consequence is deliberate and stated in `Type::syntax`: a slice
+        // The consequence is deliberate and stated on `Origin`: a slice
         // is the spelling generation must EMIT, which is the normalized one —
         // the flat namespace is what the generated crate can actually name.
         let mut modules: Vec<String> = Vec::new();
@@ -346,36 +361,36 @@ impl std::error::Error for ItemError {}
 /// whose contents the language cannot express becomes [`Element::Unsupported`]
 /// rather than failing the parse.
 fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Element {
-    let item_crate = loc.crate_name.clone();
-    let crate_ref = item_crate.as_deref();
+    // One captured record is one item, so this is allocated once and shared by
+    // the item and every node lowered out of it.
+    let at = Rc::new(loc);
     match item {
-        syn::Item::Fn(f) => match lower_fn(&f, &loc, consts, crate_ref) {
+        syn::Item::Fn(f) => match lower_fn(&f, &at, consts) {
             Ok(func) => Element::Function(func),
-            Err(error) => unsupported(f.sig.ident.clone(), syn::Item::Fn(f), loc, error),
+            Err(error) => unsupported(f.sig.ident.clone(), syn::Item::Fn(f), &at, error),
         },
-        syn::Item::Struct(s) => match lower_struct(&s, &loc, consts, crate_ref) {
+        syn::Item::Struct(s) => match lower_struct(&s, &at, consts) {
             Ok(st) => Element::Struct(st),
-            Err(error) => unsupported(s.ident.clone(), syn::Item::Struct(s), loc, error),
+            Err(error) => unsupported(s.ident.clone(), syn::Item::Struct(s), &at, error),
         },
-        syn::Item::Enum(e) => match lower_enum(&e, &loc, consts, crate_ref) {
+        syn::Item::Enum(e) => match lower_enum(&e, &at, consts) {
             Ok(en) => Element::Enum(en),
-            Err(error) => unsupported(e.ident.clone(), syn::Item::Enum(e), loc, error),
+            Err(error) => unsupported(e.ident.clone(), syn::Item::Enum(e), &at, error),
         },
         // Including the unnamed `const _` each source injects as its feature
         // guard: it is a const, so it is one here. `Element::name` returns
         // `None` for `_`, which is what keeps several sources' guards from
         // colliding in the flat namespace.
-        syn::Item::Const(c) => match lower_type(&c.ty, consts, crate_ref) {
+        syn::Item::Const(c) => match lower_type(&c.ty, consts, &at) {
             Ok(ty) => Element::Const(Const {
                 name: c.ident.clone(),
                 ty,
-                location: loc,
-                syntax: c,
+                origin: Origin::new(c, at),
             }),
             Err(source) => unsupported(
                 c.ident.clone(),
                 syn::Item::Const(c),
-                loc,
+                &at,
                 ItemError::ConstType { source },
             ),
         },
@@ -390,7 +405,7 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
                 syn::Item::Type(t) => (Some(t.ident.clone()), "a type alias"),
                 _ => (None, "an item kind"),
             };
-            unsupported(name, other, loc, ItemError::UnsupportedItemKind { kind })
+            unsupported(name, other, &at, ItemError::UnsupportedItemKind { kind })
         }
     }
 }
@@ -398,22 +413,20 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
 fn unsupported(
     name: impl Into<Option<syn::Ident>>,
     syntax: syn::Item,
-    location: SourceLocation,
+    at: &Rc<SourceLocation>,
     error: ItemError,
 ) -> Element {
     Element::Unsupported(Unsupported {
         name: name.into(),
-        location,
         error: Box::new(error),
-        syntax,
+        origin: Origin::new(syntax, Rc::clone(at)),
     })
 }
 
 fn lower_fn(
     f: &syn::ItemFn,
-    loc: &SourceLocation,
+    at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-    item_crate: Option<&str>,
 ) -> Result<Function, ItemError> {
     let mut params = Vec::with_capacity(f.sig.inputs.len());
     for input in &f.sig.inputs {
@@ -427,14 +440,14 @@ fn lower_fn(
             });
         };
         let name = pat.ident.clone();
-        let ty = lower_type(&pt.ty, consts, item_crate).map_err(|source| ItemError::ParamType {
+        let ty = lower_type(&pt.ty, consts, at).map_err(|source| ItemError::ParamType {
             param: name.clone(),
             source,
         })?;
         params.push(Param {
             name,
             ty,
-            syntax: pt.clone(),
+            origin: Origin::new(pt.clone(), Rc::clone(at)),
         });
     }
     // An elided return and a written `-> ()` are the same function. The model
@@ -443,43 +456,39 @@ fn lower_fn(
     let ret = match &f.sig.output {
         syn::ReturnType::Default => Type {
             kind: TypeKind::Unit,
-            syntax: syn::parse_quote!(()),
+            origin: Origin::new(syn::parse_quote!(()), Rc::clone(at)),
         },
         syn::ReturnType::Type(_, t) => {
-            lower_type(t, consts, item_crate).map_err(|source| ItemError::ReturnType { source })?
+            lower_type(t, consts, at).map_err(|source| ItemError::ReturnType { source })?
         }
     };
     Ok(Function {
         name: f.sig.ident.clone(),
         params,
         ret,
-        location: loc.clone(),
-        syntax: f.clone(),
+        origin: Origin::new(f.clone(), Rc::clone(at)),
     })
 }
 
 fn lower_struct(
     s: &syn::ItemStruct,
-    loc: &SourceLocation,
+    at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-    item_crate: Option<&str>,
 ) -> Result<Struct, ItemError> {
     let fields = match &s.fields {
         syn::Fields::Named(named) => {
             let mut out = Vec::with_capacity(named.named.len());
             for (index, f) in named.named.iter().enumerate() {
                 let name = f.ident.clone().expect("named fields have idents");
-                let ty = lower_type(&f.ty, consts, item_crate).map_err(|source| {
-                    ItemError::FieldType {
-                        field: name.clone(),
-                        source,
-                    }
+                let ty = lower_type(&f.ty, consts, at).map_err(|source| ItemError::FieldType {
+                    field: name.clone(),
+                    source,
                 })?;
                 out.push(Field {
                     name: Some(name),
                     index,
                     ty,
-                    syntax: f.clone(),
+                    origin: Origin::new(f.clone(), Rc::clone(at)),
                 });
             }
             Some(out)
@@ -492,16 +501,14 @@ fn lower_struct(
     Ok(Struct {
         name: s.ident.clone(),
         fields,
-        location: loc.clone(),
-        syntax: s.clone(),
+        origin: Origin::new(s.clone(), Rc::clone(at)),
     })
 }
 
 fn lower_enum(
     e: &syn::ItemEnum,
-    loc: &SourceLocation,
+    at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-    item_crate: Option<&str>,
 ) -> Result<Enum, ItemError> {
     let mut variants = Vec::with_capacity(e.variants.len());
     // Rust's own numbering rule: an explicit `= N` sets the value, an implicit
@@ -520,21 +527,20 @@ fn lower_enum(
 
         let mut fields = Vec::with_capacity(v.fields.len());
         for (index, f) in v.fields.iter().enumerate() {
-            let ty = lower_type(&f.ty, consts, item_crate).map_err(|source| {
-                ItemError::VariantFieldType {
+            let ty =
+                lower_type(&f.ty, consts, at).map_err(|source| ItemError::VariantFieldType {
                     variant: v.ident.clone(),
                     field: match &f.ident {
                         Some(id) => id.to_string(),
                         None => index.to_string(),
                     },
                     source,
-                }
-            })?;
+                })?;
             fields.push(Field {
                 name: f.ident.clone(),
                 index,
                 ty,
-                syntax: f.clone(),
+                origin: Origin::new(f.clone(), Rc::clone(at)),
             });
         }
         variants.push(Variant {
@@ -542,14 +548,13 @@ fn lower_enum(
             tag: tag as i32,
             discriminant,
             fields,
-            syntax: v.clone(),
+            origin: Origin::new(v.clone(), Rc::clone(at)),
         });
     }
     Ok(Enum {
         name: e.ident.clone(),
         variants,
-        location: loc.clone(),
-        syntax: e.clone(),
+        origin: Origin::new(e.clone(), Rc::clone(at)),
     })
 }
 

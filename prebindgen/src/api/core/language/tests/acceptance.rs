@@ -91,7 +91,7 @@ fn the_builtin_generics() {
 fn a_box_classifies_as_what_it_wraps() {
     let ty = lower(quote::quote!(Box<String>)).expect("in the language");
     assert!(matches!(ty.kind, TypeKind::Str));
-    assert_eq!(tokens(&ty.syntax), "Box < String >");
+    assert_eq!(tokens(&ty.origin.syntax), "Box < String >");
 
     // And it composes: the nullable heap string of a `#[repr(C)]` struct field
     // is an optional string, spelled with its `Box`.
@@ -100,7 +100,7 @@ fn a_box_classifies_as_what_it_wraps() {
         panic!("an option");
     };
     assert!(matches!(inner.kind, TypeKind::Str));
-    assert_eq!(tokens(&inner.syntax), "Box < String >");
+    assert_eq!(tokens(&inner.origin.syntax), "Box < String >");
 }
 
 /// A builtin must be spelled BARE **after normalization**: the real std path
@@ -175,7 +175,7 @@ fn a_lifetime_argument_is_spelling_only() {
     };
     assert_eq!(id.name, "Foo");
     assert_eq!(args.len(), 1);
-    assert_eq!(tokens(&ty.syntax), "Foo < 'a , u8 >");
+    assert_eq!(tokens(&ty.origin.syntax), "Foo < 'a , u8 >");
 }
 
 #[test]
@@ -410,7 +410,7 @@ fn consts_carry_their_type_and_value() {
     let c = as_const(&element);
     assert_eq!(c.name, "TAG_LEN");
     assert!(matches!(c.ty.kind, TypeKind::Scalar(ScalarKind::Usize)));
-    assert_eq!(tokens(&c.syntax.expr), "4");
+    assert_eq!(tokens(&c.origin.syntax.expr), "4");
 }
 
 /// An unnamed `const _` — each source's injected feature guard — is a const

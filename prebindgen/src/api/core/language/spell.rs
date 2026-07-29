@@ -37,7 +37,7 @@ pub fn fields(shape: &syn::Fields, head: TokenStream, parts: &[TokenStream]) -> 
 impl Variant {
     /// [`fields`] over this variant's own delimiters.
     pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.syntax.fields, head, parts)
+        fields(&self.origin.syntax.fields, head, parts)
     }
 }
 
@@ -45,7 +45,7 @@ impl Struct {
     /// [`fields`] over this struct's own delimiters — the dual of
     /// [`Variant::spell`], and the reason neither needs a modelled shape.
     pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.syntax.fields, head, parts)
+        fields(&self.origin.syntax.fields, head, parts)
     }
 }
 

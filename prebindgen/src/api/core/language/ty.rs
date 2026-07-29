@@ -10,31 +10,35 @@
 //! lowering rather than a second list that can drift from it. Same contract, and
 //! for the same reason, as [`lower_array_len`].
 
-use std::fmt;
+use std::{fmt, rc::Rc};
 
 use quote::ToTokens;
 
-use super::array_len::{lower_array_len, ArrayExtent, ConstIndex, UnsupportedArrayLen};
+use super::{
+    array_len::{lower_array_len, ArrayExtent, ConstIndex, UnsupportedArrayLen},
+    origin::Origin,
+};
+use crate::SourceLocation;
 
 /// A type as the language decided it, plus the exact syntax it came from.
 ///
-/// The `syntax` slice is what removes the pressure to make `kind` lossless: a
-/// lifetime, an elided argument, a `Box` that changes nothing outside Rust all
-/// survive here at zero modelling cost, so `kind` can stay language-neutral and
-/// small.
+/// The [`Origin::syntax`] slice is what removes the pressure to make `kind`
+/// lossless: a lifetime, an elided argument, a `Box` that changes nothing
+/// outside Rust all survive there at zero modelling cost, so `kind` can stay
+/// language-neutral and small.
 #[derive(Clone, Debug)]
 pub struct Type {
     /// What the type means — the closed, destination-neutral classification.
     pub kind: TypeKind,
-    /// The type as generated Rust must spell it: the source's own tokens,
+    /// The type as generated Rust must spell it — the source's own tokens,
     /// normalized to the flat namespace the generated crate can name (see
-    /// [`Language::parse`](super::Language::parse)). Feed this to `quote!`;
-    /// never `match` on it to decide what the type is.
+    /// [`Language::parse`](super::Language::parse)) — plus the source they came
+    /// from.
     ///
-    /// It can say strictly more than `kind` does — `Box<String>` is a `Str`
-    /// here — which is the point: what Rust needs and no destination language
-    /// can see lives in the tokens, not in the classification.
-    pub syntax: syn::Type,
+    /// The syntax can say strictly more than `kind` does — `Box<String>` is a
+    /// `Str` here — which is the point: what Rust needs and no destination
+    /// language can see lives in the tokens, not in the classification.
+    pub origin: Origin<syn::Type>,
 }
 
 impl Type {
@@ -144,12 +148,14 @@ pub enum TypeKind {
     Unit,
 }
 
-/// A nominal type's identity.
+/// A nominal type's identity: a name, and nothing else.
 ///
 /// `#[prebindgen]` names live in one flat namespace — a duplicate is a
-/// [`ParseError`](super::ParseError) — so the name is the whole address, and
-/// `origin` records which crate wrote it for the same reason
-/// [`ConstId`](super::ConstId) does.
+/// [`ParseError`](super::ParseError) — so the name is the whole address. It
+/// deliberately carries **no crate**: a reference carries a name, and the
+/// declaring crate belongs to the declaration, reachable by looking the name up
+/// among the elements. Putting the use site's crate here would make the same
+/// type compare unequal to itself across two source crates.
 ///
 /// A name rather than a `syn::Path` on purpose: an identity kept as syntax
 /// makes every consumer take a path apart to learn what a type is, which is the
@@ -161,9 +167,6 @@ pub struct TypeId {
     /// `foreign::Option`. Normalized, so a reducible std or source-module path
     /// has already collapsed to its final segment.
     pub name: String,
-    /// Crate the item using this type was captured from; `None` for an
-    /// origin-less stream.
-    pub origin: Option<String>,
 }
 
 /// The primitives the source language accepts. Mirrors the set every adapter
@@ -318,42 +321,41 @@ impl std::error::Error for UnsupportedType {}
 /// understood, so a form this function does not lower is a form the language
 /// does not accept.
 ///
-/// `item_crate` is the origin of the item the type was written in; an extent
-/// must name a const from that same crate.
+/// `at` is the origin of the item this type was written in — the location every
+/// node lowered from that item shares, and the crate an array extent's const
+/// must come from.
 pub(crate) fn lower_type(
     ty: &syn::Type,
     consts: &ConstIndex,
-    item_crate: Option<&str>,
+    at: &Rc<SourceLocation>,
 ) -> Result<Type, UnsupportedType> {
     let fail = |reason| UnsupportedType {
         offending: ty.to_token_stream().to_string(),
         reason,
     };
-    // Every arm builds `kind` only; the syntax slice is attached once, here, so
-    // no arm can forget it or attach a rebuilt approximation.
+    // Every arm builds `kind` only; the origin is attached once, here, so no arm
+    // can forget it or attach a rebuilt approximation.
     let kind = match ty {
         // A group or paren wraps the same type. Its inner node keeps the inner
         // spelling, which is the one a consumer wants to emit.
-        syn::Type::Group(g) => return lower_type(&g.elem, consts, item_crate),
-        syn::Type::Paren(p) => return lower_type(&p.elem, consts, item_crate),
+        syn::Type::Group(g) => return lower_type(&g.elem, consts, at),
+        syn::Type::Paren(p) => return lower_type(&p.elem, consts, at),
         syn::Type::Reference(r) => TypeKind::Ref {
             mutable: r.mutability.is_some(),
-            inner: Box::new(lower_type(&r.elem, consts, item_crate)?),
+            inner: Box::new(lower_type(&r.elem, consts, at)?),
         },
         // `[T]` is the borrowed spelling of the same concept `Vec<T>` owns.
-        syn::Type::Slice(s) => {
-            TypeKind::Sequence(Box::new(lower_type(&s.elem, consts, item_crate)?))
-        }
+        syn::Type::Slice(s) => TypeKind::Sequence(Box::new(lower_type(&s.elem, consts, at)?)),
         syn::Type::Tuple(t) if t.elems.is_empty() => TypeKind::Unit,
         // Only the unit is in the language. Refusing here names the type;
         // accepting would defer the failure to an "unresolved type" much later.
         syn::Type::Tuple(_) => return Err(fail(UnsupportedTypeReason::UnsupportedTuple)),
         syn::Type::Array(a) => {
             let rendered = a.to_token_stream().to_string();
-            let extent = lower_array_len(&a.len, &rendered, item_crate, consts)
+            let extent = lower_array_len(&a.len, &rendered, at, consts)
                 .map_err(|e| fail(UnsupportedTypeReason::BadArrayExtent(Box::new(e))))?;
             TypeKind::Array {
-                elem: Box::new(lower_type(&a.elem, consts, item_crate)?),
+                elem: Box::new(lower_type(&a.elem, consts, at)?),
                 extent,
             }
         }
@@ -363,17 +365,17 @@ pub(crate) fn lower_type(
             Some(args) => TypeKind::Callback {
                 args: args
                     .iter()
-                    .map(|a| lower_type(a, consts, item_crate))
+                    .map(|a| lower_type(a, consts, at))
                     .collect::<Result<_, _>>()?,
             },
             None => return Err(fail(UnsupportedTypeReason::DisallowedImplTrait)),
         },
-        syn::Type::Path(tp) => lower_path(ty, tp, consts, item_crate)?,
+        syn::Type::Path(tp) => lower_path(ty, tp, consts, at)?,
         _ => return Err(fail(UnsupportedTypeReason::UnsupportedForm)),
     };
     Ok(Type {
         kind,
-        syntax: ty.clone(),
+        origin: Origin::new(ty.clone(), Rc::clone(at)),
     })
 }
 
@@ -381,7 +383,7 @@ fn lower_path(
     ty: &syn::Type,
     tp: &syn::TypePath,
     consts: &ConstIndex,
-    item_crate: Option<&str>,
+    at: &Rc<SourceLocation>,
 ) -> Result<TypeKind, UnsupportedType> {
     let fail = |reason| UnsupportedType {
         offending: ty.to_token_stream().to_string(),
@@ -410,7 +412,7 @@ fn lower_path(
             for a in &ab.args {
                 match a {
                     syn::GenericArgument::Type(t) => {
-                        out.push(lower_type(t, consts, item_crate)?);
+                        out.push(lower_type(t, consts, at)?);
                     }
                     syn::GenericArgument::Lifetime(_) => has_lifetime_arg = true,
                     _ => return Err(fail(UnsupportedTypeReason::UnsupportedGenericArgument)),
@@ -480,16 +482,16 @@ fn lower_path(
                     let ok = Box::new(args.remove(0));
                     return Ok(TypeKind::Fallible { ok, err });
                 }
-                _ => return Ok(named(tp, args, item_crate)),
+                _ => return Ok(named(tp, args)),
             }
         }
     }
-    Ok(named(tp, args, item_crate))
+    Ok(named(tp, args))
 }
 
 /// `Named` with the identity read off the path: every segment joined, minus the
 /// generic arguments, which are already in `args`.
-fn named(tp: &syn::TypePath, args: Vec<Type>, item_crate: Option<&str>) -> TypeKind {
+fn named(tp: &syn::TypePath, args: Vec<Type>) -> TypeKind {
     let name = tp
         .path
         .segments
@@ -498,10 +500,7 @@ fn named(tp: &syn::TypePath, args: Vec<Type>, item_crate: Option<&str>) -> TypeK
         .collect::<Vec<_>>()
         .join("::");
     TypeKind::Named {
-        id: TypeId {
-            name,
-            origin: item_crate.map(str::to_string),
-        },
+        id: TypeId { name },
         args,
     }
 }
