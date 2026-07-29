@@ -95,6 +95,7 @@ moves it.
 | Stage | Owns | State |
 |---|---|---|
 | L0 | `Language` + `Element` + the ledger | **done** — [#227](https://github.com/milyin/prebindgen/pull/227) |
+| L0.5 | `Flat`: the model, indexed and resolved | **done** — this branch |
 | L1 | `Registry` consumes elements | not started |
 | L2 | `api/core` stops classifying source syntax | not started |
 | L3 | `Cbindgen` consumes elements | not started |
@@ -123,12 +124,43 @@ may mark items no binding uses. Only a duplicate name — which no declaration c
 disambiguate — fails the parse. Tuple-struct fields stay unmodelled for the same
 reason.
 
+### L0.5 — `Flat`: the model, indexed and resolved — **done**
+
+L0 produced a `Vec<Element>`, which nobody could ask anything. This stage makes it
+a model, and takes two bullets off L1 in the process.
+
+- [x] `core::language` → `core::flat`, `Language` → `Flat`: the thing being
+      modelled is the **flat API**
+- [x] `Element = Function | Type | Constant | Unsupported`, with `Struct`,
+      `Variant`, `Enum` and `Opaque` under `Type`; the type *reference* becomes
+      `TypeRef`
+- [x] `Opaque` is an entity, declared by `#[prebindgen] pub type X = ..` — the way
+      a foreign or crate-private handle gets a **name** in the flat API. This is
+      the prerequisite for everything below it
+- [x] `FlatBuilder` collects, `Flat` answers by name: `function`,
+      `declared_type`, `constant`, `element`, the per-kind iterators, `resolve`
+- [x] **References resolve at parse time.** An item naming an undeclared type is
+      `Element::Unsupported` with `ItemError::UnresolvedType` — so a dangling name
+      is reported here, by name, instead of surfacing downstream as an unresolved
+      *converter* from whichever adapter looked first
+- [x] `MaybeUninit<T>` becomes `TypeKind::Uninit`: a boundary concept the adapter
+      was classifying, and the one foreign generic no alias can name
+- [x] The example flat APIs are closed, and covertest-kotlin's build script
+      asserts they stay closed across both its sources
+- [x] **Did not move**: every generated artifact byte-identical
+
+**Still open**: `zenoh-flat` and its two consumers are separate repos. Their 28
+unmarked types (26 zenoh aliases, plus `Duration` and `Cow<'_, [u8]>`) need the
+same treatment before they parse. `Cow<'_, [u8]>` has no alias spelling — generic
+and lifetime-bearing — so `zbytes_to_bytes` needs either the `MaybeUninit`
+treatment or a signature change.
+
 ### L1 — `Registry` consumes elements
 
 The seam that makes the direction real. Adapters must not need touching.
 
-- [ ] `Registry::from_elements(Vec<Element>)`; `from_items` becomes
-      `Language::parse` + `from_elements`, so both entry points share one parser
+- [ ] `Registry::from_flat(&Flat)`; `from_items` becomes `Flat::builder` +
+      `from_flat`, so both entry points share one parser
 - [ ] The `functions` / `structs` / `enums` / `consts` / `passthrough` maps are
       rebuilt from each element's retained `syntax` — a projection, not a second
       source of truth
@@ -137,7 +169,6 @@ The seam that makes the direction real. Adapters must not need touching.
       declaring such an item is what raises it
 - [ ] `ScanError`'s per-item variants map onto `ItemError`, so one authority
       produces the message
-- [ ] Elements are indexed by name so L2–L4 can ask for them
 - [ ] **Must not move**: every generated artifact byte-identical
       (`examples/regen-check.sh`)
 
