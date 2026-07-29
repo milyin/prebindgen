@@ -329,6 +329,39 @@ pub(crate) fn compose_step(
     }
 }
 
+/// Fold a run of steps onto `e`, borrowing wherever ownership demands it.
+///
+/// [`compose_step`] hands a `Call` its receiver as written, and an accessor
+/// takes that receiver **by reference** — so an owned value in hand has to be
+/// borrowed before the next call composes onto it. A value is in hand whenever
+/// the previous step returned one (`f(..) -> T` rather than `-> &T`), which is
+/// what [`PathStep::yields_owned`] records; `owned` says whether `e` itself
+/// started that way.
+///
+/// A `Field` step needs no borrow either way — it composes as `&(e).f`, which
+/// reads through a value and a reference alike.
+///
+/// This is the ONE place the rule lives, so every fold — a leaf's reach, a
+/// conditional hoist's prefix, a sum's matched value — answers it the same way.
+/// Splitting it produced exactly the bug it exists to prevent: ownership was
+/// handled at the optional binding and at the value form, and lost at every
+/// ordinary call in between.
+fn fold_steps(
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    steps: &[PathStep],
+    mut e: TokenStream,
+    mut owned: bool,
+) -> TokenStream {
+    for step in steps {
+        if owned && matches!(step, PathStep::Call { .. }) {
+            e = quote!(&#e);
+        }
+        e = compose_step(qualify, step, e);
+        owned = step.yields_owned();
+    }
+    e
+}
+
 /// Start a reach from `base`, projecting the **leading run of plain field
 /// steps** directly (`&base.a.b`) instead of through a borrow of the base
 /// (`&(&base).a.b`). Returns the expression and how many steps it consumed.
@@ -413,10 +446,8 @@ pub(crate) fn reach_leaf_flat(
         let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
         return quote!(#base #(.#segs)*);
     }
-    let (mut e, lead) = project_leading_fields(&base, base_is_ref, path);
-    for step in &path[lead..] {
-        e = compose_step(qualify, step, e);
-    }
+    let (e, lead) = project_leading_fields(&base, base_is_ref, path);
+    let e = fold_steps(qualify, &path[lead..], e, false);
     if leaf.source == LeafSource::Field {
         quote!((#e).clone())
     } else {
@@ -511,18 +542,18 @@ fn reach_optional(
     depth: usize,
     body: &dyn Fn(TokenStream) -> TokenStream,
 ) -> TokenStream {
-    let (mut e, lead) = project_leading_fields(&base, base_is_ref, path);
+    let (e, lead) = project_leading_fields(&base, base_is_ref, path);
     match (lead..path.len()).find(|&i| path[i].is_optional()) {
-        None => {
-            for step in &path[lead..] {
-                e = compose_step(qualify, step, e);
-            }
-            body(e)
-        }
+        None => body(fold_steps(qualify, &path[lead..], e, false)),
         Some(k) => {
-            for step in &path[lead..k] {
-                e = compose_step(qualify, step, e);
-            }
+            let e = fold_steps(qualify, &path[lead..k], e, false);
+            let e = if path[..k].last().is_some_and(PathStep::yields_owned)
+                && matches!(path[k], PathStep::Call { .. })
+            {
+                quote!(&#e)
+            } else {
+                e
+            };
             let opt_e = compose_step(qualify, &path[k], e);
             let bind = format_ident!("__hb{}", depth);
             // What the arm binds is the step's own value: an OWNED payload is a
@@ -628,10 +659,7 @@ pub(crate) fn bind_hoists(
                     // Reached through an accessor call, so what is in hand is a
                     // borrow with nothing to give up — clone once and consume
                     // the clone, exactly as a borrowed root does below.
-                    let mut e = quote!(&#outer);
-                    for step in lead {
-                        e = compose_step(qualify, step, e);
-                    }
+                    let e = fold_steps(qualify, lead, quote!(&#outer), false);
                     (last, quote!((#e).clone()))
                 }
             }
@@ -646,9 +674,16 @@ pub(crate) fn bind_hoists(
             None if by_ref => (0, value.clone()),
             None => (0, quote!(&#value)),
         };
-        for step in &h.prefix[from..] {
-            expr = compose_step(qualify, step, expr);
-        }
+        // Every arm above that starts from an OWNED expression does so to hand
+        // it to the trailing by-value value-form call — the move the whole
+        // branch exists for — and positions itself right before it. The rest
+        // start from a reference and fold by the ordinary rule.
+        let tail = &h.prefix[from..];
+        expr = if h.consuming && from + 1 == h.prefix.len() {
+            compose_step(qualify, &tail[0], expr)
+        } else {
+            fold_steps(qualify, tail, expr, false)
+        };
         out.stmts.extend(quote! { let #local = #expr; });
         out.bound.push((h.prefix.clone(), local));
         out.consuming.push(h.consuming);
@@ -681,19 +716,19 @@ fn reach_leaf(
     } else {
         path.len().saturating_sub(1)
     };
-    let (mut e, lead) = project_leading_fields(&base, base_is_ref, path);
+    let (e, lead) = project_leading_fields(&base, base_is_ref, path);
     match (lead..limit).find(|&i| path[i].is_optional()) {
         // No (more) optional nesting steps: compose the rest plainly.
-        None => {
-            for step in &path[lead..] {
-                e = compose_step(qualify, step, e);
-            }
-            body(e)
-        }
+        None => body(fold_steps(qualify, &path[lead..], e, false)),
         Some(k) => {
-            for step in &path[lead..k] {
-                e = compose_step(qualify, step, e);
-            }
+            let e = fold_steps(qualify, &path[lead..k], e, false);
+            let e = if path[..k].last().is_some_and(PathStep::yields_owned)
+                && matches!(path[k], PathStep::Call { .. })
+            {
+                quote!(&#e)
+            } else {
+                e
+            };
             let opt_e = compose_step(qualify, &path[k], e);
             let nested = format_ident!("__n{}", depth);
             let inner = reach_leaf(
@@ -827,10 +862,8 @@ pub(crate) fn encode_plan_leaves(
         // rejects once a sibling leaf has moved another field out of it — and
         // borrowing this field while sibling fields move is exactly what a
         // consuming value form does.
-        let (mut matched, lead) = project_leading_fields(&base, base_is_ref, &path);
-        for step in &path[lead..] {
-            matched = compose_step(&qualify, step, matched);
-        }
+        let (matched, lead) = project_leading_fields(&base, base_is_ref, &path);
+        let matched = fold_steps(&qualify, &path[lead..], matched, false);
         let (group_stmts, group_args) = encode_sum_group(
             ext,
             registry,

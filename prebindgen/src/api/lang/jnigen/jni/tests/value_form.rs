@@ -1590,6 +1590,77 @@ fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
     );
 }
 
+/// Ownership has to survive EVERY call on the chain, not just the optional
+/// binding and the value form. An ordinary accessor returning an owned value
+/// leaves that value in hand, and the next accessor takes its receiver by
+/// reference — so the fold has to borrow between them wherever it happens.
+#[test]
+fn an_owned_intermediate_result_is_borrowed_for_the_next_step() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_child(h: &ZHolder) -> Option<ZChild> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zchild_middle(c: &ZChild) -> ZMiddle {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zmiddle_carrier(m: &ZMiddle) -> &ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZMiddle))
+                .class(crate::ptr_class!(ZChild))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_to_struct)))
+        .expand(crate::expand_return!(ZMiddle).field(crate::fun!(zmiddle_carrier)))
+        .expand(crate::expand_return!(ZChild).field(crate::fun!(zchild_middle)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_child)));
+    let dir = unique_test_dir("jnigen_vf_cond_owned_middle");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zmiddle_carrier(&myflat::zchild_middle(&__hb0))"),
+        "an owned INTERMEDIATE result is borrowed for the call that follows \
+         it, exactly as the optional payload is:\n{rust}"
+    );
+}
+
 #[test]
 fn an_owned_optional_payload_is_borrowed_for_a_borrowing_value_form() {
     let rust = conditional_owned_gen(
