@@ -387,22 +387,29 @@ pub(crate) fn reach_leaf_flat(
          shape needs callback delivery",
         leaf.name,
     );
-    // Under a CONSUMING value form the leaf OWNS what it reaches, so it is
-    // moved out rather than cloned — a field leaf like `reach`'s
-    // `LeafSource::Field` arm on the multi-leaf path, and an IDENTITY leaf
-    // (a handle field decomposed by `.field_self()`) whose `out_ty` the plan
-    // resolved to the owned type precisely so the owning converter boxes the
-    // move instead of the borrowed one cloning it.
+    // Whether what this leaf reaches is OURS, and so is moved rather than
+    // borrowed or cloned. The two leaf kinds say it differently:
+    //
+    // * an IDENTITY leaf carries the answer in its `out_ty` — the plan resolved
+    //   it to the owned type exactly when the value is the plan's to give away
+    //   (`place_is_owned`: an owned root, or a field of a CONSUMING value form),
+    //   and that is also what selected the owning converter, which boxes the
+    //   move rather than cloning a borrow;
+    // * a FIELD leaf's `out_ty` is the field type as written, owned either way,
+    //   so ownership is the enclosing form's: only a consuming one gives its
+    //   fields away.
     //
     // A trailing `Option` step cannot arrive here at all: return delivery has
     // no `None` arm for the absent case, so a nullable leaf is routed to
     // callback delivery when the plan picks its `Delivery` — see
     // `single_return` in `core/unfold.rs`. `is_plain_field` is what that rules
     // out, and it stays as the local statement of the same fact.
-    if consuming
-        && !matches!(leaf.out_ty, syn::Type::Reference(_))
-        && path.iter().all(PathStep::is_plain_field)
-    {
+    let reached_is_ours = if leaf.identity {
+        !matches!(leaf.out_ty, syn::Type::Reference(_))
+    } else {
+        consuming
+    };
+    if reached_is_ours && path.iter().all(PathStep::is_plain_field) {
         let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
         return quote!(#base #(.#segs)*);
     }

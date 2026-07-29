@@ -985,6 +985,62 @@ fn a_sole_optional_handle_field_takes_callback_delivery() {
     );
 }
 
+/// A ROOT identity leaf owns its value with no value form in sight — a plain
+/// `-> ZChild` return under the type-level `expand_return!(ZChild).field_self()`
+/// that exists so the same boundary can be spliced as a value-form field. The
+/// flat return path tied its move to the rebased hoist's `consuming` flag,
+/// which is `false` when there is no hoist, so it emitted `&__cvsrc` into the
+/// owning `ZChild`-to-jlong converter.
+///
+/// Ownership is not "a consuming form gave it to me" — that is one of its two
+/// sources. For an identity leaf the plan already states it in `out_ty`, so the
+/// emitter reads it there rather than re-deriving it from the hoist. The
+/// `Option` return is the same value inside a `map` closure.
+#[test]
+fn an_owned_root_identity_moves_without_any_value_form() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_root_child_make() -> ZChild {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_root_child_maybe() -> Option<ZChild> {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZChild))
+                .fun(crate::fun!(z_root_child_make))
+                .fun(crate::fun!(z_root_child_maybe)),
+        )
+        .expand(crate::expand_return!(ZChild).field_self());
+    let dir = unique_test_dir("jnigen_vf_root_identity");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        !rust.contains("&__cvsrc") && !rust.contains("&__inner"),
+        "an owned root is MOVED into its converter, not borrowed — the owning \
+         converter takes `ZChild`, not `&ZChild`:\n{rust}"
+    );
+}
+
 /// A per-field `.field(name, expand_return!(T))` override states the field's
 /// type, so it has to be checked against the field. Otherwise the override
 /// silently survives an upstream field-type change — which is exactly the drift
