@@ -394,10 +394,11 @@ pub(crate) fn reach_leaf_flat(
     // resolved to the owned type precisely so the owning converter boxes the
     // move instead of the borrowed one cloning it.
     //
-    // A trailing `Option` step is excluded here, not by `steps_are_movable`:
-    // return delivery has no `None` arm to put the absent case in, so the whole
-    // `Option` would have to reach the converter — which is what the callback
-    // path's nullable branch does with a `match`.
+    // A trailing `Option` step cannot arrive here at all: return delivery has
+    // no `None` arm for the absent case, so a nullable leaf is routed to
+    // callback delivery when the plan picks its `Delivery` — see
+    // `single_return` in `core/unfold.rs`. `is_plain_field` is what that rules
+    // out, and it stays as the local statement of the same fact.
     if consuming
         && !matches!(leaf.out_ty, syn::Type::Reference(_))
         && path.iter().all(PathStep::is_plain_field)

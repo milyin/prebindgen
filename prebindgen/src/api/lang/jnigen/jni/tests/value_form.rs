@@ -913,6 +913,78 @@ fn an_optional_handle_field_of_a_consuming_value_form_moves() {
     );
 }
 
+/// The cross-product of the two above: a value form whose SOLE field is an
+/// `Option<Handle>`. Delivery was chosen on leaf COUNT alone, so this landed on
+/// the flat `Delivery::Return` path — which has no `None` arm, and whose
+/// `convert_out_ty` names the leaf's own type rather than an optional of it, so
+/// it composed `&(&__vf0).child` into a converter typed for `ZChild`.
+///
+/// A nullable leaf now goes to callback delivery, which has that arm already.
+/// Absence is a delivery question, not an ownership one — making `out_ty` owned
+/// says who frees the handle, not whether there is one.
+#[test]
+fn a_sole_optional_handle_field_takes_callback_delivery() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOptionalSingleStruct {
+                    pub child: Option<ZChild>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_optional_single_into_struct(e: ZOptionalSingle) -> ZOptionalSingleStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_optional_single_make() -> ZOptionalSingle {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOptionalSingle))
+                .class(crate::ptr_class!(ZChild))
+                .fun(crate::fun!(z_optional_single_make)),
+        )
+        .expand(crate::expand_return!(ZChild).field_self())
+        .expand(
+            crate::expand_return!(ZOptionalSingle)
+                .fields_into(crate::fields!(z_optional_single_into_struct)),
+        );
+    let dir = unique_test_dir("jnigen_vf_sole_optional_handle");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        !rust.contains("&(&__vf0).child") && !rust.contains("&__vf0.child"),
+        "the optional field is never composed as a borrow — that is what the \
+         flat return path did, handing `&Option<ZChild>` to a `ZChild` \
+         converter:\n{rust}"
+    );
+    assert!(
+        rust.contains("match __vf0.child") && rust.contains("Box::new(__n)"),
+        "it takes callback delivery, whose `None` arm exists, and the present \
+         handle still moves:\n{rust}"
+    );
+}
+
 /// A per-field `.field(name, expand_return!(T))` override states the field's
 /// type, so it has to be checked against the field. Otherwise the override
 /// silently survives an upstream field-type change — which is exactly the drift

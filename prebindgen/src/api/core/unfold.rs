@@ -1070,16 +1070,28 @@ fn process_decl<M>(
             plan
         };
         // Delivery is by **leaf count**, not a per-decl flag:
-        //   * Output, single leaf, non-Iterable ⇒ Return (wrapper returns the
-        //     value via its ordinary output converter — `convert_out_ty`).
+        //   * Output, single non-nullable leaf, non-Iterable ⇒ Return (wrapper
+        //     returns the value via its ordinary output converter —
+        //     `convert_out_ty`).
         //   * Output, multiple leaves or Iterable (at any layer — an
         //     `Optional(Iterable)` fold has no single value to return) ⇒
         //     Callback (builder / fold).
         //   * Error ⇒ always Callback-shaped: every leaf is a `ze` arg after the
         //     fixed `je` (no return-value path; `convert_out_ty` stays None).
+        //
+        // A NULLABLE leaf is one whose path passes through an `Option` that
+        // something is decomposed below (`Option<Handle>` reached by
+        // `.field_self()`, a nested value form behind an `Option`). Returning it
+        // has nowhere to put the absent case: a return value is one expression,
+        // so there is no `None` arm, and `convert_out_ty` names the leaf's own
+        // type rather than an optional of it. Callback delivery has that arm
+        // already — the leaf crosses as a boxed `Long` / JVM null — so the
+        // shape goes there instead of being composed into Rust that hands
+        // `&Option<T>` to a converter typed for `T`.
         let single_return = ed.target == DeconTarget::Output
             && !plan.shape.has_iterable_layer()
-            && plan.leaves.len() == 1;
+            && plan.leaves.len() == 1
+            && !plan.leaves[0].nullable;
         let plan = if single_return {
             let leaf_ty = plan.leaves[0].out_ty.clone();
             let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
