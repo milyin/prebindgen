@@ -1528,6 +1528,68 @@ fn conditional_owned_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> Stri
         .expect("read rust")
 }
 
+/// An owned payload may have ORDINARY steps between it and the value form, and
+/// those compose onto whatever the arm bound. Marking every `Some` binding as
+/// already-borrowed handed the bare `T` to the next accessor, which is typed
+/// for `&T` — recording ownership only at the value form cannot repair a call
+/// that sits before it.
+#[test]
+fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_child(h: &ZHolder) -> Option<ZChild> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zchild_carrier(c: &ZChild) -> &ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZChild))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_to_struct)))
+        .expand(crate::expand_return!(ZChild).field(crate::fun!(zchild_carrier)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_child)));
+    let dir = unique_test_dir("jnigen_vf_cond_owned_chain");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zchild_carrier(&__hb0)"),
+        "the step after an owned payload BORROWS it — passing the bare value \
+         would hand `T` to an accessor typed for `&T`:\n{rust}"
+    );
+}
+
 #[test]
 fn an_owned_optional_payload_is_borrowed_for_a_borrowing_value_form() {
     let rust = conditional_owned_gen(

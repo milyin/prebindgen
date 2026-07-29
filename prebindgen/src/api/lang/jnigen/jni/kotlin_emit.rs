@@ -1460,6 +1460,13 @@ impl JniGen {
             };
             arms.push(format!("{} -> {ctor}", variant.tag));
         }
+        // A NULLABLE selector carries the absent case of a conditional value
+        // form: null in means null out. Without this arm the `when` would fall
+        // through to the invalid-tag throw, and boxing the absence as tag 0
+        // would alias whichever variant that really is.
+        if leaves[0].nullable {
+            arms.insert(0, "null -> null".to_string());
+        }
         let when = format!(
             "when ({tag}) {{ {}; else -> throw IllegalArgumentException(\"{iface_short}: invalid \
              tag ${tag}\") }}",

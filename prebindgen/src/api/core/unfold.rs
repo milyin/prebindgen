@@ -1387,7 +1387,7 @@ fn flatten<M>(
                     });
                 }
                 let mut root_path = path_prefix.to_vec();
-                root_path.push(PathStep::call(func.clone(), false));
+                root_path.push(PathStep::call(func.clone(), false, false));
                 // A hoist below an optional step is CONDITIONAL: it binds an
                 // `Option<TStruct>` local (built only in the `Some` arm) and
                 // every leaf under it is null when the value is absent — which
@@ -1428,24 +1428,6 @@ fn flatten<M>(
                                  a sibling `.field()` would read a moved value",
                     });
                 }
-                // What a CONDITIONAL hoist's `Some` arm binds: owned (`Option<T>`
-                // from the accessor immediately before the value form) or a
-                // borrow. Only that position can be owned — any further step
-                // composes as a borrow, and a field read is borrowed by
-                // construction — so the question is asked of exactly one step,
-                // and answered from its own signature rather than guessed at
-                // emit time.
-                let owned_payload = match path_prefix.last() {
-                    Some(PathStep::Call {
-                        ident,
-                        optional: true,
-                    }) => {
-                        let (_, ret) = accessor_signature(registry, ident)?;
-                        option_inner_type(&ret)
-                            .is_some_and(|inner| !matches!(inner, syn::Type::Reference(_)))
-                    }
-                    _ => false,
-                };
                 // Evaluate this value form ONCE. Recorded at the prefix it sits
                 // at rather than as a lone accessor, so a nested value form
                 // (this record reached through another one's field) gets its own
@@ -1455,7 +1437,6 @@ fn flatten<M>(
                 hoists.push(Hoist {
                     prefix: root_path.clone(),
                     consuming,
-                    owned_payload,
                 });
 
                 for fr in fields {
@@ -1600,7 +1581,11 @@ fn flatten<M>(
                     visited.insert(child_key.clone());
                     let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
-                    child_path.push(PathStep::call(func.clone(), opt));
+                    child_path.push(PathStep::call(
+                        func.clone(),
+                        opt,
+                        !matches!(core, syn::Type::Reference(_)),
+                    ));
                     flatten(
                         acc,
                         registry,
@@ -1645,7 +1630,11 @@ fn flatten<M>(
                         (ret, nullable, false)
                     };
                     let mut path = path_prefix.to_vec();
-                    path.push(PathStep::call(func.clone(), opt));
+                    path.push(PathStep::call(
+                        func.clone(),
+                        opt,
+                        !matches!(core, syn::Type::Reference(_)),
+                    ));
                     leaves.push(UnfoldLeaf {
                         name: seg_name(name).join("__"),
                         path,

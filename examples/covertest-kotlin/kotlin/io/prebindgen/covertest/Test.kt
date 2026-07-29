@@ -635,9 +635,9 @@ fun main() {
     //   filed     Option<&Report> — a BORROW, so the by-value form clones
     //   archived  Option<Report>  — OWNED, so it moves in
     //
-    // Absent is null in every leaf EXCEPT the sum's tag, which has no null on
-    // the wire and so reads as its tag-0 variant; the sibling nulls are what
-    // say the whole report was absent.
+    // Absent is null in EVERY leaf, the sum's selector included: its tag boxes
+    // so JVM null can mean "no value here", which tag 0 cannot — that would
+    // alias a real variant (`Lookup.Absent`) and lose the Option.
     section("value form reached through an Option (conditional hoist)") {
         // At a BUILDER position the sum stays raw (tag + groups), so the tag is
         // readable directly — which is how the absent case is pinned below.
@@ -653,20 +653,28 @@ fun main() {
             }
             rows.add(row)
         }
-        // An absent report nulls every leaf it owns; only the sum's tag falls
-        // back to 0 (`Lookup::Absent`) because the wire has no null for it.
+        // `-|null`: an absent report nulls the selector too, so a receiver can
+        // tell it from a present report whose outcome IS the tag-0 variant.
         check(
             rows == listOf(
-                "-|0 -|0",
-                "l1/1/1 -|0",
-                "-|0 l2/2/1",
+                "-|null -|null",
+                "l1/1/1 -|null",
+                "-|null l2/2/1",
                 "l1/1/1 l2/2/1",
             )
         ) { "conditional value-form leaves: $rows" }
 
-        // The callback position takes the same path.
+        // The callback position takes the same path, and there the sum arrives
+        // TYPED — so this is where the absent case would silently become
+        // `Lookup.Absent` if the selector could not be null.
         val seen = mutableListOf<String>()
-        ledgerEach(4L, { _, _, _, _, _, _, fLabel, _, _, _, _, _, _, aLabel ->
+        ledgerEach(4L, { _, _, _, _, _, fOutcome, fLabel, _, _, _, _, _, aOutcome, aLabel ->
+            check((fOutcome == null) == (fLabel == null)) {
+                "an absent report must reconstruct its sum as null, not as a variant"
+            }
+            check((aOutcome == null) == (aLabel == null))
+            (fOutcome as? Lookup.Found)?.v0?.close()
+            (aOutcome as? Lookup.Found)?.v0?.close()
             seen.add("${fLabel ?: "-"}|${aLabel ?: "-"}")
         }, boom)
         check(seen == listOf("-|-", "l1|-", "-|l2", "l1|l2")) {

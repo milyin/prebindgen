@@ -282,10 +282,26 @@ pub(crate) fn encode_sum_group(
                 })
                 .collect();
             let tag_lit = proc_macro2::Literal::i32_unsuffixed(variant.tag);
+            // A nullable selector rides an OBJECT slot (its absent case is JVM
+            // null, which a raw `jint` has no room for), so the live tag boxes
+            // like any other nullable primitive leaf.
+            let set_tag = if slots[tag_idx].prim {
+                quote! { #tag_id = jni::sys::jvalue { i: #tag_lit }; }
+            } else {
+                let box_fail = fail(quote!(__e));
+                quote! {
+                    #tag_id = match ::prebindgen::lang::box_jint(&mut env, #tag_lit) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            #box_fail
+                        }
+                    };
+                }
+            };
             quote! {
                 #pattern => {
                     #live
-                    #tag_id = jni::sys::jvalue { i: #tag_lit };
+                    #set_tag
                     #inert
                 }
             }

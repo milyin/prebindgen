@@ -525,11 +525,22 @@ fn reach_optional(
             }
             let opt_e = compose_step(qualify, &path[k], e);
             let bind = format_ident!("__hb{}", depth);
+            // What the arm binds is the step's own value: an OWNED payload is a
+            // bare `T`, so composing the next step onto it directly would hand
+            // `T` to an accessor typed for `&T`. Say it is not a reference and
+            // let `project_leading_fields` borrow it; a borrowed payload is
+            // already one and passes through.
+            //
+            // With NO steps left the binding goes to `body` untouched — that is
+            // what lets a consuming value form MOVE an owned payload rather than
+            // borrow it straight back, so the terminal case stays "already a
+            // reference" whatever the payload is.
+            let rest = &path[k + 1..];
             let inner = reach_optional(
                 qualify,
-                &path[k + 1..],
+                rest,
                 quote!(#bind),
-                true,
+                rest.is_empty() || !path[k].yields_owned(),
                 depth + 1,
                 body,
             );
@@ -569,7 +580,10 @@ pub(crate) fn bind_hoists(
                 .split_last()
                 .expect("a hoist prefix ends in its value-form call");
             let consuming = h.consuming;
-            let owned = h.owned_payload;
+            // The value form is handed the payload only when the optional step
+            // is the LAST thing before it; any step in between composes as a
+            // borrow, so what arrives is a reference either way.
+            let owned = lead.last().is_some_and(PathStep::yields_owned);
             let expr = reach_optional(qualify, lead, value.clone(), by_ref, 0, &|reached| {
                 // Four cases, from what the `Some` arm binds (owned `Option<T>`
                 // vs a borrow) crossed with what the accessor takes. An owned
@@ -1239,8 +1253,13 @@ pub(crate) fn leaf_is_prim(
     // The synthesized sum selector is a `jint` by definition — it is assigned,
     // never converted, so it has no output entry to read a wire from and must
     // not be made to depend on one resolving.
+    //
+    // Unless it is NULLABLE: the sum sits under a conditional value form, and
+    // the absent case needs a representation the tag's own variants do not
+    // provide. A raw `jint` has none — zero is a real variant — so the selector
+    // boxes like any other nullable leaf and JVM null means "no value here".
     if leaf.source == crate::api::core::unfold::LeafSource::SumTag {
-        return true;
+        return !leaf.nullable;
     }
     if leaf.nullable {
         return false;

@@ -79,15 +79,41 @@ pub struct DeconSpec {
 pub enum PathStep {
     /// Call a `#[prebindgen]` accessor on the value reached so far:
     /// `source_module::f(&value)`.
-    Call { ident: syn::Ident, optional: bool },
+    Call {
+        ident: syn::Ident,
+        optional: bool,
+        /// Whether the value this call yields (its return with any `Option`
+        /// peeled) is **owned** rather than a borrow — `f(..) -> T` / `-> Option<T>`
+        /// against `-> &T` / `-> Option<&T>`.
+        ///
+        /// Only an OPTIONAL step's payload can reach an emitter as a bare
+        /// binding, so this is only ever consulted there: what a `Some` arm
+        /// binds is the accessor's own value, and everything downstream of it —
+        /// the next step's receiver, the value form's argument — needs to know
+        /// whether it may be moved or has to be borrowed. Recorded here, at the
+        /// one place the signature is in hand, because deriving it later from
+        /// the path alone is not possible.
+        owned: bool,
+    },
     /// Read a struct field of the value reached so far: `value.f`.
     Field { ident: syn::Ident, optional: bool },
 }
 
 impl PathStep {
-    /// An accessor call step.
-    pub fn call(ident: syn::Ident, optional: bool) -> Self {
-        Self::Call { ident, optional }
+    /// An accessor call step. `owned` says whether its (`Option`-peeled) return
+    /// is an owned value rather than a borrow — see [`Self::Call::owned`].
+    pub fn call(ident: syn::Ident, optional: bool, owned: bool) -> Self {
+        Self::Call {
+            ident,
+            optional,
+            owned,
+        }
+    }
+
+    /// Whether the value this step yields is owned. A field read composes as
+    /// `&(e).f`, so it is a borrow by construction.
+    pub fn yields_owned(&self) -> bool {
+        matches!(self, Self::Call { owned: true, .. })
     }
 
     /// A struct-field read step.
@@ -255,19 +281,6 @@ pub struct Hoist {
     /// value-form root can consume: the ordinary accessor-chain steps are
     /// always borrows.
     pub consuming: bool,
-    /// For a CONDITIONAL hoist (one whose [`prefix`](Self::prefix) crosses an
-    /// optional step): whether the payload that step's `Some` arm binds is
-    /// **owned** (`Option<T>`) rather than a borrow (`Option<&T>` / a borrowed
-    /// field read).
-    ///
-    /// The two need opposite treatment at the value-form call — an owned
-    /// payload is borrowed for a `&Self` accessor and MOVED into a by-value
-    /// one, where a borrowed payload passes straight through and is cloned —
-    /// and the emitter cannot tell them apart from the path alone. Read off the
-    /// accessor's own signature so a by-value form does not demand a `Clone`
-    /// the type need not have. Meaningless (and `false`) for an unconditional
-    /// hoist.
-    pub owned_payload: bool,
 }
 
 /// One flattened output leaf of a decomposed return value.

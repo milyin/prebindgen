@@ -3094,7 +3094,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
             .get_method_id(
                 &__invoke_class,
                 "run",
-                "(Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;ILjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;ILjava/lang/Long;Ljava/lang/String;Ljava/lang/String;)V",
+                "(Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Integer;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Integer;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;)V",
             )
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
@@ -3143,18 +3143,28 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                         jni::objects::JObject,
                         jni::objects::JObject,
                         jni::objects::JObject,
-                        jni::sys::jvalue,
+                        jni::objects::JObject,
                         jni::objects::JObject,
                         jni::objects::JObject,
                         jni::objects::JObject,
                     ) = match __vf0 {
                         ::core::option::Option::Some(__u0) => {
-                            let __cb0_obj5: jni::sys::jvalue;
+                            let __cb0_obj5: jni::objects::JObject;
                             let __cb0_obj6: jni::objects::JObject;
                             let __cb0_obj7: jni::objects::JObject;
                             match &__u0.outcome {
                                 perftest_flat::Lookup::Absent => {
-                                    __cb0_obj5 = jni::sys::jvalue { i: 0 };
+                                    __cb0_obj5 = match ::prebindgen::lang::box_jint(
+                                        &mut env,
+                                        0,
+                                    ) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<String>>::from(__e),
+                                            );
+                                        }
+                                    };
                                     __cb0_obj6 = jni::objects::JObject::null();
                                     __cb0_obj7 = jni::objects::JObject::null();
                                 }
@@ -3183,7 +3193,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                             );
                                         }
                                     };
-                                    __cb0_obj5 = jni::sys::jvalue { i: 1 };
+                                    __cb0_obj5 = match ::prebindgen::lang::box_jint(
+                                        &mut env,
+                                        1,
+                                    ) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<String>>::from(__e),
+                                            );
+                                        }
+                                    };
                                     __cb0_obj7 = jni::objects::JObject::null();
                                 }
                                 perftest_flat::Lookup::Failed(__sv0) => {
@@ -3201,7 +3221,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                         }
                                     };
                                     __cb0_obj7 = __enc___cb0_obj7.into();
-                                    __cb0_obj5 = jni::sys::jvalue { i: 2 };
+                                    __cb0_obj5 = match ::prebindgen::lang::box_jint(
+                                        &mut env,
+                                        2,
+                                    ) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<String>>::from(__e),
+                                            );
+                                        }
+                                    };
                                     __cb0_obj6 = jni::objects::JObject::null();
                                 }
                             }
@@ -3348,7 +3378,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
-                                jni::sys::jvalue { i: 0i32 },
+                                jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
@@ -3371,18 +3401,28 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                         jni::objects::JObject,
                         jni::objects::JObject,
                         jni::objects::JObject,
-                        jni::sys::jvalue,
+                        jni::objects::JObject,
                         jni::objects::JObject,
                         jni::objects::JObject,
                         jni::objects::JObject,
                     ) = match __vf1 {
                         ::core::option::Option::Some(__u1) => {
-                            let __cb0_obj14: jni::sys::jvalue;
+                            let __cb0_obj14: jni::objects::JObject;
                             let __cb0_obj15: jni::objects::JObject;
                             let __cb0_obj16: jni::objects::JObject;
                             match &__u1.outcome {
                                 perftest_flat::Lookup::Absent => {
-                                    __cb0_obj14 = jni::sys::jvalue { i: 0 };
+                                    __cb0_obj14 = match ::prebindgen::lang::box_jint(
+                                        &mut env,
+                                        0,
+                                    ) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<String>>::from(__e),
+                                            );
+                                        }
+                                    };
                                     __cb0_obj15 = jni::objects::JObject::null();
                                     __cb0_obj16 = jni::objects::JObject::null();
                                 }
@@ -3411,7 +3451,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                             );
                                         }
                                     };
-                                    __cb0_obj14 = jni::sys::jvalue { i: 1 };
+                                    __cb0_obj14 = match ::prebindgen::lang::box_jint(
+                                        &mut env,
+                                        1,
+                                    ) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<String>>::from(__e),
+                                            );
+                                        }
+                                    };
                                     __cb0_obj16 = jni::objects::JObject::null();
                                 }
                                 perftest_flat::Lookup::Failed(__sv0) => {
@@ -3429,7 +3479,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                         }
                                     };
                                     __cb0_obj16 = __enc___cb0_obj16.into();
-                                    __cb0_obj14 = jni::sys::jvalue { i: 2 };
+                                    __cb0_obj14 = match ::prebindgen::lang::box_jint(
+                                        &mut env,
+                                        2,
+                                    ) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            return ::core::result::Result::Err(
+                                                <__JniErr as ::core::convert::From<String>>::from(__e),
+                                            );
+                                        }
+                                    };
                                     __cb0_obj15 = jni::objects::JObject::null();
                                 }
                             }
@@ -3576,7 +3636,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
-                                jni::sys::jvalue { i: 0i32 },
+                                jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
                                 jni::objects::JObject::null(),
@@ -3606,7 +3666,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                 jni::sys::jvalue {
                                     l: __cb0_obj4.as_raw(),
                                 },
-                                __cb0_obj5,
+                                jni::sys::jvalue {
+                                    l: __cb0_obj5.as_raw(),
+                                },
                                 jni::sys::jvalue {
                                     l: __cb0_obj6.as_raw(),
                                 },
@@ -3631,7 +3693,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                                 jni::sys::jvalue {
                                     l: __cb0_obj13.as_raw(),
                                 },
-                                __cb0_obj14,
+                                jni::sys::jvalue {
+                                    l: __cb0_obj14.as_raw(),
+                                },
                                 jni::sys::jvalue {
                                     l: __cb0_obj15.as_raw(),
                                 },
@@ -13047,7 +13111,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
     #[allow(non_upper_case_globals)]
     static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __CB_FQN: &str = "io/prebindgen/covertest/LedgerBuilderRaw";
-    const __CB_DESCR: &str = "(Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;ILjava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;ILjava/lang/Long;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;";
+    const __CB_DESCR: &str = "(Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Integer;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Integer;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::ledger_new(n);
     let __vf0 = match perftest_flat::ledger_filed(&__out) {
         ::core::option::Option::Some(__hb0) => {
@@ -13079,18 +13143,31 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
         jni::objects::JObject,
         jni::objects::JObject,
         jni::objects::JObject,
-        jni::sys::jvalue,
+        jni::objects::JObject,
         jni::objects::JObject,
         jni::objects::JObject,
         jni::objects::JObject,
     ) = match __vf0 {
         ::core::option::Option::Some(__u0) => {
-            let __obj5: jni::sys::jvalue;
+            let __obj5: jni::objects::JObject;
             let __obj6: jni::objects::JObject;
             let __obj7: jni::objects::JObject;
             match &__u0.outcome {
                 perftest_flat::Lookup::Absent => {
-                    __obj5 = jni::sys::jvalue { i: 0 };
+                    __obj5 = match ::prebindgen::lang::box_jint(&mut env, 0) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
                     __obj6 = jni::objects::JObject::null();
                     __obj7 = jni::objects::JObject::null();
                 }
@@ -13129,7 +13206,20 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                             return jni::objects::JObject::null().into();
                         }
                     };
-                    __obj5 = jni::sys::jvalue { i: 1 };
+                    __obj5 = match ::prebindgen::lang::box_jint(&mut env, 1) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
                     __obj7 = jni::objects::JObject::null();
                 }
                 perftest_flat::Lookup::Failed(__sv0) => {
@@ -13151,7 +13241,20 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                         }
                     };
                     __obj7 = __enc___obj7.into();
-                    __obj5 = jni::sys::jvalue { i: 2 };
+                    __obj5 = match ::prebindgen::lang::box_jint(&mut env, 2) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
                     __obj6 = jni::objects::JObject::null();
                 }
             }
@@ -13327,7 +13430,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
-                jni::sys::jvalue { i: 0i32 },
+                jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
@@ -13350,18 +13453,31 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
         jni::objects::JObject,
         jni::objects::JObject,
         jni::objects::JObject,
-        jni::sys::jvalue,
+        jni::objects::JObject,
         jni::objects::JObject,
         jni::objects::JObject,
         jni::objects::JObject,
     ) = match __vf1 {
         ::core::option::Option::Some(__u1) => {
-            let __obj14: jni::sys::jvalue;
+            let __obj14: jni::objects::JObject;
             let __obj15: jni::objects::JObject;
             let __obj16: jni::objects::JObject;
             match &__u1.outcome {
                 perftest_flat::Lookup::Absent => {
-                    __obj14 = jni::sys::jvalue { i: 0 };
+                    __obj14 = match ::prebindgen::lang::box_jint(&mut env, 0) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
                     __obj15 = jni::objects::JObject::null();
                     __obj16 = jni::objects::JObject::null();
                 }
@@ -13400,7 +13516,20 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                             return jni::objects::JObject::null().into();
                         }
                     };
-                    __obj14 = jni::sys::jvalue { i: 1 };
+                    __obj14 = match ::prebindgen::lang::box_jint(&mut env, 1) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
                     __obj16 = jni::objects::JObject::null();
                 }
                 perftest_flat::Lookup::Failed(__sv0) => {
@@ -13422,7 +13551,20 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                         }
                     };
                     __obj16 = __enc___obj16.into();
-                    __obj14 = jni::sys::jvalue { i: 2 };
+                    __obj14 = match ::prebindgen::lang::box_jint(&mut env, 2) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
                     __obj15 = jni::objects::JObject::null();
                 }
             }
@@ -13608,7 +13750,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
-                jni::sys::jvalue { i: 0i32 },
+                jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
                 jni::objects::JObject::null(),
@@ -13638,7 +13780,9 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                 jni::sys::jvalue {
                     l: __obj4.as_raw(),
                 },
-                __obj5,
+                jni::sys::jvalue {
+                    l: __obj5.as_raw(),
+                },
                 jni::sys::jvalue {
                     l: __obj6.as_raw(),
                 },
@@ -13663,7 +13807,9 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
                 jni::sys::jvalue {
                     l: __obj13.as_raw(),
                 },
-                __obj14,
+                jni::sys::jvalue {
+                    l: __obj14.as_raw(),
+                },
                 jni::sys::jvalue {
                     l: __obj15.as_raw(),
                 },
