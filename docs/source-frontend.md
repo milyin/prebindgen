@@ -35,10 +35,10 @@ i.e. places that classify source shape today:
 
 | Where | At F0 | After F2-partial (#212) | After F8 |
 |---|---|---|---|
-| `api/core` | 67 | 67 | 74 |
+| `api/core` | 67 | 67 | 74 → 72 |
 | `api/lang/jnigen` | 97 | 97 | 96 |
 | `api/lang/cbindgen` | 25 | 26 | 26 → 25 |
-| **total** | 189 | 190 | **196 → 195** |
+| **total** | 189 | 190 | **196 → 193** |
 
 The first two columns were counted by hand and are wrong in both directions — a
 recount gives 69/96/26, a token-level count a third answer. **The `After F8`
@@ -66,7 +66,7 @@ number.
 |---|---|---|
 | F0 | Array-length subgrammar; the `core::frontend` seed | **done** — [#212](https://github.com/milyin/prebindgen/pull/212), closes #210 |
 | F1 | Complete the source-language specification and classify the ledger's sites | not started |
-| F2 | `SourceModel` — the language-neutral item model | **partial** — types complete, items structs-only |
+| F2 | `SourceModel` — the language-neutral item model | **partial** — types, structs and enums; functions still `syn` |
 | F3 | Move the type-shape classifiers into the frontend | not started |
 | F4 | `Registry` consumes `SourceModel` | not started |
 | F5 | Migrate `Cbindgen` | **partial** — struct fields classify off the model; params/returns blocked on F2 |
@@ -129,7 +129,9 @@ what syntax reaches the adapter.
 - [x] `ArrayExtent { value, source }` carried per **use site**, never keyed by `TypeKey`
 - [x] `SourceStruct` for indexed structs; the `syn` field types are a projection (`to_syn`), never a second source of truth
 - [x] Diagnostics: `UnsupportedType`, surfaced as `ScanError::UnsupportedFieldType` naming item and field
-- [ ] Functions and enums — still `syn` items
+- [x] **Enums** — `SourceEnum` / `SourceVariant` / `SourceVariantField`, lowered at ingest and indexed as `Registry::source_enum`. Not a new model: `types_util`'s `SumSpec` / `SumVariant` / `SumField` already described an enum language-neutrally, so this **moved and completed** them rather than growing a second authority beside them. Completing meant three things — payload types lowered through `lower_type` (which is what unblocked cbindgen's `mirror_field_wire`), `EnumShape` / `enum_shape` / `first_payload_variant` folded in as `SourceEnum::is_unit` / `first_payload_variant` / `SourceVariant::shape`, and the discriminant modeled
+- [x] **The discriminant is an `ArrayExtent` problem again.** cbindgen re-emits the *spelling* verbatim (so a `const`- or `cfg`-driven value survives); jnigen needs the *number* (a Kotlin `NAME(n)` entry and the `jint → variant` decode). `Discriminant { value: Option<i64>, source: DiscriminantSource }` carries both, exactly as `ArrayExtent { value, source }` does for an extent. `value: None` turned a panic reachable from `enum_class!` into a refusal naming the variant. `DiscriminantSource::Explicit(syn::Expr)` is the model's one carrier of open syntax — deliberate, since narrowing it would delete C support that exists today, and listed under F7
+- [ ] Functions — still `syn` items
 - [ ] Parameters, returns, variants, ownership and borrows as modeled positions
 - [ ] Source locations on model nodes
 - [ ] One public frontend entry point from captured records to `SourceModel` (completion criterion 1)
@@ -159,7 +161,7 @@ what syntax reaches the adapter.
 
   Effect on the ledger: `api/lang/cbindgen/mod.rs` 6 → 5, the first entry to come off it. The other predicates in that file (`is_string`, `is_bool`, `is_scalar`) were never *in* it — they classify by ident name, one of the blind spots the header lists — which is precisely why a count alone is not the measure.
 
-- [ ] `mirror_field_wire` still classifies syntax (`is_scalar` / `box_inner` / `is_option`). It is one policy shared by the `repr_c_struct` mirror path, which has a model, and the tagged-union payload path, whose **variant** fields the frontend does not model yet. Splitting it in two would duplicate the policy — the exact thing #211 forbids — so it waits on F2 modeling enums
+- [x] `mirror_field_wire` now classifies the model, together with the whole tagged-union payload path (`payload_field_wire`, `payload_wire_owns`, `payload_needs_converter`, `enum_variants`, `variant_pattern`, `variant_ctor`, `payload_wire_of`). It was deferred by #225 because it is *one* policy serving both the modeled mirror path and the then-unmodeled payload path, and splitting it would have duplicated the policy rather than removed it. Modeling enums is what let it move as one piece
 - [ ] `lang/cbindgen/{trait_impl,convert,emit,builder,mod}.rs` consume `SourceModel` for parameters and returns too, not only struct fields — also blocked on F2 (functions are still `syn` items)
 - [x] Generated C artifacts byte-identical, except where previously-accepted ambiguous syntax becomes an intentional frontend error — `regen-check.sh` clean across the field-classification migration
 

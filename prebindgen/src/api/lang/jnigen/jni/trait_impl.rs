@@ -1019,7 +1019,9 @@ impl Prebindgen for JniGen {
             out.push(crate::api::core::unfold::SumDecon {
                 key: key.clone(),
                 source,
-                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, item_enum),
+                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(
+                    self, registry, sum_cfg, item_enum,
+                ),
             });
         }
         out
@@ -1860,7 +1862,7 @@ impl JniGen {
             if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
                     if let Some((e, _)) = registry.enums.get(&name) {
-                        let (wire, body) = enum_output_body(self, e);
+                        let (wire, body) = enum_output_body(self, registry, e);
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg
                             .name_spec

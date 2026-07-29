@@ -1470,3 +1470,65 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
         "…and point at the two shapes that do work: {err}"
     );
 }
+
+/// `Paren()` carries no payload and is still a tuple variant: Rust demands
+/// `Reading::Paren()` everywhere it is named, so both directions of the
+/// generated Rust have to keep the parentheses. Spelling it from the payload
+/// group instead of the written shape yields `Reading::Paren`, which rustc
+/// reads as a constructor function rather than a value.
+#[test]
+fn empty_tuple_variant_keeps_its_parens_in_generated_rust() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Paren(),
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn reading_get() -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn reading_put(r: Reading) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .fun(crate::fun!(reading_get))
+            .fun(crate::fun!(reading_put)),
+    );
+
+    let dir = unique_test_dir("jnigen_empty_tuple_variant");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read");
+    let rc: String = rust.split_whitespace().collect();
+
+    // Output: the match arm that decomposes the value.
+    assert!(rc.contains("myflat::Reading::Paren()=>"), "{rust}");
+    // Input: the expression that rebuilds it.
+    assert!(rc.contains("Ok(myflat::Reading::Paren())"), "{rust}");
+    // The true unit variant beside it stays undelimited, both ways.
+    assert!(rc.contains("myflat::Reading::Missing=>"), "{rust}");
+    assert!(rc.contains("Ok(myflat::Reading::Missing)"), "{rust}");
+}

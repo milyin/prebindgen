@@ -283,8 +283,6 @@ pub(crate) fn sum_input_body(
     e: &syn::ItemEnum,
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
-    use crate::api::core::types_util::SumSpec;
-
     let key = TypeKey::from_ident(&e.ident);
     let cfg = ext.types.get(&key)?;
     let sum_cfg = cfg.sum()?;
@@ -294,10 +292,10 @@ pub(crate) fn sum_input_body(
     let enum_ident = &e.ident;
     let enum_name = e.ident.to_string();
 
-    let spec = SumSpec::from_item_enum(e);
+    let spec = sum_model(registry, e);
     let mut arms: Vec<TokenStream> = Vec::new();
     for (v, item_variant) in spec.variants.iter().zip(&e.variants) {
-        let vident = &v.ident;
+        let vident = &v.name;
         let kotlin_name = ext.sum_variant_class_name(sum_cfg, vident);
         // A variant class is NESTED in the interface, so its JVM binary name
         // is `Outer$Variant`.
@@ -324,15 +322,9 @@ pub(crate) fn sum_input_body(
                 syn::Member::Unnamed(_) => inits.push(quote!(#value)),
             }
         }
-        let ctor = match item_variant.fields {
-            syn::Fields::Unit => quote!(#source_module::#enum_ident::#vident),
-            syn::Fields::Named(_) => {
-                quote!(#source_module::#enum_ident::#vident { #(#inits),* })
-            }
-            syn::Fields::Unnamed(_) => {
-                quote!(#source_module::#enum_ident::#vident(#(#inits),*))
-            }
-        };
+        let ctor = v
+            .shape
+            .spell(quote!(#source_module::#enum_ident::#vident), &inits);
         arms.push(quote! {
             if env.is_instance_of(__obj, #jvm_class)
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
@@ -721,6 +713,9 @@ pub(crate) struct FlatSumVariant {
     /// This variant's payload: how each field is addressed when rebuilding
     /// it, paired with the leaf carrying its value. Empty for a unit variant.
     pub fields: Vec<(syn::Member, usize)>,
+    /// How the variant is written, carried from the model: an empty payload
+    /// still needs `V()` / `V {}` where those were the delimiters.
+    pub shape: crate::api::core::frontend::model::VariantShape,
 }
 
 /// A flattened plan for one struct input parameter. Built once by
@@ -879,14 +874,12 @@ fn build_flat_sum_field(
     rust_ty: &syn::Type,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Option<FlatFieldNode> {
-    use crate::api::core::types_util::SumSpec;
-
     let ident = bare_path_ident(sum_ty)?;
     let (item_enum, _) = registry.enums.get(&ident)?;
     let cfg = ext.types.get(&TypeKey::from_ident(&ident))?;
     let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
-    let spec = SumSpec::from_item_enum(item_enum);
+    let spec = sum_model(registry, item_enum);
 
     // Plan every group first: a single unflattenable payload means the whole
     // sum stays object-shaped, so nothing may be pushed until all of them are
@@ -895,6 +888,7 @@ fn build_flat_sum_field(
         rust_ident: syn::Ident,
         kotlin: String,
         fields: Vec<(syn::Member, PlannedLeaf)>,
+        shape: crate::api::core::frontend::model::VariantShape,
     }
     struct PlannedLeaf {
         native: String,
@@ -904,7 +898,7 @@ fn build_flat_sum_field(
     }
     let mut planned: Vec<Planned> = Vec::new();
     for (v, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-        let kotlin = ext.sum_variant_class_name(sum_cfg, &v.ident);
+        let kotlin = ext.sum_variant_class_name(sum_cfg, &v.name);
         let mut fields = Vec::new();
         for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
             let entry = registry.input_entry(&item_field.ty)?;
@@ -952,9 +946,10 @@ fn build_flat_sum_field(
             ));
         }
         planned.push(Planned {
-            rust_ident: v.ident.clone(),
+            rust_ident: v.name.clone(),
             kotlin,
             fields,
+            shape: v.shape,
         });
     }
 
@@ -998,6 +993,7 @@ fn build_flat_sum_field(
         .into_iter()
         .map(|p| FlatSumVariant {
             rust_ident: p.rust_ident,
+            shape: p.shape,
             fields: p
                 .fields
                 .into_iter()
@@ -1625,13 +1621,7 @@ fn render_flat_struct_node(
                             syn::Member::Unnamed(_) => inits.push(quote!(#bind)),
                         }
                     }
-                    let ctor = if v.fields.is_empty() {
-                        quote!(#source::#vident)
-                    } else if matches!(v.fields[0].0, syn::Member::Named(_)) {
-                        quote!(#source::#vident { #(#inits),* })
-                    } else {
-                        quote!(#source::#vident(#(#inits),*))
-                    };
+                    let ctor = v.shape.spell(quote!(#source::#vident), &inits);
                     quote! { #tag_lit => { #pre #ctor } }
                 });
                 // A tag outside `0..N-1` is a binding error through the

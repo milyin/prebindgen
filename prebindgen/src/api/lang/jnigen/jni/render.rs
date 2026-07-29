@@ -13,19 +13,22 @@ use super::*;
 /// `val value: Int`, plus a `fromInt(value: Int)` companion. Mirrors
 /// the hand-written `io.zenoh.qos.Priority` shape so adapter code that
 /// already speaks the `.value` / `.fromInt(...)` idiom keeps working.
-pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> kt::KtClass {
+pub(crate) fn build_enum_class<M>(
+    class_name: &str,
+    registry: &Registry<M>,
+    item_enum: &syn::ItemEnum,
+) -> kt::KtClass {
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree.
-    let entries: Vec<kt::KtEnumEntry> =
-        crate::api::core::types_util::enum_discriminant_values(item_enum)
-            .into_iter()
-            .map(|(ident, value)| kt::KtEnumEntry {
-                name: mangle_kotlin_ident(
-                    &crate::api::lang::jnigen::util::camel_to_screaming_snake(&ident.to_string()),
-                ),
-                args: Some(value.to_string()),
-            })
-            .collect();
+    let entries: Vec<kt::KtEnumEntry> = discriminant_values_or_panic(registry, item_enum)
+        .into_iter()
+        .map(|(ident, value)| kt::KtEnumEntry {
+            name: mangle_kotlin_ident(&crate::api::lang::jnigen::util::camel_to_screaming_snake(
+                &ident.to_string(),
+            )),
+            args: Some(value.to_string()),
+        })
+        .collect();
 
     let framework_line = format!(
         "JVM-side surface for the native Rust `{}` enum.",

@@ -344,6 +344,270 @@ pub struct SourceStruct {
     pub fields: Vec<SourceField>,
 }
 
+/// A `#[prebindgen]` enum, as the frontend decided it: a **tag** — which
+/// alternative is live — plus one **field group per variant**.
+///
+/// One model covers both enum shapes on purpose. A fieldless enum is the
+/// degenerate sum whose every group is empty, so a lowering written for the
+/// general case collapses to "just a tag" for it. The distinction survives only
+/// as [`Self::is_unit`], because the *declarators* differ (`enum_class!` /
+/// `.enum_type()` accept only the degenerate case) and a refusal should name
+/// the right declarator rather than assert on `syn::Fields`.
+///
+/// Core describes the sum; an adapter decides what its groups look like on the
+/// wire — jnigen overlays them in the signature, cbindgen overlays them in
+/// memory as a `#[repr(C)]` union. Nothing here names a wire detail.
+#[derive(Clone, Debug)]
+pub struct SourceEnum {
+    /// The enum's ident as declared — the spelling adapters use to build
+    /// `Enum::Variant` constructor paths.
+    pub name: syn::Ident,
+    /// Variants in declaration order; `variants[i].tag == i as i32`.
+    pub variants: Vec<SourceVariant>,
+}
+
+impl SourceEnum {
+    /// True when every variant is fieldless, i.e. the value is exactly its
+    /// discriminant.
+    pub fn is_unit(&self) -> bool {
+        self.variants.iter().all(SourceVariant::is_unit)
+    }
+
+    /// The first payload-carrying variant — the offender an adapter names when
+    /// refusing a sum where only a fieldless enum is accepted.
+    pub fn first_payload_variant(&self) -> Option<&SourceVariant> {
+        self.variants.iter().find(|v| !v.is_unit())
+    }
+
+    /// Every variant paired with the value Rust assigns it.
+    ///
+    /// This is the numbering a destination language needs when it has no way to
+    /// reference a Rust constant: a Kotlin `enum class` entry is `NAME(3)`, and
+    /// the generated `int → variant` decode matches on the same numbers, so
+    /// both come from here and cannot drift.
+    ///
+    /// `Err` names the first variant whose discriminant the frontend could not
+    /// evaluate. That is a refusal for *this* consumer only — a C mirror
+    /// re-emits the spelling and never asks. See [`Discriminant`].
+    pub fn discriminant_values(&self) -> Result<Vec<(&syn::Ident, i64)>, &syn::Ident> {
+        self.variants
+            .iter()
+            .map(|v| match v.discriminant.value {
+                Some(n) => Ok((&v.name, n)),
+                None => Err(&v.name),
+            })
+            .collect()
+    }
+}
+
+/// One alternative of a [`SourceEnum`].
+#[derive(Clone, Debug)]
+pub struct SourceVariant {
+    /// The variant ident as declared (`PeriodicQueries`).
+    pub name: syn::Ident,
+    /// Declaration-order tag, `0..N-1`.
+    ///
+    /// This is **not** the discriminant. A sum's alternatives are identified by
+    /// position, because the payload mirror an adapter builds carries no `repr`
+    /// and numbers its arms itself; see [`Self::discriminant`] for the other
+    /// numbering.
+    pub tag: i32,
+    /// The value Rust itself assigns this variant. Distinct from [`Self::tag`]:
+    /// this one is observable from outside the binding, and only a fieldless
+    /// enum crosses as it.
+    pub discriminant: Discriminant,
+    /// The variant's payload, in declaration order. Empty for a unit variant —
+    /// the group that contributes nothing but its tag.
+    pub fields: Vec<SourceVariantField>,
+    /// How the variant is **written**, taken from `syn::Fields` at lowering.
+    ///
+    /// Not derivable from [`Self::fields`]: `B()` and `C {}` have no payload
+    /// and still must be spelled `E::B()` / `E::C {}` wherever Rust names
+    /// them, so the emptiness of the group and the delimiters around it are
+    /// two different facts. Use [`Self::is_unit`] for the first,
+    /// [`VariantShape::spell`] for the second.
+    pub shape: VariantShape,
+}
+
+impl SourceVariant {
+    /// True when this variant carries no payload — the group question, not the
+    /// syntax one. `B()` is unit by this test and still [`VariantShape::Tuple`].
+    pub fn is_unit(&self) -> bool {
+        self.fields.is_empty()
+    }
+}
+
+/// How a [`SourceVariant`] is written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VariantShape {
+    /// No delimiters — `V`.
+    Unit,
+    /// Positional payload — `V(A, B)`, including the empty `V()`.
+    Tuple,
+    /// Named payload — `V { a: A }`, including the empty `V {}`.
+    Named,
+}
+
+impl VariantShape {
+    /// Spell one variant: `head`, `head(parts…)` or `head { parts… }`.
+    ///
+    /// The single place the delimiters are chosen, for patterns and
+    /// constructors alike and in either direction — `head` is the variant's
+    /// path and each part is an already-rendered `bind` / `member: bind`.
+    pub fn spell(
+        self,
+        head: proc_macro2::TokenStream,
+        parts: &[proc_macro2::TokenStream],
+    ) -> proc_macro2::TokenStream {
+        match self {
+            VariantShape::Unit => head,
+            VariantShape::Tuple => quote::quote!(#head(#(#parts),*)),
+            VariantShape::Named => quote::quote!(#head { #(#parts),* }),
+        }
+    }
+}
+
+/// One payload field of a [`SourceVariant`].
+#[derive(Clone, Debug)]
+pub struct SourceVariantField {
+    /// How the field is addressed in a pattern: `Named(ident)` for a struct
+    /// variant, `Unnamed(index)` for a tuple variant.
+    pub member: syn::Member,
+    /// Leaf name, following the nested-prefix convention:
+    /// `<variant_snake>_<field>` for a named field, `<variant_snake>_<i>` for a
+    /// tuple field.
+    pub leaf_name: String,
+    pub ty: SourceType,
+}
+
+/// A variant's discriminant: the value Rust assigns it, and how the source
+/// wrote it.
+///
+/// Both halves are load-bearing, and they belong to **different consumers** —
+/// exactly the split [`ArrayExtent`] makes for an extent:
+///
+/// * `value` is the number. A destination language with no way to reference a
+///   Rust constant needs it: a Kotlin `enum class` entry is `NAME(3)`, and the
+///   generated `jint → variant` decode matches on it.
+/// * `source` is the spelling. A C mirror re-emits it **verbatim**, which is
+///   what lets a `const`- or `cfg`-driven discriminant keep working, and what
+///   lets a value outside `i64` exist at all.
+///
+/// `value` is therefore `None` whenever the spelling is something the frontend
+/// cannot evaluate at generation time. That is not a failure here: a consumer
+/// that needs the number refuses, naming the variant, while one that only
+/// re-emits the spelling carries on.
+#[derive(Clone, Debug)]
+pub struct Discriminant {
+    /// Rust's own assignment rule: an explicit `= N` sets the value, an
+    /// implicit variant takes the previous value plus one, starting at 0.
+    /// `None` once an unevaluable spelling has broken the chain.
+    pub value: Option<i64>,
+    pub source: DiscriminantSource,
+}
+
+/// How a [`Discriminant`] was spelled at its declaration site.
+#[derive(Clone, Debug)]
+pub enum DiscriminantSource {
+    /// Written with no `=` — the value follows from position.
+    Implicit,
+    /// Written as `= <expr>`, kept **exactly as spelled**.
+    ///
+    /// The expression is carried rather than re-rendered from
+    /// [`Discriminant::value`] because a C mirror re-emits it verbatim: `= 0x07`
+    /// must stay `0x07`, and a `const`- or `cfg`-driven value has no number to
+    /// render from in the first place.
+    ///
+    /// This is the model's one carrier of open syntax, and it is deliberate.
+    /// Narrowing it to a closed representation would delete support the C
+    /// backend has today. It is the same class of leak #211's stage F7 tracks
+    /// for `Niches`, and it is listed there.
+    Explicit(syn::Expr),
+}
+
+/// Lower a captured enum to its model.
+///
+/// Same contract as [`lower_type`]: every variant field type goes through it,
+/// so an enum whose payload the language does not accept is refused here rather
+/// than reaching an adapter. The `Err` names the offending variant and field.
+///
+/// A discriminant is never a reason to refuse — see [`Discriminant`]. An
+/// unevaluable spelling yields `value: None` and breaks the implicit chain for
+/// the variants after it, which is the honest answer: Rust would still compile
+/// them, and only a consumer that needs the number is affected.
+pub(crate) fn lower_enum(
+    e: &syn::ItemEnum,
+    consts: &ConstIndex,
+    item_crate: Option<&str>,
+) -> Result<SourceEnum, (syn::Ident, Option<syn::Ident>, UnsupportedType)> {
+    let mut variants = Vec::with_capacity(e.variants.len());
+    let mut next: Option<i64> = Some(0);
+    for (i, v) in e.variants.iter().enumerate() {
+        let (value, source) = match v.discriminant.as_ref() {
+            Some((_, expr)) => (
+                int_literal(expr),
+                DiscriminantSource::Explicit(expr.clone()),
+            ),
+            None => (next, DiscriminantSource::Implicit),
+        };
+        // `checked_add`: a discriminant at the top of the range is valid Rust
+        // (`#[repr(u64)] enum E { A = i64::MAX as u64, B }`), so overflow ends
+        // the numeric chain the same way an unevaluable spelling does. The
+        // spelling itself is untouched, and a C mirror still re-emits it.
+        next = value.and_then(|n| n.checked_add(1));
+        let prefix = crate::api::core::types_util::pascal_to_snake(&v.ident.to_string());
+        let mut fields = Vec::with_capacity(v.fields.len());
+        for (fi, f) in v.fields.iter().enumerate() {
+            let ty = lower_type(&f.ty, consts, item_crate)
+                .map_err(|e| (v.ident.clone(), f.ident.clone(), e))?;
+            let (member, leaf_name) = match &f.ident {
+                Some(id) => (syn::Member::Named(id.clone()), format!("{prefix}_{id}")),
+                None => (
+                    syn::Member::Unnamed(syn::Index::from(fi)),
+                    format!("{prefix}_{fi}"),
+                ),
+            };
+            fields.push(SourceVariantField {
+                member,
+                leaf_name,
+                ty,
+            });
+        }
+        variants.push(SourceVariant {
+            name: v.ident.clone(),
+            tag: i as i32,
+            discriminant: Discriminant { value, source },
+            fields,
+            shape: match v.fields {
+                syn::Fields::Unit => VariantShape::Unit,
+                syn::Fields::Unnamed(_) => VariantShape::Tuple,
+                syn::Fields::Named(_) => VariantShape::Named,
+            },
+        });
+    }
+    Ok(SourceEnum {
+        name: e.ident.clone(),
+        variants,
+    })
+}
+
+/// Pull a signed integer out of a literal expression (`5`, `-3`, `0x07`).
+/// `None` for anything else — a `const`, a path, arithmetic.
+fn int_literal(expr: &syn::Expr) -> Option<i64> {
+    match expr {
+        syn::Expr::Lit(lit) => match &lit.lit {
+            syn::Lit::Int(int) => int.base10_parse::<i64>().ok(),
+            _ => None,
+        },
+        syn::Expr::Unary(syn::ExprUnary {
+            op: syn::UnOp::Neg(_),
+            expr,
+            ..
+        }) => int_literal(expr).map(|v| -v),
+        _ => None,
+    }
+}
+
 /// Lower a captured type to its model.
 ///
 /// **Total over the accepted grammar**: `Ok` means every part of the type was

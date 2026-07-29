@@ -141,10 +141,7 @@ impl Cbindgen {
             // `mirror_field_wire` still takes syntax: it is shared with the
             // tagged-union payload path, whose variant fields the frontend does
             // not model yet (F2 covers structs only).
-            if matches!(
-                self.mirror_field_wire(&fty.to_syn()),
-                Some(syn::Type::Ptr(_))
-            ) {
+            if matches!(self.mirror_field_wire(&fty), Some(syn::Type::Ptr(_))) {
                 if !matches!(fty, SourceType::Optional(_)) {
                     return None; // bare `Box<T>`: cannot be nulled (invalid `Box`)
                 }
@@ -287,14 +284,14 @@ impl Cbindgen {
         if !self.enums.contains_key(&key) {
             return None;
         }
-        let e = enum_item(r, ty)?;
+        let e = enum_model(r, ty)?;
         assert_unit_enum(e);
         let name = Self::in_name(ty);
         let cname = self.c_type_ident(ty);
         let src = self.src_ty(ty);
         let cname_str = cname.to_string();
         let arms = e.variants.iter().map(|v| {
-            let id = &v.ident;
+            let id = &v.name;
             quote!(
                 if __raw == #cname::#id as ::core::ffi::c_int {
                     return ::core::result::Result::Ok(#src::#id);
@@ -675,15 +672,14 @@ impl Cbindgen {
                 let field_defs: Vec<TokenStream> = fields
                     .iter()
                     .map(|(fname, fty)| {
-                        let sty = fty.to_syn();
-                        let wire = self.mirror_field_wire(&sty).unwrap_or_else(|| {
+                        let wire = self.mirror_field_wire(fty).unwrap_or_else(|| {
                             panic!(
                                 "Cbindgen::repr_c_struct: field `{}` of `{}` has unsupported \
                                  type `{}` (expected a scalar, a declared `enum_type`, or an \
                                  opaque pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
                                 fname,
                                 type_short(&ty),
-                                sty.to_token_stream()
+                                fty.to_syn().to_token_stream()
                             )
                         });
                         let wire = self.spell_field_wire(fty, &wire);
@@ -804,7 +800,7 @@ impl Cbindgen {
     /// **re-emitted verbatim**, exactly as the source wrote it.
     ///
     /// Deliberately NOT routed through the shared
-    /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values).
+    /// [`SourceEnum::discriminant_values`](crate::api::core::frontend::model::SourceEnum::discriminant_values).
     /// That helper resolves each variant to a concrete `i64`, which is what an
     /// adapter needs when it must *know the number* — JniGen's `jint` decode
     /// and the Kotlin `value(N)` constants. This mirror needs no number: it is
@@ -824,16 +820,19 @@ impl Cbindgen {
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
                 continue;
             }
-            let Some(e) = enum_item(registry, &ty) else {
+            let Some(e) = enum_model(registry, &ty) else {
                 continue;
             };
             assert_unit_enum(e);
             let cname = self.c_type_ident(&ty);
             let variants = e.variants.iter().map(|v| {
-                let id = &v.ident;
-                match &v.discriminant {
-                    Some((_, expr)) => quote!(#id = #expr),
-                    None => quote!(#id),
+                let id = &v.name;
+                // The SPELLING, not the value: `= 0x07` stays `0x07`, and a
+                // `const`-driven discriminant survives because nothing here
+                // evaluates it. See `DiscriminantSource::Explicit`.
+                match &v.discriminant.source {
+                    DiscriminantSource::Explicit(expr) => quote!(#id = #expr),
+                    DiscriminantSource::Implicit => quote!(#id),
                 }
             });
             items.push(syn::parse_quote!(
@@ -866,7 +865,7 @@ impl Cbindgen {
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
                 continue;
             }
-            let Some(e) = enum_item(registry, &ty) else {
+            let Some(e) = enum_model(registry, &ty) else {
                 continue;
             };
             assert_payload_enum(e);
@@ -877,28 +876,25 @@ impl Cbindgen {
             // something; the rest fall to a single wildcard arm.
             let mut drop_arms: Vec<TokenStream> = Vec::new();
             for v in &e.variants {
-                let vident = &v.ident;
+                let vident = &v.name;
                 let wires: Vec<syn::Type> = v
                     .fields
                     .iter()
                     .map(|f| self.payload_wire_of(&ty, vident, f, registry))
                     .collect();
-                match &v.fields {
-                    syn::Fields::Unit => variant_defs.push(quote!(#vident)),
-                    syn::Fields::Named(named) => {
-                        let defs = named.named.iter().zip(&wires).map(|(f, w)| {
-                            let n = f.ident.as_ref().expect("named field");
-                            quote!(#n: #w)
-                        });
-                        variant_defs.push(quote!(#vident { #(#defs),* }));
-                    }
-                    syn::Fields::Unnamed(_) => {
-                        variant_defs.push(quote!(#vident(#(#wires),*)));
-                    }
-                }
+                let defs: Vec<TokenStream> = v
+                    .fields
+                    .iter()
+                    .zip(&wires)
+                    .map(|(f, w)| match &f.member {
+                        syn::Member::Named(n) => quote!(#n: #w),
+                        syn::Member::Unnamed(_) => quote!(#w),
+                    })
+                    .collect();
+                variant_defs.push(v.shape.spell(quote!(#vident), &defs));
 
                 // Drop arm: bind every field, free the owning ones.
-                let owning: Vec<(usize, &syn::Field, &syn::Type)> = v
+                let owning: Vec<(usize, &SourceVariantField, &syn::Type)> = v
                     .fields
                     .iter()
                     .zip(&wires)
@@ -912,10 +908,10 @@ impl Cbindgen {
                 let binds: Vec<syn::Ident> = (0..v.fields.len())
                     .map(|i| format_ident!("__f{}", i))
                     .collect();
-                let pattern = variant_pattern(&cname, vident, &v.fields, &binds);
+                let pattern = variant_pattern(&cname, v, &binds);
                 let frees = owning.iter().map(|(i, f, _)| {
                     let b = &binds[*i];
-                    self.payload_free_stmt(&f.ty, b, registry)
+                    self.payload_free_stmt(&f.ty.to_syn(), b, registry)
                 });
                 drop_arms.push(quote!(#pattern => { #(#frees)* }));
             }
@@ -970,7 +966,7 @@ impl Cbindgen {
         &self,
         ty: &syn::Type,
         variant: &syn::Ident,
-        field: &syn::Field,
+        field: &SourceVariantField,
         registry: &Registry<()>,
     ) -> syn::Type {
         self.payload_field_wire(&field.ty, registry)
@@ -979,11 +975,11 @@ impl Cbindgen {
                     "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
                     type_short(ty),
                     variant,
-                    match &field.ident {
-                        Some(n) => format!(".{n}"),
-                        None => String::new(),
+                    match &field.member {
+                        syn::Member::Named(n) => format!(".{n}"),
+                        syn::Member::Unnamed(_) => String::new(),
                     },
-                    field.ty.to_token_stream(),
+                    field.ty.to_syn().to_token_stream(),
                     reason,
                 )
             })
@@ -1080,7 +1076,7 @@ impl Cbindgen {
         if !self.tagged_unions.contains_key(&key) {
             return None;
         }
-        let e = enum_item(r, ty)?;
+        let e = enum_model(r, ty)?;
         assert_payload_enum(e);
         let name = Self::in_name(ty);
         let cname = self.c_type_ident(ty);
@@ -1093,7 +1089,8 @@ impl Cbindgen {
         // degrades to a passthrough and the generated code does not compile.
         for v in &e.variants {
             for f in &v.fields {
-                if self.payload_needs_converter(&f.ty) && r.input_entry(&f.ty).is_none() {
+                let fty = f.ty.to_syn();
+                if self.payload_needs_converter(&f.ty) && r.input_entry(&fty).is_none() {
                     return None;
                 }
             }
@@ -1103,11 +1100,10 @@ impl Cbindgen {
             .variants
             .iter()
             .map(|v| {
-                let vident = &v.ident;
                 let binds: Vec<syn::Ident> = (0..v.fields.len())
                     .map(|i| format_ident!("__f{}", i))
                     .collect();
-                let from = variant_pattern(&cname, vident, &v.fields, &binds);
+                let from = variant_pattern(&cname, v, &binds);
                 let exprs: Vec<TokenStream> = v
                     .fields
                     .iter()
@@ -1119,13 +1115,14 @@ impl Cbindgen {
                         // dependency, so its converter exists before this one is
                         // emitted. Without it the payload silently falls back to
                         // a passthrough and the generated code does not compile.
+                        let fty = f.ty.to_syn();
                         if self.payload_needs_converter(&f.ty) {
-                            subs.push(f.ty.clone());
+                            subs.push(fty.clone());
                         }
-                        self.payload_in_expr(&f.ty, b, r)
+                        self.payload_in_expr(&fty, b, r)
                     })
                     .collect();
-                let to = variant_ctor(&src, vident, &v.fields, &exprs);
+                let to = variant_ctor(&src, v, &exprs);
                 quote!(#from => #to,)
             })
             .collect();
@@ -1210,7 +1207,7 @@ impl Cbindgen {
         if !self.tagged_unions.contains_key(&key) {
             return None;
         }
-        let e = enum_item(r, ty)?;
+        let e = enum_model(r, ty)?;
         assert_payload_enum(e);
         let name = Self::out_name(ty);
         let cname = self.c_type_ident(ty);
@@ -1218,7 +1215,8 @@ impl Cbindgen {
         // Deferral, as in `in_tagged_union` — the output counterpart.
         for v in &e.variants {
             for f in &v.fields {
-                if self.payload_needs_converter(&f.ty) && r.output_entry(&f.ty).is_none() {
+                let fty = f.ty.to_syn();
+                if self.payload_needs_converter(&f.ty) && r.output_entry(&fty).is_none() {
                     return None;
                 }
             }
@@ -1228,23 +1226,23 @@ impl Cbindgen {
             .variants
             .iter()
             .map(|v| {
-                let vident = &v.ident;
                 let binds: Vec<syn::Ident> = (0..v.fields.len())
                     .map(|i| format_ident!("__f{}", i))
                     .collect();
-                let from = variant_pattern(&src, vident, &v.fields, &binds);
+                let from = variant_pattern(&src, v, &binds);
                 let exprs: Vec<TokenStream> = v
                     .fields
                     .iter()
                     .zip(&binds)
                     .map(|(f, b)| {
+                        let fty = f.ty.to_syn();
                         if self.payload_needs_converter(&f.ty) {
-                            subs.push(f.ty.clone());
+                            subs.push(fty.clone());
                         }
-                        self.payload_out_expr(&f.ty, b, r)
+                        self.payload_out_expr(&fty, b, r)
                     })
                     .collect();
-                let to = variant_ctor(&cname_ty(&cname), vident, &v.fields, &exprs);
+                let to = variant_ctor(&cname_ty(&cname), v, &exprs);
                 quote!(#from => #to,)
             })
             .collect();
@@ -1905,13 +1903,13 @@ impl Cbindgen {
 
         // Enum output: `match` the source enum to the C enum.
         if self.enums.contains_key(&key) {
-            let e = enum_item(_r, ty)?;
+            let e = enum_model(_r, ty)?;
             assert_unit_enum(e);
             let name = Self::out_name(ty);
             let cname = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let arms = e.variants.iter().map(|v| {
-                let id = &v.ident;
+                let id = &v.name;
                 quote!(#src::#id => #cname::#id,)
             });
             let function: syn::ItemFn = syn::parse_quote!(
