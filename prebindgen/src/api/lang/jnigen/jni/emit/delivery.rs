@@ -362,6 +362,43 @@ fn fold_steps(
     e
 }
 
+/// Compose a value form's OWN call — the one step in the whole system whose
+/// receiver may be by value.
+///
+/// Four cases, from what the fold ended up holding crossed with what the
+/// accessor takes. A CONSUMING form takes its receiver by value: hand it the
+/// value when that is ours, clone when it is not — the same cost the borrowing
+/// form of the accessor would have paid, which keeps one declaration usable by
+/// both owned and `&T` roots. A borrowing form takes a reference, so an owned
+/// value is borrowed for it.
+///
+/// The decision is made from the fold's RESULT, never from where the fold
+/// began: that is what lets a consuming form sit behind ordinary accessors,
+/// where the chain in front borrows and the form itself still moves.
+///
+/// One function because both hoist paths — the conditional binding and the
+/// ordinary one — need exactly this rule, and stating it twice is what turned
+/// each new shape into a new defect.
+fn compose_value_form_call(
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    call: &PathStep,
+    e: TokenStream,
+    e_owned: bool,
+    consuming: bool,
+) -> TokenStream {
+    match (consuming, e_owned) {
+        (true, owned) => {
+            let (m, f) = (qualify(call.ident()), call.ident());
+            // Parenthesized: the clone applies to whatever the fold holds, and
+            // `&x.clone()` would parse as `&(x.clone())`.
+            let arg = if owned { e } else { quote!((#e).clone()) };
+            quote!(#m::#f(#arg))
+        }
+        (false, true) => compose_step(qualify, call, quote!(&#e)),
+        (false, false) => compose_step(qualify, call, e),
+    }
+}
+
 /// Start a reach from `base`, projecting the **leading run of plain field
 /// steps** directly (`&base.a.b`) instead of through a borrow of the base
 /// (`&(&base).a.b`). Returns the expression and how many steps it consumed.
@@ -546,15 +583,10 @@ fn reach_optional(
     match (lead..path.len()).find(|&i| path[i].is_optional()) {
         None => body(fold_steps(qualify, &path[lead..], e, false)),
         Some(k) => {
-            let e = fold_steps(qualify, &path[lead..k], e, false);
-            let e = if path[..k].last().is_some_and(PathStep::yields_owned)
-                && matches!(path[k], PathStep::Call { .. })
-            {
-                quote!(&#e)
-            } else {
-                e
-            };
-            let opt_e = compose_step(qualify, &path[k], e);
+            // Through the optional step INCLUSIVE: the same fold, so the
+            // borrow in front of it is the ordinary rule rather than a second
+            // statement of it.
+            let opt_e = fold_steps(qualify, &path[lead..=k], e, false);
             let bind = format_ident!("__hb{}", depth);
             // What the arm binds is the step's own value: an OWNED payload is a
             // bare `T`, so composing the next step onto it directly would hand
@@ -616,25 +648,7 @@ pub(crate) fn bind_hoists(
             // borrow, so what arrives is a reference either way.
             let owned = lead.last().is_some_and(PathStep::yields_owned);
             let expr = reach_optional(qualify, lead, value.clone(), by_ref, 0, &|reached| {
-                // Four cases, from what the `Some` arm binds (owned `Option<T>`
-                // vs a borrow) crossed with what the accessor takes. An owned
-                // payload is ours: MOVE it into a by-value form, and borrow it
-                // for a `&Self` one. A borrowed payload passes straight through
-                // to `&Self`, and a by-value form has to clone it — the same
-                // trade a borrowed root makes below, and the only thing there is
-                // to give it there.
-                let call = match (consuming, owned) {
-                    (true, true) => {
-                        let (m, f) = (qualify(last.ident()), last.ident());
-                        quote!(#m::#f(#reached))
-                    }
-                    (true, false) => {
-                        let (m, f) = (qualify(last.ident()), last.ident());
-                        quote!(#m::#f((#reached).clone()))
-                    }
-                    (false, true) => compose_step(qualify, last, quote!(&#reached)),
-                    (false, false) => compose_step(qualify, last, reached),
-                };
+                let call = compose_value_form_call(qualify, last, reached, owned, consuming);
                 quote!(::core::option::Option::Some(#call))
             });
             out.stmts.extend(quote! { let #local = #expr; });
@@ -689,19 +703,7 @@ pub(crate) fn bind_hoists(
         // Deciding this from the fold's RESULT rather than from its start is
         // what lets a consuming form sit behind ordinary accessors: the chain
         // in front borrows, the form itself still moves.
-        let call = &h.prefix[last];
-        let expr = match (h.consuming, e_owned) {
-            (true, true) => {
-                let (m, f) = (qualify(call.ident()), call.ident());
-                quote!(#m::#f(#e))
-            }
-            (true, false) => {
-                let (m, f) = (qualify(call.ident()), call.ident());
-                quote!(#m::#f((#e).clone()))
-            }
-            (false, true) => compose_step(qualify, call, quote!(&#e)),
-            (false, false) => compose_step(qualify, call, e),
-        };
+        let expr = compose_value_form_call(qualify, &h.prefix[last], e, e_owned, h.consuming);
         out.stmts.extend(quote! { let #local = #expr; });
         out.bound.push((h.prefix.clone(), local));
         out.consuming.push(h.consuming);
@@ -739,15 +741,10 @@ fn reach_leaf(
         // No (more) optional nesting steps: compose the rest plainly.
         None => body(fold_steps(qualify, &path[lead..], e, false)),
         Some(k) => {
-            let e = fold_steps(qualify, &path[lead..k], e, false);
-            let e = if path[..k].last().is_some_and(PathStep::yields_owned)
-                && matches!(path[k], PathStep::Call { .. })
-            {
-                quote!(&#e)
-            } else {
-                e
-            };
-            let opt_e = compose_step(qualify, &path[k], e);
+            // Through the optional step INCLUSIVE: the same fold, so the
+            // borrow in front of it is the ordinary rule rather than a second
+            // statement of it.
+            let opt_e = fold_steps(qualify, &path[lead..=k], e, false);
             let nested = format_ident!("__n{}", depth);
             let inner = reach_leaf(
                 qualify,
