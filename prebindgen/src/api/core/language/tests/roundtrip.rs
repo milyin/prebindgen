@@ -40,27 +40,36 @@ fn function_parts_are_the_source_tokens() {
     assert_eq!(tokens(&func.params[0].ty.syntax), "& 'a KeyExpr");
     assert!(matches!(func.params[0].ty.kind, TypeKind::Ref { .. }));
 
-    assert_eq!(
-        tokens(&func.ret.as_ref().expect("a return type").syntax),
-        "Result < () , Error >"
-    );
+    assert_eq!(tokens(&func.ret.syntax), "Result < () , Error >");
 }
 
-/// A defaulted return is distinguishable from a written `-> ()`: the first has
-/// no tokens to keep, the second is a modelled unit whose slice is `()`.
+/// A defaulted return and a written `-> ()` are the same function, and both
+/// spell as `()`. The one thing that separates them — whether the source typed
+/// an arrow — is in `Function::syntax.sig.output`, where the only consumer that
+/// could care (one re-emitting the signature verbatim) already looks.
 #[test]
-fn a_defaulted_return_is_not_a_written_unit() {
+fn a_defaulted_return_spells_as_the_unit() {
+    for item in [
+        syn::parse_quote!(
+            pub fn a() {}
+        ),
+        syn::parse_quote!(
+            pub fn b() -> () {}
+        ),
+    ] {
+        let element = parse_one(item);
+        let ret = &as_fn(&element).ret;
+        assert!(matches!(ret.kind, TypeKind::Unit));
+        assert_eq!(tokens(&ret.syntax), "()");
+    }
+
     let defaulted = parse_one(syn::parse_quote!(
         pub fn a() {}
     ));
-    assert!(as_fn(&defaulted).ret.is_none());
-
-    let written = parse_one(syn::parse_quote!(
-        pub fn b() -> () {}
+    assert!(matches!(
+        as_fn(&defaulted).syntax.sig.output,
+        syn::ReturnType::Default
     ));
-    let ret = as_fn(&written).ret.as_ref().expect("a written return");
-    assert!(matches!(ret.kind, TypeKind::Unit));
-    assert_eq!(tokens(&ret.syntax), "()");
 }
 
 /// A field's slice keeps its attributes and visibility, so an emitter can
@@ -75,7 +84,7 @@ fn struct_field_slices_keep_attributes() {
             pub(crate) seq: u64,
         }
     ));
-    let fields = as_struct(&element).fields.named();
+    let fields = as_struct(&element).fields();
     assert_eq!(fields.len(), 2);
     assert!(tokens(&fields[0].syntax).contains("The key it was published on."));
     assert_eq!(
@@ -135,6 +144,64 @@ fn empty_delimiters_survive_and_spell() {
     assert_eq!(
         bind(&e.variants[1]),
         "Reading :: Range { low : __f0 , high : __f1 }"
+    );
+}
+
+/// The same property for a struct, which is why it needs no modelled shape
+/// either. `struct S;` and `struct S {}` hold zero fields alike and are still
+/// spelled differently wherever Rust names them — one `spell` off the syntax
+/// covers a struct and a variant, in either direction.
+#[test]
+fn struct_delimiters_survive_and_spell() {
+    let spell = |item: syn::Item, parts: &[proc_macro2::TokenStream]| {
+        let element = parse_one(item);
+        let s = as_struct(&element);
+        let name = &s.name;
+        (
+            s.fields.is_some(),
+            s.fields().len(),
+            s.spell(quote::quote!(#name), parts).to_string(),
+        )
+    };
+
+    assert_eq!(
+        spell(
+            syn::parse_quote!(
+                pub struct A;
+            ),
+            &[]
+        ),
+        (true, 0, "A".to_string())
+    );
+    assert_eq!(
+        spell(
+            syn::parse_quote!(
+                pub struct B {}
+            ),
+            &[]
+        ),
+        (true, 0, "B { }".to_string())
+    );
+    assert_eq!(
+        spell(
+            syn::parse_quote!(
+                pub struct C {
+                    pub x: u8,
+                }
+            ),
+            &[quote::quote!(x: __f0)]
+        ),
+        (true, 1, "C { x : __f0 }".to_string())
+    );
+    // Opaque: no modelled fields, and still spellable.
+    assert_eq!(
+        spell(
+            syn::parse_quote!(
+                pub struct D(Whatever<'_, dyn Trait>);
+            ),
+            &[quote::quote!(__f0)]
+        ),
+        (false, 0, "D (__f0)".to_string())
     );
 }
 
@@ -229,7 +296,7 @@ fn array_extent_carries_number_const_and_spelling() {
             }
         ),
     ]);
-    let fields = as_struct(&elements[1]).fields.named();
+    let fields = as_struct(&elements[1]).fields();
 
     let named = fields[0].ty.array_extent().expect("an extent");
     assert_eq!(named.value, 4);

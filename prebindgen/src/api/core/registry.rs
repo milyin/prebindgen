@@ -1483,43 +1483,9 @@ pub fn immediate_subtype_positions(ty: &syn::Type) -> Vec<syn::Type> {
     }
 }
 
-/// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the
-/// `Fn` argument types in declaration order. Otherwise None.
-pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
-    let syn::Type::ImplTrait(it) = ty else {
-        return None;
-    };
-    let mut args: Option<Vec<syn::Type>> = None;
-    let mut has_send = false;
-    let mut has_sync = false;
-    let mut has_static = false;
-    for bound in &it.bounds {
-        match bound {
-            syn::TypeParamBound::Trait(tb) => {
-                let last = tb.path.segments.last()?;
-                let name = last.ident.to_string();
-                match name.as_str() {
-                    "Fn" => {
-                        let syn::PathArguments::Parenthesized(p) = &last.arguments else {
-                            return None;
-                        };
-                        args = Some(p.inputs.iter().cloned().collect());
-                    }
-                    "Send" => has_send = true,
-                    "Sync" => has_sync = true,
-                    _ => return None,
-                }
-            }
-            syn::TypeParamBound::Lifetime(lt) if lt.ident == "static" => has_static = true,
-            _ => return None,
-        }
-    }
-    if has_send && has_sync && has_static {
-        args
-    } else {
-        None
-    }
-}
+/// The callback grammar, which the source language owns — re-exported here for
+/// the existing call sites until they consume elements (stages L2–L4 of #229).
+pub use crate::api::core::language::extract_fn_trait_args;
 
 /// A **resolved** binding generation: the [`Registry`] after
 /// [`Registry::resolve`] ran the adapter's scan, plans, and type

@@ -19,16 +19,21 @@ use super::array_len::{lower_array_len, ArrayExtent, ConstIndex, UnsupportedArra
 /// A type as the language decided it, plus the exact syntax it came from.
 ///
 /// The `syntax` slice is what removes the pressure to make `kind` lossless: a
-/// lifetime, the spelling `0x07`, a `crate::`-qualified path or an elided
-/// argument all survive here at zero modelling cost, so `kind` can stay
-/// language-neutral and small.
+/// lifetime, an elided argument, a `Box` that changes nothing outside Rust all
+/// survive here at zero modelling cost, so `kind` can stay language-neutral and
+/// small.
 #[derive(Clone, Debug)]
 pub struct Type {
     /// What the type means — the closed, destination-neutral classification.
     pub kind: TypeKind,
-    /// The type exactly as the source wrote it. Feed this to `quote!` when
-    /// generated Rust has to name the type; never `match` on it to decide what
-    /// the type is.
+    /// The type as generated Rust must spell it: the source's own tokens,
+    /// normalized to the flat namespace the generated crate can name (see
+    /// [`Language::parse`](super::Language::parse)). Feed this to `quote!`;
+    /// never `match` on it to decide what the type is.
+    ///
+    /// It can say strictly more than `kind` does — `Box<String>` is a `Str`
+    /// here — which is the point: what Rust needs and no destination language
+    /// can see lives in the tokens, not in the classification.
     pub syntax: syn::Type,
 }
 
@@ -58,12 +63,9 @@ impl Type {
                 out.push(extent);
                 elem.collect_extents(out);
             }
-            TypeKind::Optional(t)
-            | TypeKind::Sequence(t)
-            | TypeKind::Boxed(t)
-            | TypeKind::Slice(t)
-            | TypeKind::Ref { inner: t, .. }
-            | TypeKind::Ptr { inner: t, .. } => t.collect_extents(out),
+            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
+                t.collect_extents(out)
+            }
             TypeKind::Fallible { ok, err } => {
                 ok.collect_extents(out);
                 err.collect_extents(out);
@@ -77,45 +79,91 @@ impl Type {
 }
 
 /// What a [`Type`] means. The variants are the accepted type grammar.
+///
+/// One Rust spelling per concept is **not** the rule here — several are. A
+/// concept earns a variant when a destination language would act on it; a
+/// spelling that changes nothing outside Rust folds into the concept it carries
+/// and survives in [`Type::syntax`]:
+///
+/// | Spelling | Kind | Why |
+/// |---|---|---|
+/// | `String`, `str` | [`Str`](TypeKind::Str) | one concept, two Rust types |
+/// | `Vec<T>`, `[T]` | [`Sequence`](TypeKind::Sequence) | a run of `T`; owned vs borrowed is the [`Ref`](TypeKind::Ref) layer's fact, not a second variant |
+/// | `Box<T>` | *whatever `T` is* | an owned `T` either way; nothing outside Rust can tell |
 #[derive(Clone, Debug)]
 pub enum TypeKind {
     /// A primitive with a fixed C/JVM counterpart.
     Scalar(ScalarKind),
-    /// `String` — an owned, heap-allocated UTF-8 string.
+    /// A UTF-8 string — `String` owned, `str` behind a [`Ref`](TypeKind::Ref).
+    ///
+    /// Both spellings are one concept: `&str` and `&String` are each a borrowed
+    /// string and classify identically, which is what every adapter already
+    /// does by hand.
     Str,
     /// `Option<T>`.
     Optional(Box<Type>),
-    /// `Vec<T>`.
+    /// A run of `T` — `Vec<T>` owned, `[T]` behind a [`Ref`](TypeKind::Ref).
+    ///
+    /// One variant, because ownership is already the [`Ref`](TypeKind::Ref)
+    /// layer's fact: `&[T]` is `Ref(Sequence)`, `Vec<T>` is `Sequence`. A
+    /// second variant would encode ownership twice and let the two copies
+    /// disagree. `[T; N]` is *not* this — a fixed extent is a different
+    /// concept, see [`Array`](TypeKind::Array).
     Sequence(Box<Type>),
-    /// `Box<T>`.
-    Boxed(Box<Type>),
     /// `Result<T, E>`.
     Fallible { ok: Box<Type>, err: Box<Type> },
     /// Any other named type: a `#[prebindgen]` struct or enum, or a foreign
     /// path.
     ///
-    /// `path` is the type's **identity**, with the last segment's generic
-    /// arguments stripped out into `args` so one fact has one representation.
-    /// `args` holds the *type* arguments only — a lifetime argument says nothing
-    /// a destination language can act on, and the full spelling is in
-    /// [`Type::syntax`] for whoever has to re-emit it.
-    Named { path: syn::Path, args: Vec<Type> },
-    /// `[T; N]`.
+    /// `id` is the type's **identity** — a name, not syntax, so nothing outside
+    /// this module has to take a path apart to learn what a type is. The last
+    /// segment's generic arguments live in `args`, and only the *type*
+    /// arguments: a lifetime argument says nothing a destination language can
+    /// act on. The full spelling is in [`Type::syntax`] for whoever re-emits it.
+    Named { id: TypeId, args: Vec<Type> },
+    /// `[T; N]` — a run of `T` whose length is known at compile time.
+    ///
+    /// Deliberately not a [`Sequence`](TypeKind::Sequence) with an optional
+    /// extent: a fixed array crosses by value as a primitive array, a `Vec`
+    /// crosses as a heap collection, and every adapter branches between the two
+    /// at every site.
     Array {
         elem: Box<Type>,
         extent: ArrayExtent,
     },
-    /// `&T` / `&'a T` / `&mut T`. The lifetime is spelling, so it lives in
-    /// [`Type::syntax`] rather than here.
+    /// A borrow — `&T` / `&'a T` / `&mut T`. The lifetime is spelling, so it
+    /// lives in [`Type::syntax`] rather than here.
+    ///
+    /// This is the ownership layer for every concept underneath it: `&str` is
+    /// `Ref(Str)`, `&[T]` is `Ref(Sequence)`. A shared-ownership handle
+    /// (`Arc<T>`, `Rc<T>`) belongs here too when the language accepts one.
     Ref { mutable: bool, inner: Box<Type> },
-    /// `[T]`, only ever behind a [`TypeKind::Ref`].
-    Slice(Box<Type>),
-    /// `*const T` / `*mut T`.
-    Ptr { mutable: bool, inner: Box<Type> },
     /// `impl Fn(A, B, …) + Send + Sync + 'static` — the callback form.
     Callback { args: Vec<Type> },
     /// `()`.
     Unit,
+}
+
+/// A nominal type's identity.
+///
+/// `#[prebindgen]` names live in one flat namespace — a duplicate is a
+/// [`ParseError`](super::ParseError) — so the name is the whole address, and
+/// `origin` records which crate wrote it for the same reason
+/// [`ConstId`](super::ConstId) does.
+///
+/// A name rather than a `syn::Path` on purpose: an identity kept as syntax
+/// makes every consumer take a path apart to learn what a type is, which is the
+/// re-classification issue #211 exists to stop — and one the boundary ledger
+/// would not even see, since it watches `syn::Type` and `syn::Expr`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeId {
+    /// The path as written, minus any generic arguments — `Foo`,
+    /// `foreign::Option`. Normalized, so a reducible std or source-module path
+    /// has already collapsed to its final segment.
+    pub name: String,
+    /// Crate the item using this type was captured from; `None` for an
+    /// origin-less stream.
+    pub origin: Option<String>,
 }
 
 /// The primitives the source language accepts. Mirrors the set every adapter
@@ -188,8 +236,14 @@ pub struct UnsupportedType {
 /// Why [`lower_type`] refused a type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UnsupportedTypeReason {
-    /// A syntactic form with no place in the language: a bare trait object, a
-    /// closure type, a macro, `Self`, a never type, an inferred type.
+    /// A syntactic form with no place in the language: a raw pointer, a bare
+    /// trait object, a closure type, a macro, `Self`, a never type, an inferred
+    /// type.
+    ///
+    /// A `#[prebindgen]` crate is idiomatic Rust — the adapter owns the lowering
+    /// to pointers — so `*const T` / `*mut T` are refused here rather than
+    /// modelled. No adapter has a selection arm for one, so accepting them would
+    /// only defer the failure to a late "unresolved type".
     UnsupportedForm,
     /// `impl Trait` that is not the accepted callback form — anything but
     /// `impl Fn(..) + Send + Sync + 'static` returning `()`.
@@ -286,11 +340,10 @@ pub(crate) fn lower_type(
             mutable: r.mutability.is_some(),
             inner: Box::new(lower_type(&r.elem, consts, item_crate)?),
         },
-        syn::Type::Slice(s) => TypeKind::Slice(Box::new(lower_type(&s.elem, consts, item_crate)?)),
-        syn::Type::Ptr(p) => TypeKind::Ptr {
-            mutable: p.mutability.is_some(),
-            inner: Box::new(lower_type(&p.elem, consts, item_crate)?),
-        },
+        // `[T]` is the borrowed spelling of the same concept `Vec<T>` owns.
+        syn::Type::Slice(s) => {
+            TypeKind::Sequence(Box::new(lower_type(&s.elem, consts, item_crate)?))
+        }
         syn::Type::Tuple(t) if t.elems.is_empty() => TypeKind::Unit,
         // Only the unit is in the language. Refusing here names the type;
         // accepting would defer the failure to an "unresolved type" much later.
@@ -304,9 +357,9 @@ pub(crate) fn lower_type(
                 extent,
             }
         }
-        // The callback shape is decided by `extract_fn_trait_args`, which is
-        // also what the registry accepts today — ONE authority for the form.
-        syn::Type::ImplTrait(_) => match crate::api::core::registry::extract_fn_trait_args(ty) {
+        // The callback shape is decided by `extract_fn_trait_args`, this
+        // module's own — and the pipeline's only — authority for the form.
+        syn::Type::ImplTrait(_) => match super::extract_fn_trait_args(ty) {
             Some(args) => TypeKind::Callback {
                 args: args
                     .iter()
@@ -381,7 +434,11 @@ fn lower_path(
             if let Some(kind) = ScalarKind::from_name(&name) {
                 return Ok(TypeKind::Scalar(kind));
             }
-            if name == "String" {
+            // `String` and `str` are one concept. `str` is unsized and so only
+            // ever appears behind a `&`, which the `Ref` layer already records
+            // — classifying it as a nominal type instead would send every
+            // adapter looking for an item named `str` to resolve.
+            if name == "String" || name == "str" {
                 return Ok(TypeKind::Str);
             }
         }
@@ -407,9 +464,15 @@ fn lower_path(
                     arity(1)?;
                     return Ok(TypeKind::Sequence(Box::new(args.remove(0))));
                 }
+                // `Box<T>` **is** `T`: an owned value either way, and no
+                // destination language can tell the two apart. So it carries no
+                // kind of its own and classifies as whatever it wraps — the
+                // `Box` survives in `Type::syntax`, which is what generated
+                // Rust spells. (A shared-ownership handle would classify as a
+                // `Ref` for the same reason, when the language accepts one.)
                 "Box" => {
                     arity(1)?;
-                    return Ok(TypeKind::Boxed(Box::new(args.remove(0))));
+                    return Ok(args.remove(0).kind);
                 }
                 "Result" => {
                     arity(2)?;
@@ -417,18 +480,28 @@ fn lower_path(
                     let ok = Box::new(args.remove(0));
                     return Ok(TypeKind::Fallible { ok, err });
                 }
-                _ => return Ok(named(tp, args)),
+                _ => return Ok(named(tp, args, item_crate)),
             }
         }
     }
-    Ok(named(tp, args))
+    Ok(named(tp, args, item_crate))
 }
 
-/// `Named` with the last segment's arguments stripped out of the identity path.
-fn named(tp: &syn::TypePath, args: Vec<Type>) -> TypeKind {
-    let mut path = tp.path.clone();
-    if let Some(last) = path.segments.last_mut() {
-        last.arguments = syn::PathArguments::None;
+/// `Named` with the identity read off the path: every segment joined, minus the
+/// generic arguments, which are already in `args`.
+fn named(tp: &syn::TypePath, args: Vec<Type>, item_crate: Option<&str>) -> TypeKind {
+    let name = tp
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::");
+    TypeKind::Named {
+        id: TypeId {
+            name,
+            origin: item_crate.map(str::to_string),
+        },
+        args,
     }
-    TypeKind::Named { path, args }
 }

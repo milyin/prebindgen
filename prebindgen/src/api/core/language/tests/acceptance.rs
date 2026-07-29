@@ -15,7 +15,7 @@ fn lower(ty: proc_macro2::TokenStream) -> Result<Type, UnsupportedType> {
         }
     );
     match parse(vec![tag_len_const(), item]).remove(1) {
-        Element::Struct(s) => Ok(s.fields.named()[0].ty.clone()),
+        Element::Struct(s) => Ok(s.fields()[0].ty.clone()),
         Element::Unsupported(u) => match *u.error {
             ItemError::FieldType { source, .. } => Err(source),
             other => panic!("expected a field-type diagnosis, got {other}"),
@@ -52,6 +52,22 @@ fn scalars_and_strings() {
     assert!(matches!(kind(quote::quote!(())), TypeKind::Unit));
 }
 
+/// `String` and `str` are one concept, and the borrow is the `Ref` layer's
+/// fact. Every adapter already treats `&str` as a borrowed string by hand;
+/// classifying `str` as a nominal type would send them all looking for an item
+/// named `str` to resolve.
+#[test]
+fn a_string_is_a_string_however_it_is_spelled() {
+    assert!(matches!(kind(quote::quote!(str)), TypeKind::Str));
+    for spelling in [quote::quote!(&str), quote::quote!(&String)] {
+        let TypeKind::Ref { mutable, inner } = kind(spelling) else {
+            panic!("a borrow");
+        };
+        assert!(!mutable);
+        assert!(matches!(inner.kind, TypeKind::Str));
+    }
+}
+
 #[test]
 fn the_builtin_generics() {
     assert!(matches!(
@@ -63,28 +79,48 @@ fn the_builtin_generics() {
         TypeKind::Sequence(_)
     ));
     assert!(matches!(
-        kind(quote::quote!(Box<Sample>)),
-        TypeKind::Boxed(_)
-    ));
-    assert!(matches!(
         kind(quote::quote!(Result<u8, Error>)),
         TypeKind::Fallible { .. }
     ));
 }
 
-/// A builtin must be spelled BARE: a path-qualified `Option` is a foreign type
+/// `Box<T>` **is** `T` — an owned value either way, and no destination language
+/// can tell them apart, so it carries no kind of its own. The `Box` survives
+/// where it matters: in the syntax generated Rust spells.
+#[test]
+fn a_box_classifies_as_what_it_wraps() {
+    let ty = lower(quote::quote!(Box<String>)).expect("in the language");
+    assert!(matches!(ty.kind, TypeKind::Str));
+    assert_eq!(tokens(&ty.syntax), "Box < String >");
+
+    // And it composes: the nullable heap string of a `#[repr(C)]` struct field
+    // is an optional string, spelled with its `Box`.
+    let ty = lower(quote::quote!(Option<Box<String>>)).expect("in the language");
+    let TypeKind::Optional(inner) = &ty.kind else {
+        panic!("an option");
+    };
+    assert!(matches!(inner.kind, TypeKind::Str));
+    assert_eq!(tokens(&inner.syntax), "Box < String >");
+}
+
+/// A builtin must be spelled BARE **after normalization**: the real std path
+/// reduces and classifies, while a path-qualified lookalike is a foreign type
 /// that merely shares the name, and collapsing it would silently retype the
 /// field.
 #[test]
 fn a_qualified_builtin_is_a_named_type() {
     assert!(matches!(
-        kind(quote::quote!(foreign::Option<u8>)),
-        TypeKind::Named { .. }
+        kind(quote::quote!(std::option::Option<u8>)),
+        TypeKind::Optional(_)
     ));
+    let TypeKind::Named { id, .. } = kind(quote::quote!(foreign::Option<u8>)) else {
+        panic!("a named type");
+    };
+    assert_eq!(id.name, "foreign::Option");
 }
 
 #[test]
-fn references_slices_and_pointers() {
+fn references() {
     assert!(matches!(
         kind(quote::quote!(&Sample)),
         TypeKind::Ref { mutable: false, .. }
@@ -93,14 +129,40 @@ fn references_slices_and_pointers() {
         kind(quote::quote!(&mut Sample)),
         TypeKind::Ref { mutable: true, .. }
     ));
+}
+
+/// `Vec<T>` and `[T]` are one concept — a run of `T` — and ownership is the
+/// `Ref` layer's fact, not a second variant. That is already how the pipeline
+/// behaves: one `Shape::Iterable` covers both, and jnigen rewrites a `&[T]`
+/// input into the `Vec<_>` pattern outright.
+#[test]
+fn a_sequence_is_a_sequence_borrowed_or_owned() {
     assert!(matches!(
-        kind(quote::quote!(*const u8)),
-        TypeKind::Ptr { mutable: false, .. }
+        kind(quote::quote!(Vec<u8>)),
+        TypeKind::Sequence(_)
     ));
+    // Bare, as a callback argument is written: `impl Fn([T])`.
+    assert!(matches!(kind(quote::quote!([u8])), TypeKind::Sequence(_)));
     let TypeKind::Ref { inner, .. } = kind(quote::quote!(&[u8])) else {
         panic!("a reference");
     };
-    assert!(matches!(inner.kind, TypeKind::Slice(_)));
+    assert!(matches!(inner.kind, TypeKind::Sequence(_)));
+}
+
+/// A raw pointer is not in the language. A `#[prebindgen]` crate is idiomatic
+/// Rust and the adapter owns the lowering to pointers — no adapter has a
+/// selection arm for one, so accepting it would only defer the failure to a
+/// late "unresolved type".
+#[test]
+fn a_raw_pointer_is_not_in_the_language() {
+    assert_eq!(
+        reason(quote::quote!(*const u8)),
+        UnsupportedTypeReason::UnsupportedForm
+    );
+    assert_eq!(
+        reason(quote::quote!(*mut Sample)),
+        UnsupportedTypeReason::UnsupportedForm
+    );
 }
 
 /// A lifetime argument is accepted and not modelled — `Foo<'a, T>` classifies
@@ -108,10 +170,10 @@ fn references_slices_and_pointers() {
 #[test]
 fn a_lifetime_argument_is_spelling_only() {
     let ty = lower(quote::quote!(Foo<'a, u8>)).expect("in the language");
-    let TypeKind::Named { path, args } = &ty.kind else {
+    let TypeKind::Named { id, args } = &ty.kind else {
         panic!("a named type");
     };
-    assert_eq!(tokens(path), "Foo");
+    assert_eq!(id.name, "Foo");
     assert_eq!(args.len(), 1);
     assert_eq!(tokens(&ty.syntax), "Foo < 'a , u8 >");
 }
@@ -200,7 +262,7 @@ fn an_extent_may_name_a_const_declared_later() {
         tag_len_const(),
     ]);
     assert_eq!(
-        as_struct(&elements[0]).fields.named()[0]
+        as_struct(&elements[0]).fields()[0]
             .ty
             .array_extent()
             .expect("an extent")
@@ -239,10 +301,11 @@ fn a_computed_const_is_indexed_but_is_not_a_length() {
 
 // ── Item kinds ─────────────────────────────────────────────────────────
 
-/// Only a named-field struct has a modelled field list. A tuple struct is
-/// indexable as an opaque handle, and its fields are deliberately not lowered:
-/// no adapter has ever crossed them, so lowering would turn types that are
-/// ignored today into errors.
+/// A struct is a product of fields, or opaque. A tuple struct is the opaque
+/// one: usable as a handle, its fields deliberately not lowered, because no
+/// adapter has ever crossed them and lowering would turn types that are ignored
+/// today into errors. A unit struct is the empty product, not a third shape —
+/// the delimiters are spelling, and `spell` reads them off the syntax.
 #[test]
 fn struct_shapes() {
     let named = parse_one(syn::parse_quote!(
@@ -250,18 +313,19 @@ fn struct_shapes() {
             pub x: u8,
         }
     ));
-    assert!(matches!(as_struct(&named).fields, StructFields::Named(_)));
+    assert_eq!(as_struct(&named).fields().len(), 1);
 
     let tuple = parse_one(syn::parse_quote!(
         pub struct B(SomethingUnexpressible<'_, dyn Trait>);
     ));
-    assert!(matches!(as_struct(&tuple).fields, StructFields::Unnamed));
-    assert!(as_struct(&tuple).fields.named().is_empty());
+    assert!(as_struct(&tuple).fields.is_none(), "opaque");
+    assert!(as_struct(&tuple).fields().is_empty());
 
     let unit = parse_one(syn::parse_quote!(
         pub struct C;
     ));
-    assert!(matches!(as_struct(&unit).fields, StructFields::Unit));
+    assert!(as_struct(&unit).fields.is_some(), "empty, not opaque");
+    assert!(as_struct(&unit).fields().is_empty());
 }
 
 /// Tags are declaration order and are never the discriminant. The two
@@ -403,10 +467,25 @@ fn function_signatures() {
             .collect::<Vec<_>>(),
         vec!["key", "payload"]
     );
-    assert!(matches!(
-        f.ret.as_ref().expect("a return").kind,
-        TypeKind::Fallible { .. }
-    ));
+    assert!(matches!(f.ret.kind, TypeKind::Fallible { .. }));
+}
+
+/// An elided return and a written `-> ()` are the same function. Nothing in the
+/// pipeline distinguishes them — every consumer normalizes one to the other on
+/// the spot — so the model does it once instead.
+#[test]
+fn an_elided_return_is_the_unit() {
+    for sig in [
+        quote::quote!(
+            pub fn f() {}
+        ),
+        quote::quote!(
+            pub fn f() -> () {}
+        ),
+    ] {
+        let element = parse_one(syn::parse_quote!(#sig));
+        assert!(matches!(as_fn(&element).ret.kind, TypeKind::Unit));
+    }
 }
 
 #[test]

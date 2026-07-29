@@ -15,7 +15,7 @@
 //!
 //! Two things at once, and that pairing is the whole design:
 //!
-//! * a **closed classification** — [`TypeKind`], [`StructFields`], the variant
+//! * a **closed classification** — [`TypeKind`], the field list, the variant
 //!   list — that says what the source *means*, in terms every destination
 //!   language shares;
 //! * the **exact syntax** each part was built from, sliced down to the
@@ -28,7 +28,26 @@
 //! Matching a `syn::Type` or `syn::Expr` variant outside this module is a
 //! classifier, and issue #211 says classification lives here alone. Passing a
 //! `syntax` slice into `quote!` is spelling, and spelling the source is exactly
-//! what generated Rust must do.
+//! what generated Rust must do — see [`spell`] for the helpers that do it.
+//!
+//! # What earns a variant
+//!
+//! A concept, not a Rust spelling. The test is whether a *destination* language
+//! would act on the distinction; if only Rust can see it, it is spelling, and
+//! the slice already carries it:
+//!
+//! | Rust writes | The model says | Because |
+//! |---|---|---|
+//! | `String`, `str` | [`TypeKind::Str`] | one concept, two Rust types |
+//! | `Vec<T>`, `[T]` | [`TypeKind::Sequence`] | a run of `T`; owned vs borrowed is the [`Ref`](TypeKind::Ref) layer's fact |
+//! | `Box<T>` | whatever `T` is | an owned `T` either way |
+//! | `struct S;`, `struct S {}` | zero fields | the delimiters are spelling |
+//! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
+//! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
+//!
+//! The identities follow the same rule: a nominal type is a [`TypeId`] — a
+//! name — not a `syn::Path`, so nothing downstream has to take a path apart to
+//! learn what a type is.
 //!
 //! # Why the syntax rides along
 //!
@@ -63,6 +82,7 @@ mod array_len;
 #[cfg(test)]
 mod boundary;
 mod element;
+pub mod spell;
 mod ty;
 
 #[cfg(test)]
@@ -72,10 +92,9 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Const, Element, Enum, Field, Function, Param, Passthrough, Struct, StructFields,
-        Unsupported, Variant,
+        Const, Element, Enum, Field, Function, Param, Passthrough, Struct, Unsupported, Variant,
     },
-    ty::{ScalarKind, Type, TypeKind, UnsupportedType, UnsupportedTypeReason},
+    ty::{ScalarKind, Type, TypeId, TypeKind, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
 
@@ -106,13 +125,37 @@ impl Language {
     /// **Transactional**: an `Err` yields no elements at all, so a refused
     /// stream cannot leave a half-built model behind.
     ///
-    /// Order-independent: consts are indexed before anything is lowered, so an
-    /// array length may name a const declared later in the stream.
+    /// Order-independent: source modules are gathered, and consts indexed,
+    /// before anything is lowered — so a cross-source type reference and an
+    /// array length may both name something declared later in the stream.
     pub fn parse<I>(&self, items: I) -> Result<Vec<Element>, ParseError>
     where
         I: IntoIterator<Item = (syn::Item, SourceLocation)>,
     {
-        let items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
+        let mut items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
+
+        // Pass 0: normalize every item's types to the canonical flat spelling
+        // before a single one is classified. `std::option::Option<T>` is an
+        // `Option`, and `source_a::TypeA` is `TypeA` — decisions this module
+        // owns, so it must be the one to see the reduced form. Gathering EVERY
+        // module name first is what makes a cross-source reference in an
+        // earlier item normalize the same as in a later one.
+        //
+        // The consequence is deliberate and stated in `Type::syntax`: a slice
+        // is the spelling generation must EMIT, which is the normalized one —
+        // the flat namespace is what the generated crate can actually name.
+        let mut modules: Vec<String> = Vec::new();
+        for (_, loc) in &items {
+            if let Some(crate_name) = &loc.crate_name {
+                let module = crate_name.replace('-', "_");
+                if !modules.contains(&module) {
+                    modules.push(module);
+                }
+            }
+        }
+        for (item, _) in &mut items {
+            crate::api::core::types_util::normalize_item_types(item, &modules);
+        }
 
         // Pass 1: the consts an array length may name. Unnamed `const _` items
         // are excluded here for the same reason they are passed through below —
@@ -144,6 +187,48 @@ impl Language {
             out.push(element);
         }
         Ok(out)
+    }
+}
+
+/// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the `Fn`
+/// argument types in declaration order. Otherwise `None`.
+///
+/// The callback grammar, and the language's alone: [`TypeKind::Callback`] is
+/// exactly what this accepts, so acceptance cannot drift from classification.
+/// The registry re-exports it for the consumers that have not migrated yet.
+pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
+    let syn::Type::ImplTrait(it) = ty else {
+        return None;
+    };
+    let mut args: Option<Vec<syn::Type>> = None;
+    let mut has_send = false;
+    let mut has_sync = false;
+    let mut has_static = false;
+    for bound in &it.bounds {
+        match bound {
+            syn::TypeParamBound::Trait(tb) => {
+                let last = tb.path.segments.last()?;
+                let name = last.ident.to_string();
+                match name.as_str() {
+                    "Fn" => {
+                        let syn::PathArguments::Parenthesized(p) = &last.arguments else {
+                            return None;
+                        };
+                        args = Some(p.inputs.iter().cloned().collect());
+                    }
+                    "Send" => has_send = true,
+                    "Sync" => has_sync = true,
+                    _ => return None,
+                }
+            }
+            syn::TypeParamBound::Lifetime(lt) if lt.ident == "static" => has_static = true,
+            _ => return None,
+        }
+    }
+    if has_send && has_sync && has_static {
+        args
+    } else {
+        None
     }
 }
 
@@ -331,11 +416,17 @@ fn lower_fn(
             syntax: pt.clone(),
         });
     }
+    // An elided return and a written `-> ()` are the same function. The model
+    // says so once, here, instead of leaving every consumer to normalize one to
+    // the other — which is what they all do today, in eight separate copies.
     let ret = match &f.sig.output {
-        syn::ReturnType::Default => None,
-        syn::ReturnType::Type(_, t) => Some(
-            lower_type(t, consts, item_crate).map_err(|source| ItemError::ReturnType { source })?,
-        ),
+        syn::ReturnType::Default => Type {
+            kind: TypeKind::Unit,
+            syntax: syn::parse_quote!(()),
+        },
+        syn::ReturnType::Type(_, t) => {
+            lower_type(t, consts, item_crate).map_err(|source| ItemError::ReturnType { source })?
+        }
     };
     Ok(Function {
         name: f.sig.ident.clone(),
@@ -370,10 +461,12 @@ fn lower_struct(
                     syntax: f.clone(),
                 });
             }
-            StructFields::Named(out)
+            Some(out)
         }
-        syn::Fields::Unnamed(_) => StructFields::Unnamed,
-        syn::Fields::Unit => StructFields::Unit,
+        // Opaque: a tuple struct's contents are not a boundary surface, so they
+        // are not lowered and a field type outside the grammar is not an error.
+        syn::Fields::Unnamed(_) => None,
+        syn::Fields::Unit => Some(Vec::new()),
     };
     Ok(Struct {
         name: s.ident.clone(),

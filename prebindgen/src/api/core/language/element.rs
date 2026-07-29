@@ -4,9 +4,10 @@
 //! Every component — a parameter, a field, a variant, a type — keeps its own
 //! slice, so generated Rust names the source by re-emitting what the source
 //! wrote, and nothing re-parses a whole item to find a part of it.
-
-use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+//!
+//! **Structure only.** Everything that turns an element back into Rust tokens
+//! lives in [`spell`](super::spell), so the shape of an element says nothing
+//! about the language it came from.
 
 use super::ty::Type;
 use crate::SourceLocation;
@@ -80,11 +81,11 @@ pub struct Function {
     pub name: syn::Ident,
     /// Parameters in declaration order.
     pub params: Vec<Param>,
-    /// The return type, or `None` when the source wrote no `->` at all. A
-    /// written `-> ()` is `Some`, with [`TypeKind::Unit`](super::TypeKind) —
-    /// the two mean the same thing and are spelled differently, and only the
-    /// spelling side cares.
-    pub ret: Option<Type>,
+    /// What the function returns. An elided return is
+    /// [`TypeKind::Unit`](super::TypeKind), exactly as a written `-> ()` is:
+    /// they mean the same thing, differ only in spelling, and every consumer
+    /// today already normalizes one to the other on the spot.
+    pub ret: Type,
     pub location: SourceLocation,
     /// The whole item: attributes, `cfg`, doc comments, body.
     pub syntax: syn::ItemFn,
@@ -99,36 +100,32 @@ pub struct Param {
     pub syntax: syn::PatType,
 }
 
-/// A `#[prebindgen]` struct.
+/// A `#[prebindgen]` struct: a product of fields, or an opaque one.
 #[derive(Clone, Debug)]
 pub struct Struct {
     pub name: syn::Ident,
-    pub fields: StructFields,
+    /// The fields, when they are a boundary surface — `Some(vec![])` for a
+    /// struct with none.
+    ///
+    /// `None` means **opaque**: the contents are not part of the boundary and
+    /// are deliberately not lowered, so a field type outside the grammar is not
+    /// an error. That is today's tuple struct — usable as a handle, its fields
+    /// never crossed by any adapter — and lowering them would turn types that
+    /// are ignored now into refusals.
+    ///
+    /// Whether a shape has named or positional fields is not recorded here: a
+    /// [`Field`] already knows its own address, and the delimiters are
+    /// spelling, read off `syntax` by
+    /// [`spell::fields`](super::spell::fields).
+    pub fields: Option<Vec<Field>>,
     pub location: SourceLocation,
     pub syntax: syn::ItemStruct,
 }
 
-/// The three struct shapes, and which of them has a modelled field list.
-#[derive(Clone, Debug)]
-pub enum StructFields {
-    /// `struct S { a: A }` — the one shape whose fields are a boundary surface,
-    /// so they are lowered and a type the language cannot express is an error.
-    Named(Vec<Field>),
-    /// `struct S(A, B);` — indexed, fields **not** modelled. A tuple struct is
-    /// usable as an opaque handle, and no adapter has ever crossed its fields,
-    /// so lowering them would turn types that are ignored today into errors.
-    Unnamed,
-    /// `struct S;`
-    Unit,
-}
-
-impl StructFields {
-    /// The modelled fields — empty for the shapes that have none.
-    pub fn named(&self) -> &[Field] {
-        match self {
-            StructFields::Named(f) => f,
-            StructFields::Unnamed | StructFields::Unit => &[],
-        }
+impl Struct {
+    /// The modelled fields — empty when the struct is opaque.
+    pub fn fields(&self) -> &[Field] {
+        self.fields.as_deref().unwrap_or(&[])
     }
 }
 
@@ -204,38 +201,7 @@ pub struct Variant {
     pub syntax: syn::Variant,
 }
 
-impl Variant {
-    /// True when this variant carries no payload.
-    ///
-    /// The *group* question, not the syntax one: `B`, `B()` and `B {}` are all
-    /// unit by this test, and [`Self::spell`] is what keeps their delimiters
-    /// apart.
-    pub fn is_unit(&self) -> bool {
-        self.fields.is_empty()
-    }
-
-    /// Spell this variant: `head`, `head(parts…)` or `head { parts… }`,
-    /// following the delimiters the source wrote.
-    ///
-    /// The one place a variant's delimiters are chosen, for match patterns and
-    /// constructors alike and in either direction. It reads them off
-    /// [`Self::syntax`] rather than a modelled shape, because they are spelling
-    /// and nothing else: `B()` carries no payload and still must be written
-    /// `E::B()` wherever Rust names it, while no destination language can tell
-    /// it from `B`.
-    ///
-    /// `head` is the variant's path and each part is an already-rendered `bind`
-    /// or `member: bind` — see [`Field::member`].
-    pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        match &self.syntax.fields {
-            syn::Fields::Unit => head,
-            syn::Fields::Unnamed(_) => quote!(#head(#(#parts),*)),
-            syn::Fields::Named(_) => quote!(#head { #(#parts),* }),
-        }
-    }
-}
-
-/// One field of a [`StructFields::Named`] struct or of a [`Variant`].
+/// One field of a [`Struct`] or of a [`Variant`].
 #[derive(Clone, Debug)]
 pub struct Field {
     /// The field's name, or `None` for a positional one.
@@ -248,24 +214,15 @@ pub struct Field {
     pub syntax: syn::Field,
 }
 
-impl Field {
-    /// How the field is addressed in a pattern or an initializer: by name when
-    /// it has one, else by position.
-    pub fn member(&self) -> syn::Member {
-        match &self.name {
-            Some(id) => syn::Member::Named(id.clone()),
-            None => syn::Member::Unnamed(syn::Index::from(self.index)),
-        }
-    }
-
-    /// The field bound to `bind`, shaped for whichever address it uses —
-    /// `id: __f0` for a named field, `__f0` for a positional one. The part
-    /// [`Variant::spell`] takes.
-    pub fn bind(&self, bind: &impl ToTokens) -> TokenStream {
-        match &self.name {
-            Some(id) => quote!(#id: #bind),
-            None => quote!(#bind),
-        }
+impl Variant {
+    /// True when this variant carries no payload.
+    ///
+    /// The *group* question, not the syntax one: `B`, `B()` and `B {}` are all
+    /// unit by this test, and
+    /// [`spell::fields`](super::spell::fields) is what keeps their delimiters
+    /// apart.
+    pub fn is_unit(&self) -> bool {
+        self.fields.is_empty()
     }
 }
 
