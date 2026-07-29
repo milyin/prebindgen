@@ -291,10 +291,13 @@ pub mod core {
     /// itself. Not to be confused with [`crate::lang`], the *destination*
     /// adapters.
     pub use crate::api::core::language;
+    /// [`Language`] and [`Element`] sit here too, next to [`Registry`]: they are
+    /// what a build script names, and the rest of the element model stays in
+    /// [`mod@language`] where an adapter reaches for it.
     pub use crate::api::core::{
-        ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot, Niches,
-        Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,
-        TypeEntry, TypeKey, WriteRustError,
+        ConverterImpl, Direction, DomainScalar, Element, Generation, Gravestone, Language,
+        NicheSlot, Niches, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError,
+        Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
     };
 }
 

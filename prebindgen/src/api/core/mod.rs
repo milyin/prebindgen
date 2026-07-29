@@ -35,6 +35,7 @@ pub(crate) mod write;
 pub use self::{
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
     gravestone::{Gravestone, Transmute},
+    language::{Element, Language},
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
     registry::{Direction, Generation, Registry, ScanError, TypeEntry, TypeKey, WriteRustError},

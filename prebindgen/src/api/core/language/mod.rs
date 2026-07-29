@@ -11,6 +11,10 @@
 //!   (syn::Item)          validate              elements      spell off `origin`
 //! ```
 //!
+//! [`Language::source`] folds the first arrow in for the common case, so a build
+//! script names one directory and gets elements; [`Language::items`] keeps the
+//! arrow itself, for a stream that needs shaping first.
+//!
 //! # What an element is
 //!
 //! Two things at once, and that pairing is the whole design:
@@ -138,39 +142,124 @@ use crate::SourceLocation;
 
 /// The parser for the prebindgen source language.
 ///
-/// Carries no configuration: what the language accepts is a property of the
-/// language, not of the call site. See the [module docs](self) for the contract.
+/// Carries no configuration about what it *accepts* — that is a property of the
+/// language, not of the call site. What it does carry is **what to parse**:
+/// collect the inputs, then [`parse`](Self::parse) once.
 ///
-/// ```ignore
-/// let elements = Language::new().parse(
-///     flat.items_all().chain(helpers.items_in_groups(&["api"])),
-/// )?;
+/// # Reading a source directory
+///
+/// A build script's whole job, in one expression — the
+/// [`Source`](crate::Source) step included. Pass
+/// `<source_crate>::PREBINDGEN_OUT_DIR`:
+///
 /// ```
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Language;
+/// # prebindgen::Source::init_doctest_simulate();
+/// use prebindgen::core::Language;
+///
+/// let elements = Language::new().source("source_ffi").parse()?;
+/// assert_eq!(elements.len(), 2);
+/// # Ok::<_, prebindgen::core::language::ParseError>(())
+/// ```
+///
+/// # Reading a stream
+///
+/// [`Self::items`] takes any `(syn::Item, SourceLocation)` iterator, so
+/// everything a [`Source`](crate::Source) can express still composes — a group
+/// selection, a renamed dependency, several sources at once. The feeders
+/// accumulate, so mix them freely:
+///
+/// ```
+/// # prebindgen::Source::init_doctest_simulate();
+/// use prebindgen::{core::Language, Source};
+///
+/// // A dependency renamed in Cargo.toml needs the name THIS crate uses, so it
+/// // is configured rather than named by directory.
+/// let helpers = Source::builder("source_ffi").crate_name("helpers").build();
+/// let elements = Language::new()
+///     .items(helpers.items_in_groups(&["functions"]))
+///     .parse()?;
+/// assert_eq!(elements.len(), 1);
+/// # Ok::<_, prebindgen::core::language::ParseError>(())
+/// ```
+///
+/// # Why accumulate, rather than parse each input
+///
+/// The rules that make a parse fail are **whole-stream** rules: one flat
+/// namespace across every ingested crate, one const index an array length may
+/// reach into, one set of source modules to normalize paths against. None can be
+/// decided per input, so every input is in hand before any of it is classified.
+#[derive(Debug, Default)]
+pub struct Language {
+    items: Vec<(syn::Item, SourceLocation)>,
+}
 
 impl Language {
     pub fn new() -> Self {
-        Self
+        Self::default()
     }
 
-    /// Parse a captured item stream into elements.
+    /// Every `#[prebindgen]` item captured in `dir`.
     ///
-    /// Takes any `(syn::Item, SourceLocation)` iterator — typically
-    /// `source.items_all()` — so item-level selection and multi-source
-    /// composition stay upstream, where they already are.
+    /// Sugar for [`Self::items`] over [`Source::items_all`](crate::Source::items_all),
+    /// which is the whole of what a build script normally needs — pass
+    /// `<source_crate>::PREBINDGEN_OUT_DIR`. Reach for a
+    /// [`Source`](crate::Source) directly, and feed it through [`Self::items`],
+    /// only when it needs configuring.
+    ///
+    /// Panics the way [`Source::new`](crate::Source::new) does if `dir` is not
+    /// readable prebindgen output: a build script has nothing to recover with.
+    ///
+    /// ```
+    /// # prebindgen::Source::init_doctest_simulate();
+    /// use prebindgen::core::Language;
+    ///
+    /// let elements = Language::new().source("source_ffi").parse().unwrap();
+    /// let mut names: Vec<String> =
+    ///     elements.iter().filter_map(|e| e.name()).map(|n| n.to_string()).collect();
+    /// names.sort();
+    /// assert_eq!(names, ["TestStruct", "test_function"]);
+    /// ```
+    pub fn source<P: AsRef<std::path::Path>>(self, dir: P) -> Self {
+        let source = crate::Source::new(dir);
+        self.items(source.items_all())
+    }
+
+    /// Add a captured item stream.
+    ///
+    /// The general feeder: any `(syn::Item, SourceLocation)` iterator, so
+    /// item-level selection and multi-source composition stay upstream where
+    /// they already are. Call it as often as needed; the streams accumulate.
+    ///
+    /// ```
+    /// # prebindgen::Source::init_doctest_simulate();
+    /// use prebindgen::{core::Language, Source};
+    ///
+    /// let source = Source::new("source_ffi");
+    /// let elements = Language::new()
+    ///     .items(source.items_in_groups(&["structs"]))
+    ///     .parse()
+    ///     .unwrap();
+    /// assert_eq!(elements.len(), 1);
+    /// ```
+    pub fn items<I>(mut self, items: I) -> Self
+    where
+        I: IntoIterator<Item = (syn::Item, SourceLocation)>,
+    {
+        self.items.extend(items);
+        self
+    }
+
+    /// Parse everything collected so far into elements.
     ///
     /// **Transactional**: an `Err` yields no elements at all, so a refused
     /// stream cannot leave a half-built model behind.
     ///
     /// Order-independent: source modules are gathered, and consts indexed,
     /// before anything is lowered — so a cross-source type reference and an
-    /// array length may both name something declared later in the stream.
-    pub fn parse<I>(&self, items: I) -> Result<Vec<Element>, ParseError>
-    where
-        I: IntoIterator<Item = (syn::Item, SourceLocation)>,
-    {
-        let mut items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
+    /// array length may both name something declared later, in this input or
+    /// another.
+    pub fn parse(self) -> Result<Vec<Element>, ParseError> {
+        let mut items = self.items;
 
         // Pass 0: normalize every item's types to the canonical flat spelling
         // before a single one is classified. `std::option::Option<T>` is an

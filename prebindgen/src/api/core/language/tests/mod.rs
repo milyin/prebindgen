@@ -30,7 +30,9 @@ fn parse(items: Vec<syn::Item>) -> Vec<Element> {
 }
 
 fn try_parse(items: Vec<syn::Item>) -> Result<Vec<Element>, ParseError> {
-    Language::new().parse(items.into_iter().map(|i| (i, loc())))
+    Language::new()
+        .items(items.into_iter().map(|i| (i, loc())))
+        .parse()
 }
 
 fn loc() -> SourceLocation {

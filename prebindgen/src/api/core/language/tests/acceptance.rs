@@ -789,6 +789,45 @@ fn an_unsupported_item_is_indexed_not_refused() {
 
 // ── The flat namespace ─────────────────────────────────────────────────
 
+/// The feeders accumulate, and the whole-stream rules span them.
+///
+/// This is why inputs are collected before anything is classified rather than
+/// parsed one at a time: a duplicate name is only visible with every input in
+/// hand, and so is a const that an array length in another input reaches for.
+#[test]
+fn the_feeders_accumulate_and_whole_stream_rules_span_them() {
+    let marker: syn::Item = syn::parse_quote!(
+        pub struct Marker {
+            pub tag: [u8; TAG_LEN],
+        }
+    );
+
+    // A length in the first feeder naming a const from the second.
+    let elements = Language::new()
+        .items(vec![(marker.clone(), loc())])
+        .items(vec![(tag_len_const(), loc())])
+        .parse()
+        .expect("the const is found across feeders");
+    assert_eq!(elements.len(), 2);
+    assert_eq!(
+        as_struct(&elements[0]).fields()[0]
+            .ty
+            .array_extent()
+            .expect("an extent")
+            .value,
+        4
+    );
+
+    // And a name colliding across feeders is still the one hard failure.
+    let err = Language::new()
+        .items(vec![(marker.clone(), loc())])
+        .items(vec![(marker, loc())])
+        .parse()
+        .expect_err("a duplicate across feeders is still a duplicate");
+    let ParseError::DuplicateName(d) = err;
+    assert_eq!(d.name, "Marker");
+}
+
 /// Two marked items with one name are ambiguous however the crates are
 /// arranged, so this is the one thing a parse refuses outright.
 #[test]
