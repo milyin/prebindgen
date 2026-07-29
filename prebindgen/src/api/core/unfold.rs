@@ -86,6 +86,13 @@ pub enum DeconRecord {
     /// produce the same leaves.
     Fields {
         func: syn::Ident,
+        /// The accessor **consumes** its receiver (`f(T) -> TStruct`): the
+        /// value is moved in and each field moved *out* into its leaf, instead
+        /// of being cloned out of a borrow. Declared by the adapter rather than
+        /// read off the signature — giving the value away is a boundary
+        /// decision — and cross-checked against the signature when the records
+        /// are flattened, so the two cannot drift.
+        consuming: bool,
         fields: Vec<FieldRecord>,
     },
 }
@@ -860,7 +867,7 @@ fn check_records(
             // author, so the `"__"` in an inlined nested name is the separator
             // doing its job. An author-supplied rename is checked where it is
             // declared.
-            DeconRecord::Fields { func, fields } => {
+            DeconRecord::Fields { func, fields, .. } => {
                 if !accessor_fns.contains(func) {
                     return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
                 }
@@ -1330,12 +1337,36 @@ fn flatten<M>(
                     group: None,
                 });
             }
-            DeconRecord::Fields { func, fields } => {
+            DeconRecord::Fields {
+                func,
+                consuming,
+                fields,
+            } => {
+                let consuming = *consuming;
                 // The value form is called once; every field hangs off that one
                 // call, so the whole record shares a single `Call` step and the
                 // emitter can hoist it.
                 let (takes, _ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
+                // The declarator states whether the value is given away; the
+                // signature has to agree, or the emitted call would not compile
+                // in the consumer's crate. Checked rather than inferred so that
+                // declaring `.fields_into(..)` on a borrowing accessor is a
+                // named error instead of a silently downgraded boundary.
+                if consuming != accessor_consumes(registry, func) {
+                    return Err(UnfoldError::Unsupported {
+                        func: func.clone(),
+                        reason: if consuming {
+                            "declared as a CONSUMING value form (`.fields_into(..)`) but the \
+                             accessor borrows its receiver — declare it with `.fields(..)`, or \
+                             name the by-value accessor"
+                        } else {
+                            "declared as a BORROWING value form (`.fields(..)`) but the accessor \
+                             takes its receiver by value — declare it with `.fields_into(..)`, or \
+                             name the `&Self` accessor"
+                        },
+                    });
+                }
                 let mut root_path = path_prefix.to_vec();
                 root_path.push(PathStep::call(func.clone(), false));
                 // A hoist below an optional step cannot be emitted as an
@@ -1352,31 +1383,22 @@ fn flatten<M>(
                                  value-form hoisting is not implemented",
                     });
                 }
-                // A by-value receiver means the value form DESTROYS the value
-                // into its parts; the emitter then moves each field out instead
-                // of cloning it. Two shapes cannot survive that move:
-                let consuming = accessor_consumes(registry, func);
-                if consuming {
-                    // A sibling record — `.field_self()` or another `.field()` —
-                    // reads the value the form just consumed.
-                    if records.len() > 1 {
-                        return Err(UnfoldError::Unsupported {
-                            func: func.clone(),
-                            reason: "a consuming value form must be the only record of its \
-                                     declaration — it moves the value, so `.field_self()` or \
-                                     a sibling `.field()` would read a moved value",
-                        });
-                    }
-                    // Nested, it would move a field out of the parent's local,
-                    // breaking every sibling leaf that still reads that local.
-                    if !path_prefix.is_empty() {
-                        return Err(UnfoldError::Unsupported {
-                            func: func.clone(),
-                            reason: "a consuming value form cannot be reached through another \
-                                     value form — it would move a field out from under the \
-                                     parent's other leaves",
-                        });
-                    }
+                // A consuming value form DESTROYS the value into its parts, so
+                // a sibling record — `.field_self()` or another `.field()` —
+                // would read what it just gave away. jnigen refuses this in the
+                // declarator, where the author can see it; this is the backstop
+                // for records built directly against core.
+                //
+                // Being reached through ANOTHER value form is fine: a hoisted
+                // value form is an owned struct and its fields are disjoint, so
+                // the parent's field is handed over by move.
+                if consuming && records.len() > 1 {
+                    return Err(UnfoldError::Unsupported {
+                        func: func.clone(),
+                        reason: "a consuming value form must be the only record of its \
+                                 declaration — it moves the value, so `.field_self()` or \
+                                 a sibling `.field()` would read a moved value",
+                    });
                 }
                 // Evaluate this value form ONCE. Recorded at the prefix it sits
                 // at rather than as a lone accessor, so a nested value form

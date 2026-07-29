@@ -758,6 +758,7 @@ impl JniGen {
             .map(|f| match f {
                 LocalField::Fields(decl) => DeconRecord::Fields {
                     func: decl.func.clone(),
+                    consuming: decl.consuming,
                     fields: self.lower_value_form(registry, key, decl),
                 },
                 LocalField::Named(func, name_override) => {

@@ -697,6 +697,7 @@ impl ExpandReturnDecl {
     /// decomposition comes from ITS type's boundary decl, not from the
     /// accessor).
     pub fn field(mut self, accessor: FunctionDecl) -> Self {
+        self.reject_beside_consuming("field(..)");
         assert!(
             accessor.param_expands.is_empty() && accessor.return_expand.is_none(),
             "expand_return!({}).field(fun!({})): expand overrides don't apply to a \
@@ -732,8 +733,27 @@ impl ExpandReturnDecl {
     /// Declare it **last**, after any field that decomposes a nested handle,
     /// so the generated Rust moves the value only after those borrows.
     pub fn field_self(mut self) -> Self {
+        self.reject_beside_consuming("field_self()");
         self.fields.push(LocalField::SelfField);
         self
+    }
+
+    /// The one rule [`Self::fields_into`] adds: it hands the value **itself**
+    /// over, so nothing else in the decl can still read it.
+    fn reject_beside_consuming(&self, what: &str) {
+        if let Some(f) = self.fields.iter().find_map(|f| match f {
+            LocalField::Fields(d) if d.consuming => Some(&d.func),
+            _ => None,
+        }) {
+            panic!(
+                "expand_return!({k}).fields_into(fields!({f})).{what}: `.fields_into(..)` hands \
+                 the value ITSELF over as its fields, so nothing else can read it afterwards — \
+                 it must be the decl's only record. Use `.fields(fields!(..))` with the \
+                 borrowing form of the accessor if you need both.",
+                k = self.key.as_str(),
+                f = f,
+            );
+        }
     }
 
     /// Take the fields from the type's **value form** — a `#[prebindgen]`
@@ -757,45 +777,79 @@ impl ExpandReturnDecl {
     ///     .fields(prebindgen::fields!(sample_to_struct));
     /// ```
     ///
-    /// # Borrowing or consuming
+    /// The accessor **borrows** its receiver (`f(v: &Self) -> SelfStruct`):
+    /// the struct is built from a borrow, so each field is cloned into it and
+    /// the leaves clone again out of it, and the value survives. It therefore
+    /// mixes freely — `.fields(...).field_self()` delivers the value form's
+    /// fields *and* the live handle. At most one value form per decl.
     ///
-    /// The accessor's receiver decides how the fields are read, and the choice
-    /// is **inferred from its signature** so it cannot drift from it:
-    ///
-    /// * `f(v: &Self) -> SelfStruct` — **borrowing**. The struct is built from
-    ///   a borrow, so each field is cloned into it, and the leaves clone again
-    ///   out of the struct.
-    /// * `f(v: Self) -> SelfStruct` — **consuming**. The value is moved in and
-    ///   each field is moved *out* into its leaf. No clones at all.
-    ///
-    /// Prefer the consuming form wherever the value is delivered owned — a
-    /// callback argument (`impl Fn(Sample)`) or an owned return — which is the
-    /// hot path this whole declarator exists to make cheap. There is nothing to
-    /// preserve there: the borrowing form clones fields out of a value it is
-    /// about to drop.
-    ///
-    /// Because a consuming form moves the value, it must be the decl's **only**
-    /// record (no `.field_self()`, no sibling `.field()` — they would read a
-    /// moved value) and it cannot be reached through another value form. Both
-    /// are declaration-time errors. A function returning `&Self` clones once up
-    /// front and consumes the clone, so one declaration still serves owned and
-    /// borrowed returns alike.
-    ///
-    /// A **borrowing** form mixes freely — `.fields(...).field_self()` delivers
-    /// the value form's fields *and* the live handle. At most one per decl.
+    /// Where the value is delivered **owned** — a callback argument
+    /// (`impl Fn(Sample)`), an owned return — and nothing else needs it, use
+    /// [`fields_into`](Self::fields_into) instead: those clones are being paid
+    /// on a value that is about to be dropped.
     pub fn fields(mut self, decl: FieldsDecl) -> Self {
+        self.reject_beside_consuming("fields(..)");
+        self.reject_second_value_form(&decl);
+        self.fields.push(LocalField::Fields(decl));
+        self
+    }
+
+    /// Like [`fields`](Self::fields), but the accessor **consumes** its
+    /// receiver (`f(v: Self) -> SelfStruct`): the value is moved in and each
+    /// field is moved *out* into its leaf. No clones at all.
+    ///
+    /// This is the same decision [`field_self`](Self::field_self) makes, one
+    /// step further: `.field_self()` hands the value over whole,
+    /// `.fields_into(...)` hands *the value itself* over as its parts, and
+    /// `.fields(...)` hands over a copy of its parts. Use it wherever the value
+    /// arrives owned and is not needed afterwards — the hot receive path this
+    /// whole declarator exists to make cheap.
+    ///
+    /// ```
+    /// let _ = prebindgen::expand_return!(Sample)
+    ///     .fields_into(prebindgen::fields!(sample_into_struct));
+    /// ```
+    ///
+    /// Because it gives the value away it must be the decl's **only** record —
+    /// a `.field_self()` or a sibling `.field(...)` would read a value that is
+    /// gone — which is a declaration-time panic either way round. It may still
+    /// be reached through *another* value form: the parent's field is handed to
+    /// it by move, since a hoisted value form is an owned struct and its fields
+    /// are disjoint.
+    ///
+    /// The declarator and the accessor's signature must agree; naming a
+    /// `&Self` accessor here (or a by-value one on [`fields`](Self::fields)) is
+    /// an error, so the declared intent cannot drift from the function it
+    /// names. At a **borrowed** delivery position there is no value to give up,
+    /// so the emitter clones once up front and consumes the clone — the same
+    /// cost the borrowing form would have paid, which keeps one declaration
+    /// usable by both owned and `&T` returns of the type.
+    pub fn fields_into(mut self, decl: FieldsDecl) -> Self {
+        self.reject_second_value_form(&decl);
+        assert!(
+            self.fields.is_empty(),
+            "expand_return!({k}).fields_into(fields!({f})): `.fields_into(..)` hands the value \
+             ITSELF over as its fields, so it must be the decl's only record — the records \
+             already declared would read a value that is gone. Use `.fields(fields!(..))` with \
+             the borrowing form of the accessor if you need both.",
+            k = self.key.as_str(),
+            f = decl.func,
+        );
+        self.fields.push(LocalField::Fields(decl.consuming()));
+        self
+    }
+
+    fn reject_second_value_form(&self, decl: &FieldsDecl) {
         assert!(
             !self
                 .fields
                 .iter()
                 .any(|f| matches!(f, LocalField::Fields(_))),
-            "expand_return!({}).fields(fields!({})): the decl already expands a value form — \
+            "expand_return!({}): the decl already expands a value form (fields!({})) — \
              one value form states the whole field set",
             self.key.as_str(),
             decl.func
         );
-        self.fields.push(LocalField::Fields(decl));
-        self
     }
 }
 
@@ -813,6 +867,11 @@ pub struct FieldsDecl {
     pub(crate) func: syn::Ident,
     pub(crate) overrides: Vec<(String, ExpandReturnDecl)>,
     pub(crate) names: Vec<(String, String)>,
+    /// Set by [`ExpandReturnDecl::fields_into`] — the accessor consumes its
+    /// receiver. Declared rather than read off the signature, because giving
+    /// the value away is a boundary decision; the two are cross-checked when
+    /// the records are resolved.
+    pub(crate) consuming: bool,
 }
 
 impl FieldsDecl {
@@ -821,7 +880,13 @@ impl FieldsDecl {
             func,
             overrides: Vec::new(),
             names: Vec::new(),
+            consuming: false,
         }
+    }
+
+    pub(crate) fn consuming(mut self) -> Self {
+        self.consuming = true;
+        self
     }
 
     /// Replace **one** field's decomposition, with the same

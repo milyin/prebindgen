@@ -514,6 +514,28 @@ pub(crate) fn encode_plan_leaves(
     for (i, h) in plan.hoists.iter().enumerate() {
         let local = format_ident!("__vf{}", i);
         let (from, mut expr) = match longest_bound(&bound, &h.prefix) {
+            // A NESTED consuming form is handed the parent's field by MOVE: a
+            // hoisted value form is an owned struct and its fields are
+            // disjoint, so moving one out leaves every sibling leaf readable.
+            // `compose_step` borrows (`&(e).f`), so the field run to that field
+            // is projected here instead of going through it.
+            Some((at, outer)) if h.consuming => {
+                let last = h.prefix.len() - 1;
+                let lead = &h.prefix[at..last];
+                if lead.iter().all(PathStep::is_plain_field) {
+                    let segs: Vec<&syn::Ident> = lead.iter().map(PathStep::ident).collect();
+                    (last, quote!(#outer #(.#segs)*))
+                } else {
+                    // Reached through an accessor call, so what is in hand is a
+                    // borrow with nothing to give up — clone once and consume
+                    // the clone, exactly as a borrowed root does below.
+                    let mut e = quote!(&#outer);
+                    for step in lead {
+                        e = compose_step(&qualify, step, e);
+                    }
+                    (last, quote!((#e).clone()))
+                }
+            }
             Some((at, outer)) => (at, quote!(&#outer)),
             // A CONSUMING value form is handed the value itself, so its fields
             // move out instead of being cloned out of a borrow. A borrowed plan

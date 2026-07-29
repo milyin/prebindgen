@@ -783,6 +783,119 @@ fn a_nested_value_form_is_hoisted_too() {
     }
 }
 
+/// A consuming value form reached **through another one** is handed the
+/// parent's field by MOVE. A hoisted value form is an owned struct and its
+/// fields are disjoint, so giving one field away leaves every sibling leaf
+/// readable — which is why this shape needs no clone and is not refused.
+///
+/// Checked under both parents: what makes the move legal is that the hoist
+/// local is owned, and a borrowing form's returned struct is owned just as much
+/// as a consuming one's.
+#[test]
+fn a_nested_consuming_value_form_moves_the_parent_s_field() {
+    let loc = myflat_loc();
+    let items = |outer_by_value: bool| -> Vec<(syn::Item, crate::SourceLocation)> {
+        let outer: syn::Item = if outer_by_value {
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_outer_into_struct(o: ZOuter) -> ZOuterStruct {
+                    unimplemented!()
+                }
+            ))
+        } else {
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_outer_to_struct(o: &ZOuter) -> ZOuterStruct {
+                    unimplemented!()
+                }
+            ))
+        };
+        vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZInnerStruct {
+                        pub a: i64,
+                        pub b: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZOuterStruct {
+                        pub inner: ZInner,
+                        pub tag: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_inner_into_struct(i: ZInner) -> ZInnerStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (outer, loc.clone()),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_outer_sub(cb: impl Fn(ZOuter) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ]
+    };
+
+    for (tag, outer_by_value, outer) in [
+        (
+            "borrow",
+            false,
+            crate::expand_return!(ZOuter).fields(crate::fields!(z_outer_to_struct)),
+        ),
+        (
+            "consume",
+            true,
+            crate::expand_return!(ZOuter).fields_into(crate::fields!(z_outer_into_struct)),
+        ),
+    ] {
+        let registry =
+            Registry::<KotlinMeta>::from_items(items(outer_by_value)).expect("index items");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZOuter))
+                    .class(crate::ptr_class!(ZInner))
+                    .fun(crate::fun!(z_outer_sub)),
+            )
+            .expand(crate::expand_return!(ZInner).fields_into(crate::fields!(z_inner_into_struct)))
+            .expand(outer);
+        let dir = unique_test_dir(&format!("jnigen_vf_nested_consume_{tag}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = registry.resolve(jni).expect("resolve");
+        let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+            .expect("read rust");
+
+        assert!(
+            rust.contains("z_inner_into_struct(__vf0.inner)"),
+            "[{tag}] the parent's field is MOVED into the nested form, not borrowed \
+             or cloned:\n{rust}"
+        );
+        assert!(
+            rust.contains("__vf0.tag") && !rust.contains("(&__vf0)"),
+            "[{tag}] and a sibling leaf still reads its own field off the parent local, \
+             projected directly — borrowing the partially-moved local as a whole would \
+             not compile:\n{rust}"
+        );
+        assert!(
+            !rust.contains("__vf1.a.clone()"),
+            "[{tag}] the nested form's own fields move out too:\n{rust}"
+        );
+    }
+}
+
 // A compact fixture shared by the two follow-up review regressions.
 fn nested_review_items() -> Vec<(syn::Item, crate::SourceLocation)> {
     let loc = myflat_loc();
@@ -967,7 +1080,7 @@ fn consuming_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> String {
 fn a_consuming_value_form_moves_its_fields() {
     let rust = consuming_gen(
         "jnigen_vf_consume",
-        crate::expand_return!(ZCarrier).fields(crate::fields!(zc_into_struct)),
+        crate::expand_return!(ZCarrier).fields_into(crate::fields!(zc_into_struct)),
     );
     assert!(
         rust.contains("zc_into_struct(__cb_arg0)"),
@@ -1029,7 +1142,7 @@ fn a_borrowed_plan_clones_before_consuming() {
                 .fun(crate::fun!(zc_sub))
                 .fun(crate::fun!(zc_borrowed)),
         )
-        .expand(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_into_struct)));
+        .expand(crate::expand_return!(ZCarrier).fields_into(crate::fields!(zc_into_struct)));
     let dir = unique_test_dir("jnigen_vf_consume_ref");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1042,11 +1155,44 @@ fn a_borrowed_plan_clones_before_consuming() {
     );
 }
 
-/// A consuming form moves the value, so anything else reading it is broken by
-/// construction — refused at declaration time rather than emitted as Rust that
-/// cannot compile in the consumer's crate.
+/// `.fields_into(..)` gives the value away, so anything else reading it is
+/// broken by construction. Refused **where it is declared** — the collision is
+/// visible in the decl itself, so it does not need a resolve to be found.
+///
+/// `.field_self()` beside it would deliver the handle the form just consumed.
 #[test]
-fn a_consuming_value_form_rejects_shapes_that_outlive_the_move() {
+#[should_panic(expected = "only record")]
+fn a_consuming_value_form_rejects_a_following_sibling() {
+    let _ = crate::expand_return!(ZCarrier)
+        .fields_into(crate::fields!(zc_into_struct))
+        .field_self();
+}
+
+/// And the other way round — the decl is a builder, so both orders must be
+/// caught or the rule holds only for the order someone happened to write.
+#[test]
+#[should_panic(expected = "only record")]
+fn a_consuming_value_form_rejects_a_preceding_sibling() {
+    let _ = crate::expand_return!(ZCarrier)
+        .field_self()
+        .fields_into(crate::fields!(zc_into_struct));
+}
+
+/// Any sibling record, not just the identity one.
+#[test]
+#[should_panic(expected = "only record")]
+fn a_consuming_value_form_rejects_a_plain_field_sibling() {
+    let _ = crate::expand_return!(ZCarrier)
+        .fields_into(crate::fields!(zc_into_struct))
+        .field(crate::fun!(zc_to_struct));
+}
+
+/// The declarator states whether the value is given away and the accessor's
+/// signature has to agree — otherwise the emitted call would not compile in the
+/// consumer's crate, and a boundary would silently stop being the one declared.
+/// Both directions are errors; the fixture has one accessor of each kind.
+#[test]
+fn the_declarator_and_the_accessor_s_receiver_must_agree() {
     let build = |decl: crate::lang::ExpandReturnDecl| -> String {
         let registry = Registry::<KotlinMeta>::from_items(consuming_items()).expect("index");
         let jni = JniGen::new()
@@ -1063,25 +1209,15 @@ fn a_consuming_value_form_rejects_shapes_that_outlive_the_move() {
         }
     };
 
-    // `.field_self()` beside it would deliver the handle the form just consumed.
-    let msg = build(
-        crate::expand_return!(ZCarrier)
-            .fields(crate::fields!(zc_into_struct))
-            .field_self(),
-    );
+    let msg = build(crate::expand_return!(ZCarrier).fields_into(crate::fields!(zc_to_struct)));
     assert!(
-        msg.contains("only record") && msg.contains("zc_into_struct"),
-        "a sibling record must be refused, naming the rule and the accessor: {msg:?}"
+        msg.contains("CONSUMING") && msg.contains("zc_to_struct"),
+        "`.fields_into` on a borrowing accessor must be refused, naming it: {msg:?}"
     );
 
-    // A plain `.field()` sibling has the same problem.
-    let msg = build(
-        crate::expand_return!(ZCarrier)
-            .fields(crate::fields!(zc_into_struct))
-            .field(crate::fun!(zc_to_struct)),
-    );
+    let msg = build(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_into_struct)));
     assert!(
-        msg.contains("only record"),
-        "any sibling record is refused, not just the identity one: {msg:?}"
+        msg.contains("BORROWING") && msg.contains("zc_into_struct"),
+        "`.fields` on a by-value accessor must be refused, naming it: {msg:?}"
     );
 }
