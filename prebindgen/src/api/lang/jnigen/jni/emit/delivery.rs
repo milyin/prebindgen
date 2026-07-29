@@ -771,6 +771,26 @@ pub(crate) fn encode_plan_leaves(
             start..end
         })
         .collect();
+
+    // Leaves under a conditional value form are collected per hoist and emitted
+    // below as ONE `match` on its `Option` local — the same treatment a sum's
+    // groups get, and for the same reason: their slots exist unconditionally
+    // but only one arm computes them. Built BEFORE the sum pass, because a
+    // conditional form may carry a sum field and that segment has to land in
+    // the arm too: emitted ahead of it, its `match` would reach a binding the
+    // arm has not introduced yet.
+    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = plan
+        .hoists
+        .iter()
+        .enumerate()
+        .filter_map(|(i, _)| {
+            plan.leaves
+                .iter()
+                .any(|l| hoisted.conditional(&l.path).is_some_and(|(j, ..)| j == i))
+                .then_some((i, TokenStream::new()))
+        })
+        .collect();
+
     for seg in &sum_segments {
         let leaf = &plan.leaves[seg.start];
         let (base, base_is_ref, path, _) = rebase(leaf);
@@ -796,7 +816,15 @@ pub(crate) fn encode_plan_leaves(
             matched,
             fail,
         );
-        stmts.extend(group_stmts);
+        // The whole segment — its slot declarations and its `match` — is
+        // routed like any other leaf under the same form.
+        match hoisted.conditional(&leaf.path) {
+            Some((i, ..)) => cond_stmts
+                .get_mut(&i)
+                .expect("a conditional leaf's hoist has a bucket")
+                .extend(group_stmts),
+            None => stmts.extend(group_stmts),
+        }
         for (k, e) in group_args.into_iter().enumerate() {
             arg_exprs[seg.start + k] = e;
         }
@@ -807,22 +835,6 @@ pub(crate) fn encode_plan_leaves(
         .filter(|&i| !plan.leaves[i].identity && !in_sum(i))
         .collect();
     order.extend((0..n).filter(|&i| plan.leaves[i].identity && !in_sum(i)));
-
-    // Leaves under a conditional value form are collected per hoist and emitted
-    // below as ONE `match` on its `Option` local — the same treatment a sum's
-    // groups get, and for the same reason: their slots exist unconditionally
-    // but only one arm computes them.
-    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = plan
-        .hoists
-        .iter()
-        .enumerate()
-        .filter_map(|(i, _)| {
-            plan.leaves
-                .iter()
-                .any(|l| hoisted.conditional(&l.path).is_some_and(|(j, ..)| j == i))
-                .then_some((i, TokenStream::new()))
-        })
-        .collect();
 
     for idx in order {
         let leaf = &plan.leaves[idx];

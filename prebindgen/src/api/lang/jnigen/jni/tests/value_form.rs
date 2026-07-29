@@ -1482,6 +1482,106 @@ fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
     );
 }
 
+/// A conditional value form may carry a SUM field, and a sum's segment is
+/// emitted as one `match` of its own rather than as per-leaf statements. That
+/// segment belongs INSIDE the conditional arm like every other leaf under the
+/// form: emitted before it, it would reach a binding that does not exist yet
+/// (`cannot find value __u0 in this scope`), and the sum's leaves — which are
+/// held out of the per-leaf ordering — would never be routed into the arm at
+/// all.
+#[test]
+fn a_sum_field_of_a_conditional_value_form_stays_inside_the_arm() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum ZOutcome {
+                    Empty,
+                    Failed(String),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZCarrierStruct {
+                    pub outcome: ZOutcome,
+                    pub count: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zc_into_struct(c: ZCarrier) -> ZCarrierStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_get_carrier(h: &ZHolder) -> Option<&ZCarrier> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .class(crate::sealed_class!(ZOutcome))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_get_carrier)));
+    let dir = unique_test_dir("jnigen_vf_conditional_sum");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    let arm = rust
+        .split_once("Some(__u0)")
+        .expect("the conditional arm is emitted")
+        .1;
+    assert!(
+        arm.contains("__u0.outcome"),
+        "the sum's `match` is emitted INSIDE the arm that binds `__u0`, after \
+         it exists:\n{rust}"
+    );
+    assert!(
+        !rust
+            .split_once("Some(__u0)")
+            .expect("the conditional arm is emitted")
+            .0
+            .contains("__u0."),
+        "and nothing reaches the binding before the arm introduces it:\n{rust}"
+    );
+    assert!(
+        arm.contains("ZOutcome::Failed"),
+        "the variant arms are the sum's own, unchanged by being nested:\n{rust}"
+    );
+    assert!(
+        rust.contains("__u0.count"),
+        "the ordinary sibling leaf still rides the same arm:\n{rust}"
+    );
+}
+
 /// Override records are applied to a `Vec<T>` field as a whole; a fixed leaf
 /// list cannot apply `T`'s deconstructor once per element. The declaration
 /// check must compare against `Vec<T>`, not peel it to `T`.
