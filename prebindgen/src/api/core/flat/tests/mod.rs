@@ -30,7 +30,7 @@ fn parse(items: Vec<syn::Item>) -> Vec<Element> {
 }
 
 fn try_parse(items: Vec<syn::Item>) -> Result<Vec<Element>, ParseError> {
-    Language::new()
+    Flat::new()
         .items(items.into_iter().map(|i| (i, loc())))
         .parse()
 }

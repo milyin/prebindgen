@@ -32,7 +32,7 @@ pub struct Type {
     pub kind: TypeKind,
     /// The type as generated Rust must spell it — the source's own tokens,
     /// normalized to the flat namespace the generated crate can name (see
-    /// [`Language::parse`](super::Language::parse)) — plus the source they came
+    /// [`Flat::parse`](super::Flat::parse)) — plus the source they came
     /// from.
     ///
     /// The syntax can say strictly more than `kind` does — `Box<String>` is a

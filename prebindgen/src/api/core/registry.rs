@@ -1485,7 +1485,7 @@ pub fn immediate_subtype_positions(ty: &syn::Type) -> Vec<syn::Type> {
 
 /// The callback grammar, which the source language owns — re-exported here for
 /// the existing call sites until they consume elements (stages L2–L4 of #229).
-pub use crate::api::core::language::extract_fn_trait_args;
+pub use crate::api::core::flat::extract_fn_trait_args;
 
 /// A **resolved** binding generation: the [`Registry`] after
 /// [`Registry::resolve`] ran the adapter's scan, plans, and type

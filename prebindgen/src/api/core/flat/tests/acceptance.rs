@@ -828,7 +828,7 @@ fn the_feeders_accumulate_and_whole_stream_rules_span_them() {
     );
 
     // A length in the first feeder naming a const from the second.
-    let elements = Language::new()
+    let elements = Flat::new()
         .items(vec![(marker.clone(), loc())])
         .items(vec![(tag_len_const(), loc())])
         .parse()
@@ -844,7 +844,7 @@ fn the_feeders_accumulate_and_whole_stream_rules_span_them() {
     );
 
     // And a name colliding across feeders is still the one hard failure.
-    let err = Language::new()
+    let err = Flat::new()
         .items(vec![(marker.clone(), loc())])
         .items(vec![(marker, loc())])
         .parse()

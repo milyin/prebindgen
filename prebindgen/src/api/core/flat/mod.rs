@@ -6,13 +6,13 @@
 //! > (C, JNI). They are opposite ends of the pipeline.
 //!
 //! ```text
-//! Source(s) ──items──> Language ──Elements──> Registry ──> adapters
+//! Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
 //!   raw records          parse +               indexes       classify off `kind`
 //!   (syn::Item)          validate              elements      spell off `origin`
 //! ```
 //!
-//! [`Language::source`] folds the first arrow in for the common case, so a build
-//! script names one directory and gets elements; [`Language::items`] keeps the
+//! [`Flat::source`] folds the first arrow in for the common case, so a build
+//! script names one directory and gets elements; [`Flat::items`] keeps the
 //! arrow itself, for a stream that needs shaping first.
 //!
 //! # What an element is
@@ -169,11 +169,11 @@ use crate::SourceLocation;
 ///
 /// ```
 /// # prebindgen::Source::init_doctest_simulate();
-/// use prebindgen::core::Language;
+/// use prebindgen::core::Flat;
 ///
-/// let elements = Language::new().source("source_ffi").parse()?;
+/// let elements = Flat::new().source("source_ffi").parse()?;
 /// assert_eq!(elements.len(), 2);
-/// # Ok::<_, prebindgen::core::language::ParseError>(())
+/// # Ok::<_, prebindgen::core::flat::ParseError>(())
 /// ```
 ///
 /// # Reading a stream
@@ -185,16 +185,16 @@ use crate::SourceLocation;
 ///
 /// ```
 /// # prebindgen::Source::init_doctest_simulate();
-/// use prebindgen::{core::Language, Source};
+/// use prebindgen::{core::Flat, Source};
 ///
 /// // A dependency renamed in Cargo.toml needs the name THIS crate uses, so it
 /// // is configured rather than named by directory.
 /// let helpers = Source::builder("source_ffi").crate_name("helpers").build();
-/// let elements = Language::new()
+/// let elements = Flat::new()
 ///     .items(helpers.items_in_groups(&["functions"]))
 ///     .parse()?;
 /// assert_eq!(elements.len(), 1);
-/// # Ok::<_, prebindgen::core::language::ParseError>(())
+/// # Ok::<_, prebindgen::core::flat::ParseError>(())
 /// ```
 ///
 /// # Why accumulate, rather than parse each input
@@ -204,11 +204,11 @@ use crate::SourceLocation;
 /// reach into, one set of source modules to normalize paths against. None can be
 /// decided per input, so every input is in hand before any of it is classified.
 #[derive(Debug, Default)]
-pub struct Language {
+pub struct Flat {
     items: Vec<(syn::Item, SourceLocation)>,
 }
 
-impl Language {
+impl Flat {
     pub fn new() -> Self {
         Self::default()
     }
@@ -226,9 +226,9 @@ impl Language {
     ///
     /// ```
     /// # prebindgen::Source::init_doctest_simulate();
-    /// use prebindgen::core::Language;
+    /// use prebindgen::core::Flat;
     ///
-    /// let elements = Language::new().source("source_ffi").parse().unwrap();
+    /// let elements = Flat::new().source("source_ffi").parse().unwrap();
     /// let mut names: Vec<String> =
     ///     elements.iter().filter_map(|e| e.name()).map(|n| n.to_string()).collect();
     /// names.sort();
@@ -247,10 +247,10 @@ impl Language {
     ///
     /// ```
     /// # prebindgen::Source::init_doctest_simulate();
-    /// use prebindgen::{core::Language, Source};
+    /// use prebindgen::{core::Flat, Source};
     ///
     /// let source = Source::new("source_ffi");
-    /// let elements = Language::new()
+    /// let elements = Flat::new()
     ///     .items(source.items_in_groups(&["structs"]))
     ///     .parse()
     ///     .unwrap();

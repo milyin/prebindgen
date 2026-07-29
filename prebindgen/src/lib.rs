@@ -286,18 +286,17 @@ macro_rules! ident {
 /// [`lang::JniGen`]. The C / cbindgen proof of concept is available separately
 /// with the `unstable-cbindgen` feature.
 pub mod core {
-    /// The prebindgen **source language**: the parser from captured
-    /// `#[prebindgen]` records to [`language::Element`]s, and the element model
-    /// itself. Not to be confused with [`crate::lang`], the *destination*
-    /// adapters.
-    pub use crate::api::core::language;
-    /// [`Language`] and [`Element`] sit here too, next to [`Registry`]: they are
-    /// what a build script names, and the rest of the element model stays in
-    /// [`mod@language`] where an adapter reaches for it.
+    /// The **flat API**: the parser from captured `#[prebindgen]` records to the
+    /// [`flat::Element`]s that make up one flat namespace, and the model itself.
+    /// Not to be confused with [`crate::lang`], the *destination* adapters.
+    pub use crate::api::core::flat;
+    /// [`Flat`] and [`Element`] sit here too, next to [`Registry`]: they are what
+    /// a build script names, and the rest of the model stays in [`mod@flat`]
+    /// where an adapter reaches for it.
     pub use crate::api::core::{
-        ConverterImpl, Direction, DomainScalar, Element, Generation, Gravestone, Language,
-        NicheSlot, Niches, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError,
-        Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
+        ConverterImpl, Direction, DomainScalar, Element, Flat, Generation, Gravestone, NicheSlot,
+        Niches, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage,
+        Transmute, TypeEntry, TypeKey, WriteRustError,
     };
 }
 
