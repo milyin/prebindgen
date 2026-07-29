@@ -1590,6 +1590,85 @@ fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
     );
 }
 
+/// Sibling hoists under ONE consuming parent: the first moves a field out of
+/// it, so the second may not borrow the parent as a whole. Its leading field
+/// run has to be projected directly (`&__vf0.wrapper`) — a disjoint borrow that
+/// survives the move — rather than reached through the parent
+/// (`&(&__vf0).wrapper`), which is a borrow of a partially moved value.
+#[test]
+fn a_rebased_hoist_projects_its_leading_fields_past_a_sibling_move() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOuterStruct {
+                    pub direct: ZCarrier,
+                    pub wrapper: ZWrapper,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zo_into_struct(o: ZOuter) -> ZOuterStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zw_carrier(w: &ZWrapper) -> ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zo_sub(cb: impl Fn(ZOuter) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZWrapper))
+                .class(crate::ptr_class!(ZOuter))
+                .fun(crate::fun!(zo_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZWrapper).field(crate::fun!(zw_carrier)))
+        .expand(crate::expand_return!(ZOuter).fields_self_into(crate::fields!(zo_into_struct)));
+    let dir = unique_test_dir("jnigen_vf_sibling_move");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zc_into_struct(__vf0.direct)"),
+        "the first sibling still MOVES its field out of the parent:\n{rust}"
+    );
+    assert!(
+        rust.contains("zw_carrier(&__vf0.wrapper)"),
+        "and the second projects its own field directly — a disjoint borrow \
+         that survives that move:\n{rust}"
+    );
+    assert!(
+        !rust.contains("&(&__vf0)"),
+        "borrowing the partially moved parent as a whole is what E0382 rejects:\n{rust}"
+    );
+}
+
 /// A consuming value form reached through ORDINARY accessors: the chain in
 /// front of it folds by the borrowing rule, and the form itself still takes its
 /// receiver by value. Both boundaries are in one expression, and neither may be

@@ -659,7 +659,18 @@ pub(crate) fn bind_hoists(
                 let segs: Vec<&syn::Ident> = lead.iter().map(PathStep::ident).collect();
                 (h.prefix.len() - 1, quote!(#outer #(.#segs)*), true)
             }
-            Some((outer, rest, _)) => (h.prefix.len() - rest.len(), quote!(&#outer), false),
+            // Any other rebased hoist: project its own leading field run
+            // DIRECTLY off the parent local rather than reaching it through a
+            // borrow of the parent. A sibling hoist may already have moved a
+            // different field out — that is what a consuming value form does —
+            // and `&(&__vf0).wrapper` borrows the partially moved parent as a
+            // whole where `&__vf0.wrapper` is a disjoint borrow that survives.
+            // Same invariant `project_leading_fields` states for leaf reaches,
+            // and the same reason.
+            Some((outer, rest, _)) => {
+                let (e, lead) = project_leading_fields(&quote!(#outer), false, &rest);
+                (h.prefix.len() - rest.len() + lead, e, false)
+            }
             None if by_ref => (0, value.clone(), false),
             None => (0, value.clone(), true),
         };
