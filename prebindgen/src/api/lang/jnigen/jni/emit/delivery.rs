@@ -442,20 +442,104 @@ pub(crate) struct Hoisted {
     bound: Vec<(Vec<PathStep>, syn::Ident)>,
     /// Whether each bound hoist consumed the value it decomposed.
     consuming: Vec<bool>,
+    /// Whether each bound local is `Option<TStruct>` rather than `TStruct` —
+    /// the hoist sits under an optional step, so the value form ran only where
+    /// the value was present. Its leaves cannot be emitted as independent
+    /// statements: they share ONE `match` on the local (see
+    /// [`encode_plan_leaves`]), taken by value, so a consuming form's fields
+    /// still move out inside the arm.
+    optional: Vec<bool>,
 }
 
 impl Hoisted {
-    /// The innermost bound local `path` sits under, with that prefix already
-    /// consumed, and whether that hoist gave its value away. `None` for a leaf
-    /// under no value form at all — a sibling `.field()` / `.field_self()`,
-    /// which still reaches from the value itself.
-    pub(crate) fn rebase(&self, path: &[PathStep]) -> Option<(syn::Ident, Vec<PathStep>, bool)> {
+    /// Index of the innermost bound hoist `path` sits under, with that prefix
+    /// already consumed. `None` for a leaf under no value form at all — a
+    /// sibling `.field()` / `.field_self()`, which still reaches from the value
+    /// itself.
+    fn innermost(&self, path: &[PathStep]) -> Option<(usize, Vec<PathStep>)> {
         self.bound
             .iter()
             .enumerate()
             .filter(|(_, (p, _))| p.len() < path.len() && path.starts_with(p))
             .max_by_key(|(_, (p, _))| p.len())
-            .map(|(i, (p, id))| (id.clone(), path[p.len()..].to_vec(), self.consuming[i]))
+            .map(|(i, (p, _))| (i, path[p.len()..].to_vec()))
+    }
+
+    /// The innermost bound local `path` sits under, with that prefix already
+    /// consumed, and whether that hoist gave its value away.
+    pub(crate) fn rebase(&self, path: &[PathStep]) -> Option<(syn::Ident, Vec<PathStep>, bool)> {
+        self.innermost(path)
+            .map(|(i, rest)| (self.bound[i].1.clone(), rest, self.consuming[i]))
+    }
+
+    /// The innermost **conditional** hoist `path` sits under: its index, the
+    /// local holding the `Option`, the name its `Some` arm binds, and the steps
+    /// left to reach the leaf from there. `None` when the leaf's innermost
+    /// hoist is unconditional (or there is none) — then [`Self::rebase`]
+    /// applies and the leaf is an ordinary standalone statement.
+    pub(crate) fn conditional(
+        &self,
+        path: &[PathStep],
+    ) -> Option<(usize, syn::Ident, syn::Ident, Vec<PathStep>)> {
+        let (i, rest) = self.innermost(path)?;
+        self.optional[i].then(|| (i, self.bound[i].1.clone(), format_ident!("__u{}", i), rest))
+    }
+
+    /// The local a hoist was bound to.
+    pub(crate) fn local(&self, i: usize) -> syn::Ident {
+        self.bound[i].1.clone()
+    }
+
+    /// Whether a hoist consumed the value it decomposed.
+    pub(crate) fn consumed(&self, i: usize) -> bool {
+        self.consuming[i]
+    }
+}
+
+/// Fold `path` over `base` the way [`reach_leaf`] does, but yielding an
+/// `Option<…>` rather than a `JObject`: every optional step short-circuits to
+/// `None` instead of to a null object. `body` renders the innermost reached
+/// expression and must itself produce the `Some`.
+///
+/// This is how a CONDITIONAL value form is bound — the accessor runs only where
+/// the value it decomposes is actually present.
+fn reach_optional(
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+    path: &[PathStep],
+    base: TokenStream,
+    base_is_ref: bool,
+    depth: usize,
+    body: &dyn Fn(TokenStream) -> TokenStream,
+) -> TokenStream {
+    let (mut e, lead) = project_leading_fields(&base, base_is_ref, path);
+    match (lead..path.len()).find(|&i| path[i].is_optional()) {
+        None => {
+            for step in &path[lead..] {
+                e = compose_step(qualify, step, e);
+            }
+            body(e)
+        }
+        Some(k) => {
+            for step in &path[lead..k] {
+                e = compose_step(qualify, step, e);
+            }
+            let opt_e = compose_step(qualify, &path[k], e);
+            let bind = format_ident!("__hb{}", depth);
+            let inner = reach_optional(
+                qualify,
+                &path[k + 1..],
+                quote!(#bind),
+                true,
+                depth + 1,
+                body,
+            );
+            quote! {
+                match #opt_e {
+                    ::core::option::Option::Some(#bind) => { #inner }
+                    ::core::option::Option::None => ::core::option::Option::None,
+                }
+            }
+        }
     }
 }
 
@@ -469,12 +553,42 @@ pub(crate) fn bind_hoists(
         stmts: TokenStream::new(),
         bound: Vec::new(),
         consuming: Vec::new(),
+        optional: Vec::new(),
     };
     // Value forms COMPOSE, so each hoist is built from the longest hoist that
     // is already a proper prefix of it (they arrive outermost-first), and from
     // `value` otherwise.
     for (i, h) in hoists.iter().enumerate() {
         let local = format_ident!("__vf{}", i);
+        // A hoist under an optional step binds `Option<TStruct>`: the value
+        // form runs in the `Some` arm only. Core refuses to nest these, so the
+        // enclosing value is always the plan's own — no rebase to consider.
+        if h.prefix.iter().any(PathStep::is_optional) {
+            let (last, lead) = h
+                .prefix
+                .split_last()
+                .expect("a hoist prefix ends in its value-form call");
+            let consuming = h.consuming;
+            let expr = reach_optional(qualify, lead, value.clone(), by_ref, 0, &|reached| {
+                // What the `Some` arm binds is a borrow of the value (or an
+                // owned one that was about to be dropped), so a CONSUMING
+                // accessor gets a clone — the same trade a borrowed root makes
+                // below, and the only thing there is to give it here.
+                let call = if consuming {
+                    let m = qualify(last.ident());
+                    let f = last.ident();
+                    quote!(#m::#f((#reached).clone()))
+                } else {
+                    compose_step(qualify, last, reached)
+                };
+                quote!(::core::option::Option::Some(#call))
+            });
+            out.stmts.extend(quote! { let #local = #expr; });
+            out.bound.push((h.prefix.clone(), local));
+            out.consuming.push(h.consuming);
+            out.optional.push(true);
+            continue;
+        }
         let (from, mut expr) = match out.rebase(&h.prefix) {
             // A NESTED consuming form is handed the parent's field by MOVE: a
             // hoisted value form is an owned struct and its fields are
@@ -515,6 +629,7 @@ pub(crate) fn bind_hoists(
         out.stmts.extend(quote! { let #local = #expr; });
         out.bound.push((h.prefix.clone(), local));
         out.consuming.push(h.consuming);
+        out.optional.push(false);
     }
     out
 }
@@ -626,8 +741,14 @@ pub(crate) fn encode_plan_leaves(
     // value — so the leaf owns its field and may move it out rather than clone
     // it. A leaf under no value form at all (a sibling `.field()` /
     // `.field_self()`) still reaches from the value itself.
+    // A leaf under a CONDITIONAL value form reaches off the name that form's
+    // `Some` arm binds — a borrow of the struct, so nothing moves out of it —
+    // and its statements are collected into that arm rather than emitted here.
     let rebase =
         |leaf: &crate::api::core::unfold::UnfoldLeaf| -> (TokenStream, bool, Vec<PathStep>, bool) {
+            if let Some((i, _, bind, rest)) = hoisted.conditional(&leaf.path) {
+                return (quote!(#bind), false, rest, hoisted.consumed(i));
+            }
             match hoisted.rebase(&leaf.path) {
                 Some((local, rest, consuming)) => (quote!(#local), false, rest, consuming),
                 None => (value.clone(), by_ref, leaf.path.clone(), false),
@@ -687,9 +808,32 @@ pub(crate) fn encode_plan_leaves(
         .collect();
     order.extend((0..n).filter(|&i| plan.leaves[i].identity && !in_sum(i)));
 
+    // Leaves under a conditional value form are collected per hoist and emitted
+    // below as ONE `match` on its `Option` local — the same treatment a sum's
+    // groups get, and for the same reason: their slots exist unconditionally
+    // but only one arm computes them.
+    let mut cond_stmts: std::collections::BTreeMap<usize, TokenStream> = plan
+        .hoists
+        .iter()
+        .enumerate()
+        .filter_map(|(i, _)| {
+            plan.leaves
+                .iter()
+                .any(|l| hoisted.conditional(&l.path).is_some_and(|(j, ..)| j == i))
+                .then_some((i, TokenStream::new()))
+        })
+        .collect();
+
     for idx in order {
         let leaf = &plan.leaves[idx];
         let obj_ident = &obj_idents[idx];
+        // Route this leaf's statements: into its conditional arm, or straight
+        // out. Shadows `stmts` for the rest of the body, so every `extend`
+        // below lands in the right place without knowing which case it is in.
+        let stmts: &mut TokenStream = match hoisted.conditional(&leaf.path) {
+            Some((i, ..)) => cond_stmts.get_mut(&i).expect("collected above"),
+            None => &mut stmts,
+        };
         let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
         let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
@@ -791,6 +935,29 @@ pub(crate) fn encode_plan_leaves(
                                     as jni::sys::jlong,
                             };
                         });
+                    } else if let (Some(place), false) =
+                        (&owned_place, path.last().is_some_and(PathStep::is_optional))
+                    {
+                        // Ours, always present, but the SLOT is nullable — the
+                        // leaf hangs off a conditional value form, so the absent
+                        // case is the enclosing `match`'s other arm, not an
+                        // `Option` here. Move into the Box and box the jlong, so
+                        // both arms fill the slot with the same shape.
+                        let box_fail = fail(quote!(__e.to_string()));
+                        stmts.extend(bind_obj(
+                            obj_ident,
+                            quote! {{
+                                let #handle_ident: jni::sys::jlong =
+                                    std::boxed::Box::into_raw(std::boxed::Box::new(#place))
+                                        as jni::sys::jlong;
+                                match ::prebindgen::lang::box_jlong(&mut env, #handle_ident) {
+                                    ::core::result::Result::Ok(__o) => __o,
+                                    ::core::result::Result::Err(__e) => {
+                                        #box_fail
+                                    }
+                                }
+                            }},
+                        ));
                     } else if let Some(place) = &owned_place {
                         // Ours, behind an `Option`: match the option BY VALUE so
                         // the present handle is moved into its Box, boxed
@@ -1002,6 +1169,39 @@ pub(crate) fn encode_plan_leaves(
             }}
         });
         stmts.extend(bind_obj(obj_ident, expr));
+    }
+
+    // One `match` per conditional value form: the `Some` arm runs the leaves
+    // that hang off it and yields their locals as a tuple; the `None` arm
+    // yields the same wire defaults an inert sum group carries. Binding the
+    // tuple outside the match is what keeps the leaves' locals in scope for the
+    // argument expressions, which are indifferent to how the slot was filled.
+    for (i, body) in cond_stmts {
+        let local = hoisted.local(i);
+        let bind = format_ident!("__u{}", i);
+        let idxs: Vec<usize> = (0..n)
+            .filter(|&k| {
+                hoisted
+                    .conditional(&plan.leaves[k].path)
+                    .is_some_and(|(j, ..)| j == i)
+            })
+            .collect();
+        let ids: Vec<&syn::Ident> = idxs.iter().map(|&k| &obj_idents[k]).collect();
+        let tys = idxs
+            .iter()
+            .map(|&k| leaf_slot(registry, &plan.leaves[k]).ty);
+        let defaults = idxs
+            .iter()
+            .map(|&k| leaf_slot(registry, &plan.leaves[k]).default);
+        // Matched BY VALUE: the local is this arm's alone (every leaf under the
+        // hoist is in it), so a consuming value form's fields move out here
+        // exactly as they do at an unconditional one.
+        stmts.extend(quote! {
+            let (#(#ids,)*): (#(#tys,)*) = match #local {
+                ::core::option::Option::Some(#bind) => { #body (#(#ids,)*) }
+                ::core::option::Option::None => (#(#defaults,)*),
+            };
+        });
     }
     (stmts, arg_exprs)
 }

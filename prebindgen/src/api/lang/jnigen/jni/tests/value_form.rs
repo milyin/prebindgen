@@ -290,6 +290,28 @@ fn a_per_field_override_replaces_the_type_default() {
     );
 }
 
+/// The complete-set rule taken to its limit: an override with NO records is an
+/// empty leaf set, so the field does not cross at all. That is how a binding
+/// drops a field its source's value form carries but its surface has no use
+/// for — without it, adopting a value form is all-or-nothing.
+#[test]
+fn an_empty_per_field_override_drops_the_field() {
+    let (_, kotlin) = value_form_gen(
+        "jnigen_vf_drop",
+        crate::expand_return!(ZSample).fields(
+            crate::fields!(z_sample_to_struct).field("key_expr", crate::expand_return!(ZKeyExpr)),
+        ),
+    );
+    assert!(
+        !kotlin.contains("keyExpr"),
+        "a field whose override states no leaves contributes none:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("express: Boolean"),
+        "and its siblings are untouched:\n{kotlin}"
+    );
+}
+
 /// A rename keys on the Rust field ident and reaches an inlined nested field
 /// through its dotted path.
 #[test]
@@ -1362,10 +1384,12 @@ fn nested_review_jni(outer: crate::lang::ExpandReturnDecl) -> JniGen {
         .expand(outer)
 }
 
-/// A nested value form below an `Option` cannot be emitted as an
-/// unconditional hoist: its accessor takes `&Inner`, not `&Option<Inner>`.
-/// Reject it during planning until conditional hoists can share one `Some`
-/// scope across every descendant leaf.
+/// A value form below an `Option` is a CONDITIONAL hoist — supported at one
+/// level (see [`a_value_form_under_an_optional_accessor_is_hoisted_conditionally`]),
+/// but it cannot NEST: the inner form would have to be bound inside the outer
+/// one's `Some` arm, and the binder has no arm to put a second local in.
+/// Reject it during planning rather than emit a hoist that reaches through an
+/// `Option` it cannot unwrap.
 #[test]
 fn an_optional_nested_value_form_is_rejected_before_emission() {
     let registry = Registry::<KotlinMeta>::from_items(nested_review_items()).expect("index items");
@@ -1380,6 +1404,81 @@ fn an_optional_nested_value_form_is_rejected_before_emission() {
     assert!(
         msg.contains("z_review_inner_to_struct") && msg.contains("Option"),
         "the error names the unsupported conditional hoist: {msg}"
+    );
+}
+
+/// A value form reached through an `Option`-returning accessor — the shape a
+/// reply's optional sample has. The form runs only where the value is present,
+/// so it binds an `Option<TStruct>` local; every leaf under it then lives in
+/// ONE `match` on that local, whose absent arm fills each slot with the same
+/// wire default an inert sum group carries. Without this the whole containing
+/// decomposition was refused.
+#[test]
+fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_get_carrier(h: &ZHolder) -> Option<&ZCarrier> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_get_carrier)));
+    let dir = unique_test_dir("jnigen_vf_conditional");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("a conditional hoist resolves");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert_eq!(
+        rust.matches("zc_into_struct").count(),
+        1,
+        "the value form runs ONCE, not once per leaf:\n{rust}"
+    );
+    assert!(
+        rust.contains("zh_get_carrier(&__cb_arg0)") && rust.contains("Some(__hb0)"),
+        "the hoist is built inside the `Some` arm of the optional step:\n{rust}"
+    );
+    assert!(
+        rust.contains("zc_into_struct((__hb0).clone())"),
+        "what the arm binds is a borrow, so a consuming accessor gets a clone \
+         of it — the same trade a borrowed root makes:\n{rust}"
+    );
+    assert!(
+        rust.contains("match __vf0 {") && rust.contains("Some(__u0)"),
+        "and the leaves share ONE match on the local, taken by value so the \
+         struct's fields still move out:\n{rust}"
+    );
+    assert!(
+        rust.contains("__u0.label") && !rust.contains("__u0.label.clone()"),
+        "each leaf reads its own field off the arm binding, moved not cloned:\n{rust}"
+    );
+    assert!(
+        rust.contains("JObject::null()"),
+        "the absent arm fills every slot with the wire default:\n{rust}"
     );
 }
 
