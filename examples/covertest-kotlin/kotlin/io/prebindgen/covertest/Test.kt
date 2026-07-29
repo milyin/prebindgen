@@ -67,6 +67,8 @@ import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.observationNew
 import io.prebindgen.covertest.model.observationWhich
 import io.prebindgen.covertest.model.lookupEach
+import io.prebindgen.covertest.model.ledgerEach
+import io.prebindgen.covertest.model.ledgerNew
 import io.prebindgen.covertest.model.reportEach
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.archiveReading
@@ -622,6 +624,54 @@ fun main() {
         check(kept.size == 1)
         kept[0].close()
         check(kept[0].isClosed())
+    }
+
+    // The same derived boundary reached through an `Option` — a CONDITIONAL
+    // hoist. `ledgerNew(n)` fills `filed` (bit 0) and `archived` (bit 1)
+    // independently, so one call per n drives all four present/absent
+    // combinations, and each report carries a sum whose `match` lives inside
+    // the arm that binds it.
+    //
+    //   filed     Option<&Report> — a BORROW, so the by-value form clones
+    //   archived  Option<Report>  — OWNED, so it moves in
+    //
+    // Absent is null in every leaf EXCEPT the sum's tag, which has no null on
+    // the wire and so reads as its tag-0 variant; the sibling nulls are what
+    // say the whole report was absent.
+    section("value form reached through an Option (conditional hoist)") {
+        // At a BUILDER position the sum stays raw (tag + groups), so the tag is
+        // readable directly — which is how the absent case is pinned below.
+        val rows = mutableListOf<String>()
+        for (n in 0L..3L) {
+            val row = ledgerNew(n, boom) { fCount, _, _, _, _, fTag, fFound, _, fLabel,
+                                           aCount, _, _, _, _, aTag, aFound, _, aLabel ->
+                fFound?.close()
+                aFound?.close()
+                val filed = if (fLabel == null) "-|$fTag" else "$fLabel/$fCount/$fTag"
+                val archived = if (aLabel == null) "-|$aTag" else "$aLabel/$aCount/$aTag"
+                "$filed $archived"
+            }
+            rows.add(row)
+        }
+        // An absent report nulls every leaf it owns; only the sum's tag falls
+        // back to 0 (`Lookup::Absent`) because the wire has no null for it.
+        check(
+            rows == listOf(
+                "-|0 -|0",
+                "l1/1/1 -|0",
+                "-|0 l2/2/1",
+                "l1/1/1 l2/2/1",
+            )
+        ) { "conditional value-form leaves: $rows" }
+
+        // The callback position takes the same path.
+        val seen = mutableListOf<String>()
+        ledgerEach(4L, { _, _, _, _, _, _, fLabel, _, _, _, _, _, _, aLabel ->
+            seen.add("${fLabel ?: "-"}|${aLabel ?: "-"}")
+        }, boom)
+        check(seen == listOf("-|-", "l1|-", "-|l2", "l1|l2")) {
+            "conditional value form through a callback: $seen"
+        }
     }
 
     // A sum returned BORROWED (`&Reading` / `Option<&Reading>`). The value stays

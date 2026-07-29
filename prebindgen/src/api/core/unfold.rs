@@ -1428,6 +1428,24 @@ fn flatten<M>(
                                  a sibling `.field()` would read a moved value",
                     });
                 }
+                // What a CONDITIONAL hoist's `Some` arm binds: owned (`Option<T>`
+                // from the accessor immediately before the value form) or a
+                // borrow. Only that position can be owned — any further step
+                // composes as a borrow, and a field read is borrowed by
+                // construction — so the question is asked of exactly one step,
+                // and answered from its own signature rather than guessed at
+                // emit time.
+                let owned_payload = match path_prefix.last() {
+                    Some(PathStep::Call {
+                        ident,
+                        optional: true,
+                    }) => {
+                        let (_, ret) = accessor_signature(registry, ident)?;
+                        option_inner_type(&ret)
+                            .is_some_and(|inner| !matches!(inner, syn::Type::Reference(_)))
+                    }
+                    _ => false,
+                };
                 // Evaluate this value form ONCE. Recorded at the prefix it sits
                 // at rather than as a lone accessor, so a nested value form
                 // (this record reached through another one's field) gets its own
@@ -1437,6 +1455,7 @@ fn flatten<M>(
                 hoists.push(Hoist {
                     prefix: root_path.clone(),
                     consuming,
+                    owned_payload,
                 });
 
                 for fr in fields {

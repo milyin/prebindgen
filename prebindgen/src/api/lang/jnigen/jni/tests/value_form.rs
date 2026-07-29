@@ -1482,6 +1482,82 @@ fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
     );
 }
 
+/// The optional step may hand over an OWNED payload (`Option<T>`) as readily
+/// as a borrowed one (`Option<&T>`), and the two need opposite treatment at the
+/// value-form call: an owned payload is borrowed for a `&Self` accessor and
+/// MOVED into a by-value one, where a borrowed payload is passed straight
+/// through and cloned. Getting this from the accessor's own signature is what
+/// keeps a by-value accessor from demanding a `Clone` its type need not have.
+fn conditional_owned_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> String {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_take_carrier(h: &ZHolder) -> Option<ZCarrier> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(decl)
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_take_carrier)));
+    let dir = unique_test_dir(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust")
+}
+
+#[test]
+fn an_owned_optional_payload_is_borrowed_for_a_borrowing_value_form() {
+    let rust = conditional_owned_gen(
+        "jnigen_vf_cond_owned_borrow",
+        crate::expand_return!(ZCarrier).fields(crate::fields!(zc_to_struct)),
+    );
+    assert!(
+        rust.contains("zc_to_struct(&__hb0)"),
+        "an owned `Option<T>` payload is BORROWED for a `&Self` accessor — \
+         passing it through would supply `T` where `&T` is required:\n{rust}"
+    );
+}
+
+#[test]
+fn an_owned_optional_payload_is_moved_into_a_consuming_value_form() {
+    let rust = conditional_owned_gen(
+        "jnigen_vf_cond_owned_consume",
+        crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)),
+    );
+    assert!(
+        rust.contains("zc_into_struct(__hb0)"),
+        "an owned payload MOVES into a by-value accessor:\n{rust}"
+    );
+    assert!(
+        !rust.contains("zc_into_struct((__hb0).clone())"),
+        "cloning it would demand a `Clone` the type need not have, on a value \
+         that was already ours:\n{rust}"
+    );
+}
+
 /// A conditional value form may carry a SUM field, and a sum's segment is
 /// emitted as one `match` of its own rather than as per-leaf statements. That
 /// segment belongs INSIDE the conditional arm like every other leaf under the

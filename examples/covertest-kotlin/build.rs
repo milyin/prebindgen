@@ -393,6 +393,18 @@ fn main() {
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
         .expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+        // `Ledger` reaches that same derived boundary through an `Option`, so
+        // `Report`'s value form is hoisted CONDITIONALLY — built in the `Some`
+        // arm, its leaves (the sum among them) sharing one `match`, null in the
+        // absent arm. The two accessors differ in what the arm binds: `filed`
+        // hands over a borrow, `archived` an owned report the by-value form
+        // takes directly — `Report` is not `Clone`, so cloning it here would not
+        // compile.
+        .expand(
+            expand_return!(Ledger)
+                .field(fun!(ledger_filed))
+                .field(fun!(ledger_archived)),
+        )
         // ── Base-package handle type: `Storage` + scalar members ────────────
         // Back in the base package so the typed handle classes live alongside
         // `Payload`.
@@ -510,6 +522,12 @@ fn main() {
                 // `Report` in one crossing; the leaf list comes from
                 // `ReportStruct`'s fields, so it cannot drift from it.
                 .fun(fun!(report_each))
+                // The same derived boundary reached through an `Option` — a
+                // CONDITIONAL hoist. `ledger_each` delivers both at once, so one
+                // crossing covers the borrowed payload, the owned one, and the
+                // sum each report carries.
+                .fun(fun!(ledger_each))
+                .fun(fun!(ledger_new))
                 .fun(fun!(archive_set_reading))
                 .fun(fun!(archive_reading))
                 .fun(fun!(archive_reading_maybe))

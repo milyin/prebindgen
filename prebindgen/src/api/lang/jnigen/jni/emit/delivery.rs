@@ -569,17 +569,26 @@ pub(crate) fn bind_hoists(
                 .split_last()
                 .expect("a hoist prefix ends in its value-form call");
             let consuming = h.consuming;
+            let owned = h.owned_payload;
             let expr = reach_optional(qualify, lead, value.clone(), by_ref, 0, &|reached| {
-                // What the `Some` arm binds is a borrow of the value (or an
-                // owned one that was about to be dropped), so a CONSUMING
-                // accessor gets a clone — the same trade a borrowed root makes
-                // below, and the only thing there is to give it here.
-                let call = if consuming {
-                    let m = qualify(last.ident());
-                    let f = last.ident();
-                    quote!(#m::#f((#reached).clone()))
-                } else {
-                    compose_step(qualify, last, reached)
+                // Four cases, from what the `Some` arm binds (owned `Option<T>`
+                // vs a borrow) crossed with what the accessor takes. An owned
+                // payload is ours: MOVE it into a by-value form, and borrow it
+                // for a `&Self` one. A borrowed payload passes straight through
+                // to `&Self`, and a by-value form has to clone it — the same
+                // trade a borrowed root makes below, and the only thing there is
+                // to give it there.
+                let call = match (consuming, owned) {
+                    (true, true) => {
+                        let (m, f) = (qualify(last.ident()), last.ident());
+                        quote!(#m::#f(#reached))
+                    }
+                    (true, false) => {
+                        let (m, f) = (qualify(last.ident()), last.ident());
+                        quote!(#m::#f((#reached).clone()))
+                    }
+                    (false, true) => compose_step(qualify, last, quote!(&#reached)),
+                    (false, false) => compose_step(qualify, last, reached),
                 };
                 quote!(::core::option::Option::Some(#call))
             });

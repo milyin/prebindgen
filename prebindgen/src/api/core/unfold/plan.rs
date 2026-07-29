@@ -255,6 +255,19 @@ pub struct Hoist {
     /// value-form root can consume: the ordinary accessor-chain steps are
     /// always borrows.
     pub consuming: bool,
+    /// For a CONDITIONAL hoist (one whose [`prefix`](Self::prefix) crosses an
+    /// optional step): whether the payload that step's `Some` arm binds is
+    /// **owned** (`Option<T>`) rather than a borrow (`Option<&T>` / a borrowed
+    /// field read).
+    ///
+    /// The two need opposite treatment at the value-form call — an owned
+    /// payload is borrowed for a `&Self` accessor and MOVED into a by-value
+    /// one, where a borrowed payload passes straight through and is cloned —
+    /// and the emitter cannot tell them apart from the path alone. Read off the
+    /// accessor's own signature so a by-value form does not demand a `Clone`
+    /// the type need not have. Meaningless (and `false`) for an unconditional
+    /// hoist.
+    pub owned_payload: bool,
 }
 
 /// One flattened output leaf of a decomposed return value.
