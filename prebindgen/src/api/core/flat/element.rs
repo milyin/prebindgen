@@ -103,6 +103,11 @@ impl Type {
     }
 
     pub fn location(&self) -> &SourceLocation {
+        self.location_rc()
+    }
+
+    /// The shared location itself, for building a sibling node's [`Origin`].
+    pub(super) fn location_rc(&self) -> &std::rc::Rc<SourceLocation> {
         match self {
             Type::Struct(s) => &s.origin.location,
             Type::Variant(v) => &v.origin.location,

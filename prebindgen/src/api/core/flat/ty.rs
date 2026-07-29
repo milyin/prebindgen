@@ -61,6 +61,35 @@ impl TypeRef {
         out
     }
 
+    /// The first nominal type reachable from here that `declared` does not hold.
+    ///
+    /// Recurses the same structure [`Self::collect_extents`] walks: what is
+    /// reachable is what a destination language will have to convert, so every
+    /// layer's inner reference counts.
+    pub(super) fn first_unresolved(
+        &self,
+        declared: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        match &self.kind {
+            TypeKind::Named { id, args } => {
+                if !declared.contains(&id.name) {
+                    return Some(id.name.clone());
+                }
+                args.iter().find_map(|a| a.first_unresolved(declared))
+            }
+            TypeKind::Optional(t)
+            | TypeKind::Sequence(t)
+            | TypeKind::Uninit(t)
+            | TypeKind::Ref { inner: t, .. } => t.first_unresolved(declared),
+            TypeKind::Array { elem, .. } => elem.first_unresolved(declared),
+            TypeKind::Fallible { ok, err } => ok
+                .first_unresolved(declared)
+                .or_else(|| err.first_unresolved(declared)),
+            TypeKind::Callback { args } => args.iter().find_map(|a| a.first_unresolved(declared)),
+            TypeKind::Scalar(_) | TypeKind::Str | TypeKind::Unit => None,
+        }
+    }
+
     fn collect_extents<'a>(&'a self, out: &mut Vec<&'a ArrayExtent>) {
         match &self.kind {
             TypeKind::Array { elem, extent } => {

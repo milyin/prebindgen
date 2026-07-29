@@ -84,7 +84,7 @@ fn struct_field_slices_keep_attributes() {
             pub(crate) seq: u64,
         }
     ));
-    let fields = as_struct(&element).fields();
+    let fields = &as_struct(&element).fields;
     assert_eq!(fields.len(), 2);
     assert!(tokens(&fields[0].origin.syntax).contains("The key it was published on."));
     assert_eq!(
@@ -108,12 +108,12 @@ fn an_item_and_its_components_share_one_location() {
     ));
     let s = as_struct(&element);
     let item = &s.origin.location;
-    for field in s.fields() {
+    for field in &s.fields {
         assert!(Rc::ptr_eq(item, &field.origin.location), "field");
         assert!(Rc::ptr_eq(item, &field.ty.origin.location), "field type");
     }
     // And down through a nested type's arguments.
-    let TypeKind::Sequence(elem) = &s.fields()[1].ty.kind else {
+    let TypeKind::Sequence(elem) = &s.fields[1].ty.kind else {
         panic!("a sequence");
     };
     assert!(Rc::ptr_eq(item, &elem.origin.location), "element type");
@@ -246,8 +246,7 @@ fn struct_delimiters_survive_and_spell() {
         let s = as_struct(&element);
         let name = &s.name;
         (
-            s.fields.is_some(),
-            s.fields().len(),
+            s.fields.len(),
             s.spell(quote::quote!(#name), parts).to_string(),
         )
     };
@@ -259,7 +258,7 @@ fn struct_delimiters_survive_and_spell() {
             ),
             &[]
         ),
-        (true, 0, "A".to_string())
+        (0, "A".to_string())
     );
     assert_eq!(
         spell(
@@ -268,7 +267,7 @@ fn struct_delimiters_survive_and_spell() {
             ),
             &[]
         ),
-        (true, 0, "B { }".to_string())
+        (0, "B { }".to_string())
     );
     assert_eq!(
         spell(
@@ -279,18 +278,17 @@ fn struct_delimiters_survive_and_spell() {
             ),
             &[quote::quote!(x: __f0)]
         ),
-        (true, 1, "C { x : __f0 }".to_string())
+        (1, "C { x : __f0 }".to_string())
     );
-    // Opaque: no modelled fields, and still spellable.
-    assert_eq!(
-        spell(
-            syn::parse_quote!(
-                pub struct D(Whatever<'_, dyn Trait>);
-            ),
-            &[quote::quote!(__f0)]
-        ),
-        (false, 0, "D (__f0)".to_string())
-    );
+
+    // A tuple struct is a handle, so it is an `Opaque` and has no field list to
+    // spell from — the delimiters still survive in its retained syntax.
+    let element = parse_one(syn::parse_quote!(
+        pub struct D(Whatever<'_, dyn Trait>);
+    ));
+    let o = as_opaque(&element);
+    assert_eq!(o.name, "D");
+    assert!(tokens(&o.origin.syntax).contains("Whatever"));
 }
 
 /// A discriminant is two facts with two homes: the number is modelled, the
@@ -425,7 +423,7 @@ fn array_extent_carries_number_const_and_spelling() {
             }
         ),
     ]);
-    let fields = as_struct(&elements[1]).fields();
+    let fields = &as_struct(&elements[1]).fields;
 
     let named = fields[0].ty.array_extent().expect("an extent");
     assert_eq!(named.value, 4);
@@ -458,7 +456,9 @@ fn the_whole_item_survives() {
 #[test]
 fn an_unsupported_item_keeps_its_tokens() {
     let source: syn::Item = syn::parse_quote!(
-        pub type Alias = u32;
+        pub union U {
+            a: u8,
+        }
     );
     let element = parse_one(source.clone());
     assert!(matches!(element, Element::Unsupported(_)));

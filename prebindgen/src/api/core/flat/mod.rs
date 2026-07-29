@@ -166,11 +166,11 @@ pub use self::{
 };
 use crate::SourceLocation;
 
-/// The parser for the prebindgen source language.
+/// Collects what to parse, then hands over the model.
 ///
-/// Carries no configuration about what it *accepts* — that is a property of the
-/// language, not of the call site. What it does carry is **what to parse**:
-/// collect the inputs, then [`parse`](Self::parse) once.
+/// Carries no configuration about what the language *accepts* — that is a
+/// property of the language, not of the call site. What it carries is **what to
+/// parse**: feed the inputs, then [`build`](Self::build) once.
 ///
 /// # Reading a source directory
 ///
@@ -182,8 +182,9 @@ use crate::SourceLocation;
 /// # prebindgen::Source::init_doctest_simulate();
 /// use prebindgen::core::Flat;
 ///
-/// let elements = Flat::new().source("source_ffi").parse()?;
-/// assert_eq!(elements.len(), 2);
+/// let flat = Flat::builder().source("source_ffi").build()?;
+/// assert!(flat.function("test_function").is_some());
+/// assert!(flat.declared_type("TestStruct").is_some());
 /// # Ok::<_, prebindgen::core::flat::ParseError>(())
 /// ```
 ///
@@ -201,10 +202,10 @@ use crate::SourceLocation;
 /// // A dependency renamed in Cargo.toml needs the name THIS crate uses, so it
 /// // is configured rather than named by directory.
 /// let helpers = Source::builder("source_ffi").crate_name("helpers").build();
-/// let elements = Flat::new()
+/// let flat = Flat::builder()
 ///     .items(helpers.items_in_groups(&["functions"]))
-///     .parse()?;
-/// assert_eq!(elements.len(), 1);
+///     .build()?;
+/// assert_eq!(flat.functions().count(), 1);
 /// # Ok::<_, prebindgen::core::flat::ParseError>(())
 /// ```
 ///
@@ -212,18 +213,15 @@ use crate::SourceLocation;
 ///
 /// The rules that make a parse fail are **whole-stream** rules: one flat
 /// namespace across every ingested crate, one const index an array length may
-/// reach into, one set of source modules to normalize paths against. None can be
+/// reach into, one set of source modules to normalize paths against, and every
+/// type reference resolving against every declaration. None can be
 /// decided per input, so every input is in hand before any of it is classified.
 #[derive(Debug, Default)]
-pub struct Flat {
+pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
 }
 
-impl Flat {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
+impl FlatBuilder {
     /// Every `#[prebindgen]` item captured in `dir`.
     ///
     /// Sugar for [`Self::items`] over [`Source::items_all`](crate::Source::items_all),
@@ -239,11 +237,10 @@ impl Flat {
     /// # prebindgen::Source::init_doctest_simulate();
     /// use prebindgen::core::Flat;
     ///
-    /// let elements = Flat::new().source("source_ffi").parse().unwrap();
-    /// let mut names: Vec<String> =
-    ///     elements.iter().filter_map(|e| e.name()).map(|n| n.to_string()).collect();
-    /// names.sort();
-    /// assert_eq!(names, ["TestStruct", "test_function"]);
+    /// let flat = Flat::builder().source("source_ffi").build()?;
+    /// assert!(flat.function("test_function").is_some());
+    /// assert!(flat.declared_type("TestStruct").is_some());
+    /// # Ok::<_, prebindgen::core::flat::ParseError>(())
     /// ```
     pub fn source<P: AsRef<std::path::Path>>(self, dir: P) -> Self {
         let source = crate::Source::new(dir);
@@ -261,11 +258,11 @@ impl Flat {
     /// use prebindgen::{core::Flat, Source};
     ///
     /// let source = Source::new("source_ffi");
-    /// let elements = Flat::new()
+    /// let flat = Flat::builder()
     ///     .items(source.items_in_groups(&["structs"]))
-    ///     .parse()
-    ///     .unwrap();
-    /// assert_eq!(elements.len(), 1);
+    ///     .build()?;
+    /// assert_eq!(flat.types().count(), 1);
+    /// # Ok::<_, prebindgen::core::flat::ParseError>(())
     /// ```
     pub fn items<I>(mut self, items: I) -> Self
     where
@@ -275,16 +272,16 @@ impl Flat {
         self
     }
 
-    /// Parse everything collected so far into elements.
+    /// Parse everything collected so far into the model.
     ///
-    /// **Transactional**: an `Err` yields no elements at all, so a refused
-    /// stream cannot leave a half-built model behind.
+    /// **Transactional**: an `Err` yields no model at all, so a refused stream
+    /// cannot leave a half-built one behind.
     ///
-    /// Order-independent: source modules are gathered, and consts indexed,
-    /// before anything is lowered — so a cross-source type reference and an
-    /// array length may both name something declared later, in this input or
-    /// another.
-    pub fn parse(self) -> Result<Vec<Element>, ParseError> {
+    /// Order-independent: source modules are gathered, consts indexed, and every
+    /// item lowered before any reference is resolved — so a type reference, an
+    /// array length and a cross-source mention may each name something declared
+    /// later, in this input or another.
+    pub fn build(self) -> Result<Flat, ParseError> {
         let mut items = self.items;
 
         // Pass 0: normalize every item's types to the canonical flat spelling
@@ -323,7 +320,7 @@ impl Flat {
         }));
 
         // Pass 2: lower, checking the flat namespace as we go.
-        let mut out: Vec<Element> = Vec::with_capacity(items.len());
+        let mut elements: Vec<Element> = Vec::with_capacity(items.len());
         let mut seen: Vec<(syn::Ident, SourceLocation)> = Vec::new();
         for (item, loc) in items {
             let element = lower_item(item, loc, &consts);
@@ -337,10 +334,189 @@ impl Flat {
                 }
                 seen.push((name.clone(), element.location().clone()));
             }
-            out.push(element);
+            elements.push(element);
         }
-        Ok(out)
+
+        // Pass 3: resolve references, now that every declaration is in hand.
+        resolve_references(&mut elements);
+
+        Ok(Flat { elements })
     }
+}
+
+/// The flat API: every `#[prebindgen]` item from every ingested source, parsed,
+/// indexed by name, and with every type reference resolved.
+///
+/// # Direct access, not a stream
+///
+/// Names are unique across the whole model — a duplicate is a
+/// [`ParseError::DuplicateName`] — so a name is a complete address, and the
+/// model answers by it. That is what every later stage needs: an adapter asks
+/// what a declared name *is*, rather than scanning a list for it.
+///
+/// # References are already resolved
+///
+/// Every [`TypeKind::Named`] in a surviving element denotes a [`Type`] this model
+/// holds, and [`Self::resolve`] hands it over. An item that named something the
+/// flat API does not declare is [`Element::Unsupported`] with
+/// [`ItemError::UnresolvedType`] — inert until an adapter declares it, exactly
+/// like every other refusal, so an item no binding uses stays harmless.
+///
+/// Resolving here rather than in the adapters is the point of #211: a dangling
+/// name used to surface much later as an unresolved-converter error, from
+/// whichever adapter happened to look first.
+#[derive(Debug)]
+pub struct Flat {
+    elements: Vec<Element>,
+}
+
+impl Flat {
+    /// Start collecting what to parse.
+    pub fn builder() -> FlatBuilder {
+        FlatBuilder { items: Vec::new() }
+    }
+
+    /// Every element, in the order the sources were fed.
+    pub fn elements(&self) -> impl Iterator<Item = &Element> {
+        self.elements.iter()
+    }
+
+    /// The element with this name, whatever kind it is — including an
+    /// [`Element::Unsupported`], which still holds its name against the
+    /// namespace.
+    pub fn element(&self, name: &str) -> Option<&Element> {
+        self.elements
+            .iter()
+            .find(|e| e.name().is_some_and(|n| n == name))
+    }
+
+    pub fn function(&self, name: &str) -> Option<&Function> {
+        match self.element(name)? {
+            Element::Function(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    /// The type declared under this name.
+    ///
+    /// Named `declared_type` because `type` is a keyword; it is the accessor a
+    /// resolved [`TypeKind::Named`] reference leads to, and [`Self::resolve`] is
+    /// the same lookup taking a [`TypeId`].
+    pub fn declared_type(&self, name: &str) -> Option<&Type> {
+        match self.element(name)? {
+            Element::Type(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn constant(&self, name: &str) -> Option<&Constant> {
+        match self.element(name)? {
+            Element::Constant(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Function(f) => Some(f),
+            _ => None,
+        })
+    }
+
+    pub fn types(&self) -> impl Iterator<Item = &Type> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Type(t) => Some(t),
+            _ => None,
+        })
+    }
+
+    pub fn constants(&self) -> impl Iterator<Item = &Constant> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Constant(c) => Some(c),
+            _ => None,
+        })
+    }
+
+    /// Every item the language could not express, with its diagnosis.
+    ///
+    /// An adapter raises one of these when it declares the item; until then they
+    /// are inert. See the [module docs](self) on where acceptance is enforced.
+    pub fn unsupported(&self) -> impl Iterator<Item = &Unsupported> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Unsupported(u) => Some(u),
+            _ => None,
+        })
+    }
+
+    /// The declaration a reference denotes.
+    ///
+    /// Infallible in practice for any reference reached from a surviving element:
+    /// [`FlatBuilder::build`] made unresolvable references into
+    /// [`ItemError::UnresolvedType`], so what is left resolves.
+    pub fn resolve(&self, id: &TypeId) -> Option<&Type> {
+        self.declared_type(&id.name)
+    }
+}
+
+/// Turn every element that names an undeclared type into an
+/// [`Element::Unsupported`].
+///
+/// Runs once every declaration is in hand, so the order sources were fed in does
+/// not matter and a reference may point forward or across crates.
+fn resolve_references(elements: &mut Vec<Element>) {
+    let declared: std::collections::HashSet<String> = elements
+        .iter()
+        .filter_map(|e| match e {
+            Element::Type(t) => Some(t.name().to_string()),
+            _ => None,
+        })
+        .collect();
+
+    for element in elements.iter_mut() {
+        let Some(unresolved) = first_unresolved(element, &declared) else {
+            continue;
+        };
+        let name = element.name().cloned();
+        let origin = Origin::new(
+            element.syntax(),
+            Rc::clone(match element {
+                Element::Function(f) => &f.origin.location,
+                Element::Type(t) => t.location_rc(),
+                Element::Constant(c) => &c.origin.location,
+                Element::Unsupported(u) => &u.origin.location,
+            }),
+        );
+        *element = Element::Unsupported(Unsupported {
+            name,
+            error: Box::new(ItemError::UnresolvedType { name: unresolved }),
+            origin,
+        });
+    }
+}
+
+/// The first type this element names that the flat API does not declare.
+fn first_unresolved(
+    element: &Element,
+    declared: &std::collections::HashSet<String>,
+) -> Option<String> {
+    let mut refs: Vec<&TypeRef> = Vec::new();
+    match element {
+        Element::Function(f) => {
+            refs.extend(f.params.iter().map(|p| &p.ty));
+            refs.push(&f.ret);
+        }
+        Element::Constant(c) => refs.push(&c.ty),
+        Element::Type(Type::Struct(s)) => refs.extend(s.fields.iter().map(|f| &f.ty)),
+        Element::Type(Type::Variant(v)) => refs.extend(
+            v.alternatives
+                .iter()
+                .flat_map(|a| a.fields.iter().map(|f| &f.ty)),
+        ),
+        // An enum names nothing, an opaque hides what it names, and an
+        // unsupported item already has a diagnosis worth keeping.
+        Element::Type(Type::Enum(_) | Type::Opaque(_)) | Element::Unsupported(_) => {}
+    }
+    refs.into_iter().find_map(|r| r.first_unresolved(declared))
 }
 
 /// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the `Fn`
@@ -487,6 +663,13 @@ pub enum ItemError {
         /// `a type parameter` / `a const generic parameter`.
         kind: &'static str,
     },
+    /// The item names a type the flat API does not declare.
+    ///
+    /// The flat API is closed over its own names: a handle enters it through
+    /// `#[prebindgen] pub type X = ..`, so a name with no declaration is either a
+    /// missing marker or a typo. Reporting it here replaces discovering it much
+    /// later as an unresolved converter, from whichever adapter looked first.
+    UnresolvedType { name: String },
     /// A whole item kind the language does not model — a `union`, a type alias.
     ///
     /// The proc-macro refuses to mark a `use`, `mod`, `impl` or `macro_rules!`
@@ -534,6 +717,19 @@ impl fmt::Display for ItemError {
                  binder, so an uninstantiated parameter is indistinguishable from a nominal type \
                  of the same name and no destination language can express it — write the \
                  concrete types, one marked item per instantiation (a newtype is the usual way)"
+            ),
+            ItemError::UnresolvedType { name } if name.contains("::") => write!(
+                f,
+                "names the type `{name}`, which the flat API does not declare \u{2014} and being \
+                 path-qualified it never could, because marked items live in one flat namespace \
+                 of bare names. Give the type a name here with `#[prebindgen] pub type <Name> = \
+                 {name};` and refer to that"
+            ),
+            ItemError::UnresolvedType { name } => write!(
+                f,
+                "names the type `{name}`, which the flat API does not declare \u{2014} mark its \
+                 declaration `#[prebindgen]`, or, for a foreign or crate-private type used as a \
+                 handle, give it a name here with `#[prebindgen] pub type {name} = ..;`"
             ),
             ItemError::UnsupportedItemKind { kind } => write!(
                 f,

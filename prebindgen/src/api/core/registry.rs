@@ -1107,6 +1107,11 @@ impl<M> Registry<M> {
                 self.consts.insert(c.ident.clone(), (c, loc));
                 Ok(())
             }
+            // `#[prebindgen] pub type X = ..` DECLARES an opaque type: it states
+            // something about the flat API's surface, and is not code to copy
+            // into the binding. Its target is routinely crate-private, so
+            // re-emitting it would not even compile.
+            syn::Item::Type(_) => Ok(()),
             other => {
                 self.passthrough.push((other, loc));
                 Ok(())
