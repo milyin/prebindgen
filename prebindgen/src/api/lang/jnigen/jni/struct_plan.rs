@@ -161,6 +161,9 @@ pub(crate) struct SumPlanVariant {
     /// This variant's payload, in declaration order. Empty for a unit
     /// variant — the group that contributes nothing but its tag.
     pub fields: Vec<SumPlanField>,
+    /// How the variant is written, carried from the model: an empty payload
+    /// still needs `V()` / `V {}` where those were the delimiters.
+    pub shape: crate::api::core::frontend::model::VariantShape,
 }
 
 /// One payload field of a [`SumPlanVariant`]. Classified by exactly the same
@@ -525,6 +528,7 @@ fn sum_plan_kind(
             rust_ident: v.name.clone(),
             kotlin_name,
             fields,
+            shape: v.shape,
         });
     }
 

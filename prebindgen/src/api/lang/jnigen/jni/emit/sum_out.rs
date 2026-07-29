@@ -217,19 +217,16 @@ pub(crate) fn encode_sum_leaves(
                 .map(|(k, _)| format_ident!("__sv{}", k))
                 .collect();
             let vident = &variant.name;
-            let pattern = match variant.fields.first().map(|f| &f.member) {
-                None => quote!(#source::#vident),
-                Some(syn::Member::Named(_)) => {
-                    let pairs = variant.fields.iter().zip(&binds).map(|(f, b)| {
-                        let syn::Member::Named(n) = &f.member else {
-                            unreachable!("variant field shapes are uniform")
-                        };
-                        quote!(#n: #b)
-                    });
-                    quote!(#source::#vident { #(#pairs),* })
-                }
-                Some(syn::Member::Unnamed(_)) => quote!(#source::#vident(#(#binds),*)),
-            };
+            let parts: Vec<TokenStream> = variant
+                .fields
+                .iter()
+                .zip(&binds)
+                .map(|(f, b)| match &f.member {
+                    syn::Member::Named(n) => quote!(#n: #b),
+                    syn::Member::Unnamed(_) => quote!(#b),
+                })
+                .collect();
+            let pattern = variant.shape.spell(quote!(#source::#vident), &parts);
             // The live group: convert each payload through its own output
             // converter, exactly as a struct field of the same type would be.
             let live: TokenStream = group

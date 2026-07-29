@@ -882,19 +882,16 @@ impl Cbindgen {
                     .iter()
                     .map(|f| self.payload_wire_of(&ty, vident, f, registry))
                     .collect();
-                match v.shape() {
-                    VariantShape::Unit => variant_defs.push(quote!(#vident)),
-                    VariantShape::Named => {
-                        let defs = v.fields.iter().zip(&wires).map(|(f, w)| {
-                            let n = &f.member;
-                            quote!(#n: #w)
-                        });
-                        variant_defs.push(quote!(#vident { #(#defs),* }));
-                    }
-                    VariantShape::Tuple => {
-                        variant_defs.push(quote!(#vident(#(#wires),*)));
-                    }
-                }
+                let defs: Vec<TokenStream> = v
+                    .fields
+                    .iter()
+                    .zip(&wires)
+                    .map(|(f, w)| match &f.member {
+                        syn::Member::Named(n) => quote!(#n: #w),
+                        syn::Member::Unnamed(_) => quote!(#w),
+                    })
+                    .collect();
+                variant_defs.push(v.shape.spell(quote!(#vident), &defs));
 
                 // Drop arm: bind every field, free the owning ones.
                 let owning: Vec<(usize, &SourceVariantField, &syn::Type)> = v

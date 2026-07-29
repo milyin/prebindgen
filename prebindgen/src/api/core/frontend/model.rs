@@ -419,38 +419,52 @@ pub struct SourceVariant {
     /// The variant's payload, in declaration order. Empty for a unit variant —
     /// the group that contributes nothing but its tag.
     pub fields: Vec<SourceVariantField>,
+    /// How the variant is **written**, taken from `syn::Fields` at lowering.
+    ///
+    /// Not derivable from [`Self::fields`]: `B()` and `C {}` have no payload
+    /// and still must be spelled `E::B()` / `E::C {}` wherever Rust names
+    /// them, so the emptiness of the group and the delimiters around it are
+    /// two different facts. Use [`Self::is_unit`] for the first,
+    /// [`VariantShape::spell`] for the second.
+    pub shape: VariantShape,
 }
 
 impl SourceVariant {
-    /// True when this variant carries no payload.
+    /// True when this variant carries no payload — the group question, not the
+    /// syntax one. `B()` is unit by this test and still [`VariantShape::Tuple`].
     pub fn is_unit(&self) -> bool {
         self.fields.is_empty()
     }
-
-    /// How the payload is addressed — the closed classifier that replaces
-    /// matching on `syn::Fields` at each use site.
-    ///
-    /// Derived from the first field's [`SourceVariantField::member`] rather
-    /// than stored: Rust gives every field of one variant the same addressing,
-    /// so a stored copy would be a second representation of the same fact.
-    pub fn shape(&self) -> VariantShape {
-        match self.fields.first().map(|f| &f.member) {
-            None => VariantShape::Unit,
-            Some(syn::Member::Named(_)) => VariantShape::Named,
-            Some(syn::Member::Unnamed(_)) => VariantShape::Tuple,
-        }
-    }
 }
 
-/// How a [`SourceVariant`]'s payload is addressed.
+/// How a [`SourceVariant`] is written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VariantShape {
-    /// No payload.
+    /// No delimiters — `V`.
     Unit,
-    /// Positional payload — `V(A, B)`.
+    /// Positional payload — `V(A, B)`, including the empty `V()`.
     Tuple,
-    /// Named payload — `V { a: A }`.
+    /// Named payload — `V { a: A }`, including the empty `V {}`.
     Named,
+}
+
+impl VariantShape {
+    /// Spell one variant: `head`, `head(parts…)` or `head { parts… }`.
+    ///
+    /// The single place the delimiters are chosen, for patterns and
+    /// constructors alike and in either direction — `head` is the variant's
+    /// path and each part is an already-rendered `bind` / `member: bind`.
+    pub fn spell(
+        self,
+        head: proc_macro2::TokenStream,
+        parts: &[proc_macro2::TokenStream],
+    ) -> proc_macro2::TokenStream {
+        match self {
+            VariantShape::Unit => head,
+            VariantShape::Tuple => quote::quote!(#head(#(#parts),*)),
+            VariantShape::Named => quote::quote!(#head { #(#parts),* }),
+        }
+    }
 }
 
 /// One payload field of a [`SourceVariant`].
@@ -536,7 +550,11 @@ pub(crate) fn lower_enum(
             ),
             None => (next, DiscriminantSource::Implicit),
         };
-        next = value.map(|n| n + 1);
+        // `checked_add`: a discriminant at the top of the range is valid Rust
+        // (`#[repr(u64)] enum E { A = i64::MAX as u64, B }`), so overflow ends
+        // the numeric chain the same way an unevaluable spelling does. The
+        // spelling itself is untouched, and a C mirror still re-emits it.
+        next = value.and_then(|n| n.checked_add(1));
         let prefix = crate::api::core::types_util::pascal_to_snake(&v.ident.to_string());
         let mut fields = Vec::with_capacity(v.fields.len());
         for (fi, f) in v.fields.iter().enumerate() {
@@ -560,6 +578,11 @@ pub(crate) fn lower_enum(
             tag: i as i32,
             discriminant: Discriminant { value, source },
             fields,
+            shape: match v.fields {
+                syn::Fields::Unit => VariantShape::Unit,
+                syn::Fields::Unnamed(_) => VariantShape::Tuple,
+                syn::Fields::Named(_) => VariantShape::Named,
+            },
         });
     }
     Ok(SourceEnum {

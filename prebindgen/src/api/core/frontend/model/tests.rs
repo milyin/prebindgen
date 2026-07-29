@@ -380,8 +380,8 @@ fn shape_classifies_unit_and_payload() {
         quote::quote! { enum E { A(u32), B } },
         quote::quote! { enum E { A, B { x: u32 } } },
         // An empty tuple/brace variant carries no field, so it is a unit
-        // group like any other — `Fields::Unnamed` with nothing in it says
-        // nothing the model needs.
+        // GROUP like any other — its shape is a separate question, see
+        // `empty_payload_keeps_the_written_shape`.
         quote::quote! { enum E { A, B(u32), C() } },
     ] {
         let e = lower_e(src.clone());
@@ -465,7 +465,7 @@ fn leaf_names_members_and_shape() {
     );
 
     assert_eq!(
-        e.variants.iter().map(|v| v.shape()).collect::<Vec<_>>(),
+        e.variants.iter().map(|v| v.shape).collect::<Vec<_>>(),
         vec![
             VariantShape::Tuple,
             VariantShape::Unit,
@@ -489,6 +489,37 @@ fn leaf_names_members_and_shape() {
         e.variants[2].fields[0].ty,
         SourceType::Scalar(ScalarKind::U32)
     ));
+}
+
+/// Emptiness of the payload and the delimiters around it are two facts, and
+/// `B()` / `C {}` is where they disagree: no field to carry, yet Rust still
+/// demands `E::B()` / `E::C {}` at every mention. Deriving the shape from the
+/// fields would spell those `E::B` and stop compiling.
+#[test]
+fn empty_payload_keeps_the_written_shape() {
+    let e = lower_e(quote::quote! { enum E { A, B(), C {}, D(u32) } });
+    assert_eq!(
+        e.variants.iter().map(|v| v.shape).collect::<Vec<_>>(),
+        vec![
+            VariantShape::Unit,
+            VariantShape::Tuple,
+            VariantShape::Named,
+            VariantShape::Tuple
+        ]
+    );
+    // ...and all three of the first ones are still unit GROUPS.
+    assert!(e.variants[..3].iter().all(|v| v.is_unit()));
+
+    let spell = |v: &crate::api::core::frontend::model::SourceVariant| {
+        let name = &v.name;
+        v.shape
+            .spell(quote::quote!(E::#name), &[])
+            .to_string()
+            .replace(' ', "")
+    };
+    assert_eq!(spell(&e.variants[0]), "E::A");
+    assert_eq!(spell(&e.variants[1]), "E::B()");
+    assert_eq!(spell(&e.variants[2]), "E::C{}");
 }
 
 /// A unit-only enum is the degenerate sum: every group is empty, so a lowering
@@ -577,6 +608,37 @@ fn an_unevaluable_discriminant_is_carried_not_refused() {
     // The chain is broken from there: B has no computable value either.
     assert!(e.variants[1].discriminant.value.is_none());
     assert_eq!(e.discriminant_values().expect_err("no values"), "A");
+}
+
+/// A discriminant at the top of the range is valid Rust, so running out of
+/// `i64` ends the numeric chain the way an unevaluable spelling does — it does
+/// not panic during ingest, which would take down every adapter including the
+/// C one that only re-emits the spelling.
+#[test]
+fn a_discriminant_at_the_top_of_the_range_does_not_overflow() {
+    let e = lower_e(quote::quote! {
+        #[repr(u64)]
+        enum E { A = 9223372036854775807, B }
+    });
+    assert_eq!(e.variants[0].discriminant.value, Some(i64::MAX));
+    assert!(e.variants[1].discriminant.value.is_none());
+    assert_eq!(e.discriminant_values().expect_err("no values"), "B");
+    // The spelling is untouched, so a C mirror still emits both variants.
+    assert!(matches!(
+        e.variants[0].discriminant.source,
+        DiscriminantSource::Explicit(_)
+    ));
+    assert!(matches!(
+        e.variants[1].discriminant.source,
+        DiscriminantSource::Implicit
+    ));
+
+    // The last variant needs no successor, so it must not fail either.
+    let e = lower_e(quote::quote! { enum E { A = 9223372036854775807 } });
+    assert_eq!(
+        e.discriminant_values().expect("literal discriminant")[0].1,
+        i64::MAX
+    );
 }
 
 /// The spelling survives exactly, which is what lets a C header keep `0x07`

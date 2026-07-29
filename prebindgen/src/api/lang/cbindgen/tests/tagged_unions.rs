@@ -756,3 +756,85 @@ fn bool_payload_is_normalised_not_materialised() {
     // A bool owns nothing, so the union still gets no typed drop.
     assert!(!compact.contains("flagged_drop"), "{src}");
 }
+
+/// `B()` and `C {}` carry no payload and are still NOT unit variants: Rust
+/// requires the delimiters wherever the variant is named, so the mirror, the
+/// output match and the input match all have to keep them. Deriving the shape
+/// from the payload group instead of the syntax produces `E::B`, which rustc
+/// reads as a constructor function / a struct variant and rejects.
+#[test]
+fn empty_tuple_and_brace_variants_keep_their_delimiters() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Empties {
+                    Unit,
+                    Paren(),
+                    Brace {},
+                    Payload(f64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn empties_new() -> Empties {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn empties_value(e: Empties) -> f64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<()>::from_items(items).expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(example_flat))
+        .free_memory_function("example_free")
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .tagged_union(syn::parse_quote!(Empties))
+        .function(syn::parse_quote!(empties_new))
+        .function(syn::parse_quote!(empties_value))
+        .panic();
+
+    let src = write(cbindgen, registry, "empty_variant_forms");
+    let compact: String = src.split_whitespace().collect();
+
+    // The mirror keeps each spelling.
+    assert!(compact.contains("Unit,"), "{src}");
+    assert!(compact.contains("Paren(),"), "{src}");
+    assert!(compact.contains("Brace{},"), "{src}");
+
+    // Output: source pattern → mirror constructor, both delimited.
+    assert!(
+        compact.contains("example_flat::Empties::Paren()=>empties_t::Paren(),"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("example_flat::Empties::Brace{}=>empties_t::Brace{},"),
+        "{src}"
+    );
+    // Input: the same in reverse.
+    assert!(
+        compact.contains("empties_t::Paren()=>example_flat::Empties::Paren(),"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("empties_t::Brace{}=>example_flat::Empties::Brace{},"),
+        "{src}"
+    );
+    // And a true unit variant is still spelled without delimiters.
+    assert!(
+        compact.contains("example_flat::Empties::Unit=>empties_t::Unit,"),
+        "{src}"
+    );
+}

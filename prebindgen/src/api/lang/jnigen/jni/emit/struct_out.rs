@@ -398,19 +398,16 @@ fn encode_field(
                         vslots.extend(s);
                     }
                     // Bind every payload field, shaped like the variant.
-                    let pattern = match v.fields.first().map(|f| &f.member) {
-                        None => quote!(#source::#vident),
-                        Some(syn::Member::Named(_)) => {
-                            let pairs = v.fields.iter().zip(&binds).map(|(f, b)| {
-                                let syn::Member::Named(n) = &f.member else {
-                                    unreachable!("variant field shapes are uniform")
-                                };
-                                quote!(#n: #b)
-                            });
-                            quote!(#source::#vident { #(#pairs),* })
-                        }
-                        Some(syn::Member::Unnamed(_)) => quote!(#source::#vident(#(#binds),*)),
-                    };
+                    let parts: Vec<TokenStream> = v
+                        .fields
+                        .iter()
+                        .zip(&binds)
+                        .map(|(f, b)| match &f.member {
+                            syn::Member::Named(n) => quote!(#n: #b),
+                            syn::Member::Unnamed(_) => quote!(#b),
+                        })
+                        .collect();
+                    let pattern = v.shape.spell(quote!(#source::#vident), &parts);
                     arms.push(Arm {
                         pattern,
                         preludes: vpre,

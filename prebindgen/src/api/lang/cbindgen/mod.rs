@@ -110,7 +110,7 @@ use crate::api::{
     core::{
         frontend::model::{
             DiscriminantSource, ScalarKind, SourceEnum, SourceType, SourceVariant,
-            SourceVariantField, VariantShape,
+            SourceVariantField,
         },
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
@@ -449,17 +449,16 @@ fn variant_pattern(
     binds: &[syn::Ident],
 ) -> TokenStream {
     let name = &variant.name;
-    match variant.shape() {
-        VariantShape::Unit => quote!(#enum_path::#name),
-        VariantShape::Named => {
-            let pairs = variant.fields.iter().zip(binds).map(|(f, b)| {
-                let n = &f.member;
-                quote!(#n: #b)
-            });
-            quote!(#enum_path::#name { #(#pairs),* })
-        }
-        VariantShape::Tuple => quote!(#enum_path::#name(#(#binds),*)),
-    }
+    let parts: Vec<TokenStream> = variant
+        .fields
+        .iter()
+        .zip(binds)
+        .map(|(f, b)| match &f.member {
+            syn::Member::Named(n) => quote!(#n: #b),
+            syn::Member::Unnamed(_) => quote!(#b),
+        })
+        .collect();
+    variant.shape.spell(quote!(#enum_path::#name), &parts)
 }
 
 /// The constructor counterpart of [`variant_pattern`]: rebuild one variant
@@ -470,17 +469,16 @@ fn variant_ctor(
     exprs: &[TokenStream],
 ) -> TokenStream {
     let name = &variant.name;
-    match variant.shape() {
-        VariantShape::Unit => quote!(#enum_path::#name),
-        VariantShape::Named => {
-            let pairs = variant.fields.iter().zip(exprs).map(|(f, e)| {
-                let n = &f.member;
-                quote!(#n: #e)
-            });
-            quote!(#enum_path::#name { #(#pairs),* })
-        }
-        VariantShape::Tuple => quote!(#enum_path::#name(#(#exprs),*)),
-    }
+    let parts: Vec<TokenStream> = variant
+        .fields
+        .iter()
+        .zip(exprs)
+        .map(|(f, e)| match &f.member {
+            syn::Member::Named(n) => quote!(#n: #e),
+            syn::Member::Unnamed(_) => quote!(#e),
+        })
+        .collect();
+    variant.shape.spell(quote!(#enum_path::#name), &parts)
 }
 
 /// Hard error when an `.enum_type()`-declared enum is not the shape that
