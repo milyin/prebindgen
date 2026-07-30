@@ -31,18 +31,9 @@ fn body_of(src: &str) -> &str {
 fn enum_class_with_from_int_companion() {
     let class = KtClass::new(
         ClassKind::Enum(vec![
-            KtEnumEntry {
-                name: "RED".into(),
-                args: Some("0".into()),
-            },
-            KtEnumEntry {
-                name: "GREEN".into(),
-                args: Some("5".into()),
-            },
-            KtEnumEntry {
-                name: "BLUE".into(),
-                args: Some("6".into()),
-            },
+            KtEnumEntry::legacy_args("RED", "0"),
+            KtEnumEntry::legacy_args("GREEN", "5"),
+            KtEnumEntry::legacy_args("BLUE", "6"),
         ]),
         "Color",
     )
@@ -642,4 +633,114 @@ fn delegated_property_renders_by_clause() {
         src.contains("public val MAGIC: Long by lazy { constGetMagic(handler) }"),
         "{src}"
     );
+}
+
+/// Every position that now holds an `ExprSlot` must have its `Code::import`
+/// collected by the file's raw-import prepass.
+///
+/// A `Legacy(Code)` renders raw text, and `Code::import` is the **only** place
+/// its FQNs are recorded — so a position the prepass skips renders
+/// `Factory.make()` and never emits `import io.example.Factory`, i.e.
+/// uncompilable Kotlin. These are the rows the walk previously missed:
+/// function-parameter defaults, constructor-parameter defaults, supertype
+/// constructor arguments, enum-entry arguments, and a `fun interface`'s method.
+#[test]
+fn every_expression_slot_contributes_its_raw_imports() {
+    // One helper, generic over the slot's payload — the positions differ
+    // (`KtExpr` vs `Vec<KtExpr>`) but the `Legacy` arm is the same `Code`.
+    fn slot<T>(text: &str, fqn: &str) -> ExprSlot<T> {
+        ExprSlot::legacy(Code::new().line(text).import(fqn))
+    }
+
+    // fn param default
+    let mut f = KtFun::new("withDefault").vis(Vis::Public);
+    let mut p = KtParam::new("factory", KtType::cls("Any"));
+    p.default = Some(slot("Factory.make()", "io.example.Factory"));
+    f = f.param(p);
+
+    // fun interface whose METHOD has a defaulted param
+    let mut im = KtFun::new("run");
+    let mut ip = KtParam::new("codec", KtType::cls("Any"));
+    ip.default = Some(slot("Codec.utf8()", "io.example.Codec"));
+    im = im.param(ip);
+    let iface = KtFunInterface::new("Handler", im).vis(Vis::Public);
+
+    // ctor param default + supertype ctor args
+    let mut cp = KtCtorParam::new("seed", KtType::long());
+    cp.default = Some(slot("Seed.zero()", "io.example.Seed"));
+    let mut cls = KtClass::new(ClassKind::Plain, "Holder")
+        .vis(Vis::Public)
+        .ctor_param(cp);
+    cls.supertypes.push((
+        KtType::cls("Base"),
+        Some(slot("Anchor.of(1)", "io.example.Anchor")),
+    ));
+
+    // enum entry args
+    let entries = vec![KtEnumEntry {
+        name: "FIRST".into(),
+        args: Some(slot("Weight.one()", "io.example.Weight")),
+    }];
+    let enum_cls = KtClass::new(ClassKind::Enum(entries), "Kind").vis(Vis::Public);
+
+    let src = KtFile::new("io.test")
+        .decl(f)
+        .decl(iface)
+        .decl(cls)
+        .decl(enum_cls)
+        .render();
+
+    for fqn in [
+        "io.example.Factory",
+        "io.example.Codec",
+        "io.example.Seed",
+        "io.example.Anchor",
+        "io.example.Weight",
+    ] {
+        assert!(
+            src.contains(&format!("import {fqn}")),
+            "missing `import {fqn}` — that slot's raw imports were dropped\n{src}"
+        );
+    }
+}
+
+/// The AST surface #193 and #199 will build against must be reachable by the
+/// **normal** `kt::` path, not only via `kt::expr::`.
+///
+/// `KtLambda` was missing from the re-export list even though
+/// `with_trailing_lambda` requires that concrete type, so a downstream emitter
+/// would have had to reach into the module's internals for it. This names each
+/// intended type through `super::*` — the same glob the back-end imports — so a
+/// dropped re-export is a compile error here rather than a surprise at the call
+/// site.
+#[test]
+fn the_ast_surface_is_reachable_by_its_intended_path() {
+    let mut arena: ExprArena = ExprArena::new();
+    let id: BindingId = arena.bind_fixed(KtName::expect("v"));
+    let _: &Binder = arena.binder(id);
+    let _: ArenaId = id.arena();
+
+    let lambda: KtLambda = KtLambda::expr([id], KtExpr::local(id));
+    let call: KtExpr = KtExpr::free_call("f", []).with_trailing_lambda(lambda);
+    let _: KtStmt = KtStmt::Expr(call.clone());
+    let _: KtPattern = KtPattern::Else;
+    let _: KtLiteral = KtLiteral::Null;
+    let _: Spelling = Spelling::Fresh(NameHint::new("x"));
+
+    // The slot surface, likewise.
+    let _: ExprSlot<KtExpr> = ExprSlot::ast(arena.clone(), call.clone());
+    let _: PropertyValue = PropertyValue::None;
+    let _: KtAccessor = KtAccessor::get_expr(arena.clone(), call.clone());
+    let _: AccessorTree = AccessorTree::Expr(slot::Ast::new(arena.clone(), call.clone()));
+    let _: KtAnnotation = KtAnnotation::new(KtName::expect("JvmStatic"));
+    // Through the macro, which is the intended constructor for literal
+    // annotation text — and keeps this test out of the `from_legacy_string`
+    // audit, whose job is to count *generator* call sites.
+    let _: AnnotationSlot = AnnotationSlot::Legacy(slot::kt_annotation_text!("JvmStatic"));
+
+    // …and the tree operations.
+    let _ = free_names(&call);
+    let _ = has_hole(&call);
+    let _ = fill_hole(&arena, &call, &KtExpr::null());
+    let _ = substitute(&arena, &call, id, &KtExpr::null());
 }
