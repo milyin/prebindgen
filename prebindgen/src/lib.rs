@@ -288,8 +288,8 @@ macro_rules! ident {
 pub mod core {
     pub use crate::api::core::{
         ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot, Niches,
-        Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,
-        TypeEntry, TypeKey, WriteRustError,
+        Prebindgen, Registry, RegistryBuilder, RepresentationDomain, ScalarValue, ScanError, Stage,
+        Transmute, TypeEntry, TypeKey, WriteRustError,
     };
 }
 

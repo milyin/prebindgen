@@ -38,8 +38,6 @@ fn main() {
 /// Generate the Rust FFI bindings from `example-flat`'s prebindgen output via the
 /// `lang::Cbindgen` adapter, and publish the result to `generated/example_flat.rs`.
 fn generate_ffi_bindings() -> PathBuf {
-    // Reader over the data emitted by example-flat's `#[prebindgen]` macro.
-    let source = prebindgen::Source::new(example_flat::PREBINDGEN_OUT_DIR);
     let unstable = std::env::var("CARGO_FEATURE_UNSTABLE").is_ok();
 
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
@@ -184,8 +182,11 @@ fn generate_ffi_bindings() -> PathBuf {
         cbindgen = cbindgen.function(function).panic();
     }
 
-    let registry =
-        prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    // Reads example-flat's `#[prebindgen]` output straight from its directory.
+    let registry = prebindgen::core::Registry::builder()
+        .source(example_flat::PREBINDGEN_OUT_DIR)
+        .build()
+        .expect("scan prebindgen items");
     // Always written to OUT_DIR under a stable name too, so the commented-out
     // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
     let out_file = registry

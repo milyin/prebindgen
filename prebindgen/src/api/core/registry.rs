@@ -15,6 +15,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    marker::PhantomData,
 };
 
 use quote::ToTokens;
@@ -597,14 +598,108 @@ impl DeclaredItems {
     }
 }
 
+/// Collects what a [`Registry`] will index, then hands over the registry.
+///
+/// The same shape [`Flat`](crate::core::flat) reads prebindgen data with — name a
+/// directory, or feed a stream, then `build()` — so there is one way to say where
+/// captured items come from, whoever consumes them.
+///
+/// Feeders accumulate, so mix them freely.
+pub struct RegistryBuilder<M> {
+    items: Vec<(syn::Item, SourceLocation)>,
+    /// `M` is fixed by the adapter a caller eventually `resolve`s with, and is
+    /// carried through so `Registry::builder()` needs no turbofish: it threads
+    /// from here to [`Self::build`] and is inferred at the `resolve` call.
+    _metadata: PhantomData<M>,
+}
+
+impl<M> RegistryBuilder<M> {
+    /// Every `#[prebindgen]` item captured in `dir` — pass
+    /// `<source_crate>::PREBINDGEN_OUT_DIR`.
+    ///
+    /// Panics the way [`Source::new`](crate::Source::new) does if `dir` is not
+    /// readable prebindgen output: a build script has nothing to recover with.
+    pub fn source<P: AsRef<std::path::Path>>(self, dir: P) -> Self {
+        let source = crate::Source::new(dir);
+        self.items(source.items_all())
+    }
+
+    /// The same, for a dependency this crate **renames** in `Cargo.toml`.
+    ///
+    /// The origin recorded at capture time is the dependency's real package name,
+    /// which will not resolve from a crate that refers to it by another name.
+    /// `crate_name` is the name *this* crate uses.
+    ///
+    /// Per directory, deliberately: a registry-level override could only fix one
+    /// module, and a registry may layer several sources.
+    pub fn source_named<P: AsRef<std::path::Path>>(
+        self,
+        dir: P,
+        crate_name: impl Into<String>,
+    ) -> Self {
+        let source = crate::Source::builder(dir).crate_name(crate_name).build();
+        self.items(source.items_all())
+    }
+
+    /// Add a captured item stream — a group selection, an otherwise-configured
+    /// [`Source`](crate::Source), or synthetic items in a test.
+    pub fn items<I>(mut self, items: I) -> Self
+    where
+        I: IntoIterator<Item = (syn::Item, SourceLocation)>,
+    {
+        self.items.extend(items);
+        self
+    }
+
+    /// Index everything collected so far.
+    ///
+    /// Sugar over [`Registry::from_items`], which stays the primitive: one place
+    /// decides what a stream of items means.
+    pub fn build(self) -> Result<Registry<M>, ScanError> {
+        Registry::from_items(self.items)
+    }
+}
+
 impl<M> Registry<M> {
+    /// Start collecting what to index.
+    ///
+    /// The way a build script reads prebindgen output: name the directory and get
+    /// a registry, with no [`Source`](crate::Source) in between.
+    ///
+    /// ```
+    /// # prebindgen::Source::init_doctest_simulate();
+    /// use prebindgen::core::Registry;
+    ///
+    /// // Annotated only because nothing here resolves: in a build script `M` is
+    /// // fixed by the adapter passed to `resolve`, so no call site names it.
+    /// let registry: Registry<()> = Registry::builder().source("source_ffi").build()?;
+    /// assert!(registry.functions.contains_key(&quote::format_ident!("test_function")));
+    /// # Ok::<_, prebindgen::core::ScanError>(())
+    /// ```
+    ///
+    /// Several directories compose, including one this crate renames:
+    ///
+    /// ```ignore
+    /// let registry = Registry::builder()
+    ///     .source(flat_crate::PREBINDGEN_OUT_DIR)
+    ///     .source_named(helpers::PREBINDGEN_OUT_DIR, "helpers")
+    ///     .build()?;
+    /// ```
+    pub fn builder() -> RegistryBuilder<M> {
+        RegistryBuilder {
+            items: Vec::new(),
+            _metadata: PhantomData,
+        }
+    }
+
     /// Construct a `Registry` by indexing a stream of source items.
     ///
-    /// Callers feed any `(syn::Item, SourceLocation)` iterator — typically
-    /// `source.items_all()`, `source.items_except_groups(...)`, or a
-    /// hand-rolled filter chain — so item-level selection happens upstream
-    /// of the registry rather than inside it. Streams from several sources
-    /// combine with plain iterator composition:
+    /// The primitive: [`Self::builder`] is sugar over this, and is what a build
+    /// script reading a directory should reach for. Callers feed any
+    /// `(syn::Item, SourceLocation)` iterator — typically `source.items_all()`,
+    /// `source.items_except_groups(...)`, or a hand-rolled filter chain — so
+    /// item-level selection happens upstream of the registry rather than inside
+    /// it. Streams from several sources combine with plain iterator composition:
     ///
     /// ```ignore
     /// let registry = Registry::from_items(
