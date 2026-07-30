@@ -232,7 +232,10 @@ fn generate_ffi_bindings() -> PathBuf {
     // `lib.rs` includes this path rather than matching on `cfg`: the build script
     // already knows which variant it wrote, and a `cfg` matrix in the source would
     // have to be re-taught every arch × feature combination.
-    println!("cargo:rustc-env=EXAMPLE_FLAT_BINDINGS={}", in_tree.display());
+    println!(
+        "cargo:rustc-env=EXAMPLE_FLAT_BINDINGS={}",
+        in_tree.display()
+    );
     println!("cargo:warning=Generated bindings at: {}", in_tree.display());
     in_tree
 }
