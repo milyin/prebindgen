@@ -750,7 +750,7 @@ fn builder_and_from_items_agree() {
         built.default_module().map(module),
         streamed.default_module().map(module)
     );
-    assert_eq!(built.passthrough.len(), streamed.passthrough.len());
+    assert_eq!(built.guards.len(), streamed.guards.len());
 }
 
 // ── What a table cell knows about its type ─────────────────────────────
@@ -905,7 +905,7 @@ fn from_flat_projects_each_element_kind() {
     assert!(reg.enums.contains_key(&id("Sum")), "a sum is an enum here");
     assert!(reg.enums.contains_key(&id("Flags")));
     assert!(reg.consts.contains_key(&id("K")));
-    assert_eq!(reg.passthrough.len(), 2, "one guard per source");
+    assert_eq!(reg.guards.len(), 2, "one guard per source");
     assert!(
         !reg.structs.contains_key(&id("Handle")) && !reg.enums.contains_key(&id("Handle")),
         "an Extern names a type; it declares no body to index"
@@ -1028,4 +1028,53 @@ fn a_well_formed_binding_local_fn_passes() {
     };
     reg.resolve(ext)
         .expect("a grammatical local fn passes, undeclared types and all");
+}
+
+/// A guard is not a const, structurally — so nothing that consumes the const
+/// surface has to remember it exists.
+///
+/// The three `c.ident == "_"` sentinel checks this replaced had gone **dead**
+/// without anyone noticing: once ingestion routed unnamed consts away from
+/// `consts`, they guarded a state the pipeline could no longer produce. This is
+/// the assertion that would have caught that, and that keeps a future
+/// reclassification honest.
+#[test]
+fn a_guard_never_reaches_the_const_surface() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                const _: () = ();
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub const REAL: u64 = 7;
+            ),
+            loc.clone(),
+        ),
+        // A second source's guard: several coexist, having no address to collide on.
+        (
+            syn::parse_quote!(
+                const _: () = ();
+            ),
+            loc.clone(),
+        ),
+    ];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+
+    assert_eq!(reg.guards.len(), 2);
+    assert_eq!(reg.consts.len(), 1);
+    assert!(reg
+        .consts
+        .contains_key(&syn::parse_str::<syn::Ident>("REAL").unwrap()));
+
+    // An adapter WITH a const mechanism that declares nothing warns about `REAL`
+    // only: a guard is not undeclared API, it is not API.
+    let ext = StubExt {
+        consts: Some(HashSet::new()),
+        ..Default::default()
+    };
+    reg.scan_declared(&ext).expect("guards are not declarable");
 }

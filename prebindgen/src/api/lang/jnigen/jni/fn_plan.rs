@@ -315,7 +315,7 @@ pub(crate) fn validate_bindings(
         let mut const_idents: Vec<&syn::Ident> = registry.consts.keys().collect();
         const_idents.sort();
         for ident in const_idents {
-            if *ident == "_" || !declared_consts.contains(ident) {
+            if !declared_consts.contains(ident) {
                 continue;
             }
             let (item_const, _) = &registry.consts[ident];
