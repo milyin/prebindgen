@@ -22,7 +22,56 @@
 //!   milliseconds, with `Option<Duration>` using an invalid representation as
 //!   an allocation-free niche.
 
-pub use std::time::Duration;
+/// Marked, so `Duration` is a name the flat API declares rather than one it
+/// merely mentions.
+#[prebindgen]
+pub type Duration = std::time::Duration;
+
+/// The handle types this module's flat API exports.
+///
+/// Definitions live here and the flat API exports marked aliases to them, so
+/// each has a **name** every signature can resolve against without declaring
+/// its fields a boundary surface. See `lib.rs`'s `handles` for the same shape.
+mod handles {
+    use super::{Lookup, Reading, Stamp, Storage};
+
+    #[derive(Clone)]
+
+    pub struct Summary {
+        pub(super) count: i64,
+        pub(super) total: f64,
+    }
+
+    pub struct Archive {
+        pub(super) latest: Option<Summary>,
+        /// A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
+        /// — the return shape whose encoder must match on the value behind the
+        /// reference rather than moving it.
+        pub(super) reading: Reading,
+        /// The same, optional, for the `Option<&Reading>` shape.
+        pub(super) fallback: Option<Reading>,
+    }
+
+    pub struct Report {
+        pub(super) summary: Summary,
+        pub(super) taken: Option<Stamp>,
+        pub(super) origin: Stamp,
+        pub(super) outcome: Lookup,
+        pub(super) label: String,
+    }
+
+    pub struct EscapeProbe {
+        pub(super) value: i64,
+    }
+
+    #[derive(Debug)]
+
+    pub struct StorageError {
+        pub(super) message: String,
+    }
+
+    pub struct StorageHandler(pub(super) Box<dyn Fn(Storage) + Send + Sync>);
+}
 
 use prebindgen_proc_macro::prebindgen;
 
@@ -427,10 +476,8 @@ pub fn stamp_series(count: i64) -> Vec<Stamp> {
 /// Failure value for the fallible storage constructor. Never crosses as a
 /// value: the binding peels the `Result`, renders the message through
 /// [`storage_error_message`], and delivers it to the caller's `onError`.
-#[derive(Debug)]
-pub struct StorageError {
-    message: String,
-}
+#[prebindgen]
+pub type StorageError = handles::StorageError;
 
 /// Render a [`StorageError`] as its message (the error's flatten-output
 /// **accessor**, fed to `onError`).
@@ -497,11 +544,8 @@ pub fn storage_try_from_stamp(s: Stamp, tag: [u8; 2]) -> Result<Storage, Storage
 /// `Clone` because [`archive_latest`] returns it *borrowed* (`Option<&Summary>`)
 /// and the JVM binding's only sound lowering of a borrowed handle is a clone
 /// into a fresh owned handle.
-#[derive(Clone)]
-pub struct Summary {
-    count: i64,
-    total: f64,
-}
+#[prebindgen]
+pub type Summary = handles::Summary;
 
 /// Construct a [`Summary`] from its parts (declared a **constructor** /
 /// companion factory, and the build-from **variant** of the flatten-input).
@@ -654,6 +698,7 @@ pub fn storage_with_payload(payload: Payload) -> Storage {
 /// marking it would make the Kotlin emitter try to render this tuple struct as a
 /// data class.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Millis(pub u64);
 
 /// Sum two durations (exercises the custom wrapper on both a **parameter** and
@@ -772,6 +817,7 @@ pub fn hold_policy_echo(p: HoldPolicy) -> HoldPolicy {
 /// A temperature. Crosses via its `From`/`Into` impls
 /// (`convert!(Celsius).input_from(ty!(i32)).output_into(ty!(i32))`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Celsius(pub i32);
 
 impl From<i32> for Celsius {
@@ -796,6 +842,7 @@ pub fn celsius_double(c: Celsius) -> Celsius {
 /// `TryFrom<i32>` on input (out-of-range i32 from the JVM → the caller's
 /// error handler) and an infallible `Into<i32>` on output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Percent(pub u8);
 
 impl TryFrom<i32> for Percent {
@@ -840,6 +887,7 @@ pub fn percent_invalid_output() -> Option<Percent> {
 /// crate** (`convert!(Label).input_with(ty!(String), path!(crate::label_in))…`)
 /// — no `#[prebindgen]` marking anywhere in the conversion.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Label(pub String);
 
 /// Reverse a label's characters (exercises the binding-local conversion on
@@ -1210,12 +1258,13 @@ pub fn storage_shards_opt(count: i64, each: i64) -> Option<Vec<Storage>> {
 /// by value). Unlike [`PayloadHandler`] (whose arg is a flattened data class),
 /// the handle crosses as a raw pointer and the generated Kotlin proxy wraps it
 /// into a typed `Storage` and `close()`s it after `run` (close-unless-taken).
-pub struct StorageHandler(Box<dyn Fn(Storage) + Send + Sync>);
+#[prebindgen]
+pub type StorageHandler = handles::StorageHandler;
 
 /// Wrap a `Fn(Storage)` closure into a reusable [`StorageHandler`].
 #[prebindgen]
 pub fn storage_handler_new(f: impl Fn(Storage) + Send + Sync + 'static) -> StorageHandler {
-    StorageHandler(Box::new(f))
+    handles::StorageHandler(Box::new(f))
 }
 
 /// Build a synthetic storage of `n` payloads and hand **ownership** of it to
@@ -1233,15 +1282,8 @@ pub fn storage_emit(n: i64, h: &StorageHandler) {
 /// **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 /// zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 /// owned handle (the JVM keeps its handle past the call).
-pub struct Archive {
-    latest: Option<Summary>,
-    /// A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
-    /// — the return shape whose encoder must match on the value behind the
-    /// reference rather than moving it.
-    reading: Reading,
-    /// The same, optional, for the `Option<&Reading>` shape.
-    fallback: Option<Reading>,
-}
+#[prebindgen]
+pub type Archive = handles::Archive;
 
 impl Default for Archive {
     fn default() -> Self {
@@ -1365,9 +1407,8 @@ pub fn cover_tag_runtime() -> String {
 /// extern is mangled to an underscored method name — so its `freePtr`
 /// destructor and accessor symbols only resolve at runtime if the generator
 /// applies the JNI spec's `_1` escaping.
-pub struct EscapeProbe {
-    value: i64,
-}
+#[prebindgen]
+pub type EscapeProbe = handles::EscapeProbe;
 
 /// Construct an [`EscapeProbe`] (its covertest constructor).
 #[prebindgen]
@@ -1399,13 +1440,8 @@ pub fn escape_probe_value(p: &EscapeProbe) -> i64 {
 /// | `origin` | a non-optional declared `data class` ⇒ INLINES into its own fields |
 /// | `outcome` | a `sealed_class!` ⇒ its selector plus one group per alternative, with a handle payload |
 /// | `label` | a plain leaf |
-pub struct Report {
-    summary: Summary,
-    taken: Option<Stamp>,
-    origin: Stamp,
-    outcome: Lookup,
-    label: String,
-}
+#[prebindgen]
+pub type Report = handles::Report;
 
 /// The value form of [`Report`]: its fields as data, handles staying handles.
 #[prebindgen]

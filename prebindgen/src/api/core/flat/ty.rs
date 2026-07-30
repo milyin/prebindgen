@@ -1,6 +1,6 @@
 //! Types: a closed classification paired with the syntax it was read from.
 //!
-//! [`Type`] is the pattern the whole element model follows — `kind` says what
+//! [`TypeRef`] is the pattern the whole element model follows — `kind` says what
 //! the type *means*, `syntax` is the tokens the source wrote. Consumers
 //! **classify off `kind` and spell off `syntax`**; see the [module docs](super)
 //! for why that split is the point.
@@ -27,12 +27,12 @@ use crate::SourceLocation;
 /// outside Rust all survive there at zero modelling cost, so `kind` can stay
 /// language-neutral and small.
 #[derive(Clone, Debug)]
-pub struct Type {
+pub struct TypeRef {
     /// What the type means — the closed, destination-neutral classification.
     pub kind: TypeKind,
     /// The type as generated Rust must spell it — the source's own tokens,
     /// normalized to the flat namespace the generated crate can name (see
-    /// [`Language::parse`](super::Language::parse)) — plus the source they came
+    /// [`Flat::parse`](super::Flat::parse)) — plus the source they came
     /// from.
     ///
     /// The syntax can say strictly more than `kind` does — `Box<String>` is a
@@ -41,7 +41,7 @@ pub struct Type {
     pub origin: Origin<syn::Type>,
 }
 
-impl Type {
+impl TypeRef {
     /// The extent of this type when it is an array, else `None`.
     pub fn array_extent(&self) -> Option<&ArrayExtent> {
         match &self.kind {
@@ -59,6 +59,34 @@ impl Type {
         let mut out = Vec::new();
         self.collect_extents(&mut out);
         out
+    }
+
+    /// The first nominal type reachable from here that `declared` does not hold.
+    ///
+    /// Recurses the same structure [`Self::collect_extents`] walks: what is
+    /// reachable is what a destination language will have to convert, so every
+    /// layer's inner reference counts.
+    pub(super) fn first_unresolved(
+        &self,
+        declared: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        match &self.kind {
+            TypeKind::Named { id, args } => {
+                if !declared.contains(&id.name) {
+                    return Some(id.name.clone());
+                }
+                args.iter().find_map(|a| a.first_unresolved(declared))
+            }
+            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
+                t.first_unresolved(declared)
+            }
+            TypeKind::Array { elem, .. } => elem.first_unresolved(declared),
+            TypeKind::Fallible { ok, err } => ok
+                .first_unresolved(declared)
+                .or_else(|| err.first_unresolved(declared)),
+            TypeKind::Callback { args } => args.iter().find_map(|a| a.first_unresolved(declared)),
+            TypeKind::Scalar(_) | TypeKind::Str | TypeKind::Unit => None,
+        }
     }
 
     fn collect_extents<'a>(&'a self, out: &mut Vec<&'a ArrayExtent>) {
@@ -82,12 +110,12 @@ impl Type {
     }
 }
 
-/// What a [`Type`] means. The variants are the accepted type grammar.
+/// What a [`TypeRef`] means. The variants are the accepted type grammar.
 ///
 /// One Rust spelling per concept is **not** the rule here — several are. A
 /// concept earns a variant when a destination language would act on it; a
 /// spelling that changes nothing outside Rust folds into the concept it carries
-/// and survives in [`Type::syntax`]:
+/// and survives in [`TypeRef::origin`]:
 ///
 /// | Spelling | Kind | Why |
 /// |---|---|---|
@@ -105,7 +133,7 @@ pub enum TypeKind {
     /// does by hand.
     Str,
     /// `Option<T>`.
-    Optional(Box<Type>),
+    Optional(Box<TypeRef>),
     /// A run of `T` — `Vec<T>` owned, `[T]` behind a [`Ref`](TypeKind::Ref).
     ///
     /// One variant, because ownership is already the [`Ref`](TypeKind::Ref)
@@ -113,9 +141,9 @@ pub enum TypeKind {
     /// second variant would encode ownership twice and let the two copies
     /// disagree. `[T; N]` is *not* this — a fixed extent is a different
     /// concept, see [`Array`](TypeKind::Array).
-    Sequence(Box<Type>),
+    Sequence(Box<TypeRef>),
     /// `Result<T, E>`.
-    Fallible { ok: Box<Type>, err: Box<Type> },
+    Fallible { ok: Box<TypeRef>, err: Box<TypeRef> },
     /// Any other named type: a `#[prebindgen]` struct or enum, or a foreign
     /// path.
     ///
@@ -123,8 +151,8 @@ pub enum TypeKind {
     /// this module has to take a path apart to learn what a type is. The last
     /// segment's generic arguments live in `args`, and only the *type*
     /// arguments: a lifetime argument says nothing a destination language can
-    /// act on. The full spelling is in [`Type::syntax`] for whoever re-emits it.
-    Named { id: TypeId, args: Vec<Type> },
+    /// act on. The full spelling is in [`TypeRef::origin`] for whoever re-emits it.
+    Named { id: TypeId, args: Vec<TypeRef> },
     /// `[T; N]` — a run of `T` whose length is known at compile time.
     ///
     /// Deliberately not a [`Sequence`](TypeKind::Sequence) with an optional
@@ -132,20 +160,46 @@ pub enum TypeKind {
     /// crosses as a heap collection, and every adapter branches between the two
     /// at every site.
     Array {
-        elem: Box<Type>,
+        elem: Box<TypeRef>,
         extent: ArrayExtent,
     },
-    /// A borrow — `&T` / `&'a T` / `&mut T`. The lifetime is spelling, so it
-    /// lives in [`Type::syntax`] rather than here.
+    /// A borrow — `&T`, `&mut T`, or `&mut MaybeUninit<T>`. The lifetime is
+    /// spelling, so it lives in [`TypeRef::origin`] rather than here.
     ///
     /// This is the ownership layer for every concept underneath it: `&str` is
     /// `Ref(Str)`, `&[T]` is `Ref(Sequence)`. A shared-ownership handle
     /// (`Arc<T>`, `Rc<T>`) belongs here too when the language accepts one.
-    Ref { mutable: bool, inner: Box<Type> },
+    ///
+    /// `inner` is always the borrowed *value's* type, so an out-parameter's
+    /// `MaybeUninit` is absorbed into [`RefMode::Out`] rather than wrapping it:
+    /// uninitialized-ness is a property of the **borrow**, not of the type, and
+    /// it is meaningless anywhere else.
+    Ref { mode: RefMode, inner: Box<TypeRef> },
     /// `impl Fn(A, B, …) + Send + Sync + 'static` — the callback form.
-    Callback { args: Vec<Type> },
+    Callback { args: Vec<TypeRef> },
     /// `()`.
     Unit,
+}
+
+/// What a borrow permits, and what the callee owes.
+///
+/// One axis with three values rather than a `mutable` flag plus a wrapper, so the
+/// combinations that mean nothing at a boundary — a shared borrow of
+/// uninitialized storage, an owned `MaybeUninit` — cannot be written down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RefMode {
+    /// `&T` — the callee may read it and must not write it.
+    Shared,
+    /// `&mut T` — the callee may read and write an already-valid `T`.
+    Exclusive,
+    /// `&mut MaybeUninit<T>` — an **out-parameter**: the caller supplies storage
+    /// only, and the callee's job is to make it a valid `T`. The callee may not
+    /// read it first.
+    ///
+    /// This is a boundary concept every destination language has (C's `T *out`),
+    /// which is why it is modelled here rather than left as a nominal
+    /// `MaybeUninit` for each adapter to recognise.
+    Out,
 }
 
 /// A nominal type's identity: a name, and nothing else.
@@ -258,6 +312,18 @@ pub enum UnsupportedTypeReason {
     /// lowered a tuple, so accepting one would defer the failure to a late
     /// "unresolved type" instead of naming it here.
     UnsupportedTuple,
+    /// `MaybeUninit<T>` somewhere other than behind a `&mut`.
+    ///
+    /// Uninitialized storage is a property of a *borrow*, not of a type — see
+    /// [`RefMode::Out`]. Owned, returned or stored in a field it promises nothing
+    /// a destination language can use, and reading it would be undefined.
+    OwnedUninit,
+    /// `&MaybeUninit<T>` — a shared borrow of uninitialized storage.
+    ///
+    /// A shared borrow promises a readable `T`, and this supplies storage that may
+    /// not be one. Only `&mut MaybeUninit<T>` means anything: see
+    /// [`RefMode::Out`].
+    SharedUninit,
     /// A path with a qualified self — `<T as Trait>::Assoc`.
     ///
     /// The frontend never captures `impl` blocks, so it cannot know what an
@@ -297,6 +363,20 @@ impl fmt::Display for UnsupportedType {
                  components separately, or wrap them in a `#[prebindgen]` struct",
                 self.offending
             ),
+            UnsupportedTypeReason::OwnedUninit => write!(
+                f,
+                "type `{}` is uninitialized storage outside an out-parameter. Only `&mut \
+                 MaybeUninit<T>` means anything at a boundary \u{2014} it says the caller supplies \
+                 the slot and the callee fills it; owned or in a field it promises nothing, and \
+                 reading it would be undefined",
+                self.offending
+            ),
+            UnsupportedTypeReason::SharedUninit => write!(
+                f,
+                "type `{}` is a shared borrow of uninitialized storage: `&T` promises a readable \
+                 `T`, which this may not be. Use `&mut MaybeUninit<T>` for an out-parameter",
+                self.offending
+            ),
             UnsupportedTypeReason::AssociatedType => write!(
                 f,
                 "type `{}` is an associated type; `#[prebindgen]` never captures `impl` \
@@ -328,7 +408,7 @@ pub(crate) fn lower_type(
     ty: &syn::Type,
     consts: &ConstIndex,
     at: &Rc<SourceLocation>,
-) -> Result<Type, UnsupportedType> {
+) -> Result<TypeRef, UnsupportedType> {
     let fail = |reason| UnsupportedType {
         offending: ty.to_token_stream().to_string(),
         reason,
@@ -340,10 +420,23 @@ pub(crate) fn lower_type(
         // spelling, which is the one a consumer wants to emit.
         syn::Type::Group(g) => return lower_type(&g.elem, consts, at),
         syn::Type::Paren(p) => return lower_type(&p.elem, consts, at),
-        syn::Type::Reference(r) => TypeKind::Ref {
-            mutable: r.mutability.is_some(),
-            inner: Box::new(lower_type(&r.elem, consts, at)?),
-        },
+        // The mode is read off the borrow AND its target together, because
+        // `&mut MaybeUninit<T>` is one concept — an out-parameter — rather than a
+        // mutable borrow of a distinct `MaybeUninit` type.
+        syn::Type::Reference(r) => {
+            let (mode, target) = match maybe_uninit_inner(&r.elem) {
+                Some(inner) if r.mutability.is_some() => (RefMode::Out, inner),
+                // `&MaybeUninit<T>` promises a readable `T` and supplies storage
+                // that may not be one. Nothing at a boundary can use it.
+                Some(_) => return Err(fail(UnsupportedTypeReason::SharedUninit)),
+                None if r.mutability.is_some() => (RefMode::Exclusive, (*r.elem).clone()),
+                None => (RefMode::Shared, (*r.elem).clone()),
+            };
+            TypeKind::Ref {
+                mode,
+                inner: Box::new(lower_type(&target, consts, at)?),
+            }
+        }
         // `[T]` is the borrowed spelling of the same concept `Vec<T>` owns.
         syn::Type::Slice(s) => TypeKind::Sequence(Box::new(lower_type(&s.elem, consts, at)?)),
         _ if is_unit_type(ty) => TypeKind::Unit,
@@ -373,7 +466,7 @@ pub(crate) fn lower_type(
         syn::Type::Path(tp) => lower_path(ty, tp, consts, at)?,
         _ => return Err(fail(UnsupportedTypeReason::UnsupportedForm)),
     };
-    Ok(Type {
+    Ok(TypeRef {
         kind,
         origin: Origin::new(ty.clone(), Rc::clone(at)),
     })
@@ -403,9 +496,9 @@ fn lower_path(
 
     // Type arguments only. A lifetime argument is accepted and dropped: it is
     // part of the spelling (`Foo<'a>` is not `Foo`), and the spelling is in
-    // `Type::syntax`, so modelling it would be a second copy of one fact.
+    // `TypeRef::origin`, so modelling it would be a second copy of one fact.
     let mut has_lifetime_arg = false;
-    let args: Vec<Type> = match &last.arguments {
+    let args: Vec<TypeRef> = match &last.arguments {
         syn::PathArguments::None => Vec::new(),
         syn::PathArguments::AngleBracketed(ab) => {
             let mut out = Vec::new();
@@ -466,10 +559,14 @@ fn lower_path(
                     arity(1)?;
                     return Ok(TypeKind::Sequence(Box::new(args.remove(0))));
                 }
+                // Reached here, it is not behind a `&mut`, so it is not an
+                // out-parameter — see `RefMode::Out`, which is the only place
+                // uninitialized storage means anything.
+                "MaybeUninit" => return Err(fail(UnsupportedTypeReason::OwnedUninit)),
                 // `Box<T>` **is** `T`: an owned value either way, and no
                 // destination language can tell the two apart. So it carries no
                 // kind of its own and classifies as whatever it wraps — the
-                // `Box` survives in `Type::syntax`, which is what generated
+                // `Box` survives in `TypeRef::origin`, which is what generated
                 // Rust spells. (A shared-ownership handle would classify as a
                 // `Ref` for the same reason, when the language accepts one.)
                 "Box" => {
@@ -489,6 +586,29 @@ fn lower_path(
     Ok(named(tp, args))
 }
 
+/// If `ty` is a bare `MaybeUninit<T>`, the `T` it holds storage for.
+///
+/// Bare, for the reason every builtin generic is: `normalize_type` has already
+/// reduced the real std paths at ingest, so anything still carrying a prefix is a
+/// foreign type that merely shares the name.
+fn maybe_uninit_inner(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Path(tp) = ty else { return None };
+    if tp.qself.is_some() || tp.path.leading_colon.is_some() || tp.path.segments.len() != 1 {
+        return None;
+    }
+    let seg = &tp.path.segments[0];
+    if seg.ident != "MaybeUninit" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    match ab.args.first() {
+        Some(syn::GenericArgument::Type(t)) if ab.args.len() == 1 => Some(t.clone()),
+        _ => None,
+    }
+}
+
 /// True when `ty` is the unit type `()`.
 ///
 /// The language's one answer to that question: [`lower_type`] classifies it as
@@ -506,7 +626,7 @@ pub(crate) fn is_unit_type(ty: &syn::Type) -> bool {
 
 /// `Named` with the identity read off the path: every segment joined, minus the
 /// generic arguments, which are already in `args`.
-fn named(tp: &syn::TypePath, args: Vec<Type>) -> TypeKind {
+fn named(tp: &syn::TypePath, args: Vec<TypeRef>) -> TypeKind {
     let name = tp
         .path
         .segments

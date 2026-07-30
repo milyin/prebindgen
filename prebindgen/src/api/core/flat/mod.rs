@@ -6,13 +6,13 @@
 //! > (C, JNI). They are opposite ends of the pipeline.
 //!
 //! ```text
-//! Source(s) ──items──> Language ──Elements──> Registry ──> adapters
+//! Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
 //!   raw records          parse +               indexes       classify off `kind`
 //!   (syn::Item)          validate              elements      spell off `origin`
 //! ```
 //!
-//! [`Language::source`] folds the first arrow in for the common case, so a build
-//! script names one directory and gets elements; [`Language::items`] keeps the
+//! [`Flat::source`] folds the first arrow in for the common case, so a build
+//! script names one directory and gets elements; [`Flat::items`] keeps the
 //! arrow itself, for a stream that needs shaping first.
 //!
 //! # What an element is
@@ -56,6 +56,8 @@
 //! | `struct S;`, `struct S {}` | zero fields | the delimiters are spelling |
 //! | `enum E { A(u8) }` | [`Variant`] | a sum, identified by position |
 //! | `enum E { A = 7 }` | [`Enum`] | a named integer, identified by its value |
+//! | `type X = ..`, `struct X(..)` | [`Opaque`] | a handle; contents do not cross |
+//! | `&mut MaybeUninit<T>` | [`RefMode::Out`] | an out-param slot the caller supplies |
 //! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
 //! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
 //!
@@ -106,9 +108,18 @@
 //! There is **no verbatim passthrough**, because a `#[prebindgen]` crate marks
 //! the items that cross the boundary and leaves the supporting code to the
 //! consumer. The proc-macro already enforces that — a `use`, `mod`, `impl` or
-//! `macro_rules!` cannot be marked at all — so an item kind this module does
-//! not model is a `union` or a type alias, and it is diagnosed like any other
-//! thing the language cannot express.
+//! `macro_rules!` cannot be marked at all — so the only item kind left that this
+//! module does not model is a `union`, and it is diagnosed like anything else the
+//! language cannot express.
+//!
+//! # Declaring a handle
+//!
+//! `#[prebindgen] pub type X = path::To<Thing>;` declares an [`Opaque`]: it gives
+//! a foreign or crate-private type a **name in the flat API** without claiming
+//! anything about its contents. That is what makes the API closable — a handle
+//! enters it deliberately rather than by being mentioned — and it is why a
+//! reference can be required to resolve. A marked tuple struct declares the same
+//! thing, since no adapter has ever crossed its fields.
 //!
 //! # Shapes that must be refused rather than approximated
 //!
@@ -147,19 +158,19 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Alternative, Const, Element, Enum, EnumValue, Field, Function, Param, Struct, Unsupported,
-        Variant,
+        Alternative, Constant, Element, Enum, EnumValue, Field, Function, Opaque, Param, Struct,
+        Type, Unsupported, Variant,
     },
     origin::Origin,
-    ty::{ScalarKind, Type, TypeId, TypeKind, UnsupportedType, UnsupportedTypeReason},
+    ty::{RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
 
-/// The parser for the prebindgen source language.
+/// Collects what to parse, then hands over the model.
 ///
-/// Carries no configuration about what it *accepts* — that is a property of the
-/// language, not of the call site. What it does carry is **what to parse**:
-/// collect the inputs, then [`parse`](Self::parse) once.
+/// Carries no configuration about what the language *accepts* — that is a
+/// property of the language, not of the call site. What it carries is **what to
+/// parse**: feed the inputs, then [`build`](Self::build) once.
 ///
 /// # Reading a source directory
 ///
@@ -169,11 +180,12 @@ use crate::SourceLocation;
 ///
 /// ```
 /// # prebindgen::Source::init_doctest_simulate();
-/// use prebindgen::core::Language;
+/// use prebindgen::core::Flat;
 ///
-/// let elements = Language::new().source("source_ffi").parse()?;
-/// assert_eq!(elements.len(), 2);
-/// # Ok::<_, prebindgen::core::language::ParseError>(())
+/// let flat = Flat::builder().source("source_ffi").build()?;
+/// assert!(flat.function("test_function").is_some());
+/// assert!(flat.declared_type("TestStruct").is_some());
+/// # Ok::<_, prebindgen::core::flat::ParseError>(())
 /// ```
 ///
 /// # Reading a stream
@@ -185,34 +197,31 @@ use crate::SourceLocation;
 ///
 /// ```
 /// # prebindgen::Source::init_doctest_simulate();
-/// use prebindgen::{core::Language, Source};
+/// use prebindgen::{core::Flat, Source};
 ///
 /// // A dependency renamed in Cargo.toml needs the name THIS crate uses, so it
 /// // is configured rather than named by directory.
 /// let helpers = Source::builder("source_ffi").crate_name("helpers").build();
-/// let elements = Language::new()
+/// let flat = Flat::builder()
 ///     .items(helpers.items_in_groups(&["functions"]))
-///     .parse()?;
-/// assert_eq!(elements.len(), 1);
-/// # Ok::<_, prebindgen::core::language::ParseError>(())
+///     .build()?;
+/// assert_eq!(flat.functions().count(), 1);
+/// # Ok::<_, prebindgen::core::flat::ParseError>(())
 /// ```
 ///
 /// # Why accumulate, rather than parse each input
 ///
 /// The rules that make a parse fail are **whole-stream** rules: one flat
 /// namespace across every ingested crate, one const index an array length may
-/// reach into, one set of source modules to normalize paths against. None can be
+/// reach into, one set of source modules to normalize paths against, and every
+/// type reference resolving against every declaration. None can be
 /// decided per input, so every input is in hand before any of it is classified.
 #[derive(Debug, Default)]
-pub struct Language {
+pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
 }
 
-impl Language {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
+impl FlatBuilder {
     /// Every `#[prebindgen]` item captured in `dir`.
     ///
     /// Sugar for [`Self::items`] over [`Source::items_all`](crate::Source::items_all),
@@ -226,13 +235,12 @@ impl Language {
     ///
     /// ```
     /// # prebindgen::Source::init_doctest_simulate();
-    /// use prebindgen::core::Language;
+    /// use prebindgen::core::Flat;
     ///
-    /// let elements = Language::new().source("source_ffi").parse().unwrap();
-    /// let mut names: Vec<String> =
-    ///     elements.iter().filter_map(|e| e.name()).map(|n| n.to_string()).collect();
-    /// names.sort();
-    /// assert_eq!(names, ["TestStruct", "test_function"]);
+    /// let flat = Flat::builder().source("source_ffi").build()?;
+    /// assert!(flat.function("test_function").is_some());
+    /// assert!(flat.declared_type("TestStruct").is_some());
+    /// # Ok::<_, prebindgen::core::flat::ParseError>(())
     /// ```
     pub fn source<P: AsRef<std::path::Path>>(self, dir: P) -> Self {
         let source = crate::Source::new(dir);
@@ -247,14 +255,14 @@ impl Language {
     ///
     /// ```
     /// # prebindgen::Source::init_doctest_simulate();
-    /// use prebindgen::{core::Language, Source};
+    /// use prebindgen::{core::Flat, Source};
     ///
     /// let source = Source::new("source_ffi");
-    /// let elements = Language::new()
+    /// let flat = Flat::builder()
     ///     .items(source.items_in_groups(&["structs"]))
-    ///     .parse()
-    ///     .unwrap();
-    /// assert_eq!(elements.len(), 1);
+    ///     .build()?;
+    /// assert_eq!(flat.types().count(), 1);
+    /// # Ok::<_, prebindgen::core::flat::ParseError>(())
     /// ```
     pub fn items<I>(mut self, items: I) -> Self
     where
@@ -264,16 +272,16 @@ impl Language {
         self
     }
 
-    /// Parse everything collected so far into elements.
+    /// Parse everything collected so far into the model.
     ///
-    /// **Transactional**: an `Err` yields no elements at all, so a refused
-    /// stream cannot leave a half-built model behind.
+    /// **Transactional**: an `Err` yields no model at all, so a refused stream
+    /// cannot leave a half-built one behind.
     ///
-    /// Order-independent: source modules are gathered, and consts indexed,
-    /// before anything is lowered — so a cross-source type reference and an
-    /// array length may both name something declared later, in this input or
-    /// another.
-    pub fn parse(self) -> Result<Vec<Element>, ParseError> {
+    /// Order-independent: source modules are gathered, consts indexed, and every
+    /// item lowered before any reference is resolved — so a type reference, an
+    /// array length and a cross-source mention may each name something declared
+    /// later, in this input or another.
+    pub fn build(self) -> Result<Flat, ParseError> {
         let mut items = self.items;
 
         // Pass 0: normalize every item's types to the canonical flat spelling
@@ -312,7 +320,7 @@ impl Language {
         }));
 
         // Pass 2: lower, checking the flat namespace as we go.
-        let mut out: Vec<Element> = Vec::with_capacity(items.len());
+        let mut elements: Vec<Element> = Vec::with_capacity(items.len());
         let mut seen: Vec<(syn::Ident, SourceLocation)> = Vec::new();
         for (item, loc) in items {
             let element = lower_item(item, loc, &consts);
@@ -326,10 +334,233 @@ impl Language {
                 }
                 seen.push((name.clone(), element.location().clone()));
             }
-            out.push(element);
+            elements.push(element);
         }
-        Ok(out)
+
+        // Pass 3: resolve references, now that every declaration is in hand.
+        resolve_references(&mut elements);
+
+        // Indexed after resolution, because refusing an item can change its kind
+        // (a `Type` becomes `Unsupported`) though never its name.
+        let by_name = elements
+            .iter()
+            .enumerate()
+            .filter_map(|(i, e)| e.name().map(|n| (n.to_string(), i)))
+            .collect();
+        Ok(Flat { elements, by_name })
     }
+}
+
+/// The flat API: every `#[prebindgen]` item from every ingested source, parsed,
+/// indexed by name, and with every type reference resolved.
+///
+/// # Direct access, not a stream
+///
+/// Names are unique across the whole model — a duplicate is a
+/// [`ParseError::DuplicateName`] — so a name is a complete address, and the
+/// model answers by it. That is what every later stage needs: an adapter asks
+/// what a declared name *is*, rather than scanning a list for it.
+///
+/// # References are already resolved
+///
+/// Every [`TypeKind::Named`] in a surviving element denotes a [`Type`] this model
+/// holds, and [`Self::resolve`] hands it over. An item that named something the
+/// flat API does not declare is [`Element::Unsupported`] with
+/// [`ItemError::UnresolvedType`] — inert until an adapter declares it, exactly
+/// like every other refusal, so an item no binding uses stays harmless.
+///
+/// Resolving here rather than in the adapters is the point of #211: a dangling
+/// name used to surface much later as an unresolved-converter error, from
+/// whichever adapter happened to look first.
+#[derive(Debug)]
+pub struct Flat {
+    /// Source order, so iteration reports items as the sources were fed.
+    elements: Vec<Element>,
+    /// Name → position in [`Self::elements`].
+    ///
+    /// A map rather than a scan because every typed accessor and every
+    /// [`Self::resolve`] routes through it, and later stages resolve references
+    /// in a loop — a linear scan would make that quadratic in the size of the
+    /// API. Positions rather than clones, so there is one copy of each element
+    /// and source order stays available.
+    by_name: std::collections::HashMap<String, usize>,
+}
+
+impl Flat {
+    /// Start collecting what to parse.
+    pub fn builder() -> FlatBuilder {
+        FlatBuilder { items: Vec::new() }
+    }
+
+    /// Every element, in the order the sources were fed.
+    pub fn elements(&self) -> impl Iterator<Item = &Element> {
+        self.elements.iter()
+    }
+
+    /// The element with this name, whatever kind it is — including an
+    /// [`Element::Unsupported`], which still holds its name against the
+    /// namespace.
+    pub fn element(&self, name: &str) -> Option<&Element> {
+        self.elements.get(*self.by_name.get(name)?)
+    }
+
+    pub fn function(&self, name: &str) -> Option<&Function> {
+        match self.element(name)? {
+            Element::Function(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    /// The type declared under this name.
+    ///
+    /// Named `declared_type` because `type` is a keyword; it is the accessor a
+    /// resolved [`TypeKind::Named`] reference leads to, and [`Self::resolve`] is
+    /// the same lookup taking a [`TypeId`].
+    pub fn declared_type(&self, name: &str) -> Option<&Type> {
+        match self.element(name)? {
+            Element::Type(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn constant(&self, name: &str) -> Option<&Constant> {
+        match self.element(name)? {
+            Element::Constant(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Function(f) => Some(f),
+            _ => None,
+        })
+    }
+
+    pub fn types(&self) -> impl Iterator<Item = &Type> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Type(t) => Some(t),
+            _ => None,
+        })
+    }
+
+    pub fn constants(&self) -> impl Iterator<Item = &Constant> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Constant(c) => Some(c),
+            _ => None,
+        })
+    }
+
+    /// Every item the language could not express, with its diagnosis.
+    ///
+    /// An adapter raises one of these when it declares the item; until then they
+    /// are inert. See the [module docs](self) on where acceptance is enforced.
+    pub fn unsupported(&self) -> impl Iterator<Item = &Unsupported> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Unsupported(u) => Some(u),
+            _ => None,
+        })
+    }
+
+    /// The declaration a reference denotes.
+    ///
+    /// Infallible in practice for any reference reached from a surviving element:
+    /// [`FlatBuilder::build`] made unresolvable references into
+    /// [`ItemError::UnresolvedType`], so what is left resolves.
+    pub fn resolve(&self, id: &TypeId) -> Option<&Type> {
+        self.declared_type(&id.name)
+    }
+}
+
+/// Turn every element that names an undeclared type into an
+/// [`Element::Unsupported`], **transitively**.
+///
+/// Runs once every declaration is in hand, so the order sources were fed in does
+/// not matter and a reference may point forward or across crates.
+///
+/// # Why this iterates
+///
+/// Refusing a type *removes a declaration*, which can strand its dependents:
+///
+/// ```ignore
+/// pub struct Broken { pub field: Missing }   // refused: `Missing` undeclared
+/// pub fn use_broken(value: Broken) {}        // `Broken` is now gone too
+/// ```
+///
+/// A single pass against a snapshot of the initial declarations would keep
+/// `use_broken`, and [`Flat::resolve`] would then return `None` for its parameter
+/// — breaking the invariant that a surviving element's references all resolve.
+/// So this runs to a fixed point: each round drops the declarations it refused,
+/// and stops when a round refuses nothing. Chains of any length collapse, in
+/// either declaration order, because the set only ever shrinks.
+fn resolve_references(elements: &mut [Element]) {
+    let mut declared: std::collections::HashSet<String> = elements
+        .iter()
+        .filter_map(|e| match e {
+            Element::Type(t) => Some(t.name().to_string()),
+            _ => None,
+        })
+        .collect();
+
+    loop {
+        let mut refused = Vec::new();
+        for (i, element) in elements.iter().enumerate() {
+            if let Some(unresolved) = first_unresolved(element, &declared) {
+                refused.push((i, unresolved));
+            }
+        }
+        if refused.is_empty() {
+            return;
+        }
+        for (i, unresolved) in refused {
+            // A refused type stops being a declaration, which is what lets the
+            // next round see its dependents as unresolved.
+            if let Element::Type(t) = &elements[i] {
+                declared.remove(&t.name().to_string());
+            }
+            let element = &mut elements[i];
+            let name = element.name().cloned();
+            let origin = Origin::new(
+                element.syntax(),
+                Rc::clone(match element {
+                    Element::Function(f) => &f.origin.location,
+                    Element::Type(t) => t.location_rc(),
+                    Element::Constant(c) => &c.origin.location,
+                    Element::Unsupported(u) => &u.origin.location,
+                }),
+            );
+            *element = Element::Unsupported(Unsupported {
+                name,
+                error: Box::new(ItemError::UnresolvedType { name: unresolved }),
+                origin,
+            });
+        }
+    }
+}
+
+/// The first type this element names that the flat API does not declare.
+fn first_unresolved(
+    element: &Element,
+    declared: &std::collections::HashSet<String>,
+) -> Option<String> {
+    let mut refs: Vec<&TypeRef> = Vec::new();
+    match element {
+        Element::Function(f) => {
+            refs.extend(f.params.iter().map(|p| &p.ty));
+            refs.push(&f.ret);
+        }
+        Element::Constant(c) => refs.push(&c.ty),
+        Element::Type(Type::Struct(s)) => refs.extend(s.fields.iter().map(|f| &f.ty)),
+        Element::Type(Type::Variant(v)) => refs.extend(
+            v.alternatives
+                .iter()
+                .flat_map(|a| a.fields.iter().map(|f| &f.ty)),
+        ),
+        // An enum names nothing, an opaque hides what it names, and an
+        // unsupported item already has a diagnosis worth keeping.
+        Element::Type(Type::Enum(_) | Type::Opaque(_)) | Element::Unsupported(_) => {}
+    }
+    refs.into_iter().find_map(|r| r.first_unresolved(declared))
 }
 
 /// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the `Fn`
@@ -476,6 +707,13 @@ pub enum ItemError {
         /// `a type parameter` / `a const generic parameter`.
         kind: &'static str,
     },
+    /// The item names a type the flat API does not declare.
+    ///
+    /// The flat API is closed over its own names: a handle enters it through
+    /// `#[prebindgen] pub type X = ..`, so a name with no declaration is either a
+    /// missing marker or a typo. Reporting it here replaces discovering it much
+    /// later as an unresolved converter, from whichever adapter looked first.
+    UnresolvedType { name: String },
     /// A whole item kind the language does not model — a `union`, a type alias.
     ///
     /// The proc-macro refuses to mark a `use`, `mod`, `impl` or `macro_rules!`
@@ -524,6 +762,19 @@ impl fmt::Display for ItemError {
                  of the same name and no destination language can express it — write the \
                  concrete types, one marked item per instantiation (a newtype is the usual way)"
             ),
+            ItemError::UnresolvedType { name } if name.contains("::") => write!(
+                f,
+                "names the type `{name}`, which the flat API does not declare \u{2014} and being \
+                 path-qualified it never could, because marked items live in one flat namespace \
+                 of bare names. Give the type a name here with `#[prebindgen] pub type <Name> = \
+                 {name};` and refer to that"
+            ),
+            ItemError::UnresolvedType { name } => write!(
+                f,
+                "names the type `{name}`, which the flat API does not declare \u{2014} mark its \
+                 declaration `#[prebindgen]`, or, for a foreign or crate-private type used as a \
+                 handle, give it a name here with `#[prebindgen] pub type {name} = ..;`"
+            ),
             ItemError::UnsupportedItemKind { kind } => write!(
                 f,
                 "is {kind}; the prebindgen source language models functions, structs, enums and \
@@ -548,19 +799,35 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
             Err(error) => unsupported(f.sig.ident.clone(), syn::Item::Fn(f), &at, error),
         },
         syn::Item::Struct(s) => match lower_struct(&s, &at, consts) {
-            Ok(st) => Element::Struct(st),
+            Ok(ty) => Element::Type(ty),
             Err(error) => unsupported(s.ident.clone(), syn::Item::Struct(s), &at, error),
         },
         syn::Item::Enum(e) => match lower_enum(&e, &at, consts) {
-            Ok(element) => element,
+            Ok(ty) => Element::Type(ty),
             Err(error) => unsupported(e.ident.clone(), syn::Item::Enum(e), &at, error),
+        },
+        // `#[prebindgen] pub type X = path;` DECLARES an opaque type: it gives a
+        // foreign or crate-private type a name in the flat API, without claiming
+        // anything about its contents. That is the only way a handle enters the
+        // API deliberately, and the reason references can be required to resolve.
+        syn::Item::Type(t) => match reject_generic_params(&t.generics) {
+            // `Opaque` has no binder and no arity, so a generic alias would be
+            // accepted as one declaration that `Handle<u8>` then resolves against
+            // — losing exactly the scoped-parameter distinction every other item
+            // kind refuses. It is also why `MaybeUninit` needed grammar support
+            // rather than an alias.
+            Err(error) => unsupported(t.ident.clone(), syn::Item::Type(t), &at, error),
+            Ok(()) => Element::Type(Type::Opaque(Opaque {
+                name: t.ident.clone(),
+                origin: Origin::new(syn::Item::Type(t), at),
+            })),
         },
         // Including the unnamed `const _` each source injects as its feature
         // guard: it is a const, so it is one here. `Element::name` returns
         // `None` for `_`, which is what keeps several sources' guards from
         // colliding in the flat namespace.
         syn::Item::Const(c) => match lower_type(&c.ty, consts, &at) {
-            Ok(ty) => Element::Const(Const {
+            Ok(ty) => Element::Constant(Constant {
                 name: c.ident.clone(),
                 ty,
                 origin: Origin::new(c, at),
@@ -572,15 +839,14 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
                 ItemError::ConstType { source },
             ),
         },
-        // An item kind the language does not model. The proc-macro accepts
-        // only six kinds, so in practice this is a `union` or a type alias —
-        // both named, neither ever written by a source crate. It is diagnosed
-        // rather than carried: a `#[prebindgen]` crate marks what crosses the
-        // boundary, and the code around that belongs to the consumer.
+        // An item kind the language does not model. The proc-macro accepts only
+        // six kinds and the five above cover the rest, so in practice this is a
+        // `union` — never written by any source crate. It is diagnosed rather
+        // than carried: a `#[prebindgen]` crate marks what crosses the boundary,
+        // and the code around that belongs to the consumer.
         other => {
             let (name, kind) = match &other {
                 syn::Item::Union(u) => (Some(u.ident.clone()), "a union"),
-                syn::Item::Type(t) => (Some(t.ident.clone()), "a type alias"),
                 _ => (None, "an item kind"),
             };
             unsupported(name, other, &at, ItemError::UnsupportedItemKind { kind })
@@ -657,7 +923,7 @@ fn lower_fn(
     // says so once, here, instead of leaving every consumer to normalize one to
     // the other — which is what they all do today, in eight separate copies.
     let ret = match &f.sig.output {
-        syn::ReturnType::Default => Type {
+        syn::ReturnType::Default => TypeRef {
             kind: TypeKind::Unit,
             origin: Origin::new(syn::parse_quote!(()), Rc::clone(at)),
         },
@@ -673,11 +939,16 @@ fn lower_fn(
     })
 }
 
+/// Lower a `struct` item to whichever of the two shapes it is.
+///
+/// A **tuple struct** is an [`Opaque`]: no adapter has ever crossed its fields,
+/// so they are deliberately not lowered and a field type outside the grammar is
+/// not an error. Anything else is a product of fields that do cross.
 fn lower_struct(
     s: &syn::ItemStruct,
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-) -> Result<Struct, ItemError> {
+) -> Result<Type, ItemError> {
     reject_generic_params(&s.generics)?;
     let fields = match &s.fields {
         syn::Fields::Named(named) => {
@@ -695,18 +966,22 @@ fn lower_struct(
                     origin: Origin::new(f.clone(), Rc::clone(at)),
                 });
             }
-            Some(out)
+            out
         }
-        // Opaque: a tuple struct's contents are not a boundary surface, so they
-        // are not lowered and a field type outside the grammar is not an error.
-        syn::Fields::Unnamed(_) => None,
-        syn::Fields::Unit => Some(Vec::new()),
+        // Its contents are not a boundary surface, so nothing is lowered.
+        syn::Fields::Unnamed(_) => {
+            return Ok(Type::Opaque(Opaque {
+                name: s.ident.clone(),
+                origin: Origin::new(syn::Item::Struct(s.clone()), Rc::clone(at)),
+            }))
+        }
+        syn::Fields::Unit => Vec::new(),
     };
-    Ok(Struct {
+    Ok(Type::Struct(Struct {
         name: s.ident.clone(),
         fields,
         origin: Origin::new(s.clone(), Rc::clone(at)),
-    })
+    }))
 }
 
 /// Lower an `enum` item to whichever of the two shapes it is.
@@ -723,13 +998,13 @@ fn lower_enum(
     e: &syn::ItemEnum,
     at: &Rc<SourceLocation>,
     consts: &ConstIndex,
-) -> Result<Element, ItemError> {
+) -> Result<Type, ItemError> {
     reject_generic_params(&e.generics)?;
 
     if e.variants.iter().any(|v| !v.fields.is_empty()) {
-        return Ok(Element::Variant(lower_variant(e, at, consts)?));
+        return Ok(Type::Variant(lower_variant(e, at, consts)?));
     }
-    Ok(Element::Enum(lower_c_enum(e, at)))
+    Ok(Type::Enum(lower_c_enum(e, at)))
 }
 
 /// The payload-carrying shape. Position is the only numbering a sum has, so no

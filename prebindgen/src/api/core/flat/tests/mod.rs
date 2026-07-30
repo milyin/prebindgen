@@ -18,10 +18,35 @@ mod roundtrip;
 
 /// Parse one item, stamped with an origin crate so array extents can name
 /// `#[prebindgen]` consts from "their own" crate.
+///
+/// The fixture types are declared alongside, so a test naming `Sample` or
+/// `KeyExpr` is about whatever it is testing rather than about resolution.
 fn parse_one(item: syn::Item) -> Element {
-    let mut out = parse(vec![item]);
-    assert_eq!(out.len(), 1);
-    out.remove(0)
+    let mut items = fixture_types();
+    let n = items.len();
+    items.push(item);
+    let mut out = parse(items);
+    assert_eq!(out.len(), n + 1);
+    out.remove(n)
+}
+
+/// Names that stand in for "a type exists" across the tests. Declared as opaque
+/// handles, since none of them is the subject of the test that names it.
+///
+/// Deliberately excludes `Sample`, which several tests *declare* themselves —
+/// declaring it here too would be a duplicate name. `lower` adds it, because a
+/// type-grammar test only ever references it.
+fn fixture_types() -> Vec<syn::Item> {
+    [
+        "Error",
+        "KeyExpr",
+        "Foo",
+        "Whatever",
+        "SomethingUnexpressible",
+    ]
+    .into_iter()
+    .map(opaque)
+    .collect()
 }
 
 /// Parse a whole stream, all items stamped with the same origin crate.
@@ -30,9 +55,10 @@ fn parse(items: Vec<syn::Item>) -> Vec<Element> {
 }
 
 fn try_parse(items: Vec<syn::Item>) -> Result<Vec<Element>, ParseError> {
-    Language::new()
+    Flat::builder()
         .items(items.into_iter().map(|i| (i, loc())))
-        .parse()
+        .build()
+        .map(|flat| flat.elements().cloned().collect())
 }
 
 fn loc() -> SourceLocation {
@@ -51,6 +77,15 @@ fn tag_len_const() -> syn::Item {
     )
 }
 
+/// A marked alias declaring `name` as an opaque handle — the fixture for
+/// "some type exists under this name", now that references must resolve.
+fn opaque(name: &str) -> syn::Item {
+    let ident = quote::format_ident!("{name}");
+    syn::parse_quote!(
+        pub type #ident = other::#ident;
+    )
+}
+
 /// Whitespace-insensitive token comparison, so a test states what the tokens
 /// are rather than how they were spaced.
 fn tokens(t: &impl ToTokens) -> String {
@@ -65,31 +100,45 @@ fn as_fn(e: &Element) -> &Function {
     }
 }
 
-fn as_struct(e: &Element) -> &Struct {
+fn as_type(e: &Element) -> &Type {
     match e {
-        Element::Struct(s) => s,
-        other => panic!("expected a struct, got {}", describe(other)),
+        Element::Type(t) => t,
+        other => panic!("expected a type, got {}", describe(other)),
+    }
+}
+
+fn as_struct(e: &Element) -> &Struct {
+    match as_type(e) {
+        Type::Struct(s) => s,
+        other => panic!("expected a struct, got {}", describe_type(other)),
     }
 }
 
 fn as_enum(e: &Element) -> &Enum {
-    match e {
-        Element::Enum(en) => en,
-        other => panic!("expected a fieldless enum, got {}", describe(other)),
+    match as_type(e) {
+        Type::Enum(en) => en,
+        other => panic!("expected a fieldless enum, got {}", describe_type(other)),
     }
 }
 
 fn as_variant(e: &Element) -> &Variant {
-    match e {
-        Element::Variant(v) => v,
-        other => panic!("expected a sum, got {}", describe(other)),
+    match as_type(e) {
+        Type::Variant(v) => v,
+        other => panic!("expected a sum, got {}", describe_type(other)),
     }
 }
 
-fn as_const(e: &Element) -> &Const {
+fn as_opaque(e: &Element) -> &Opaque {
+    match as_type(e) {
+        Type::Opaque(o) => o,
+        other => panic!("expected an opaque, got {}", describe_type(other)),
+    }
+}
+
+fn as_const(e: &Element) -> &Constant {
     match e {
-        Element::Const(c) => c,
-        other => panic!("expected a const, got {}", describe(other)),
+        Element::Constant(c) => c,
+        other => panic!("expected a constant, got {}", describe(other)),
     }
 }
 
@@ -106,13 +155,21 @@ fn as_unsupported(e: &Element) -> &ItemError {
 fn describe(e: &Element) -> String {
     match e {
         Element::Function(f) => format!("function `{}`", f.name),
-        Element::Struct(s) => format!("struct `{}`", s.name),
-        Element::Variant(v) => format!("sum `{}`", v.name),
-        Element::Enum(en) => format!("enum `{}`", en.name),
-        Element::Const(c) => format!("const `{}`", c.name),
+        Element::Type(t) => describe_type(t),
+        Element::Constant(c) => format!("constant `{}`", c.name),
         Element::Unsupported(u) => match &u.name {
             Some(name) => format!("unsupported `{name}` ({})", u.error),
             None => format!("unsupported ({})", u.error),
         },
     }
+}
+
+fn describe_type(t: &Type) -> String {
+    let kind = match t {
+        Type::Struct(_) => "struct",
+        Type::Variant(_) => "sum",
+        Type::Enum(_) => "enum",
+        Type::Opaque(_) => "opaque",
+    };
+    format!("{kind} `{}`", t.name())
 }

@@ -80,14 +80,14 @@ use proc_macro2::{Delimiter, TokenStream, TokenTree};
 const WATCHED: &[&str] = &["Type", "Expr"];
 
 /// Ledger location, relative to `src/`.
-const LEDGER: &str = "api/core/language/boundary.ledger";
+const LEDGER: &str = "api/core/flat/boundary.ledger";
 
 /// Regenerated verbatim on every write, so the contract cannot drift from the
 /// numbers underneath it.
 const HEADER: &str = "\
 # prebindgen source-syntax boundary ledger — issue #211.
 #
-# One line per file OUTSIDE `api/core/language/`, counting how many times a
+# One line per file OUTSIDE `api/core/flat/`, counting how many times a
 # variant of a watched syn syntax enum is named in production code:
 #
 #     syn::Type::Reference(r) => ...        <- one site
@@ -107,7 +107,7 @@ const HEADER: &str = "\
 # To change it deliberately:
 #
 #     UPDATE_BOUNDARY_LEDGER=1 cargo test -p prebindgen boundary_ledger
-#     git diff prebindgen/src/api/core/language/boundary.ledger
+#     git diff prebindgen/src/api/core/flat/boundary.ledger
 #
 # A count going DOWN is the goal (a classifier reads elements instead) and is
 # still a ledger edit, so the win shows up in the diff.
@@ -155,7 +155,7 @@ fn scan_tree(src_root: &Path) -> BTreeMap<String, usize> {
                 continue;
             }
             let rel = rel_key(src_root, &path);
-            if rel.starts_with("api/core/language/") {
+            if rel.starts_with("api/core/flat/") {
                 continue;
             }
             let text = fs::read_to_string(&path).expect("source file is UTF-8");

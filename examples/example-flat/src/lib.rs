@@ -31,6 +31,11 @@ pub const FEATURES: &str = features!();
 /// Boxed error type, mirroring zenoh-flat's `Error`. It is the `E` of every
 /// fallible `Result` and never crosses the FFI boundary as a value; the adapter
 /// marshals it to C as a `char*` message obtained from [`error_get_message`].
+///
+/// Marked, because that is how a type whose contents do not cross gets a name in
+/// the flat API: the alias declares `Error` as an opaque handle, which is what
+/// lets every `Result<_, Error>` below resolve.
+#[prebindgen]
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
 /// Render an error as its display string. Wired into the C adapter as the
@@ -286,10 +291,20 @@ pub fn drawing_get_shape(d: Drawing) -> Shape {
 
 /// A stateful accumulator. This is a plain Rust type used as an opaque handle:
 /// the binding holds it behind a pointer and frees it with `calculator_drop`.
-pub struct Calculator {
-    value: f64,
-    history: Vec<f64>,
+///
+/// The definition lives in a private module and the flat API exports a marked
+/// alias to it. That is how a handle whose contents never cross gets a name here
+/// — the same shape zenoh-flat uses for the Zenoh types it re-exports — and the
+/// alias is transparent, so everything below still says `Calculator`.
+mod calculator {
+    pub struct Calculator {
+        pub(super) value: f64,
+        pub(super) history: Vec<f64>,
+    }
 }
+
+#[prebindgen]
+pub type Calculator = calculator::Calculator;
 
 /// Build a fresh accumulator initialized to zero.
 #[prebindgen]

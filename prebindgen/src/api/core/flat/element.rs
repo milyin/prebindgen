@@ -9,29 +9,26 @@
 //! lives in [`spell`](super::spell), so the shape of an element says nothing
 //! about the language it came from.
 
-use super::{origin::Origin, ty::Type};
+use super::{origin::Origin, ty::TypeRef};
 use crate::SourceLocation;
 
-/// One structure of the prebindgen source language.
+/// One member of the flat API.
 ///
-/// The five modelled kinds, plus [`Element::Unsupported`] for anything the
-/// language cannot express. There is no verbatim-passthrough variant: a
-/// `#[prebindgen]` crate marks the items that cross the boundary, and the
-/// supporting code around them is the consumer crate's job — the proc-macro
-/// enforces that already, refusing to mark a `use`, `mod`, `impl` or
-/// `macro_rules!` at all.
+/// Three modelled kinds — a function, a type, a constant — plus
+/// [`Element::Unsupported`] for anything the language cannot express. There is no
+/// verbatim-passthrough variant: a `#[prebindgen]` crate marks the items that
+/// cross the boundary, and the supporting code around them is the consumer
+/// crate's job — the proc-macro enforces that already, refusing to mark a `use`,
+/// `mod`, `impl` or `macro_rules!` at all.
 #[derive(Clone, Debug)]
 pub enum Element {
     Function(Function),
-    Struct(Struct),
-    /// An enum whose alternatives carry payloads — a sum type.
-    Variant(Variant),
-    /// An enum whose every alternative is fieldless — a named set of integers.
-    Enum(Enum),
-    Const(Const),
+    /// A type declaration: a struct, either enum shape, or an opaque handle.
+    Type(Type),
+    Constant(Constant),
     /// An item the language cannot express — a parameter type outside the
-    /// grammar, a `self` receiver, or a whole item kind it does not model such
-    /// as a `union`.
+    /// grammar, a `self` receiver, a reference to a type the flat API never
+    /// declares, or a whole item kind it does not model such as a `union`.
     ///
     /// Inert: it is indexed under its name so nothing else can claim it, and
     /// the diagnosis rides along, to be raised by whatever declares it. See the
@@ -49,10 +46,8 @@ impl Element {
     pub fn name(&self) -> Option<&syn::Ident> {
         let named = match self {
             Element::Function(f) => Some(&f.name),
-            Element::Struct(s) => Some(&s.name),
-            Element::Variant(v) => Some(&v.name),
-            Element::Enum(e) => Some(&e.name),
-            Element::Const(c) => Some(&c.name),
+            Element::Type(t) => Some(t.name()),
+            Element::Constant(c) => Some(&c.name),
             Element::Unsupported(u) => u.name.as_ref(),
         };
         named.filter(|id| *id != "_")
@@ -65,10 +60,8 @@ impl Element {
     pub fn location(&self) -> &SourceLocation {
         match self {
             Element::Function(f) => &f.origin.location,
-            Element::Struct(s) => &s.origin.location,
-            Element::Variant(v) => &v.origin.location,
-            Element::Enum(e) => &e.origin.location,
-            Element::Const(c) => &c.origin.location,
+            Element::Type(t) => t.location(),
+            Element::Constant(c) => &c.origin.location,
             Element::Unsupported(u) => &u.origin.location,
         }
     }
@@ -77,13 +70,81 @@ impl Element {
     pub fn syntax(&self) -> syn::Item {
         match self {
             Element::Function(f) => syn::Item::Fn(f.origin.syntax.clone()),
-            Element::Struct(s) => syn::Item::Struct(s.origin.syntax.clone()),
-            Element::Variant(v) => syn::Item::Enum(v.origin.syntax.clone()),
-            Element::Enum(e) => syn::Item::Enum(e.origin.syntax.clone()),
-            Element::Const(c) => syn::Item::Const(c.origin.syntax.clone()),
+            Element::Type(t) => t.syntax(),
+            Element::Constant(c) => syn::Item::Const(c.origin.syntax.clone()),
             Element::Unsupported(u) => u.origin.syntax.clone(),
         }
     }
+}
+
+/// A type the flat API declares.
+///
+/// Four shapes, and the classification is what a destination language acts on: a
+/// product of fields, a sum, a named set of integers, or a handle whose contents
+/// do not cross.
+#[derive(Clone, Debug)]
+pub enum Type {
+    Struct(Struct),
+    /// An enum whose alternatives carry payloads — a sum type.
+    Variant(Variant),
+    /// An enum whose every alternative is fieldless — a named set of integers.
+    Enum(Enum),
+    Opaque(Opaque),
+}
+
+impl Type {
+    pub fn name(&self) -> &syn::Ident {
+        match self {
+            Type::Struct(s) => &s.name,
+            Type::Variant(v) => &v.name,
+            Type::Enum(e) => &e.name,
+            Type::Opaque(o) => &o.name,
+        }
+    }
+
+    pub fn location(&self) -> &SourceLocation {
+        self.location_rc()
+    }
+
+    /// The shared location itself, for building a sibling node's [`Origin`].
+    pub(super) fn location_rc(&self) -> &std::rc::Rc<SourceLocation> {
+        match self {
+            Type::Struct(s) => &s.origin.location,
+            Type::Variant(v) => &v.origin.location,
+            Type::Enum(e) => &e.origin.location,
+            Type::Opaque(o) => &o.origin.location,
+        }
+    }
+
+    /// The whole item as the source wrote it.
+    pub fn syntax(&self) -> syn::Item {
+        match self {
+            Type::Struct(s) => syn::Item::Struct(s.origin.syntax.clone()),
+            Type::Variant(v) => syn::Item::Enum(v.origin.syntax.clone()),
+            Type::Enum(e) => syn::Item::Enum(e.origin.syntax.clone()),
+            Type::Opaque(o) => o.origin.syntax.clone(),
+        }
+    }
+}
+
+/// A type whose contents do not cross the boundary — a handle.
+///
+/// Two spellings declare one thing, because the model records the *fact* rather
+/// than the Rust shape that carried it:
+///
+/// * `#[prebindgen] pub type X = path::To<Thing>;` — the way to give a foreign or
+///   crate-private type a name in the flat API. This is how a handle is declared
+///   deliberately.
+/// * `#[prebindgen] pub struct X(..);` — a tuple struct, whose fields no adapter
+///   has ever crossed.
+///
+/// Either way the adapter decides what the handle becomes: an opaque pointer, a
+/// `ptr_class`, a `convert!` target.
+#[derive(Clone, Debug)]
+pub struct Opaque {
+    pub name: syn::Ident,
+    /// The declaring item — a type alias or a tuple struct.
+    pub origin: Origin<syn::Item>,
 }
 
 /// A `#[prebindgen]` free function.
@@ -96,7 +157,7 @@ pub struct Function {
     /// [`TypeKind::Unit`](super::TypeKind), exactly as a written `-> ()` is:
     /// they mean the same thing, differ only in spelling, and every consumer
     /// today already normalizes one to the other on the spot.
-    pub ret: Type,
+    pub ret: TypeRef,
     /// The whole item: attributes, `cfg`, doc comments, body.
     pub origin: Origin<syn::ItemFn>,
 }
@@ -105,37 +166,25 @@ pub struct Function {
 #[derive(Clone, Debug)]
 pub struct Param {
     pub name: syn::Ident,
-    pub ty: Type,
+    pub ty: TypeRef,
     /// The parameter as written — `mode: Mode`.
     pub origin: Origin<syn::PatType>,
 }
 
-/// A `#[prebindgen]` struct: a product of fields, or an opaque one.
+/// A `#[prebindgen]` struct: a product of fields that cross the boundary.
+///
+/// A struct whose contents do *not* cross is an [`Opaque`], not a `Struct` with
+/// nothing in it — so `fields` is a plain list, and empty means the source wrote
+/// a struct with no fields.
+///
+/// Whether the fields are named or positional is not recorded: a [`Field`]
+/// already knows its own address, and the delimiters are spelling, read off the
+/// syntax by [`spell::fields`](super::spell::fields).
 #[derive(Clone, Debug)]
 pub struct Struct {
     pub name: syn::Ident,
-    /// The fields, when they are a boundary surface — `Some(vec![])` for a
-    /// struct with none.
-    ///
-    /// `None` means **opaque**: the contents are not part of the boundary and
-    /// are deliberately not lowered, so a field type outside the grammar is not
-    /// an error. That is today's tuple struct — usable as a handle, its fields
-    /// never crossed by any adapter — and lowering them would turn types that
-    /// are ignored now into refusals.
-    ///
-    /// Whether a shape has named or positional fields is not recorded here: a
-    /// [`Field`] already knows its own address, and the delimiters are
-    /// spelling, read off `syntax` by
-    /// [`spell::fields`](super::spell::fields).
-    pub fields: Option<Vec<Field>>,
+    pub fields: Vec<Field>,
     pub origin: Origin<syn::ItemStruct>,
-}
-
-impl Struct {
-    /// The modelled fields — empty when the struct is opaque.
-    pub fn fields(&self) -> &[Field] {
-        self.fields.as_deref().unwrap_or(&[])
-    }
 }
 
 /// A `#[prebindgen]` enum whose alternatives carry payloads — a sum type.
@@ -259,20 +308,21 @@ pub struct Field {
     /// does not need it: it is addressed by name, so this is available rather
     /// than used — the same way it carries its item's location.
     pub index: usize,
-    pub ty: Type,
+    pub ty: TypeRef,
     /// The field as written — `pub id: u64`, attributes and docs included.
     pub origin: Origin<syn::Field>,
 }
 
-/// A `#[prebindgen]` const.
+/// A `#[prebindgen]` constant.
 ///
 /// Also the home of the unnamed `const _` feature guard each source injects: it
-/// is a const, so it is modelled as one, and [`Element::name`] returning `None`
-/// for `_` is what keeps several of them from colliding in the flat namespace.
+/// is a constant, so it is modelled as one, and [`Element::name`] returning
+/// `None` for `_` is what keeps several of them from colliding in the flat
+/// namespace.
 #[derive(Clone, Debug)]
-pub struct Const {
+pub struct Constant {
     pub name: syn::Ident,
-    pub ty: Type,
+    pub ty: TypeRef,
     /// The whole item — the initializer expression included, which is where a
     /// consumer that re-emits the value reads it from.
     pub origin: Origin<syn::ItemConst>,

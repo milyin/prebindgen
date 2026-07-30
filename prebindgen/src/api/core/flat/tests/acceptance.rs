@@ -8,14 +8,21 @@ use super::*;
 /// Lower one type by putting it in a struct field, and report what the language
 /// made of it. The field path is used because a field is the position every
 /// consumer already agrees is a boundary surface.
-fn lower(ty: proc_macro2::TokenStream) -> Result<Type, UnsupportedType> {
+fn lower(ty: proc_macro2::TokenStream) -> Result<TypeRef, UnsupportedType> {
     let item: syn::Item = syn::parse_quote!(
         pub struct S {
             pub f: #ty,
         }
     );
-    match parse(vec![tag_len_const(), item]).remove(1) {
-        Element::Struct(s) => Ok(s.fields()[0].ty.clone()),
+    // The fixture types stand in for a declared type wherever the grammar needs
+    // a nominal one, so references resolve and the test is about the grammar.
+    let mut items = fixture_types();
+    items.push(tag_len_const());
+    items.push(opaque("Sample"));
+    let n = items.len();
+    items.push(item);
+    match parse(items).remove(n) {
+        Element::Type(Type::Struct(s)) => Ok(s.fields[0].ty.clone()),
         Element::Unsupported(u) => match *u.error {
             ItemError::FieldType { source, .. } => Err(source),
             other => panic!("expected a field-type diagnosis, got {other}"),
@@ -60,10 +67,10 @@ fn scalars_and_strings() {
 fn a_string_is_a_string_however_it_is_spelled() {
     assert!(matches!(kind(quote::quote!(str)), TypeKind::Str));
     for spelling in [quote::quote!(&str), quote::quote!(&String)] {
-        let TypeKind::Ref { mutable, inner } = kind(spelling) else {
+        let TypeKind::Ref { mode, inner } = kind(spelling) else {
             panic!("a borrow");
         };
-        assert!(!mutable);
+        assert_eq!(mode, RefMode::Shared);
         assert!(matches!(inner.kind, TypeKind::Str));
     }
 }
@@ -113,21 +120,40 @@ fn a_qualified_builtin_is_a_named_type() {
         kind(quote::quote!(std::option::Option<u8>)),
         TypeKind::Optional(_)
     ));
-    let TypeKind::Named { id, .. } = kind(quote::quote!(foreign::Option<u8>)) else {
-        panic!("a named type");
+
+    // Not an `Option` — and, being path-qualified, it cannot name a flat-API item
+    // either, so it is refused as unresolved rather than silently retyped.
+    let element = {
+        let mut items = fixture_types();
+        let n = items.len();
+        items.push(syn::parse_quote!(
+            pub struct S {
+                pub f: foreign::Option<u8>,
+            }
+        ));
+        parse(items).remove(n)
     };
-    assert_eq!(id.name, "foreign::Option");
+    assert!(matches!(
+        as_unsupported(&element),
+        ItemError::UnresolvedType { name } if name == "foreign::Option"
+    ));
 }
 
 #[test]
 fn references() {
     assert!(matches!(
         kind(quote::quote!(&Sample)),
-        TypeKind::Ref { mutable: false, .. }
+        TypeKind::Ref {
+            mode: RefMode::Shared,
+            ..
+        }
     ));
     assert!(matches!(
         kind(quote::quote!(&mut Sample)),
-        TypeKind::Ref { mutable: true, .. }
+        TypeKind::Ref {
+            mode: RefMode::Exclusive,
+            ..
+        }
     ));
 }
 
@@ -289,7 +315,7 @@ fn an_extent_may_name_a_const_declared_later() {
         tag_len_const(),
     ]);
     assert_eq!(
-        as_struct(&elements[0]).fields()[0]
+        as_struct(&elements[0]).fields[0]
             .ty
             .array_extent()
             .expect("an extent")
@@ -320,7 +346,7 @@ fn the_three_extent_projections_are_independent() {
             pub const ALSO_FOUR: usize = 4;
         ),
     ]);
-    let fields = as_struct(&elements[0]).fields();
+    let fields = &as_struct(&elements[0]).fields;
     let at = |i: usize| fields[i].ty.array_extent().expect("an extent");
     let (by_const, by_other_const, by_literal, by_hex, longer) =
         (at(0), at(1), at(2), at(3), at(4));
@@ -396,8 +422,8 @@ fn a_computed_const_is_indexed_but_is_not_a_length() {
 /// A struct is a product of fields, or opaque. A tuple struct is the opaque
 /// one: usable as a handle, its fields deliberately not lowered, because no
 /// adapter has ever crossed them and lowering would turn types that are ignored
-/// today into errors. A unit struct is the empty product, not a third shape —
-/// the delimiters are spelling, and `spell` reads them off the syntax.
+/// today into errors. A unit struct is the empty product, not a handle — the
+/// delimiters are spelling, and `spell` reads them off the syntax.
 #[test]
 fn struct_shapes() {
     let named = parse_one(syn::parse_quote!(
@@ -405,19 +431,22 @@ fn struct_shapes() {
             pub x: u8,
         }
     ));
-    assert_eq!(as_struct(&named).fields().len(), 1);
+    assert_eq!(as_struct(&named).fields.len(), 1);
 
+    // A tuple struct is a handle, so its fields are never lowered — which is why
+    // a field type outside the grammar is not an error here.
     let tuple = parse_one(syn::parse_quote!(
         pub struct B(SomethingUnexpressible<'_, dyn Trait>);
     ));
-    assert!(as_struct(&tuple).fields.is_none(), "opaque");
-    assert!(as_struct(&tuple).fields().is_empty());
+    assert_eq!(as_opaque(&tuple).name, "B");
 
     let unit = parse_one(syn::parse_quote!(
         pub struct C;
     ));
-    assert!(as_struct(&unit).fields.is_some(), "empty, not opaque");
-    assert!(as_struct(&unit).fields().is_empty());
+    assert!(
+        as_struct(&unit).fields.is_empty(),
+        "an empty product, not a handle"
+    );
 }
 
 /// A variant's index is its declaration order and is never its discriminant:
@@ -544,40 +573,56 @@ fn an_unnamed_const_is_a_const_without_an_address() {
             const _: () = ();
         ),
     ]);
-    assert!(elements.iter().all(|e| matches!(e, Element::Const(_))));
+    assert!(elements.iter().all(|e| matches!(e, Element::Constant(_))));
     assert!(elements.iter().all(|e| e.name().is_none()));
 }
 
 /// An item kind the language does not model is diagnosed, not carried: a
 /// `#[prebindgen]` crate marks what crosses the boundary and leaves the code
-/// around it to the consumer. The proc-macro refuses to mark a `use` at all, so
-/// only a `union` or a type alias can reach here — and both keep their name, so
-/// nothing else can claim it.
+/// around it to the consumer. The proc-macro refuses to mark a `use` at all, and
+/// a type alias now *declares* an opaque handle — so a `union` is the only kind
+/// left that reaches here.
 #[test]
 fn an_unmodelled_item_kind_is_diagnosed() {
-    for (item, expected) in [
-        (
-            syn::parse_quote!(
-                pub union U {
-                    a: u8,
-                }
-            ),
-            "a union",
-        ),
-        (
-            syn::parse_quote!(
-                pub type Alias = u32;
-            ),
-            "a type alias",
-        ),
-    ] {
-        let element = parse_one(item);
-        assert!(element.name().is_some(), "keeps its address");
-        assert!(matches!(
-            as_unsupported(&element),
-            ItemError::UnsupportedItemKind { kind } if *kind == expected
-        ));
-    }
+    let element = parse_one(syn::parse_quote!(
+        pub union U {
+            a: u8,
+        }
+    ));
+    assert!(element.name().is_some(), "keeps its address");
+    assert!(matches!(
+        as_unsupported(&element),
+        ItemError::UnsupportedItemKind { kind } if *kind == "a union"
+    ));
+}
+
+/// A marked type alias DECLARES an opaque handle — the way a foreign or
+/// crate-private type gets a name in the flat API. That is what lets references
+/// be required to resolve, so it is the keystone of the whole model.
+#[test]
+fn a_marked_alias_declares_an_opaque() {
+    let element = parse_one(syn::parse_quote!(
+        pub type Session = zenoh::Session;
+    ));
+    let o = as_opaque(&element);
+    assert_eq!(o.name, "Session");
+    // The whole item survives, so a consumer can still read what it aliased.
+    assert_eq!(
+        tokens(&o.origin.syntax),
+        "pub type Session = zenoh :: Session ;"
+    );
+
+    // And it satisfies a reference, which is the point.
+    let mut items = fixture_types();
+    items.push(syn::parse_quote!(
+        pub type Session = zenoh::Session;
+    ));
+    let n = items.len();
+    items.push(syn::parse_quote!(
+        pub fn session_close(s: Session) {}
+    ));
+    let elements = parse(items);
+    assert!(matches!(elements[n], Element::Function(_)));
 }
 
 // ── Functions ──────────────────────────────────────────────────────────
@@ -714,8 +759,8 @@ fn a_lifetime_binder_is_accepted() {
         }
     ));
     let s = as_struct(&element);
-    assert_eq!(s.fields().len(), 1);
-    assert_eq!(tokens(&s.fields()[0].ty.origin.syntax), "& 'a str");
+    assert_eq!(s.fields.len(), 1);
+    assert_eq!(tokens(&s.fields[0].ty.origin.syntax), "& 'a str");
 }
 
 /// `impl Trait` in argument position is an anonymous type parameter in Rust, but
@@ -812,6 +857,435 @@ fn an_unsupported_item_is_indexed_not_refused() {
     assert!(matches!(elements[1], Element::Function(_)));
 }
 
+// ── Resolution and access ──────────────────────────────────────────────
+
+/// The model answers by name, which is what every later stage needs. An
+/// unsupported item is still reachable — it holds its slot in the namespace —
+/// but it is not a type.
+#[test]
+fn the_model_is_addressed_by_name() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                syn::parse_quote!(
+                    pub type Session = zenoh::Session;
+                ),
+                syn::parse_quote!(
+                    pub const LIMIT: usize = 4;
+                ),
+                syn::parse_quote!(
+                    pub fn session_close(s: Session) {}
+                ),
+                syn::parse_quote!(
+                    pub union U {
+                        a: u8,
+                    }
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+
+    assert!(flat.function("session_close").is_some());
+    assert!(flat.declared_type("Session").is_some());
+    assert!(flat.constant("LIMIT").is_some());
+    assert_eq!(flat.functions().count(), 1);
+    assert_eq!(flat.types().count(), 1);
+    assert_eq!(flat.constants().count(), 1);
+
+    // Reachable, but not a type — it holds its name so nothing else can claim it.
+    assert!(flat.element("U").is_some());
+    assert!(flat.declared_type("U").is_none());
+    assert_eq!(flat.unsupported().count(), 1);
+
+    // A name nobody declared is simply absent.
+    assert!(flat.element("nope").is_none());
+}
+
+/// A reference leads to the declaration it names. Resolving here is the point of
+/// #211: a dangling name used to surface much later, as an unresolved converter
+/// from whichever adapter looked first.
+#[test]
+fn a_reference_resolves_to_its_declaration() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                syn::parse_quote!(
+                    pub type Session = zenoh::Session;
+                ),
+                syn::parse_quote!(
+                    pub fn session_close(s: Session) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+
+    let f = flat.function("session_close").expect("declared");
+    let TypeKind::Named { id, .. } = &f.params[0].ty.kind else {
+        panic!("a nominal type");
+    };
+    let target = flat.resolve(id).expect("resolves");
+    assert!(matches!(target, Type::Opaque(_)));
+    assert_eq!(target.name(), "Session");
+}
+
+/// Resolution runs once every declaration is in hand, so a reference may point
+/// forward, or into another source entirely — which is how a helper crate names
+/// types it cannot mark itself.
+#[test]
+fn resolution_spans_feeders_and_declaration_order() {
+    // Forward reference within one feeder.
+    let flat = Flat::builder()
+        .items(
+            vec![
+                syn::parse_quote!(
+                    pub fn session_close(s: Session) {}
+                ),
+                syn::parse_quote!(
+                    pub type Session = zenoh::Session;
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("a forward reference resolves");
+    assert!(flat.function("session_close").is_some());
+
+    // And across feeders: the declaration arrives in the second stream.
+    let flat = Flat::builder()
+        .items(vec![(
+            syn::parse_quote!(
+                pub fn session_close(s: Session) {}
+            ),
+            loc(),
+        )])
+        .items(vec![(
+            syn::parse_quote!(
+                pub type Session = zenoh::Session;
+            ),
+            loc(),
+        )])
+        .build()
+        .expect("a cross-feeder reference resolves");
+    assert!(flat.function("session_close").is_some());
+}
+
+/// A name the flat API does not declare makes the *referencing* item
+/// unsupported, inert until an adapter declares it — the same deferral every
+/// other refusal uses, so an item no binding touches stays harmless.
+#[test]
+fn an_undeclared_reference_refuses_the_referencing_item() {
+    let flat = Flat::builder()
+        .items(vec![(
+            syn::parse_quote!(
+                pub fn session_close(s: Session) {}
+            ),
+            loc(),
+        )])
+        .build()
+        .expect("a refusal is deferred, not fatal");
+
+    assert!(flat.function("session_close").is_none());
+    let u = flat.unsupported().next().expect("one refusal");
+    assert!(matches!(
+        &*u.error,
+        ItemError::UnresolvedType { name } if name == "Session"
+    ));
+    // It still holds its name, so nothing else can claim it.
+    assert_eq!(u.name.as_ref().expect("named"), "session_close");
+
+    // Reachable through every layer a reference can nest in.
+    for ty in [
+        quote::quote!(Option<Session>),
+        quote::quote!(Vec<Session>),
+        quote::quote!(&Session),
+        quote::quote!(Result<Session, Error>),
+        quote::quote!(impl Fn(Session) + Send + Sync + 'static),
+        quote::quote!([Session; 4]),
+        quote::quote!(Wrapper<Session>),
+    ] {
+        let flat = Flat::builder()
+            .items(vec![
+                (opaque("Error"), loc()),
+                (opaque("Wrapper"), loc()),
+                (
+                    syn::parse_quote!(
+                        pub fn f(s: #ty) {}
+                    ),
+                    loc(),
+                ),
+            ])
+            .build()
+            .expect("deferred");
+        assert_eq!(
+            flat.unsupported().count(),
+            1,
+            "`Session` must be found inside {}",
+            ty
+        );
+    }
+}
+
+/// An out-parameter is a **mode of borrowing**, not a type. `&mut MaybeUninit<T>`
+/// says the caller supplies the slot and the callee fills it; the `MaybeUninit` is
+/// absorbed into the mode, so `inner` is the value's own type.
+///
+/// Uninitialized storage anywhere else promises nothing a destination language can
+/// use, so the combinations that mean nothing cannot be written down.
+#[test]
+fn an_out_parameter_is_a_borrow_mode() {
+    let TypeKind::Ref { mode, inner } = kind(quote::quote!(&mut MaybeUninit<Sample>)) else {
+        panic!("a borrow");
+    };
+    assert_eq!(mode, RefMode::Out);
+    // The `MaybeUninit` is gone from the type: it described the borrow.
+    let TypeKind::Named { id, .. } = &inner.kind else {
+        panic!("the value's own type");
+    };
+    assert_eq!(id.name, "Sample");
+
+    // The three modes are one axis.
+    assert_eq!(
+        [
+            quote::quote!(&Sample),
+            quote::quote!(&mut Sample),
+            quote::quote!(&mut MaybeUninit<Sample>),
+        ]
+        .map(|t| match kind(t) {
+            TypeKind::Ref { mode, .. } => mode,
+            other => panic!("a borrow, got {other:?}"),
+        }),
+        [RefMode::Shared, RefMode::Exclusive, RefMode::Out]
+    );
+
+    // Owned, or shared-borrowed, it means nothing.
+    assert_eq!(
+        reason(quote::quote!(MaybeUninit<Sample>)),
+        UnsupportedTypeReason::OwnedUninit
+    );
+    assert_eq!(
+        reason(quote::quote!(&MaybeUninit<Sample>)),
+        UnsupportedTypeReason::SharedUninit
+    );
+
+    // And it still needs no declaration, unlike every other generic-bearing name.
+    let flat = Flat::builder()
+        .items(vec![
+            (opaque("Sample"), loc()),
+            (
+                syn::parse_quote!(
+                    pub fn get(out: &mut MaybeUninit<Sample>) -> bool {}
+                ),
+                loc(),
+            ),
+        ])
+        .build()
+        .expect("parses");
+    assert!(flat.function("get").is_some());
+}
+
+/// Refusing a type removes a *declaration*, so its dependents must be refused
+/// too — otherwise a surviving element would hold a reference that resolves to
+/// nothing, which is the one invariant the model promises.
+///
+/// Checked in both declaration orders, because a single pass against a snapshot
+/// of the initial declarations keeps the dependent whichever way round it is.
+#[test]
+fn refusal_is_transitive() {
+    let broken: syn::Item = syn::parse_quote!(
+        pub struct Broken {
+            pub field: Missing,
+        }
+    );
+    let user: syn::Item = syn::parse_quote!(
+        pub fn use_broken(value: Broken) {}
+    );
+
+    for (label, items) in [
+        ("declaration first", vec![broken.clone(), user.clone()]),
+        ("dependent first", vec![user, broken]),
+    ] {
+        let flat = Flat::builder()
+            .items(items.into_iter().map(|i| (i, loc())))
+            .build()
+            .expect("deferred, not fatal");
+
+        assert!(
+            flat.declared_type("Broken").is_none(),
+            "{label}: `Missing` is undeclared"
+        );
+        assert!(
+            flat.function("use_broken").is_none(),
+            "{label}: `Broken` is no longer a declaration either"
+        );
+        assert_eq!(flat.unsupported().count(), 2, "{label}");
+        // Both still hold their names against the namespace.
+        assert!(flat.element("Broken").is_some(), "{label}");
+        assert!(flat.element("use_broken").is_some(), "{label}");
+    }
+}
+
+/// And through a chain of any length, in either direction — the fixed point only
+/// ever shrinks the declared set, so it terminates and misses no hop.
+#[test]
+fn refusal_is_transitive_through_a_chain() {
+    let chain: Vec<syn::Item> = vec![
+        syn::parse_quote!(
+            pub struct A {
+                pub field: Missing,
+            }
+        ),
+        syn::parse_quote!(
+            pub struct B {
+                pub field: A,
+            }
+        ),
+        syn::parse_quote!(
+            pub struct C {
+                pub field: B,
+            }
+        ),
+        syn::parse_quote!(
+            pub fn takes_c(value: C) {}
+        ),
+    ];
+
+    for (label, items) in [
+        ("forward", chain.clone()),
+        ("reversed", chain.into_iter().rev().collect()),
+    ] {
+        let flat = Flat::builder()
+            .items(items.into_iter().map(|i| (i, loc())))
+            .build()
+            .expect("deferred");
+        assert_eq!(
+            flat.types().count(),
+            0,
+            "{label}: the whole chain collapses"
+        );
+        assert_eq!(flat.functions().count(), 0, "{label}");
+        assert_eq!(flat.unsupported().count(), 4, "{label}");
+    }
+
+    // A sound chain is untouched, so the fixed point is not just refusing
+    // everything reachable.
+    let flat = Flat::builder()
+        .items(
+            vec![
+                opaque("Missing"),
+                syn::parse_quote!(
+                    pub struct A {
+                        pub field: Missing,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn takes_a(value: A) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+    assert_eq!(flat.unsupported().count(), 0);
+    assert!(flat.function("takes_a").is_some());
+}
+
+/// Every reference reachable from a *surviving* element resolves. That is what
+/// the transitive pass buys, and what `resolve` relies on.
+#[test]
+fn every_surviving_reference_resolves() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                opaque("Missing"),
+                syn::parse_quote!(
+                    pub struct Held {
+                        pub field: Missing,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn takes_held(value: Held) -> Held {}
+                ),
+                // ... alongside a chain that does collapse.
+                syn::parse_quote!(
+                    pub struct Broken {
+                        pub field: Absent,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn takes_broken(value: Broken) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("deferred");
+
+    for f in flat.functions() {
+        for r in f.params.iter().map(|p| &p.ty).chain([&f.ret]) {
+            if let TypeKind::Named { id, .. } = &r.kind {
+                assert!(
+                    flat.resolve(id).is_some(),
+                    "`{}` must resolve from a surviving function",
+                    id.name
+                );
+            }
+        }
+    }
+    assert!(flat.function("takes_held").is_some());
+    assert!(flat.function("takes_broken").is_none());
+}
+
+/// A generic alias is a generic binder like any other item's, and `Opaque` has no
+/// binder or arity — so accepting one would let `Handle<u8>` resolve against a
+/// declaration that says nothing about its parameter. It is also why
+/// `MaybeUninit` needed grammar support rather than an alias.
+#[test]
+fn a_generic_alias_is_refused() {
+    for (item, param, kind_str) in [
+        (
+            syn::parse_quote!(
+                pub type Handle<T> = hidden::Handle<T>;
+            ),
+            "T",
+            "a type parameter",
+        ),
+        (
+            syn::parse_quote!(
+                pub type Padded<const N: usize> = hidden::Padded<N>;
+            ),
+            "N",
+            "a const generic parameter",
+        ),
+    ] {
+        let element = parse_one(item);
+        let ItemError::UnsupportedGenericParam { param: got, kind } = as_unsupported(&element)
+        else {
+            panic!(
+                "expected a generic-parameter diagnosis, got {}",
+                describe(&element)
+            );
+        };
+        assert_eq!(got, param);
+        assert_eq!(*kind, kind_str);
+    }
+
+    // A lifetime binder stays accepted, as it is on every other item kind:
+    // lifetimes are spelling and the spelling already travels.
+    let element = parse_one(syn::parse_quote!(
+        pub type Borrowed<'a> = hidden::Borrowed<'a>;
+    ));
+    assert_eq!(as_opaque(&element).name, "Borrowed");
+}
+
 // ── The flat namespace ─────────────────────────────────────────────────
 
 /// The feeders accumulate, and the whole-stream rules span them.
@@ -828,14 +1302,15 @@ fn the_feeders_accumulate_and_whole_stream_rules_span_them() {
     );
 
     // A length in the first feeder naming a const from the second.
-    let elements = Language::new()
+    let flat = Flat::builder()
         .items(vec![(marker.clone(), loc())])
         .items(vec![(tag_len_const(), loc())])
-        .parse()
+        .build()
         .expect("the const is found across feeders");
+    let elements: Vec<Element> = flat.elements().cloned().collect();
     assert_eq!(elements.len(), 2);
     assert_eq!(
-        as_struct(&elements[0]).fields()[0]
+        as_struct(&elements[0]).fields[0]
             .ty
             .array_extent()
             .expect("an extent")
@@ -844,10 +1319,10 @@ fn the_feeders_accumulate_and_whole_stream_rules_span_them() {
     );
 
     // And a name colliding across feeders is still the one hard failure.
-    let err = Language::new()
+    let err = Flat::builder()
         .items(vec![(marker.clone(), loc())])
         .items(vec![(marker, loc())])
-        .parse()
+        .build()
         .expect_err("a duplicate across feeders is still a duplicate");
     let ParseError::DuplicateName(d) = err;
     assert_eq!(d.name, "Marker");
