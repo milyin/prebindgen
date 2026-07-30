@@ -42,7 +42,7 @@
 # gaps are listed here rather than implied away.
 
 4	api/core/expand.rs
-12	api/core/registry.rs
+11	api/core/registry.rs
 40	api/core/types_util.rs
 18	api/core/unfold.rs
 8	api/lang/cbindgen/builder.rs
@@ -70,4 +70,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 205
+# total: 204

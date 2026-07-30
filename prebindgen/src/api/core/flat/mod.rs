@@ -340,6 +340,8 @@ impl FlatBuilder {
                         name: first_name.clone(),
                         first: first.clone(),
                         second: element.location().clone(),
+                        first_crate: first.crate_name.clone(),
+                        second_crate: element.location().crate_name.clone(),
                     })));
                 }
                 seen.push((name.clone(), element.location().clone()));
@@ -382,7 +384,7 @@ impl FlatBuilder {
 /// Resolving here rather than in the adapters is the point of #211: a dangling
 /// name used to surface much later as an unresolved-converter error, from
 /// whichever adapter happened to look first.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Flat {
     /// Source order, so iteration reports items as the sources were fed.
     elements: Vec<Element>,
@@ -642,17 +644,30 @@ pub struct DuplicateName {
     pub name: syn::Ident,
     pub first: SourceLocation,
     pub second: SourceLocation,
+    /// The crate each was marked in. A captured file path is crate-relative
+    /// (both are `src/lib.rs`), so these are the only unambiguous coordinates
+    /// when two sources collide.
+    pub first_crate: Option<String>,
+    pub second_crate: Option<String>,
 }
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::DuplicateName(d) => write!(
-                f,
-                "duplicate `#[prebindgen]` name `{}`: first at {}, again at {} — marked items \
-                 share one flat namespace across all source crates",
-                d.name, d.first, d.second
-            ),
+            ParseError::DuplicateName(d) => {
+                let at = |loc: &SourceLocation, krate: &Option<String>| match krate {
+                    Some(k) => format!("{loc} (crate `{k}`)"),
+                    None => loc.to_string(),
+                };
+                write!(
+                    f,
+                    "duplicate `#[prebindgen]` name `{}`: first at {}, again at {} — marked items \
+                     share one flat namespace across all source crates",
+                    d.name,
+                    at(&d.first, &d.first_crate),
+                    at(&d.second, &d.second_crate)
+                )
+            }
         }
     }
 }

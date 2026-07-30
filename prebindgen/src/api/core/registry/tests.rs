@@ -309,6 +309,33 @@ fn type_entry_helpers_expose_converter_chain_contract() {
 /// `SourceLocation` file paths are crate-relative (both may read
 /// `src/lib.rs`), so the crates (stamped into each stream item's location
 /// by `Source`) are the only unambiguous coordinates.
+/// Ingestion checks that the flat API is expressible, and reports **every**
+/// offender at once — a source crate that needs migrating should see one list,
+/// not one rebuild per item.
+///
+/// This replaces two tests that asserted the opposite (that `from_items` was
+/// index-only and diagnosed at declaration time). The frontend owns that
+/// judgement now, and its diagnosis is richer: it names the parameter.
+#[test]
+fn from_items_rejects_what_the_language_cannot_express() {
+    let err = match Registry::<()>::from_items(vec![
+        fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }"),
+        fn_item("fn worse(self) -> u64 { 0 }"),
+    ]) {
+        Ok(_) => panic!("neither item is expressible"),
+        Err(e) => e,
+    };
+
+    let ScanError::NotExpressible { entries } = &err else {
+        panic!("expected a NotExpressible report, got {err}");
+    };
+    assert_eq!(entries.len(), 2, "all offenders at once");
+
+    let msg = err.to_string();
+    assert!(msg.contains("bogus") && msg.contains("impl Trait"), "{msg}");
+    assert!(msg.contains("worse") && msg.contains("self"), "{msg}");
+}
+
 #[test]
 fn duplicate_name_across_sources_names_both_crates() {
     use crate::{

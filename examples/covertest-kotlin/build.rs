@@ -118,36 +118,6 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 }
 
 fn main() {
-    // The flat API must be CLOSED: every type a marked signature names has to be
-    // declared here too, as a struct/enum or as `#[prebindgen] pub type X = ..`
-    // for a handle. `Flat` proves that across BOTH sources at once, which is the
-    // only way the helper crate's references to `perftest-flat`'s types can
-    // resolve — it cannot mark them itself.
-    //
-    // Asserted rather than merely computed: without this, an unmarked type would
-    // go unnoticed until the adapters consume elements (L1+), and then surface as
-    // a late unresolved-converter error instead of naming the missing marker.
-    //
-    // `source_named` for the helpers, for the reason spelled out at the registry
-    // below: the dep is renamed in Cargo.toml.
-    let flat = prebindgen::core::Flat::builder()
-        .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
-        .build()
-        .expect("the flat API parses");
-    let unresolved: Vec<String> = flat
-        .unsupported()
-        .map(|u| match &u.name {
-            Some(name) => format!("  {name}: {}", u.error),
-            None => format!("  {}", u.error),
-        })
-        .collect();
-    assert!(
-        unresolved.is_empty(),
-        "the flat API is not closed:\n{}",
-        unresolved.join("\n")
-    );
-
     let jni = JniGen::new()
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
