@@ -133,13 +133,12 @@ impl Type {
 /// rather than the Rust shape that carried it:
 ///
 /// * `#[prebindgen] pub type X = path::To<Thing>;` — how a foreign or
-///   crate-private type gets a name here. That name usually also teaches the
-///   language to recognise the path (see
-///   [`normalize_type`](crate::api::core::types_util::normalize_type)'s rule list),
-///   but the two are not the same thing: an alias is an `Extern` **always** and a
-///   reduction rule only when its target is a path the grammar does not already
-///   model. `type Error = Box<dyn Error>` is an `Extern` with no reduction rule at
-///   all — nobody spells a trait object in a signature, they write `Error`.
+///   crate-private type gets a name here. A **one-way road**: the name is
+///   thereafter the only way to spell that type inside the flat API, and the
+///   qualified path stays refused. This declares a name; it is not an equivalence
+///   between spellings — see
+///   [`normalize_type`](crate::api::core::types_util::normalize_type)'s rule 4 for
+///   why treating it as one is a category error.
 /// * `#[prebindgen] pub struct X(..);` — a tuple struct, whose fields no adapter
 ///   has ever crossed.
 ///
