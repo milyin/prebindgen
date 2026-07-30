@@ -2,7 +2,7 @@
 //!
 //! `write_rust` collects every resolved input/output converter (each entry
 //! already carries its full `ItemFn`), every per-item `on_<kind>` output,
-//! and every passthrough item; concatenates them; and hands them to
+//! and every anonymous const; concatenates them; and hands them to
 //! `Destination::write` (which does prettyplease formatting and
 //! resolves the path against `OUT_DIR`).
 
@@ -105,27 +105,26 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // Consts: an adapter WITH a const declaration mechanism
     // (`declared_consts() == Some(set)`) emits declared consts only,
     // symmetric with functions; an adapter without one (`None`) gets every
-    // const passed through verbatim via the default `on_const`. Unnamed
-    // consts (`const _`, e.g. the injected `konst::assertc_eq!` feature
-    // guard) are infrastructure, not declarable API — they bypass the gate
-    // and always emit.
+    // const passed through verbatim via the default `on_const`. Prebindgen's
+    // own injected feature guards are not consts at all — see `guards` below.
     let declared_consts = ext.declared_consts();
     items.extend(parse_items_from_tokens(
         "on_const",
         sorted_items_by_ident(&registry.consts)
             .into_iter()
             .filter(|(ident, _)| {
-                *ident == "_"
-                    || declared_consts
-                        .as_ref()
-                        .is_none_or(|set| set.contains(*ident))
+                declared_consts
+                    .as_ref()
+                    .is_none_or(|set| set.contains(*ident))
             })
             .map(|(_, (item, _))| ext.on_const(item, registry)),
     )?);
 
-    // 3. Passthrough items verbatim.
-    for (item, _) in &registry.passthrough {
-        items.push(item.clone());
+    // 3. Anonymous consts, verbatim. Last, and in stream order. Ungated on
+    //    purpose: with no name there is nothing for an adapter to declare, so
+    //    the const gate above cannot apply to them.
+    for guard in &registry.guards {
+        items.push(syn::Item::Const(guard.origin.syntax.clone()));
     }
 
     // 4. Cross-cutting post-process pass. Adapters use this to qualify
@@ -162,13 +161,13 @@ pub fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, sy
 }
 
 fn walk_resolved<M, F: FnMut(&TypeKey, &TypeEntry<M>)>(
-    table: &std::collections::HashMap<TypeKey, Option<TypeEntry<M>>>,
+    table: &std::collections::HashMap<TypeKey, crate::api::core::registry::TypeCell<M>>,
     mut f: F,
 ) {
     let mut keys: Vec<&TypeKey> = table.keys().collect();
     keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
     for key in keys {
-        if let Some(Some(entry)) = table.get(key) {
+        if let Some(entry) = table.get(key).and_then(|c| c.entry.as_ref()) {
             f(key, entry);
         }
     }

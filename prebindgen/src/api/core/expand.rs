@@ -299,7 +299,7 @@ fn process_expand<M>(
     exp: &Expansions,
     ed: &ExpandDecl,
 ) -> Result<(), ExpandError> {
-    let (item_fn, loc) = registry
+    let (item_fn, _) = registry
         .functions
         .get(&ed.func)
         .cloned()
@@ -334,7 +334,7 @@ fn process_expand<M>(
     )?;
 
     for leaf in &plan.leaves {
-        registry.require_input(&leaf.ty, &loc);
+        registry.require_input(&leaf.ty);
     }
     registry
         .expansion_plans

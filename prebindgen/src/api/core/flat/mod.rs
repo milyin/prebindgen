@@ -114,12 +114,19 @@
 //! adapter declaration is examined. A binding is built against a model the
 //! frontend could read in full, or it is not built.
 //!
-//! There is **no verbatim passthrough**, because a `#[prebindgen]` crate marks
-//! the items that cross the boundary and leaves the supporting code to the
+//! No **marked** item passes through verbatim, because a `#[prebindgen]` crate
+//! marks the items that cross the boundary and leaves the supporting code to the
 //! consumer. The proc-macro already enforces that — a `use`, `mod`, `impl` or
 //! `macro_rules!` cannot be marked at all — so the only item kind left that this
 //! module does not model is a `union`, and it is diagnosed like anything else the
 //! language cannot express.
+//!
+//! The one item that *is* re-emitted verbatim is a [`Guard`] — an anonymous
+//! const, which has no address and so cannot be part of an API addressed by name.
+//! Today these are the feature checks [`Source`](crate::Source) injects on its own
+//! behalf. Modelled rather than dropped because this module must be total over
+//! what it is handed, and a separate element so nothing that consumes the API has
+//! to remember to skip it.
 //!
 //! # Declaring a handle
 //!
@@ -168,8 +175,8 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Param, Struct,
-        Type, Unsupported, Variant,
+        Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Guard, Param,
+        Struct, Type, Unsupported, Variant,
     },
     origin::Origin,
     ty::{RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
@@ -327,9 +334,11 @@ impl FlatBuilder {
             crate::api::core::types_util::normalize_item_types(item, &normalization);
         }
 
-        // Pass 1: the consts an array length may name. Unnamed `const _` items
-        // are excluded for the same reason `Element::name` skips them — they
-        // are not addressable, so no length can name one.
+        // Pass 1: the consts an array length may name. Unnamed items are
+        // excluded because no length can name one — the same fact that makes
+        // them `Guard`s. This is the one place that tests the spelling rather
+        // than the classification, and it has to: it runs before Pass 2, so no
+        // classification exists yet.
         let consts = ConstIndex::new(items.iter().filter_map(|(item, loc)| match item {
             syn::Item::Const(c) if c.ident != "_" => Some((
                 c.ident.to_string(),
@@ -473,6 +482,35 @@ impl Flat {
         })
     }
 
+    /// Every type the API **mentions**, at every nesting depth — as distinct from
+    /// [`Self::types`], which is every type it **declares**.
+    ///
+    /// A parameter, a return, a field, a constant's type, and everything reachable
+    /// inside those. The same type mentioned in several places yields one
+    /// [`TypeRef`] per mention, each with its own spelling and origin; a consumer
+    /// that wants one per type indexes them and picks, and element order makes
+    /// that pick deterministic.
+    ///
+    /// This is how a later stage gets the frontend's reading of a type it holds
+    /// only as syntax, without lowering it a second time.
+    pub fn type_refs(&self) -> impl Iterator<Item = &TypeRef> {
+        self.elements
+            .iter()
+            .flat_map(element_type_refs)
+            .flat_map(TypeRef::walk)
+    }
+
+    /// Every anonymous const, in stream order — **zero or more**.
+    ///
+    /// Not part of the flat API — see [`Guard`] — but ingested with it, and a
+    /// consumer that re-emits the source must re-emit these too.
+    pub fn guards(&self) -> impl Iterator<Item = &Guard> {
+        self.elements.iter().filter_map(|e| match e {
+            Element::Guard(g) => Some(g),
+            _ => None,
+        })
+    }
+
     /// Every item the language could not express, with its diagnosis.
     ///
     /// Present in the model so a consumer can inspect what a source crate marked
@@ -576,6 +614,7 @@ fn resolve_references(elements: &mut [Element]) {
                     Element::Function(f) => &f.origin.location,
                     Element::Type(t) => t.location_rc(),
                     Element::Constant(c) => &c.origin.location,
+                    Element::Guard(g) => &g.origin.location,
                     Element::Unsupported(u) => &u.origin.location,
                 }),
             );
@@ -588,11 +627,12 @@ fn resolve_references(elements: &mut [Element]) {
     }
 }
 
-/// The first type this element names that the flat API does not declare.
-fn first_unresolved(
-    element: &Element,
-    declared: &std::collections::HashSet<String>,
-) -> Option<String> {
+/// Every type slot this element writes, outermost only — a parameter, a return,
+/// a field, a constant's type.
+///
+/// The one place the slots are enumerated, so a new element shape is taught to
+/// every consumer at once instead of drifting between them.
+fn element_type_refs(element: &Element) -> Vec<&TypeRef> {
     let mut refs: Vec<&TypeRef> = Vec::new();
     match element {
         Element::Function(f) => {
@@ -606,11 +646,24 @@ fn first_unresolved(
                 .iter()
                 .flat_map(|a| a.fields.iter().map(|f| &f.ty)),
         ),
-        // An enum names nothing, an opaque hides what it names, and an
+        // An enum names nothing, an extern hides what it names, a guard is
+        // emitted verbatim so its types are the consumer's business, and an
         // unsupported item already has a diagnosis worth keeping.
-        Element::Type(Type::Enum(_) | Type::Extern(_)) | Element::Unsupported(_) => {}
+        Element::Type(Type::Enum(_) | Type::Extern(_))
+        | Element::Guard(_)
+        | Element::Unsupported(_) => {}
     }
-    refs.into_iter().find_map(|r| r.first_unresolved(declared))
+    refs
+}
+
+/// The first type this element names that the flat API does not declare.
+fn first_unresolved(
+    element: &Element,
+    declared: &std::collections::HashSet<String>,
+) -> Option<String> {
+    element_type_refs(element)
+        .into_iter()
+        .find_map(|r| r.first_unresolved(declared))
 }
 
 /// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the `Fn`
@@ -889,10 +942,12 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
                 }))
             }
         },
-        // Including the unnamed `const _` each source injects as its feature
-        // guard: it is a const, so it is one here. `Element::name` returns
-        // `None` for `_`, which is what keeps several sources' guards from
-        // colliding in the flat namespace.
+        // An unnamed const is a `Guard`, not a constant: nothing can name it, so
+        // it is not part of the API, and several sources' guards coexist because
+        // none of them has an address to collide on.
+        syn::Item::Const(c) if c.ident == "_" => Element::Guard(Guard {
+            origin: Origin::new(c, at),
+        }),
         syn::Item::Const(c) => match lower_type(&c.ty, consts, &at) {
             Ok(ty) => Element::Constant(Constant {
                 name: c.ident.clone(),

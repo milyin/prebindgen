@@ -6,7 +6,20 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::api::core::registry::Registry;
+use crate::api::core::registry::{Registry, TypeCell, TypeEntry, TypeKey, TypeSubject};
+
+/// A type-table cell for a fixture.
+///
+/// The subject is always [`TypeSubject::Adapter`]: a hand-built table has no
+/// `Flat` behind it, so no key in one has a source reading. A test that cares
+/// about the `Source` side builds its registry from items instead.
+pub(crate) fn cell<M>(key: &TypeKey, root: bool, entry: Option<TypeEntry<M>>) -> TypeCell<M> {
+    TypeCell {
+        subject: TypeSubject::Adapter(key.to_type()),
+        root,
+        entry,
+    }
+}
 
 /// Index a `Registry` from a list of Rust item sources.
 ///

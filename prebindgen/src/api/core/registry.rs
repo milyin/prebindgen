@@ -4,8 +4,8 @@
 //! * Item maps (`functions`, `structs`, `enums`, `consts`) indexed by ident.
 //!   Duplicate names across kinds OR within a kind are an error — prebindgen
 //!   items live in one flat namespace.
-//! * `passthrough` — items that aren't function/struct/enum/const (use, mod,
-//!   type alias, macro_rules) emitted verbatim.
+//! * `guards` — anonymous consts, emitted verbatim. Not API: having no name,
+//!   they cannot be declared, so they are neither gated nor addressable.
 //! * `input_types` / `output_types` — direction-specific type tables. Each
 //!   scanned type maps to either a resolved [`TypeEntry`] or an unresolved cell
 //!   that the fixed-point resolver can retry.
@@ -137,6 +137,66 @@ impl fmt::Display for TypeKey {
     }
 }
 
+/// What a type-table key names.
+///
+/// Two populations, and saying which is which is what keeps one origin per cell:
+/// a type the flat API contains **is** a [`TypeRef`](crate::api::core::flat::TypeRef), reused whole, so its
+/// classification and its source location are already there.
+#[derive(Clone, Debug)]
+pub enum TypeSubject {
+    /// A type the flat API contains — the frontend's own reading, unmodified.
+    Source(crate::api::core::flat::TypeRef),
+    /// A type only the binding authored: a declared wire type with no
+    /// `#[prebindgen]` item behind it, an [`unfold`](crate::api::core::unfold)
+    /// leaf. It has no reading and no source location — a fact about it, rather
+    /// than information that went missing.
+    Adapter(syn::Type),
+}
+
+impl TypeSubject {
+    /// Where the source wrote this type, or `None` when no source did.
+    pub fn location(&self) -> Option<&SourceLocation> {
+        match self {
+            TypeSubject::Source(t) => Some(&t.origin.location),
+            TypeSubject::Adapter(_) => None,
+        }
+    }
+
+    /// The frontend's classification, or `None` for an adapter-authored type.
+    pub fn kind(&self) -> Option<&crate::api::core::flat::TypeKind> {
+        match self {
+            TypeSubject::Source(t) => Some(&t.kind),
+            TypeSubject::Adapter(_) => None,
+        }
+    }
+
+    /// The type as Rust must spell it, either way.
+    pub fn syntax(&self) -> &syn::Type {
+        match self {
+            TypeSubject::Source(t) => &t.origin.syntax,
+            TypeSubject::Adapter(ty) => ty,
+        }
+    }
+}
+
+/// One type-table cell: what the key names, and the adapter's answer for it.
+pub struct TypeCell<M = ()> {
+    /// The type itself, as the frontend reads it when it can.
+    pub subject: TypeSubject,
+    /// The binding asks for this cell **directly** — a declared fn's signature, a
+    /// declared type, an `unfold` leaf — as opposed to reaching it through some
+    /// converter's [`TypeEntry::subs`].
+    ///
+    /// A scan fact. Whether a converter is *needed* here is reachability from
+    /// these roots, which [`crate::api::core::resolve`] derives rather than
+    /// stores: the scan deliberately over-approximates the table (every nested
+    /// position, every struct in both directions), so the roots are what say
+    /// which of it has to work.
+    pub root: bool,
+    /// The adapter's converter, once resolved.
+    pub entry: Option<TypeEntry<M>>,
+}
+
 /// Per-cell registry entry.
 #[derive(Clone)]
 pub struct TypeEntry<M = ()> {
@@ -159,10 +219,6 @@ pub struct TypeEntry<M = ()> {
     /// terminal converters; populated by wrapper converters. Used by the
     /// post-resolution propagation pass.
     pub subs: Vec<TypeKey>,
-    /// Initially true for types that appear directly in a `#[prebindgen]` fn
-    /// signature; false for sub-positions. Promoted true by the propagation
-    /// pass for any type reachable via `subs` from another required type.
-    pub required: bool,
     /// Wire bit-patterns this converter never produces / always rejects.
     /// Wrappers (`Option<_>`, sum-typed enums) carve from this set for
     /// their own discriminants. See [`Niches`] for the cascade model.
@@ -241,8 +297,11 @@ pub struct Registry<M = ()> {
     pub structs: HashMap<syn::Ident, (syn::ItemStruct, SourceLocation)>,
     pub enums: HashMap<syn::Ident, (syn::ItemEnum, SourceLocation)>,
     pub consts: HashMap<syn::Ident, (syn::ItemConst, SourceLocation)>,
-    /// Anything else (use, mod, type alias, macro_rules) — passed through.
-    pub passthrough: Vec<(syn::Item, SourceLocation)>,
+    /// Anonymous consts, in stream order, re-emitted verbatim — **zero or
+    /// more**. Not API: having no name, they cannot be declared, so they are
+    /// neither gated nor addressable. See
+    /// [`Guard`](crate::api::core::flat::Guard) for what produces them.
+    pub guards: Vec<crate::api::core::flat::Guard>,
 
     /// Origin crate name of each named item (fn/struct/enum/const),
     /// recorded by [`Self::from_items`] from each item's
@@ -262,21 +321,20 @@ pub struct Registry<M = ()> {
     /// back to `crate`.
     pub(crate) source_modules: Vec<String>,
 
-    /// Type tables, one per direction. Each scanned type maps to its resolved
-    /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
-    /// resolver fills it.
-    pub input_types: HashMap<TypeKey, Option<TypeEntry<M>>>,
-    pub output_types: HashMap<TypeKey, Option<TypeEntry<M>>>,
+    /// Type tables, one per direction. Each scanned type gets a [`TypeCell`]
+    /// holding what the key names, whether the binding asks for it directly, and
+    /// the resolved [`TypeEntry`] once the structural resolver fills it.
+    pub input_types: HashMap<TypeKey, TypeCell<M>>,
+    pub output_types: HashMap<TypeKey, TypeCell<M>>,
 
-    /// First-seen source location for each type key. Used in error messages
-    /// to point the user at where a required-but-unresolved type came from.
-    pub type_locations: HashMap<TypeKey, SourceLocation>,
-
-    /// Sidecar tracking which keys were registered as top-level fn-signature
-    /// types, separate from per-entry `required` (which the resolver flips
-    /// into `TypeEntry::required` once an entry is filled).
-    pub required_inputs_scan: HashSet<TypeKey>,
-    pub required_outputs_scan: HashSet<TypeKey>,
+    /// The frontend's reading of every type the flat API mentions, keyed the way
+    /// the tables are, so a cell gets its [`TypeSubject::Source`] by lookup
+    /// instead of by lowering the type a second time.
+    ///
+    /// Built once from [`Self::flat`] before anything is scanned. A type
+    /// mentioned in several places keeps the first mention in **element order** —
+    /// a property of the model, not of the order items were fed in.
+    type_refs: HashMap<TypeKey, crate::api::core::flat::TypeRef>,
 
     /// Resolved constructor-expansion plans, keyed by `(function, parameter)`.
     /// Filled by [`crate::api::core::expand::apply`] before resolution; read
@@ -331,14 +389,12 @@ impl<M> Registry<M> {
             structs: HashMap::new(),
             enums: HashMap::new(),
             consts: HashMap::new(),
-            passthrough: Vec::new(),
+            guards: Vec::new(),
             item_origins: HashMap::new(),
             source_modules: Vec::new(),
             input_types: Default::default(),
             output_types: Default::default(),
-            type_locations: HashMap::new(),
-            required_inputs_scan: HashSet::new(),
-            required_outputs_scan: HashSet::new(),
+            type_refs: HashMap::new(),
             expansion_plans: HashMap::new(),
             unfold_plans: HashMap::new(),
             error_plans: HashMap::new(),
@@ -769,11 +825,15 @@ impl<M> Registry<M> {
     /// override could only fix one module).
     ///
     /// This step only populates the item maps (`functions`, `structs`,
-    /// `enums`, `consts`, `passthrough`). Signature/body scanning that
+    /// `enums`, `consts`, `guards`). Signature/body scanning that
     /// drives type-resolution requirements happens later, in
     /// [`Self::scan_declared`], and is gated on what the language adapter
-    /// has explicitly declared. Items that are never declared remain in
-    /// the registry but never drive type resolution and never emit.
+    /// has explicitly declared. An **API** item that is never declared remains
+    /// in the registry but never drives type resolution and never emits.
+    ///
+    /// `guards` is the exception, and it is not one of the API maps: an
+    /// anonymous const has no name to declare, so it is outside the gate
+    /// entirely and always emits.
     pub fn from_items<I>(items: I) -> Result<Self, ScanError>
     where
         I: IntoIterator<Item = (syn::Item, SourceLocation)>,
@@ -784,7 +844,7 @@ impl<M> Registry<M> {
         Self::from_flat(flat)
     }
 
-    /// Index a parsed [`Flat`] model.
+    /// Index a parsed [`Flat`](crate::api::core::flat::Flat) model.
     ///
     /// The registry is a **projection** of the model, not a second reading of the
     /// source: `Flat` decided what every item means, and this arranges those
@@ -813,6 +873,17 @@ impl<M> Registry<M> {
         }
 
         let mut registry = Registry::empty();
+        // Every type the model mentions, indexed the way the type tables are.
+        // Read up front, from the whole model: which mention of a repeated type
+        // wins is then decided by element order rather than by when a scan
+        // happened to reach it.
+        for ty in flat.type_refs() {
+            registry
+                .type_refs
+                .entry(TypeKey::from_type(&ty.origin.syntax))
+                .or_insert_with(|| ty.clone());
+        }
+
         // First-seen order, which is what makes the first entry the default
         // module. Derived from the elements rather than stored twice.
         for element in flat.elements() {
@@ -852,16 +923,9 @@ impl<M> Registry<M> {
                         (t.origin.syntax.clone(), element.location().clone()),
                     );
                 }
-                // An unnamed `const _` is each source's injected `konst` feature
-                // guard: not addressable, re-emitted verbatim. That is the whole
-                // of `passthrough` now — the proc-macro refuses to mark a `use`,
-                // `mod` or `macro_rules!`, so nothing else ever reached it.
-                Element::Constant(c) if named.is_none() => {
-                    registry.passthrough.push((
-                        syn::Item::Const(c.origin.syntax.clone()),
-                        element.location().clone(),
-                    ));
-                }
+                // An anonymous const, re-emitted verbatim. No name means nothing
+                // can declare it, which is why it is in none of the API maps.
+                Element::Guard(g) => registry.guards.push(g.clone()),
                 Element::Constant(c) => {
                     registry.consts.insert(
                         c.name.clone(),
@@ -1030,8 +1094,8 @@ impl<M> Registry<M> {
 
         // Scan declared functions.
         for ident in &declared.functions {
-            if let Some((item_fn, loc)) = self.functions.get(ident).cloned() {
-                self.scan_fn_signature(&item_fn, &loc)?;
+            if let Some((item_fn, _)) = self.functions.get(ident).cloned() {
+                self.scan_fn_signature(&item_fn)?;
             } else {
                 missing.push(("function", ident.to_string()));
             }
@@ -1061,8 +1125,8 @@ impl<M> Registry<M> {
         // so the type is required in the output direction only.
         if let Some(decl_consts) = &declared.consts {
             for ident in decl_consts {
-                if let Some((item_const, loc)) = self.consts.get(ident).cloned() {
-                    self.ensure_entry(Direction::Output, &item_const.ty, true, &loc);
+                if let Some((item_const, _)) = self.consts.get(ident).cloned() {
+                    self.ensure_entry(Direction::Output, &item_const.ty, true);
                 } else {
                     missing.push(("constant", ident.to_string()));
                 }
@@ -1085,7 +1149,7 @@ impl<M> Registry<M> {
         // Adapter-required extra output types — synthesized values with no
         // `#[prebindgen]` item behind them (e.g. expression constants).
         for ty in &declared.required_output_types {
-            self.ensure_entry(Direction::Output, ty, true, &SourceLocation::default());
+            self.ensure_entry(Direction::Output, ty, true);
         }
 
         // Scan declared types.
@@ -1093,15 +1157,15 @@ impl<M> Registry<M> {
             let ty = key.to_type();
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
-                if let Some((s, loc)) = self.structs.get(&ident).cloned() {
-                    self.scan_struct(&s, &loc)?;
-                    self.ensure_entry(Direction::Input, &ty, true, &loc);
-                    self.ensure_entry(Direction::Output, &ty, true, &loc);
+                if let Some((s, _)) = self.structs.get(&ident).cloned() {
+                    self.scan_struct(&s)?;
+                    self.ensure_entry(Direction::Input, &ty, true);
+                    self.ensure_entry(Direction::Output, &ty, true);
                     matched = true;
-                } else if let Some((e, loc)) = self.enums.get(&ident).cloned() {
-                    self.scan_enum(&e, &loc)?;
-                    self.ensure_entry(Direction::Input, &ty, true, &loc);
-                    self.ensure_entry(Direction::Output, &ty, true, &loc);
+                } else if let Some((e, _)) = self.enums.get(&ident).cloned() {
+                    self.scan_enum(&e)?;
+                    self.ensure_entry(Direction::Input, &ty, true);
+                    self.ensure_entry(Direction::Output, &ty, true);
                     matched = true;
                 }
             }
@@ -1110,9 +1174,8 @@ impl<M> Registry<M> {
                 // `ptr_class(ZKeyExpr<'static>)` on a re-exported
                 // foreign type). Still mark required so the resolver
                 // tries to produce a converter for it.
-                let loc = self.type_locations.get(key).cloned().unwrap_or_default();
-                self.ensure_entry(Direction::Input, &ty, true, &loc);
-                self.ensure_entry(Direction::Output, &ty, true, &loc);
+                self.ensure_entry(Direction::Input, &ty, true);
+                self.ensure_entry(Direction::Output, &ty, true);
             }
         }
 
@@ -1182,12 +1245,8 @@ impl<M> Registry<M> {
             let mut skipped_consts: Vec<String> = self
                 .consts
                 .keys()
-                // Unnamed consts (`const _`, e.g. the injected feature
-                // guard) are infrastructure: not declarable, always emitted
-                // verbatim — never a skip.
                 .filter(|k| {
-                    *k != "_"
-                        && !decl_consts.contains(*k)
+                    !decl_consts.contains(*k)
                         && !declared.ignored_consts.contains(*k)
                         && !pred_ignored(&k.to_string())
                 })
@@ -1205,16 +1264,8 @@ impl<M> Registry<M> {
         Ok(())
     }
 
-    /// True iff the key was scanned as a top-level fn-signature input type.
-    pub fn is_required_input_at_scan(&self, key: &TypeKey) -> bool {
-        self.required_inputs_scan.contains(key)
-    }
-    pub fn is_required_output_at_scan(&self, key: &TypeKey) -> bool {
-        self.required_outputs_scan.contains(key)
-    }
-
     /// Direction-indexed read access to the type-resolution tables.
-    pub(crate) fn type_table(&self, dir: Direction) -> &HashMap<TypeKey, Option<TypeEntry<M>>> {
+    pub(crate) fn type_table(&self, dir: Direction) -> &HashMap<TypeKey, TypeCell<M>> {
         match dir {
             Direction::Input => &self.input_types,
             Direction::Output => &self.output_types,
@@ -1222,10 +1273,7 @@ impl<M> Registry<M> {
     }
 
     /// Direction-indexed mutable access to the type-resolution tables.
-    pub(crate) fn type_table_mut(
-        &mut self,
-        dir: Direction,
-    ) -> &mut HashMap<TypeKey, Option<TypeEntry<M>>> {
+    pub(crate) fn type_table_mut(&mut self, dir: Direction) -> &mut HashMap<TypeKey, TypeCell<M>> {
         match dir {
             Direction::Input => &mut self.input_types,
             Direction::Output => &mut self.output_types,
@@ -1238,30 +1286,30 @@ impl<M> Registry<M> {
     /// its wire form.
     pub fn input_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         let key = TypeKey::from_type(ty);
-        self.type_table(Direction::Input).get(&key)?.as_ref()
+        self.type_table(Direction::Input).get(&key)?.entry.as_ref()
     }
 
     /// Look up the resolved output entry for `ty`. See [`Self::input_entry`].
     pub fn output_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         let key = TypeKey::from_type(ty);
-        self.type_table(Direction::Output).get(&key)?.as_ref()
+        self.type_table(Direction::Output).get(&key)?.entry.as_ref()
     }
 
     /// Register `ty` (and its nested positions) as a required **input** so
     /// the resolver produces a converter for it. Used by
     /// [`crate::api::core::expand`] to pull in the leaf types a fold needs.
-    pub(crate) fn require_input(&mut self, ty: &syn::Type, loc: &SourceLocation) {
+    pub(crate) fn require_input(&mut self, ty: &syn::Type) {
         // Leaf/expansion types are concrete (no disallowed `impl Trait`), so
         // the recursive registration cannot fail here.
-        let _ = self.register_type_recursive(Direction::Input, ty, true, loc);
+        let _ = self.register_type_recursive(Direction::Input, ty, true);
     }
 
     /// Register `ty` (and its nested positions) as a required **output** so the
     /// resolver produces a converter for it. The output-side peer of
     /// [`Self::require_input`]; used by [`crate::api::core::unfold`] to pull in
     /// the leaf types a decomposition delivers.
-    pub(crate) fn require_output(&mut self, ty: &syn::Type, loc: &SourceLocation) {
-        let _ = self.register_type_recursive(Direction::Output, ty, true, loc);
+    pub(crate) fn require_output(&mut self, ty: &syn::Type) {
+        let _ = self.register_type_recursive(Direction::Output, ty, true);
     }
 
     /// Drop `ty` from the required-output scan set. The type's table entry is
@@ -1274,7 +1322,7 @@ impl<M> Registry<M> {
     /// `Vec<opaque-handle>` it cannot resolve at all (a `jlong` wire is not
     /// JObject-shaped), so requiring it would wrongly fail resolution.
     pub(crate) fn unrequire_output(&mut self, ty: &syn::Type) {
-        self.required_outputs_scan.remove(&TypeKey::from_type(ty));
+        self.clear_root(Direction::Output, ty);
     }
 
     /// Drop `ty` from the required-input scan set — the input-side peer of
@@ -1284,14 +1332,19 @@ impl<M> Registry<M> {
     /// converter is genuinely not needed (and for an undeclared type cannot
     /// resolve at all).
     pub(crate) fn unrequire_input(&mut self, ty: &syn::Type) {
-        self.required_inputs_scan.remove(&TypeKey::from_type(ty));
+        self.clear_root(Direction::Input, ty);
     }
 
-    fn scan_fn_signature(
-        &mut self,
-        f: &syn::ItemFn,
-        loc: &SourceLocation,
-    ) -> Result<(), ScanError> {
+    /// Stop treating `ty` as a root. The cell stays, so the resolver still fills
+    /// it if it can — only the demand that it *must* resolve is dropped.
+    fn clear_root(&mut self, dir: Direction, ty: &syn::Type) {
+        let key = TypeKey::from_type(ty);
+        if let Some(cell) = self.type_table_mut(dir).get_mut(&key) {
+            cell.root = false;
+        }
+    }
+
+    fn scan_fn_signature(&mut self, f: &syn::ItemFn) -> Result<(), ScanError> {
         // Mechanical: register every fn-signature type as the user wrote it.
         // No semantic transformations (no &T→T strip, no ZResult<T>→T strip,
         // no skip for () / ZResult<()>). The adapter handles structural
@@ -1306,7 +1359,7 @@ impl<M> Registry<M> {
             match input {
                 syn::FnArg::Receiver(_) => continue,
                 syn::FnArg::Typed(pt) => {
-                    self.register_type_recursive(Direction::Input, &pt.ty, true, loc)?;
+                    self.register_type_recursive(Direction::Input, &pt.ty, true)?;
                 }
             }
         }
@@ -1314,51 +1367,50 @@ impl<M> Registry<M> {
             syn::ReturnType::Default => syn::parse_quote!(()),
             syn::ReturnType::Type(_, ty) => (**ty).clone(),
         };
-        self.register_type_recursive(Direction::Output, &ret_ty, true, loc)?;
+        self.register_type_recursive(Direction::Output, &ret_ty, true)?;
         Ok(())
     }
 
-    fn scan_struct(&mut self, s: &syn::ItemStruct, loc: &SourceLocation) -> Result<(), ScanError> {
+    fn scan_struct(&mut self, s: &syn::ItemStruct) -> Result<(), ScanError> {
         // The struct itself can appear in either direction.
         let ty: syn::Type = crate::api::core::types_util::type_from_ident(&s.ident);
-        self.ensure_entry(Direction::Input, &ty, false, loc);
-        self.ensure_entry(Direction::Output, &ty, false, loc);
+        self.ensure_entry(Direction::Input, &ty, false);
+        self.ensure_entry(Direction::Output, &ty, false);
 
         if let syn::Fields::Named(named) = &s.fields {
             for field in &named.named {
-                self.register_type_recursive(Direction::Input, &field.ty, false, loc)?;
-                self.register_type_recursive(Direction::Output, &field.ty, false, loc)?;
+                self.register_type_recursive(Direction::Input, &field.ty, false)?;
+                self.register_type_recursive(Direction::Output, &field.ty, false)?;
             }
         }
         Ok(())
     }
 
-    fn scan_enum(&mut self, e: &syn::ItemEnum, loc: &SourceLocation) -> Result<(), ScanError> {
+    fn scan_enum(&mut self, e: &syn::ItemEnum) -> Result<(), ScanError> {
         let ty: syn::Type = crate::api::core::types_util::type_from_ident(&e.ident);
-        self.ensure_entry(Direction::Input, &ty, false, loc);
-        self.ensure_entry(Direction::Output, &ty, false, loc);
+        self.ensure_entry(Direction::Input, &ty, false);
+        self.ensure_entry(Direction::Output, &ty, false);
 
         for variant in &e.variants {
             for field in &variant.fields {
-                self.register_type_recursive(Direction::Input, &field.ty, false, loc)?;
-                self.register_type_recursive(Direction::Output, &field.ty, false, loc)?;
+                self.register_type_recursive(Direction::Input, &field.ty, false)?;
+                self.register_type_recursive(Direction::Output, &field.ty, false)?;
             }
         }
         Ok(())
     }
 
-    /// Register `ty` as an entry in the given direction, then recurse into
-    /// every nested position. `top_required` applies only to `ty` itself;
-    /// nested positions are always recorded as not-required.
+    /// Register `ty` as a cell in the given direction, then recurse into every
+    /// nested position. `root` applies only to `ty` itself — a nested position is
+    /// never something the binding asked for directly.
     fn register_type_recursive(
         &mut self,
         dir: Direction,
         ty: &syn::Type,
-        top_required: bool,
-        loc: &SourceLocation,
+        root: bool,
     ) -> Result<(), ScanError> {
         let mut visited: HashSet<TypeKey> = HashSet::new();
-        self.register_type_inner(dir, ty, top_required, loc, &mut visited)
+        self.register_type_inner(dir, ty, root, &mut visited)
     }
 
     fn register_type_inner(
@@ -1366,7 +1418,6 @@ impl<M> Registry<M> {
         dir: Direction,
         ty: &syn::Type,
         is_top: bool,
-        loc: &SourceLocation,
         visited: &mut HashSet<TypeKey>,
     ) -> Result<(), ScanError> {
         // A disallowed `impl Trait` cannot reach here: every fn whose signature
@@ -1379,33 +1430,35 @@ impl<M> Registry<M> {
             return Ok(()); // cycle guard
         }
 
-        self.ensure_entry(dir, ty, is_top, loc);
+        self.ensure_entry(dir, ty, is_top);
 
         for (child_dir, sub) in self.immediate_edges(dir, ty) {
-            self.register_type_inner(child_dir, &sub, false, loc, visited)?;
+            self.register_type_inner(child_dir, &sub, false, visited)?;
         }
         Ok(())
     }
 
-    fn ensure_entry(
-        &mut self,
-        dir: Direction,
-        ty: &syn::Type,
-        required: bool,
-        loc: &SourceLocation,
-    ) {
+    /// Create the cell for `ty` in `dir` if it has none, and mark it a root when
+    /// the binding asked for it directly.
+    ///
+    /// The one place a cell is born, which is what lets the subject be decided
+    /// once: the model's reading if the flat API mentions this type, an
+    /// adapter-authored type otherwise.
+    fn ensure_entry(&mut self, dir: Direction, ty: &syn::Type, root: bool) {
         let key = TypeKey::from_type(ty);
-        let table = self.type_table_mut(dir);
-        table.entry(key.clone()).or_insert(None);
-        if required {
-            match dir {
-                Direction::Input => self.required_inputs_scan.insert(key.clone()),
-                Direction::Output => self.required_outputs_scan.insert(key.clone()),
-            };
-        }
-        self.type_locations
+        let subject = match self.type_refs.get(&key) {
+            Some(t) => TypeSubject::Source(t.clone()),
+            None => TypeSubject::Adapter(key.to_type()),
+        };
+        let cell = self
+            .type_table_mut(dir)
             .entry(key)
-            .or_insert_with(|| loc.clone());
+            .or_insert_with(|| TypeCell {
+                subject,
+                root: false,
+                entry: None,
+            });
+        cell.root |= root;
     }
 
     /// Enumerate the immediate type-graph edges out of `(dir, ty)`:
@@ -1430,20 +1483,24 @@ impl<M> Registry<M> {
         for sub in positions {
             out.push((child_dir, sub));
         }
+        // A declared type's own fields, read off the element rather than off its
+        // `syn::Fields`: a positional field is an ordinary `Field` there, so the
+        // named-only asymmetry the syntax walk had does not arise. An `Enum` has
+        // no fields and an `Extern` declares none, which is what makes both
+        // contribute nothing here.
         if let Some(name) = bare_path_ident(ty) {
-            if let Some((s, _)) = self.structs.get(&name) {
-                if let syn::Fields::Named(named) = &s.fields {
-                    for field in &named.named {
-                        out.push((dir, field.ty.clone()));
-                    }
-                }
-            }
-            if let Some((e, _)) = self.enums.get(&name) {
-                for variant in &e.variants {
-                    for field in &variant.fields {
-                        out.push((dir, field.ty.clone()));
-                    }
-                }
+            use crate::api::core::flat::{Field, Type};
+            let fields: Vec<&Field> = match self.flat.declared_type(&name.to_string()) {
+                Some(Type::Struct(s)) => s.fields.iter().collect(),
+                Some(Type::Variant(v)) => v
+                    .alternatives
+                    .iter()
+                    .flat_map(|a| a.fields.iter())
+                    .collect(),
+                Some(Type::Enum(_) | Type::Extern(_)) | None => Vec::new(),
+            };
+            for field in fields {
+                out.push((dir, field.ty.origin.syntax.clone()));
             }
         }
         out
@@ -1573,10 +1630,9 @@ impl<M> Registry<M> {
         // Adapter-derived extra requirements (registry-aware — e.g. the
         // other-side types of `convert!` conversion fns, per direction).
         for (dir, ty) in ext.extra_required_types(self) {
-            let loc = SourceLocation::default();
             match dir {
-                Direction::Input => self.require_input(&ty, &loc),
-                Direction::Output => self.require_output(&ty, &loc),
+                Direction::Input => self.require_input(&ty),
+                Direction::Output => self.require_output(&ty),
             }
         }
         // Boundary-only types: every crossing is now covered by a plan (fold

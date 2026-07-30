@@ -1587,12 +1587,6 @@ impl Prebindgen for JniGen {
     /// const's type flows through the ordinary output-converter machinery);
     /// only the callee expression differs — a path to the const, not a call.
     fn on_const(&self, c: &syn::ItemConst, registry: &Registry<KotlinMeta>) -> TokenStream {
-        // Unnamed infrastructure consts (`const _`, e.g. the injected
-        // `konst::assertc_eq!` feature guard) pass through verbatim — no
-        // getter, no Kotlin surface.
-        if c.ident == "_" {
-            return c.to_token_stream();
-        }
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);
         let const_ident = &c.ident;

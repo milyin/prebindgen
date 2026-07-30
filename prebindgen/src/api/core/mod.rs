@@ -14,7 +14,7 @@
 //!    until no unresolved type advances, then propagates `ConverterImpl::subs`
 //!    from required roots.
 //! 5. [`registry::Registry::write_rust`] emits adapter prerequisites,
-//!    converters, per-item wrapper Rust, and passthrough items.
+//!    converters, per-item wrapper Rust, and verbatim anonymous consts.
 //!
 //! Secondary artifacts such as C headers or Kotlin sources are produced by the
 //! language adapter after the Rust registry is resolved.
@@ -39,7 +39,7 @@ pub use self::{
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
     registry::{
-        Direction, Generation, Registry, RegistryBuilder, ScanError, TypeEntry, TypeKey,
-        WriteRustError,
+        Direction, Generation, Registry, RegistryBuilder, ScanError, TypeCell, TypeEntry, TypeKey,
+        TypeSubject, WriteRustError,
     },
 };

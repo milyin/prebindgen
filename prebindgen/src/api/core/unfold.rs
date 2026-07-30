@@ -393,7 +393,7 @@ pub fn apply<M>(
     // (there is no return-value lane in a callback invocation). A type without
     // a default deconstructor gets no plan and is delivered whole.
     for func in declared_fns {
-        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
             continue;
         };
         for input in &item_fn.sig.inputs {
@@ -455,7 +455,7 @@ pub fn apply<M>(
                     continue;
                 }
                 for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty, &loc);
+                    registry.require_output(&leaf.out_ty);
                 }
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -601,7 +601,7 @@ fn wire_fixed_returns<M>(
     no_converter: bool,
 ) {
     for func in declared_fns {
-        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
             continue;
         };
         let ret = fn_return(&item_fn);
@@ -651,7 +651,7 @@ fn wire_fixed_returns<M>(
             registry.unrequire_output(&core);
         }
         for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-            registry.require_output(&leaf.out_ty, &loc);
+            registry.require_output(&leaf.out_ty);
         }
         let plan = UnfoldPlan {
             source: vd.source.clone(),
@@ -682,7 +682,7 @@ fn wire_fixed_callbacks<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for func in declared_fns {
-        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
             continue;
         };
         for input in &item_fn.sig.inputs {
@@ -718,7 +718,7 @@ fn wire_fixed_callbacks<M>(
                     continue;
                 }
                 for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-                    registry.require_output(&leaf.out_ty, &loc);
+                    registry.require_output(&leaf.out_ty);
                 }
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
@@ -765,7 +765,7 @@ pub fn apply_leaf_vec_folds<M>(
     // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
     let is_nominated = |bare: &syn::Type| elem_keys.contains(&TypeKey::from_type(bare));
     for func in declared_fns {
-        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
             continue;
         };
         // Output position: `Vec<T>` / `Option<Vec<T>>` return. Skip if a plan
@@ -785,7 +785,7 @@ pub fn apply_leaf_vec_folds<M>(
                     } else {
                         inner_shape
                     };
-                    registry.require_output(&vec_elem, &loc);
+                    registry.require_output(&vec_elem);
                     // The fold delivers the return element-by-element, so the
                     // whole `Vec<T>` / `Option<Vec<T>>` converter is not needed.
                     // De-require it: for String / scalar elements it still
@@ -821,7 +821,7 @@ pub fn apply_leaf_vec_folds<M>(
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
-                registry.require_output(&elem, &loc);
+                registry.require_output(&elem);
                 let plan =
                     whole_leaf_fold_plan(&elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
                 registry.callback_arg_plans.insert(key, plan);
@@ -938,7 +938,7 @@ fn process_decl<M>(
     ed: &OutputDecl,
 ) -> Result<(), UnfoldError> {
     {
-        let (item_fn, loc) = registry
+        let (item_fn, _) = registry
             .functions
             .get(&ed.func)
             .cloned()
@@ -1016,7 +1016,7 @@ fn process_decl<M>(
                 register_decon_spec(registry, acc, &decon, &records, &element)?;
                 let plan = build_plan(acc, registry, ed, by_ref, &element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty, &loc);
+                    registry.require_output(&leaf.out_ty);
                 }
                 plan
             } else {
@@ -1025,7 +1025,7 @@ fn process_decl<M>(
                 // No declaration is involved (`decon: None`) — the element
                 // crosses whole through its own converter.
                 let by_ref = matches!(&inner, syn::Type::Reference(_));
-                registry.require_output(&inner, &loc);
+                registry.require_output(&inner);
                 UnfoldPlan {
                     source: inner.clone(),
                     decon: None,
@@ -1065,7 +1065,7 @@ fn process_decl<M>(
             register_decon_spec(registry, acc, &decon, &records, &source)?;
             let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records, decon)?;
             for leaf in &plan.leaves {
-                registry.require_output(&leaf.out_ty, &loc);
+                registry.require_output(&leaf.out_ty);
             }
             plan
         };
@@ -1099,7 +1099,7 @@ fn process_decl<M>(
             } else {
                 leaf_ty
             };
-            registry.require_output(&cv_ty, &loc);
+            registry.require_output(&cv_ty);
             UnfoldPlan {
                 delivery: Delivery::Return,
                 convert_out_ty: Some(cv_ty),
