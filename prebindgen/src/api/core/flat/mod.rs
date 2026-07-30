@@ -121,11 +121,12 @@
 //! module does not model is a `union`, and it is diagnosed like anything else the
 //! language cannot express.
 //!
-//! The one item that *is* re-emitted verbatim was never marked: [`Guard`], the
-//! feature check [`Source`](crate::Source) injects into the stream on its own
-//! behalf. It is modelled rather than dropped because this module must be total
-//! over what it is handed — but it is a separate element, so nothing that
-//! consumes the API has to remember to skip it.
+//! The one item that *is* re-emitted verbatim is a [`Guard`] — an anonymous
+//! const, which has no address and so cannot be part of an API addressed by name.
+//! Today these are the feature checks [`Source`](crate::Source) injects on its own
+//! behalf. Modelled rather than dropped because this module must be total over
+//! what it is handed, and a separate element so nothing that consumes the API has
+//! to remember to skip it.
 //!
 //! # Declaring a handle
 //!
@@ -499,7 +500,7 @@ impl Flat {
             .flat_map(TypeRef::walk)
     }
 
-    /// Prebindgen's own injected compile-time checks, in stream order.
+    /// Every anonymous const, in stream order — **zero or more**.
     ///
     /// Not part of the flat API — see [`Guard`] — but ingested with it, and a
     /// consumer that re-emits the source must re-emit these too.

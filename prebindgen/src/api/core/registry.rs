@@ -4,8 +4,8 @@
 //! * Item maps (`functions`, `structs`, `enums`, `consts`) indexed by ident.
 //!   Duplicate names across kinds OR within a kind are an error — prebindgen
 //!   items live in one flat namespace.
-//! * `guards` — prebindgen's own injected feature checks, emitted verbatim.
-//!   Not API: no source crate marked them.
+//! * `guards` — anonymous consts, emitted verbatim. Not API: having no name,
+//!   they cannot be declared, so they are neither gated nor addressable.
 //! * `input_types` / `output_types` — direction-specific type tables. Each
 //!   scanned type maps to either a resolved [`TypeEntry`] or an unresolved cell
 //!   that the fixed-point resolver can retry.
@@ -140,7 +140,7 @@ impl fmt::Display for TypeKey {
 /// What a type-table key names.
 ///
 /// Two populations, and saying which is which is what keeps one origin per cell:
-/// a type the flat API contains **is** a [`TypeRef`], reused whole, so its
+/// a type the flat API contains **is** a [`TypeRef`](crate::api::core::flat::TypeRef), reused whole, so its
 /// classification and its source location are already there.
 #[derive(Clone, Debug)]
 pub enum TypeSubject {
@@ -297,9 +297,10 @@ pub struct Registry<M = ()> {
     pub structs: HashMap<syn::Ident, (syn::ItemStruct, SourceLocation)>,
     pub enums: HashMap<syn::Ident, (syn::ItemEnum, SourceLocation)>,
     pub consts: HashMap<syn::Ident, (syn::ItemConst, SourceLocation)>,
-    /// Prebindgen's own injected compile-time checks — one feature guard per
-    /// ingested source crate — re-emitted verbatim. Not API: see
-    /// [`Guard`](crate::api::core::flat::Guard).
+    /// Anonymous consts, in stream order, re-emitted verbatim — **zero or
+    /// more**. Not API: having no name, they cannot be declared, so they are
+    /// neither gated nor addressable. See
+    /// [`Guard`](crate::api::core::flat::Guard) for what produces them.
     pub guards: Vec<crate::api::core::flat::Guard>,
 
     /// Origin crate name of each named item (fn/struct/enum/const),
@@ -827,8 +828,12 @@ impl<M> Registry<M> {
     /// `enums`, `consts`, `guards`). Signature/body scanning that
     /// drives type-resolution requirements happens later, in
     /// [`Self::scan_declared`], and is gated on what the language adapter
-    /// has explicitly declared. Items that are never declared remain in
-    /// the registry but never drive type resolution and never emit.
+    /// has explicitly declared. An **API** item that is never declared remains
+    /// in the registry but never drives type resolution and never emits.
+    ///
+    /// `guards` is the exception, and it is not one of the API maps: an
+    /// anonymous const has no name to declare, so it is outside the gate
+    /// entirely and always emits.
     pub fn from_items<I>(items: I) -> Result<Self, ScanError>
     where
         I: IntoIterator<Item = (syn::Item, SourceLocation)>,
@@ -839,7 +844,7 @@ impl<M> Registry<M> {
         Self::from_flat(flat)
     }
 
-    /// Index a parsed [`Flat`] model.
+    /// Index a parsed [`Flat`](crate::api::core::flat::Flat) model.
     ///
     /// The registry is a **projection** of the model, not a second reading of the
     /// source: `Flat` decided what every item means, and this arranges those
@@ -918,9 +923,8 @@ impl<M> Registry<M> {
                         (t.origin.syntax.clone(), element.location().clone()),
                     );
                 }
-                // Prebindgen's own feature guard, re-emitted verbatim. The only
-                // item here that no source crate marked, which is why it is not
-                // in any of the API maps.
+                // An anonymous const, re-emitted verbatim. No name means nothing
+                // can declare it, which is why it is in none of the API maps.
                 Element::Guard(g) => registry.guards.push(g.clone()),
                 Element::Constant(c) => {
                     registry.consts.insert(

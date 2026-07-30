@@ -15,8 +15,8 @@ use crate::SourceLocation;
 /// One member of the flat API.
 ///
 /// Three modelled kinds — a function, a type, a constant — plus
-/// [`Element::Guard`] for prebindgen's own injected checks and
-/// [`Element::Unsupported`] for anything the language cannot express. No *marked*
+/// [`Element::Guard`] for an anonymous const and [`Element::Unsupported`] for
+/// anything the language cannot express. No *marked*
 /// item passes through verbatim: a `#[prebindgen]` crate marks the items that
 /// cross the boundary, and the supporting code around them is the consumer
 /// crate's job — the proc-macro enforces that already, refusing to mark a `use`,
@@ -27,8 +27,8 @@ pub enum Element {
     /// A type declaration: a struct, either enum shape, or an opaque handle.
     Type(Type),
     Constant(Constant),
-    /// A compile-time check prebindgen injects into the generated file. Carries
-    /// no API surface: nothing can name it, declare it, or cross it.
+    /// An anonymous const — infrastructure re-emitted verbatim. Carries no API
+    /// surface: nothing can name it, declare it, or cross it.
     Guard(Guard),
     /// An item the language cannot express — a parameter type outside the
     /// grammar, a `self` receiver, a reference to a type the flat API never
@@ -350,17 +350,23 @@ pub struct Constant {
     pub origin: Origin<syn::ItemConst>,
 }
 
-/// A compile-time check prebindgen injects into the generated file.
+/// An **anonymous const**: `const _: T = ..`, whatever produced it.
 ///
-/// Today that is one `const _: () = { konst::assertc_eq!(..) }` per ingested
-/// source crate, synthesized by [`Source`](crate::Source) to assert that the
-/// crate's `FEATURES` match what the build script asked for. **Nothing marked it**
-/// — it is prebindgen's own item, riding the same stream — which is why it is not
-/// part of the flat API even though it arrives with it.
+/// The definition is the shape, not the origin. A const with no name has no
+/// address, so nothing can declare it, reference it, or emit it as an alias —
+/// which is what puts it outside the flat API rather than in it, and that holds
+/// however the item arrived: synthesized, hand-fed to [`FlatBuilder`](super::FlatBuilder), or written
+/// as `#[prebindgen] const _: () = ..` in a source crate.
 ///
-/// Recognised by shape rather than by provenance: a constant with no name has no
-/// address, so nothing can declare it, reference it, or emit it as an alias. That
-/// is the property that makes it infrastructure, and it holds whoever wrote it.
+/// **Today's producer** is [`Source`](crate::Source)'s cfg filter, which
+/// synthesizes `const _: () = { konst::assertc_eq!(..) }` to assert that a source
+/// crate's `FEATURES` match what the build script asked for. Nothing *marked*
+/// that one — it is prebindgen's own item riding the same stream — but it is not
+/// the only thing that can land here, and the model does not claim otherwise.
+///
+/// **Cardinality is zero or more.** `enable_feature_filtering(None)` produces
+/// none, and each item iterator taken from a `Source` emits its own, so composing
+/// two iterators from one crate yields two.
 ///
 /// It carries no type, unlike a [`Constant`]. The item is emitted verbatim, so
 /// what its types mean is the consumer crate's business; modelling them would let

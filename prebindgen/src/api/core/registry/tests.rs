@@ -905,7 +905,11 @@ fn from_flat_projects_each_element_kind() {
     assert!(reg.enums.contains_key(&id("Sum")), "a sum is an enum here");
     assert!(reg.enums.contains_key(&id("Flags")));
     assert!(reg.consts.contains_key(&id("K")));
-    assert_eq!(reg.guards.len(), 2, "one guard per source");
+    assert_eq!(
+        reg.guards.len(),
+        2,
+        "both anonymous consts, in stream order"
+    );
     assert!(
         !reg.structs.contains_key(&id("Handle")) && !reg.enums.contains_key(&id("Handle")),
         "an Extern names a type; it declares no body to index"
