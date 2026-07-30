@@ -1090,6 +1090,202 @@ fn an_out_parameter_is_a_borrow_mode() {
     assert!(flat.function("get").is_some());
 }
 
+/// Refusing a type removes a *declaration*, so its dependents must be refused
+/// too — otherwise a surviving element would hold a reference that resolves to
+/// nothing, which is the one invariant the model promises.
+///
+/// Checked in both declaration orders, because a single pass against a snapshot
+/// of the initial declarations keeps the dependent whichever way round it is.
+#[test]
+fn refusal_is_transitive() {
+    let broken: syn::Item = syn::parse_quote!(
+        pub struct Broken {
+            pub field: Missing,
+        }
+    );
+    let user: syn::Item = syn::parse_quote!(
+        pub fn use_broken(value: Broken) {}
+    );
+
+    for (label, items) in [
+        ("declaration first", vec![broken.clone(), user.clone()]),
+        ("dependent first", vec![user, broken]),
+    ] {
+        let flat = Flat::builder()
+            .items(items.into_iter().map(|i| (i, loc())))
+            .build()
+            .expect("deferred, not fatal");
+
+        assert!(
+            flat.declared_type("Broken").is_none(),
+            "{label}: `Missing` is undeclared"
+        );
+        assert!(
+            flat.function("use_broken").is_none(),
+            "{label}: `Broken` is no longer a declaration either"
+        );
+        assert_eq!(flat.unsupported().count(), 2, "{label}");
+        // Both still hold their names against the namespace.
+        assert!(flat.element("Broken").is_some(), "{label}");
+        assert!(flat.element("use_broken").is_some(), "{label}");
+    }
+}
+
+/// And through a chain of any length, in either direction — the fixed point only
+/// ever shrinks the declared set, so it terminates and misses no hop.
+#[test]
+fn refusal_is_transitive_through_a_chain() {
+    let chain: Vec<syn::Item> = vec![
+        syn::parse_quote!(
+            pub struct A {
+                pub field: Missing,
+            }
+        ),
+        syn::parse_quote!(
+            pub struct B {
+                pub field: A,
+            }
+        ),
+        syn::parse_quote!(
+            pub struct C {
+                pub field: B,
+            }
+        ),
+        syn::parse_quote!(
+            pub fn takes_c(value: C) {}
+        ),
+    ];
+
+    for (label, items) in [
+        ("forward", chain.clone()),
+        ("reversed", chain.into_iter().rev().collect()),
+    ] {
+        let flat = Flat::builder()
+            .items(items.into_iter().map(|i| (i, loc())))
+            .build()
+            .expect("deferred");
+        assert_eq!(
+            flat.types().count(),
+            0,
+            "{label}: the whole chain collapses"
+        );
+        assert_eq!(flat.functions().count(), 0, "{label}");
+        assert_eq!(flat.unsupported().count(), 4, "{label}");
+    }
+
+    // A sound chain is untouched, so the fixed point is not just refusing
+    // everything reachable.
+    let flat = Flat::builder()
+        .items(
+            vec![
+                opaque("Missing"),
+                syn::parse_quote!(
+                    pub struct A {
+                        pub field: Missing,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn takes_a(value: A) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+    assert_eq!(flat.unsupported().count(), 0);
+    assert!(flat.function("takes_a").is_some());
+}
+
+/// Every reference reachable from a *surviving* element resolves. That is what
+/// the transitive pass buys, and what `resolve` relies on.
+#[test]
+fn every_surviving_reference_resolves() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                opaque("Missing"),
+                syn::parse_quote!(
+                    pub struct Held {
+                        pub field: Missing,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn takes_held(value: Held) -> Held {}
+                ),
+                // ... alongside a chain that does collapse.
+                syn::parse_quote!(
+                    pub struct Broken {
+                        pub field: Absent,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn takes_broken(value: Broken) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("deferred");
+
+    for f in flat.functions() {
+        for r in f.params.iter().map(|p| &p.ty).chain([&f.ret]) {
+            if let TypeKind::Named { id, .. } = &r.kind {
+                assert!(
+                    flat.resolve(id).is_some(),
+                    "`{}` must resolve from a surviving function",
+                    id.name
+                );
+            }
+        }
+    }
+    assert!(flat.function("takes_held").is_some());
+    assert!(flat.function("takes_broken").is_none());
+}
+
+/// A generic alias is a generic binder like any other item's, and `Opaque` has no
+/// binder or arity — so accepting one would let `Handle<u8>` resolve against a
+/// declaration that says nothing about its parameter. It is also why
+/// `MaybeUninit` needed grammar support rather than an alias.
+#[test]
+fn a_generic_alias_is_refused() {
+    for (item, param, kind_str) in [
+        (
+            syn::parse_quote!(
+                pub type Handle<T> = hidden::Handle<T>;
+            ),
+            "T",
+            "a type parameter",
+        ),
+        (
+            syn::parse_quote!(
+                pub type Padded<const N: usize> = hidden::Padded<N>;
+            ),
+            "N",
+            "a const generic parameter",
+        ),
+    ] {
+        let element = parse_one(item);
+        let ItemError::UnsupportedGenericParam { param: got, kind } = as_unsupported(&element)
+        else {
+            panic!(
+                "expected a generic-parameter diagnosis, got {}",
+                describe(&element)
+            );
+        };
+        assert_eq!(got, param);
+        assert_eq!(*kind, kind_str);
+    }
+
+    // A lifetime binder stays accepted, as it is on every other item kind:
+    // lifetimes are spelling and the spelling already travels.
+    let element = parse_one(syn::parse_quote!(
+        pub type Borrowed<'a> = hidden::Borrowed<'a>;
+    ));
+    assert_eq!(as_opaque(&element).name, "Borrowed");
+}
+
 // ── The flat namespace ─────────────────────────────────────────────────
 
 /// The feeders accumulate, and the whole-stream rules span them.

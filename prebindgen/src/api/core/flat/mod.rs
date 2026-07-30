@@ -340,7 +340,14 @@ impl FlatBuilder {
         // Pass 3: resolve references, now that every declaration is in hand.
         resolve_references(&mut elements);
 
-        Ok(Flat { elements })
+        // Indexed after resolution, because refusing an item can change its kind
+        // (a `Type` becomes `Unsupported`) though never its name.
+        let by_name = elements
+            .iter()
+            .enumerate()
+            .filter_map(|(i, e)| e.name().map(|n| (n.to_string(), i)))
+            .collect();
+        Ok(Flat { elements, by_name })
     }
 }
 
@@ -367,7 +374,16 @@ impl FlatBuilder {
 /// whichever adapter happened to look first.
 #[derive(Debug)]
 pub struct Flat {
+    /// Source order, so iteration reports items as the sources were fed.
     elements: Vec<Element>,
+    /// Name → position in [`Self::elements`].
+    ///
+    /// A map rather than a scan because every typed accessor and every
+    /// [`Self::resolve`] routes through it, and later stages resolve references
+    /// in a loop — a linear scan would make that quadratic in the size of the
+    /// API. Positions rather than clones, so there is one copy of each element
+    /// and source order stays available.
+    by_name: std::collections::HashMap<String, usize>,
 }
 
 impl Flat {
@@ -385,9 +401,7 @@ impl Flat {
     /// [`Element::Unsupported`], which still holds its name against the
     /// namespace.
     pub fn element(&self, name: &str) -> Option<&Element> {
-        self.elements
-            .iter()
-            .find(|e| e.name().is_some_and(|n| n == name))
+        self.elements.get(*self.by_name.get(name)?)
     }
 
     pub fn function(&self, name: &str) -> Option<&Function> {
@@ -459,12 +473,28 @@ impl Flat {
 }
 
 /// Turn every element that names an undeclared type into an
-/// [`Element::Unsupported`].
+/// [`Element::Unsupported`], **transitively**.
 ///
 /// Runs once every declaration is in hand, so the order sources were fed in does
 /// not matter and a reference may point forward or across crates.
+///
+/// # Why this iterates
+///
+/// Refusing a type *removes a declaration*, which can strand its dependents:
+///
+/// ```ignore
+/// pub struct Broken { pub field: Missing }   // refused: `Missing` undeclared
+/// pub fn use_broken(value: Broken) {}        // `Broken` is now gone too
+/// ```
+///
+/// A single pass against a snapshot of the initial declarations would keep
+/// `use_broken`, and [`Flat::resolve`] would then return `None` for its parameter
+/// — breaking the invariant that a surviving element's references all resolve.
+/// So this runs to a fixed point: each round drops the declarations it refused,
+/// and stops when a round refuses nothing. Chains of any length collapse, in
+/// either declaration order, because the set only ever shrinks.
 fn resolve_references(elements: &mut [Element]) {
-    let declared: std::collections::HashSet<String> = elements
+    let mut declared: std::collections::HashSet<String> = elements
         .iter()
         .filter_map(|e| match e {
             Element::Type(t) => Some(t.name().to_string()),
@@ -472,25 +502,39 @@ fn resolve_references(elements: &mut [Element]) {
         })
         .collect();
 
-    for element in elements.iter_mut() {
-        let Some(unresolved) = first_unresolved(element, &declared) else {
-            continue;
-        };
-        let name = element.name().cloned();
-        let origin = Origin::new(
-            element.syntax(),
-            Rc::clone(match element {
-                Element::Function(f) => &f.origin.location,
-                Element::Type(t) => t.location_rc(),
-                Element::Constant(c) => &c.origin.location,
-                Element::Unsupported(u) => &u.origin.location,
-            }),
-        );
-        *element = Element::Unsupported(Unsupported {
-            name,
-            error: Box::new(ItemError::UnresolvedType { name: unresolved }),
-            origin,
-        });
+    loop {
+        let mut refused = Vec::new();
+        for (i, element) in elements.iter().enumerate() {
+            if let Some(unresolved) = first_unresolved(element, &declared) {
+                refused.push((i, unresolved));
+            }
+        }
+        if refused.is_empty() {
+            return;
+        }
+        for (i, unresolved) in refused {
+            // A refused type stops being a declaration, which is what lets the
+            // next round see its dependents as unresolved.
+            if let Element::Type(t) = &elements[i] {
+                declared.remove(&t.name().to_string());
+            }
+            let element = &mut elements[i];
+            let name = element.name().cloned();
+            let origin = Origin::new(
+                element.syntax(),
+                Rc::clone(match element {
+                    Element::Function(f) => &f.origin.location,
+                    Element::Type(t) => t.location_rc(),
+                    Element::Constant(c) => &c.origin.location,
+                    Element::Unsupported(u) => &u.origin.location,
+                }),
+            );
+            *element = Element::Unsupported(Unsupported {
+                name,
+                error: Box::new(ItemError::UnresolvedType { name: unresolved }),
+                origin,
+            });
+        }
     }
 }
 
@@ -766,10 +810,18 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
         // foreign or crate-private type a name in the flat API, without claiming
         // anything about its contents. That is the only way a handle enters the
         // API deliberately, and the reason references can be required to resolve.
-        syn::Item::Type(t) => Element::Type(Type::Opaque(Opaque {
-            name: t.ident.clone(),
-            origin: Origin::new(syn::Item::Type(t), at),
-        })),
+        syn::Item::Type(t) => match reject_generic_params(&t.generics) {
+            // `Opaque` has no binder and no arity, so a generic alias would be
+            // accepted as one declaration that `Handle<u8>` then resolves against
+            // — losing exactly the scoped-parameter distinction every other item
+            // kind refuses. It is also why `MaybeUninit` needed grammar support
+            // rather than an alias.
+            Err(error) => unsupported(t.ident.clone(), syn::Item::Type(t), &at, error),
+            Ok(()) => Element::Type(Type::Opaque(Opaque {
+                name: t.ident.clone(),
+                origin: Origin::new(syn::Item::Type(t), at),
+            })),
+        },
         // Including the unnamed `const _` each source injects as its feature
         // guard: it is a const, so it is one here. `Element::name` returns
         // `None` for `_`, which is what keeps several sources' guards from
