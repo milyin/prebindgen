@@ -12,18 +12,32 @@
 //! build the model; this module renders it.
 
 pub(crate) mod code;
+pub(crate) mod expr;
 pub(crate) mod file;
 pub(crate) mod model;
 pub(crate) mod render;
+pub(crate) mod slot;
 pub(crate) mod types;
 
 #[cfg(test)]
 mod tests;
 
 pub use code::Code;
+// Re-exported for #193 / #199, which are the first consumers; `ExprSlot` is
+// already used by the model's mechanical bridges.
+#[allow(unused_imports)]
+pub use expr::{
+    fill_hole, free_names, has_hole, substitute, ArenaId, Binder, BindingId, ExprArena, KtExpr,
+    KtLambda, KtLiteral, KtName, KtPattern, KtStmt, NameHint, Spelling,
+};
 pub use file::{merge_files, write_files, WriteKotlinError};
 pub use model::{
     ClassKind, KtBody, KtClass, KtCtorParam, KtDecl, KtEnumEntry, KtFile, KtFun, KtFunInterface,
     KtParam, KtProperty, Vis,
+};
+#[allow(unused_imports)]
+pub use slot::{
+    AccessorTree, AnnotationSlot, ExprSlot, KtAccessor, KtAnnotation, PropertyValue,
+    StaticAnnotationText,
 };
 pub use types::{ImportSet, KtType};

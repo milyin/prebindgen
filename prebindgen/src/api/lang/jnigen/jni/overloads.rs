@@ -548,7 +548,7 @@ fn overload_shell(sel_fun: &kt::KtFun, params: Vec<kt::KtParam>, body: kt::Code)
     let mut ov = sel_fun.clone();
     ov.params = params;
     ov.kdoc = None;
-    ov.body = kt::KtBody::Expr(body);
+    ov.body = kt::KtBody::Expr(kt::ExprSlot::legacy(body));
     ov
 }
 

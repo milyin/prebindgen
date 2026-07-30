@@ -19,11 +19,13 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
     let entries: Vec<kt::KtEnumEntry> =
         crate::api::core::types_util::enum_discriminant_values(item_enum)
             .into_iter()
-            .map(|(ident, value)| kt::KtEnumEntry {
-                name: mangle_kotlin_ident(
-                    &crate::api::lang::jnigen::util::camel_to_screaming_snake(&ident.to_string()),
-                ),
-                args: Some(value.to_string()),
+            .map(|(ident, value)| {
+                kt::KtEnumEntry::legacy_args(
+                    mangle_kotlin_ident(&crate::api::lang::jnigen::util::camel_to_screaming_snake(
+                        &ident.to_string(),
+                    )),
+                    value.to_string(),
+                )
             })
             .collect();
 
