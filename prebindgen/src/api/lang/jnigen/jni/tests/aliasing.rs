@@ -41,7 +41,7 @@ fn build(fns: &[&str], tag: &str) -> String {
         decls = decls.fun(crate::lang::FunctionDecl::new(id));
         items.push((syn::Item::Fn(f), loc.clone()));
     }
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(decls);

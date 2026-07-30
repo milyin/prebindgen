@@ -58,7 +58,7 @@ impl Prebindgen for IdentityExt {
 
 #[test]
 fn dedup_and_sort() {
-    let mut reg: Registry<()> = Registry::default();
+    let mut reg: Registry<()> = Registry::empty();
     let key_a = TypeKey::parse("u64").expect("test type");
     let key_b = TypeKey::parse("Sample").expect("test type");
     let wire: syn::Type = syn::parse_quote!(i64);
@@ -107,7 +107,7 @@ fn dedup_and_sort() {
 
 #[test]
 fn write_rust_sorts_declared_items_by_ident() {
-    let mut reg: Registry<()> = Registry::default();
+    let mut reg: Registry<()> = Registry::empty();
     let loc = SourceLocation::default();
 
     reg.functions.insert(

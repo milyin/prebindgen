@@ -4,21 +4,23 @@ use super::*;
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
-        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
-        "pub fn duration_to_millis(v: &std::time::Duration) -> u64 { unimplemented!() }",
-        "pub fn duration_echo(v: Option<std::time::Duration>) -> Option<std::time::Duration> { unimplemented!() }",
+        "#[prebindgen] pub type Duration = std::time::Duration;",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+        "pub fn duration_echo(v: Option<Duration>) -> Option<Duration> { unimplemented!() }",
     ]
     .into_iter()
     .map(|source| {
-        let function: syn::ItemFn = syn::parse_str(source).unwrap();
-        (syn::Item::Fn(function), loc.clone())
+        // `syn::Item`, not `ItemFn`: a fixture declares the types it names.
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).unwrap();
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            crate::convert!(std::time::Duration)
+            crate::convert!(Duration)
                 .input(crate::fun!(duration_from_millis))
                 .output(crate::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
@@ -68,14 +70,14 @@ fn flattened_field_composes_bounded_conversion_stages() {
         (
             syn::Item::Struct(syn::parse_quote!(
                 pub struct Timed {
-                    pub delay: Option<std::time::Duration>,
+                    pub delay: Option<Duration>,
                 }
             )),
             loc.clone(),
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
-                pub fn duration_from_millis(v: u64) -> std::time::Duration {
+                pub fn duration_from_millis(v: u64) -> Duration {
                     unimplemented!()
                 }
             )),
@@ -83,7 +85,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
-                pub fn duration_to_millis(v: &std::time::Duration) -> u64 {
+                pub fn duration_to_millis(v: &Duration) -> u64 {
                     unimplemented!()
                 }
             )),
@@ -106,11 +108,12 @@ fn flattened_field_composes_bounded_conversion_stages() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            crate::convert!(std::time::Duration)
+            crate::convert!(Duration)
                 .input(crate::fun!(duration_from_millis))
                 .output(crate::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
@@ -153,11 +156,11 @@ fn flattened_field_composes_bounded_conversion_stages() {
     assert!(rc.contains("jlong_to_u64"), "{rust}");
     assert!(rc.contains("u64_to_Duration"), "{rust}");
     assert!(
-        rc.contains("jlong_to_Option_std_time_Duration") && rc.contains("env,&__delay_raw)?"),
+        rc.contains("jlong_to_Option_Duration") && rc.contains("env,&__delay_raw)?"),
         "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
     );
     assert!(
-        rc.contains("let___delay:jni::sys::jlong=Option_std_time_Duration_to_jlong")
+        rc.contains("let___delay:jni::sys::jlong=Option_Duration_to_jlong")
             && rc.contains("\"(J)Lio/test/jni/Timed;\""),
         "whole-struct output must pass the niche as primitive jlong:\n{rust}"
     );
@@ -170,12 +173,16 @@ fn flattened_field_composes_bounded_conversion_stages() {
 
 #[test]
 fn duration_requires_an_explicit_conversion() {
-    let function: syn::ItemFn = syn::parse_str(
-        "pub fn duration_echo(v: std::time::Duration) -> std::time::Duration { unimplemented!() }",
-    )
-    .unwrap();
-    let registry = Registry::<KotlinMeta>::from_items([(syn::Item::Fn(function), myflat_loc())])
-        .expect("index items");
+    let alias: syn::Item =
+        syn::parse_str("#[prebindgen] pub type Duration = std::time::Duration;").unwrap();
+    let function: syn::ItemFn =
+        syn::parse_str("pub fn duration_echo(v: Duration) -> Duration { unimplemented!() }")
+            .unwrap();
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced([
+        (alias, myflat_loc()),
+        (syn::Item::Fn(function), myflat_loc()),
+    ]))
+    .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("time").fun(crate::fun!(duration_echo)));
@@ -192,19 +199,20 @@ fn duration_requires_an_explicit_conversion() {
 fn conversion_domain_must_match_the_representation() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
-        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
-        "pub fn duration_use(v: std::time::Duration) { unimplemented!() }",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_use(v: Duration) { unimplemented!() }",
     ]
     .into_iter()
     .map(|source| {
-        let function: syn::ItemFn = syn::parse_str(source).unwrap();
-        (syn::Item::Fn(function), loc.clone())
+        // `syn::Item`, not `ItemFn`: a fixture declares the types it names.
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).unwrap();
     let jni = JniGen::new()
         .convert(
-            crate::convert!(std::time::Duration)
+            crate::convert!(Duration)
                 .input(crate::fun!(duration_from_millis))
                 .valid_range(0i64..=1_000i64),
         )
@@ -242,7 +250,8 @@ fn option_scalar_param_crosses_as_present_value_pair() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -339,7 +348,8 @@ fn vec_of_handle_output_folds_kotlin_side() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -422,7 +432,8 @@ fn option_scalar_struct_field_flattens() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
@@ -537,7 +548,8 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -653,7 +665,8 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::data_class!(FlatChild))
@@ -726,7 +739,8 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::ptr_class!(Token))
@@ -782,10 +796,10 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
         }
     );
     let loc = myflat_loc();
-    let registry = Registry::<KotlinMeta>::from_items([
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced([
         (syn::Item::Struct(wide.clone()), loc.clone()),
         (syn::Item::Fn(use_wide.clone()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
     let jni = JniGen::new().package(
         crate::package!()
@@ -802,10 +816,10 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
     // The explicit object boundary keeps the same public Kotlin data class,
     // but the native method receives it in one slot and performs the legacy
     // whole-object field decode instead of producing an illegal signature.
-    let registry = Registry::<KotlinMeta>::from_items([
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced([
         (syn::Item::Struct(wide), loc.clone()),
         (syn::Item::Fn(use_wide), loc),
-    ])
+    ]))
     .expect("index marked items");
     let jni = JniGen::new().package(
         crate::package!()
@@ -837,7 +851,8 @@ fn output_only_convert_resolves_without_input_twin() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
@@ -882,7 +897,8 @@ fn convert_fn_qualifies_with_origin_crate() {
         "my-helpers",
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(flat.into_iter().chain(helpers)).expect("index items");
+        Registry::<KotlinMeta>::from_items(declare_referenced(flat.into_iter().chain(helpers)))
+            .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
@@ -917,7 +933,8 @@ fn convert_input_target_mismatch_rejected() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .convert(crate::convert!(Len).input(crate::fun!(from_long)))
         .package(crate::package!("len").fun(crate::fun!(use_len)));
@@ -938,7 +955,8 @@ fn convert_via_trait_impls() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn temp_double(c: Celsius) -> Celsius { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -973,7 +991,8 @@ fn convert_via_try_from_is_fallible() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn pct_use(p: Percent) -> i32 { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Percent).input(crate::try_from!(i32)))
@@ -1007,7 +1026,8 @@ fn option_composition_normalizes_fallible_stage_errors() {
     )
     .unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -1044,7 +1064,8 @@ fn convert_via_local_fns() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -1112,7 +1133,8 @@ fn convert_via_local_try_fn_is_fallible() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -1169,7 +1191,8 @@ fn data_class_members_reenter_as_field_leaves() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!().class(
             crate::data_class!(Point)
@@ -1268,7 +1291,8 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::data_class!(Unsigned))
@@ -1396,7 +1420,8 @@ fn data_class_properties_match_their_from_parts_params() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::ptr_class!(Handle))
@@ -1476,35 +1501,10 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         )),
         loc.clone(),
     ));
-    // A type owning an ASSOCIATED const, used as the other length below. It is
-    // deliberately NEVER declared to JniGen: it is only the Rust namespace for
-    // a compile-time length, not a boundary type, so qualification must not
-    // require a Kotlin class to exist for it.
-    items.push((
-        syn::Item::Struct(syn::parse_quote!(
-            pub struct Holder {
-                pub marker: u8,
-            }
-        )),
-        loc.clone(),
-    ));
-    // A `const fn` whose CALL is a length. Also never declared: its result
-    // determines an array size, which is no reason to put it in the Kotlin
-    // surface.
-    items.push((
-        syn::Item::Fn(syn::parse_quote!(
-            pub const fn array_len() -> usize {
-                4
-            }
-        )),
-        loc.clone(),
-    ));
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Blob {
                 pub bytes: [u8; env],
-                pub assoc: [u8; Holder::N],
-                pub called: [u8; array_len()],
             }
         )),
         loc.clone(),
@@ -1517,7 +1517,7 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         )),
         loc.clone(),
     ));
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).unwrap();
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("blob")
             .class(crate::data_class!(Blob))
@@ -1544,126 +1544,4 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     );
     assert!(!rc.contains(&format!("{module}::env,")), "{rust}");
     assert!(!rc.contains(&format!("&mut{module}::env")), "{rust}");
-
-    // An ASSOCIATED const qualifies its leading TYPE segment and leaves the
-    // rest of the path relative to it — `myflat::Holder::N`, never
-    // `myflat::Holder::myflat::N`. `Holder` is UNDECLARED, so this also pins
-    // that qualification reads the registry rather than the declared surface.
-    // Asserted at the two CODE positions (return type and param type); the bare
-    // spelling legitimately survives inside the decode's diagnostic string,
-    // which names the type as the source wrote it.
-    assert!(
-        rc.contains(&format!("Result<[u8;{module}::Holder::N]")),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(&format!("v:[u8;{module}::Holder::N]")),
-        "{rust}"
-    );
-    assert!(!rc.contains("Result<[u8;Holder::N]"), "{rust}");
-    assert!(!rc.contains("v:[u8;Holder::N]"), "{rust}");
-    // The leading segment is rewritten ONCE — the associated item stays
-    // relative to the type it belongs to.
-    assert!(
-        !rc.contains(&format!("{module}::Holder::{module}")),
-        "{rust}"
-    );
-
-    // A `const fn` CALL is a third shape a length can take, and its callee is
-    // an indexed item like the other two. Also undeclared.
-    assert!(
-        rc.contains(&format!("Result<[u8;{module}::array_len()]")),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(&format!("v:[u8;{module}::array_len()]")),
-        "{rust}"
-    );
-    assert!(!rc.contains("Result<[u8;array_len()]"), "{rust}");
-    assert!(!rc.contains("v:[u8;array_len()]"), "{rust}");
-}
-
-/// An array length whose expression form is not on the supported whitelist is
-/// REJECTED, not qualified.
-///
-/// An inline `const { … }` block may bind locals, and this generator qualifies
-/// a length's bare paths against their source module — so a local shadowing a
-/// source item would be rewritten into it (`array_len` the local becoming
-/// `myflat::array_len` the fn). Scope tracking is the general answer; the shape
-/// has no place in an FFI boundary type, so the whole family is refused with a
-/// message naming the type and the fix. Silently mis-qualifying is the
-/// alternative this exists to prevent.
-#[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_inline_const_block_is_rejected() {
-    // A local bound by an inline const block, shadowing the indexed fn.
-    check_array_length_rejected(syn::parse_quote!(
-        [u8; const {
-            let array_len = 3;
-            array_len
-        }]
-    ));
-}
-
-/// `match` arms bind their patterns directly, with no `Expr::Block` node in
-/// between — which is how this form slipped past the first, blacklist-shaped
-/// attempt. The whitelist refuses it because `match` is simply not on the list.
-#[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_match_arm_binding_is_rejected() {
-    check_array_length_rejected(syn::parse_quote!(
-        [u8; match 3 {
-            array_len => array_len,
-        }]
-    ));
-}
-
-/// `if let` likewise binds without an intervening block node.
-#[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_if_let_binding_is_rejected() {
-    check_array_length_rejected(syn::parse_quote!(
-        [u8; if let array_len = 3 { array_len } else { 0 }]
-    ));
-}
-
-fn check_array_length_rejected(field_ty: syn::Type) {
-    let loc = myflat_loc();
-    let mut items: Vec<(syn::Item, SourceLocation)> = Vec::new();
-    items.push((
-        syn::Item::Fn(syn::parse_quote!(
-            pub const fn array_len() -> usize {
-                4
-            }
-        )),
-        loc.clone(),
-    ));
-    // The offending length; in each case its binding shadows `array_len`.
-    items.push((
-        syn::Item::Struct(syn::parse_quote!(
-            pub struct Blob {
-                pub local: #field_ty,
-            }
-        )),
-        loc.clone(),
-    ));
-    items.push((
-        syn::Item::Fn(syn::parse_quote!(
-            pub fn blob_echo(b: Blob) -> Blob {
-                unimplemented!()
-            }
-        )),
-        loc.clone(),
-    ));
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("blob")
-            .class(crate::data_class!(Blob))
-            .fun(crate::fun!(blob_echo)),
-    );
-    let dir = unique_test_dir("jnigen_array_len_scope");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).unwrap();
-    generation.write_rust(dir.join("gen.rs")).unwrap();
 }

@@ -141,8 +141,10 @@ fn every_input_category() -> String {
         ),
     ];
 
-    let registry = Registry::<()>::from_items(items.into_iter().map(|i| (i, loc.clone())))
-        .expect("index items");
+    let registry = Registry::<()>::from_items(declare_referenced(
+        items.into_iter().map(|i| (i, loc.clone())),
+    ))
+    .expect("index items");
 
     let mut cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(example_flat))

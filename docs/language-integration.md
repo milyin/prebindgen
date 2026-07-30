@@ -96,7 +96,7 @@ moves it.
 |---|---|---|
 | L0 | `Language` + `Element` + the ledger | **done** — [#227](https://github.com/milyin/prebindgen/pull/227) |
 | L0.5 | `Flat`: the model, indexed and resolved | **done** — this branch |
-| L1 | `Registry` consumes elements | not started |
+| L1 | `Registry` consumes elements | **done** — this branch |
 | L2 | `api/core` stops classifying source syntax | not started |
 | L3 | `Cbindgen` consumes elements | not started |
 | L4 | `JniGen` consumes elements *(the long pole — 105 sites)* | not started |
@@ -155,22 +155,37 @@ same treatment before they parse. `Cow<'_, [u8]>` has no alias spelling — gene
 and lifetime-bearing — so `zbytes_to_bytes` needs either the `MaybeUninit`
 treatment or a signature change.
 
-### L1 — `Registry` consumes elements
+### L1 — `Registry` consumes elements — **done**
 
-The seam that makes the direction real. Adapters must not need touching.
+The seam that makes the direction real. Adapters were not touched.
 
-- [ ] `Registry::from_flat(&Flat)`; `from_items` becomes `Flat::builder` +
-      `from_flat`, so both entry points share one parser
-- [ ] The `functions` / `structs` / `enums` / `consts` / `passthrough` maps are
-      rebuilt from each element's retained `syntax` — a projection, not a second
-      source of truth
-- [ ] `scan_fn_signature`'s receiver / parameter-pattern / `impl Trait` guards
-      are deleted: the diagnosis is already on `Element::Unsupported`, and
-      declaring such an item is what raises it
-- [ ] `ScanError`'s per-item variants map onto `ItemError`, so one authority
+- [x] `Registry::from_flat(Flat)`; `from_items` is `Flat::builder` + `from_flat`,
+      so both entry points share one parser
+- [x] The registry **holds** the model (`registry.flat()`), which is how L2–L4
+      reach it: an adapter already has the registry
+- [x] The maps are a projection of the elements — plus synthesis, since `resolve`
+      injects adapter-declared binding-local fns into `functions`
+- [x] `scan_fn_signature`'s receiver / parameter-pattern / `impl Trait` guards
+      deleted with their `ScanError` variants, along with `index_item`,
+      `check_no_duplicate` and `first_seen_loc`: `Flat` owns indexing and
+      duplicate detection
+- [x] `ParseError::DuplicateName` carries both crate names, so one authority
       produces the message
-- [ ] **Must not move**: every generated artifact byte-identical
-      (`examples/regen-check.sh`)
+- [x] **Did not move**: every generated artifact byte-identical
+
+**Correctness is checked by default**, superseding L0's "inert until declared":
+ingestion fails on anything the language cannot express, listing every offender at
+once so a source crate needing migration sees one list. An opt-out for
+deliberately-unsupported elements is #237.
+
+The cost landed in test fixtures: 167 of 524 tests held an item naming a type they
+never declared. `test_util::declare_referenced` supplies a marked alias for those
+where the handle is incidental; the rest were real corrections — a path-qualified
+`std::time::Duration` that no declaration can name, and two array-length tests
+asserting shapes the subgrammar dropped in #212.
+
+**Still open**: `zenoh-flat`'s 26 unmarked aliases. Until they are marked,
+`zenoh-flat-c` and `zenoh-flat-jni` do not generate.
 
 ### L2 — `api/core` stops classifying source syntax
 

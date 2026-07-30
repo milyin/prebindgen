@@ -9,7 +9,7 @@ use super::*;
 fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     use crate::api::core::registry::{Registry, TypeKey};
 
-    let mut reg: Registry<()> = Registry::default();
+    let mut reg: Registry<()> = Registry::empty();
 
     // Index a struct `Outer { inner: ZKeyExpr }` so the BFS can walk
     // into its field. `ZKeyExpr` itself stays *unindexed* (the user's
@@ -60,7 +60,7 @@ fn final_invariant_stops_at_resolved_nodes() {
         SourceLocation as Loc,
     };
 
-    let mut reg: Registry<()> = Registry::default();
+    let mut reg: Registry<()> = Registry::empty();
 
     let outer_struct: syn::ItemStruct = syn::parse_str("struct Outer { inner: Inner }").unwrap();
     let inner_struct: syn::ItemStruct =

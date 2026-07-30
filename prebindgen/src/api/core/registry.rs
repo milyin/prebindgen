@@ -233,6 +233,10 @@ impl Direction {
 /// [`crate::api::core::prebindgen::ConverterImpl`] that produced it.
 /// Adapters that don't carry extras leave `M = ()`.
 pub struct Registry<M = ()> {
+    /// The parsed model these maps project. Held rather than discarded, so a
+    /// later stage can ask it what a name means through the registry it already
+    /// has — see [`Self::flat`].
+    flat: crate::api::core::flat::Flat,
     pub functions: HashMap<syn::Ident, (syn::ItemFn, SourceLocation)>,
     pub structs: HashMap<syn::Ident, (syn::ItemStruct, SourceLocation)>,
     pub enums: HashMap<syn::Ident, (syn::ItemEnum, SourceLocation)>,
@@ -312,9 +316,17 @@ pub struct Registry<M = ()> {
         HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec>,
 }
 
-impl<M> Default for Registry<M> {
-    fn default() -> Self {
+impl<M> Registry<M> {
+    /// An empty registry: no model, no items, no types.
+    ///
+    /// **Not public.** A `Registry` is a projection of a [`Flat`], and one built
+    /// this way projects nothing — [`Self::flat`] would hand a later stage an
+    /// empty model that claims to be this registry's source. Outside this crate
+    /// the entry points are [`Self::from_items`], [`Self::from_flat`] and
+    /// [`Self::builder`], each of which has a model behind it.
+    pub(crate) fn empty() -> Self {
         Self {
+            flat: crate::api::core::flat::Flat::default(),
             functions: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
@@ -334,6 +346,33 @@ impl<M> Default for Registry<M> {
             decon_plans: HashMap::new(),
         }
     }
+}
+
+impl From<crate::api::core::flat::ParseError> for ScanError {
+    fn from(e: crate::api::core::flat::ParseError) -> Self {
+        match e {
+            crate::api::core::flat::ParseError::DuplicateName(d) => {
+                ScanError::DuplicateName(Box::new(DuplicateNameError {
+                    name: d.name,
+                    first: d.first,
+                    second: d.second,
+                    first_crate: d.first_crate,
+                    second_crate: d.second_crate,
+                }))
+            }
+        }
+    }
+}
+
+/// One item of a [`ScanError::NotExpressible`] report.
+#[derive(Debug)]
+pub struct NotExpressibleEntry {
+    /// The item's name, or `None` for an item kind that has none.
+    pub name: Option<syn::Ident>,
+    /// Rendered [`ItemError`](crate::core::flat::ItemError) — the frontend's own
+    /// message, so one authority produces it.
+    pub reason: String,
+    pub location: SourceLocation,
 }
 
 /// Payload of [`ScanError::DuplicateName`], boxed to keep the error enum
@@ -361,15 +400,15 @@ pub enum ScanError {
     ConflictingTypeIntent {
         key: TypeKey,
     },
-    DisallowedImplTrait {
-        ty: String,
-        loc: SourceLocation,
-    },
-    UnsupportedReceiver {
-        loc: SourceLocation,
-    },
-    UnsupportedParamPattern {
-        loc: SourceLocation,
+    /// Items the flat language cannot express, all of them at once.
+    ///
+    /// The message for each comes from
+    /// [`ItemError`](crate::core::flat::ItemError), so one authority produces it.
+    /// This replaces the per-item guards the registry used to duplicate — a `self`
+    /// receiver, a non-ident parameter pattern, a disallowed `impl Trait` — which
+    /// the frontend now catches with a richer diagnosis (it names the parameter).
+    NotExpressible {
+        entries: Vec<NotExpressibleEntry>,
     },
     /// An adapter-invariant check failed — see [`Prebindgen::validate`].
     /// The message is adapter-authored and printed verbatim.
@@ -416,26 +455,35 @@ impl fmt::Display for ScanError {
                     e.second
                 )
             }
-            ScanError::ConflictingFunctionIntent { name } => write!(
-                f,
-                "function `{}` cannot be both declared and ignored",
-                name
-            ),
-            ScanError::ConflictingTypeIntent { key } => write!(
-                f,
-                "type `{}` cannot be both declared and ignored",
-                key
-            ),
-            ScanError::DisallowedImplTrait { ty, loc } => write!(
-                f,
-                "`impl Trait` is not allowed at {}: `{}` (only `impl Fn(...) + Send + Sync + 'static` is supported)",
-                loc, ty
-            ),
-            ScanError::UnsupportedReceiver { loc } => {
-                write!(f, "method receiver (`self`) parameters are not supported at {}", loc)
+            ScanError::ConflictingFunctionIntent { name } => {
+                write!(f, "function `{}` cannot be both declared and ignored", name)
             }
-            ScanError::UnsupportedParamPattern { loc } => {
-                write!(f, "non-ident parameter pattern is not supported at {}", loc)
+            ScanError::ConflictingTypeIntent { key } => {
+                write!(f, "type `{}` cannot be both declared and ignored", key)
+            }
+            ScanError::NotExpressible { entries } => {
+                write!(
+                    f,
+                    "{} `#[prebindgen]` item(s) the flat language cannot express:",
+                    entries.len()
+                )?;
+                for e in entries {
+                    // The crate, because a captured path is crate-relative: with
+                    // several sources, two offenders both read `src/lib.rs:..`
+                    // and the location alone says nothing about which one to fix.
+                    // Same reason the duplicate-name diagnostic carries it.
+                    let in_crate = match &e.location.crate_name {
+                        Some(c) => format!(" in crate `{c}`"),
+                        None => String::new(),
+                    };
+                    match &e.name {
+                        Some(name) => {
+                            write!(f, "\n  {}{in_crate}: {name} {}", e.location, e.reason)?
+                        }
+                        None => write!(f, "\n  {}{in_crate}: {}", e.location, e.reason)?,
+                    }
+                }
+                Ok(())
             }
             ScanError::AdapterInvariant { message } => write!(f, "{}", message),
             ScanError::DeclaredNotFound { entries } => {
@@ -730,50 +778,116 @@ impl<M> Registry<M> {
     where
         I: IntoIterator<Item = (syn::Item, SourceLocation)>,
     {
-        let mut registry = Registry::default();
-        // Pass 1: collect and gather EVERY source module name first, so
-        // cross-source type references (`source_a::TypeA` in a later-chained
-        // source's signature) normalize order-independently in pass 2 — and so do
-        // alias-named paths, whose declaration may arrive later or in another
-        // source.
-        let items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
-        let normalization = crate::api::core::types_util::Normalization::from_items(&items);
-        registry
-            .source_modules
-            .clone_from(&normalization.source_modules);
-        // Pass 2: normalize each item's types to the canonical flat spelling
-        // (`crate::`/source-module paths reduce to the bare indexed name, and an
-        // aliased path to the name its alias gives it — see `normalize_type`'s
-        // rule list), then index. Every downstream `TypeKey::from_type` over a
-        // signature type therefore sees the normalized form, so bare adapter
-        // declarations match qualified captured spellings (issue #95).
-        for (mut item, loc) in items {
-            crate::api::core::types_util::normalize_item_types(&mut item, &normalization);
-            let crate_name = loc.crate_name.clone();
-            let named: Option<syn::Ident> = match &item {
-                syn::Item::Fn(f) => Some(f.sig.ident.clone()),
-                syn::Item::Struct(s) => Some(s.ident.clone()),
-                syn::Item::Enum(e) => Some(e.ident.clone()),
-                syn::Item::Const(c) if c.ident != "_" => Some(c.ident.clone()),
-                _ => None,
-            };
-            match registry.index_item(item, loc) {
-                Ok(()) => {
-                    // Only after successful indexing — a collision must keep
-                    // the FIRST item's origin for the error below.
-                    if let (Some(ident), Some(crate_name)) = (named, crate_name) {
-                        registry.item_origins.insert(ident, crate_name);
-                    }
+        let flat = crate::api::core::flat::Flat::builder()
+            .items(items)
+            .build()?;
+        Self::from_flat(flat)
+    }
+
+    /// Index a parsed [`Flat`] model.
+    ///
+    /// The registry is a **projection** of the model, not a second reading of the
+    /// source: `Flat` decided what every item means, and this arranges those
+    /// decisions into the maps adapters read. The model itself is kept
+    /// ([`Self::flat`]) so later stages can ask it questions rather than
+    /// re-deriving them.
+    ///
+    /// **Fails on anything the language cannot express** — a `self` receiver, an
+    /// `async fn`, a generic binder, a type form outside the grammar, or a
+    /// reference to a type the flat API does not declare. All of them at once, so
+    /// a source crate that needs migrating sees one list instead of one rebuild
+    /// per item.
+    pub fn from_flat(flat: crate::api::core::flat::Flat) -> Result<Self, ScanError> {
+        use crate::api::core::flat::{Element, Type};
+
+        let entries: Vec<NotExpressibleEntry> = flat
+            .unsupported()
+            .map(|u| NotExpressibleEntry {
+                name: u.name.clone(),
+                reason: u.error.to_string(),
+                location: (*u.origin.location).clone(),
+            })
+            .collect();
+        if !entries.is_empty() {
+            return Err(ScanError::NotExpressible { entries });
+        }
+
+        let mut registry = Registry::empty();
+        // First-seen order, which is what makes the first entry the default
+        // module. Derived from the elements rather than stored twice.
+        for element in flat.elements() {
+            if let Some(crate_name) = element.location().crate_name.as_ref() {
+                let module = crate_name.replace('-', "_");
+                if !registry.source_modules.contains(&module) {
+                    registry.source_modules.push(module);
                 }
-                Err(ScanError::DuplicateName(mut e)) => {
-                    e.first_crate = registry.item_origins.get(&e.name).cloned();
-                    e.second_crate = crate_name;
-                    return Err(ScanError::DuplicateName(e));
-                }
-                Err(e) => return Err(e),
             }
         }
+
+        for element in flat.elements() {
+            let crate_name = element.location().crate_name.clone();
+            let named = element.name().cloned();
+            match element {
+                Element::Function(f) => {
+                    registry.functions.insert(
+                        f.name.clone(),
+                        (f.origin.syntax.clone(), element.location().clone()),
+                    );
+                }
+                Element::Type(Type::Struct(t)) => {
+                    registry.structs.insert(
+                        t.name.clone(),
+                        (t.origin.syntax.clone(), element.location().clone()),
+                    );
+                }
+                Element::Type(Type::Variant(t)) => {
+                    registry.enums.insert(
+                        t.name.clone(),
+                        (t.origin.syntax.clone(), element.location().clone()),
+                    );
+                }
+                Element::Type(Type::Enum(t)) => {
+                    registry.enums.insert(
+                        t.name.clone(),
+                        (t.origin.syntax.clone(), element.location().clone()),
+                    );
+                }
+                // An unnamed `const _` is each source's injected `konst` feature
+                // guard: not addressable, re-emitted verbatim. That is the whole
+                // of `passthrough` now — the proc-macro refuses to mark a `use`,
+                // `mod` or `macro_rules!`, so nothing else ever reached it.
+                Element::Constant(c) if named.is_none() => {
+                    registry.passthrough.push((
+                        syn::Item::Const(c.origin.syntax.clone()),
+                        element.location().clone(),
+                    ));
+                }
+                Element::Constant(c) => {
+                    registry.consts.insert(
+                        c.name.clone(),
+                        (c.origin.syntax.clone(), element.location().clone()),
+                    );
+                }
+                // An `Extern` states that a name exists and its contents do not
+                // cross. There is no map for that, and adapters have never seen
+                // one — a type alias was already a no-op here. Reachable through
+                // [`Self::flat`] for the stages that will want it.
+                Element::Type(Type::Extern(_)) => {}
+                // Refused above.
+                Element::Unsupported(_) => unreachable!("checked before indexing"),
+            }
+            if let (Some(ident), Some(crate_name)) = (named, crate_name) {
+                registry.item_origins.insert(ident, crate_name);
+            }
+        }
+
+        registry.flat = flat;
         Ok(registry)
+    }
+
+    /// The parsed model this registry projects.
+    pub fn flat(&self) -> &crate::api::core::flat::Flat {
+        &self.flat
     }
 
     /// The origin crate's **module path** for an item ingested via
@@ -1173,78 +1287,6 @@ impl<M> Registry<M> {
         self.required_inputs_scan.remove(&TypeKey::from_type(ty));
     }
 
-    fn index_item(&mut self, item: syn::Item, loc: SourceLocation) -> Result<(), ScanError> {
-        match item {
-            syn::Item::Fn(f) => {
-                self.check_no_duplicate(&f.sig.ident, &loc)?;
-                self.functions.insert(f.sig.ident.clone(), (f, loc));
-                Ok(())
-            }
-            syn::Item::Struct(s) => {
-                self.check_no_duplicate(&s.ident, &loc)?;
-                self.structs.insert(s.ident.clone(), (s, loc));
-                Ok(())
-            }
-            syn::Item::Enum(e) => {
-                self.check_no_duplicate(&e.ident, &loc)?;
-                self.enums.insert(e.ident.clone(), (e, loc));
-                Ok(())
-            }
-            syn::Item::Const(c) => {
-                // Unnamed `const _` items (each source's injected `konst`
-                // feature guard) live outside the flat namespace: several
-                // sources may each carry one, all passed through verbatim.
-                if c.ident == "_" {
-                    self.passthrough.push((syn::Item::Const(c), loc));
-                    return Ok(());
-                }
-                self.check_no_duplicate(&c.ident, &loc)?;
-                self.consts.insert(c.ident.clone(), (c, loc));
-                Ok(())
-            }
-            // `#[prebindgen] pub type X = ..` DECLARES an opaque type: it states
-            // something about the flat API's surface, and is not code to copy
-            // into the binding. Its target is routinely crate-private, so
-            // re-emitting it would not even compile.
-            syn::Item::Type(_) => Ok(()),
-            other => {
-                self.passthrough.push((other, loc));
-                Ok(())
-            }
-        }
-    }
-
-    fn check_no_duplicate(&self, name: &syn::Ident, loc: &SourceLocation) -> Result<(), ScanError> {
-        if let Some(first) = self.first_seen_loc(name) {
-            // Origin crates are unknown at this level; `from_items` enriches
-            // the error with them (the locations alone are crate-relative).
-            return Err(ScanError::DuplicateName(Box::new(DuplicateNameError {
-                name: name.clone(),
-                first,
-                second: loc.clone(),
-                first_crate: None,
-                second_crate: None,
-            })));
-        }
-        Ok(())
-    }
-
-    fn first_seen_loc(&self, name: &syn::Ident) -> Option<SourceLocation> {
-        if let Some((_, loc)) = self.functions.get(name) {
-            return Some(loc.clone());
-        }
-        if let Some((_, loc)) = self.structs.get(name) {
-            return Some(loc.clone());
-        }
-        if let Some((_, loc)) = self.enums.get(name) {
-            return Some(loc.clone());
-        }
-        if let Some((_, loc)) = self.consts.get(name) {
-            return Some(loc.clone());
-        }
-        None
-    }
-
     fn scan_fn_signature(
         &mut self,
         f: &syn::ItemFn,
@@ -1256,15 +1298,14 @@ impl<M> Registry<M> {
         // wrappers; propagation through `subs` then marks transitive deps
         // (e.g. &Foo's `&_` converter returns subs=[Foo], so Foo becomes
         // required).
+        // No receiver or non-ident pattern can reach here: a captured item was
+        // refused by the frontend and `from_flat` failed before indexing it, and
+        // a binding-local fn was checked against the same grammar
+        // (`Flat::check_signature`) when `resolve` synthesized it.
         for input in &f.sig.inputs {
             match input {
-                syn::FnArg::Receiver(_) => {
-                    return Err(ScanError::UnsupportedReceiver { loc: loc.clone() });
-                }
+                syn::FnArg::Receiver(_) => continue,
                 syn::FnArg::Typed(pt) => {
-                    if !matches!(&*pt.pat, syn::Pat::Ident(_)) {
-                        return Err(ScanError::UnsupportedParamPattern { loc: loc.clone() });
-                    }
                     self.register_type_recursive(Direction::Input, &pt.ty, true, loc)?;
                 }
             }
@@ -1328,15 +1369,10 @@ impl<M> Registry<M> {
         loc: &SourceLocation,
         visited: &mut HashSet<TypeKey>,
     ) -> Result<(), ScanError> {
-        // Reject `impl Trait` except `impl Fn(...) + Send + Sync + 'static`.
-        if let syn::Type::ImplTrait(it) = ty {
-            if extract_fn_trait_args(ty).is_none() {
-                return Err(ScanError::DisallowedImplTrait {
-                    ty: it.to_token_stream().to_string(),
-                    loc: loc.clone(),
-                });
-            }
-        }
+        // A disallowed `impl Trait` cannot reach here: every fn whose signature
+        // reaches this point passed the frontend's grammar — captured items at
+        // ingestion, binding-local ones at synthesis — and it names the
+        // parameter the bad type sits on.
 
         let key = TypeKey::from_type(ty);
         if !visited.insert(key.clone()) {
@@ -1437,6 +1473,18 @@ impl<M> Registry<M> {
         // stage treats them exactly like `#[prebindgen]` fns.
         for (item_fn, origin) in adapter.local_functions() {
             let ident = item_fn.sig.ident.clone();
+            // The one input that does not come through `Flat`: a `sig!(..)` is
+            // written by hand in a build script and inserted straight into the
+            // maps, so the grammar has to be checked here or nowhere. Silently
+            // dropping a `self` receiver or a pattern parameter would surface as
+            // an arity mismatch out of rustc on generated code, which is the
+            // wrong end of the pipeline to learn about a build.rs typo.
+            if let Err(error) = self.flat.check_signature(&item_fn) {
+                return Err(ScanError::AdapterInvariant {
+                    message: format!("binding-local fn `{ident}`: {error}"),
+                }
+                .into());
+            }
             if self.functions.contains_key(&ident) {
                 return Err(ScanError::AdapterInvariant {
                     message: format!(

@@ -10,10 +10,10 @@ fn result_error_not_declared_is_build_error() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     // Error declared as data_struct but NOT marked `.error()`.
@@ -49,8 +49,11 @@ fn fallible_input_without_result_needs_panic() {
     );
 
     // No `.panic()` → build error.
-    let reg1 = Registry::<()>::from_items([(syn::Item::Fn(func.clone()), loc.clone())])
-        .expect("index items");
+    let reg1 = Registry::<()>::from_items(declare_referenced([(
+        syn::Item::Fn(func.clone()),
+        loc.clone(),
+    )]))
+    .expect("index items");
     let cb1 = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log));
@@ -62,8 +65,8 @@ fn fallible_input_without_result_needs_panic() {
     assert!(err.is_err(), "expected a build error without .panic()");
 
     // With `.panic()` → wrapper aborts on decode failure.
-    let reg2 =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let reg2 = Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+        .expect("index items");
     let cb2 = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log))
@@ -95,11 +98,11 @@ fn error_out_param_is_null_guarded() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(ptr_fn), loc.clone()),
         (syn::Item::Fn(unit_fn), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()

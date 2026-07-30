@@ -24,7 +24,7 @@ fn ptr_class_implements_adds_interface_supertypes() {
         .iter()
         .map(|src| (syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()))
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
             .class(
@@ -74,7 +74,7 @@ fn ptr_class_interface_emits_generated_api() {
         .iter()
         .map(|src| (syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()))
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
             .class(
@@ -133,7 +133,8 @@ fn interface_name_mangle_identity_rejected() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_thing_new() -> ZThing { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .set_interface_name_mangle(|package, n| {
@@ -179,7 +180,7 @@ fn interface_name_override_and_hook() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .set_interface_name_mangle(|package, n| {
@@ -241,7 +242,7 @@ fn data_class_interface_emits_generated_api() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t").class(
             crate::data_class!(ZStamp)
@@ -311,7 +312,8 @@ fn per_class_name_and_base_package_fun() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -387,7 +389,8 @@ fn setters_after_declarations_apply() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     // Declarations first, settings last.
     let jni = JniGen::new()
@@ -436,7 +439,8 @@ fn generation_writes_are_order_free() {
         let f: syn::ItemFn =
             syn::parse_str("pub fn z_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
         let registry =
-            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+            Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+                .expect("index");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!("thing").fun(crate::fun!(z_ping)));
@@ -492,7 +496,8 @@ fn method_hook_can_strip_flat_class_prefix() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .set_method_name_mangle(|package, class, name| {
@@ -570,7 +575,8 @@ fn method_name_mangle_hook_applies_order_independently() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -620,7 +626,8 @@ fn harness_hook_receives_derived_default() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .set_harness_name_mangle(|n| {
@@ -656,7 +663,8 @@ fn function_and_native_method_hooks_receive_placement() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_session_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .set_fun_name_mangle(|package, name| {
@@ -700,7 +708,8 @@ fn write_kotlin_owns_and_resets_the_root() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_ping)));
@@ -748,7 +757,8 @@ fn report_explains_the_resolved_surface() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -864,7 +874,8 @@ fn docs_become_kdoc_with_shape_notes() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(

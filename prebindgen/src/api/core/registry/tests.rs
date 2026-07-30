@@ -20,6 +20,7 @@ struct StubExt {
     consts: Option<HashSet<syn::Ident>>,
     types: HashSet<TypeKey>,
     ignored_types: HashSet<TypeKey>,
+    local_fns: Vec<(syn::ItemFn, String)>,
 }
 
 impl Prebindgen for StubExt {
@@ -45,6 +46,9 @@ impl Prebindgen for StubExt {
     }
     fn ignored_types(&self) -> HashSet<TypeKey> {
         self.ignored_types.clone()
+    }
+    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+        self.local_fns.clone()
     }
 
     fn on_function(&self, _f: &syn::ItemFn, _registry: &Registry<()>) -> TokenStream {
@@ -84,22 +88,6 @@ fn fn_item(src: &str) -> (syn::Item, SourceLocation) {
 }
 
 #[test]
-fn from_items_does_not_scan_signatures() {
-    // A `#[prebindgen]`-marked fn whose return is a bare `impl Foo`
-    // would have failed `from_items` under the old code path
-    // (ScanError::DisallowedImplTrait). Now `from_items` is index-
-    // only and accepts it without complaint.
-    let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
-    let reg: Registry<()> = Registry::from_items(items).expect("from_items must succeed");
-    assert!(reg.required_inputs_scan.is_empty());
-    assert!(reg.required_outputs_scan.is_empty());
-    // The fn is indexed but no types are pre-required.
-    assert!(reg
-        .functions
-        .contains_key(&syn::parse_str("bogus").unwrap()));
-}
-
-#[test]
 fn scan_declared_empty_ext_marks_nothing_required() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
     let mut reg: Registry<()> = Registry::from_items(items).unwrap();
@@ -131,24 +119,6 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
     assert!(!reg
         .required_outputs_scan
         .contains(&TypeKey::parse("u32").expect("test type")));
-}
-
-#[test]
-fn scan_declared_fails_disallowed_impl_trait_only_when_fn_declared() {
-    let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-
-    // Empty ext: the bogus fn is not scanned, so no error.
-    let empty = StubExt::default();
-    assert!(reg.scan_declared(&empty).is_ok());
-
-    // Declare the fn: scan now fires the disallowed-impl-Trait error.
-    let mut ext = StubExt::default();
-    ext.functions.insert(syn::parse_str("bogus").unwrap());
-    match reg.scan_declared(&ext) {
-        Err(ScanError::DisallowedImplTrait { .. }) => (),
-        other => panic!("expected DisallowedImplTrait, got {:?}", other),
-    }
 }
 
 #[test]
@@ -343,6 +313,33 @@ fn type_entry_helpers_expose_converter_chain_contract() {
 /// `SourceLocation` file paths are crate-relative (both may read
 /// `src/lib.rs`), so the crates (stamped into each stream item's location
 /// by `Source`) are the only unambiguous coordinates.
+/// Ingestion checks that the flat API is expressible, and reports **every**
+/// offender at once — a source crate that needs migrating should see one list,
+/// not one rebuild per item.
+///
+/// This replaces two tests that asserted the opposite (that `from_items` was
+/// index-only and diagnosed at declaration time). The frontend owns that
+/// judgement now, and its diagnosis is richer: it names the parameter.
+#[test]
+fn from_items_rejects_what_the_language_cannot_express() {
+    let err = match Registry::<()>::from_items(vec![
+        fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }"),
+        fn_item("fn worse(self) -> u64 { 0 }"),
+    ]) {
+        Ok(_) => panic!("neither item is expressible"),
+        Err(e) => e,
+    };
+
+    let ScanError::NotExpressible { entries } = &err else {
+        panic!("expected a NotExpressible report, got {err}");
+    };
+    assert_eq!(entries.len(), 2, "all offenders at once");
+
+    let msg = err.to_string();
+    assert!(msg.contains("bogus") && msg.contains("impl Trait"), "{msg}");
+    assert!(msg.contains("worse") && msg.contains("self"), "{msg}");
+}
+
 #[test]
 fn duplicate_name_across_sources_names_both_crates() {
     use crate::{
@@ -766,4 +763,223 @@ fn builder_and_from_items_agree() {
         streamed.default_module().map(module)
     );
     assert_eq!(built.passthrough.len(), streamed.passthrough.len());
+}
+
+// ── The projection itself ──────────────────────────────────────────────
+
+/// Every element kind lands where the projection says, the model is **kept**,
+/// and a name's origin crate survives the trip.
+///
+/// The seam's only direct test: everything else reaches `from_flat` through
+/// `from_items`, which cannot distinguish "the projection is right" from "the
+/// parser and the projection are wrong in matching ways".
+#[test]
+fn from_flat_projects_each_element_kind() {
+    let at = |krate: &str| SourceLocation {
+        file: "src/lib.rs".into(),
+        crate_name: Some(krate.to_string()),
+        ..SourceLocation::default()
+    };
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub fn f(v: u64) -> u64 {
+                    v
+                }
+            ),
+            at("myflat"),
+        ),
+        (
+            syn::parse_quote!(
+                pub struct S {
+                    pub a: u64,
+                }
+            ),
+            at("myflat"),
+        ),
+        // A sum and a C-style enum are different elements, one map.
+        (
+            syn::parse_quote!(
+                pub enum Sum {
+                    A(u64),
+                    B,
+                }
+            ),
+            at("myflat"),
+        ),
+        (
+            syn::parse_quote!(
+                pub enum Flags {
+                    X = 1,
+                    Y = 2,
+                }
+            ),
+            at("myflat"),
+        ),
+        (
+            syn::parse_quote!(
+                pub const K: u64 = 7;
+            ),
+            at("myflat"),
+        ),
+        // Each source's injected feature guard: no address, so several coexist.
+        (
+            syn::parse_quote!(
+                const _: () = ();
+            ),
+            at("myflat"),
+        ),
+        (
+            syn::parse_quote!(
+                const _: () = ();
+            ),
+            at("helpers"),
+        ),
+        // An alias declared by a SECONDARY source. It lands in no map — an
+        // `Extern` states a name exists, which the registry has never had a
+        // place for — but it DOES record an origin, so a reference to it
+        // qualifies against the crate that declared it rather than falling back
+        // to the default module.
+        (
+            syn::parse_quote!(
+                pub type Handle = helpers::Inner;
+            ),
+            at("helpers"),
+        ),
+    ];
+    let flat = crate::api::core::flat::Flat::builder()
+        .items(items)
+        .build()
+        .expect("parse");
+    let reg: Registry<()> = Registry::from_flat(flat).expect("project");
+
+    let id = |n: &str| syn::parse_str::<syn::Ident>(n).unwrap();
+    assert!(reg.functions.contains_key(&id("f")));
+    assert!(reg.structs.contains_key(&id("S")));
+    assert!(reg.enums.contains_key(&id("Sum")), "a sum is an enum here");
+    assert!(reg.enums.contains_key(&id("Flags")));
+    assert!(reg.consts.contains_key(&id("K")));
+    assert_eq!(reg.passthrough.len(), 2, "one guard per source");
+    assert!(
+        !reg.structs.contains_key(&id("Handle")) && !reg.enums.contains_key(&id("Handle")),
+        "an Extern names a type; it declares no body to index"
+    );
+
+    // The model is held, not discarded — this is what makes the registry a
+    // projection rather than a second reading.
+    assert!(reg.flat().element("f").is_some());
+    assert!(
+        reg.flat().declared_type("Handle").is_some(),
+        "the alias is reachable through the model even though no map holds it"
+    );
+
+    // Origins, including the alias's — a behaviour change from the old
+    // `syn::Item::Type` no-op, which recorded none.
+    assert_eq!(reg.origin_module(&id("f")), Some(syn::parse_quote!(myflat)));
+    assert_eq!(
+        reg.origin_module(&id("Handle")),
+        Some(syn::parse_quote!(helpers)),
+        "an alias declared by a helper crate qualifies against that crate"
+    );
+    // First-seen source order, which is what makes the first entry the default.
+    assert_eq!(reg.default_module(), Some(syn::parse_quote!(myflat)));
+}
+
+/// The inexpressible report names the **crate**, not just the location.
+///
+/// A captured path is crate-relative, so two offenders from different sources
+/// both read `src/lib.rs:0:0` and the location alone cannot say which crate to
+/// fix. Same reason the duplicate-name diagnostic carries it.
+#[test]
+fn not_expressible_report_names_the_crate_of_each_offender() {
+    let at = |krate: &str| SourceLocation {
+        file: "src/lib.rs".into(),
+        crate_name: Some(krate.to_string()),
+        ..SourceLocation::default()
+    };
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                pub async fn a() {}
+            ),
+            at("myflat"),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn b<T>(v: T) -> T {
+                    v
+                }
+            ),
+            at("helpers"),
+        ),
+    ];
+    let Err(err) = Registry::<()>::from_items(items) else {
+        panic!("both items are inexpressible")
+    };
+    let msg = err.to_string();
+
+    assert!(msg.contains("2 `#[prebindgen]` item(s)"), "{msg}");
+    assert!(msg.contains("in crate `myflat`"), "{msg}");
+    assert!(msg.contains("in crate `helpers`"), "{msg}");
+    // Both share a file path, so the crate is the only thing telling them apart.
+    assert_eq!(msg.matches("src/lib.rs").count(), 2, "{msg}");
+    // No trailing newline: the message is embedded in `expect`/`panic` output.
+    assert!(!msg.ends_with('\n'), "{msg:?}");
+}
+
+/// A binding-local fn is checked against the **same grammar** as a captured one.
+///
+/// `sig!(..)` is written by hand in a build script and inserted straight into the
+/// registry, so it is the one input that never passes through `Flat`. Without a
+/// check here a `self` receiver or a pattern parameter is silently dropped and
+/// the user meets it as an arity mismatch out of rustc on generated code — the
+/// wrong end of the pipeline to learn about a build.rs typo.
+#[test]
+fn a_binding_local_fn_is_checked_against_the_grammar() {
+    for (src, expected) in [
+        ("fn takes_self(&self, x: u32) -> u32 { x }", "receiver"),
+        (
+            "fn takes_pattern((a, b): (u32, u32)) -> u32 { a }",
+            "pattern",
+        ),
+        ("fn takes_impl(x: impl std::fmt::Debug) {}", "impl Trait"),
+        ("async fn is_async() {}", "async"),
+    ] {
+        let reg: Registry<()> =
+            Registry::from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")]).unwrap();
+        let ext = StubExt {
+            local_fns: vec![(syn::parse_str(src).expect("parse local fn"), "b".into())],
+            ..Default::default()
+        };
+        let err = reg
+            .resolve(ext)
+            .expect_err(&format!("`{src}` must be refused"));
+        let msg = err.to_string();
+        assert!(
+            msg.contains("binding-local fn"),
+            "must say which input is at fault: {msg}"
+        );
+        assert!(
+            msg.to_lowercase().contains(&expected.to_lowercase()),
+            "`{src}` should be diagnosed as {expected}, got: {msg}"
+        );
+    }
+}
+
+/// The same check accepts what the grammar allows, so it is a grammar check and
+/// not a blanket refusal — and it does **not** demand that a local fn's types be
+/// declared, which a binding-local fn legitimately may not be.
+#[test]
+fn a_well_formed_binding_local_fn_passes() {
+    let reg: Registry<()> =
+        Registry::from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")]).unwrap();
+    let ext = StubExt {
+        local_fns: vec![(
+            syn::parse_str("fn helper(s: &Undeclared) -> u64 { 0 }").expect("parse"),
+            "b".into(),
+        )],
+        ..Default::default()
+    };
+    reg.resolve(ext)
+        .expect("a grammatical local fn passes, undeclared types and all");
 }

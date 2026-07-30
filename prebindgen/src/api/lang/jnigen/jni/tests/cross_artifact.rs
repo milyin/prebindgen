@@ -261,7 +261,8 @@ fn run_pipeline(
     items: Vec<(syn::Item, crate::SourceLocation)>,
     jni: JniGen,
 ) -> (String, BTreeMap<String, String>) {
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
