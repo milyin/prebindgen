@@ -463,7 +463,7 @@ impl Flat {
 ///
 /// Runs once every declaration is in hand, so the order sources were fed in does
 /// not matter and a reference may point forward or across crates.
-fn resolve_references(elements: &mut Vec<Element>) {
+fn resolve_references(elements: &mut [Element]) {
     let declared: std::collections::HashSet<String> = elements
         .iter()
         .filter_map(|e| match e {
