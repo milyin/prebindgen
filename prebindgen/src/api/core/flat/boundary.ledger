@@ -44,7 +44,7 @@
 4	api/core/expand.rs
 11	api/core/registry.rs
 40	api/core/types_util.rs
-18	api/core/unfold.rs
+16	api/core/unfold.rs
 8	api/lang/cbindgen/builder.rs
 1	api/lang/cbindgen/convert.rs
 5	api/lang/cbindgen/emit.rs
@@ -70,4 +70,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 204
+# total: 202

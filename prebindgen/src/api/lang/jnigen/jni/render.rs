@@ -309,7 +309,11 @@ pub(crate) fn build_typed_handle(
             .param(kt::KtParam::new("ptr", kt::KtType::long())),
     );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
-        if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+        if let Some(item_fn) = registry
+            .flat()
+            .function(&m.rust_ident.to_string())
+            .map(|__f| &__f.origin.syntax)
+        {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
@@ -418,7 +422,11 @@ pub(crate) fn build_typed_handle(
     // (receiver bound to `this`), delegating to the same centralized
     // `JNINative` extern as a free wrapper would.
     for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-        if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+        if let Some(item_fn) = registry
+            .flat()
+            .function(&m.rust_ident.to_string())
+            .map(|__f| &__f.origin.syntax)
+        {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
@@ -2324,10 +2332,11 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
 /// key, when the item is indexed (a re-exported foreign type has none).
 pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Option<String> {
     let ident = bare_path_ident(&key.to_type())?;
+    let name = ident.to_string();
     let attrs = registry
-        .structs
-        .get(&ident)
-        .map(|(s, _)| s.attrs.as_slice())
-        .or_else(|| registry.enums.get(&ident).map(|(e, _)| e.attrs.as_slice()))?;
+        .flat()
+        .struct_type(&name)
+        .map(|s| s.origin.syntax.attrs.as_slice())
+        .or_else(|| registry.flat().enum_item(&name).map(|e| e.attrs.as_slice()))?;
     crate::api::lang::jnigen::util::doc_string(attrs)
 }

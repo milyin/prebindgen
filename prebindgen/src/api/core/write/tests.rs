@@ -113,47 +113,34 @@ fn dedup_and_sort() {
 
 #[test]
 fn write_rust_sorts_declared_items_by_ident() {
-    let mut reg: Registry<()> = Registry::empty();
+    // Fed in a deliberately un-sorted order: the assertion below is that
+    // emission sorts by name, and the model preserves stream order.
     let loc = SourceLocation::default();
-
-    reg.functions.insert(
-        syn::parse_quote!(b_fn),
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::parse_quote!(
                 fn b_fn() {}
             ),
             loc.clone(),
         ),
-    );
-    reg.functions.insert(
-        syn::parse_quote!(a_fn),
         (
             syn::parse_quote!(
                 fn a_fn() {}
             ),
             loc.clone(),
         ),
-    );
-    reg.structs.insert(
-        syn::parse_quote!(BStruct),
         (
             syn::parse_quote!(
                 pub struct BStruct;
             ),
             loc.clone(),
         ),
-    );
-    reg.structs.insert(
-        syn::parse_quote!(AStruct),
         (
             syn::parse_quote!(
                 pub struct AStruct;
             ),
             loc.clone(),
         ),
-    );
-    reg.enums.insert(
-        syn::parse_quote!(BEnum),
         (
             syn::parse_quote!(
                 pub enum BEnum {
@@ -162,9 +149,6 @@ fn write_rust_sorts_declared_items_by_ident() {
             ),
             loc.clone(),
         ),
-    );
-    reg.enums.insert(
-        syn::parse_quote!(AEnum),
         (
             syn::parse_quote!(
                 pub enum AEnum {
@@ -173,25 +157,20 @@ fn write_rust_sorts_declared_items_by_ident() {
             ),
             loc.clone(),
         ),
-    );
-    reg.consts.insert(
-        syn::parse_quote!(B_CONST),
         (
             syn::parse_quote!(
                 pub const B_CONST: u32 = 2;
             ),
             loc.clone(),
         ),
-    );
-    reg.consts.insert(
-        syn::parse_quote!(A_CONST),
         (
             syn::parse_quote!(
                 pub const A_CONST: u32 = 1;
             ),
             loc,
         ),
-    );
+    ];
+    let reg: Registry<()> = Registry::from_items(items).expect("index");
 
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -295,7 +274,7 @@ fn guards_emit_ungated_and_in_stream_order() {
         ),
     ];
     let registry: Registry<()> = Registry::from_items(items).expect("index");
-    assert_eq!(registry.guards.len(), 2);
+    assert_eq!(registry.flat().guards().count(), 2);
 
     let dir = crate::api::test_util::unique_test_dir("write_guards");
     std::fs::create_dir_all(&dir).unwrap();

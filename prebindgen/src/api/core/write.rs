@@ -7,7 +7,7 @@
 //! resolves the path against `OUT_DIR`).
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
@@ -81,49 +81,60 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     //    via `cargo:warning=` in `Registry::scan_declared`.
     let declared_fns = ext.declared_functions();
     let declared_types = ext.declared_types();
+    let flat = registry.flat();
     items.extend(parse_items_from_tokens(
         "on_function",
-        sorted_items_by_ident(&registry.functions)
+        sorted_by_name(flat.functions().map(|f| (&f.name, &f.origin.syntax)))
             .into_iter()
             .filter(|(ident, _)| declared_fns.contains(*ident))
-            .map(|(_, (item, _))| ext.on_function(item, registry)),
+            .map(|(_, item)| ext.on_function(item, registry)),
     )?);
     items.extend(parse_items_from_tokens(
         "on_struct",
-        sorted_items_by_ident(&registry.structs)
-            .into_iter()
-            .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
-            .map(|(_, (item, _))| ext.on_struct(item, registry)),
+        sorted_by_name(flat.types().filter_map(|t| match t {
+            crate::api::core::flat::Type::Struct(s) => Some((&s.name, &s.origin.syntax)),
+            _ => None,
+        }))
+        .into_iter()
+        .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
+        .map(|(_, item)| ext.on_struct(item, registry)),
     )?);
+    // Both enum shapes emit through `on_enum` and sort together: they were one
+    // map here before they were two elements, and an adapter re-emitting the
+    // item does not branch on the distinction.
     items.extend(parse_items_from_tokens(
         "on_enum",
-        sorted_items_by_ident(&registry.enums)
-            .into_iter()
-            .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
-            .map(|(_, (item, _))| ext.on_enum(item, registry)),
+        sorted_by_name(flat.types().filter_map(|t| match t {
+            crate::api::core::flat::Type::Variant(v) => Some((&v.name, &v.origin.syntax)),
+            crate::api::core::flat::Type::Enum(e) => Some((&e.name, &e.origin.syntax)),
+            _ => None,
+        }))
+        .into_iter()
+        .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
+        .map(|(_, item)| ext.on_enum(item, registry)),
     )?);
     // Consts: an adapter WITH a const declaration mechanism
     // (`declared_consts() == Some(set)`) emits declared consts only,
     // symmetric with functions; an adapter without one (`None`) gets every
     // const passed through verbatim via the default `on_const`. Prebindgen's
-    // own injected feature guards are not consts at all — see `guards` below.
+    // own injected feature guards are not consts at all — see the guards loop.
     let declared_consts = ext.declared_consts();
     items.extend(parse_items_from_tokens(
         "on_const",
-        sorted_items_by_ident(&registry.consts)
+        sorted_by_name(flat.constants().map(|c| (&c.name, &c.origin.syntax)))
             .into_iter()
             .filter(|(ident, _)| {
                 declared_consts
                     .as_ref()
                     .is_none_or(|set| set.contains(*ident))
             })
-            .map(|(_, (item, _))| ext.on_const(item, registry)),
+            .map(|(_, item)| ext.on_const(item, registry)),
     )?);
 
     // 3. Anonymous consts, verbatim. Last, and in stream order. Ungated on
     //    purpose: with no name there is nothing for an adapter to declare, so
     //    the const gate above cannot apply to them.
-    for guard in &registry.guards {
+    for guard in flat.guards() {
         items.push(syn::Item::Const(guard.origin.syntax.clone()));
     }
 
@@ -173,8 +184,16 @@ fn walk_resolved<M, F: FnMut(&TypeKey, &TypeEntry<M>)>(
     }
 }
 
-fn sorted_items_by_ident<T>(map: &HashMap<syn::Ident, T>) -> Vec<(&syn::Ident, &T)> {
-    let mut items: Vec<(&syn::Ident, &T)> = map.iter().collect();
+/// Name-sorted, because emission order is part of the generated file and the
+/// model is in source order. Was `sorted_items_by_ident` over the registry's
+/// maps; same ordering, read from the one index.
+fn sorted_by_name<'a, T>(
+    items: impl Iterator<Item = (&'a syn::Ident, &'a T)>,
+) -> Vec<(&'a syn::Ident, &'a T)>
+where
+    T: 'a,
+{
+    let mut items: Vec<(&syn::Ident, &T)> = items.collect();
     items.sort_by_key(|(left, _)| left.to_string());
     items
 }

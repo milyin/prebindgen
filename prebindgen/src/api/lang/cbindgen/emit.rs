@@ -55,7 +55,7 @@ impl Cbindgen {
         ty: &syn::Type,
     ) -> Option<Vec<syn::Variant>> {
         let ident = type_path_tail(ty)?;
-        let (item, _) = registry.enums.get(&ident)?;
+        let item = registry.flat().enum_item(&ident.to_string())?;
         Some(item.variants.iter().cloned().collect())
     }
 
@@ -284,12 +284,11 @@ impl Cbindgen {
     pub(super) fn produces_array(&self, registry: &Registry<()>) -> bool {
         self.functions.keys().any(|orig| {
             registry
-                .functions
-                .get(orig)
-                .map(|(f, _)| match &f.sig.output {
-                    syn::ReturnType::Type(_, ty) => type_contains_vec(ty),
-                    syn::ReturnType::Default => false,
-                })
+                .flat()
+                .function(&orig.to_string())
+                // The model already decided that an elided return and `-> ()`
+                // are one thing, so there is no second arm to write here.
+                .map(|f| type_contains_vec(&f.ret.origin.syntax))
                 .unwrap_or(false)
         })
     }
@@ -303,7 +302,10 @@ impl Cbindgen {
         ty: &syn::Type,
     ) -> Option<Vec<(syn::Ident, syn::Type)>> {
         let ident = type_path_tail(ty)?;
-        let (item, _) = registry.structs.get(&ident)?;
+        let item = registry
+            .flat()
+            .struct_type(&ident.to_string())
+            .map(|__s| &__s.origin.syntax)?;
         if let syn::Fields::Named(named) = &item.fields {
             Some(
                 named

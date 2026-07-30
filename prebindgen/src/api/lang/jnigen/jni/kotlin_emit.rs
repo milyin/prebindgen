@@ -492,7 +492,7 @@ impl JniGen {
             }) else {
                 continue;
             };
-            let Some((item_enum, _)) = registry.enums.get(&ident) else {
+            let Some(item_enum) = registry.flat().enum_item(&ident.to_string()) else {
                 continue;
             };
             let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
@@ -548,7 +548,7 @@ impl JniGen {
             let Some(ident) = bare_path_ident(&ty) else {
                 continue;
             };
-            let Some((item_enum, _)) = registry.enums.get(&ident) else {
+            let Some(item_enum) = registry.flat().enum_item(&ident.to_string()) else {
                 continue;
             };
             assert!(
@@ -893,7 +893,11 @@ impl JniGen {
             }) else {
                 continue;
             };
-            let Some((item_struct, _)) = registry.structs.get(&ident) else {
+            let Some(item_struct) = registry
+                .flat()
+                .struct_type(&ident.to_string())
+                .map(|__s| &__s.origin.syntax)
+            else {
                 continue;
             };
 
@@ -921,7 +925,11 @@ impl JniGen {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
             for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-                if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                if let Some(item_fn) = registry
+                    .flat()
+                    .function(&m.rust_ident.to_string())
+                    .map(|__f| &__f.origin.syntax)
+                {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
                         item_fn,
@@ -951,7 +959,11 @@ impl JniGen {
                     .map(|c| *c)
                     .unwrap_or_else(|| KtClass::companion_object().vis(Vis::Public));
                 for m in ctors {
-                    if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                    if let Some(item_fn) = registry
+                        .flat()
+                        .function(&m.rust_ident.to_string())
+                        .map(|__f| &__f.origin.syntax)
+                    {
                         if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                             self,
                             item_fn,
@@ -1067,7 +1079,11 @@ impl JniGen {
             .collect();
         for ident in &declared_idents {
             {
-                let Some((item_fn, _loc)) = registry.functions.get(ident) else {
+                let Some(item_fn) = registry
+                    .flat()
+                    .function(&ident.to_string())
+                    .map(|__f| &__f.origin.syntax)
+                else {
                     continue;
                 };
                 for input in &item_fn.sig.inputs {
@@ -1433,9 +1449,9 @@ impl JniGen {
         let iface_short = register_fqn(&iface_fqn, imports);
         let ident = bare_path_ident(source)
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
-        let (item_enum, _) = registry
-            .enums
-            .get(&ident)
+        let item_enum = registry
+            .flat()
+            .enum_item(&ident.to_string())
             .unwrap_or_else(|| panic!("sum builder: no indexed enum `{ident}`"));
         let sum_cfg = self.types[&key]
             .sum()
@@ -1577,9 +1593,9 @@ impl JniGen {
         let mut file = kt::KtFile::new(&package);
         let mut imports: BTreeSet<String> = BTreeSet::new();
         for entry in &pkg_cfg.functions {
-            let (item_fn, _loc) = registry
-                .functions
-                .get(&entry.rust_ident)
+            let item_fn = &registry
+                .flat()
+                .function(&entry.rust_ident.to_string())
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: function `{}` registered via .function(...) is \
@@ -1588,6 +1604,7 @@ impl JniGen {
                         entry.rust_ident,
                     )
                 });
+            let item_fn = &item_fn.origin.syntax;
             let kotlin_name = self.effective_function_name(subpackage, entry);
             if let Some(f) = render_wrapper_fn(self, item_fn, registry, Some(&kotlin_name), None) {
                 // #52: idiomatic typed overloads for `.split_on_param`
@@ -1601,14 +1618,18 @@ impl JniGen {
         // Declared consts: a private nullary helper + the public
         // lazily-initialized `val` (see `render_const_val`).
         for entry in &pkg_cfg.constants {
-            let (item_const, _loc) = registry.consts.get(&entry.rust_ident).unwrap_or_else(|| {
-                panic!(
-                    "write_jni_package: const `{}` registered via .constant(...) is \
+            let item_const = registry
+                .flat()
+                .constant(&entry.rust_ident.to_string())
+                .map(|__c| &__c.origin.syntax)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "write_jni_package: const `{}` registered via .constant(...) is \
                      not in the prebindgen registry — check the spelling against the \
                      matching `#[prebindgen]` Rust const name.",
-                    entry.rust_ident,
-                )
-            });
+                        entry.rust_ident,
+                    )
+                });
             reject_handle_const(self, item_const);
             if let Some((helper, prop)) = render_const_val(
                 self,
@@ -1626,9 +1647,9 @@ impl JniGen {
         // `val` (see `render_constant_fn_val`). The JNINative extern and the
         // Rust wrapper are the plain declared-function ones.
         for entry in &pkg_cfg.constant_functions {
-            let (item_fn, _loc) = registry
-                .functions
-                .get(&entry.rust_ident)
+            let item_fn = &registry
+                .flat()
+                .function(&entry.rust_ident.to_string())
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: constant fn `{}` registered via .constant_fun(...) \
@@ -1637,6 +1658,7 @@ impl JniGen {
                         entry.rust_ident,
                     )
                 });
+            let item_fn = &item_fn.origin.syntax;
             validate_constant_fn(self, item_fn);
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
@@ -1689,13 +1711,19 @@ impl JniGen {
         // shortens types, collects imports, and wraps long signatures (no
         // derivation-time import set).
         let mut externs: Vec<kt::KtFun> = Vec::new();
-        let mut idents: Vec<&syn::Ident> = registry.functions.keys().collect();
+        let mut idents: Vec<&syn::Ident> =
+            registry.flat().functions().map(|__f| &__f.name).collect();
         idents.sort();
         for ident in idents {
             if !declared.contains(ident) {
                 continue;
             }
-            let (item_fn, _loc) = &registry.functions[ident];
+            let item_fn = &registry
+                .flat()
+                .function(&ident.to_string())
+                .expect("iterating the model's own function names")
+                .origin
+                .syntax;
             if let Some(fun) = render_extern_decl(self, item_fn, registry) {
                 externs.push(fun);
             }
@@ -1712,7 +1740,11 @@ impl JniGen {
             .collect();
         const_idents.sort_by_key(|i| i.to_string());
         for ident in const_idents {
-            let Some((item_const, _loc)) = registry.consts.get(ident) else {
+            let Some(item_const) = registry
+                .flat()
+                .constant(&ident.to_string())
+                .map(|__c| &__c.origin.syntax)
+            else {
                 continue; // missing decl already warned by the scan
             };
             let getter = crate::api::lang::jnigen::jni::const_getter_fn(item_const);

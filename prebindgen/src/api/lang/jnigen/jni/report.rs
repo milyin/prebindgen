@@ -188,7 +188,11 @@ impl crate::api::core::Generation<JniGen> {
     ) {
         let ext = self.adapter();
         let registry = self.registry();
-        let Some((item_fn, _)) = registry.functions.get(rust_ident) else {
+        let Some(item_fn) = registry
+            .flat()
+            .function(&rust_ident.to_string())
+            .map(|__f| &__f.origin.syntax)
+        else {
             return;
         };
         let Some(f) = render_wrapper_fn(ext, item_fn, registry, kotlin_name, receiver_key) else {

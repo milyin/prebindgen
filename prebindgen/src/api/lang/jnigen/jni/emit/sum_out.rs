@@ -222,9 +222,12 @@ pub(crate) fn encode_sum_group(
     let tag_id = &obj_idents[tag_idx];
     // A unit variant contributes no leaf, so the arm list is driven by the
     // enum's own variants, not by the grouped leaves.
-    let (item_enum, _) = registry.enums.get(&ident).unwrap_or_else(|| {
-        panic!("jnigen sum unfold: no indexed enum `{ident}` for the decomposed sum")
-    });
+    let item_enum = registry
+        .flat()
+        .enum_item(&ident.to_string())
+        .unwrap_or_else(|| {
+            panic!("jnigen sum unfold: no indexed enum `{ident}` for the decomposed sum")
+        });
     let spec = crate::api::core::types_util::SumSpec::from_item_enum(item_enum);
 
     let arms: Vec<TokenStream> = spec

@@ -63,7 +63,11 @@ impl JniGen {
             }
         }
         if let Some(name) = bare_path_ident(bare) {
-            if let Some((st, _)) = registry.structs.get(&name) {
+            if let Some(st) = registry
+                .flat()
+                .struct_type(&name.to_string())
+                .map(|__s| &__s.origin.syntax)
+            {
                 return TypeKind::DataStruct { st, cfg };
             }
         }

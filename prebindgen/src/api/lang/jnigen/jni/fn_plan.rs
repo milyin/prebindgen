@@ -296,13 +296,19 @@ pub(crate) fn validate_bindings(
     // Declared functions (incl. binding-local synthetics and fn-backed
     // constants), in deterministic ident order.
     let declared = ext.declared_functions();
-    let mut fn_idents: Vec<&syn::Ident> = registry.functions.keys().collect();
+    let mut fn_idents: Vec<&syn::Ident> =
+        registry.flat().functions().map(|__f| &__f.name).collect();
     fn_idents.sort();
     for ident in fn_idents {
         if !declared.contains(ident) {
             continue;
         }
-        let (item_fn, _) = &registry.functions[ident];
+        let item_fn = &registry
+            .flat()
+            .function(&ident.to_string())
+            .expect("iterating the model's own function names")
+            .origin
+            .syntax;
         match ext.fn_plan(registry, item_fn) {
             Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
             Err(e) => errors.push(e.message(ident)),
@@ -312,13 +318,19 @@ pub(crate) fn validate_bindings(
     // Declared consts: their synthetic nullary getters run through the same
     // plan machinery (`JniGen::on_const`).
     if let Some(declared_consts) = ext.declared_consts() {
-        let mut const_idents: Vec<&syn::Ident> = registry.consts.keys().collect();
+        let mut const_idents: Vec<&syn::Ident> =
+            registry.flat().constants().map(|__c| &__c.name).collect();
         const_idents.sort();
         for ident in const_idents {
             if !declared_consts.contains(ident) {
                 continue;
             }
-            let (item_const, _) = &registry.consts[ident];
+            let item_const = &registry
+                .flat()
+                .constant(&ident.to_string())
+                .expect("iterating the model's own const names")
+                .origin
+                .syntax;
             let getter = const_getter_fn(item_const);
             match ext.fn_plan(registry, &getter) {
                 Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),

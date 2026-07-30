@@ -378,7 +378,21 @@ impl FlatBuilder {
             .enumerate()
             .filter_map(|(i, e)| e.name().map(|n| (n.to_string(), i)))
             .collect();
-        Ok(Flat { elements, by_name })
+        // Frozen here, from the captured stream alone. See the field's docs.
+        let mut source_modules: Vec<String> = Vec::new();
+        for element in &elements {
+            if let Some(crate_name) = element.location().crate_name.as_ref() {
+                let module = crate_name.replace('-', "_");
+                if !source_modules.contains(&module) {
+                    source_modules.push(module);
+                }
+            }
+        }
+        Ok(Flat {
+            elements,
+            by_name,
+            source_modules,
+        })
     }
 }
 
@@ -407,6 +421,15 @@ impl FlatBuilder {
 pub struct Flat {
     /// Source order, so iteration reports items as the sources were fed.
     elements: Vec<Element>,
+    /// Module name of every **captured** source, in first-seen order (crate
+    /// names, dashes normalized to underscores). The first doubles as the
+    /// default module for a reference with no recorded origin.
+    ///
+    /// Computed once in [`FlatBuilder::build`] and frozen: it is a property of
+    /// the ingested stream, so a binding-local function added later must not
+    /// extend it — that would change which module an unqualified reference
+    /// resolves against.
+    source_modules: Vec<String>,
     /// Name → position in [`Self::elements`].
     ///
     /// A map rather than a scan because every typed accessor and every
@@ -500,6 +523,40 @@ impl Flat {
             .flat_map(TypeRef::walk)
     }
 
+    /// The `struct` declared under this name, or `None` for any other shape.
+    ///
+    /// A tuple struct is an [`Extern`] rather than a `Struct`, so this answers
+    /// only for a product of fields that cross the boundary.
+    pub fn struct_type(&self, name: &str) -> Option<&Struct> {
+        match self.declared_type(name)? {
+            Type::Struct(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// The `syn::ItemEnum` behind **either** enum shape.
+    ///
+    /// A sum and a C-style enum are different elements — numbered differently
+    /// and consumed as different constructs — but both were spelled `enum` in
+    /// Rust and both keep that item. A consumer re-emitting the source wants the
+    /// item without caring which shape it is; one that acts on the distinction
+    /// reaches for [`Self::declared_type`].
+    pub fn enum_item(&self, name: &str) -> Option<&syn::ItemEnum> {
+        match self.declared_type(name)? {
+            Type::Variant(v) => Some(&v.origin.syntax),
+            Type::Enum(e) => Some(&e.origin.syntax),
+            _ => None,
+        }
+    }
+
+    /// Module name of every captured source, in first-seen order.
+    ///
+    /// The first entry is the default module for a reference with no recorded
+    /// origin. Empty for a hand-built stream that carried no crate stamps.
+    pub fn source_modules(&self) -> &[String] {
+        &self.source_modules
+    }
+
     /// Every anonymous const, in stream order — **zero or more**.
     ///
     /// Not part of the flat API — see [`Guard`] — but ingested with it, and a
@@ -535,7 +592,7 @@ impl Flat {
     /// Grammar only. Whether the types it names are *declared* is a whole-model
     /// question ([`resolve_references`]), and a binding-local fn may legitimately
     /// name types the source crate never did.
-    pub fn check_signature(&self, f: &syn::ItemFn) -> Result<(), ItemError> {
+    pub fn check_signature(&self, f: &syn::ItemFn) -> Result<Function, ItemError> {
         // Rebuilt from the model rather than kept: this runs once per local fn,
         // and a stored index would be a second copy of what `constants()` says.
         let consts = ConstIndex::new(self.constants().map(|c| {
@@ -545,9 +602,29 @@ impl Flat {
                 c.origin.crate_name().map(str::to_owned),
             )
         }));
-        // A synthesized fn has no captured location; the caller names it.
+        // A synthesized fn has no captured location, but it does have an origin
+        // crate — the caller supplies it, and `add_local_function` records it.
         let at = Rc::new(SourceLocation::default());
-        lower_fn(f, &at, &consts).map(|_| ())
+        lower_fn(f, &at, &consts)
+    }
+
+    /// Admit a binding-local function: one a build script wrote via `sig!(..)`
+    /// rather than one a source crate marked.
+    ///
+    /// The model is the pipeline's only index, so a function nothing captured
+    /// still has to live here or nothing downstream can find it. `crate_name` is
+    /// the module its generated call qualifies against, stamped onto the
+    /// element's location where [`Element::location`] already looks for it.
+    ///
+    /// Deliberately does **not** extend [`Self::source_modules`]: see that
+    /// field's docs.
+    pub(crate) fn add_local_function(&mut self, mut f: Function, crate_name: String) {
+        f.origin.location = Rc::new(SourceLocation {
+            crate_name: Some(crate_name),
+            ..SourceLocation::default()
+        });
+        self.by_name.insert(f.name.to_string(), self.elements.len());
+        self.elements.push(Element::Function(f));
     }
 
     /// The declaration a reference denotes.

@@ -44,20 +44,14 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
 /// that the resolved converter doesn't actually depend on.
 #[test]
 fn final_invariant_stops_at_resolved_nodes() {
-    use crate::{
-        api::core::registry::{Direction, Registry, TypeEntry, TypeKey},
-        SourceLocation as Loc,
-    };
+    use crate::api::core::registry::{Direction, Registry, TypeEntry, TypeKey};
 
-    let mut reg: Registry<()> = Registry::empty();
-
-    let outer_struct: syn::ItemStruct = syn::parse_str("struct Outer { inner: Inner }").unwrap();
-    let inner_struct: syn::ItemStruct =
-        syn::parse_str("struct Inner { unused: Unrelated }").unwrap();
-    reg.structs
-        .insert(outer_struct.ident.clone(), (outer_struct, Loc::default()));
-    reg.structs
-        .insert(inner_struct.ident.clone(), (inner_struct, Loc::default()));
+    // Through the real scan, so the state under test is one the pipeline can
+    // actually produce: `Unrelated` is a field type nothing declares.
+    let mut reg: Registry<()> = crate::api::test_util::reg_with(&[
+        "pub struct Outer { pub inner: Inner }",
+        "pub struct Inner { pub unused: Unrelated }",
+    ]);
 
     // `Outer` required & unresolved; `Inner` RESOLVED (with a dummy
     // entry); `Unrelated` unresolved but only reachable through Inner.

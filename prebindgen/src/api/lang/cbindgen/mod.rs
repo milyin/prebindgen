@@ -393,7 +393,7 @@ fn type_short(ty: &syn::Type) -> String {
 /// The indexed `syn::ItemEnum` for a declared enum type, by tail ident.
 fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
     let ident = type_path_tail(ty)?;
-    registry.enums.get(&ident).map(|(e, _)| e)
+    registry.flat().enum_item(&ident.to_string())
 }
 
 /// Hard error when a `.tagged_union()`-declared enum is unit-only. The
