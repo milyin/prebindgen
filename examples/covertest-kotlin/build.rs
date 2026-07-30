@@ -118,20 +118,6 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 }
 
 fn main() {
-    // Two prebindgen sources: the flat crate plus the binding-side helper
-    // crate (conversion fns for `convert!`). The registry records each fn's
-    // origin from the stream's `SourceLocation` stamps so generated calls
-    // qualify with the defining crate (`perftest_flat::…` vs
-    // `cov_helpers::…`). The helper dependency is RENAMED in Cargo.toml
-    // (`cov_helpers = { package = "covertest-helpers", .. }`), so the stamp
-    // recorded at capture time (`covertest-helpers`) would not resolve from
-    // this crate — `.crate_name()` overrides it with the name this crate
-    // actually uses.
-    let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
-    let helpers = prebindgen::Source::builder(cov_helpers::PREBINDGEN_OUT_DIR)
-        .crate_name("cov_helpers")
-        .build();
-
     let jni = JniGen::new()
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
@@ -706,7 +692,18 @@ fn main() {
         .ignore(matching(|name| name.starts_with("storage_get_into_")))
         .ignore(fun!(storage_put_by_read_and_update));
 
-    let registry = Registry::from_items(source.items_all().chain(helpers.items_all()))
+    // Two prebindgen sources: the flat crate plus the binding-side helper crate
+    // (conversion fns for `convert!`). The registry records each fn's origin from
+    // the `SourceLocation` stamps so generated calls qualify with the defining
+    // crate (`perftest_flat::…` vs `cov_helpers::…`). The helper dependency is
+    // RENAMED in Cargo.toml (`cov_helpers = { package = "covertest-helpers", .. }`),
+    // so the stamp recorded at capture time (`covertest-helpers`) would not
+    // resolve from this crate — `source_named` overrides it with the name this
+    // crate actually uses, per directory.
+    let registry = Registry::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
+        .build()
         .expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();

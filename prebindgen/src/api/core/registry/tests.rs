@@ -611,3 +611,159 @@ fn foreign_qualified_declared_type_stays_supported() {
     assert!(reg.required_inputs_scan.contains(&foreign));
     assert!(reg.required_outputs_scan.contains(&foreign));
 }
+
+// ── The directory-reading builder ──────────────────────────────────────
+
+/// Write a real prebindgen output directory holding one marked fn, stamped with
+/// `crate_name` at capture time — the same fixture shape
+/// `duplicate_name_across_sources_names_both_crates` builds.
+fn write_source_dir(tag: &str, crate_name: &str, fn_name: &str) -> std::path::PathBuf {
+    use crate::{
+        api::record::{Record, RecordKind},
+        SourceLocation,
+    };
+
+    let dir = crate::api::test_util::unique_test_dir(&format!("builder_{tag}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("crate_name.txt"), crate_name).unwrap();
+    let record = Record::new(
+        RecordKind::Function,
+        fn_name.to_string(),
+        format!("pub fn {fn_name}() -> i32 {{ 1 }}"),
+        SourceLocation {
+            file: "src/lib.rs".to_string(),
+            line: 1,
+            column: 1,
+            crate_name: None,
+        },
+        None,
+    );
+    crate::api::utils::jsonl::write_to_jsonl_file(dir.join("default_1.jsonl"), &[&record]).unwrap();
+    dir
+}
+
+/// Render a module path the way the other origin tests in this file do.
+fn module(p: syn::Path) -> String {
+    p.to_token_stream().to_string()
+}
+
+fn fn_ident(name: &str) -> syn::Ident {
+    syn::parse_str(name).unwrap()
+}
+
+/// A build script names a directory and gets a registry — no `Source` in between.
+/// The captured crate becomes the default module, exactly as it does through a
+/// hand-built stream.
+#[test]
+fn builder_reads_a_source_directory() {
+    let dir = write_source_dir("plain", "flat-crate", "marked_fn");
+    let registry: Registry<()> = Registry::builder().source(&dir).build().expect("indexes");
+
+    assert!(registry.functions.contains_key(&fn_ident("marked_fn")));
+    // Dashes normalize to underscores, as they must to be a Rust module path.
+    assert_eq!(
+        registry.default_module().map(module),
+        Some("flat_crate".to_string())
+    );
+    assert_eq!(
+        registry.origin_module(&fn_ident("marked_fn")).map(module),
+        Some("flat_crate".to_string())
+    );
+}
+
+/// `source_named` overrides the capture-time stamp, which is what a dependency
+/// renamed in `Cargo.toml` needs: the recorded package name would not resolve
+/// from the crate that refers to it by another name.
+#[test]
+fn builder_source_named_overrides_the_captured_crate() {
+    let dir = write_source_dir("renamed", "real-package-name", "helper_fn");
+
+    // Without the override, the registry believes the package name.
+    let plain: Registry<()> = Registry::builder().source(&dir).build().expect("indexes");
+    assert_eq!(
+        plain.origin_module(&fn_ident("helper_fn")).map(module),
+        Some("real_package_name".to_string())
+    );
+
+    let renamed: Registry<()> = Registry::builder()
+        .source_named(&dir, "as_renamed")
+        .build()
+        .expect("indexes");
+    assert_eq!(
+        renamed.origin_module(&fn_ident("helper_fn")).map(module),
+        Some("as_renamed".to_string())
+    );
+    assert_eq!(
+        renamed.default_module().map(module),
+        Some("as_renamed".to_string())
+    );
+}
+
+/// Feeders accumulate, and the override stays **per directory** — a
+/// registry-level one could only fix a single module, which is the whole reason
+/// it lives on the source.
+#[test]
+fn builder_composes_directories_and_streams() {
+    let flat = write_source_dir("multi_flat", "flat-crate", "flat_fn");
+    let helper = write_source_dir("multi_helper", "real-helper-name", "helper_fn");
+
+    let registry: Registry<()> = Registry::builder()
+        .source(&flat)
+        .source_named(&helper, "renamed_helper")
+        .items(vec![(
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn synthetic() -> i32 {
+                    2
+                }
+            )),
+            crate::SourceLocation::default(),
+        )])
+        .build()
+        .expect("indexes");
+
+    for name in ["flat_fn", "helper_fn", "synthetic"] {
+        assert!(registry.functions.contains_key(&fn_ident(name)), "{name}");
+    }
+    // Each directory keeps its own origin; the stream item has none to keep.
+    assert_eq!(
+        registry.origin_module(&fn_ident("flat_fn")).map(module),
+        Some("flat_crate".to_string())
+    );
+    assert_eq!(
+        registry.origin_module(&fn_ident("helper_fn")).map(module),
+        Some("renamed_helper".to_string())
+    );
+    assert_eq!(
+        registry.origin_module(&fn_ident("synthetic")).map(module),
+        None
+    );
+
+    // First-seen order, which is what makes the first entry the default module.
+    assert_eq!(
+        registry
+            .all_source_modules()
+            .into_iter()
+            .map(module)
+            .collect::<Vec<_>>(),
+        vec!["flat_crate".to_string(), "renamed_helper".to_string()]
+    );
+}
+
+/// The builder is sugar: it reaches the same indexing as the primitive, so the
+/// whole-stream rules cannot differ between the two entry points.
+#[test]
+fn builder_and_from_items_agree() {
+    let dir = write_source_dir("agree", "flat-crate", "marked_fn");
+
+    let built: Registry<()> = Registry::builder().source(&dir).build().expect("indexes");
+    let streamed: Registry<()> =
+        Registry::from_items(crate::Source::new(&dir).items_all()).expect("indexes");
+
+    assert_eq!(built.functions.len(), streamed.functions.len());
+    assert_eq!(
+        built.default_module().map(module),
+        streamed.default_module().map(module)
+    );
+    assert_eq!(built.passthrough.len(), streamed.passthrough.len());
+}
