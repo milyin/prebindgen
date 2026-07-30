@@ -4,8 +4,8 @@
 //! * Item maps (`functions`, `structs`, `enums`, `consts`) indexed by ident.
 //!   Duplicate names across kinds OR within a kind are an error — prebindgen
 //!   items live in one flat namespace.
-//! * `passthrough` — items that aren't function/struct/enum/const (use, mod,
-//!   type alias, macro_rules) emitted verbatim.
+//! * `guards` — prebindgen's own injected feature checks, emitted verbatim.
+//!   Not API: no source crate marked them.
 //! * `input_types` / `output_types` — direction-specific type tables. Each
 //!   scanned type maps to either a resolved [`TypeEntry`] or an unresolved cell
 //!   that the fixed-point resolver can retry.
@@ -297,8 +297,10 @@ pub struct Registry<M = ()> {
     pub structs: HashMap<syn::Ident, (syn::ItemStruct, SourceLocation)>,
     pub enums: HashMap<syn::Ident, (syn::ItemEnum, SourceLocation)>,
     pub consts: HashMap<syn::Ident, (syn::ItemConst, SourceLocation)>,
-    /// Anything else (use, mod, type alias, macro_rules) — passed through.
-    pub passthrough: Vec<(syn::Item, SourceLocation)>,
+    /// Prebindgen's own injected compile-time checks — one feature guard per
+    /// ingested source crate — re-emitted verbatim. Not API: see
+    /// [`Guard`](crate::api::core::flat::Guard).
+    pub guards: Vec<crate::api::core::flat::Guard>,
 
     /// Origin crate name of each named item (fn/struct/enum/const),
     /// recorded by [`Self::from_items`] from each item's
@@ -386,7 +388,7 @@ impl<M> Registry<M> {
             structs: HashMap::new(),
             enums: HashMap::new(),
             consts: HashMap::new(),
-            passthrough: Vec::new(),
+            guards: Vec::new(),
             item_origins: HashMap::new(),
             source_modules: Vec::new(),
             input_types: Default::default(),
@@ -822,7 +824,7 @@ impl<M> Registry<M> {
     /// override could only fix one module).
     ///
     /// This step only populates the item maps (`functions`, `structs`,
-    /// `enums`, `consts`, `passthrough`). Signature/body scanning that
+    /// `enums`, `consts`, `guards`). Signature/body scanning that
     /// drives type-resolution requirements happens later, in
     /// [`Self::scan_declared`], and is gated on what the language adapter
     /// has explicitly declared. Items that are never declared remain in
@@ -916,16 +918,10 @@ impl<M> Registry<M> {
                         (t.origin.syntax.clone(), element.location().clone()),
                     );
                 }
-                // An unnamed `const _` is each source's injected `konst` feature
-                // guard: not addressable, re-emitted verbatim. That is the whole
-                // of `passthrough` now — the proc-macro refuses to mark a `use`,
-                // `mod` or `macro_rules!`, so nothing else ever reached it.
-                Element::Constant(c) if named.is_none() => {
-                    registry.passthrough.push((
-                        syn::Item::Const(c.origin.syntax.clone()),
-                        element.location().clone(),
-                    ));
-                }
+                // Prebindgen's own feature guard, re-emitted verbatim. The only
+                // item here that no source crate marked, which is why it is not
+                // in any of the API maps.
+                Element::Guard(g) => registry.guards.push(g.clone()),
                 Element::Constant(c) => {
                     registry.consts.insert(
                         c.name.clone(),
@@ -1245,12 +1241,8 @@ impl<M> Registry<M> {
             let mut skipped_consts: Vec<String> = self
                 .consts
                 .keys()
-                // Unnamed consts (`const _`, e.g. the injected feature
-                // guard) are infrastructure: not declarable, always emitted
-                // verbatim — never a skip.
                 .filter(|k| {
-                    *k != "_"
-                        && !decl_consts.contains(*k)
+                    !decl_consts.contains(*k)
                         && !declared.ignored_consts.contains(*k)
                         && !pred_ignored(&k.to_string())
                 })

@@ -15,8 +15,9 @@ use crate::SourceLocation;
 /// One member of the flat API.
 ///
 /// Three modelled kinds — a function, a type, a constant — plus
-/// [`Element::Unsupported`] for anything the language cannot express. There is no
-/// verbatim-passthrough variant: a `#[prebindgen]` crate marks the items that
+/// [`Element::Guard`] for prebindgen's own injected checks and
+/// [`Element::Unsupported`] for anything the language cannot express. No *marked*
+/// item passes through verbatim: a `#[prebindgen]` crate marks the items that
 /// cross the boundary, and the supporting code around them is the consumer
 /// crate's job — the proc-macro enforces that already, refusing to mark a `use`,
 /// `mod`, `impl` or `macro_rules!` at all.
@@ -26,6 +27,9 @@ pub enum Element {
     /// A type declaration: a struct, either enum shape, or an opaque handle.
     Type(Type),
     Constant(Constant),
+    /// A compile-time check prebindgen injects into the generated file. Carries
+    /// no API surface: nothing can name it, declare it, or cross it.
+    Guard(Guard),
     /// An item the language cannot express — a parameter type outside the
     /// grammar, a `self` receiver, a reference to a type the flat API never
     /// declares, or a whole item kind it does not model such as a `union`.
@@ -42,17 +46,16 @@ impl Element {
     /// The item's name, which is also its address: `#[prebindgen]` names live
     /// in one flat namespace across every ingested source crate.
     ///
-    /// `None` when the item has no address — an unnamed `const _` (each
-    /// source's injected feature guard, so several may coexist), or an item
-    /// kind with no identifier at all.
+    /// `None` when the item has no address — a [`Guard`], or an item kind with
+    /// no identifier at all.
     pub fn name(&self) -> Option<&syn::Ident> {
-        let named = match self {
+        match self {
             Element::Function(f) => Some(&f.name),
             Element::Type(t) => Some(t.name()),
             Element::Constant(c) => Some(&c.name),
+            Element::Guard(_) => None,
             Element::Unsupported(u) => u.name.as_ref(),
-        };
-        named.filter(|id| *id != "_")
+        }
     }
 
     /// Where the item was captured, including the crate that marked it.
@@ -64,6 +67,7 @@ impl Element {
             Element::Function(f) => &f.origin.location,
             Element::Type(t) => t.location(),
             Element::Constant(c) => &c.origin.location,
+            Element::Guard(g) => &g.origin.location,
             Element::Unsupported(u) => &u.origin.location,
         }
     }
@@ -74,6 +78,7 @@ impl Element {
             Element::Function(f) => syn::Item::Fn(f.origin.syntax.clone()),
             Element::Type(t) => t.syntax(),
             Element::Constant(c) => syn::Item::Const(c.origin.syntax.clone()),
+            Element::Guard(g) => syn::Item::Const(g.origin.syntax.clone()),
             Element::Unsupported(u) => u.origin.syntax.clone(),
         }
     }
@@ -334,16 +339,35 @@ pub struct Field {
 
 /// A `#[prebindgen]` constant.
 ///
-/// Also the home of the unnamed `const _` feature guard each source injects: it
-/// is a constant, so it is modelled as one, and [`Element::name`] returning
-/// `None` for `_` is what keeps several of them from colliding in the flat
-/// namespace.
+/// Always named: an unnamed `const _` is a [`Guard`], not a constant with no
+/// address.
 #[derive(Clone, Debug)]
 pub struct Constant {
     pub name: syn::Ident,
     pub ty: TypeRef,
     /// The whole item — the initializer expression included, which is where a
     /// consumer that re-emits the value reads it from.
+    pub origin: Origin<syn::ItemConst>,
+}
+
+/// A compile-time check prebindgen injects into the generated file.
+///
+/// Today that is one `const _: () = { konst::assertc_eq!(..) }` per ingested
+/// source crate, synthesized by [`Source`](crate::Source) to assert that the
+/// crate's `FEATURES` match what the build script asked for. **Nothing marked it**
+/// — it is prebindgen's own item, riding the same stream — which is why it is not
+/// part of the flat API even though it arrives with it.
+///
+/// Recognised by shape rather than by provenance: a constant with no name has no
+/// address, so nothing can declare it, reference it, or emit it as an alias. That
+/// is the property that makes it infrastructure, and it holds whoever wrote it.
+///
+/// It carries no type, unlike a [`Constant`]. The item is emitted verbatim, so
+/// what its types mean is the consumer crate's business; modelling them would let
+/// a guard that names something undeclared refuse the whole element.
+#[derive(Clone, Debug)]
+pub struct Guard {
+    /// Emitted verbatim, so the item is all there is.
     pub origin: Origin<syn::ItemConst>,
 }
 

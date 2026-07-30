@@ -866,11 +866,12 @@ fn consts_carry_their_type_and_value() {
     assert_eq!(tokens(&c.origin.syntax.expr), "4");
 }
 
-/// An unnamed `const _` — each source's injected feature guard — is a const
-/// like any other, and simply has no address, so several sources may each carry
-/// one without colliding in the flat namespace.
+/// An unnamed const is a `Guard`, not a `Constant`: nothing can name it, so it
+/// is not part of the API. Several coexist because none has an address to
+/// collide on — which is what lets a binding ingest two source crates, each
+/// injecting its own feature check.
 #[test]
-fn an_unnamed_const_is_a_const_without_an_address() {
+fn an_unnamed_const_is_a_guard() {
     let elements = parse(vec![
         syn::parse_quote!(
             const _: () = ();
@@ -879,8 +880,11 @@ fn an_unnamed_const_is_a_const_without_an_address() {
             const _: () = ();
         ),
     ]);
-    assert!(elements.iter().all(|e| matches!(e, Element::Constant(_))));
+    assert!(elements.iter().all(|e| matches!(e, Element::Guard(_))));
     assert!(elements.iter().all(|e| e.name().is_none()));
+    // A guard writes no type slot, so a consumer walking the API never reaches
+    // one — the reason it carries no `TypeRef`.
+    assert!(!elements.iter().any(|e| matches!(e, Element::Constant(_))));
 }
 
 /// An item kind the language does not model is diagnosed, not carried: a

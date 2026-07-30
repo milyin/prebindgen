@@ -504,14 +504,16 @@ pub trait Prebindgen {
     /// (see [`const_path_alias`]) when [`Self::source_module`] is available —
     /// initializer tokens are never copied, so a const whose initializer
     /// references source-crate internals stays valid in the generated file.
-    /// Unnamed `const _` items (self-contained infrastructure guards, e.g.
-    /// the injected `konst::assertc_eq!` feature check) and adapters without
-    /// a source module pass through verbatim.
+    /// An adapter without a source module passes the const through verbatim.
+    ///
+    /// A const reaching here is always named: prebindgen's own injected feature
+    /// checks are [`Guard`](crate::api::core::flat::Guard)s, not consts, so this
+    /// never has to recognise one.
     fn on_const(&self, c: &syn::ItemConst, _registry: &Registry<Self::Metadata>) -> TokenStream {
         use quote::ToTokens;
         match self.source_module() {
-            Some(m) if c.ident != "_" => const_path_alias(c, m),
-            _ => c.to_token_stream(),
+            Some(m) => const_path_alias(c, m),
+            None => c.to_token_stream(),
         }
     }
 

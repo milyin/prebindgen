@@ -157,6 +157,7 @@ fn describe(e: &Element) -> String {
         Element::Function(f) => format!("function `{}`", f.name),
         Element::Type(t) => describe_type(t),
         Element::Constant(c) => format!("constant `{}`", c.name),
+        Element::Guard(_) => "guard".to_string(),
         Element::Unsupported(u) => match &u.name {
             Some(name) => format!("unsupported `{name}` ({})", u.error),
             None => format!("unsupported ({})", u.error),
