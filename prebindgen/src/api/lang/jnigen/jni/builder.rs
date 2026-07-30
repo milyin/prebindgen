@@ -812,7 +812,7 @@ impl JniGen {
         let func = &decl.func;
         let item_fn = registry
             .flat()
-            .function(&func.to_string())
+            .function(&func)
             .map(|__f| &__f.origin.syntax)
             .unwrap_or_else(|| {
                 panic!(
@@ -1035,7 +1035,7 @@ impl JniGen {
                     let ident = bare_path_ident(&probe).expect("a sum type is a path type");
                     let item_enum = registry
                         .flat()
-                        .enum_item(&ident.to_string())
+                        .enum_item(&ident)
                         .expect("TypeKind::Sum implies an indexed enum");
                     let sum_cfg = self.types[&TypeKey::from_type(&probe)]
                         .sum()
@@ -1398,7 +1398,7 @@ impl JniGen {
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry
                     .flat()
-                    .function(&f.to_string())
+                    .function(&f)
                     .map(|__f| &__f.origin.syntax)
                     .unwrap_or_else(|| {
                         panic!(
@@ -1474,7 +1474,7 @@ impl JniGen {
             ConvertSpec::PrebindgenFn(g) => {
                 let item_fn = registry
                     .flat()
-                    .function(&g.to_string())
+                    .function(&g)
                     .map(|__f| &__f.origin.syntax)
                     .unwrap_or_else(|| {
                         panic!(

@@ -492,7 +492,7 @@ impl JniGen {
             }) else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&ident.to_string()) else {
+            let Some(item_enum) = registry.flat().enum_item(&ident) else {
                 continue;
             };
             let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
@@ -548,7 +548,7 @@ impl JniGen {
             let Some(ident) = bare_path_ident(&ty) else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&ident.to_string()) else {
+            let Some(item_enum) = registry.flat().enum_item(&ident) else {
                 continue;
             };
             assert!(
@@ -895,7 +895,7 @@ impl JniGen {
             };
             let Some(item_struct) = registry
                 .flat()
-                .struct_type(&ident.to_string())
+                .struct_type(&ident)
                 .map(|__s| &__s.origin.syntax)
             else {
                 continue;
@@ -927,7 +927,7 @@ impl JniGen {
             for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
                 if let Some(item_fn) = registry
                     .flat()
-                    .function(&m.rust_ident.to_string())
+                    .function(&m.rust_ident)
                     .map(|__f| &__f.origin.syntax)
                 {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
@@ -961,7 +961,7 @@ impl JniGen {
                 for m in ctors {
                     if let Some(item_fn) = registry
                         .flat()
-                        .function(&m.rust_ident.to_string())
+                        .function(&m.rust_ident)
                         .map(|__f| &__f.origin.syntax)
                     {
                         if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
@@ -1081,7 +1081,7 @@ impl JniGen {
             {
                 let Some(item_fn) = registry
                     .flat()
-                    .function(&ident.to_string())
+                    .function(&ident)
                     .map(|__f| &__f.origin.syntax)
                 else {
                     continue;
@@ -1451,7 +1451,7 @@ impl JniGen {
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
         let item_enum = registry
             .flat()
-            .enum_item(&ident.to_string())
+            .enum_item(&ident)
             .unwrap_or_else(|| panic!("sum builder: no indexed enum `{ident}`"));
         let sum_cfg = self.types[&key]
             .sum()
@@ -1595,7 +1595,7 @@ impl JniGen {
         for entry in &pkg_cfg.functions {
             let item_fn = &registry
                 .flat()
-                .function(&entry.rust_ident.to_string())
+                .function(&entry.rust_ident)
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: function `{}` registered via .function(...) is \
@@ -1620,7 +1620,7 @@ impl JniGen {
         for entry in &pkg_cfg.constants {
             let item_const = registry
                 .flat()
-                .constant(&entry.rust_ident.to_string())
+                .constant(&entry.rust_ident)
                 .map(|__c| &__c.origin.syntax)
                 .unwrap_or_else(|| {
                     panic!(
@@ -1649,7 +1649,7 @@ impl JniGen {
         for entry in &pkg_cfg.constant_functions {
             let item_fn = &registry
                 .flat()
-                .function(&entry.rust_ident.to_string())
+                .function(&entry.rust_ident)
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: constant fn `{}` registered via .constant_fun(...) \
@@ -1720,7 +1720,7 @@ impl JniGen {
             }
             let item_fn = &registry
                 .flat()
-                .function(&ident.to_string())
+                .function(&ident)
                 .expect("iterating the model's own function names")
                 .origin
                 .syntax;
@@ -1742,7 +1742,7 @@ impl JniGen {
         for ident in const_idents {
             let Some(item_const) = registry
                 .flat()
-                .constant(&ident.to_string())
+                .constant(&ident)
                 .map(|__c| &__c.origin.syntax)
             else {
                 continue; // missing decl already warned by the scan

@@ -1047,7 +1047,7 @@ impl Prebindgen for JniGen {
             let Some(ident) = bare_path_ident(&source) else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&ident.to_string()) else {
+            let Some(item_enum) = registry.flat().enum_item(&ident) else {
                 continue;
             };
             out.push(crate::api::core::unfold::SumDecon {
@@ -1218,7 +1218,7 @@ impl Prebindgen for JniGen {
                 // A registry-absent fn already hard-errored in the scan.
                 let Some(item_fn) = registry
                     .flat()
-                    .function(&m.rust_ident.to_string())
+                    .function(&m.rust_ident)
                     .map(|__f| &__f.origin.syntax)
                 else {
                     continue;
@@ -1289,7 +1289,7 @@ impl Prebindgen for JniGen {
         for ident in self.declared_functions() {
             let Some(item_fn) = registry
                 .flat()
-                .function(&ident.to_string())
+                .function(&ident)
                 .map(|__f| &__f.origin.syntax)
             else {
                 continue;
@@ -1684,7 +1684,7 @@ impl JniGen {
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
-                    if let Some(e) = registry.flat().enum_item(&name.to_string()) {
+                    if let Some(e) = registry.flat().enum_item(&name) {
                         let (wire, body) = enum_input_body(self, registry, e);
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg
@@ -1786,7 +1786,7 @@ impl JniGen {
             // OUTPUT direction has no counterpart: a sum crosses Rust →
             // Kotlin flattened, always.)
             if self.types.get(&key).is_some_and(|c| c.sum().is_some()) {
-                if let Some(e) = registry.flat().enum_item(&name.to_string()) {
+                if let Some(e) = registry.flat().enum_item(&name) {
                     let (wire, body) = sum_input_body(self, e, registry)?;
                     // The wire's own null niche, exactly as a data class gets
                     // — that is what lets `Option<sum>` fold with JVM null as
@@ -1809,7 +1809,7 @@ impl JniGen {
             }
             if let Some(s) = registry
                 .flat()
-                .struct_type(&name.to_string())
+                .struct_type(&name)
                 .map(|__s| &__s.origin.syntax)
             {
                 let (wire, body) = struct_input_body(self, s, registry)?;
@@ -1902,7 +1902,7 @@ impl JniGen {
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
-                    if let Some(e) = registry.flat().enum_item(&name.to_string()) {
+                    if let Some(e) = registry.flat().enum_item(&name) {
                         let (wire, body) = enum_output_body(self, e);
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg
@@ -2000,7 +2000,7 @@ impl JniGen {
         if let Some(name) = bare_path_ident(ty) {
             if let Some(s) = registry
                 .flat()
-                .struct_type(&name.to_string())
+                .struct_type(&name)
                 .map(|__s| &__s.origin.syntax)
             {
                 let (wire, body) = struct_output_body(self, s, registry)?;

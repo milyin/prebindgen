@@ -896,12 +896,7 @@ impl<M> Registry<M> {
         // Off the element's own location, which covers both populations: a
         // captured item stamped at capture time, and a binding-local fn stamped
         // by `add_local_function`.
-        let crate_name = self
-            .flat
-            .element(&ident.to_string())?
-            .location()
-            .crate_name
-            .as_ref()?;
+        let crate_name = self.flat.element(&ident)?.location().crate_name.as_ref()?;
         let module = crate_name.replace('-', "_");
         syn::parse_str(&module).ok()
     }
@@ -997,7 +992,7 @@ impl<M> Registry<M> {
             let last = tp.path.segments.last().expect("len checked");
             if self.flat.source_modules().contains(&head) {
                 qualified.push((key.to_string(), last.to_token_stream().to_string()));
-            } else if self.flat.declared_type(&last.ident.to_string()).is_some() {
+            } else if self.flat.declared_type(&last.ident).is_some() {
                 println!(
                     "cargo:warning=prebindgen: declared type `{}` is path-qualified, but a \
                      captured #[prebindgen] item `{}` exists — if you meant the source item, \
@@ -1019,11 +1014,7 @@ impl<M> Registry<M> {
 
         // Scan declared functions.
         for ident in &declared.functions {
-            if let Some(item_fn) = self
-                .flat
-                .function(&ident.to_string())
-                .map(|f| f.origin.syntax.clone())
-            {
+            if let Some(item_fn) = self.flat.function(&ident).map(|f| f.origin.syntax.clone()) {
                 self.scan_fn_signature(&item_fn)?;
             } else {
                 missing.push(("function", ident.to_string()));
@@ -1031,7 +1022,7 @@ impl<M> Registry<M> {
         }
 
         for ident in &declared.ignored_functions {
-            if self.flat.function(&ident.to_string()).is_none() {
+            if self.flat.function(&ident).is_none() {
                 println!(
                     "cargo:warning=prebindgen: ignored function `{}` not found among #[prebindgen] items",
                     ident
@@ -1044,7 +1035,7 @@ impl<M> Registry<M> {
         // `extra_required_types`) — but they are referenced by name from
         // adapter declarations, so a missing one is a hard error.
         for ident in &declared.helper_functions {
-            if self.flat.function(&ident.to_string()).is_none() {
+            if self.flat.function(&ident).is_none() {
                 missing.push(("helper function", ident.to_string()));
             }
         }
@@ -1054,10 +1045,8 @@ impl<M> Registry<M> {
         // so the type is required in the output direction only.
         if let Some(decl_consts) = &declared.consts {
             for ident in decl_consts {
-                if let Some(item_const) = self
-                    .flat
-                    .constant(&ident.to_string())
-                    .map(|c| c.origin.syntax.clone())
+                if let Some(item_const) =
+                    self.flat.constant(&ident).map(|c| c.origin.syntax.clone())
                 {
                     self.ensure_entry(Direction::Output, &item_const.ty, true);
                 } else {
@@ -1065,7 +1054,7 @@ impl<M> Registry<M> {
                 }
             }
             for ident in &declared.ignored_consts {
-                if self.flat.constant(&ident.to_string()).is_none() {
+                if self.flat.constant(&ident).is_none() {
                     println!(
                         "cargo:warning=prebindgen: ignored const `{}` not found among #[prebindgen] items",
                         ident
@@ -1092,14 +1081,14 @@ impl<M> Registry<M> {
             if let Some(ident) = bare_path_ident(&ty) {
                 if let Some(s) = self
                     .flat
-                    .struct_type(&ident.to_string())
+                    .struct_type(&ident)
                     .map(|s| s.origin.syntax.clone())
                 {
                     self.scan_struct(&s)?;
                     self.ensure_entry(Direction::Input, &ty, true);
                     self.ensure_entry(Direction::Output, &ty, true);
                     matched = true;
-                } else if let Some(e) = self.flat.enum_item(&ident.to_string()).cloned() {
+                } else if let Some(e) = self.flat.enum_item(&ident).cloned() {
                     self.scan_enum(&e)?;
                     self.ensure_entry(Direction::Input, &ty, true);
                     self.ensure_entry(Direction::Output, &ty, true);
@@ -1119,8 +1108,7 @@ impl<M> Registry<M> {
         for key in &declared.ignored_types {
             let ty = key.to_type();
             let matched = bare_path_ident(&ty).is_some_and(|ident| {
-                self.flat.struct_type(&ident.to_string()).is_some()
-                    || self.flat.enum_item(&ident.to_string()).is_some()
+                self.flat.struct_type(&ident).is_some() || self.flat.enum_item(&ident).is_some()
             });
             if !matched {
                 println!(
@@ -1430,7 +1418,7 @@ impl<M> Registry<M> {
         // contribute nothing here.
         if let Some(name) = bare_path_ident(ty) {
             use crate::api::core::flat::{Field, Type};
-            let fields: Vec<&Field> = match self.flat.declared_type(&name.to_string()) {
+            let fields: Vec<&Field> = match self.flat.declared_type(&name) {
                 Some(Type::Struct(s)) => s.fields.iter().collect(),
                 Some(Type::Variant(v)) => v
                     .alternatives
@@ -1485,7 +1473,7 @@ impl<M> Registry<M> {
                     .into())
                 }
             };
-            if self.flat.element(&ident.to_string()).is_some() {
+            if self.flat.element(&ident).is_some() {
                 return Err(ScanError::AdapterInvariant {
                     message: format!(
                         "binding-local fn `{ident}` collides with a `#[prebindgen]` item — \

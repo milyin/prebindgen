@@ -194,7 +194,7 @@ impl Cbindgen {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
                     .flat()
-                    .function(&f.to_string())
+                    .function(&f)
                     .map(|__f| &__f.origin.syntax)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (repr, by_ref) = one_param(item);
@@ -238,7 +238,7 @@ impl Cbindgen {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
                     .flat()
-                    .function(&f.to_string())
+                    .function(&f)
                     .map(|__f| &__f.origin.syntax)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);

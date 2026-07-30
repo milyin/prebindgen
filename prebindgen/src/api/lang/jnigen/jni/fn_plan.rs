@@ -305,7 +305,7 @@ pub(crate) fn validate_bindings(
         }
         let item_fn = &registry
             .flat()
-            .function(&ident.to_string())
+            .function(&ident)
             .expect("iterating the model's own function names")
             .origin
             .syntax;
@@ -327,7 +327,7 @@ pub(crate) fn validate_bindings(
             }
             let item_const = &registry
                 .flat()
-                .constant(&ident.to_string())
+                .constant(&ident)
                 .expect("iterating the model's own const names")
                 .origin
                 .syntax;
