@@ -22,11 +22,11 @@ fn opaque_owned_transmute_by_value() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(out_fn), loc.clone()),
         (syn::Item::Fn(in_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -117,11 +117,11 @@ fn opaque_data_no_gravestone_writeback() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(out_fn), loc.clone()),
         (syn::Item::Fn(in_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -196,13 +196,13 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(make_fn), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(cb_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -284,11 +284,11 @@ fn repr_c_struct_owned_inferred_field_nulls_without_default() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -337,10 +337,10 @@ fn repr_c_struct_plain_data_has_no_writeback() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(take_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -385,11 +385,11 @@ fn repr_c_struct_bare_box_field_keeps_full_gravestone() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -450,12 +450,12 @@ fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(upd_fn), loc.clone()),
         (syn::Item::Fn(into_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -517,7 +517,7 @@ fn repr_c_struct_restricted_validity_field_is_rejected() {
                     unimplemented!()
                 }
             );
-            let registry = Registry::<()>::from_items([
+            let registry = Registry::<()>::from_items(declare_referenced([
                 (syn::Item::Struct(st), loc.clone()),
                 (
                     syn::Item::Enum(syn::parse_quote!(
@@ -529,7 +529,7 @@ fn repr_c_struct_restricted_validity_field_is_rejected() {
                     loc.clone(),
                 ),
                 (syn::Item::Fn(take), loc.clone()),
-            ])
+            ]))
             .expect("index items");
 
             let cbindgen = Cbindgen::new()
@@ -569,10 +569,10 @@ fn repr_c_struct_restricted_validity_field_accepted_when_acknowledged() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(take), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -612,10 +612,10 @@ fn repr_c_struct_restricted_validity_field_audited_even_when_output_only() {
         }
     );
     let registry = || {
-        Registry::<()>::from_items([
+        Registry::<()>::from_items(declare_referenced([
             (syn::Item::Struct(st.clone()), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
-        ])
+        ]))
         .expect("index items")
     };
 

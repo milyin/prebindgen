@@ -11,7 +11,8 @@ fn slice_u8_input_two_params() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -46,10 +47,10 @@ fn option_opaque_input_reuses_pointer() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -91,7 +92,8 @@ fn option_scalar_input_boxed_pointer() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -122,7 +124,8 @@ fn str_borrow_input_lowering() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -161,10 +164,10 @@ fn relation_to_lowering() {
         }
     );
 
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Enum(enum_item), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -221,11 +224,11 @@ fn enum_input_validates_the_discriminant() {
         }
     );
 
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Enum(enum_item), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -290,10 +293,10 @@ fn enum_input_without_error_channel_requires_panic() {
     );
     let build = |allow_panic: bool| {
         let loc = SourceLocation::default();
-        let registry = Registry::<()>::from_items([
+        let registry = Registry::<()>::from_items(declare_referenced([
             (syn::Item::Fn(func.clone()), loc.clone()),
             (syn::Item::Enum(enum_item.clone()), loc.clone()),
-        ])
+        ]))
         .expect("index items");
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
@@ -331,10 +334,10 @@ fn mutable_opaque_borrow_input_lowering() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()

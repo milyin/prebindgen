@@ -571,6 +571,37 @@ fn extents_outside_the_subgrammar() {
         extent_reason(quote::quote!([u8; UNMARKED])),
         ArrayLenReason::NotAMarkedConst
     );
+    // Expression forms that BIND a local, which is the dangerous family: a length
+    // is qualified against its source module, so a local shadowing a marked item
+    // would be rewritten into it. Scope tracking is the general answer; none of
+    // these has a place in a boundary type, so the whole family is refused.
+    // (Moved here from the jnigen suite: the subgrammar is the frontend's.)
+    assert_eq!(
+        extent_reason(quote::quote!(
+            [u8; const {
+                let n = 3;
+                n
+            }]
+        )),
+        ArrayLenReason::NotLiteralOrName
+    );
+    assert_eq!(
+        extent_reason(quote::quote!(
+            [u8; match 3 {
+                n => n,
+            }]
+        )),
+        ArrayLenReason::NotLiteralOrName
+    );
+    assert_eq!(
+        extent_reason(quote::quote!([u8; if let n = 3 { n } else { 0 }])),
+        ArrayLenReason::NotLiteralOrName
+    );
+    // A CALL is not a name either, however const the callee.
+    assert_eq!(
+        extent_reason(quote::quote!([u8; array_len()])),
+        ArrayLenReason::NotLiteralOrName
+    );
     assert_eq!(
         extent_reason(quote::quote!([u8; 'c'])),
         ArrayLenReason::NotAnIntegerLiteral

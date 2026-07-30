@@ -1,6 +1,7 @@
 use quote::ToTokens;
 
 use super::*;
+pub(crate) use crate::api::test_util::declare_referenced;
 use crate::{
     api::{
         core::{

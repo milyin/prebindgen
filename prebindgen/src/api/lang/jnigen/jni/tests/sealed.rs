@@ -31,7 +31,8 @@ fn sealed_kotlin(rename_labeled: Option<&str>) -> String {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let mut sealed = crate::sealed_class!(Reading);
     if let Some(n) = rename_labeled {
@@ -155,7 +156,8 @@ fn declarators_do_not_accept_each_others_shape() {
 
     let emit = |item: syn::Item, decl: crate::lang::ClassDecl, tag: &str| {
         let registry =
-            Registry::<KotlinMeta>::from_items(vec![(item, loc.clone())]).expect("index items");
+            Registry::<KotlinMeta>::from_items(declare_referenced(vec![(item, loc.clone())]))
+                .expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
@@ -187,7 +189,7 @@ fn declarators_do_not_accept_each_others_shape() {
 fn unknown_variant_is_an_error() {
     let loc = myflat_loc();
     let boom = || {
-        let registry = Registry::<KotlinMeta>::from_items(vec![(
+        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![(
             syn::Item::Enum(syn::parse_quote!(
                 pub enum Reading {
                     Missing,
@@ -195,7 +197,7 @@ fn unknown_variant_is_an_error() {
                 }
             )),
             loc.clone(),
-        )])
+        )]))
         .expect("index items");
         let jni = JniGen::new().set_package_prefix("io.test.jni").package(
             crate::package!()
@@ -216,7 +218,7 @@ fn unknown_variant_is_an_error() {
 #[test]
 fn reopened_sealed_class_merges_variant_names() {
     let loc = myflat_loc();
-    let registry = Registry::<KotlinMeta>::from_items(vec![(
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![(
         syn::Item::Enum(syn::parse_quote!(
             pub enum Reading {
                 Missing,
@@ -225,7 +227,7 @@ fn reopened_sealed_class_merges_variant_names() {
             }
         )),
         loc.clone(),
-    )])
+    )]))
     .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -283,7 +285,8 @@ fn reopened_ptr_class_keeps_gc_managed() {
         )]
     };
     let gc_managed_of = |first: crate::lang::PtrClassDecl, second: crate::lang::PtrClassDecl| {
-        let registry = Registry::<KotlinMeta>::from_items(items()).expect("index items");
+        let registry =
+            Registry::<KotlinMeta>::from_items(declare_referenced(items())).expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(first).class(second));
@@ -339,7 +342,8 @@ fn a_type_gets_one_class_declarator() {
         ]
     };
     let declare = |first: crate::lang::ClassDecl, second: crate::lang::ClassDecl| {
-        let registry = Registry::<KotlinMeta>::from_items(items()).expect("index items");
+        let registry =
+            Registry::<KotlinMeta>::from_items(declare_referenced(items())).expect("index items");
         let _ = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(first).class(second));
@@ -440,9 +444,11 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
     // Resolve is where `validate_symbols` runs, so the error surfaces before
     // any artifact writer touches disk.
     let resolve_err = |decl: crate::lang::SealedClassDecl, item: syn::ItemEnum| -> String {
-        let registry =
-            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Enum(item), loc.clone())])
-                .expect("index items");
+        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![(
+            syn::Item::Enum(item),
+            loc.clone(),
+        )]))
+        .expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
@@ -507,9 +513,11 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
 fn variant_named_companion_moves_the_companion_not_the_variant() {
     let loc = myflat_loc();
     let emit = |decl: crate::lang::SealedClassDecl, item: syn::ItemEnum, tag: &str| -> String {
-        let registry =
-            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Enum(item), loc.clone())])
-                .expect("index items");
+        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![(
+            syn::Item::Enum(item),
+            loc.clone(),
+        )]))
+        .expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
@@ -579,7 +587,7 @@ fn variant_named_companion_moves_the_companion_not_the_variant() {
 fn payload_without_output_converter_is_an_error() {
     let loc = myflat_loc();
     let boom = || {
-        let registry = Registry::<KotlinMeta>::from_items(vec![(
+        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![(
             syn::Item::Enum(syn::parse_quote!(
                 pub enum Reading {
                     Missing,
@@ -589,7 +597,7 @@ fn payload_without_output_converter_is_an_error() {
                 }
             )),
             loc.clone(),
-        )])
+        )]))
         .expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
@@ -617,7 +625,7 @@ fn payload_without_output_converter_is_an_error() {
 #[test]
 fn sum_is_its_own_type_kind() {
     let loc = myflat_loc();
-    let registry = Registry::<KotlinMeta>::from_items(vec![(
+    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![(
         syn::Item::Enum(syn::parse_quote!(
             pub enum Reading {
                 Missing,
@@ -625,7 +633,7 @@ fn sum_is_its_own_type_kind() {
             }
         )),
         loc.clone(),
-    )])
+    )]))
     .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -658,7 +666,7 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
                 unimplemented!()
             }
         );
-        let registry = Registry::<KotlinMeta>::from_items(vec![
+        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![
             (
                 syn::Item::Enum(syn::parse_quote!(
                     pub enum Reading {
@@ -670,7 +678,7 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
             ),
             (syn::Item::Struct(st), loc.clone()),
             (syn::Item::Fn(f), loc.clone()),
-        ])
+        ]))
         .expect("index items");
         let jni = JniGen::new().set_package_prefix("io.test.jni").package(
             crate::package!()
@@ -726,11 +734,11 @@ fn recursive_sum_shapes_fail_deterministically() {
                 unimplemented!()
             }
         );
-        let registry = Registry::<KotlinMeta>::from_items(vec![
+        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![
             (syn::Item::Enum(e), loc.clone()),
             (syn::Item::Struct(st), loc.clone()),
             (syn::Item::Fn(f), loc.clone()),
-        ])
+        ]))
         .expect("index items");
         let jni = JniGen::new().set_package_prefix("io.test.jni").package(
             crate::package!()
@@ -871,7 +879,8 @@ fn sum_returns(tag: &str) -> (String, String) {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::enum_class!(Priority))
@@ -1187,7 +1196,8 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::ptr_class!(Probe))
@@ -1279,7 +1289,8 @@ fn two_sum_callback_args_keep_their_own_selectors() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::sealed_class!(Reading))
@@ -1358,7 +1369,8 @@ fn sum_in_result_ok_position_is_rejected_with_its_reason() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::sealed_class!(Reading))
@@ -1408,7 +1420,8 @@ fn undeclared_sum_in_result_error_position_is_rejected() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::sealed_class!(Reading))
@@ -1460,7 +1473,8 @@ fn the_diagnostic_names_the_whole_error_type_where_it_must() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::sealed_class!(Reading))
@@ -1516,7 +1530,8 @@ fn declared_sum_in_result_error_position_resolves() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .expand(crate::expand_return!(Reading).field(crate::fun!(reading_code)))
@@ -1560,7 +1575,8 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::sealed_class!(Reading))

@@ -4,22 +4,24 @@ use super::*;
 fn bounded_duration_option_is_one_scalar_with_named_niche() {
     let loc = SourceLocation::default();
     let items: Vec<(syn::Item, SourceLocation)> = [
-        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
-        "pub fn duration_to_millis(v: &std::time::Duration) -> u64 { unimplemented!() }",
-        "pub fn duration_echo(v: Option<std::time::Duration>) -> Option<std::time::Duration> { unimplemented!() }",
-        "pub fn duration_nested_echo(v: Option<Option<std::time::Duration>>) -> Option<Option<std::time::Duration>> { unimplemented!() }",
+        "#[prebindgen] pub type Duration = std::time::Duration;",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+        "pub fn duration_echo(v: Option<Duration>) -> Option<Duration> { unimplemented!() }",
+        "pub fn duration_nested_echo(v: Option<Option<Duration>>) -> Option<Option<Duration>> { unimplemented!() }",
     ]
     .into_iter()
     .map(|source| {
-        let function: syn::ItemFn = syn::parse_str(source).unwrap();
-        (syn::Item::Fn(function), loc.clone())
+        // `syn::Item`, not `ItemFn`: a fixture declares the types it names.
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(items).unwrap();
+    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
-            crate::convert!(std::time::Duration)
+            crate::convert!(Duration)
                 .input(crate::fun!(duration_from_millis))
                 .output(crate::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
@@ -68,11 +70,12 @@ fn bounded_float_option_uses_a_finite_bit_exact_niche() {
     ]
     .into_iter()
     .map(|source| {
-        let function: syn::ItemFn = syn::parse_str(source).unwrap();
-        (syn::Item::Fn(function), loc.clone())
+        // `syn::Item`, not `ItemFn`: a fixture declares the types it names.
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(items).unwrap();
+    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
@@ -113,11 +116,12 @@ fn custom_conversion_without_domain_stays_infallible() {
     ]
     .into_iter()
     .map(|source| {
-        let function: syn::ItemFn = syn::parse_str(source).unwrap();
-        (syn::Item::Fn(function), loc.clone())
+        // `syn::Item`, not `ItemFn`: a fixture declares the types it names.
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(items).unwrap();
+    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
@@ -165,10 +169,10 @@ fn keyexpr_try_from_lowering() {
         }
     );
 
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -238,7 +242,8 @@ fn opaque_error_lowering() {
     );
 
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))

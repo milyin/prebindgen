@@ -663,6 +663,34 @@ impl<M> RegistryBuilder<M> {
     }
 }
 
+/// TEMPORARY scaffold — see the call site in [`Registry::from_items`].
+///
+/// Panics naming every item the flat language cannot express, so a fixture that
+/// references a type it never declares fails loudly and immediately.
+#[cfg(test)]
+fn assert_self_sufficient(items: &[(syn::Item, SourceLocation)]) {
+    // A stream that does not parse at all (a duplicate name) is a fixture testing
+    // exactly that; `from_items` reports it itself.
+    let Ok(flat) = crate::api::core::flat::Flat::builder()
+        .items(items.iter().cloned())
+        .build()
+    else {
+        return;
+    };
+    let bad: Vec<String> = flat
+        .unsupported()
+        .map(|u| match &u.name {
+            Some(name) => format!("  {name}: {}", u.error),
+            None => format!("  {}", u.error),
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "fixture is not self-sufficient:\n{}",
+        bad.join("\n")
+    );
+}
+
 impl<M> Registry<M> {
     /// Start collecting what to index.
     ///
@@ -737,6 +765,11 @@ impl<M> Registry<M> {
         // alias-named paths, whose declaration may arrive later or in another
         // source.
         let items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
+        // TEMPORARY (deleted in the commit that flips the seam): prove every test
+        // fixture is self-sufficient *before* `from_items` routes through `Flat`,
+        // which is the only way to migrate them against a green build.
+        #[cfg(test)]
+        assert_self_sufficient(&items);
         let normalization = crate::api::core::types_util::Normalization::from_items(&items);
         registry
             .source_modules

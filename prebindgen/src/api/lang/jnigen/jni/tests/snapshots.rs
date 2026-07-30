@@ -43,7 +43,8 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -242,7 +243,8 @@ fn handler_interfaces_carry_split_contract_kdoc() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
@@ -302,7 +304,8 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("payload")
@@ -379,7 +382,8 @@ fn slice_input_builds_vec_handle() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("foo")
@@ -500,7 +504,8 @@ fn native_symbols_are_jni_escaped() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.example.my_pkg")
@@ -568,7 +573,8 @@ fn jni_native_init_emits_init_block() {
         )),
         loc.clone(),
     )];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")

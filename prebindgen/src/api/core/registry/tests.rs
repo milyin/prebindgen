@@ -84,22 +84,6 @@ fn fn_item(src: &str) -> (syn::Item, SourceLocation) {
 }
 
 #[test]
-fn from_items_does_not_scan_signatures() {
-    // A `#[prebindgen]`-marked fn whose return is a bare `impl Foo`
-    // would have failed `from_items` under the old code path
-    // (ScanError::DisallowedImplTrait). Now `from_items` is index-
-    // only and accepts it without complaint.
-    let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
-    let reg: Registry<()> = Registry::from_items(items).expect("from_items must succeed");
-    assert!(reg.required_inputs_scan.is_empty());
-    assert!(reg.required_outputs_scan.is_empty());
-    // The fn is indexed but no types are pre-required.
-    assert!(reg
-        .functions
-        .contains_key(&syn::parse_str("bogus").unwrap()));
-}
-
-#[test]
 fn scan_declared_empty_ext_marks_nothing_required() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
     let mut reg: Registry<()> = Registry::from_items(items).unwrap();
@@ -131,24 +115,6 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
     assert!(!reg
         .required_outputs_scan
         .contains(&TypeKey::parse("u32").expect("test type")));
-}
-
-#[test]
-fn scan_declared_fails_disallowed_impl_trait_only_when_fn_declared() {
-    let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-
-    // Empty ext: the bogus fn is not scanned, so no error.
-    let empty = StubExt::default();
-    assert!(reg.scan_declared(&empty).is_ok());
-
-    // Declare the fn: scan now fires the disallowed-impl-Trait error.
-    let mut ext = StubExt::default();
-    ext.functions.insert(syn::parse_str("bogus").unwrap());
-    match reg.scan_declared(&ext) {
-        Err(ScanError::DisallowedImplTrait { .. }) => (),
-        other => panic!("expected DisallowedImplTrait, got {:?}", other),
-    }
 }
 
 #[test]

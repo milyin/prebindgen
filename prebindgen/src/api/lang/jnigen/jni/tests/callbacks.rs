@@ -32,7 +32,8 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -217,7 +218,8 @@ fn callback_root_identity_moved_after_nested_borrow() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -312,7 +314,8 @@ fn callback_double_option_unwrap_pipeline() {
         )),
         loc.clone(),
     ));
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -480,7 +483,8 @@ fn iface_spec_memo_shares_one_derivation() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -552,7 +556,8 @@ fn fn_plan_memo_shares_one_derivation() {
         )),
         loc.clone(),
     )];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));

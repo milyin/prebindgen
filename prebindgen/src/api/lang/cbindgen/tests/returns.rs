@@ -10,10 +10,10 @@ fn result_unit_omits_out_param() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -47,10 +47,10 @@ fn result_string_uses_owned_string_wire() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -94,7 +94,8 @@ fn option_string_returns_pointer_null_for_none() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -136,10 +137,10 @@ fn result_option_uses_out_param() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -184,7 +185,8 @@ fn vec_string_returns_ptr_and_len() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -232,7 +234,8 @@ fn vec_u8_returns_scalar_array() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -260,7 +263,8 @@ fn cow_u8_returns_scalar_array() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -292,10 +296,10 @@ fn result_vec_uses_out_params() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -334,7 +338,8 @@ fn option_vec_uses_present_and_out() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -371,10 +376,10 @@ fn result_option_vec_full() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -412,10 +417,10 @@ fn result_pointer_returns_null_on_error() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -451,7 +456,8 @@ fn borrowed_ref_output_is_const_non_owning() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -489,7 +495,8 @@ fn borrowed_option_ref_output_nullable() {
         }
     );
     let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
