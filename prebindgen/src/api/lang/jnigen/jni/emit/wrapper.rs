@@ -217,32 +217,44 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // straight off the raw value, which for a value form declared with
         // `.fields_self_into(..)` emitted `f(&v)` against a by-value receiver.
         let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
-        let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
+        // `None` when the reach is the IDENTITY of `base` and no value form had
+        // to be bound — the leaf IS the value, so there is nothing to compose.
+        // Reported separately from the composed form because the two want
+        // different code: wrapping identity in a block emits `{ __cvsrc }`
+        // (`unused_braces`), and mapping it over an `Option` emits
+        // `.map(|__inner| __inner)` (`clippy::map_identity`). Generated code
+        // runs through the consumer's own lints, where both are denials.
+        let compose = |base: TokenStream, base_is_ref: bool| -> Option<TokenStream> {
             let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
             let stmts = &hoisted.stmts;
             let reached = match hoisted.rebase(&leaf.path) {
                 Some((local, rest, consuming)) => {
                     reach_leaf_flat(&qualify, leaf, &rest, quote!(#local), false, consuming)
                 }
-                None => reach_leaf_flat(&qualify, leaf, &leaf.path, base, base_is_ref, false),
+                None => {
+                    reach_leaf_flat(&qualify, leaf, &leaf.path, base.clone(), base_is_ref, false)
+                }
             };
-            quote!({ #stmts #reached })
+            if stmts.is_empty() && reached.to_string() == base.to_string() {
+                return None;
+            }
+            Some(quote!({ #stmts #reached }))
         };
         match &uplan.shape {
-            UnfoldShape::Optional((), _) => {
-                let inner = compose(quote!(__inner), by_ref);
-                quote!({
+            UnfoldShape::Optional((), _) => match compose(quote!(__inner), by_ref) {
+                Some(inner) => quote!({
                     let __cvsrc = #raw_call;
                     __cvsrc.map(|__inner| #inner)
-                })
-            }
-            _ => {
-                let v = compose(quote!(__cvsrc), by_ref);
-                quote!({
+                }),
+                None => raw_call.clone(),
+            },
+            _ => match compose(quote!(__cvsrc), by_ref) {
+                Some(v) => quote!({
                     let __cvsrc = #raw_call;
                     #v
-                })
-            }
+                }),
+                None => raw_call.clone(),
+            },
         }
     } else if let Some(ep) = error_plan {
         // `Result<T, E>` peel (the automatic `?`): success ⇒ `T`; on `Err(e)`,

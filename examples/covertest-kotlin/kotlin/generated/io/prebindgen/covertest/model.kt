@@ -5,6 +5,8 @@ import io.prebindgen.covertest.CovNative
 import io.prebindgen.covertest.DurationCallback
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
+import io.prebindgen.covertest.LedgerBuilder
+import io.prebindgen.covertest.LedgerCallback
 import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
@@ -1561,6 +1563,32 @@ public fun reportEach(n: Long, sink: ReportCallback, onError: JniErrorHandler<Un
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.reportEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Deliver a [`Ledger`] to a callback, so both conditional decompositions cross
+ * in ONE call — including the sum (`Report::outcome`) each one carries, whose
+ * `match` belongs inside the arm that binds the report.
+ */
+public fun ledgerEach(n: Long, sink: LedgerCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.ledgerEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Ledger`]; `n` selects which of the two slots are filled (bit 0 =
+ * `filed`, bit 1 = `archived`), so a caller can drive every arm of the
+ * conditional decomposition, both-present through both-absent.
+ *
+ * The Rust `Ledger` result is delivered decomposed: the builder callback receives (`ledgerFiled__summary__count`, `ledgerFiled__summary__total`, `ledgerFiled__taken`, `ledgerFiled__origin__secs`, `ledgerFiled__origin__nanos`, `ledgerFiled__outcome__tag`, `ledgerFiled__outcome__found_v0`, `ledgerFiled__outcome__failed_v0`, `ledgerFiled__label`, `ledgerArchived__summary__count`, `ledgerArchived__summary__total`, `ledgerArchived__taken`, `ledgerArchived__origin__secs`, `ledgerArchived__origin__nanos`, `ledgerArchived__outcome__tag`, `ledgerArchived__outcome__found_v0`, `ledgerArchived__outcome__failed_v0`, `ledgerArchived__label`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <R> ledgerNew(n: Long, onError: JniErrorHandler<R>, build: LedgerBuilder<R>): R {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.ledgerNew(n, build.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as R
 }
 
 /**

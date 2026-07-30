@@ -9,7 +9,7 @@
 # Watched enums: syn::Type, syn::Expr. Test code is excluded.
 #
 # Every one of these is a place that independently decides what captured Rust
-# MEANS. #211 says only `core::language` may do that, so this file freezes the
+# MEANS. #211 says only `core::flat` may do that, so this file freezes the
 # population: any change fails `cargo test -p prebindgen boundary_ledger`.
 #
 # This is the CLASSIFY half of the rule, and only that half. Spelling the source
@@ -44,7 +44,7 @@
 4	api/core/expand.rs
 12	api/core/registry.rs
 40	api/core/types_util.rs
-16	api/core/unfold.rs
+18	api/core/unfold.rs
 8	api/lang/cbindgen/builder.rs
 1	api/lang/cbindgen/convert.rs
 5	api/lang/cbindgen/emit.rs
@@ -70,4 +70,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 203
+# total: 205

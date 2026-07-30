@@ -52,6 +52,12 @@ mod handles {
         pub(super) fallback: Option<Reading>,
     }
 
+    pub struct Ledger {
+        pub(super) filed: Option<Report>,
+        pub(super) archived: Option<i64>,
+    }
+
+    #[derive(Clone)]
     pub struct Report {
         pub(super) summary: Summary,
         pub(super) taken: Option<Stamp>,
@@ -1440,6 +1446,11 @@ pub fn escape_probe_value(p: &EscapeProbe) -> i64 {
 /// | `origin` | a non-optional declared `data class` ⇒ INLINES into its own fields |
 /// | `outcome` | a `sealed_class!` ⇒ its selector plus one group per alternative, with a handle payload |
 /// | `label` | a plain leaf |
+///
+/// `Clone` because a CONSUMING value form reached through a BORROW has nothing
+/// to take and must clone first — see [`ledger_filed`]. Only the borrowed
+/// position needs it; an owned payload is moved. The derive lives on the
+/// definition in `handles`, since this is only its name in the flat API.
 #[prebindgen]
 pub type Report = handles::Report;
 
@@ -1518,6 +1529,63 @@ pub fn report_each(n: i64, sink: impl Fn(Report) + Send + Sync + 'static) {
             i % 2 == 0,
             format!("r{i}"),
         ));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ledger — a value form reached through an `Option` (the CONDITIONAL hoist).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Holds reports a binding reaches **optionally**, so [`Report`]'s derived
+/// boundary is spliced in below an `Option` step rather than at a return of its
+/// own. That makes its value form conditional: the accessor runs only where the
+/// report is present, and every leaf under it is null otherwise.
+///
+/// Both payload shapes are here because they need opposite treatment at the
+/// value-form call — the borrowed one is passed through (and cloned by a
+/// by-value accessor), the owned one is moved into it — and only one of the two
+/// is exercised by any single accessor.
+#[prebindgen]
+pub type Ledger = handles::Ledger;
+
+/// Build a [`Ledger`]; `n` selects which of the two slots are filled (bit 0 =
+/// `filed`, bit 1 = `archived`), so a caller can drive every arm of the
+/// conditional decomposition, both-present through both-absent.
+#[prebindgen]
+pub fn ledger_new(n: i64) -> Ledger {
+    Ledger {
+        filed: (n & 1 != 0).then(|| ledger_report(1)),
+        archived: (n & 2 != 0).then_some(2),
+    }
+}
+
+fn ledger_report(seed: i64) -> Report {
+    report_new(seed, 10.0 * seed as f64, seed % 2 == 0, format!("l{seed}"))
+}
+
+/// The filed report, **borrowed** (`Option<&Report>`) — the shape a `z_*`-style
+/// accessor hands back, where a by-value value form has nothing to take and
+/// clones first.
+#[prebindgen]
+pub fn ledger_filed(l: &Ledger) -> Option<&Report> {
+    l.filed.as_ref()
+}
+
+/// The archived report, **owned** (`Option<Report>`) — the equally ordinary
+/// shape whose payload is the caller's to move, so a by-value value form takes
+/// it directly. Built on demand precisely because `Report` is not `Clone`.
+#[prebindgen]
+pub fn ledger_archived(l: &Ledger) -> Option<Report> {
+    l.archived.map(ledger_report)
+}
+
+/// Deliver a [`Ledger`] to a callback, so both conditional decompositions cross
+/// in ONE call — including the sum (`Report::outcome`) each one carries, whose
+/// `match` belongs inside the arm that binds the report.
+#[prebindgen]
+pub fn ledger_each(n: i64, sink: impl Fn(Ledger) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(ledger_new(i));
     }
 }
 

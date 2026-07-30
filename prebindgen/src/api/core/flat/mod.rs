@@ -1,7 +1,7 @@
 //! The prebindgen **source language**: one parser from captured records to
 //! [`Element`]s.
 //!
-//! > Naming: `core::language` is the *source* language — the Rust subset a
+//! > Naming: `core::flat` is the *source* side — the flat API a
 //! > `#[prebindgen]` crate may write. `api::lang` is the *destination* adapters
 //! > (C, JNI). They are opposite ends of the pipeline.
 //!

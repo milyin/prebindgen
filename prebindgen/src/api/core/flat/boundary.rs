@@ -96,7 +96,7 @@ const HEADER: &str = "\
 # Watched enums: syn::Type, syn::Expr. Test code is excluded.
 #
 # Every one of these is a place that independently decides what captured Rust
-# MEANS. #211 says only `core::language` may do that, so this file freezes the
+# MEANS. #211 says only `core::flat` may do that, so this file freezes the
 # population: any change fails `cargo test -p prebindgen boundary_ledger`.
 #
 # This is the CLASSIFY half of the rule, and only that half. Spelling the source
@@ -415,8 +415,8 @@ fn boundary_ledger() {
     panic!(
         "BOUNDARY LEDGER DRIFT — source-syntax classification sites changed:\n\
          {drift}\n\
-         A new classifier outside core::language needs one of:\n\
-         \x20 * move it into core::language (see #211), or\n\
+         A new classifier outside core::flat needs one of:\n\
+         \x20 * move it into core::flat (see #211), or\n\
          \x20 * regenerate and justify the change in review:\n\
          \x20     UPDATE_BOUNDARY_LEDGER=1 cargo test -p prebindgen boundary_ledger\n\
          \x20     git diff prebindgen/src/{LEDGER}\n"
