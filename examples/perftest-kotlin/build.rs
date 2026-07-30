@@ -24,8 +24,6 @@
 use prebindgen::{core::Registry, data_class, fun, lang::JniGen, package, ptr_class};
 
 fn main() {
-    let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
-
     let jni = JniGen::new()
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
@@ -115,7 +113,11 @@ fn main() {
                 .fun(fun!(storage_callback_vec)),
         );
 
-    let registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
+    let registry = Registry::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .build()
+        .expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

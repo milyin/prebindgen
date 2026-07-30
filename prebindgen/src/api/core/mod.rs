@@ -38,5 +38,8 @@ pub use self::{
     gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
-    registry::{Direction, Generation, Registry, ScanError, TypeEntry, TypeKey, WriteRustError},
+    registry::{
+        Direction, Generation, Registry, RegistryBuilder, ScanError, TypeEntry, TypeKey,
+        WriteRustError,
+    },
 };

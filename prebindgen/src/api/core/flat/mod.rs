@@ -247,6 +247,23 @@ impl FlatBuilder {
         self.items(source.items_all())
     }
 
+    /// The same, for a dependency this crate **renames** in `Cargo.toml`.
+    ///
+    /// The origin recorded at capture time is the dependency's real package name,
+    /// which will not resolve from a crate that refers to it by another name.
+    /// `crate_name` is the name *this* crate uses.
+    ///
+    /// Per directory, deliberately: an override on the whole parse could only fix
+    /// one module, and a flat API may layer several sources.
+    pub fn source_named<P: AsRef<std::path::Path>>(
+        self,
+        dir: P,
+        crate_name: impl Into<String>,
+    ) -> Self {
+        let source = crate::Source::builder(dir).crate_name(crate_name).build();
+        self.items(source.items_all())
+    }
+
     /// Add a captured item stream.
     ///
     /// The general feeder: any `(syn::Item, SourceLocation)` iterator, so

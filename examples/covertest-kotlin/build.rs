@@ -22,7 +22,7 @@
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
-//! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
+//! | `.source_named(dir, "cov_helpers")`   | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | fallible conversion stages under `Option` | `Option<Percent>` ⇄ `Int?`; raw `TryFrom::Error` input and binding-local `String` output errors normalize to `JniErrorHandler` |
 //! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
@@ -118,20 +118,6 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 }
 
 fn main() {
-    // Two prebindgen sources: the flat crate plus the binding-side helper
-    // crate (conversion fns for `convert!`). The registry records each fn's
-    // origin from the stream's `SourceLocation` stamps so generated calls
-    // qualify with the defining crate (`perftest_flat::…` vs
-    // `cov_helpers::…`). The helper dependency is RENAMED in Cargo.toml
-    // (`cov_helpers = { package = "covertest-helpers", .. }`), so the stamp
-    // recorded at capture time (`covertest-helpers`) would not resolve from
-    // this crate — `.crate_name()` overrides it with the name this crate
-    // actually uses.
-    let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
-    let helpers = prebindgen::Source::builder(cov_helpers::PREBINDGEN_OUT_DIR)
-        .crate_name("cov_helpers")
-        .build();
-
     // The flat API must be CLOSED: every type a marked signature names has to be
     // declared here too, as a struct/enum or as `#[prebindgen] pub type X = ..`
     // for a handle. `Flat` proves that across BOTH sources at once, which is the
@@ -141,9 +127,12 @@ fn main() {
     // Asserted rather than merely computed: without this, an unmarked type would
     // go unnoticed until the adapters consume elements (L1+), and then surface as
     // a late unresolved-converter error instead of naming the missing marker.
+    //
+    // `source_named` for the helpers, for the reason spelled out at the registry
+    // below: the dep is renamed in Cargo.toml.
     let flat = prebindgen::core::Flat::builder()
-        .items(source.items_all())
-        .items(helpers.items_all())
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
         .build()
         .expect("the flat API parses");
     let unresolved: Vec<String> = flat
@@ -733,7 +722,18 @@ fn main() {
         .ignore(matching(|name| name.starts_with("storage_get_into_")))
         .ignore(fun!(storage_put_by_read_and_update));
 
-    let registry = Registry::from_items(source.items_all().chain(helpers.items_all()))
+    // Two prebindgen sources: the flat crate plus the binding-side helper crate
+    // (conversion fns for `convert!`). The registry records each fn's origin from
+    // the `SourceLocation` stamps so generated calls qualify with the defining
+    // crate (`perftest_flat::…` vs `cov_helpers::…`). The helper dependency is
+    // RENAMED in Cargo.toml (`cov_helpers = { package = "covertest-helpers", .. }`),
+    // so the stamp recorded at capture time (`covertest-helpers`) would not
+    // resolve from this crate — `source_named` overrides it with the name this
+    // crate actually uses, per directory.
+    let registry = Registry::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
+        .build()
         .expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();

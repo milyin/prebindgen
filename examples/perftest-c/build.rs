@@ -28,9 +28,6 @@ fn main() {
 /// Generate the Rust FFI bindings from `perftest-flat`'s prebindgen output via the
 /// `lang::Cbindgen` adapter, and publish the result to `generated/perftest_<arch>.rs`.
 fn generate_ffi_bindings() -> PathBuf {
-    // Reader over the data emitted by perftest-flat's `#[prebindgen]` macro.
-    let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
-
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen::lang::Cbindgen::new()
@@ -130,8 +127,11 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(payload_vec_handler_new));
     cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
 
-    let registry =
-        prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
+    let registry = prebindgen::core::Registry::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .build()
+        .expect("scan prebindgen items");
     let out_file = registry
         .resolve(cbindgen)
         .expect("resolve prebindgen items")
