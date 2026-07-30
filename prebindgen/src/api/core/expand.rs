@@ -192,7 +192,7 @@ pub fn apply<M>(
         if let Some(declared) = &ed.declared_target {
             let item_fn = registry
                 .flat()
-                .function(&ed.func.to_string())
+                .function(&ed.func)
                 .map(|f| f.origin.syntax.clone())
                 .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
             let param_ty = find_param_type(&item_fn, &ed.param)
@@ -239,7 +239,7 @@ pub fn apply<M>(
             }
             let Some(item_fn) = registry
                 .flat()
-                .function(&func.to_string())
+                .function(&func)
                 .map(|f| f.origin.syntax.clone())
             else {
                 continue;
@@ -305,7 +305,7 @@ fn process_expand<M>(
 ) -> Result<(), ExpandError> {
     let item_fn = registry
         .flat()
-        .function(&ed.func.to_string())
+        .function(&ed.func)
         .map(|f| f.origin.syntax.clone())
         .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
 
@@ -379,7 +379,7 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
     // elided return and a written `-> ()` are one thing.
     let f = registry
         .flat()
-        .function(&func.to_string())
+        .function(&func)
         .ok_or_else(|| ExpandError::UnknownConstructor(func.clone()))?;
 
     let params: Vec<(syn::Ident, syn::Type)> = f

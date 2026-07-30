@@ -298,7 +298,7 @@ pub fn apply<M>(
         if let Some(declared) = &ed.declared_source {
             let item_fn = registry
                 .flat()
-                .function(&ed.func.to_string())
+                .function(&ed.func)
                 .map(|f| f.origin.syntax.clone())
                 .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
             let ret = fn_return(&item_fn);
@@ -342,7 +342,7 @@ pub fn apply<M>(
             }
             let Some(item_fn) = registry
                 .flat()
-                .function(&func.to_string())
+                .function(&func)
                 .map(|f| f.origin.syntax.clone())
             else {
                 continue;
@@ -399,7 +399,7 @@ pub fn apply<M>(
     for func in declared_fns {
         let Some(item_fn) = registry
             .flat()
-            .function(&func.to_string())
+            .function(&func)
             .map(|f| f.origin.syntax.clone())
         else {
             continue;
@@ -611,7 +611,7 @@ fn wire_fixed_returns<M>(
     for func in declared_fns {
         let Some(item_fn) = registry
             .flat()
-            .function(&func.to_string())
+            .function(&func)
             .map(|f| f.origin.syntax.clone())
         else {
             continue;
@@ -696,7 +696,7 @@ fn wire_fixed_callbacks<M>(
     for func in declared_fns {
         let Some(item_fn) = registry
             .flat()
-            .function(&func.to_string())
+            .function(&func)
             .map(|f| f.origin.syntax.clone())
         else {
             continue;
@@ -783,7 +783,7 @@ pub fn apply_leaf_vec_folds<M>(
     for func in declared_fns {
         let Some(item_fn) = registry
             .flat()
-            .function(&func.to_string())
+            .function(&func)
             .map(|f| f.origin.syntax.clone())
         else {
             continue;
@@ -960,7 +960,7 @@ fn process_decl<M>(
     {
         let item_fn = registry
             .flat()
-            .function(&ed.func.to_string())
+            .function(&ed.func)
             .map(|f| f.origin.syntax.clone())
             .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
 
@@ -1713,7 +1713,7 @@ fn accessor_signature<M>(
 ) -> Result<(syn::Type, syn::Type), UnfoldError> {
     let f = registry
         .flat()
-        .function(&func.to_string())
+        .function(&func)
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
 
     // First parameter is the receiver `&T`; peel the borrow to get `T`. The
@@ -1760,7 +1760,7 @@ fn place_is_owned(hoists: &[Hoist], path_prefix: &[PathStep], by_ref: bool) -> b
 fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
     registry
         .flat()
-        .function(&func.to_string())
+        .function(&func)
         .and_then(|f| f.params.first())
         .is_some_and(|p| !matches!(p.ty.kind, crate::api::core::flat::TypeKind::Ref { .. }))
 }

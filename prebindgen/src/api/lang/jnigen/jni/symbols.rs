@@ -127,8 +127,8 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
                 short.to_string(),
                 format!("sealed class `{key}` itself (its variants' supertype)"),
             )]);
-            if let Some(item_enum) = bare_path_ident(&key.to_type())
-                .and_then(|i| registry.flat().enum_item(&i.to_string()))
+            if let Some(item_enum) =
+                bare_path_ident(&key.to_type()).and_then(|i| registry.flat().enum_item(&i))
             {
                 for v in &item_enum.variants {
                     let name = ext.sum_variant_class_name(sum_cfg, &v.ident);
@@ -174,7 +174,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             // prototype, so the validator doesn't pay for body codegen.
             if let Some(item_fn) = registry
                 .flat()
-                .function(&entry.rust_ident.to_string())
+                .function(&entry.rust_ident)
                 .map(|__f| &__f.origin.syntax)
             {
                 if let Some(s) = build_wrapper_surface(ext, item_fn, registry, Some(&name), None) {
@@ -219,7 +219,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             check_ident(&name, &format!("method `{}`", m.rust_ident), &mut errors);
             let Some(item_fn) = registry
                 .flat()
-                .function(&m.rust_ident.to_string())
+                .function(&m.rust_ident)
                 .map(|__f| &__f.origin.syntax)
             else {
                 continue;
@@ -282,7 +282,7 @@ fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
         };
         if let Some(s) = registry
             .flat()
-            .struct_type(&ident.to_string())
+            .struct_type(&ident)
             .map(|__s| &__s.origin.syntax)
         {
             for f in &s.fields {
@@ -297,7 +297,7 @@ fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
                 }
             }
         }
-        if let Some(e) = registry.flat().enum_item(&ident.to_string()) {
+        if let Some(e) = registry.flat().enum_item(&ident) {
             for v in &e.variants {
                 let screaming =
                     crate::api::lang::jnigen::util::camel_to_screaming_snake(&v.ident.to_string());

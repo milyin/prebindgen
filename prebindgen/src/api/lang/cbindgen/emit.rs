@@ -55,7 +55,7 @@ impl Cbindgen {
         ty: &syn::Type,
     ) -> Option<Vec<syn::Variant>> {
         let ident = type_path_tail(ty)?;
-        let item = registry.flat().enum_item(&ident.to_string())?;
+        let item = registry.flat().enum_item(&ident)?;
         Some(item.variants.iter().cloned().collect())
     }
 
@@ -285,7 +285,7 @@ impl Cbindgen {
         self.functions.keys().any(|orig| {
             registry
                 .flat()
-                .function(&orig.to_string())
+                .function(&orig)
                 // The model already decided that an elided return and `-> ()`
                 // are one thing, so there is no second arm to write here.
                 .map(|f| type_contains_vec(&f.ret.origin.syntax))
@@ -304,7 +304,7 @@ impl Cbindgen {
         let ident = type_path_tail(ty)?;
         let item = registry
             .flat()
-            .struct_type(&ident.to_string())
+            .struct_type(&ident)
             .map(|__s| &__s.origin.syntax)?;
         if let syn::Fields::Named(named) = &item.fields {
             Some(

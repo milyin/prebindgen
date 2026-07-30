@@ -311,7 +311,7 @@ pub(crate) fn build_typed_handle(
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
         if let Some(item_fn) = registry
             .flat()
-            .function(&m.rust_ident.to_string())
+            .function(&m.rust_ident)
             .map(|__f| &__f.origin.syntax)
         {
             if let Some(f) = render_wrapper_fn(
@@ -424,7 +424,7 @@ pub(crate) fn build_typed_handle(
     for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
         if let Some(item_fn) = registry
             .flat()
-            .function(&m.rust_ident.to_string())
+            .function(&m.rust_ident)
             .map(|__f| &__f.origin.syntax)
         {
             if let Some(f) = render_wrapper_fn(
