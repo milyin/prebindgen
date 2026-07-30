@@ -57,7 +57,7 @@
 //! | `enum E { A(u8) }` | [`Variant`] | a sum, identified by position |
 //! | `enum E { A = 7 }` | [`Enum`] | a named integer, identified by its value |
 //! | `type X = ..`, `struct X(..)` | [`Opaque`] | a handle; contents do not cross |
-//! | `MaybeUninit<T>` | [`TypeKind::Uninit`] | an out-param slot the caller supplies |
+//! | `&mut MaybeUninit<T>` | [`RefMode::Out`] | an out-param slot the caller supplies |
 //! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
 //! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
 //!
@@ -162,7 +162,7 @@ pub use self::{
         Type, Unsupported, Variant,
     },
     origin::Origin,
-    ty::{ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
+    ty::{RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
 

@@ -67,10 +67,10 @@ fn scalars_and_strings() {
 fn a_string_is_a_string_however_it_is_spelled() {
     assert!(matches!(kind(quote::quote!(str)), TypeKind::Str));
     for spelling in [quote::quote!(&str), quote::quote!(&String)] {
-        let TypeKind::Ref { mutable, inner } = kind(spelling) else {
+        let TypeKind::Ref { mode, inner } = kind(spelling) else {
             panic!("a borrow");
         };
-        assert!(!mutable);
+        assert_eq!(mode, RefMode::Shared);
         assert!(matches!(inner.kind, TypeKind::Str));
     }
 }
@@ -143,11 +143,17 @@ fn a_qualified_builtin_is_a_named_type() {
 fn references() {
     assert!(matches!(
         kind(quote::quote!(&Sample)),
-        TypeKind::Ref { mutable: false, .. }
+        TypeKind::Ref {
+            mode: RefMode::Shared,
+            ..
+        }
     ));
     assert!(matches!(
         kind(quote::quote!(&mut Sample)),
-        TypeKind::Ref { mutable: true, .. }
+        TypeKind::Ref {
+            mode: RefMode::Exclusive,
+            ..
+        }
     ));
 }
 
@@ -1026,23 +1032,49 @@ fn an_undeclared_reference_refuses_the_referencing_item() {
     }
 }
 
-/// `MaybeUninit<T>` is a boundary concept, not a foreign type: an out-parameter
-/// whose slot the caller supplies and the callee fills. It is also the one
-/// foreign generic no alias could name, a generic alias being a generic binder.
+/// An out-parameter is a **mode of borrowing**, not a type. `&mut MaybeUninit<T>`
+/// says the caller supplies the slot and the callee fills it; the `MaybeUninit` is
+/// absorbed into the mode, so `inner` is the value's own type.
+///
+/// Uninitialized storage anywhere else promises nothing a destination language can
+/// use, so the combinations that mean nothing cannot be written down.
 #[test]
-fn maybe_uninit_is_an_out_param_slot() {
-    assert!(matches!(
-        kind(quote::quote!(MaybeUninit<Sample>)),
-        TypeKind::Uninit(_)
-    ));
-    // Only meaningful behind a `&mut`, which is how the boundary spells it.
-    let TypeKind::Ref { mutable, inner } = kind(quote::quote!(&mut MaybeUninit<Sample>)) else {
+fn an_out_parameter_is_a_borrow_mode() {
+    let TypeKind::Ref { mode, inner } = kind(quote::quote!(&mut MaybeUninit<Sample>)) else {
         panic!("a borrow");
     };
-    assert!(mutable);
-    assert!(matches!(inner.kind, TypeKind::Uninit(_)));
+    assert_eq!(mode, RefMode::Out);
+    // The `MaybeUninit` is gone from the type: it described the borrow.
+    let TypeKind::Named { id, .. } = &inner.kind else {
+        panic!("the value's own type");
+    };
+    assert_eq!(id.name, "Sample");
 
-    // And it needs no declaration, unlike every other generic-bearing name.
+    // The three modes are one axis.
+    assert_eq!(
+        [
+            quote::quote!(&Sample),
+            quote::quote!(&mut Sample),
+            quote::quote!(&mut MaybeUninit<Sample>),
+        ]
+        .map(|t| match kind(t) {
+            TypeKind::Ref { mode, .. } => mode,
+            other => panic!("a borrow, got {other:?}"),
+        }),
+        [RefMode::Shared, RefMode::Exclusive, RefMode::Out]
+    );
+
+    // Owned, or shared-borrowed, it means nothing.
+    assert_eq!(
+        reason(quote::quote!(MaybeUninit<Sample>)),
+        UnsupportedTypeReason::OwnedUninit
+    );
+    assert_eq!(
+        reason(quote::quote!(&MaybeUninit<Sample>)),
+        UnsupportedTypeReason::SharedUninit
+    );
+
+    // And it still needs no declaration, unlike every other generic-bearing name.
     let flat = Flat::builder()
         .items(vec![
             (opaque("Sample"), loc()),

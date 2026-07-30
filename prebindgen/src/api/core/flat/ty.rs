@@ -77,10 +77,9 @@ impl TypeRef {
                 }
                 args.iter().find_map(|a| a.first_unresolved(declared))
             }
-            TypeKind::Optional(t)
-            | TypeKind::Sequence(t)
-            | TypeKind::Uninit(t)
-            | TypeKind::Ref { inner: t, .. } => t.first_unresolved(declared),
+            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
+                t.first_unresolved(declared)
+            }
             TypeKind::Array { elem, .. } => elem.first_unresolved(declared),
             TypeKind::Fallible { ok, err } => ok
                 .first_unresolved(declared)
@@ -96,10 +95,9 @@ impl TypeRef {
                 out.push(extent);
                 elem.collect_extents(out);
             }
-            TypeKind::Optional(t)
-            | TypeKind::Sequence(t)
-            | TypeKind::Uninit(t)
-            | TypeKind::Ref { inner: t, .. } => t.collect_extents(out),
+            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
+                t.collect_extents(out)
+            }
             TypeKind::Fallible { ok, err } => {
                 ok.collect_extents(out);
                 err.collect_extents(out);
@@ -165,22 +163,43 @@ pub enum TypeKind {
         elem: Box<TypeRef>,
         extent: ArrayExtent,
     },
-    /// A borrow — `&T` / `&'a T` / `&mut T`. The lifetime is spelling, so it
-    /// lives in [`TypeRef::origin`] rather than here.
+    /// A borrow — `&T`, `&mut T`, or `&mut MaybeUninit<T>`. The lifetime is
+    /// spelling, so it lives in [`TypeRef::origin`] rather than here.
     ///
     /// This is the ownership layer for every concept underneath it: `&str` is
     /// `Ref(Str)`, `&[T]` is `Ref(Sequence)`. A shared-ownership handle
     /// (`Arc<T>`, `Rc<T>`) belongs here too when the language accepts one.
-    Ref { mutable: bool, inner: Box<TypeRef> },
-    /// `MaybeUninit<T>` — storage for a `T` the caller has not written yet.
     ///
-    /// Only meaningful behind a `&mut`: it is how a boundary expresses an
-    /// out-parameter whose slot the caller supplies and the callee fills.
-    Uninit(Box<TypeRef>),
+    /// `inner` is always the borrowed *value's* type, so an out-parameter's
+    /// `MaybeUninit` is absorbed into [`RefMode::Out`] rather than wrapping it:
+    /// uninitialized-ness is a property of the **borrow**, not of the type, and
+    /// it is meaningless anywhere else.
+    Ref { mode: RefMode, inner: Box<TypeRef> },
     /// `impl Fn(A, B, …) + Send + Sync + 'static` — the callback form.
     Callback { args: Vec<TypeRef> },
     /// `()`.
     Unit,
+}
+
+/// What a borrow permits, and what the callee owes.
+///
+/// One axis with three values rather than a `mutable` flag plus a wrapper, so the
+/// combinations that mean nothing at a boundary — a shared borrow of
+/// uninitialized storage, an owned `MaybeUninit` — cannot be written down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RefMode {
+    /// `&T` — the callee may read it and must not write it.
+    Shared,
+    /// `&mut T` — the callee may read and write an already-valid `T`.
+    Exclusive,
+    /// `&mut MaybeUninit<T>` — an **out-parameter**: the caller supplies storage
+    /// only, and the callee's job is to make it a valid `T`. The callee may not
+    /// read it first.
+    ///
+    /// This is a boundary concept every destination language has (C's `T *out`),
+    /// which is why it is modelled here rather than left as a nominal
+    /// `MaybeUninit` for each adapter to recognise.
+    Out,
 }
 
 /// A nominal type's identity: a name, and nothing else.
@@ -293,6 +312,18 @@ pub enum UnsupportedTypeReason {
     /// lowered a tuple, so accepting one would defer the failure to a late
     /// "unresolved type" instead of naming it here.
     UnsupportedTuple,
+    /// `MaybeUninit<T>` somewhere other than behind a `&mut`.
+    ///
+    /// Uninitialized storage is a property of a *borrow*, not of a type — see
+    /// [`RefMode::Out`]. Owned, returned or stored in a field it promises nothing
+    /// a destination language can use, and reading it would be undefined.
+    OwnedUninit,
+    /// `&MaybeUninit<T>` — a shared borrow of uninitialized storage.
+    ///
+    /// A shared borrow promises a readable `T`, and this supplies storage that may
+    /// not be one. Only `&mut MaybeUninit<T>` means anything: see
+    /// [`RefMode::Out`].
+    SharedUninit,
     /// A path with a qualified self — `<T as Trait>::Assoc`.
     ///
     /// The frontend never captures `impl` blocks, so it cannot know what an
@@ -330,6 +361,20 @@ impl fmt::Display for UnsupportedType {
                 f,
                 "type `{}` is a tuple; only the unit `()` is supported — return the \
                  components separately, or wrap them in a `#[prebindgen]` struct",
+                self.offending
+            ),
+            UnsupportedTypeReason::OwnedUninit => write!(
+                f,
+                "type `{}` is uninitialized storage outside an out-parameter. Only `&mut \
+                 MaybeUninit<T>` means anything at a boundary \u{2014} it says the caller supplies \
+                 the slot and the callee fills it; owned or in a field it promises nothing, and \
+                 reading it would be undefined",
+                self.offending
+            ),
+            UnsupportedTypeReason::SharedUninit => write!(
+                f,
+                "type `{}` is a shared borrow of uninitialized storage: `&T` promises a readable \
+                 `T`, which this may not be. Use `&mut MaybeUninit<T>` for an out-parameter",
                 self.offending
             ),
             UnsupportedTypeReason::AssociatedType => write!(
@@ -375,10 +420,23 @@ pub(crate) fn lower_type(
         // spelling, which is the one a consumer wants to emit.
         syn::Type::Group(g) => return lower_type(&g.elem, consts, at),
         syn::Type::Paren(p) => return lower_type(&p.elem, consts, at),
-        syn::Type::Reference(r) => TypeKind::Ref {
-            mutable: r.mutability.is_some(),
-            inner: Box::new(lower_type(&r.elem, consts, at)?),
-        },
+        // The mode is read off the borrow AND its target together, because
+        // `&mut MaybeUninit<T>` is one concept — an out-parameter — rather than a
+        // mutable borrow of a distinct `MaybeUninit` type.
+        syn::Type::Reference(r) => {
+            let (mode, target) = match maybe_uninit_inner(&r.elem) {
+                Some(inner) if r.mutability.is_some() => (RefMode::Out, inner),
+                // `&MaybeUninit<T>` promises a readable `T` and supplies storage
+                // that may not be one. Nothing at a boundary can use it.
+                Some(_) => return Err(fail(UnsupportedTypeReason::SharedUninit)),
+                None if r.mutability.is_some() => (RefMode::Exclusive, (*r.elem).clone()),
+                None => (RefMode::Shared, (*r.elem).clone()),
+            };
+            TypeKind::Ref {
+                mode,
+                inner: Box::new(lower_type(&target, consts, at)?),
+            }
+        }
         // `[T]` is the borrowed spelling of the same concept `Vec<T>` owns.
         syn::Type::Slice(s) => TypeKind::Sequence(Box::new(lower_type(&s.elem, consts, at)?)),
         _ if is_unit_type(ty) => TypeKind::Unit,
@@ -501,16 +559,10 @@ fn lower_path(
                     arity(1)?;
                     return Ok(TypeKind::Sequence(Box::new(args.remove(0))));
                 }
-                // An out-parameter the caller supplies uninitialized. A boundary
-                // concept, not a Rust one: cbindgen already models it as exactly
-                // that, and #211 says the classification belongs here rather
-                // than in the adapter. It is also the one foreign generic no
-                // `#[prebindgen] type` alias could name, since a generic alias
-                // is a generic binder.
-                "MaybeUninit" => {
-                    arity(1)?;
-                    return Ok(TypeKind::Uninit(Box::new(args.remove(0))));
-                }
+                // Reached here, it is not behind a `&mut`, so it is not an
+                // out-parameter — see `RefMode::Out`, which is the only place
+                // uninitialized storage means anything.
+                "MaybeUninit" => return Err(fail(UnsupportedTypeReason::OwnedUninit)),
                 // `Box<T>` **is** `T`: an owned value either way, and no
                 // destination language can tell the two apart. So it carries no
                 // kind of its own and classifies as whatever it wraps — the
@@ -532,6 +584,29 @@ fn lower_path(
         }
     }
     Ok(named(tp, args))
+}
+
+/// If `ty` is a bare `MaybeUninit<T>`, the `T` it holds storage for.
+///
+/// Bare, for the reason every builtin generic is: `normalize_type` has already
+/// reduced the real std paths at ingest, so anything still carrying a prefix is a
+/// foreign type that merely shares the name.
+fn maybe_uninit_inner(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Path(tp) = ty else { return None };
+    if tp.qself.is_some() || tp.path.leading_colon.is_some() || tp.path.segments.len() != 1 {
+        return None;
+    }
+    let seg = &tp.path.segments[0];
+    if seg.ident != "MaybeUninit" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    match ab.args.first() {
+        Some(syn::GenericArgument::Type(t)) if ab.args.len() == 1 => Some(t.clone()),
+        _ => None,
+    }
 }
 
 /// True when `ty` is the unit type `()`.
