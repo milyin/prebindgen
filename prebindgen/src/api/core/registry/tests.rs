@@ -93,8 +93,8 @@ fn scan_declared_empty_ext_marks_nothing_required() {
     let mut reg: Registry<()> = Registry::from_items(items).unwrap();
     let ext = StubExt::default();
     reg.scan_declared(&ext).expect("empty ext = no scan");
-    assert!(reg.required_inputs_scan.is_empty());
-    assert!(reg.required_outputs_scan.is_empty());
+    assert!(!reg.input_types.values().any(|c| c.root));
+    assert!(!reg.output_types.values().any(|c| c.root));
 }
 
 #[test]
@@ -107,18 +107,14 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("a").unwrap());
     reg.scan_declared(&ext).unwrap();
-    assert!(reg
-        .required_inputs_scan
-        .contains(&TypeKey::parse("u64").expect("test type")));
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::parse("u64").expect("test type")));
-    assert!(!reg
-        .required_inputs_scan
-        .contains(&TypeKey::parse("u32").expect("test type")));
-    assert!(!reg
-        .required_outputs_scan
-        .contains(&TypeKey::parse("u32").expect("test type")));
+    let is_root = |t: &HashMap<TypeKey, TypeCell<()>>, k: &str| {
+        t.get(&TypeKey::parse(k).expect("test type"))
+            .is_some_and(|c| c.root)
+    };
+    assert!(is_root(&reg.input_types, "u64"));
+    assert!(is_root(&reg.output_types, "u64"));
+    assert!(!is_root(&reg.input_types, "u32"));
+    assert!(!is_root(&reg.output_types, "u32"));
 }
 
 #[test]
@@ -239,8 +235,8 @@ fn scan_declared_accepts_ignore_predicates() {
     ext.ignored_name_predicates
         .push(std::sync::Arc::new(|n: &str| n.starts_with("nothing_")));
     reg.scan_declared(&ext).expect("predicates must scan clean");
-    // Nothing was declared, so nothing became required.
-    assert!(reg.required_inputs_scan.is_empty());
+    // Nothing was declared, so nothing became a root.
+    assert!(!reg.input_types.values().any(|c| c.root));
 }
 
 #[test]
@@ -274,7 +270,6 @@ fn type_entry_helpers_expose_converter_chain_contract() {
             TypeKey::parse("Rust").expect("test type"),
             TypeKey::parse("Mid").expect("test type"),
         ],
-        required: true,
         niches: Niches::empty(),
         metadata: (),
     };
@@ -527,16 +522,13 @@ fn qualified_signature_matches_bare_declaration() {
     ext.types
         .insert(TypeKey::parse("Thing").expect("test type"));
     reg.scan_declared(&ext).unwrap();
-    assert!(reg
-        .required_inputs_scan
-        .contains(&TypeKey::parse("&Thing").expect("test type")));
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::parse("Vec<Thing>").expect("test type")));
+    assert!(reg.input_types[&TypeKey::parse("&Thing").expect("test type")].root);
+    assert!(reg.output_types[&TypeKey::parse("Vec<Thing>").expect("test type")].root);
     // No spelling-variant duplicate cells survive anywhere.
-    let no_paths = |set: &HashSet<TypeKey>| !set.iter().any(|k| k.as_str().contains("::"));
-    assert!(no_paths(&reg.required_inputs_scan));
-    assert!(no_paths(&reg.required_outputs_scan));
+    let no_paths =
+        |t: &HashMap<TypeKey, TypeCell<()>>| !t.keys().any(|k| k.as_str().contains("::"));
+    assert!(no_paths(&reg.input_types));
+    assert!(no_paths(&reg.output_types));
 }
 
 #[test]
@@ -562,12 +554,8 @@ fn multi_source_rename_cross_reference_normalizes() {
     ext.types
         .insert(TypeKey::parse("TypeB").expect("test type"));
     reg.scan_declared(&ext).unwrap();
-    assert!(reg
-        .required_inputs_scan
-        .contains(&TypeKey::parse("&TypeA").expect("test type")));
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::parse("TypeB").expect("test type")));
+    assert!(reg.input_types[&TypeKey::parse("&TypeA").expect("test type")].root);
+    assert!(reg.output_types[&TypeKey::parse("TypeB").expect("test type")].root);
 }
 
 #[test]
@@ -605,8 +593,8 @@ fn foreign_qualified_declared_type_stays_supported() {
     ext.types.insert(foreign.clone());
     reg.scan_declared(&ext)
         .expect("foreign qualified declaration is supported");
-    assert!(reg.required_inputs_scan.contains(&foreign));
-    assert!(reg.required_outputs_scan.contains(&foreign));
+    assert!(reg.input_types[&foreign].root);
+    assert!(reg.output_types[&foreign].root);
 }
 
 // ── The directory-reading builder ──────────────────────────────────────
@@ -763,6 +751,64 @@ fn builder_and_from_items_agree() {
         streamed.default_module().map(module)
     );
     assert_eq!(built.passthrough.len(), streamed.passthrough.len());
+}
+
+// ── What a table cell knows about its type ─────────────────────────────
+
+/// A cell for a type the source wrote carries the **frontend's own** reading:
+/// the same classification the element holds, and the item's location. Not a
+/// re-derivation — the registry looks the model up rather than lowering twice.
+#[test]
+fn a_source_type_cell_carries_the_models_typeref() {
+    use crate::api::core::flat::TypeKind;
+
+    let loc = SourceLocation {
+        file: "src/lib.rs".into(),
+        line: 42,
+        column: 7,
+        crate_name: Some("myflat".into()),
+    };
+    let item: syn::Item = syn::parse_str("pub fn f(v: Option<u64>) -> u64 { v.unwrap() }").unwrap();
+    let mut reg: Registry<()> = Registry::from_items([(item, loc.clone())]).unwrap();
+
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("f").unwrap());
+    reg.scan_declared(&ext).unwrap();
+
+    let key = TypeKey::parse("Option<u64>").expect("test type");
+    let cell = &reg.input_types[&key];
+    assert!(cell.root, "a top-level parameter is a root");
+    assert!(
+        matches!(cell.subject.kind(), Some(TypeKind::Optional(_))),
+        "the frontend classified it, so the cell has that classification"
+    );
+    // One location per cell, and it is the model's — not a copy the scan made.
+    assert_eq!(cell.subject.location(), Some(&loc));
+
+    // The nested position is in the model too, and is not a root.
+    let inner = &reg.input_types[&TypeKey::parse("u64").expect("test type")];
+    assert!(!inner.root);
+    assert!(matches!(inner.subject.kind(), Some(TypeKind::Scalar(_))));
+}
+
+/// A type only the binding authored has **no** reading and no location — a fact
+/// about it, not information that went missing. Declaring a type the source
+/// never mentions is the ordinary way to reach this state.
+#[test]
+fn an_adapter_authored_type_cell_has_no_source_reading() {
+    let items = vec![fn_item("fn f(x: u64) -> u64 { x }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+
+    let mut ext = StubExt::default();
+    ext.types
+        .insert(TypeKey::parse("Foreign").expect("test type"));
+    reg.scan_declared(&ext).unwrap();
+
+    let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
+    assert!(cell.root, "the binding asked for it directly");
+    assert!(matches!(cell.subject, TypeSubject::Adapter(_)));
+    assert!(cell.subject.kind().is_none());
+    assert_eq!(cell.subject.location(), None);
 }
 
 // ── The projection itself ──────────────────────────────────────────────

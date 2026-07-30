@@ -15,11 +15,14 @@
 //! args resolve in the opposite direction). New slots only go `None → Some`, so
 //! the loop terminates.
 //!
-//! After the loop, [`propagate_required`] performs a BFS from the scan-time
-//! required entries through `subs` edges; the final invariant is that every
-//! `required: true && None` is reported as an error.
+//! After the loop, [`required_set`] performs a BFS from the **root** cells — the
+//! ones the binding asked for directly — through `subs` edges. It returns the
+//! reachable set rather than storing it: needing a converter is a property of the
+//! graph, so it is derived once at the end instead of written back into every
+//! cell it was computed from. The final invariant is that every reachable-but-
+//! unresolved cell is reported as an error.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use crate::{
     api::core::{
@@ -105,7 +108,6 @@ pub fn resolve<E: Prebindgen>(
         apply_deltas(registry, Direction::Input, deltas_in);
         apply_deltas(registry, Direction::Output, deltas_out);
     }
-    propagate_required(registry);
     final_invariant_check(registry)
 }
 
@@ -119,15 +121,11 @@ fn collect_deltas<E: Prebindgen>(
     let mut deltas: Vec<(TypeKey, TypeEntry<E::Metadata>)> = Vec::new();
     let table = registry.type_table(dir);
     for (key, slot) in table {
-        if slot.is_some() {
+        if slot.entry.is_some() {
             continue;
         }
         let key_ty = key.to_type();
-        let scan_required = match dir {
-            Direction::Input => registry.is_required_input_at_scan(key),
-            Direction::Output => registry.is_required_output_at_scan(key),
-        };
-        if let Some(entry) = resolve_one(ext, &key_ty, dir, scan_required, registry) {
+        if let Some(entry) = resolve_one(ext, &key_ty, dir, registry) {
             deltas.push((key.clone(), entry));
         }
     }
@@ -144,9 +142,9 @@ fn apply_deltas<M>(
 ) {
     let table = registry.type_table_mut(dir);
     for (key, entry) in deltas {
-        if let Some(slot) = table.get_mut(&key) {
-            if slot.is_none() {
-                *slot = Some(entry);
+        if let Some(cell) = table.get_mut(&key) {
+            if cell.entry.is_none() {
+                cell.entry = Some(entry);
             }
         }
     }
@@ -160,7 +158,6 @@ fn resolve_one<E: Prebindgen>(
     ext: &E,
     key_ty: &syn::Type,
     dir: Direction,
-    scan_required: bool,
     registry: &Registry<E::Metadata>,
 ) -> Option<TypeEntry<E::Metadata>> {
     let conv: Option<ConverterImpl<E::Metadata>> = match dir {
@@ -183,7 +180,6 @@ fn resolve_one<E: Prebindgen>(
         function: c.function,
         pre_stages: c.pre_stages,
         subs: c.subs.iter().map(TypeKey::from_type).collect(),
-        required: scan_required,
         niches: c.niches,
         metadata: c.metadata,
     })
@@ -193,77 +189,47 @@ fn resolve_one<E: Prebindgen>(
 // Required-flag propagation (BFS from required entries through `subs`)
 // ──────────────────────────────────────────────────────────────────────
 
-fn propagate_required<M>(registry: &mut Registry<M>) {
-    // Seed the queue from scan-time required keys plus any `required: true`
-    // already on resolved entries.
+/// The cells a converter must exist for: every root, plus everything reachable
+/// from one through a resolved converter's `subs`.
+///
+/// Derived, never stored. Needing a converter is a property of the graph, and the
+/// graph is not complete until resolution has run — so computing it once here
+/// beats maintaining a flag that every edge discovery has to write back.
+fn required_set<M>(registry: &Registry<M>) -> HashSet<(Direction, TypeKey)> {
+    let mut required: HashSet<(Direction, TypeKey)> = HashSet::new();
     let mut queue: VecDeque<(Direction, TypeKey)> = VecDeque::new();
-    for k in &registry.required_inputs_scan {
-        queue.push_back((Direction::Input, k.clone()));
-    }
-    for k in &registry.required_outputs_scan {
-        queue.push_back((Direction::Output, k.clone()));
-    }
-
-    while let Some((dir, key)) = queue.pop_front() {
-        // Mark this entry's `required: true` if it's resolved.
-        let subs = mark_and_get_subs(registry, dir, &key);
-        // Subs travel in the same direction as the parent — they're the
-        // inner converters this body delegates to.
-        for sub_key in subs {
-            if !is_required_resolved(registry, dir, &sub_key) {
-                set_required(registry, dir, &sub_key);
-                queue.push_back((dir, sub_key));
+    for dir in [Direction::Input, Direction::Output] {
+        for (key, cell) in registry.type_table(dir) {
+            if cell.root && required.insert((dir, key.clone())) {
+                queue.push_back((dir, key.clone()));
             }
         }
     }
-}
 
-fn mark_and_get_subs<M>(registry: &mut Registry<M>, dir: Direction, key: &TypeKey) -> Vec<TypeKey> {
-    let table = registry.type_table_mut(dir);
-    match table.get_mut(key) {
-        Some(Some(entry)) => {
-            entry.required = true;
-            entry.subs.clone()
-        }
-        _ => vec![],
-    }
-}
-
-fn is_required_resolved<M>(registry: &Registry<M>, dir: Direction, key: &TypeKey) -> bool {
-    let table = registry.type_table(dir);
-    table
-        .get(key)
-        .and_then(|slot| slot.as_ref())
-        .is_some_and(|e| e.required)
-}
-
-fn set_required<M>(registry: &mut Registry<M>, dir: Direction, key: &TypeKey) {
-    match dir {
-        Direction::Input => {
-            registry.required_inputs_scan.insert(key.clone());
-        }
-        Direction::Output => {
-            registry.required_outputs_scan.insert(key.clone());
+    while let Some((dir, key)) = queue.pop_front() {
+        // Subs travel in the same direction as the parent — they are the inner
+        // converters this body delegates to. An unresolved cell has none to give,
+        // which is why this cannot run before the fixed-point loop.
+        let Some(entry) = registry
+            .type_table(dir)
+            .get(&key)
+            .and_then(|c| c.entry.as_ref())
+        else {
+            continue;
+        };
+        for sub_key in &entry.subs {
+            if required.insert((dir, sub_key.clone())) {
+                queue.push_back((dir, sub_key.clone()));
+            }
         }
     }
-    let table = registry.type_table_mut(dir);
-    if let Some(Some(entry)) = table.get_mut(key) {
-        entry.required = true;
-    }
-}
-
-fn lookup_slot<'a, M>(
-    registry: &'a Registry<M>,
-    dir: Direction,
-    key: &TypeKey,
-) -> Option<&'a Option<TypeEntry<M>>> {
-    registry.type_table(dir).get(key)
+    required
 }
 
 /// BFS from unresolved required-roots through the type graph, surfacing
 /// further unresolved entries reachable through struct fields, enum variants,
 /// generic args, and `impl Fn(...)` args. Stops at resolved nodes — their
-/// `subs` were already walked by `propagate_required`, so traversing through
+/// `subs` were already walked by `required_set`, so traversing through
 /// them risks reporting dependents the resolved converter doesn't actually
 /// need.
 fn collect_unresolved_descendants<M>(
@@ -292,13 +258,13 @@ fn collect_unresolved_descendants<M>(
     }
 
     while let Some((dir, key)) = queue.pop_front() {
-        match lookup_slot(registry, dir, &key) {
-            Some(None) => {
+        match registry.type_table(dir).get(&key) {
+            Some(cell) if cell.entry.is_none() => {
                 // Registered but unresolved — report it and keep walking.
                 out.push(UnresolvedEntry {
                     key: key.clone(),
                     direction: dir,
-                    location: registry.type_locations.get(&key).cloned(),
+                    location: cell.subject.location().cloned(),
                 });
                 enqueue_edges_from(dir, &key, &mut queue, seen);
             }
@@ -308,50 +274,36 @@ fn collect_unresolved_descendants<M>(
                 // include registered-but-unresolved types worth flagging.
                 enqueue_edges_from(dir, &key, &mut queue, seen);
             }
-            Some(Some(_)) => {
-                // Resolved — `propagate_required` already walked its `subs`.
-                // Stop here to avoid spurious reports for descendants the
-                // resolved converter doesn't need.
+            Some(_) => {
+                // Resolved — `required_set` already walked its `subs`. Stop here
+                // to avoid spurious reports for descendants the resolved
+                // converter doesn't need.
             }
         }
     }
 }
 
 fn final_invariant_check<M>(registry: &Registry<M>) -> Result<(), ResolveError> {
+    let required = required_set(registry);
     let mut entries: Vec<UnresolvedEntry> = Vec::new();
-    let scan_required_input = &registry.required_inputs_scan;
-    let scan_required_output = &registry.required_outputs_scan;
     let mut unresolved_required_roots: Vec<(Direction, TypeKey)> = Vec::new();
-    let mut seen_unresolved: std::collections::HashSet<(Direction, TypeKey)> =
-        std::collections::HashSet::new();
+    let mut seen_unresolved: HashSet<(Direction, TypeKey)> = HashSet::new();
 
-    for (key, slot) in &registry.input_types {
-        let needs = match slot {
-            Some(e) => e.required,
-            None => scan_required_input.contains(key),
-        };
-        if needs && slot.is_none() {
-            unresolved_required_roots.push((Direction::Input, key.clone()));
-            seen_unresolved.insert((Direction::Input, key.clone()));
+    for dir in [Direction::Input, Direction::Output] {
+        // Sorted, so a build that fails reports the same list every time.
+        let mut keys: Vec<&TypeKey> = registry.type_table(dir).keys().collect();
+        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        for key in keys {
+            let cell = &registry.type_table(dir)[key];
+            if cell.entry.is_some() || !required.contains(&(dir, key.clone())) {
+                continue;
+            }
+            unresolved_required_roots.push((dir, key.clone()));
+            seen_unresolved.insert((dir, key.clone()));
             entries.push(UnresolvedEntry {
                 key: key.clone(),
-                direction: Direction::Input,
-                location: registry.type_locations.get(key).cloned(),
-            });
-        }
-    }
-    for (key, slot) in &registry.output_types {
-        let needs = match slot {
-            Some(e) => e.required,
-            None => scan_required_output.contains(key),
-        };
-        if needs && slot.is_none() {
-            unresolved_required_roots.push((Direction::Output, key.clone()));
-            seen_unresolved.insert((Direction::Output, key.clone()));
-            entries.push(UnresolvedEntry {
-                key: key.clone(),
-                direction: Direction::Output,
-                location: registry.type_locations.get(key).cloned(),
+                direction: dir,
+                location: cell.subject.location().cloned(),
             });
         }
     }

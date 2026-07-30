@@ -93,9 +93,10 @@ fn accessor_optional_primitive() {
         "z_timestamp_ntp64"
     );
     assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "i64");
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(i64))));
+    assert!(
+        reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
+        "the leaf type must be a root"
+    );
 }
 
 #[test]
@@ -161,9 +162,7 @@ fn accessor_plan_byref() {
 
     // Leaf out_tys registered as required outputs so the resolver builds
     // their converters.
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(&str))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
 }
 
 #[test]
@@ -756,9 +755,7 @@ fn iterable_whole_element_plan() {
             .map(|t| t.to_token_stream().to_string()),
         Some("ZZenohId".to_string())
     );
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(ZZenohId))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(ZZenohId))].root);
 }
 
 #[test]
@@ -863,9 +860,7 @@ fn convert_output_single_value() {
         Some("Option < i64 >".to_string())
     );
     // The shaped convert type is registered as a required output.
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(Option<i64>))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(Option<i64>))].root);
 }
 
 #[test]
@@ -1354,12 +1349,8 @@ fn callback_arg_plan_derived() {
         "SampleKind"
     );
     // Leaf out_tys registered so the resolver builds their converters.
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(&str))));
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(SampleKind))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(SampleKind))].root);
     // No return-position plan was created for the declaring fn.
     assert!(reg.unfold_plans.is_empty());
 }
@@ -1740,8 +1731,9 @@ fn sum_return_is_a_fixed_builder_plan() {
     assert!(!plan.leaves[0].has_converter());
     assert!(plan.leaves[1].has_converter());
     assert!(
-        !reg.required_outputs_scan
-            .contains(&TypeKey::from_type(&syn::parse_quote!(Reading))),
+        !reg.output_types
+            .get(&TypeKey::from_type(&syn::parse_quote!(Reading)))
+            .is_some_and(|c| c.root),
         "a sum has no whole-value converter, so its return must not require one"
     );
 }
@@ -1771,7 +1763,9 @@ fn sum_return_layers_ride_the_shape_fold() {
     for ty in ["Option<Reading>", "Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
         assert!(
-            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            !reg.output_types
+                .get(&TypeKey::from_type(&ty))
+                .is_some_and(|c| c.root),
             "no layer of a sum return may require a whole-value converter: {}",
             ty.to_token_stream()
         );
@@ -1793,10 +1787,9 @@ fn sum_return_layers_ride_the_shape_fold() {
 fn a_vec_only_sum_return_drops_the_bare_requirement() {
     let mut reg = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
     let bare: syn::Type = syn::parse_quote!(Reading);
-    reg.require_output(&bare, &crate::SourceLocation::default());
+    reg.require_output(&bare);
     assert!(
-        reg.required_outputs_scan
-            .contains(&TypeKey::from_type(&bare)),
+        reg.output_types[&TypeKey::from_type(&bare)].root,
         "fixture precondition: the bare element starts out required"
     );
 
@@ -1807,7 +1800,9 @@ fn a_vec_only_sum_return_drops_the_bare_requirement() {
     for ty in ["Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
         assert!(
-            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            !reg.output_types
+                .get(&TypeKey::from_type(&ty))
+                .is_some_and(|c| c.root),
             "no layer of a sum return may require a whole-value converter: {}",
             ty.to_token_stream()
         );

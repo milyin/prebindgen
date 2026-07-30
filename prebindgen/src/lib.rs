@@ -296,7 +296,7 @@ pub mod core {
     pub use crate::api::core::{
         ConverterImpl, Direction, DomainScalar, Element, Flat, Generation, Gravestone, NicheSlot,
         Niches, Prebindgen, Registry, RegistryBuilder, RepresentationDomain, ScalarValue,
-        ScanError, Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
+        ScanError, Stage, Transmute, TypeCell, TypeEntry, TypeKey, TypeSubject, WriteRustError,
     };
 }
 

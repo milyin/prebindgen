@@ -7,7 +7,7 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 
 use super::*;
-use crate::SourceLocation;
+use crate::{api::test_util::cell, SourceLocation};
 
 struct IdentityExt;
 
@@ -66,35 +66,41 @@ fn dedup_and_sort() {
 
     reg.input_types.insert(
         key_a.clone(),
-        Some(TypeEntry {
-            destination: wire.clone(),
-            function: syn::parse_quote!(
-                fn handle_to_u64_aaaa(v: i64) -> u64 {
-                    v as u64
-                }
-            ),
-            pre_stages: vec![],
-            subs: vec![],
-            required: true,
-            niches: crate::api::core::niches::Niches::empty(),
-            metadata: (),
-        }),
+        cell(
+            &key_a,
+            true,
+            Some(TypeEntry {
+                destination: wire.clone(),
+                function: syn::parse_quote!(
+                    fn handle_to_u64_aaaa(v: i64) -> u64 {
+                        v as u64
+                    }
+                ),
+                pre_stages: vec![],
+                subs: vec![],
+                niches: crate::api::core::niches::Niches::empty(),
+                metadata: (),
+            }),
+        ),
     );
     reg.input_types.insert(
         key_b.clone(),
-        Some(TypeEntry {
-            destination: wire2.clone(),
-            function: syn::parse_quote!(
-                fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample {
-                    decode_sample(v)
-                }
-            ),
-            pre_stages: vec![],
-            subs: vec![],
-            required: true,
-            niches: crate::api::core::niches::Niches::empty(),
-            metadata: (),
-        }),
+        cell(
+            &key_b,
+            true,
+            Some(TypeEntry {
+                destination: wire2.clone(),
+                function: syn::parse_quote!(
+                    fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample {
+                        decode_sample(v)
+                    }
+                ),
+                pre_stages: vec![],
+                subs: vec![],
+                niches: crate::api::core::niches::Niches::empty(),
+                metadata: (),
+            }),
+        ),
     );
 
     let items = collect_converter_items(&reg);
