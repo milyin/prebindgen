@@ -89,7 +89,7 @@ pub enum Type {
     Variant(Variant),
     /// An enum whose every alternative is fieldless — a named set of integers.
     Enum(Enum),
-    Opaque(Opaque),
+    Extern(Extern),
 }
 
 impl Type {
@@ -98,7 +98,7 @@ impl Type {
             Type::Struct(s) => &s.name,
             Type::Variant(v) => &v.name,
             Type::Enum(e) => &e.name,
-            Type::Opaque(o) => &o.name,
+            Type::Extern(e) => &e.name,
         }
     }
 
@@ -112,7 +112,7 @@ impl Type {
             Type::Struct(s) => &s.origin.location,
             Type::Variant(v) => &v.origin.location,
             Type::Enum(e) => &e.origin.location,
-            Type::Opaque(o) => &o.origin.location,
+            Type::Extern(e) => &e.origin.location,
         }
     }
 
@@ -122,27 +122,44 @@ impl Type {
             Type::Struct(s) => syn::Item::Struct(s.origin.syntax.clone()),
             Type::Variant(v) => syn::Item::Enum(v.origin.syntax.clone()),
             Type::Enum(e) => syn::Item::Enum(e.origin.syntax.clone()),
-            Type::Opaque(o) => o.origin.syntax.clone(),
+            Type::Extern(e) => e.origin.syntax.clone(),
         }
     }
 }
 
-/// A type whose contents do not cross the boundary — a handle.
+/// A type the flat API **names** but whose contents it does not model.
 ///
-/// Two spellings declare one thing, because the model records the *fact* rather
-/// than the Rust shape that carried it:
+/// Two spellings declare one thing, because what the frontend records is the fact
+/// rather than the Rust shape that carried it:
 ///
-/// * `#[prebindgen] pub type X = path::To<Thing>;` — the way to give a foreign or
-///   crate-private type a name in the flat API. This is how a handle is declared
-///   deliberately.
+/// * `#[prebindgen] pub type X = path::To<Thing>;` — how a foreign or
+///   crate-private type gets a name here. A **one-way road**: the name is
+///   thereafter the only way to spell that type inside the flat API, and the
+///   qualified path stays refused. This declares a name; it is not an equivalence
+///   between spellings — see
+///   [`normalize_type`](crate::api::core::types_util::normalize_type)'s rule 4 for
+///   why treating it as one is a category error.
 /// * `#[prebindgen] pub struct X(..);` — a tuple struct, whose fields no adapter
 ///   has ever crossed.
 ///
-/// Either way the adapter decides what the handle becomes: an opaque pointer, a
-/// `ptr_class`, a `convert!` target.
+/// Not necessarily a *handle*: `#[prebindgen] pub type Duration =
+/// std::time::Duration;` crosses by value through a `convert!`, erased to a plain
+/// integer. What it becomes — an opaque pointer, a `ptr_class`, a conversion — is
+/// the adapter's decision, and this says only that the frontend does not model the
+/// contents.
 #[derive(Clone, Debug)]
-pub struct Opaque {
+pub struct Extern {
     pub name: syn::Ident,
+    /// What the declaration points at, for an alias — `std::time::Duration`,
+    /// `zenoh::Session`, `handles::Storage`. `None` for a tuple struct, which is
+    /// itself the definition.
+    ///
+    /// Informational, and deliberately **not** classified. `Error` is
+    /// `Box<dyn std::error::Error + Send + Sync>` behind a `zenoh::` alias in one
+    /// crate and spelled openly in another, so being "a std type" is a property of
+    /// the spelling, not of the type. An adapter that wants to recognise a target
+    /// may; the frontend does not decide for it.
+    pub target: Option<String>,
     /// The declaring item — a type alias or a tuple struct.
     pub origin: Origin<syn::Item>,
 }
@@ -173,7 +190,7 @@ pub struct Param {
 
 /// A `#[prebindgen]` struct: a product of fields that cross the boundary.
 ///
-/// A struct whose contents do *not* cross is an [`Opaque`], not a `Struct` with
+/// A struct whose contents do *not* cross is an [`Extern`], not a `Struct` with
 /// nothing in it — so `fields` is a plain list, and empty means the source wrote
 /// a struct with no fields.
 ///

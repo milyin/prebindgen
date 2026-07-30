@@ -56,7 +56,7 @@
 //! | `struct S;`, `struct S {}` | zero fields | the delimiters are spelling |
 //! | `enum E { A(u8) }` | [`Variant`] | a sum, identified by position |
 //! | `enum E { A = 7 }` | [`Enum`] | a named integer, identified by its value |
-//! | `type X = ..`, `struct X(..)` | [`Opaque`] | a handle; contents do not cross |
+//! | `type X = ..`, `struct X(..)` | [`Extern`] | named here; contents not modelled |
 //! | `&mut MaybeUninit<T>` | [`RefMode::Out`] | an out-param slot the caller supplies |
 //! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
 //! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
@@ -114,7 +114,7 @@
 //!
 //! # Declaring a handle
 //!
-//! `#[prebindgen] pub type X = path::To<Thing>;` declares an [`Opaque`]: it gives
+//! `#[prebindgen] pub type X = path::To<Thing>;` declares an [`Extern`]: it gives
 //! a foreign or crate-private type a **name in the flat API** without claiming
 //! anything about its contents. That is what makes the API closable — a handle
 //! enters it deliberately rather than by being mentioned — and it is why a
@@ -158,7 +158,7 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Alternative, Constant, Element, Enum, EnumValue, Field, Function, Opaque, Param, Struct,
+        Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Param, Struct,
         Type, Unsupported, Variant,
     },
     origin::Origin,
@@ -303,25 +303,18 @@ impl FlatBuilder {
 
         // Pass 0: normalize every item's types to the canonical flat spelling
         // before a single one is classified. `std::option::Option<T>` is an
-        // `Option`, and `source_a::TypeA` is `TypeA` — decisions this module
-        // owns, so it must be the one to see the reduced form. Gathering EVERY
-        // module name first is what makes a cross-source reference in an
-        // earlier item normalize the same as in a later one.
+        // `Option`, `source_a::TypeA` is `TypeA`, and `zenoh::Session` is whatever
+        // an alias named it — decisions this module owns, so it must be the one to
+        // see the reduced form. Gathering EVERY module and alias first is what
+        // makes a reference in an earlier item normalize the same as in a later
+        // one.
         //
         // The consequence is deliberate and stated on `Origin`: a slice
         // is the spelling generation must EMIT, which is the normalized one —
         // the flat namespace is what the generated crate can actually name.
-        let mut modules: Vec<String> = Vec::new();
-        for (_, loc) in &items {
-            if let Some(crate_name) = &loc.crate_name {
-                let module = crate_name.replace('-', "_");
-                if !modules.contains(&module) {
-                    modules.push(module);
-                }
-            }
-        }
+        let normalization = crate::api::core::types_util::Normalization::from_items(&items);
         for (item, _) in &mut items {
-            crate::api::core::types_util::normalize_item_types(item, &modules);
+            crate::api::core::types_util::normalize_item_types(item, &normalization);
         }
 
         // Pass 1: the consts an array length may name. Unnamed `const _` items
@@ -575,7 +568,7 @@ fn first_unresolved(
         ),
         // An enum names nothing, an opaque hides what it names, and an
         // unsupported item already has a diagnosis worth keeping.
-        Element::Type(Type::Enum(_) | Type::Opaque(_)) | Element::Unsupported(_) => {}
+        Element::Type(Type::Enum(_) | Type::Extern(_)) | Element::Unsupported(_) => {}
     }
     refs.into_iter().find_map(|r| r.first_unresolved(declared))
 }
@@ -828,16 +821,20 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
         // anything about its contents. That is the only way a handle enters the
         // API deliberately, and the reason references can be required to resolve.
         syn::Item::Type(t) => match reject_generic_params(&t.generics) {
-            // `Opaque` has no binder and no arity, so a generic alias would be
+            // `Extern` has no binder and no arity, so a generic alias would be
             // accepted as one declaration that `Handle<u8>` then resolves against
             // — losing exactly the scoped-parameter distinction every other item
             // kind refuses. It is also why `MaybeUninit` needed grammar support
             // rather than an alias.
             Err(error) => unsupported(t.ident.clone(), syn::Item::Type(t), &at, error),
-            Ok(()) => Element::Type(Type::Opaque(Opaque {
-                name: t.ident.clone(),
-                origin: Origin::new(syn::Item::Type(t), at),
-            })),
+            Ok(()) => {
+                let target = Some(t.ty.to_token_stream().to_string());
+                Element::Type(Type::Extern(Extern {
+                    name: t.ident.clone(),
+                    target,
+                    origin: Origin::new(syn::Item::Type(t), at),
+                }))
+            }
         },
         // Including the unnamed `const _` each source injects as its feature
         // guard: it is a const, so it is one here. `Element::name` returns
@@ -958,7 +955,7 @@ fn lower_fn(
 
 /// Lower a `struct` item to whichever of the two shapes it is.
 ///
-/// A **tuple struct** is an [`Opaque`]: no adapter has ever crossed its fields,
+/// A **tuple struct** is an [`Extern`]: no adapter has ever crossed its fields,
 /// so they are deliberately not lowered and a field type outside the grammar is
 /// not an error. Anything else is a product of fields that do cross.
 fn lower_struct(
@@ -987,10 +984,12 @@ fn lower_struct(
         }
         // Its contents are not a boundary surface, so nothing is lowered.
         syn::Fields::Unnamed(_) => {
-            return Ok(Type::Opaque(Opaque {
+            return Ok(Type::Extern(Extern {
                 name: s.ident.clone(),
+                // A tuple struct IS the definition; it points at nothing.
+                target: None,
                 origin: Origin::new(syn::Item::Struct(s.clone()), Rc::clone(at)),
-            }))
+            }));
         }
         syn::Fields::Unit => Vec::new(),
     };

@@ -103,7 +103,10 @@ impl TypeKey {
     /// input is not modified).
     pub fn from_type(ty: &syn::Type) -> Self {
         let mut t = ty.clone();
-        crate::api::core::types_util::normalize_type(&mut t, &[]);
+        crate::api::core::types_util::normalize_type(
+            &mut t,
+            &crate::api::core::types_util::Normalization::prelude(),
+        );
         Self {
             canon: t.to_token_stream().to_string().into(),
             ty: std::rc::Rc::new(t),
@@ -730,25 +733,22 @@ impl<M> Registry<M> {
         let mut registry = Registry::default();
         // Pass 1: collect and gather EVERY source module name first, so
         // cross-source type references (`source_a::TypeA` in a later-chained
-        // source's signature) normalize order-independently in pass 2.
+        // source's signature) normalize order-independently in pass 2 — and so do
+        // alias-named paths, whose declaration may arrive later or in another
+        // source.
         let items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
-        for (_, loc) in &items {
-            if let Some(crate_name) = &loc.crate_name {
-                let module = crate_name.replace('-', "_");
-                if !registry.source_modules.contains(&module) {
-                    registry.source_modules.push(module);
-                }
-            }
-        }
+        let normalization = crate::api::core::types_util::Normalization::from_items(&items);
+        registry
+            .source_modules
+            .clone_from(&normalization.source_modules);
         // Pass 2: normalize each item's types to the canonical flat spelling
-        // (`crate::`/source-module paths reduce to the bare indexed name —
-        // see `normalize_type`'s rule list), then index. Every downstream
-        // `TypeKey::from_type` over a signature type therefore sees the
-        // normalized form, so bare adapter declarations match qualified
-        // captured spellings (issue #95).
-        let modules = registry.source_modules.clone();
+        // (`crate::`/source-module paths reduce to the bare indexed name, and an
+        // aliased path to the name its alias gives it — see `normalize_type`'s
+        // rule list), then index. Every downstream `TypeKey::from_type` over a
+        // signature type therefore sees the normalized form, so bare adapter
+        // declarations match qualified captured spellings (issue #95).
         for (mut item, loc) in items {
-            crate::api::core::types_util::normalize_item_types(&mut item, &modules);
+            crate::api::core::types_util::normalize_item_types(&mut item, &normalization);
             let crate_name = loc.crate_name.clone();
             let named: Option<syn::Ident> = match &item {
                 syn::Item::Fn(f) => Some(f.sig.ident.clone()),

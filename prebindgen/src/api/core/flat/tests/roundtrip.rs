@@ -281,12 +281,12 @@ fn struct_delimiters_survive_and_spell() {
         (1, "C { x : __f0 }".to_string())
     );
 
-    // A tuple struct is a handle, so it is an `Opaque` and has no field list to
+    // A tuple struct is named-only, so it is an `Extern` and has no field list to
     // spell from — the delimiters still survive in its retained syntax.
     let element = parse_one(syn::parse_quote!(
         pub struct D(Whatever<'_, dyn Trait>);
     ));
-    let o = as_opaque(&element);
+    let o = as_extern(&element);
     assert_eq!(o.name, "D");
     assert!(tokens(&o.origin.syntax).contains("Whatever"));
 }

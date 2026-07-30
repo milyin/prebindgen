@@ -114,6 +114,192 @@ fn a_box_classifies_as_what_it_wraps() {
 /// reduces and classifies, while a path-qualified lookalike is a foreign type
 /// that merely shares the name, and collapsing it would silently retype the
 /// field.
+/// The prelude: every name the language pre-declares reaches the same kind however
+/// it is spelled. This is the drift guard — adding a builtin arm to `lower_path`
+/// and forgetting its prelude entry fails here, which is exactly how `MaybeUninit`
+/// slipped through and worked only when the source happened to `use` it.
+#[test]
+fn the_prelude_reaches_every_builtin_by_either_spelling() {
+    use crate::api::core::types_util::Normalization;
+
+    // Each entry, bare against fully qualified. `MaybeUninit` needs a `&mut` to
+    // mean anything, so it is checked separately below.
+    for (path, name) in Normalization::PRELUDE {
+        if *name == "MaybeUninit" {
+            continue;
+        }
+        let bare: proc_macro2::TokenStream = match *name {
+            "Result" => quote::quote!(Result<u8, Error>),
+            "String" => quote::quote!(String),
+            _ => {
+                let n = quote::format_ident!("{name}");
+                quote::quote!(#n<u8>)
+            }
+        };
+        let qualified: proc_macro2::TokenStream = {
+            let p: syn::Path = syn::parse_str(path).expect("a prelude path");
+            match *name {
+                "Result" => quote::quote!(#p<u8, Error>),
+                "String" => quote::quote!(#p),
+                _ => quote::quote!(#p<u8>),
+            }
+        };
+        assert_eq!(
+            format!("{:?}", kind(bare)),
+            format!("{:?}", kind(qualified)),
+            "`{name}` must classify the same as `{path}`"
+        );
+    }
+
+    // `core` and `alloc` are re-exports of the same items, so either root works.
+    assert!(matches!(
+        kind(quote::quote!(core::option::Option<u8>)),
+        TypeKind::Optional(_)
+    ));
+    assert!(matches!(
+        kind(quote::quote!(alloc::string::String)),
+        TypeKind::Str
+    ));
+
+    // The bug: qualified `MaybeUninit` used to fall through to an unresolvable
+    // nominal type, so an out-parameter worked only if the source `use`d it.
+    let TypeKind::Ref { mode, .. } = kind(quote::quote!(&mut std::mem::MaybeUninit<Sample>)) else {
+        panic!("a borrow");
+    };
+    assert_eq!(mode, RefMode::Out);
+}
+
+/// A `#[prebindgen] pub type` is a **one-way road**: it brings a foreign type into
+/// the flat API under a name, and that name is thereafter the only way to spell it.
+///
+/// It is a *declaration*, not an equivalence. Treating it as a reduction rule broke
+/// the contract normalization actually has — choose among spellings of one type,
+/// never change what a type is — because `type Bytes = Vec<u8>` would make `Vec<u8>`
+/// an extern. So a qualified spelling stays refused even when an alias names exactly
+/// that type.
+#[test]
+fn an_alias_is_a_declaration_not_an_equivalence() {
+    let items: Vec<syn::Item> = vec![
+        syn::parse_quote!(
+            pub type Session = zenoh::Session;
+        ),
+        syn::parse_quote!(
+            pub fn by_name(s: &Session) {}
+        ),
+        syn::parse_quote!(
+            pub fn by_path(s: &zenoh::Session) {}
+        ),
+    ];
+    let flat = Flat::builder()
+        .items(items.into_iter().map(|i| (i, loc())))
+        .build()
+        .expect("a refusal is deferred, not fatal");
+
+    // The declared name works.
+    let f = flat.function("by_name").expect("declared");
+    let TypeKind::Ref { inner, .. } = &f.params[0].ty.kind else {
+        panic!("a borrow");
+    };
+    let TypeKind::Named { id } = &inner.kind else {
+        panic!("a nominal type");
+    };
+    assert_eq!(id.name, "Session");
+
+    // The path it aliases does NOT, and the diagnosis says to use the name.
+    assert!(flat.function("by_path").is_none());
+    let u = flat.unsupported().next().expect("one refusal");
+    assert!(matches!(
+        &*u.error,
+        ItemError::UnresolvedType { name } if name == "zenoh::Session"
+    ));
+    assert!(
+        u.error.to_string().contains("refer to that"),
+        "the diagnosis must point at the declared name: {}",
+        u.error
+    );
+
+    // And the declaration itself still records what it points at.
+    let Type::Extern(e) = flat.declared_type("Session").expect("declared") else {
+        panic!("an extern");
+    };
+    assert_eq!(e.target.as_deref(), Some("zenoh :: Session"));
+}
+
+/// An alias cannot retype anything, whatever its target's arguments — the property
+/// that made key-shape bugs possible in the first place, now unreachable because an
+/// alias is not an equivalence at all.
+///
+/// Covers the reported cases: a concrete generic target (`Vec<u8>`, which shadowed
+/// the prelude), and a const-generic pair (`Wrap<4>` / `Wrap<8>`, which collided
+/// because a key kept only type arguments).
+#[test]
+fn an_alias_never_retypes_a_spelling() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                syn::parse_quote!(
+                    pub type Bytes = std::vec::Vec<u8>;
+                ),
+                syn::parse_quote!(
+                    pub type Small = zenoh::Wrap<4>;
+                ),
+                syn::parse_quote!(
+                    pub type Big = zenoh::Wrap<8>;
+                ),
+                syn::parse_quote!(
+                    pub fn strings(xs: std::vec::Vec<String>) {}
+                ),
+                syn::parse_quote!(
+                    pub fn bytes(xs: std::vec::Vec<u8>) {}
+                ),
+                syn::parse_quote!(
+                    pub fn by_name(b: Bytes) {}
+                ),
+                syn::parse_quote!(
+                    pub fn small(w: Small) {}
+                ),
+                syn::parse_quote!(
+                    pub fn big(w: Big) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+
+    let param = |name: &str| {
+        flat.function(name)
+            .unwrap_or_else(|| panic!("{name} survives"))
+            .params[0]
+            .ty
+            .kind
+            .clone()
+    };
+
+    // A prelude type keeps its grammar meaning at every instantiation, whatever an
+    // unrelated alias happens to target.
+    for f in ["strings", "bytes"] {
+        assert!(
+            matches!(param(f), TypeKind::Sequence(_)),
+            "`{f}`: the grammar's spelling stays canonical"
+        );
+    }
+
+    // Each alias is usable by its own name, and they cannot collide: a bare path is
+    // never reduced, so the name IS the identity.
+    for (f, expected) in [("by_name", "Bytes"), ("small", "Small"), ("big", "Big")] {
+        let TypeKind::Named { id } = param(f) else {
+            panic!("{f}: a nominal type");
+        };
+        assert_eq!(id.name, expected, "{f}");
+        assert!(matches!(
+            flat.declared_type(expected).expect(expected),
+            Type::Extern(_)
+        ));
+    }
+}
+
 #[test]
 fn a_qualified_builtin_is_a_named_type() {
     assert!(matches!(
@@ -191,17 +377,26 @@ fn a_raw_pointer_is_not_in_the_language() {
     );
 }
 
-/// A lifetime argument is accepted and not modelled — `Foo<'a, T>` classifies
-/// as `Foo` with one type argument, and the spelling keeps the rest.
+/// Generic arguments are accepted and not modelled — a reference is a *name*, and
+/// the spelling keeps the rest.
+///
+/// Nothing could read retained arguments: a surviving reference resolves to a
+/// declared type, and no declaration takes type parameters. They are still lowered,
+/// so a bad type inside one is diagnosed.
 #[test]
-fn a_lifetime_argument_is_spelling_only() {
+fn generic_arguments_are_spelling_only() {
     let ty = lower(quote::quote!(Foo<'a, u8>)).expect("in the language");
-    let TypeKind::Named { id, args } = &ty.kind else {
+    let TypeKind::Named { id } = &ty.kind else {
         panic!("a named type");
     };
     assert_eq!(id.name, "Foo");
-    assert_eq!(args.len(), 1);
     assert_eq!(tokens(&ty.origin.syntax), "Foo < 'a , u8 >");
+
+    // Lowered, so still checked: a tuple inside a generic argument is refused.
+    assert_eq!(
+        reason(quote::quote!(Foo<(u8, u8)>)),
+        UnsupportedTypeReason::UnsupportedTuple
+    );
 }
 
 #[test]
@@ -438,7 +633,7 @@ fn struct_shapes() {
     let tuple = parse_one(syn::parse_quote!(
         pub struct B(SomethingUnexpressible<'_, dyn Trait>);
     ));
-    assert_eq!(as_opaque(&tuple).name, "B");
+    assert_eq!(as_extern(&tuple).name, "B");
 
     let unit = parse_one(syn::parse_quote!(
         pub struct C;
@@ -600,17 +795,38 @@ fn an_unmodelled_item_kind_is_diagnosed() {
 /// crate-private type gets a name in the flat API. That is what lets references
 /// be required to resolve, so it is the keystone of the whole model.
 #[test]
-fn a_marked_alias_declares_an_opaque() {
+fn a_marked_alias_declares_an_extern() {
     let element = parse_one(syn::parse_quote!(
         pub type Session = zenoh::Session;
     ));
-    let o = as_opaque(&element);
-    assert_eq!(o.name, "Session");
+    let e = as_extern(&element);
+    assert_eq!(e.name, "Session");
+    // What it points at is a modelled fact, so an adapter can recognise a target
+    // without taking the syntax apart. Not classified: a std type may hide behind a
+    // foreign alias, as `Error = zenoh::Error` does.
+    assert_eq!(e.target.as_deref(), Some("zenoh :: Session"));
     // The whole item survives, so a consumer can still read what it aliased.
     assert_eq!(
-        tokens(&o.origin.syntax),
+        tokens(&e.origin.syntax),
         "pub type Session = zenoh :: Session ;"
     );
+
+    // A std target is recorded the same way — nothing here decides it is special.
+    let element = parse_one(syn::parse_quote!(
+        pub type Duration = std::time::Duration;
+    ));
+    assert_eq!(
+        as_extern(&element).target.as_deref(),
+        Some("std :: time :: Duration")
+    );
+
+    // A tuple struct points at nothing: it IS the definition.
+    let element = parse_one(syn::parse_quote!(
+        pub struct Handle(Whatever);
+    ));
+    let e = as_extern(&element);
+    assert_eq!(e.name, "Handle");
+    assert_eq!(e.target, None);
 
     // And it satisfies a reference, which is the point.
     let mut items = fixture_types();
@@ -930,7 +1146,7 @@ fn a_reference_resolves_to_its_declaration() {
         panic!("a nominal type");
     };
     let target = flat.resolve(id).expect("resolves");
-    assert!(matches!(target, Type::Opaque(_)));
+    assert!(matches!(target, Type::Extern(_)));
     assert_eq!(target.name(), "Session");
 }
 
@@ -1008,12 +1224,14 @@ fn an_undeclared_reference_refuses_the_referencing_item() {
         quote::quote!(Result<Session, Error>),
         quote::quote!(impl Fn(Session) + Send + Sync + 'static),
         quote::quote!([Session; 4]),
-        quote::quote!(Wrapper<Session>),
+        // NOT `Wrapper<Session>`: a declared type takes no type parameters, so a
+        // source writing that would not compile. Generic arguments are lowered and
+        // discarded — `generic_arguments_are_spelling_only` covers that they are
+        // still checked.
     ] {
         let flat = Flat::builder()
             .items(vec![
                 (opaque("Error"), loc()),
-                (opaque("Wrapper"), loc()),
                 (
                     syn::parse_quote!(
                         pub fn f(s: #ty) {}
@@ -1244,7 +1462,7 @@ fn every_surviving_reference_resolves() {
     assert!(flat.function("takes_broken").is_none());
 }
 
-/// A generic alias is a generic binder like any other item's, and `Opaque` has no
+/// A generic alias is a generic binder like any other item's, and `Extern` has no
 /// binder or arity — so accepting one would let `Handle<u8>` resolve against a
 /// declaration that says nothing about its parameter. It is also why
 /// `MaybeUninit` needed grammar support rather than an alias.
@@ -1283,7 +1501,7 @@ fn a_generic_alias_is_refused() {
     let element = parse_one(syn::parse_quote!(
         pub type Borrowed<'a> = hidden::Borrowed<'a>;
     ));
-    assert_eq!(as_opaque(&element).name, "Borrowed");
+    assert_eq!(as_extern(&element).name, "Borrowed");
 }
 
 // ── The flat namespace ─────────────────────────────────────────────────

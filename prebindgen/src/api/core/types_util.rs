@@ -3,8 +3,12 @@
 //! replaces the per-module copies that used to live in `core::unfold`,
 //! `core::expand`, and the jnigen adapter.
 
+use std::collections::HashMap;
+
 use proc_macro2::Span;
 use quote::ToTokens;
+
+use crate::SourceLocation;
 
 /// The single-segment path type for a bare item ident (`Foo` → `Foo`) —
 /// direct construction, no string round trip, cannot fail.
@@ -29,13 +33,23 @@ pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
 ///    `#[prebindgen]` source crates chained into the registry,
 ///    hyphens-as-underscores) reduces the same way (`myflat::Foo` ≡ `Foo`).
 ///    Pure callers pass `&[]`.
-/// 4. The std prelude whitelist reduces to its bare form — exactly
-///    `std|core|alloc :: vec::Vec | option::Option | result::Result |
-///    string::String | boxed::Box` (with or without a leading `::`).
-///    Nothing else: `std::ffi::CString` stays qualified, and unknown crate
-///    paths (`zenoh::KeyExpr`) are NEVER touched — the registry has no
-///    index of a foreign namespace, so `a::KeyExpr` and `b::KeyExpr` may be
-///    genuinely distinct types and their spelling is their identity.
+/// 4. A **prelude** path reduces to the bare name the language knows it by —
+///    exactly [`Normalization::PRELUDE`], with `core`/`alloc` read as `std`.
+///    Each entry names a *constructor*, so arguments are preserved:
+///    `std::vec::Vec<Foo>` ≡ `Vec<Foo>`.
+///
+///    Nothing else. `std::ffi::CString` stays qualified, and so does a
+///    foreign path (`zenoh::KeyExpr`) **even when an alias names that
+///    type**: a `#[prebindgen] pub type` is a one-way road, bringing a
+///    foreign type into the flat API under a name that is thereafter the
+///    only way to spell it. It declares
+///    an [`Extern`](crate::core::flat::Extern); it is not an equivalence.
+///
+///    That keeps the rule meaning-preserving, which is the whole contract
+///    here: reduction may choose among spellings of ONE type, never change
+///    what a type is. Treating an alias as an equivalence broke that —
+///    `Vec<u8>` ≡ `Bytes` turns a sequence into an extern — and no
+///    key-shape refinement fixes the category error.
 /// 5. Lifetimes are NOT normalized (`&'a T` ≠ `&T`, `Foo<'static>` ≠ `Foo`)
 ///    — [`match_pattern`] treats lifetimes as fixed structure and
 ///    foreign-type declarations (`ptr_class!(ZKeyExpr<'static>)`) rely on
@@ -44,10 +58,118 @@ pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
 /// Idempotent; recurses through references, slices, tuples, pointers,
 /// generic arguments, and `impl Trait` bounds. Paths with a qualified self
 /// (`<T as Trait>::Assoc`) are left untouched.
-pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
+/// What a captured path may be reduced against: the ingested source crates' own
+/// modules, and every name an alias gives to a foreign path.
+///
+/// One value rather than a bare `&[String]`, because reduction has one rule and
+/// two sources of aliases feeding it — see [`normalize_type`]'s rule list.
+/// [`Self::default`] is the prelude alone, which is what a caller normalizing a
+/// lone type (rather than an ingested stream) wants.
+#[derive(Clone, Debug)]
+pub struct Normalization {
+    /// Module name per ingested source, first-seen order. The first doubles as the
+    /// default module for references with no recorded origin.
+    pub source_modules: Vec<String>,
+    /// Constructor path → the bare name the language knows it by, from
+    /// [`Self::PRELUDE`] alone. Matched with the use site's type arguments ignored
+    /// and preserved, because a prelude entry names a constructor:
+    /// `std::vec::Vec` is every `Vec<T>`.
+    ///
+    /// A crate's `#[prebindgen] pub type` is deliberately **not** here — see
+    /// [`normalize_type`]'s rule 4.
+    constructors: HashMap<String, String>,
+}
+
+impl Normalization {
+    /// The names the language **pre-declares**, so no source crate has to write
+    /// them — exactly Rust's own idea of a prelude, a set of `use`s you need not
+    /// write. A crate need not write `use std::vec::Vec`, and need not write
+    /// `#[prebindgen] pub type Vec = std::vec::Vec` either, for the same reason.
+    ///
+    /// Not identical to Rust's prelude: it adds `MaybeUninit`, which the grammar
+    /// recognises for out-parameters. Its entries are exactly the bare names
+    /// [`lower_path`](crate::core::flat) classifies as builtins and that have a
+    /// std path at all — `str` has none, and neither do the scalars.
+    ///
+    /// Written with the `std` root; `core` and `alloc` are re-exports of the same
+    /// items, so a leading `core`/`alloc` is read as `std` before matching.
+    pub const PRELUDE: &'static [(&'static str, &'static str)] = &[
+        ("std::vec::Vec", "Vec"),
+        ("std::option::Option", "Option"),
+        ("std::result::Result", "Result"),
+        ("std::string::String", "String"),
+        ("std::boxed::Box", "Box"),
+        ("std::mem::MaybeUninit", "MaybeUninit"),
+    ];
+
+    /// The prelude alone: no ingested sources, no declared aliases.
+    pub fn prelude() -> Self {
+        Self {
+            source_modules: Vec::new(),
+            constructors: Self::PRELUDE
+                .iter()
+                .map(|(path, name)| ((*path).to_string(), (*name).to_string()))
+                .collect(),
+        }
+    }
+
+    /// Collect from a captured stream, before anything is normalized.
+    ///
+    /// Both entry points — `FlatBuilder::build` and `Registry::from_items` — build
+    /// this, so they cannot normalize differently. Gathering every module and alias
+    /// first is what makes reduction order-independent: a signature may name a type
+    /// whose alias is declared later, or in another source.
+    pub fn from_items(items: &[(syn::Item, SourceLocation)]) -> Self {
+        let mut out = Self::prelude();
+        for (_, loc) in items {
+            if let Some(crate_name) = &loc.crate_name {
+                let module = crate_name.replace('-', "_");
+                if !out.source_modules.contains(&module) {
+                    out.source_modules.push(module);
+                }
+            }
+        }
+        out
+    }
+
+    /// The bare name the language knows this constructor by, arguments ignored.
+    fn constructor_of(&self, path: &syn::Path) -> Option<&str> {
+        self.constructors
+            .get(&constructor_key(path))
+            .map(String::as_str)
+    }
+}
+
+impl Default for Normalization {
+    fn default() -> Self {
+        Self::prelude()
+    }
+}
+
+/// A path as a key: segments joined, arguments dropped, and a leading
+/// `core`/`alloc` read as `std` since they re-export the same items.
+///
+/// Only [`Normalization::constructors`] is keyed this way, and a constructor is
+/// exactly a path without arguments — `std::vec::Vec` matches every `Vec<T>`.
+fn constructor_key(path: &syn::Path) -> String {
+    let mut out = String::new();
+    for (i, seg) in path.segments.iter().enumerate() {
+        if i > 0 {
+            out.push_str("::");
+        }
+        let mut ident = seg.ident.to_string();
+        if i == 0 && (ident == "core" || ident == "alloc") {
+            ident = "std".to_string();
+        }
+        out.push_str(&ident);
+    }
+    out
+}
+
+pub fn normalize_type(ty: &mut syn::Type, against: &Normalization) {
     use syn::visit_mut::VisitMut;
     struct Normalizer<'a> {
-        modules: &'a [String],
+        against: &'a Normalization,
     }
     impl VisitMut for Normalizer<'_> {
         fn visit_type_mut(&mut self, ty: &mut syn::Type) {
@@ -61,16 +183,13 @@ pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
             }
             if let syn::Type::Path(tp) = ty {
                 if tp.qself.is_none() {
-                    reduce_flat_path(&mut tp.path, self.modules);
+                    reduce_flat_path(&mut tp.path, self.against);
                 }
             }
             syn::visit_mut::visit_type_mut(self, ty);
         }
     }
-    Normalizer {
-        modules: source_modules,
-    }
-    .visit_type_mut(ty);
+    Normalizer { against }.visit_type_mut(ty);
 }
 
 /// Apply [`normalize_type`] to every type position inside an item — fn
@@ -78,29 +197,41 @@ pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
 /// pass ([`crate::api::core::registry::Registry::from_items`]) that makes
 /// captured spellings canonical before any key is formed, so every
 /// downstream `TypeKey::from_type` sees the flat spelling.
-pub fn normalize_item_types(item: &mut syn::Item, source_modules: &[String]) {
+pub fn normalize_item_types(item: &mut syn::Item, against: &Normalization) {
     use syn::visit_mut::VisitMut;
+
     struct ItemNormalizer<'a> {
-        modules: &'a [String],
+        against: &'a Normalization,
     }
     impl VisitMut for ItemNormalizer<'_> {
         fn visit_type_mut(&mut self, ty: &mut syn::Type) {
             // Normalizes the whole subtree; no further descent needed.
-            normalize_type(ty, self.modules);
+            normalize_type(ty, self.against);
         }
     }
-    ItemNormalizer {
-        modules: source_modules,
-    }
-    .visit_item_mut(item);
+    ItemNormalizer { against }.visit_item_mut(item);
 }
 
 /// The path-reduction step of [`normalize_type`]: collapse a reducible
 /// multi-segment path to its final segment. See the rule list there.
-fn reduce_flat_path(path: &mut syn::Path, source_modules: &[String]) {
+fn reduce_flat_path(path: &mut syn::Path, against: &Normalization) {
     if path.segments.len() < 2 {
         return;
     }
+
+    // A prelude entry names a CONSTRUCTOR, so arguments are ignored when matching
+    // and preserved when rewriting: `std::vec::Vec<Foo>` is `Vec<Foo>`. A crate's
+    // own alias is NOT consulted — see rule 4.
+    if let Some(name) = against.constructor_of(path) {
+        let mut last = path.segments.last().expect("len checked").clone();
+        last.ident = syn::Ident::new(name, last.ident.span());
+        path.leading_colon = None;
+        path.segments = std::iter::once(last).collect();
+        return;
+    }
+
+    // Otherwise only a prefix into the flat namespace reduces, to the final
+    // segment: this crate's own path, or an ingested source's module.
     let head = path
         .segments
         .first()
@@ -109,26 +240,7 @@ fn reduce_flat_path(path: &mut syn::Path, source_modules: &[String]) {
         .to_string();
     let reduce = match head.as_str() {
         "crate" | "self" => true,
-        "std" | "core" | "alloc" => {
-            let tail: Vec<String> = path
-                .segments
-                .iter()
-                .skip(1)
-                .map(|s| s.ident.to_string())
-                .collect();
-            matches!(
-                tail.iter()
-                    .map(String::as_str)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-                ["vec", "Vec"]
-                    | ["option", "Option"]
-                    | ["result", "Result"]
-                    | ["string", "String"]
-                    | ["boxed", "Box"]
-            )
-        }
-        other => source_modules.iter().any(|m| m == other),
+        other => against.source_modules.iter().any(|m| m == other),
     };
     if reduce {
         let last = path.segments.last().expect("len checked").clone();
