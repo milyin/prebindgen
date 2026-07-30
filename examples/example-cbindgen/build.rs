@@ -6,11 +6,16 @@
 //! that file to produce a C header.
 //!
 //! Both generated artifacts are also published into this crate's tree so they can
-//! be committed and inspected, with a **per-target-architecture** file name —
-//! because `#[prebindgen]` `cfg` handling makes the output differ per target
+//! be committed and inspected, under a file name naming **every input that
+//! changes the output** — the target architecture and the enabled features,
+//! because `#[prebindgen]` `cfg` handling makes the generated code differ by both
 //! (see `Foo` / `InsideFoo` in `example-flat`):
-//!   - `generated/example_flat_<arch>.rs` — the Rust FFI layer (`include!`d per-target by `lib.rs`)
-//!   - `include/example_flat_<arch>.h`    — the C header
+//!   - `generated/example_flat_<arch>[_<feature>…].rs` — the Rust FFI layer (`include!`d by `lib.rs`)
+//!   - `include/example_flat_<arch>[_<feature>…].h`    — the C header
+//!
+//! One name per variant is what keeps them independent: a `--all-features` build
+//! writes `…_internal_unstable.rs` and leaves the default-feature file alone,
+//! instead of overwriting it with a variant that then gets committed by accident.
 //!
 //! Build for several targets (e.g. via the bundled `CMakeLists.txt`, or
 //! `cargo build -p example-cbindgen --target x86_64-... ` then `--target aarch64-...`)
@@ -26,6 +31,30 @@ use syn::parse_quote as pq;
 /// file.
 fn target_arch() -> String {
     std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "unknown".to_string())
+}
+
+/// The features of `example-flat` this build enables, in declaration order, as a
+/// file-name suffix (`""`, `"_unstable"`, `"_internal_unstable"`, …).
+///
+/// The features gate `#[prebindgen]` items, so they change the generated output
+/// exactly the way the target arch does — and so they belong in the name for the
+/// same reason. Without this, `cargo test --all-features` (which CI runs) silently
+/// rewrites the default-feature artifact with the all-features one.
+fn feature_suffix() -> String {
+    let mut suffix = String::new();
+    for feature in ["internal", "unstable"] {
+        if std::env::var(format!("CARGO_FEATURE_{}", feature.to_uppercase())).is_ok() {
+            suffix.push('_');
+            suffix.push_str(feature);
+        }
+    }
+    suffix
+}
+
+/// The committed artifact's stem: every input that changes the output, and
+/// nothing else.
+fn variant() -> String {
+    format!("example_flat_{}{}", target_arch(), feature_suffix())
 }
 
 fn main() {
@@ -195,20 +224,28 @@ fn generate_ffi_bindings() -> PathBuf {
         .write_rust("example_flat.rs")
         .expect("write generated bindings");
 
-    // Publish the generated Rust into the crate tree under a per-target-arch name
-    // (committed artifact; `lib.rs` `include!`s the one matching its target).
-    // Write only on change so cargo doesn't rebuild-loop on the `include!`d file.
+    // Publish the generated Rust into the crate tree under its per-variant name
+    // (committed artifact). Write only on change so cargo doesn't rebuild-loop on
+    // the `include!`d file.
     let in_tree = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .join("generated")
-        .join(format!("example_flat_{}.rs", target_arch()));
+        .join(format!("{}.rs", variant()));
     write_if_changed(&in_tree, &std::fs::read_to_string(&out_file).unwrap());
 
+    // `lib.rs` includes this path rather than matching on `cfg`: the build script
+    // already knows which variant it wrote, and a `cfg` matrix in the source would
+    // have to be re-taught every arch × feature combination.
+    println!(
+        "cargo:rustc-env=EXAMPLE_FLAT_BINDINGS={}",
+        in_tree.display()
+    );
     println!("cargo:warning=Generated bindings at: {}", in_tree.display());
     in_tree
 }
 
 /// Generate the C header from the prebindgen-generated Rust file via cbindgen, and
-/// publish it to `include/example_flat_<arch>.h` (per-target, like the Rust file).
+/// publish it to `include/example_flat_<arch>[_<feature>…].h` (per-variant, like
+/// the Rust file).
 fn generate_c_headers(bindings_file: &Path) {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_dir = std::env::var("OUT_DIR").unwrap();
@@ -224,10 +261,10 @@ fn generate_c_headers(bindings_file: &Path) {
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
-            // Publish the header to the in-tree, committed `include/` dir, per-arch.
+            // Publish the header to the in-tree, committed `include/` dir, per-variant.
             let stable = PathBuf::from(&crate_dir)
                 .join("include")
-                .join(format!("example_flat_{}.h", target_arch()));
+                .join(format!("{}.h", variant()));
             write_if_changed(&stable, &std::fs::read_to_string(&header_path).unwrap());
             println!("cargo:warning=Generated C header at: {}", stable.display());
         }

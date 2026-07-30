@@ -39,16 +39,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* The committed header is per target architecture, like the Rust file `lib.rs`
- * `include!`s — `#[prebindgen]` cfg handling makes the generated surface differ
- * per target. */
+/* The committed header is per VARIANT — target architecture and feature set —
+ * like the Rust file `lib.rs` `include!`s, because `#[prebindgen]` cfg handling
+ * makes the generated surface differ by both. The default-feature name is derived
+ * here; a build that enables features passes `-DEXAMPLE_FLAT_HEADER=...` (see
+ * CMakeLists.txt), since only the builder knows which features it asked for. */
+#if !defined(EXAMPLE_FLAT_HEADER)
 #if defined(__x86_64__) || defined(_M_X64)
-#include "example_flat_x86_64.h"
+#define EXAMPLE_FLAT_HEADER "example_flat_x86_64.h"
 #elif defined(__aarch64__) || defined(_M_ARM64)
-#include "example_flat_aarch64.h"
+#define EXAMPLE_FLAT_HEADER "example_flat_aarch64.h"
 #else
 #error "no committed example_flat header for this target architecture"
 #endif
+#endif
+#include EXAMPLE_FLAT_HEADER
 
 static int failures = 0;
 

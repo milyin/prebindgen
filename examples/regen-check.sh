@@ -40,6 +40,13 @@ cargo build --release \
     -p perftest-c \
     -p example-cbindgen
 
+# example-cbindgen commits one artifact per VARIANT (arch × features), and the
+# feature set changes the generated surface as much as the arch does. The
+# default-feature build above covers one of them; this covers the other. Without
+# it the all-features artifacts would be committed but never checked.
+echo "== regenerating example-cbindgen (--all-features)"
+cargo build --release --all-features -p example-cbindgen
+
 echo "== diffing committed generated files"
 # `git status --porcelain` catches modified AND newly created files (a new
 # generated file never shows in `git diff`).
