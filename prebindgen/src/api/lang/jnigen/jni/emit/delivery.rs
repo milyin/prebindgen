@@ -565,9 +565,10 @@ impl Hoisted {
 }
 
 /// Fold `path` over `base` the way [`reach_leaf`] does, but yielding an
-/// `Option<…>` rather than a `JObject`: every optional step short-circuits to
-/// `None` instead of to a null object. `body` renders the innermost reached
-/// expression and must itself produce the `Some`.
+/// `Option<…>` rather than a `JObject`: the optional steps become a
+/// `map`/`and_then` chain, so an absent value short-circuits to `None` instead
+/// of to a null object. `body` renders the innermost reached expression as a
+/// BARE value — the chain's last link wraps it.
 ///
 /// This is how a CONDITIONAL value form is bound — the accessor runs only where
 /// the value it decomposes is actually present.
@@ -607,11 +608,18 @@ fn reach_optional(
                 depth + 1,
                 body,
             );
+            // `map` when this is the LAST optional step (the body yields a bare
+            // value) and `and_then` when another follows (the recursion yields
+            // an `Option` that must not nest). The equivalent `match` reads the
+            // same but generated code runs through the consumer's lints, where
+            // `clippy::manual_map` is a denial.
+            let combinator = if rest.iter().any(PathStep::is_optional) {
+                format_ident!("and_then")
+            } else {
+                format_ident!("map")
+            };
             quote! {
-                match #opt_e {
-                    ::core::option::Option::Some(#bind) => { #inner }
-                    ::core::option::Option::None => ::core::option::Option::None,
-                }
+                #opt_e.#combinator(|#bind| #inner)
             }
         }
     }
@@ -648,8 +656,7 @@ pub(crate) fn bind_hoists(
             // borrow, so what arrives is a reference either way.
             let owned = lead.last().is_some_and(PathStep::yields_owned);
             let expr = reach_optional(qualify, lead, value.clone(), by_ref, 0, &|reached| {
-                let call = compose_value_form_call(qualify, last, reached, owned, consuming);
-                quote!(::core::option::Option::Some(#call))
+                compose_value_form_call(qualify, last, reached, owned, consuming)
             });
             out.stmts.extend(quote! { let #local = #expr; });
             out.bound.push((h.prefix.clone(), local));

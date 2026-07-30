@@ -3111,22 +3111,10 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
                         String,
                     >>::from(format!("push local frame for {}: {}", "Fn(Ledger)", e)))?;
                 let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
-                    let __vf0 = match perftest_flat::ledger_filed(&__cb_arg0) {
-                        ::core::option::Option::Some(__hb0) => {
-                            ::core::option::Option::Some(
-                                perftest_flat::report_into_struct((__hb0).clone()),
-                            )
-                        }
-                        ::core::option::Option::None => ::core::option::Option::None,
-                    };
-                    let __vf1 = match perftest_flat::ledger_archived(&__cb_arg0) {
-                        ::core::option::Option::Some(__hb0) => {
-                            ::core::option::Option::Some(
-                                perftest_flat::report_into_struct(__hb0),
-                            )
-                        }
-                        ::core::option::Option::None => ::core::option::Option::None,
-                    };
+                    let __vf0 = perftest_flat::ledger_filed(&__cb_arg0)
+                        .map(|__hb0| perftest_flat::report_into_struct((__hb0).clone()));
+                    let __vf1 = perftest_flat::ledger_archived(&__cb_arg0)
+                        .map(|__hb0| perftest_flat::report_into_struct(__hb0));
                     let (
                         __cb0_obj0,
                         __cb0_obj1,
@@ -13113,20 +13101,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ledgerNew<'a>(
     const __CB_FQN: &str = "io/prebindgen/covertest/LedgerBuilderRaw";
     const __CB_DESCR: &str = "(Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Integer;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Double;Lio/prebindgen/covertest/model/Stamp;Ljava/lang/Long;Ljava/lang/Long;Ljava/lang/Integer;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::ledger_new(n);
-    let __vf0 = match perftest_flat::ledger_filed(&__out) {
-        ::core::option::Option::Some(__hb0) => {
-            ::core::option::Option::Some(
-                perftest_flat::report_into_struct((__hb0).clone()),
-            )
-        }
-        ::core::option::Option::None => ::core::option::Option::None,
-    };
-    let __vf1 = match perftest_flat::ledger_archived(&__out) {
-        ::core::option::Option::Some(__hb0) => {
-            ::core::option::Option::Some(perftest_flat::report_into_struct(__hb0))
-        }
-        ::core::option::Option::None => ::core::option::Option::None,
-    };
+    let __vf0 = perftest_flat::ledger_filed(&__out)
+        .map(|__hb0| perftest_flat::report_into_struct((__hb0).clone()));
+    let __vf1 = perftest_flat::ledger_archived(&__out)
+        .map(|__hb0| perftest_flat::report_into_struct(__hb0));
     let (
         __obj0,
         __obj1,
