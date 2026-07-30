@@ -84,6 +84,37 @@ impl TypeRef {
         }
     }
 
+    /// This type and every type reachable inside it, outermost first.
+    ///
+    /// The nested positions are real [`TypeRef`]s carrying their own spelling and
+    /// origin, so a consumer that indexes types finds `Foo` from `Vec<Foo>` with
+    /// the classification already made rather than a sub-path to re-read.
+    ///
+    /// A [`Named`](TypeKind::Named)'s generic arguments are **not** among them:
+    /// [`TypeId`] keeps a name and nothing else, so `MyBox<Foo>` reaches no `Foo`
+    /// here. The full spelling is in [`Self::origin`] for whoever needs it.
+    pub fn walk(&self) -> Vec<&TypeRef> {
+        let mut out = Vec::new();
+        self.collect_refs(&mut out);
+        out
+    }
+
+    fn collect_refs<'a>(&'a self, out: &mut Vec<&'a TypeRef>) {
+        out.push(self);
+        match &self.kind {
+            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
+                t.collect_refs(out)
+            }
+            TypeKind::Array { elem, .. } => elem.collect_refs(out),
+            TypeKind::Fallible { ok, err } => {
+                ok.collect_refs(out);
+                err.collect_refs(out);
+            }
+            TypeKind::Callback { args } => args.iter().for_each(|t| t.collect_refs(out)),
+            TypeKind::Named { .. } | TypeKind::Scalar(_) | TypeKind::Str | TypeKind::Unit => {}
+        }
+    }
+
     fn collect_extents<'a>(&'a self, out: &mut Vec<&'a ArrayExtent>) {
         match &self.kind {
             TypeKind::Array { elem, extent } => {

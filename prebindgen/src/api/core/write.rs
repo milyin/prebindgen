@@ -162,13 +162,13 @@ pub fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, sy
 }
 
 fn walk_resolved<M, F: FnMut(&TypeKey, &TypeEntry<M>)>(
-    table: &std::collections::HashMap<TypeKey, Option<TypeEntry<M>>>,
+    table: &std::collections::HashMap<TypeKey, crate::api::core::registry::TypeCell<M>>,
     mut f: F,
 ) {
     let mut keys: Vec<&TypeKey> = table.keys().collect();
     keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
     for key in keys {
-        if let Some(Some(entry)) = table.get(key) {
+        if let Some(entry) = table.get(key).and_then(|c| c.entry.as_ref()) {
             f(key, entry);
         }
     }

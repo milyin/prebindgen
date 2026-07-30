@@ -8,7 +8,7 @@ use crate::{
             niches::{NicheSlot, Niches},
             registry::{Registry, TypeEntry, TypeKey},
         },
-        test_util::unique_test_dir,
+        test_util::{cell, unique_test_dir},
     },
     SourceLocation,
 };
@@ -55,7 +55,6 @@ fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMe
         function: func,
         pre_stages: vec![],
         subs: vec![],
-        required: false,
         niches,
         metadata: KotlinMeta::default(),
     }
@@ -67,8 +66,9 @@ fn install_input(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
+    let key = TypeKey::parse(ty_str).expect("test type");
     reg.input_types
-        .insert(TypeKey::parse(ty_str).expect("test type"), Some(e));
+        .insert(key.clone(), cell(&key, true, Some(e)));
 }
 
 fn install_output(
@@ -77,6 +77,7 @@ fn install_output(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
+    let key = TypeKey::parse(ty_str).expect("test type");
     reg.output_types
-        .insert(TypeKey::parse(ty_str).expect("test type"), Some(e));
+        .insert(key.clone(), cell(&key, true, Some(e)));
 }

@@ -473,6 +473,24 @@ impl Flat {
         })
     }
 
+    /// Every type the API **mentions**, at every nesting depth — as distinct from
+    /// [`Self::types`], which is every type it **declares**.
+    ///
+    /// A parameter, a return, a field, a constant's type, and everything reachable
+    /// inside those. The same type mentioned in several places yields one
+    /// [`TypeRef`] per mention, each with its own spelling and origin; a consumer
+    /// that wants one per type indexes them and picks, and element order makes
+    /// that pick deterministic.
+    ///
+    /// This is how a later stage gets the frontend's reading of a type it holds
+    /// only as syntax, without lowering it a second time.
+    pub fn type_refs(&self) -> impl Iterator<Item = &TypeRef> {
+        self.elements
+            .iter()
+            .flat_map(element_type_refs)
+            .flat_map(TypeRef::walk)
+    }
+
     /// Every item the language could not express, with its diagnosis.
     ///
     /// Present in the model so a consumer can inspect what a source crate marked
@@ -588,11 +606,12 @@ fn resolve_references(elements: &mut [Element]) {
     }
 }
 
-/// The first type this element names that the flat API does not declare.
-fn first_unresolved(
-    element: &Element,
-    declared: &std::collections::HashSet<String>,
-) -> Option<String> {
+/// Every type slot this element writes, outermost only — a parameter, a return,
+/// a field, a constant's type.
+///
+/// The one place the slots are enumerated, so a new element shape is taught to
+/// every consumer at once instead of drifting between them.
+fn element_type_refs(element: &Element) -> Vec<&TypeRef> {
     let mut refs: Vec<&TypeRef> = Vec::new();
     match element {
         Element::Function(f) => {
@@ -606,11 +625,21 @@ fn first_unresolved(
                 .iter()
                 .flat_map(|a| a.fields.iter().map(|f| &f.ty)),
         ),
-        // An enum names nothing, an opaque hides what it names, and an
+        // An enum names nothing, an extern hides what it names, and an
         // unsupported item already has a diagnosis worth keeping.
         Element::Type(Type::Enum(_) | Type::Extern(_)) | Element::Unsupported(_) => {}
     }
-    refs.into_iter().find_map(|r| r.first_unresolved(declared))
+    refs
+}
+
+/// The first type this element names that the flat API does not declare.
+fn first_unresolved(
+    element: &Element,
+    declared: &std::collections::HashSet<String>,
+) -> Option<String> {
+    element_type_refs(element)
+        .into_iter()
+        .find_map(|r| r.first_unresolved(declared))
 }
 
 /// If `ty` is `impl Fn(T1, T2, ...) + Send + Sync + 'static`, return the `Fn`

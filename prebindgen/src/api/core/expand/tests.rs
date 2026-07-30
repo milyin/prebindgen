@@ -104,9 +104,7 @@ fn constructor_plan_and_fold() {
 
     // Leaf types registered as required inputs (so the resolver builds
     // their converters).
-    assert!(reg
-        .required_inputs_scan
-        .contains(&TypeKey::from_type(&plan.leaves[1].ty)));
+    assert!(reg.input_types[&TypeKey::from_type(&plan.leaves[1].ty)].root);
 
     let locals = vec![ident("sel"), ident("v0"), ident("vid")];
     let folded = emit_fold(plan, &locals, &src_qualify);
