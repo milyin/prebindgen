@@ -702,9 +702,13 @@ fn plan_leaf_param(
 ) -> Option<IfaceParam> {
     use crate::api::core::unfold::LeafSource;
     // The sum selector has no converter behind it — it is a plain `Int` the
-    // emitter assigns per `match` arm.
+    // emitter assigns per `match` arm. Nullable when the sum sits under a
+    // conditional value form: null is the absent case, which the tag's own
+    // variants cannot express.
     if leaf.source == LeafSource::SumTag {
-        return Some(IfaceParam::same(name, kt::KtType::int()));
+        let ty = kt::KtType::int();
+        let ty = if leaf.nullable { ty.nullable() } else { ty };
+        return Some(IfaceParam::same(name, ty));
     }
     // A group slot is INERT whenever another variant is live, and the encoder
     // fills an inert object slot with `JObject::null()`. A JVM null handed to a
@@ -1174,7 +1178,17 @@ pub(crate) fn callback_iface_spec(
                                 .strip_suffix(&format!("__{SUM_TAG_LEAF}"))
                                 .unwrap_or(&leaf_names[k])
                                 .to_string(),
-                            typed: Some(kt::KtType::cls(fqn.to_string())),
+                            // Nullable exactly when its selector is: a sum under
+                            // a conditional value form reconstructs to `null`
+                            // where the form was absent.
+                            typed: Some({
+                                let t = kt::KtType::cls(fqn.to_string());
+                                if leaf.nullable {
+                                    t.nullable()
+                                } else {
+                                    t
+                                }
+                            }),
                             reassemble: Some(reassemble),
                             imports,
                             leaf_count: seg - k,

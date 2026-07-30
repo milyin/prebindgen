@@ -894,6 +894,23 @@ impl FieldsDecl {
     /// rule applies here too: the decl states that field's entire leaf set.
     /// Use it where the field's type default is not what this boundary wants
     /// (a lone `.field_self()` keeps the raw handle instead of decomposing it).
+    ///
+    /// An override declaring **no** records states an empty leaf set: the field
+    /// **does not cross**. That is the one way to drop a field a value form
+    /// carries, and it follows from the complete-set rule rather than adding a
+    /// rule — a boundary that wants none of a field's leaves says so the same
+    /// way it says it wants some of them. (A *generator-level*
+    /// `expand_return!(T)` with no records is still an error: a type has to
+    /// cross somehow.) Use it for a field the binding has no surface for —
+    /// diagnostics a consumer never reads, a type whose accessors would drag in
+    /// a subtree nothing asks for:
+    ///
+    /// ```ignore
+    /// prebindgen::expand_return!(Sample).fields_self_into(
+    ///     prebindgen::fields!(sample_into_struct)
+    ///         .field("timestamp_stack", prebindgen::expand_return!(TimestampStack)),
+    /// );
+    /// ```
     pub fn field(mut self, field: impl AsRef<str>, decl: ExpandReturnDecl) -> Self {
         let field = field.as_ref().to_string();
         assert!(

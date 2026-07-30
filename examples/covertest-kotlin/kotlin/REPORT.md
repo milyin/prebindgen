@@ -75,6 +75,9 @@ Base package: `io.prebindgen.covertest`
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy>): HoldPolicy`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
 - `label_series_echo` — `fun labelSeriesEcho(labels: List<String>, onError: JniErrorHandler<List<String>>): List<String>`
+- `ledger_each` — `fun ledgerEach(n: Long, sink: LedgerCallback, onError: JniErrorHandler<Unit>)`
+- `ledger_new` — `fun <R> ledgerNew(n: Long, onError: JniErrorHandler<R>, build: LedgerBuilder<R>): R`
+  - shaped by: return `Ledger` decomposed → [ledgerFiled__summary__count, ledgerFiled__summary__total, ledgerFiled__taken, ledgerFiled__origin__secs, ledgerFiled__origin__nanos, ledgerFiled__outcome__tag, ledgerFiled__outcome__found_v0, ledgerFiled__outcome__failed_v0, ledgerFiled__label, ledgerArchived__summary__count, ledgerArchived__summary__total, ledgerArchived__taken, ledgerArchived__origin__secs, ledgerArchived__origin__nanos, ledgerArchived__outcome__tag, ledgerArchived__outcome__found_v0, ledgerArchived__outcome__failed_v0, ledgerArchived__label] (Callback delivery)
 - `lookup_each` — `fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: JniErrorHandler<Unit>)`
 - `lookup_of` — `fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>): Lookup`
   - shaped by: return `Lookup` decomposed → [tag, found_v0, failed_v0] (Callback delivery)
@@ -219,3 +222,7 @@ Base package: `io.prebindgen.covertest`
 - `convert!(Label)`: input `#[prebindgen]` fn `label_in`, output `#[prebindgen]` fn `label_out`
 - `convert!(Millis)`: input `#[prebindgen]` fn `millis_from_long`, output `#[prebindgen]` fn `millis_value`
 - `convert!(Percent)`: input `TryInto` ⇄ `i32`, output `#[prebindgen]` fn `percent_out`
+
+## rust-side-only types
+
+- `Ledger` (never materializes in Kotlin)

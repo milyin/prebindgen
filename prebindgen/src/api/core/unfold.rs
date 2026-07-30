@@ -1387,19 +1387,28 @@ fn flatten<M>(
                     });
                 }
                 let mut root_path = path_prefix.to_vec();
-                root_path.push(PathStep::call(func.clone(), false));
-                // A hoist below an optional step cannot be emitted as an
-                // unconditional local: composing the path directly would pass
-                // `&Option<T>` to the child value-form accessor. The current
-                // flat leaf emitter has no conditional-hoist representation,
-                // so reject the shape instead of generating ill-typed Rust.
+                root_path.push(PathStep::call(func.clone(), false, false));
+                // A hoist below an optional step is CONDITIONAL: it binds an
+                // `Option<TStruct>` local (built only in the `Some` arm) and
+                // every leaf under it is null when the value is absent — which
+                // is the nullability `flatten` already propagates down here.
+                // What it cannot do is nest: composing a second hoist off a
+                // conditional one would have to reach through the outer
+                // `Option`, and the binder has no arm to put that in. One level
+                // is the shape real bindings need (`Option<&Sample>` delivering
+                // a sample's value form), so implement that and name the rest.
+                //
                 // A top-level `Option<T>` is represented by
                 // `UnfoldShape::Optional`, not by a path step, and is unaffected.
-                if root_path.iter().any(PathStep::is_optional) {
+                if root_path.iter().any(PathStep::is_optional)
+                    && hoists.iter().any(|h| {
+                        h.prefix.len() < root_path.len() && root_path.starts_with(&h.prefix)
+                    })
+                {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
-                        reason: "a nested value form reached through `Option` — conditional \
-                                 value-form hoisting is not implemented",
+                        reason: "a value form nested under another one that is reached through \
+                                 `Option` — conditional hoists do not nest",
                     });
                 }
                 // A consuming value form DESTROYS the value into its parts, so
@@ -1572,7 +1581,11 @@ fn flatten<M>(
                     visited.insert(child_key.clone());
                     let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
-                    child_path.push(PathStep::call(func.clone(), opt));
+                    child_path.push(PathStep::call(
+                        func.clone(),
+                        opt,
+                        !matches!(core, syn::Type::Reference(_)),
+                    ));
                     flatten(
                         acc,
                         registry,
@@ -1617,7 +1630,11 @@ fn flatten<M>(
                         (ret, nullable, false)
                     };
                     let mut path = path_prefix.to_vec();
-                    path.push(PathStep::call(func.clone(), opt));
+                    path.push(PathStep::call(
+                        func.clone(),
+                        opt,
+                        !matches!(core, syn::Type::Reference(_)),
+                    ));
                     leaves.push(UnfoldLeaf {
                         name: seg_name(name).join("__"),
                         path,

@@ -290,6 +290,28 @@ fn a_per_field_override_replaces_the_type_default() {
     );
 }
 
+/// The complete-set rule taken to its limit: an override with NO records is an
+/// empty leaf set, so the field does not cross at all. That is how a binding
+/// drops a field its source's value form carries but its surface has no use
+/// for — without it, adopting a value form is all-or-nothing.
+#[test]
+fn an_empty_per_field_override_drops_the_field() {
+    let (_, kotlin) = value_form_gen(
+        "jnigen_vf_drop",
+        crate::expand_return!(ZSample).fields(
+            crate::fields!(z_sample_to_struct).field("key_expr", crate::expand_return!(ZKeyExpr)),
+        ),
+    );
+    assert!(
+        !kotlin.contains("keyExpr"),
+        "a field whose override states no leaves contributes none:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("express: Boolean"),
+        "and its siblings are untouched:\n{kotlin}"
+    );
+}
+
 /// A rename keys on the Rust field ident and reaches an inlined nested field
 /// through its dotted path.
 #[test]
@@ -1362,10 +1384,12 @@ fn nested_review_jni(outer: crate::lang::ExpandReturnDecl) -> JniGen {
         .expand(outer)
 }
 
-/// A nested value form below an `Option` cannot be emitted as an
-/// unconditional hoist: its accessor takes `&Inner`, not `&Option<Inner>`.
-/// Reject it during planning until conditional hoists can share one `Some`
-/// scope across every descendant leaf.
+/// A value form below an `Option` is a CONDITIONAL hoist — supported at one
+/// level (see [`a_value_form_under_an_optional_accessor_is_hoisted_conditionally`]),
+/// but it cannot NEST: the inner form would have to be bound inside the outer
+/// one's `Some` arm, and the binder has no arm to put a second local in.
+/// Reject it during planning rather than emit a hoist that reaches through an
+/// `Option` it cannot unwrap.
 #[test]
 fn an_optional_nested_value_form_is_rejected_before_emission() {
     let registry = Registry::<KotlinMeta>::from_items(nested_review_items()).expect("index items");
@@ -1380,6 +1404,521 @@ fn an_optional_nested_value_form_is_rejected_before_emission() {
     assert!(
         msg.contains("z_review_inner_to_struct") && msg.contains("Option"),
         "the error names the unsupported conditional hoist: {msg}"
+    );
+}
+
+/// A value form reached through an `Option`-returning accessor — the shape a
+/// reply's optional sample has. The form runs only where the value is present,
+/// so it binds an `Option<TStruct>` local; every leaf under it then lives in
+/// ONE `match` on that local, whose absent arm fills each slot with the same
+/// wire default an inert sum group carries. Without this the whole containing
+/// decomposition was refused.
+#[test]
+fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_get_carrier(h: &ZHolder) -> Option<&ZCarrier> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_get_carrier)));
+    let dir = unique_test_dir("jnigen_vf_conditional");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("a conditional hoist resolves");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert_eq!(
+        rust.matches("zc_into_struct").count(),
+        1,
+        "the value form runs ONCE, not once per leaf:\n{rust}"
+    );
+    assert!(
+        rust.contains("zh_get_carrier(&__cb_arg0)") && rust.contains("Some(__hb0)"),
+        "the hoist is built inside the `Some` arm of the optional step:\n{rust}"
+    );
+    assert!(
+        rust.contains("zc_into_struct((__hb0).clone())"),
+        "what the arm binds is a borrow, so a consuming accessor gets a clone \
+         of it — the same trade a borrowed root makes:\n{rust}"
+    );
+    assert!(
+        rust.contains("match __vf0 {") && rust.contains("Some(__u0)"),
+        "and the leaves share ONE match on the local, taken by value so the \
+         struct's fields still move out:\n{rust}"
+    );
+    assert!(
+        rust.contains("__u0.label") && !rust.contains("__u0.label.clone()"),
+        "each leaf reads its own field off the arm binding, moved not cloned:\n{rust}"
+    );
+    assert!(
+        rust.contains("JObject::null()"),
+        "the absent arm fills every slot with the wire default:\n{rust}"
+    );
+}
+
+/// The optional step may hand over an OWNED payload (`Option<T>`) as readily
+/// as a borrowed one (`Option<&T>`), and the two need opposite treatment at the
+/// value-form call: an owned payload is borrowed for a `&Self` accessor and
+/// MOVED into a by-value one, where a borrowed payload is passed straight
+/// through and cloned. Getting this from the accessor's own signature is what
+/// keeps a by-value accessor from demanding a `Clone` its type need not have.
+fn conditional_owned_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> String {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_take_carrier(h: &ZHolder) -> Option<ZCarrier> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(decl)
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_take_carrier)));
+    let dir = unique_test_dir(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust")
+}
+
+/// An owned payload may have ORDINARY steps between it and the value form, and
+/// those compose onto whatever the arm bound. Marking every `Some` binding as
+/// already-borrowed handed the bare `T` to the next accessor, which is typed
+/// for `&T` — recording ownership only at the value form cannot repair a call
+/// that sits before it.
+#[test]
+fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_child(h: &ZHolder) -> Option<ZChild> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zchild_carrier(c: &ZChild) -> &ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZChild))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_to_struct)))
+        .expand(crate::expand_return!(ZChild).field(crate::fun!(zchild_carrier)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_child)));
+    let dir = unique_test_dir("jnigen_vf_cond_owned_chain");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zchild_carrier(&__hb0)"),
+        "the step after an owned payload BORROWS it — passing the bare value \
+         would hand `T` to an accessor typed for `&T`:\n{rust}"
+    );
+}
+
+/// Sibling hoists under ONE consuming parent: the first moves a field out of
+/// it, so the second may not borrow the parent as a whole. Its leading field
+/// run has to be projected directly (`&__vf0.wrapper`) — a disjoint borrow that
+/// survives the move — rather than reached through the parent
+/// (`&(&__vf0).wrapper`), which is a borrow of a partially moved value.
+#[test]
+fn a_rebased_hoist_projects_its_leading_fields_past_a_sibling_move() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOuterStruct {
+                    pub direct: ZCarrier,
+                    pub wrapper: ZWrapper,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zo_into_struct(o: ZOuter) -> ZOuterStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zw_carrier(w: &ZWrapper) -> ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zo_sub(cb: impl Fn(ZOuter) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZWrapper))
+                .class(crate::ptr_class!(ZOuter))
+                .fun(crate::fun!(zo_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZWrapper).field(crate::fun!(zw_carrier)))
+        .expand(crate::expand_return!(ZOuter).fields_self_into(crate::fields!(zo_into_struct)));
+    let dir = unique_test_dir("jnigen_vf_sibling_move");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zc_into_struct(__vf0.direct)"),
+        "the first sibling still MOVES its field out of the parent:\n{rust}"
+    );
+    assert!(
+        rust.contains("zw_carrier(&__vf0.wrapper)"),
+        "and the second projects its own field directly — a disjoint borrow \
+         that survives that move:\n{rust}"
+    );
+    assert!(
+        !rust.contains("&(&__vf0)"),
+        "borrowing the partially moved parent as a whole is what E0382 rejects:\n{rust}"
+    );
+}
+
+/// A consuming value form reached through ORDINARY accessors: the chain in
+/// front of it folds by the borrowing rule, and the form itself still takes its
+/// receiver by value. Both boundaries are in one expression, and neither may be
+/// decided by the other — `zh_carrier` wants `&ZHolder`, `zc_into_struct` wants
+/// the `ZCarrier` it returns, moved.
+#[test]
+fn a_consuming_value_form_keeps_its_by_value_boundary_behind_accessors() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_carrier(h: &ZHolder) -> ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_carrier)));
+    let dir = unique_test_dir("jnigen_vf_consume_behind_acc");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zc_into_struct(myflat::zh_carrier(&__cb_arg0))"),
+        "the accessor in front borrows its receiver, and its owned result MOVES \
+         into the by-value value form — neither boundary decides the other:\n{rust}"
+    );
+}
+
+/// Ownership has to survive EVERY call on the chain, not just the optional
+/// binding and the value form. An ordinary accessor returning an owned value
+/// leaves that value in hand, and the next accessor takes its receiver by
+/// reference — so the fold has to borrow between them wherever it happens.
+#[test]
+fn an_owned_intermediate_result_is_borrowed_for_the_next_step() {
+    let loc = myflat_loc();
+    let mut items = consuming_items();
+    items.extend([
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_child(h: &ZHolder) -> Option<ZChild> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zchild_middle(c: &ZChild) -> ZMiddle {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zmiddle_carrier(m: &ZMiddle) -> &ZCarrier {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ]);
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZMiddle))
+                .class(crate::ptr_class!(ZChild))
+                .class(crate::ptr_class!(ZHolder))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields(crate::fields!(zc_to_struct)))
+        .expand(crate::expand_return!(ZMiddle).field(crate::fun!(zmiddle_carrier)))
+        .expand(crate::expand_return!(ZChild).field(crate::fun!(zchild_middle)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_child)));
+    let dir = unique_test_dir("jnigen_vf_cond_owned_middle");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    assert!(
+        rust.contains("zmiddle_carrier(&myflat::zchild_middle(&__hb0))"),
+        "an owned INTERMEDIATE result is borrowed for the call that follows \
+         it, exactly as the optional payload is:\n{rust}"
+    );
+}
+
+#[test]
+fn an_owned_optional_payload_is_borrowed_for_a_borrowing_value_form() {
+    let rust = conditional_owned_gen(
+        "jnigen_vf_cond_owned_borrow",
+        crate::expand_return!(ZCarrier).fields(crate::fields!(zc_to_struct)),
+    );
+    assert!(
+        rust.contains("zc_to_struct(&__hb0)"),
+        "an owned `Option<T>` payload is BORROWED for a `&Self` accessor — \
+         passing it through would supply `T` where `&T` is required:\n{rust}"
+    );
+}
+
+#[test]
+fn an_owned_optional_payload_is_moved_into_a_consuming_value_form() {
+    let rust = conditional_owned_gen(
+        "jnigen_vf_cond_owned_consume",
+        crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)),
+    );
+    assert!(
+        rust.contains("zc_into_struct(__hb0)"),
+        "an owned payload MOVES into a by-value accessor:\n{rust}"
+    );
+    assert!(
+        !rust.contains("zc_into_struct((__hb0).clone())"),
+        "cloning it would demand a `Clone` the type need not have, on a value \
+         that was already ours:\n{rust}"
+    );
+}
+
+/// A conditional value form may carry a SUM field, and a sum's segment is
+/// emitted as one `match` of its own rather than as per-leaf statements. That
+/// segment belongs INSIDE the conditional arm like every other leaf under the
+/// form: emitted before it, it would reach a binding that does not exist yet
+/// (`cannot find value __u0 in this scope`), and the sum's leaves — which are
+/// held out of the per-leaf ordering — would never be routed into the arm at
+/// all.
+#[test]
+fn a_sum_field_of_a_conditional_value_form_stays_inside_the_arm() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum ZOutcome {
+                    Empty,
+                    Failed(String),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZCarrierStruct {
+                    pub outcome: ZOutcome,
+                    pub count: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zc_into_struct(c: ZCarrier) -> ZCarrierStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_get_carrier(h: &ZHolder) -> Option<&ZCarrier> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn zh_sub(cb: impl Fn(ZHolder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZCarrier))
+                .class(crate::ptr_class!(ZHolder))
+                .class(crate::sealed_class!(ZOutcome))
+                .fun(crate::fun!(zh_sub)),
+        )
+        .expand(crate::expand_return!(ZCarrier).fields_self_into(crate::fields!(zc_into_struct)))
+        .expand(crate::expand_return!(ZHolder).field(crate::fun!(zh_get_carrier)));
+    let dir = unique_test_dir("jnigen_vf_conditional_sum");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    let arm = rust
+        .split_once("Some(__u0)")
+        .expect("the conditional arm is emitted")
+        .1;
+    assert!(
+        arm.contains("__u0.outcome"),
+        "the sum's `match` is emitted INSIDE the arm that binds `__u0`, after \
+         it exists:\n{rust}"
+    );
+    assert!(
+        !rust
+            .split_once("Some(__u0)")
+            .expect("the conditional arm is emitted")
+            .0
+            .contains("__u0."),
+        "and nothing reaches the binding before the arm introduces it:\n{rust}"
+    );
+    assert!(
+        arm.contains("ZOutcome::Failed"),
+        "the variant arms are the sum's own, unchanged by being nested:\n{rust}"
+    );
+    assert!(
+        rust.contains("__u0.count"),
+        "the ordinary sibling leaf still rides the same arm:\n{rust}"
     );
 }
 
@@ -1553,7 +2092,10 @@ fn a_borrowed_plan_clones_before_consuming() {
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     assert!(
-        rust.contains("zc_into_struct(__inner.clone())"),
+        // Parenthesized because the clone applies to whatever the fold holds,
+        // which is not always a bare name — `&__out.clone()` would parse as
+        // `&(__out.clone())` and clone the wrong thing.
+        rust.contains("zc_into_struct((__inner).clone())"),
         "a borrowed plan clones the value, then consumes the clone:\n{rust}"
     );
 }

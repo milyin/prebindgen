@@ -79,15 +79,41 @@ pub struct DeconSpec {
 pub enum PathStep {
     /// Call a `#[prebindgen]` accessor on the value reached so far:
     /// `source_module::f(&value)`.
-    Call { ident: syn::Ident, optional: bool },
+    Call {
+        ident: syn::Ident,
+        optional: bool,
+        /// Whether the value this call yields (its return with any `Option`
+        /// peeled) is **owned** rather than a borrow — `f(..) -> T` / `-> Option<T>`
+        /// against `-> &T` / `-> Option<&T>`.
+        ///
+        /// Only an OPTIONAL step's payload can reach an emitter as a bare
+        /// binding, so this is only ever consulted there: what a `Some` arm
+        /// binds is the accessor's own value, and everything downstream of it —
+        /// the next step's receiver, the value form's argument — needs to know
+        /// whether it may be moved or has to be borrowed. Recorded here, at the
+        /// one place the signature is in hand, because deriving it later from
+        /// the path alone is not possible.
+        owned: bool,
+    },
     /// Read a struct field of the value reached so far: `value.f`.
     Field { ident: syn::Ident, optional: bool },
 }
 
 impl PathStep {
-    /// An accessor call step.
-    pub fn call(ident: syn::Ident, optional: bool) -> Self {
-        Self::Call { ident, optional }
+    /// An accessor call step. `owned` says whether its (`Option`-peeled) return
+    /// is an owned value rather than a borrow — see [`Self::Call::owned`].
+    pub fn call(ident: syn::Ident, optional: bool, owned: bool) -> Self {
+        Self::Call {
+            ident,
+            optional,
+            owned,
+        }
+    }
+
+    /// Whether the value this step yields is owned. A field read composes as
+    /// `&(e).f`, so it is a borrow by construction.
+    pub fn yields_owned(&self) -> bool {
+        matches!(self, Self::Call { owned: true, .. })
     }
 
     /// A struct-field read step.

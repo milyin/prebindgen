@@ -87,6 +87,56 @@ pub(crate) fn synth_sum_leaves(
     leaves
 }
 
+/// The wire slot one leaf occupies when its value is only computed in SOME arm
+/// of a `match`: a primitive-wire leaf occupies a typed `jvalue` (its raw
+/// primitive rides the typed `run`), everything else a `JObject`. `default` is
+/// what an arm that does not compute the leaf assigns instead.
+///
+/// Shared by the two conditional shapes — a decomposed sum's inert groups
+/// ([`encode_sum_group`]) and the absent arm of a conditional value form
+/// ([`encode_plan_leaves`](super::encode_plan_leaves)) — so "what does an
+/// unfilled slot carry" has one answer. Derived from the same
+/// [`leaf_is_prim`] the argument expressions and the interface descriptor use.
+pub(crate) struct Slot {
+    pub(crate) prim: bool,
+    pub(crate) ty: TokenStream,
+    pub(crate) default: TokenStream,
+}
+
+pub(crate) fn leaf_slot(
+    registry: &Registry<KotlinMeta>,
+    leaf: &crate::api::core::unfold::UnfoldLeaf,
+) -> Slot {
+    use crate::api::core::unfold::LeafSource;
+    if !leaf_is_prim(registry, leaf) {
+        return Slot {
+            prim: false,
+            ty: quote!(jni::objects::JObject),
+            default: quote!(jni::objects::JObject::null()),
+        };
+    }
+    // The tag is synthesized, so it has no converter to read a wire from — it
+    // is a `jint` by definition.
+    let (sig, letter) = if leaf.source == LeafSource::SumTag {
+        ("I", format_ident!("i"))
+    } else {
+        let wire = registry
+            .output_entry(&leaf.out_ty)
+            .expect("leaf_is_prim implies a resolved output entry")
+            .destination
+            .clone();
+        let (sig, letter, _) =
+            jni_field_access(&wire).expect("leaf_is_prim guarantees a primitive wire");
+        (sig, letter)
+    };
+    let zero = primitive_default_for_descriptor(sig);
+    Slot {
+        prim: true,
+        ty: quote!(jni::sys::jvalue),
+        default: quote!(jni::sys::jvalue { #letter: #zero }),
+    }
+}
+
 /// True when `plan` decomposes a sum — it carries the synthesized selector.
 /// The one place that question is asked, so every consumer agrees on it.
 pub(crate) fn is_sum_leaves(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> bool {
@@ -136,47 +186,7 @@ pub(crate) fn encode_sum_group(
     let module = ext.fn_module(registry, &ident);
     let source: syn::Path = syn::parse_quote!(#module::#ident);
 
-    // Per-leaf slot shape: a primitive-wire leaf occupies a typed `jvalue`
-    // (its raw primitive rides the typed `run`), everything else a `JObject`.
-    // Derived from the SAME `leaf_is_prim` the argument expressions below and
-    // the interface descriptor use, so the three cannot disagree.
-    struct Slot {
-        prim: bool,
-        ty: TokenStream,
-        default: TokenStream,
-    }
-    let slots: Vec<Slot> = leaves
-        .iter()
-        .map(|leaf| {
-            if !leaf_is_prim(registry, leaf) {
-                return Slot {
-                    prim: false,
-                    ty: quote!(jni::objects::JObject),
-                    default: quote!(jni::objects::JObject::null()),
-                };
-            }
-            // The tag is synthesized, so it has no converter to read a wire
-            // from — it is a `jint` by definition.
-            let (sig, letter) = if leaf.source == LeafSource::SumTag {
-                ("I", format_ident!("i"))
-            } else {
-                let wire = registry
-                    .output_entry(&leaf.out_ty)
-                    .expect("leaf_is_prim implies a resolved output entry")
-                    .destination
-                    .clone();
-                let (sig, letter, _) =
-                    jni_field_access(&wire).expect("leaf_is_prim guarantees a primitive wire");
-                (sig, letter)
-            };
-            let zero = primitive_default_for_descriptor(sig);
-            Slot {
-                prim: true,
-                ty: quote!(jni::sys::jvalue),
-                default: quote!(jni::sys::jvalue { #letter: #zero }),
-            }
-        })
-        .collect();
+    let slots: Vec<Slot> = leaves.iter().map(|l| leaf_slot(registry, l)).collect();
 
     let arg_exprs: Vec<TokenStream> = leaves
         .iter()
@@ -272,10 +282,26 @@ pub(crate) fn encode_sum_group(
                 })
                 .collect();
             let tag_lit = proc_macro2::Literal::i32_unsuffixed(variant.tag);
+            // A nullable selector rides an OBJECT slot (its absent case is JVM
+            // null, which a raw `jint` has no room for), so the live tag boxes
+            // like any other nullable primitive leaf.
+            let set_tag = if slots[tag_idx].prim {
+                quote! { #tag_id = jni::sys::jvalue { i: #tag_lit }; }
+            } else {
+                let box_fail = fail(quote!(__e));
+                quote! {
+                    #tag_id = match ::prebindgen::lang::box_jint(&mut env, #tag_lit) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            #box_fail
+                        }
+                    };
+                }
+            };
             quote! {
                 #pattern => {
                     #live
-                    #tag_id = jni::sys::jvalue { i: #tag_lit };
+                    #set_tag
                     #inert
                 }
             }
