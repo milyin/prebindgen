@@ -4,7 +4,7 @@ use super::*;
 /// remainder is empty. No widening to JObject.
 #[test]
 fn option_carves_single_niche() {
-    let mut reg = Registry::default();
+    let mut reg = Registry::empty();
     install_input(
         &mut reg,
         "TestType",
@@ -31,7 +31,7 @@ fn option_carves_single_niche() {
 /// wire. The third layer hits empty niches and falls back to box.
 #[test]
 fn option_cascades_through_multi_niche() {
-    let mut reg = Registry::default();
+    let mut reg = Registry::empty();
 
     // TestType: jint with two niches (MIN, MAX).
     install_input(
@@ -107,7 +107,7 @@ fn option_cascades_through_multi_niche() {
 /// `None` arm of the match, and the remainder is re-exported.
 #[test]
 fn option_output_cascades_through_multi_niche() {
-    let mut reg = Registry::default();
+    let mut reg = Registry::empty();
     install_output(
         &mut reg,
         "TestType",
@@ -165,7 +165,7 @@ fn option_output_cascades_through_multi_niche() {
 /// decoder stays on `JObject` (no boxing).
 #[test]
 fn option_over_jobject_uses_default_null_niche() {
-    let mut reg = Registry::default();
+    let mut reg = Registry::empty();
     install_input(
         &mut reg,
         "MyStruct",
@@ -191,7 +191,7 @@ fn option_over_jobject_uses_default_null_niche() {
 /// JNI primitives.
 #[test]
 fn option_fails_when_no_niche_and_non_primitive_wire() {
-    let mut reg = Registry::default();
+    let mut reg = Registry::empty();
     install_input(
         &mut reg,
         "MyStruct",
@@ -211,7 +211,7 @@ fn option_fails_when_no_niche_and_non_primitive_wire() {
 /// to widen.
 #[test]
 fn option_box_fallback_exposes_no_niches() {
-    let mut reg = Registry::default();
+    let mut reg = Registry::empty();
     install_input(
         &mut reg,
         "i64",

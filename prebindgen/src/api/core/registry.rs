@@ -316,8 +316,15 @@ pub struct Registry<M = ()> {
         HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec>,
 }
 
-impl<M> Default for Registry<M> {
-    fn default() -> Self {
+impl<M> Registry<M> {
+    /// An empty registry: no model, no items, no types.
+    ///
+    /// **Not public.** A `Registry` is a projection of a [`Flat`], and one built
+    /// this way projects nothing — [`Self::flat`] would hand a later stage an
+    /// empty model that claims to be this registry's source. Outside this crate
+    /// the entry points are [`Self::from_items`], [`Self::from_flat`] and
+    /// [`Self::builder`], each of which has a model behind it.
+    pub(crate) fn empty() -> Self {
         Self {
             flat: crate::api::core::flat::Flat::default(),
             functions: HashMap::new(),
@@ -455,15 +462,25 @@ impl fmt::Display for ScanError {
                 write!(f, "type `{}` cannot be both declared and ignored", key)
             }
             ScanError::NotExpressible { entries } => {
-                writeln!(
+                write!(
                     f,
                     "{} `#[prebindgen]` item(s) the flat language cannot express:",
                     entries.len()
                 )?;
                 for e in entries {
+                    // The crate, because a captured path is crate-relative: with
+                    // several sources, two offenders both read `src/lib.rs:..`
+                    // and the location alone says nothing about which one to fix.
+                    // Same reason the duplicate-name diagnostic carries it.
+                    let in_crate = match &e.location.crate_name {
+                        Some(c) => format!(" in crate `{c}`"),
+                        None => String::new(),
+                    };
                     match &e.name {
-                        Some(name) => writeln!(f, "  {}: {name} {}", e.location, e.reason)?,
-                        None => writeln!(f, "  {}: {}", e.location, e.reason)?,
+                        Some(name) => {
+                            write!(f, "\n  {}{in_crate}: {name} {}", e.location, e.reason)?
+                        }
+                        None => write!(f, "\n  {}{in_crate}: {}", e.location, e.reason)?,
                     }
                 }
                 Ok(())
@@ -795,7 +812,7 @@ impl<M> Registry<M> {
             return Err(ScanError::NotExpressible { entries });
         }
 
-        let mut registry = Registry::default();
+        let mut registry = Registry::empty();
         // First-seen order, which is what makes the first entry the default
         // module. Derived from the elements rather than stored twice.
         for element in flat.elements() {
@@ -1281,8 +1298,10 @@ impl<M> Registry<M> {
         // wrappers; propagation through `subs` then marks transitive deps
         // (e.g. &Foo's `&_` converter returns subs=[Foo], so Foo becomes
         // required).
-        // No receiver or non-ident pattern can reach here: the frontend refuses
-        // such an item, and `from_flat` fails before indexing it.
+        // No receiver or non-ident pattern can reach here: a captured item was
+        // refused by the frontend and `from_flat` failed before indexing it, and
+        // a binding-local fn was checked against the same grammar
+        // (`Flat::check_signature`) when `resolve` synthesized it.
         for input in &f.sig.inputs {
             match input {
                 syn::FnArg::Receiver(_) => continue,
@@ -1350,9 +1369,10 @@ impl<M> Registry<M> {
         loc: &SourceLocation,
         visited: &mut HashSet<TypeKey>,
     ) -> Result<(), ScanError> {
-        // A disallowed `impl Trait` cannot reach here: the frontend refuses the
-        // item, naming the parameter it sits on, and `from_flat` fails before
-        // indexing it.
+        // A disallowed `impl Trait` cannot reach here: every fn whose signature
+        // reaches this point passed the frontend's grammar — captured items at
+        // ingestion, binding-local ones at synthesis — and it names the
+        // parameter the bad type sits on.
 
         let key = TypeKey::from_type(ty);
         if !visited.insert(key.clone()) {
@@ -1453,6 +1473,18 @@ impl<M> Registry<M> {
         // stage treats them exactly like `#[prebindgen]` fns.
         for (item_fn, origin) in adapter.local_functions() {
             let ident = item_fn.sig.ident.clone();
+            // The one input that does not come through `Flat`: a `sig!(..)` is
+            // written by hand in a build script and inserted straight into the
+            // maps, so the grammar has to be checked here or nowhere. Silently
+            // dropping a `self` receiver or a pattern parameter would surface as
+            // an arity mismatch out of rustc on generated code, which is the
+            // wrong end of the pipeline to learn about a build.rs typo.
+            if let Err(error) = self.flat.check_signature(&item_fn) {
+                return Err(ScanError::AdapterInvariant {
+                    message: format!("binding-local fn `{ident}`: {error}"),
+                }
+                .into());
+            }
             if self.functions.contains_key(&ident) {
                 return Err(ScanError::AdapterInvariant {
                     message: format!(

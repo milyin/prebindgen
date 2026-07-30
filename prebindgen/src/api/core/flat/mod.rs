@@ -96,14 +96,23 @@
 //! [`TypeKind`] is a form the language does not accept, so there is no second
 //! acceptance list to drift from it.
 //!
-//! But an item the language cannot express is not automatically a build failure.
-//! A source crate may mark items no binding uses, and those have never been
-//! required to be expressible — the pipeline scans a signature only once an
-//! adapter *declares* it. So parsing diagnoses per item and defers the raising:
-//! such an item becomes [`Element::Unsupported`], carrying the diagnosis, inert
-//! until something declares it. Only whole-stream rules — a duplicate name in
-//! the flat namespace — are [`ParseError`]s, because no declaration can make
-//! two items with one name unambiguous.
+//! **Parsing diagnoses; ingestion raises.** Those are two different points, and
+//! the split is what lets one model serve both.
+//!
+//! Parsing never fails on a single item: an item the language cannot express
+//! becomes [`Element::Unsupported`] carrying its diagnosis, and
+//! [`FlatBuilder::build`] returns the model with it in place. Only whole-stream
+//! rules — a duplicate name in the flat namespace — are [`ParseError`]s, because
+//! no declaration can make two items with one name unambiguous. So a consumer
+//! that wants to *inspect* what a source crate marked, refusals included, gets
+//! exactly that from [`Flat::unsupported`].
+//!
+//! [`Registry`](crate::core::Registry) ingestion is where the diagnoses are raised.
+//! Building a registry from this model **fails if any element is
+//! `Unsupported`** — all of them at once, so a source crate that needs migrating
+//! sees one list rather than one rebuild per item — and it fails before any
+//! adapter declaration is examined. A binding is built against a model the
+//! frontend could read in full, or it is not built.
 //!
 //! There is **no verbatim passthrough**, because a `#[prebindgen]` crate marks
 //! the items that cross the boundary and leaves the supporting code to the
@@ -133,7 +142,8 @@
 //! | `fn f(a: u8, ...)` | a function without the tail | the variadic arguments vanish |
 //! | `struct S<T>`, `fn f<T>()`, `struct S<const N: usize>` | `T` as a nominal reference | a parameter is indistinguishable from an item named `T` |
 //!
-//! All three are [`ItemError`]s, inert until declared, like any other refusal. A
+//! All three are [`ItemError`]s, carried like any other refusal and raised at
+//! registry ingestion. A
 //! **lifetime** binder is not among them: lifetimes are spelling, and the
 //! spelling already travels. Nor is `impl Trait` in argument position — Rust
 //! calls it an anonymous type parameter, but it is not a binder in the syntax,
@@ -378,8 +388,8 @@ impl FlatBuilder {
 /// Every [`TypeKind::Named`] in a surviving element denotes a [`Type`] this model
 /// holds, and [`Self::resolve`] hands it over. An item that named something the
 /// flat API does not declare is [`Element::Unsupported`] with
-/// [`ItemError::UnresolvedType`] — inert until an adapter declares it, exactly
-/// like every other refusal, so an item no binding uses stays harmless.
+/// [`ItemError::UnresolvedType`], exactly like every other refusal — carried
+/// here, raised by [`Registry`](crate::core::Registry) ingestion.
 ///
 /// Resolving here rather than in the adapters is the point of #211: a dangling
 /// name used to surface much later as an unresolved-converter error, from
@@ -465,13 +475,41 @@ impl Flat {
 
     /// Every item the language could not express, with its diagnosis.
     ///
-    /// An adapter raises one of these when it declares the item; until then they
-    /// are inert. See the [module docs](self) on where acceptance is enforced.
+    /// Present in the model so a consumer can inspect what a source crate marked
+    /// — building a [`Registry`](crate::core::Registry) from a model holding any of
+    /// these fails, and reports all of them. See the [module docs](self) on where
+    /// acceptance is enforced.
     pub fn unsupported(&self) -> impl Iterator<Item = &Unsupported> {
         self.elements.iter().filter_map(|e| match e {
             Element::Unsupported(u) => Some(u),
             _ => None,
         })
+    }
+
+    /// Check a function signature against the source language's grammar.
+    ///
+    /// For the **one input that does not come through this module**: a binding's
+    /// `local_functions`, whose signatures are written by hand in a build script
+    /// and inserted straight into the registry. Everything else was already
+    /// lowered here, so this exists to keep the grammar decided in one place
+    /// rather than re-checked at the far end.
+    ///
+    /// Grammar only. Whether the types it names are *declared* is a whole-model
+    /// question ([`resolve_references`]), and a binding-local fn may legitimately
+    /// name types the source crate never did.
+    pub fn check_signature(&self, f: &syn::ItemFn) -> Result<(), ItemError> {
+        // Rebuilt from the model rather than kept: this runs once per local fn,
+        // and a stored index would be a second copy of what `constants()` says.
+        let consts = ConstIndex::new(self.constants().map(|c| {
+            (
+                c.name.to_string(),
+                (*c.origin.syntax.expr).clone(),
+                c.origin.crate_name().map(str::to_owned),
+            )
+        }));
+        // A synthesized fn has no captured location; the caller names it.
+        let at = Rc::new(SourceLocation::default());
+        lower_fn(f, &at, &consts).map(|_| ())
     }
 
     /// The declaration a reference denotes.

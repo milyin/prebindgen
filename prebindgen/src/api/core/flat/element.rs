@@ -30,9 +30,11 @@ pub enum Element {
     /// grammar, a `self` receiver, a reference to a type the flat API never
     /// declares, or a whole item kind it does not model such as a `union`.
     ///
-    /// Inert: it is indexed under its name so nothing else can claim it, and
-    /// the diagnosis rides along, to be raised by whatever declares it. See the
-    /// [module docs](super) on where acceptance is enforced.
+    /// Indexed under its name so nothing else can claim it, with the diagnosis
+    /// riding along. Parsing carries it; building a
+    /// [`Registry`](crate::core::Registry) from a model holding one fails, reporting
+    /// every offender at once. See the [module docs](super) on where acceptance
+    /// is enforced.
     Unsupported(Unsupported),
 }
 
