@@ -71,12 +71,7 @@ impl TypeRef {
         declared: &std::collections::HashSet<String>,
     ) -> Option<String> {
         match &self.kind {
-            TypeKind::Named { id, args } => {
-                if !declared.contains(&id.name) {
-                    return Some(id.name.clone());
-                }
-                args.iter().find_map(|a| a.first_unresolved(declared))
-            }
+            TypeKind::Named { id } => (!declared.contains(&id.name)).then(|| id.name.clone()),
             TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
                 t.first_unresolved(declared)
             }
@@ -102,9 +97,8 @@ impl TypeRef {
                 ok.collect_extents(out);
                 err.collect_extents(out);
             }
-            TypeKind::Callback { args } | TypeKind::Named { args, .. } => {
-                args.iter().for_each(|t| t.collect_extents(out))
-            }
+            TypeKind::Callback { args } => args.iter().for_each(|t| t.collect_extents(out)),
+            TypeKind::Named { .. } => {}
             TypeKind::Scalar(_) | TypeKind::Str | TypeKind::Unit => {}
         }
     }
@@ -152,7 +146,7 @@ pub enum TypeKind {
     /// segment's generic arguments live in `args`, and only the *type*
     /// arguments: a lifetime argument says nothing a destination language can
     /// act on. The full spelling is in [`TypeRef::origin`] for whoever re-emits it.
-    Named { id: TypeId, args: Vec<TypeRef> },
+    Named { id: TypeId },
     /// `[T; N]` — a run of `T` whose length is known at compile time.
     ///
     /// Deliberately not a [`Sequence`](TypeKind::Sequence) with an optional
@@ -579,11 +573,11 @@ fn lower_path(
                     let ok = Box::new(args.remove(0));
                     return Ok(TypeKind::Fallible { ok, err });
                 }
-                _ => return Ok(named(tp, args)),
+                _ => return Ok(named(tp)),
             }
         }
     }
-    Ok(named(tp, args))
+    Ok(named(tp))
 }
 
 /// If `ty` is a bare `MaybeUninit<T>`, the `T` it holds storage for.
@@ -626,7 +620,16 @@ pub(crate) fn is_unit_type(ty: &syn::Type) -> bool {
 
 /// `Named` with the identity read off the path: every segment joined, minus the
 /// generic arguments, which are already in `args`.
-fn named(tp: &syn::TypePath, args: Vec<TypeRef>) -> TypeKind {
+/// `Named` with the identity read off the path: every segment joined, minus the
+/// generic arguments.
+///
+/// The arguments are **lowered but not retained** — a bad type inside one is still
+/// diagnosed, it just leaves no trace. Nothing could read them: a surviving
+/// reference resolves to a declared type, and no declaration takes type parameters,
+/// so `Foo<u8>` against a declared `Foo` would not compile in the source crate.
+/// Accepting *instantiated* generics — `Wrapper<u8>` as its own declared type — is
+/// what would bring the field back.
+fn named(tp: &syn::TypePath) -> TypeKind {
     let name = tp
         .path
         .segments
@@ -636,6 +639,5 @@ fn named(tp: &syn::TypePath, args: Vec<TypeRef>) -> TypeKind {
         .join("::");
     TypeKind::Named {
         id: TypeId { name },
-        args,
     }
 }

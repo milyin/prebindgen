@@ -128,10 +128,10 @@ fn as_variant(e: &Element) -> &Variant {
     }
 }
 
-fn as_opaque(e: &Element) -> &Opaque {
+fn as_extern(e: &Element) -> &Extern {
     match as_type(e) {
-        Type::Opaque(o) => o,
-        other => panic!("expected an opaque, got {}", describe_type(other)),
+        Type::Extern(e) => e,
+        other => panic!("expected an extern, got {}", describe_type(other)),
     }
 }
 
@@ -169,7 +169,7 @@ fn describe_type(t: &Type) -> String {
         Type::Struct(_) => "struct",
         Type::Variant(_) => "sum",
         Type::Enum(_) => "enum",
-        Type::Opaque(_) => "opaque",
+        Type::Extern(_) => "extern",
     };
     format!("{kind} `{}`", t.name())
 }
