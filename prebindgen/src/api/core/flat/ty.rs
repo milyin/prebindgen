@@ -155,7 +155,10 @@ pub enum TypeKind {
     /// at every site.
     Array {
         elem: Box<TypeRef>,
-        extent: ArrayExtent,
+        /// Boxed: an extent carries an [`Origin`] over the length expression, which
+        /// makes it the size outlier among the kinds, and an array is the rare one.
+        /// The same trade-off [`Unsupported::error`](super::Unsupported) makes.
+        extent: Box<ArrayExtent>,
     },
     /// A borrow — `&T`, `&mut T`, or `&mut MaybeUninit<T>`. The lifetime is
     /// spelling, so it lives in [`TypeRef::origin`] rather than here.
@@ -443,7 +446,7 @@ pub(crate) fn lower_type(
                 .map_err(|e| fail(UnsupportedTypeReason::BadArrayExtent(Box::new(e))))?;
             TypeKind::Array {
                 elem: Box::new(lower_type(&a.elem, consts, at)?),
-                extent,
+                extent: Box::new(extent),
             }
         }
         // The callback shape is decided by `extract_fn_trait_args`, this
