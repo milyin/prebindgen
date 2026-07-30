@@ -41,11 +41,14 @@ fn target_arch() -> String {
 /// same reason. Without this, `cargo test --all-features` (which CI runs) silently
 /// rewrites the default-feature artifact with the all-features one.
 fn feature_suffix() -> String {
-    ["internal", "unstable"]
-        .iter()
-        .filter(|f| std::env::var(format!("CARGO_FEATURE_{}", f.to_uppercase())).is_ok())
-        .map(|f| format!("_{f}"))
-        .collect()
+    let mut suffix = String::new();
+    for feature in ["internal", "unstable"] {
+        if std::env::var(format!("CARGO_FEATURE_{}", feature.to_uppercase())).is_ok() {
+            suffix.push('_');
+            suffix.push_str(feature);
+        }
+    }
+    suffix
 }
 
 /// The committed artifact's stem: every input that changes the output, and
