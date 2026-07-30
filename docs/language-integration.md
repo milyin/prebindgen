@@ -176,7 +176,7 @@ The seam that makes the direction real. Adapters were not touched.
 **Correctness is checked by default**, superseding L0's "inert until declared":
 ingestion fails on anything the language cannot express, listing every offender at
 once so a source crate needing migration sees one list. An opt-out for
-deliberately-unsupported elements is a separate issue.
+deliberately-unsupported elements is #237.
 
 The cost landed in test fixtures: 167 of 524 tests held an item naming a type they
 never declared. `test_util::declare_referenced` supplies a marked alias for those
