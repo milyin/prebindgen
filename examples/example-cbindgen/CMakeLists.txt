@@ -2,9 +2,12 @@
 #
 # This demonstrates that prebindgen's `#[prebindgen]` `cfg` handling generates
 # *different* code per target: each `cargo build --target <triple>` runs the
-# build script, which regenerates the per-target Rust FFI layer and C header under
-#   generated/example_flat_<arch>.rs
-#   include/example_flat_<arch>.h
+# build script, which regenerates that variant's Rust FFI layer and C header under
+#   generated/example_flat_<arch>[_<feature>…].rs
+#   include/example_flat_<arch>[_<feature>…].h
+# The feature set is in the name for the same reason the arch is: it changes the
+# generated output. One name per variant also means a featured build cannot
+# overwrite the default-feature artifact that is committed alongside it.
 # Compare the two `include/example_flat_*.h` (or run the `show_generated_diff`
 # target) to see `foo_t`'s fields and `inside_foo_t`'s discriminants change with
 # the target architecture.
@@ -94,6 +97,27 @@ add_custom_target(host_cdylib DEPENDS "${_host_dylib}")
 add_executable(example_smoke c/smoke.c)
 add_dependencies(example_smoke host_cdylib)
 target_include_directories(example_smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+# The committed header's name carries the feature set as well as the arch, so a
+# featured build must be told which variant it is linking against — `smoke.c`
+# only derives the default-feature name on its own. Declaration order, matching
+# the suffix `build.rs` writes.
+if(EXAMPLE_FEATURES)
+  string(REPLACE "," ";" _feature_list "${EXAMPLE_FEATURES}")
+  set(_header_suffix "")
+  foreach(_feature IN ITEMS internal unstable)
+    if(_feature IN_LIST _feature_list)
+      string(APPEND _header_suffix "_${_feature}")
+    endif()
+  endforeach()
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+    set(_header_arch aarch64)
+  else()
+    set(_header_arch x86_64)
+  endif()
+  target_compile_definitions(example_smoke PRIVATE
+    EXAMPLE_FLAT_HEADER="example_flat_${_header_arch}${_header_suffix}.h")
+endif()
 target_link_libraries(example_smoke PRIVATE "${_host_dylib}" m)
 # Find the cdylib at runtime without installing it.
 set_target_properties(example_smoke PROPERTIES BUILD_RPATH "${_host_dir}")
