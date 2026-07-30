@@ -534,9 +534,11 @@ fn lower_path(
                 return Ok(TypeKind::Str);
             }
         }
-        // A builtin generic takes types only; a lifetime argument on one is not
-        // a shape this language has.
-        if !has_lifetime_arg {
+        // A builtin generic takes TYPE arguments only — a lifetime on one is not a
+        // shape this language has — with one exception: `Cow`'s own signature HAS a
+        // lifetime, so it is the one builtin where a lifetime argument is expected
+        // rather than refused.
+        if !has_lifetime_arg || name == "Cow" {
             let mut args = args;
             let arity = |n: usize| {
                 if args.len() == n {
@@ -567,6 +569,22 @@ fn lower_path(
                 // Rust spells. (A shared-ownership handle would classify as a
                 // `Ref` for the same reason, when the language accepts one.)
                 "Box" => {
+                    arity(1)?;
+                    return Ok(args.remove(0).kind);
+                }
+                // `Cow<'_, T>` **is** `T`, for the same reason `Box<T>` is: borrowed
+                // or owned, and no destination language can tell. Both adapters
+                // already say exactly that — cbindgen lowers it "just like `Vec<T>`
+                // outputs", and jnigen's converter body is
+                // `byte_array_from_slice(&v)`, which works by deref and is identical
+                // to the `Vec<u8>` one. So this classification *predicts* their
+                // behaviour instead of leaving it a special case.
+                //
+                // The `Cow` survives in `TypeRef::origin`, which is where an adapter
+                // reads the param type its generated fn must spell — and it must,
+                // since `Cow<'_, [u8]>` is not interchangeable with `Vec<u8>` in a
+                // Rust signature.
+                "Cow" => {
                     arity(1)?;
                     return Ok(args.remove(0).kind);
                 }

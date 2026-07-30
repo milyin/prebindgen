@@ -131,6 +131,8 @@ fn the_prelude_reaches_every_builtin_by_either_spelling() {
         let bare: proc_macro2::TokenStream = match *name {
             "Result" => quote::quote!(Result<u8, Error>),
             "String" => quote::quote!(String),
+            // `Cow` needs a lifetime and an unsized target to be valid Rust.
+            "Cow" => quote::quote!(Cow<'_, [u8]>),
             _ => {
                 let n = quote::format_ident!("{name}");
                 quote::quote!(#n<u8>)
@@ -141,6 +143,7 @@ fn the_prelude_reaches_every_builtin_by_either_spelling() {
             match *name {
                 "Result" => quote::quote!(#p<u8, Error>),
                 "String" => quote::quote!(#p),
+                "Cow" => quote::quote!(#p<'_, [u8]>),
                 _ => quote::quote!(#p<u8>),
             }
         };
@@ -359,6 +362,83 @@ fn a_sequence_is_a_sequence_borrowed_or_owned() {
         panic!("a reference");
     };
     assert!(matches!(inner.kind, TypeKind::Sequence(_)));
+}
+
+/// `Cow<'_, T>` **is** `T`, the same treatment `Box<T>` gets: borrowed or owned, and
+/// no destination language can tell.
+///
+/// Both adapters already behave that way — cbindgen lowers `Cow<'_, [T]>` "just like
+/// `Vec<T>` outputs", and jnigen's converter is `byte_array_from_slice(&v)`, which
+/// works by deref and is identical to the `Vec<u8>` one — so this classification
+/// predicts their behaviour rather than leaving it a special case.
+#[test]
+fn a_cow_is_what_it_borrows() {
+    // The property the whole treatment rests on: indistinguishable from the owned
+    // spelling of the same thing.
+    assert_eq!(
+        format!("{:?}", kind(quote::quote!(Cow<'_, [u8]>))),
+        format!("{:?}", kind(quote::quote!(Vec<u8>))),
+        "a byte Cow classifies exactly as a byte Vec"
+    );
+    assert!(matches!(kind(quote::quote!(Cow<'_, str>)), TypeKind::Str));
+
+    // The `Cow` survives where codegen reads it: a generated signature must spell
+    // `Cow<'_, [u8]>`, which is not interchangeable with `Vec<u8>` in Rust.
+    let ty = lower(quote::quote!(Cow<'_, [u8]>)).expect("in the language");
+    assert_eq!(tokens(&ty.origin.syntax), "Cow < '_ , [u8] >");
+
+    // Transparent for any target, as `Box` is: whether it can actually cross is the
+    // adapter's call, and both already restrict which elements they accept.
+    let TypeKind::Sequence(elem) = kind(quote::quote!(Cow<'_, [Sample]>)) else {
+        panic!("a sequence");
+    };
+    assert!(matches!(elem.kind, TypeKind::Named { .. }));
+
+    // A lifetime argument is expected on `Cow` alone. On any other builtin it is
+    // still not a shape the language has, so the exception is exactly one name wide:
+    // `Vec<'a, u8>` is a nominal `Vec` nobody declared, and the item is refused.
+    let element = {
+        let mut items = fixture_types();
+        let n = items.len();
+        items.push(syn::parse_quote!(
+            pub struct S {
+                pub f: Vec<'a, u8>,
+            }
+        ));
+        parse(items).remove(n)
+    };
+    assert!(matches!(
+        as_unsupported(&element),
+        ItemError::UnresolvedType { name } if name == "Vec"
+    ));
+}
+
+/// The signature that motivated this: zenoh-flat's `zbytes_to_bytes`. It was refused
+/// under the closed API because a lifetime argument sent `Cow` to an undeclared
+/// nominal type.
+#[test]
+fn a_cow_returning_accessor_resolves() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                syn::parse_quote!(
+                    pub type ZBytes = zenoh::bytes::ZBytes;
+                ),
+                syn::parse_quote!(
+                    pub fn zbytes_to_bytes(z: &ZBytes) -> Cow<'_, [u8]> {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+
+    assert_eq!(flat.unsupported().count(), 0, "no longer refused");
+    let f = flat.function("zbytes_to_bytes").expect("survives");
+    assert!(matches!(f.ret.kind, TypeKind::Sequence(_)));
+    // And the return still spells its `Cow`, so an adapter can emit the signature.
+    assert_eq!(tokens(&f.ret.origin.syntax), "Cow < '_ , [u8] >");
 }
 
 /// A raw pointer is not in the language. A `#[prebindgen]` crate is idiomatic

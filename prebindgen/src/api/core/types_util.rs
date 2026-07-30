@@ -87,7 +87,8 @@ impl Normalization {
     /// `#[prebindgen] pub type Vec = std::vec::Vec` either, for the same reason.
     ///
     /// Not identical to Rust's prelude: it adds `MaybeUninit`, which the grammar
-    /// recognises for out-parameters. Its entries are exactly the bare names
+    /// recognises for out-parameters, and `Cow`, which it treats as transparent.
+    /// Its entries are exactly the bare names
     /// [`lower_path`](crate::core::flat) classifies as builtins and that have a
     /// std path at all — `str` has none, and neither do the scalars.
     ///
@@ -100,6 +101,7 @@ impl Normalization {
         ("std::string::String", "String"),
         ("std::boxed::Box", "Box"),
         ("std::mem::MaybeUninit", "MaybeUninit"),
+        ("std::borrow::Cow", "Cow"),
     ];
 
     /// The prelude alone: no ingested sources, no declared aliases.
