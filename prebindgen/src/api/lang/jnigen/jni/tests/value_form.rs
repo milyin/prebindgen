@@ -1459,8 +1459,10 @@ fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
         "the value form runs ONCE, not once per leaf:\n{rust}"
     );
     assert!(
-        rust.contains("zh_get_carrier(&__cb_arg0)") && rust.contains("Some(__hb0)"),
-        "the hoist is built inside the `Some` arm of the optional step:\n{rust}"
+        rust.contains("zh_get_carrier(&__cb_arg0)") && rust.contains(".map(|__hb0|"),
+        "the hoist is built only where the optional step has a value — as a \
+         `map`, since the equivalent `match` trips `clippy::manual_map` in the \
+         consumer:\n{rust}"
     );
     assert!(
         rust.contains("zc_into_struct((__hb0).clone())"),
