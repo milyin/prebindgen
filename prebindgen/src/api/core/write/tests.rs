@@ -222,3 +222,100 @@ fn bad_generated_tokens_report_emission_phase() {
         err
     );
 }
+
+/// An adapter with a const mechanism gates **named** consts and cannot gate
+/// guards — pinned at the emission site, not just in the registry.
+///
+/// `a_guard_never_reaches_the_const_surface` proves the maps are separate, but it
+/// never calls `write_rust`. This is what would catch a change that keeps
+/// `Registry::guards` populated and then forgets to emit them, or re-gates them
+/// on the way out.
+#[test]
+fn guards_emit_ungated_and_in_stream_order() {
+    /// Declares a const mechanism (`Some`) and declares nothing through it.
+    struct ConstGatingExt;
+
+    impl Prebindgen for ConstGatingExt {
+        type Metadata = ();
+
+        fn declared_consts(&self) -> Option<HashSet<syn::Ident>> {
+            // The gate exists and is empty: `KEPT_OUT` must not emit.
+            Some(HashSet::new())
+        }
+        fn on_function(&self, f: &syn::ItemFn, _r: &Registry<()>) -> TokenStream {
+            f.to_token_stream()
+        }
+        fn on_struct(&self, s: &syn::ItemStruct, _r: &Registry<()>) -> TokenStream {
+            s.to_token_stream()
+        }
+        fn on_enum(&self, e: &syn::ItemEnum, _r: &Registry<()>) -> TokenStream {
+            e.to_token_stream()
+        }
+        fn on_input_type(
+            &self,
+            _ty: &syn::Type,
+            _r: &Registry<()>,
+        ) -> Option<crate::api::core::prebindgen::ConverterImpl<()>> {
+            None
+        }
+        fn on_output_type(
+            &self,
+            _ty: &syn::Type,
+            _r: &Registry<()>,
+        ) -> Option<crate::api::core::prebindgen::ConverterImpl<()>> {
+            None
+        }
+    }
+
+    let loc = SourceLocation::default();
+    // Two distinguishable guards, straddling the named const, so the assertion
+    // below pins order rather than merely presence.
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_quote!(
+                const _: () = {
+                    first_check();
+                };
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub const KEPT_OUT: u64 = 7;
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                const _: () = {
+                    second_check();
+                };
+            ),
+            loc.clone(),
+        ),
+    ];
+    let registry: Registry<()> = Registry::from_items(items).expect("index");
+    assert_eq!(registry.guards.len(), 2);
+
+    let dir = crate::api::test_util::unique_test_dir("write_guards");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = registry
+        .resolve(ConstGatingExt)
+        .expect("resolve")
+        .write_rust(dir.join("gen.rs"))
+        .expect("write_rust");
+    let src = std::fs::read_to_string(&path).unwrap();
+
+    // The named const is gated out; both guards emit regardless.
+    assert!(
+        !src.contains("KEPT_OUT"),
+        "declared_consts is empty:\n{src}"
+    );
+    let first = src
+        .find("first_check")
+        .unwrap_or_else(|| panic!("guard 1 missing:\n{src}"));
+    let second = src
+        .find("second_check")
+        .unwrap_or_else(|| panic!("guard 2 missing:\n{src}"));
+    assert!(first < second, "guards must keep stream order:\n{src}");
+}

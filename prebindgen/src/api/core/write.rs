@@ -2,7 +2,7 @@
 //!
 //! `write_rust` collects every resolved input/output converter (each entry
 //! already carries its full `ItemFn`), every per-item `on_<kind>` output,
-//! and every injected guard; concatenates them; and hands them to
+//! and every anonymous const; concatenates them; and hands them to
 //! `Destination::write` (which does prettyplease formatting and
 //! resolves the path against `OUT_DIR`).
 
@@ -120,8 +120,9 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
             .map(|(_, (item, _))| ext.on_const(item, registry)),
     )?);
 
-    // 3. Prebindgen's own injected feature guards, verbatim. Last, and in
-    //    stream order, so a generated file ends with one guard per source crate.
+    // 3. Anonymous consts, verbatim. Last, and in stream order. Ungated on
+    //    purpose: with no name there is nothing for an adapter to declare, so
+    //    the const gate above cannot apply to them.
     for guard in &registry.guards {
         items.push(syn::Item::Const(guard.origin.syntax.clone()));
     }
