@@ -929,8 +929,8 @@ fn from_flat_projects_each_element_kind() {
         "both anonymous consts, in stream order"
     );
     assert!(
-        !reg.flat().struct_type(&id("Handle").to_string()).is_some()
-            && !reg.flat().enum_item(&id("Handle").to_string()).is_some(),
+        reg.flat().struct_type(&id("Handle").to_string()).is_none()
+            && reg.flat().enum_item(&id("Handle").to_string()).is_none(),
         "an Extern names a type; it declares no body to index"
     );
 
