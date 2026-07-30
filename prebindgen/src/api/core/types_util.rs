@@ -34,11 +34,25 @@ pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
 ///    hyphens-as-underscores) reduces the same way (`myflat::Foo` ≡ `Foo`).
 ///    Pure callers pass `&[]`.
 /// 4. A path that some **alias** names reduces to that alias's name. Two
-///    sources of aliases, treated identically because they say the same
-///    kind of thing: [`Normalization::PRELUDE`], which the language
-///    pre-declares, and every `#[prebindgen] pub type X = path;` the
-///    ingested crates wrote. So `std::vec::Vec` ≡ `Vec` and, given
-///    `pub type Session = zenoh::Session`, `zenoh::Session` ≡ `Session`.
+///    sources of aliases, and they **partition** the targets rather than
+///    competing, because a target either has a grammar meaning or it does
+///    not:
+///
+///    * [`Normalization::PRELUDE`], which the language pre-declares, over
+///      targets the grammar **models**. Each names a *constructor*, so
+///      arguments are ignored when matching and preserved when rewriting:
+///      `std::vec::Vec<Foo>` ≡ `Vec<Foo>`.
+///    * every `#[prebindgen] pub type X = path;` an ingested crate wrote,
+///      over targets the grammar does **not** model. Each names one
+///      *complete type*, so the key includes its type arguments and a match
+///      replaces the whole type: given `pub type Session = zenoh::Session`,
+///      `zenoh::Session` ≡ `Session`.
+///
+///    An alias whose target the grammar already models is therefore NOT a
+///    reduction rule — the prelude owns that path. `type Bytes = Vec<u8>`
+///    is a perfectly good name for an [`Extern`](crate::core::flat::Extern),
+///    but it must not make `Vec<u8>` stop being a sequence, and it must not
+///    capture `Vec<String>`.
 ///
 ///    Nothing else: `std::ffi::CString` stays qualified, and a foreign path
 ///    nobody aliased (`zenoh::KeyExpr` with no such declaration) is NEVER
@@ -65,8 +79,12 @@ pub struct Normalization {
     /// Module name per ingested source, first-seen order. The first doubles as the
     /// default module for references with no recorded origin.
     pub source_modules: Vec<String>,
-    /// Path → the name it is known by. `std::vec::Vec` → `Vec`,
-    /// `zenoh::Session` → `Session`.
+    /// Constructor path → name, from [`Self::PRELUDE`] alone. Matched with the use
+    /// site's type arguments **ignored and preserved**, because a prelude entry
+    /// names a constructor: `std::vec::Vec` is every `Vec<T>`.
+    constructors: HashMap<String, String>,
+    /// Complete type → name, from the aliases the ingested crates declared. Matched
+    /// exactly, arguments included, because an alias names one whole type.
     aliases: HashMap<String, String>,
 }
 
@@ -96,10 +114,11 @@ impl Normalization {
     pub fn prelude() -> Self {
         Self {
             source_modules: Vec::new(),
-            aliases: Self::PRELUDE
+            constructors: Self::PRELUDE
                 .iter()
                 .map(|(path, name)| ((*path).to_string(), (*name).to_string()))
                 .collect(),
+            aliases: HashMap::new(),
         }
     }
 
@@ -122,21 +141,46 @@ impl Normalization {
         for (item, _) in items {
             // A marked `type X = path;` declares `X` as the name for `path`. Only a
             // path-shaped target can be a reduction key: `Box<dyn Error>` never
-            // appears *as a path* in a signature.
-            if let syn::Item::Type(t) = item {
-                if let syn::Type::Path(tp) = &*t.ty {
-                    if tp.qself.is_none() {
-                        out.aliases.insert(path_key(&tp.path), t.ident.to_string());
-                    }
-                }
+            // appears *as a path* in a signature — it is still an `Extern`, just not
+            // a spelling anyone writes.
+            let syn::Item::Type(t) = item else { continue };
+            let syn::Type::Path(tp) = &*t.ty else {
+                continue;
+            };
+            if tp.qself.is_some() {
+                continue;
             }
+            // The language's aliases and a crate's PARTITION the targets: a target
+            // either has a grammar meaning or it does not. So an alias to something
+            // the grammar already models is not a reduction rule — the prelude owns
+            // that path, and `Vec<u8>` must keep meaning a sequence rather than be
+            // retyped by an unrelated declaration. A single-segment target is a bare
+            // builtin or scalar, and dead as a key anyway, since `reduce_flat_path`
+            // bails below two segments.
+            if tp.path.segments.len() < 2
+                || out.constructors.contains_key(&constructor_key(&tp.path))
+            {
+                continue;
+            }
+            // First declaration wins, so two names for one target reduce
+            // deterministically rather than by stream order.
+            out.aliases
+                .entry(alias_key(&tp.path))
+                .or_insert_with(|| t.ident.to_string());
         }
         out
     }
 
-    /// The name this path is known by, if any.
+    /// The name a crate's alias gives this exact type, arguments included.
     fn alias_of(&self, path: &syn::Path) -> Option<&str> {
-        self.aliases.get(&path_key(path)).map(String::as_str)
+        self.aliases.get(&alias_key(path)).map(String::as_str)
+    }
+
+    /// The bare name the language knows this constructor by, arguments ignored.
+    fn constructor_of(&self, path: &syn::Path) -> Option<&str> {
+        self.constructors
+            .get(&constructor_key(path))
+            .map(String::as_str)
     }
 
     /// True when `ident` is an alias this collected — so its own declaration is not
@@ -153,20 +197,68 @@ impl Default for Normalization {
     }
 }
 
-/// A path as an alias-map key: segments joined, generic arguments dropped, and a
-/// leading `core`/`alloc` read as `std` since they re-export the same items.
+/// A path as an alias-map key: segments joined, **type** arguments kept, lifetimes
+/// dropped, and a leading `core`/`alloc` read as `std` since they re-export the
+/// same items.
 ///
-/// Arguments are dropped so `zenoh::key_expr::KeyExpr<'static>` and a use site's
-/// `KeyExpr<'a>` share a key — a lifetime is spelling, as everywhere else in the
-/// model.
-fn path_key(path: &syn::Path) -> String {
-    let mut segs: Vec<String> = path.segments.iter().map(|s| s.ident.to_string()).collect();
-    if let Some(first) = segs.first_mut() {
-        if first == "core" || first == "alloc" {
-            *first = "std".to_string();
+/// Type arguments are part of the key because they are part of the type:
+/// `Vec<u8>`, `Vec<String>` and the bare constructor `Vec` are three different
+/// things, and conflating them lets a concrete alias capture every other
+/// instantiation.
+///
+/// Lifetimes are dropped, so a target `zenoh::key_expr::KeyExpr<'static>` and a use
+/// site's `KeyExpr<'a>` share a key — a lifetime is spelling, as everywhere else in
+/// the model.
+fn alias_key(path: &syn::Path) -> String {
+    let mut out = String::new();
+    for (i, seg) in path.segments.iter().enumerate() {
+        if i > 0 {
+            out.push_str("::");
         }
+        let mut ident = seg.ident.to_string();
+        if i == 0 && (ident == "core" || ident == "alloc") {
+            ident = "std".to_string();
+        }
+        out.push_str(&ident);
     }
-    segs.join("::")
+    let args = type_args(path);
+    if !args.is_empty() {
+        out.push('<');
+        out.push_str(&args.join(","));
+        out.push('>');
+    }
+    out
+}
+
+/// The last segment's **type** arguments, rendered; lifetimes and anything else
+/// excluded. Empty for a path with no arguments, or with only lifetimes.
+fn type_args(path: &syn::Path) -> Vec<String> {
+    let Some(seg) = path.segments.last() else {
+        return Vec::new();
+    };
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return Vec::new();
+    };
+    ab.args
+        .iter()
+        .filter_map(|a| match a {
+            syn::GenericArgument::Type(t) => Some(t.to_token_stream().to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The path a prelude entry is keyed under: the same, minus type arguments.
+///
+/// A prelude entry names a **constructor** — `std::vec::Vec` matches every `Vec<T>`
+/// — which is the one asymmetry between the language's aliases and a crate's. A
+/// crate's alias names a complete type, so its key keeps the arguments.
+fn constructor_key(path: &syn::Path) -> String {
+    let mut path = path.clone();
+    if let Some(last) = path.segments.last_mut() {
+        last.arguments = syn::PathArguments::None;
+    }
+    alias_key(&path)
 }
 
 pub fn normalize_type(ty: &mut syn::Type, against: &Normalization) {
@@ -232,12 +324,22 @@ fn reduce_flat_path(path: &mut syn::Path, against: &Normalization) {
         return;
     }
 
-    // An alias names this path — the prelude's or a source crate's, treated alike.
-    // The use site's own arguments ride along, because a prelude alias names a
-    // generic: `std::vec::Vec<Foo>` is `Vec<Foo>`. The key is the WHOLE path, so a
-    // different path that merely ends in the same segment never matches —
-    // `foreign::Wrapper<u8>` is not an alias to `other::Wrapper`.
+    // A crate's alias names one COMPLETE type, arguments included, so a match
+    // replaces the whole thing: the alias name carries no arguments of its own.
+    // Tried first, and exactly — `zenoh::Wrap<u8>` is not `zenoh::Wrap<String>`.
     if let Some(name) = against.alias_of(path) {
+        let ident = syn::Ident::new(
+            name,
+            path.segments.last().expect("len checked").ident.span(),
+        );
+        path.leading_colon = None;
+        path.segments = std::iter::once(syn::PathSegment::from(ident)).collect();
+        return;
+    }
+
+    // The language's own aliases name a CONSTRUCTOR, so arguments are ignored when
+    // matching and preserved when rewriting: `std::vec::Vec<Foo>` is `Vec<Foo>`.
+    if let Some(name) = against.constructor_of(path) {
         let mut last = path.segments.last().expect("len checked").clone();
         last.ident = syn::Ident::new(name, last.ident.span());
         path.leading_colon = None;

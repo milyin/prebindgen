@@ -212,6 +212,110 @@ fn a_declared_alias_reduces_the_path_it_names() {
     assert_eq!(e.target.as_deref(), Some("zenoh :: Session"));
 }
 
+/// A concrete alias must not capture other instantiations, nor the constructor.
+///
+/// `type Bytes = Vec<u8>` and `Vec<String>` are unrelated types. An arg-blind key
+/// conflated them *and* shadowed the prelude, so the parameter below stopped being a
+/// sequence — an unrelated declaration retyping a spelling elsewhere in the API.
+#[test]
+fn a_concrete_alias_captures_nothing_else() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                syn::parse_quote!(
+                    pub type Bytes = std::vec::Vec<u8>;
+                ),
+                syn::parse_quote!(
+                    pub fn strings(xs: std::vec::Vec<String>) {}
+                ),
+                syn::parse_quote!(
+                    pub fn bytes(xs: std::vec::Vec<u8>) {}
+                ),
+                syn::parse_quote!(
+                    pub fn by_name(b: Bytes) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+
+    let param = |name: &str| {
+        flat.function(name)
+            .unwrap_or_else(|| panic!("{name} survives"))
+            .params[0]
+            .ty
+            .kind
+            .clone()
+    };
+
+    // The reported case: a different instantiation is untouched.
+    assert!(
+        matches!(param("strings"), TypeKind::Sequence(_)),
+        "`Vec<String>` is a sequence, whatever `Bytes` aliases"
+    );
+
+    // And the alias's OWN instantiation keeps its grammar meaning: the language
+    // models `Vec<u8>`, so the prelude owns that path and the alias is not a
+    // reduction rule for it. Otherwise declaring `Bytes` would retype every
+    // `Vec<u8>` in the flat API.
+    assert!(
+        matches!(param("bytes"), TypeKind::Sequence(_)),
+        "the grammar's spelling stays canonical"
+    );
+
+    // The alias is still perfectly usable by name — a bare path is never reduced.
+    let TypeKind::Named { id } = param("by_name") else {
+        panic!("a nominal type");
+    };
+    assert_eq!(id.name, "Bytes");
+    assert!(matches!(
+        flat.declared_type("Bytes").expect("declared"),
+        Type::Extern(_)
+    ));
+}
+
+/// Two aliases over one foreign constructor stay distinct, which is what keeping
+/// type arguments in the key buys.
+#[test]
+fn concrete_aliases_over_one_constructor_stay_distinct() {
+    let flat = Flat::builder()
+        .items(
+            vec![
+                syn::parse_quote!(
+                    pub type Small = zenoh::Wrap<u8>;
+                ),
+                syn::parse_quote!(
+                    pub type Big = zenoh::Wrap<String>;
+                ),
+                syn::parse_quote!(
+                    pub fn small(w: zenoh::Wrap<u8>) {}
+                ),
+                syn::parse_quote!(
+                    pub fn big(w: zenoh::Wrap<String>) {}
+                ),
+            ]
+            .into_iter()
+            .map(|i: syn::Item| (i, loc())),
+        )
+        .build()
+        .expect("parses");
+
+    for (func, expected) in [("small", "Small"), ("big", "Big")] {
+        let f = flat
+            .function(func)
+            .unwrap_or_else(|| panic!("{func} survives"));
+        let TypeKind::Named { id } = &f.params[0].ty.kind else {
+            panic!("a nominal type");
+        };
+        // Each use site reaches its own alias, and the reduced type carries no
+        // arguments — the alias name IS the whole type.
+        assert_eq!(id.name, expected, "{func}");
+        assert_eq!(tokens(&f.params[0].ty.origin.syntax), expected, "{func}");
+    }
+}
+
 #[test]
 fn a_qualified_builtin_is_a_named_type() {
     assert!(matches!(
