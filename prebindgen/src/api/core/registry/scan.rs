@@ -12,35 +12,6 @@ use quote::ToTokens;
 use super::*;
 
 impl<M> Registry<M> {
-    /// Scan the signature/body of every item declared by the adapter.
-    ///
-    /// * For each ident in `adapter.declared_functions()` ∩ indexed functions,
-    ///   call `scan_fn_signature` so parameter and return types
-    ///   are registered as required.
-    /// * For each `TypeKey` in `adapter.declared_types()`, mark the key as
-    ///   required in both directions; if the key resolves to an indexed
-    ///   struct/enum, also scan its body so field types are registered
-    ///   (still `required: false` — propagation later promotes them
-    ///   through `subs`).
-    /// * Idents / types returned by `adapter.ignored_functions()` /
-    ///   `adapter.ignored_types()` are treated as intentional skips: they are
-    ///   neither scanned nor emitted, but they do suppress the "skipping
-    ///   undeclared" warnings.
-    ///
-    /// Declared items that don't match any indexed body get a build
-    /// warning (likely a typo in the build script). Indexed items that
-    /// were neither declared nor ignored also get a `cargo:warning=` skip
-    /// line so the user sees the remaining unexpected skips per build.
-    /// Scan everything pushed in through the configure methods.
-    ///
-    /// Takes no adapter: what to build was stated by the caller, not asked for.
-    pub fn scan_declared(&mut self) -> Result<(), ScanError> {
-        let declared = std::mem::take(&mut self.declared);
-        let out = self.scan_declared_items(&declared);
-        self.declared = declared;
-        out
-    }
-
     pub(super) fn scan_declared_items(&mut self, declared: &Declared) -> Result<(), ScanError> {
         // Source-qualified declared types are a hard error (issue #95). The
         // key's own normalization already reduced `crate::`/`self::` and std
