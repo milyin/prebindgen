@@ -26,26 +26,15 @@ struct StubExt {
 impl Prebindgen for StubExt {
     type Metadata = ();
 
-    fn declared_functions(&self) -> HashSet<syn::Ident> {
-        self.functions.clone()
-    }
-    fn ignored_functions(&self) -> HashSet<syn::Ident> {
-        self.ignored_functions.clone()
-    }
-    fn ignored_name_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
-        self.ignored_name_predicates.clone()
-    }
-    fn helper_functions(&self) -> HashSet<syn::Ident> {
-        self.helper_functions.clone()
-    }
-    fn declared_consts(&self) -> Option<HashSet<syn::Ident>> {
-        self.consts.clone()
-    }
-    fn declared_types(&self) -> HashSet<TypeKey> {
-        self.types.clone()
-    }
-    fn ignored_types(&self) -> HashSet<TypeKey> {
-        self.ignored_types.clone()
+    fn declarations(&self) -> Declarations {
+        Declarations::new()
+            .functions(self.functions.clone())
+            .ignored_functions(self.ignored_functions.clone())
+            .ignored_name_predicates(self.ignored_name_predicates.clone())
+            .helper_functions(self.helper_functions.clone())
+            .consts(self.consts.clone())
+            .types(self.types.clone())
+            .ignored_types(self.ignored_types.clone())
     }
     fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         self.local_fns.clone()
@@ -425,6 +414,9 @@ fn resolve_surfaces_adapter_invariant_errors() {
     struct FailingExt(StubExt);
     impl Prebindgen for FailingExt {
         type Metadata = ();
+        fn declarations(&self) -> Declarations {
+            self.0.declarations()
+        }
         fn validate(&self, _registry: &Registry<()>) -> Result<(), String> {
             Err("member fun `f` has no receiver".to_string())
         }
@@ -1304,8 +1296,8 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
     }
     impl Prebindgen for AnyConverterExt {
         type Metadata = ();
-        fn declared_functions(&self) -> HashSet<syn::Ident> {
-            self.0.declared_functions()
+        fn declarations(&self) -> Declarations {
+            self.0.declarations()
         }
         fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
             self.0.local_functions()

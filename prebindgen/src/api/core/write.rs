@@ -79,8 +79,9 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // 2. Per-item Rust output from the adapter — only for items the adapter
     //    explicitly declared. Undeclared items were already announced
     //    via `cargo:warning=` in `Registry::scan_declared`.
-    let declared_fns = ext.declared_functions();
-    let declared_types = ext.declared_types();
+    let declared = ext.declarations();
+    let declared_fns = &declared.functions;
+    let declared_types = &declared.types;
     let flat = registry.flat();
     items.extend(parse_items_from_tokens(
         "on_function",
@@ -118,7 +119,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // symmetric with functions; an adapter without one (`None`) gets every
     // const passed through verbatim via the default `on_const`. Prebindgen's
     // own injected feature guards are not consts at all — see the guards loop.
-    let declared_consts = ext.declared_consts();
+    let declared_consts = &declared.consts;
     items.extend(parse_items_from_tokens(
         "on_const",
         sorted_by_name(flat.constants().map(|c| (&c.name, &c.origin.syntax)))

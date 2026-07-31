@@ -14,17 +14,19 @@ struct IdentityExt;
 impl Prebindgen for IdentityExt {
     type Metadata = ();
 
-    fn declared_functions(&self) -> HashSet<syn::Ident> {
-        [syn::parse_quote!(a_fn), syn::parse_quote!(b_fn)]
-            .into_iter()
-            .collect()
-    }
-
-    fn declared_types(&self) -> HashSet<TypeKey> {
-        ["AEnum", "AStruct", "BEnum", "BStruct"]
-            .into_iter()
-            .map(|s| TypeKey::parse(s).expect("test type"))
-            .collect()
+    fn declarations(&self) -> crate::core::Declarations {
+        crate::core::Declarations::new()
+            .functions(
+                [syn::parse_quote!(a_fn), syn::parse_quote!(b_fn)]
+                    .into_iter()
+                    .collect(),
+            )
+            .types(
+                ["AEnum", "AStruct", "BEnum", "BStruct"]
+                    .into_iter()
+                    .map(|s| TypeKey::parse(s).expect("test type"))
+                    .collect(),
+            )
     }
 
     fn on_function(&self, f: &syn::ItemFn, _registry: &Registry<Self::Metadata>) -> TokenStream {
@@ -217,9 +219,9 @@ fn guards_emit_ungated_and_in_stream_order() {
     impl Prebindgen for ConstGatingExt {
         type Metadata = ();
 
-        fn declared_consts(&self) -> Option<HashSet<syn::Ident>> {
+        fn declarations(&self) -> crate::core::Declarations {
             // The gate exists and is empty: `KEPT_OUT` must not emit.
-            Some(HashSet::new())
+            crate::core::Declarations::new().consts(Some(HashSet::new()))
         }
         fn on_function(&self, f: &syn::ItemFn, _r: &Registry<()>) -> TokenStream {
             f.to_token_stream()

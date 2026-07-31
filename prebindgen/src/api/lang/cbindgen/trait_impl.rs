@@ -1443,6 +1443,15 @@ impl Cbindgen {
 }
 
 impl Prebindgen for Cbindgen {
+    fn declarations(&self) -> crate::core::Declarations {
+        crate::core::Declarations::new()
+            .functions(self.declared_functions())
+            .ignored_functions(self.ignored_functions())
+            .helper_functions(self.helper_functions())
+            .types(self.declared_types())
+            .ignored_types(self.ignored_types())
+    }
+
     type Metadata = ();
 
     // Consts have no declaration mechanism here (`declared_consts` stays
@@ -1468,26 +1477,6 @@ impl Prebindgen for Cbindgen {
         self.select_output_type(ty, r)
     }
 
-    fn declared_functions(&self) -> HashSet<syn::Ident> {
-        self.functions.keys().cloned().collect()
-    }
-
-    fn ignored_functions(&self) -> HashSet<syn::Ident> {
-        self.ignored_functions.clone()
-    }
-
-    fn helper_functions(&self) -> HashSet<syn::Ident> {
-        self.convert_decls
-            .iter()
-            .flat_map(|decl| decl.input.iter().chain(decl.output.iter()))
-            .filter_map(|spec| match spec {
-                ConvertSpec::PrebindgenFn(ident) => Some(ident.clone()),
-                ConvertSpec::Trait { .. } => None,
-            })
-            .filter(|ident| !self.functions.contains_key(ident))
-            .collect()
-    }
-
     fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         let mut result = Vec::new();
         let mut seen = HashMap::<syn::Ident, String>::new();
@@ -1509,21 +1498,6 @@ impl Prebindgen for Cbindgen {
             result.push((item, origin));
         }
         result
-    }
-
-    fn declared_types(&self) -> HashSet<TypeKey> {
-        self.opaque
-            .keys()
-            .chain(self.data.keys())
-            .chain(self.value_opaque.keys())
-            .chain(self.enums.keys())
-            .chain(self.tagged_unions.keys())
-            .cloned()
-            .collect()
-    }
-
-    fn ignored_types(&self) -> HashSet<TypeKey> {
-        self.ignored_types.clone()
     }
 
     fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
@@ -2348,5 +2322,43 @@ impl Cbindgen {
             });
         }
         None
+    }
+}
+
+/// The declaration surface, stated once.
+///
+/// These were trait methods the registry called back into the adapter from
+/// inside `resolve`. They are the adapter's own business now, gathered into the
+/// one value the registry is constructed from.
+impl Cbindgen {
+    pub(crate) fn declared_functions(&self) -> HashSet<syn::Ident> {
+        self.functions.keys().cloned().collect()
+    }
+    pub(crate) fn ignored_functions(&self) -> HashSet<syn::Ident> {
+        self.ignored_functions.clone()
+    }
+    pub(crate) fn helper_functions(&self) -> HashSet<syn::Ident> {
+        self.convert_decls
+            .iter()
+            .flat_map(|decl| decl.input.iter().chain(decl.output.iter()))
+            .filter_map(|spec| match spec {
+                ConvertSpec::PrebindgenFn(ident) => Some(ident.clone()),
+                ConvertSpec::Trait { .. } => None,
+            })
+            .filter(|ident| !self.functions.contains_key(ident))
+            .collect()
+    }
+    pub(crate) fn declared_types(&self) -> HashSet<TypeKey> {
+        self.opaque
+            .keys()
+            .chain(self.data.keys())
+            .chain(self.value_opaque.keys())
+            .chain(self.enums.keys())
+            .chain(self.tagged_unions.keys())
+            .cloned()
+            .collect()
+    }
+    pub(crate) fn ignored_types(&self) -> HashSet<TypeKey> {
+        self.ignored_types.clone()
     }
 }

@@ -646,7 +646,6 @@ fn ignore_matching_acknowledges_naming_family() {
         .ignore(crate::ty!(ZUnusedThing));
     // The predicate flows through the Prebindgen hook…
     {
-        use crate::api::core::prebindgen::Prebindgen;
         let preds = jni.ignored_name_predicates();
         assert_eq!(preds.len(), 1);
         assert!(preds[0]("detail_const_a") && !preds[0]("z_len"));

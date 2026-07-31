@@ -924,6 +924,22 @@ impl JniGen {
 // ──────────────────────────────────────────────────────────────────────
 
 impl Prebindgen for JniGen {
+    fn declarations(&self) -> crate::core::Declarations {
+        crate::core::Declarations::new()
+            .functions(self.declared_functions())
+            .accessors(self.accessor_functions())
+            .method_receivers(self.method_receivers())
+            .ignored_functions(self.ignored_functions())
+            .ignored_name_predicates(self.ignored_name_predicates())
+            .helper_functions(self.helper_functions())
+            .consts(self.declared_consts())
+            .ignored_consts(self.ignored_consts())
+            .required_output_types(self.required_output_types())
+            .types(self.declared_types())
+            .ignored_types(self.ignored_types())
+            .boundary_only_types(self.boundary_only_types())
+    }
+
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
     /// handlers at the same point they build the wire/body; the
@@ -1106,47 +1122,6 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Union of every `.fun(...)` list across all
-    /// [`Self::package`] subpackage contexts. Each entry is a
-    /// `#[prebindgen]` fn ident the user explicitly hooked into the
-    /// binding; functions not in this set are skipped by the registry's
-    /// signature scan and by the per-item emitter.
-    fn declared_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        let mut out = std::collections::HashSet::new();
-        for pkg in self.packages.values() {
-            for m in &pkg.functions {
-                out.insert(m.rust_ident.clone());
-            }
-            // Function-backed constants (`constant_fun`) are ordinary
-            // declared functions on the Rust/extern side; only their Kotlin
-            // surface differs (an eagerly-initialized top-level `val`).
-            for m in &pkg.constant_functions {
-                out.insert(m.rust_ident.clone());
-            }
-        }
-        // Class members (accessor/method/constructor) are declared via
-        // `.accessor`/`.method`/`.constructor` (not `.fun`) but are still real
-        // `#[prebindgen]` wrappers: they need a Rust extern + JNINative
-        // `external fun` + JSONL inclusion. Only their Kotlin surface differs
-        // (an instance method or companion factory instead of a free fn).
-        out.extend(
-            self.class_members
-                .values()
-                .flatten()
-                .map(|m| m.rust_ident.clone()),
-        );
-        out
-    }
-
-    /// Functions ever referenced as a named `.field(fun!(...))` in any
-    /// `expand_return!` decl, type-level or per-fn — see
-    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.method()`
-    /// class-member declarations: a function need not also be exposed as an
-    /// instance method to be referenced this way.
-    fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.field_accessor_fns()
-    }
-
     /// Binding-local fns to synthesize into the registry, from both entry
     /// forms — path-built `fun!(crate::f).sig(…)` decls (full stated
     /// signature) and `field!("name").with(ty, path)` output fields
@@ -1154,58 +1129,6 @@ impl Prebindgen for JniGen {
     /// declarations only with an identical synthesized signature.
     fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         self.collect_local_functions()
-    }
-
-    /// Methods (`.method`) — their fn ident mapped to the owning class's
-    /// `TypeKey`, so input-flattening can skip the receiver parameter.
-    fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
-        self.class_members
-            .iter()
-            .flat_map(|(key, ms)| {
-                ms.iter()
-                    .filter(|m| m.kind == MemberKind::Method)
-                    .map(move |m| (m.rust_ident.clone(), key.clone()))
-            })
-            .collect()
-    }
-
-    /// Every type registered via one of the **class declarators**
-    /// (`ptr_class!` / `enum_class!` / `sealed_class!` / `data_class!`)
-    /// — i.e. every entry in the type table, whose only
-    /// writer is `JniGen::register_class`. These are the only structs/enums
-    /// the per-item emitter walks, and the scan requires them in BOTH
-    /// directions (their converters always resolve both ways). Wrapper
-    /// registrations live in their own tables and are deliberately excluded: a
-    /// wrapper type is required per **usage** direction, so an output-only
-    /// wrapper needs no input twin.
-    fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.types.keys().cloned().collect()
-    }
-
-    /// Union of every `.constant(...)` list across all
-    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGen
-    /// HAS a const declaration mechanism, so const emission is declared-only
-    /// and undeclared consts get the skip warning (see
-    /// [`Prebindgen::declared_consts`]).
-    /// The declared value types of every expression constant
-    /// (`ConstDecl::expr`) — they have no `#[prebindgen]` item to
-    /// scan, so the resolver is told directly to produce their output
-    /// converters.
-    fn required_output_types(&self) -> Vec<syn::Type> {
-        self.packages
-            .values()
-            .flat_map(|p| p.constant_exprs.iter().map(|e| e.ty.clone()))
-            .collect()
-    }
-
-    fn declared_consts(&self) -> Option<std::collections::HashSet<syn::Ident>> {
-        let mut out = std::collections::HashSet::new();
-        for pkg in self.packages.values() {
-            for c in &pkg.constants {
-                out.insert(c.rust_ident.clone());
-            }
-        }
-        Some(out)
     }
 
     /// Member-shape invariants (N5), checked against registry signatures —
@@ -1418,42 +1341,6 @@ impl Prebindgen for JniGen {
         validate_bindings(self, registry)
     }
 
-    /// Consts acknowledged-but-unexposed via [`JniGen::ignore`].
-    fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
-        self.ignored_const_idents.clone()
-    }
-
-    /// Fns acknowledged-but-unbound via [`JniGen::ignore`] — suppresses
-    /// the registry's "skipping undeclared" warning, emits nothing.
-    fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.ignored_fns.clone()
-    }
-
-    /// Bulk name-family ignores from [`JniGen::ignore`] +
-    /// [`matching`](crate::lang::matching).
-    fn ignored_name_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
-        self.ignored_name_predicates.clone()
-    }
-
-    /// Framework-called fns that get no extern of their own: `convert!`
-    /// conversion fns (called by generated converter bodies) and fns
-    /// referenced only inside boundary decls (`expand_return!` accessors /
-    /// `expand_param!` ctors, called by the generated fold/unfold code).
-    /// Routing both through the *helper* channel — not the ignore channel —
-    /// makes a typo'd `fun!(…)` inside a decl a hard scan error
-    /// (`ScanError::DeclaredNotFound`) instead of a stale-ignore
-    /// warning.
-    /// Declared functions are subtracted: a fn that is also a real
-    /// member/package fn keeps its extern. Type requirements come through
-    /// [`Self::extra_required_types`], not a signature scan.
-    fn helper_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        let declared = self.declared_functions();
-        self.convert_fns()
-            .chain(self.boundary_referenced_fns())
-            .filter(|f| !declared.contains(f))
-            .collect()
-    }
-
     /// The other-side type of every `convert!` conversion, in the
     /// conversion's direction: an input fn's parameter type (peeled of `&`)
     /// must have its own **input** converter for the composed rank-0 body to
@@ -1476,34 +1363,6 @@ impl Prebindgen for JniGen {
             }
         }
         out
-    }
-
-    /// Types acknowledged-but-undeclared via [`JniGen::ignore`].
-    fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.ignored_class_types.clone()
-    }
-
-    /// **Rust-side-only** types: boundary decls (`expand_param!` /
-    /// `expand_return!`) whose type has no class declaration. They never
-    /// materialize in Kotlin — only their ingredients (fold) and fields
-    /// (unfold / error channel) cross the boundary — so the registry
-    /// acknowledges them and drops their direct converter requirements once
-    /// the plans are in place.
-    fn boundary_only_types(&self) -> std::collections::HashSet<TypeKey> {
-        // A `sealed_class!`-declared sum has no single wire: it crosses as a
-        // tag plus one leaf group per variant, so a direct converter for the
-        // value itself is genuinely not needed. Declaring it boundary-only
-        // drops that requirement while keeping the type scanned (its payload
-        // types register and resolve, which is what the Kotlin surface reads
-        // its field types from).
-        self.rust_side_only_types()
-            .chain(
-                self.types
-                    .iter()
-                    .filter(|(_, c)| c.sum().is_some())
-                    .map(|(k, _)| k.clone()),
-            )
-            .collect()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by
@@ -2249,5 +2108,160 @@ impl JniGen {
                 projection,
             },
         })
+    }
+}
+
+/// The declaration surface, stated once.
+///
+/// These were trait methods the registry called back into the adapter from
+/// inside `resolve`. They are the adapter's own business now, gathered into the
+/// one value the registry is constructed from.
+impl JniGen {
+    /// Union of every `.fun(...)` list across all
+    /// [`Self::package`] subpackage contexts. Each entry is a
+    /// `#[prebindgen]` fn ident the user explicitly hooked into the
+    /// binding; functions not in this set are skipped by the registry's
+    /// signature scan and by the per-item emitter.
+    pub(crate) fn declared_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        let mut out = std::collections::HashSet::new();
+        for pkg in self.packages.values() {
+            for m in &pkg.functions {
+                out.insert(m.rust_ident.clone());
+            }
+            // Function-backed constants (`constant_fun`) are ordinary
+            // declared functions on the Rust/extern side; only their Kotlin
+            // surface differs (an eagerly-initialized top-level `val`).
+            for m in &pkg.constant_functions {
+                out.insert(m.rust_ident.clone());
+            }
+        }
+        // Class members (accessor/method/constructor) are declared via
+        // `.accessor`/`.method`/`.constructor` (not `.fun`) but are still real
+        // `#[prebindgen]` wrappers: they need a Rust extern + JNINative
+        // `external fun` + JSONL inclusion. Only their Kotlin surface differs
+        // (an instance method or companion factory instead of a free fn).
+        out.extend(
+            self.class_members
+                .values()
+                .flatten()
+                .map(|m| m.rust_ident.clone()),
+        );
+        out
+    }
+    /// Functions ever referenced as a named `.field(fun!(...))` in any
+    /// `expand_return!` decl, type-level or per-fn — see
+    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.method()`
+    /// class-member declarations: a function need not also be exposed as an
+    /// instance method to be referenced this way.
+    pub(crate) fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        self.field_accessor_fns()
+    }
+    /// Methods (`.method`) — their fn ident mapped to the owning class's
+    /// `TypeKey`, so input-flattening can skip the receiver parameter.
+    pub(crate) fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
+        self.class_members
+            .iter()
+            .flat_map(|(key, ms)| {
+                ms.iter()
+                    .filter(|m| m.kind == MemberKind::Method)
+                    .map(move |m| (m.rust_ident.clone(), key.clone()))
+            })
+            .collect()
+    }
+    /// Fns acknowledged-but-unbound via [`JniGen::ignore`] — suppresses
+    /// the registry's "skipping undeclared" warning, emits nothing.
+    pub(crate) fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        self.ignored_fns.clone()
+    }
+    /// Bulk name-family ignores from [`JniGen::ignore`] +
+    /// [`matching`](crate::lang::matching).
+    pub(crate) fn ignored_name_predicates(
+        &self,
+    ) -> Vec<crate::api::core::prebindgen::NamePredicate> {
+        self.ignored_name_predicates.clone()
+    }
+    /// Framework-called fns that get no extern of their own: `convert!`
+    /// conversion fns (called by generated converter bodies) and fns
+    /// referenced only inside boundary decls (`expand_return!` accessors /
+    /// `expand_param!` ctors, called by the generated fold/unfold code).
+    /// Routing both through the *helper* channel — not the ignore channel —
+    /// makes a typo'd `fun!(…)` inside a decl a hard scan error
+    /// (`ScanError::DeclaredNotFound`) instead of a stale-ignore
+    /// warning.
+    /// Declared functions are subtracted: a fn that is also a real
+    /// member/package fn keeps its extern. Type requirements come through
+    /// [`Self::extra_required_types`], not a signature scan.
+    pub(crate) fn helper_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        let declared = self.declared_functions();
+        self.convert_fns()
+            .chain(self.boundary_referenced_fns())
+            .filter(|f| !declared.contains(f))
+            .collect()
+    }
+    pub(crate) fn declared_consts(&self) -> Option<std::collections::HashSet<syn::Ident>> {
+        let mut out = std::collections::HashSet::new();
+        for pkg in self.packages.values() {
+            for c in &pkg.constants {
+                out.insert(c.rust_ident.clone());
+            }
+        }
+        Some(out)
+    }
+    /// Consts acknowledged-but-unexposed via [`JniGen::ignore`].
+    pub(crate) fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
+        self.ignored_const_idents.clone()
+    }
+    /// Union of every `.constant(...)` list across all
+    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGen
+    /// HAS a const declaration mechanism, so const emission is declared-only
+    /// and undeclared consts get the skip warning (see
+    /// [`Prebindgen::declared_consts`]).
+    /// The declared value types of every expression constant
+    /// (`ConstDecl::expr`) — they have no `#[prebindgen]` item to
+    /// scan, so the resolver is told directly to produce their output
+    /// converters.
+    pub(crate) fn required_output_types(&self) -> Vec<syn::Type> {
+        self.packages
+            .values()
+            .flat_map(|p| p.constant_exprs.iter().map(|e| e.ty.clone()))
+            .collect()
+    }
+    /// Every type registered via one of the **class declarators**
+    /// (`ptr_class!` / `enum_class!` / `sealed_class!` / `data_class!`)
+    /// — i.e. every entry in the type table, whose only
+    /// writer is `JniGen::register_class`. These are the only structs/enums
+    /// the per-item emitter walks, and the scan requires them in BOTH
+    /// directions (their converters always resolve both ways). Wrapper
+    /// registrations live in their own tables and are deliberately excluded: a
+    /// wrapper type is required per **usage** direction, so an output-only
+    /// wrapper needs no input twin.
+    pub(crate) fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
+        self.types.keys().cloned().collect()
+    }
+    /// Types acknowledged-but-undeclared via [`JniGen::ignore`].
+    pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
+        self.ignored_class_types.clone()
+    }
+    /// **Rust-side-only** types: boundary decls (`expand_param!` /
+    /// `expand_return!`) whose type has no class declaration. They never
+    /// materialize in Kotlin — only their ingredients (fold) and fields
+    /// (unfold / error channel) cross the boundary — so the registry
+    /// acknowledges them and drops their direct converter requirements once
+    /// the plans are in place.
+    pub(crate) fn boundary_only_types(&self) -> std::collections::HashSet<TypeKey> {
+        // A `sealed_class!`-declared sum has no single wire: it crosses as a
+        // tag plus one leaf group per variant, so a direct converter for the
+        // value itself is genuinely not needed. Declaring it boundary-only
+        // drops that requirement while keeping the type scanned (its payload
+        // types register and resolve, which is what the Kotlin surface reads
+        // its field types from).
+        self.rust_side_only_types()
+            .chain(
+                self.types
+                    .iter()
+                    .filter(|(_, c)| c.sum().is_some())
+                    .map(|(k, _)| k.clone()),
+            )
+            .collect()
     }
 }

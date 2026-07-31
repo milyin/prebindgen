@@ -17,13 +17,11 @@
 //! 100% of the shape. Other code that wants to call this converter reads
 //! the name from `function.sig.ident`; the wire form from `destination`.
 
-use std::collections::HashSet;
-
 use proc_macro2::TokenStream;
 
 use crate::api::core::{
     niches::Niches,
-    registry::{Direction, Registry, TypeKey},
+    registry::{Direction, Registry},
 };
 
 /// A shared predicate over an item name, as used by
@@ -265,27 +263,6 @@ pub trait Prebindgen {
 
     // ── Declaration queries ────────────────────────────────────────
 
-    /// Idents of `#[prebindgen]` functions the adapter claims for emission.
-    /// Anything not in this set is left in the registry's `functions`
-    /// map but never scanned for type requirements and never emitted —
-    /// the build prints a `cargo:warning=` line per skip.
-    ///
-    /// Default: empty (strict allowlist; an adapter with no declarations
-    /// emits nothing for functions).
-    fn declared_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// Subset of [`Self::declared_functions`] declared as **read accessors**:
-    /// the parameter composer (constructor expansion) is never applied to them,
-    /// and a decomposer record may only reference one. Adapters without the
-    /// concept return empty (then no fn is treated as an accessor).
-    ///
-    /// Default: empty.
-    fn accessor_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
     /// **Binding-local functions** to synthesize into the registry before
     /// scanning: `(item, origin module path)` pairs built from
     /// adapter-declared signatures (there is no `#[prebindgen]` item behind
@@ -298,55 +275,6 @@ pub trait Prebindgen {
     /// Default: empty.
     fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         Vec::new()
-    }
-
-    /// `#[prebindgen]` functions declared as **methods** of a class, mapping the
-    /// fn ident to its class's canonical [`TypeKey`]. A method's first parameter
-    /// of that class type is the receiver and is excluded from input-flattening
-    /// (it is bound to `this`); the remaining parameters flatten normally.
-    /// Adapters without the concept return empty.
-    ///
-    /// Default: empty.
-    fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
-        std::collections::HashMap::new()
-    }
-
-    /// Idents of `#[prebindgen]` functions the adapter explicitly knows about but
-    /// intentionally does not emit. These suppress the registry's
-    /// "skipping undeclared" warning while still leaving the items out of the
-    /// scan and write pipelines.
-    ///
-    /// Default: empty.
-    fn ignored_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// Bulk form of the `ignored_*` sets: predicates over the item NAME —
-    /// every *undeclared* `#[prebindgen]` item (function, struct/enum, or
-    /// const) whose name matches any predicate is an acknowledged skip (no
-    /// "skipping undeclared" warning). Kind-agnostic by design: prebindgen
-    /// items live in one flat namespace, so a name filter needs no kind. A
-    /// declared item matching a predicate is unaffected (declaration wins),
-    /// and a predicate matching nothing is silent — it is a filter, not a
-    /// claim, so unlike an exact-name ignore there is no "not found"
-    /// warning.
-    ///
-    /// Default: empty.
-    fn ignored_name_predicates(&self) -> Vec<NamePredicate> {
-        Vec::new()
-    }
-
-    /// Idents of `#[prebindgen]` **helper** functions: called from the
-    /// adapter's generated converter bodies rather than exported. No
-    /// extern/wrapper is emitted for them and the "skipping undeclared"
-    /// warning is suppressed; the specific types a helper makes the adapter
-    /// depend on are registered via [`Self::extra_required_types`] (a full
-    /// signature scan would over-require — e.g. an output conversion fn's
-    /// `&T` parameter has no input-direction meaning).
-    ///
-    /// Default: empty.
-    fn helper_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
     }
 
     /// Extra converter requirements the adapter derives from its own decls
@@ -363,80 +291,15 @@ pub trait Prebindgen {
         Vec::new()
     }
 
-    /// Idents of `#[prebindgen]` consts the adapter claims for emission.
+    /// Everything this binding declares: which functions, types and consts it
+    /// emits, which it deliberately skips, and the extra types its plans need.
     ///
-    /// * `None` (default) — the adapter has **no const declaration
-    ///   mechanism**: every indexed const is re-emitted into the generated
-    ///   Rust via [`Self::on_const`] (a path-alias when
-    ///   [`Self::source_module`] is available, verbatim otherwise), none
-    ///   drives type resolution, and no skip warnings are printed.
-    /// * `Some(set)` — declared-only, symmetric with functions: a declared
-    ///   const's type is scanned as a required **output** type, only
-    ///   declared consts reach [`Self::on_const`], and undeclared ones get
-    ///   a `cargo:warning=` skip line (suppressed via
-    ///   [`Self::ignored_consts`]).
-    fn declared_consts(&self) -> Option<HashSet<syn::Ident>> {
-        None
-    }
-
-    /// Idents of `#[prebindgen]` consts the adapter explicitly knows about
-    /// but intentionally does not emit — suppresses the "skipping
-    /// undeclared" warning. Only meaningful when [`Self::declared_consts`]
-    /// returns `Some`.
-    ///
-    /// Default: empty.
-    fn ignored_consts(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// Extra types the adapter requires in the **output** direction beyond
-    /// what scanning the declared items discovers — for adapter-synthesized
-    /// values that have no `#[prebindgen]` item to scan (e.g. the declared
-    /// value type of a binding-defined expression constant).
-    ///
-    /// Default: none.
-    fn required_output_types(&self) -> Vec<syn::Type> {
-        Vec::new()
-    }
-
-    /// Canonical keys of types (structs / enums) the adapter claims for
-    /// emission. Matched against `Registry::structs` and `Registry::enums`
-    /// by bare-ident lookup. Anything not in this set is left in the
-    /// registry but never scanned for body type requirements and never
-    /// emitted — the build prints a `cargo:warning=` line per skip.
-    ///
-    /// Default: empty (strict allowlist).
-    fn declared_types(&self) -> HashSet<TypeKey> {
-        HashSet::new()
-    }
-
-    /// Canonical keys of types the adapter explicitly knows about but
-    /// intentionally does not emit. These suppress the registry's
-    /// "skipping undeclared" warning while still leaving the items out of the
-    /// scan and write pipelines.
-    ///
-    /// Default: empty.
-    fn ignored_types(&self) -> HashSet<TypeKey> {
-        HashSet::new()
-    }
-
-    /// Canonical keys of the adapter's **boundary-only** (rust-side-only)
-    /// types: types the adapter converts exclusively through its
-    /// expansion/deconstruction plans — built from ingredients on input,
-    /// decomposed into fields on output — so the value itself never crosses
-    /// the boundary and has no destination-language representation.
-    ///
-    /// `write_rust` treats them as acknowledged (no "skipping undeclared"
-    /// warning) and, after the adapter's plans are applied, drops their
-    /// direct converter requirements in both directions
-    /// ([`crate::api::core::registry::Registry`]'s `unrequire_input` /
-    /// `unrequire_output`) — a direct converter for such a type is genuinely
-    /// not needed and typically cannot resolve.
-    ///
-    /// Default: empty.
-    fn boundary_only_types(&self) -> HashSet<TypeKey> {
-        HashSet::new()
-    }
+    /// **The registry's construction input, stated once.** This was twenty-one
+    /// getters the registry called back into the adapter from inside `resolve`,
+    /// which put configuring and using in the same call — and that is why a
+    /// converter could read a half-built registry. The caller states it all up
+    /// front; resolution then passes or fails.
+    fn declarations(&self) -> crate::api::core::registry::Declarations;
 
     /// Final post-processing pass applied to every emitted item right
     /// before write. Default: no-op.

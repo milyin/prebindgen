@@ -589,57 +589,123 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
     }
 }
 
-/// Adapter declaration intent normalized once per pipeline run.
-struct DeclaredItems {
-    functions: HashSet<syn::Ident>,
-    ignored_functions: HashSet<syn::Ident>,
+/// Everything the caller declares about what a binding emits.
+///
+/// **The registry's construction input.** It used to be assembled by calling
+/// twenty-one getters back into the adapter from inside `resolve`, which put
+/// "configuring" and "using" in the same call — and that is what let a converter
+/// read a half-built registry, which is what made `None` ambiguous between
+/// *defer* and *cannot*. The caller fills this first; `resolve` then passes or
+/// fails.
+#[derive(Default)]
+pub struct Declarations {
+    pub(crate) functions: HashSet<syn::Ident>,
+    pub(crate) ignored_functions: HashSet<syn::Ident>,
     /// Bulk-ignore predicates over item names — every matching *undeclared*
     /// item (fn, struct/enum, const) is an acknowledged skip (no warning).
     /// Kind-agnostic: prebindgen names live in one flat namespace. A
     /// declared item matching a predicate is unaffected: declaration wins.
     /// See [`Prebindgen::ignored_name_predicates`].
-    ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
+    pub(crate) ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
     /// Signature-scanned but not emitted — see [`Prebindgen::helper_functions`].
-    helper_functions: HashSet<syn::Ident>,
-    accessors: HashSet<syn::Ident>,
-    method_receivers: HashMap<syn::Ident, TypeKey>,
-    types: HashSet<TypeKey>,
-    ignored_types: HashSet<TypeKey>,
+    pub(crate) helper_functions: HashSet<syn::Ident>,
+    pub(crate) accessors: HashSet<syn::Ident>,
+    pub(crate) method_receivers: HashMap<syn::Ident, TypeKey>,
+    pub(crate) types: HashSet<TypeKey>,
+    pub(crate) ignored_types: HashSet<TypeKey>,
     /// Types converted exclusively through the adapter's plans (built from
     /// ingredients / decomposed into fields); acknowledged for warning
     /// purposes and un-required after plans — see
     /// [`Prebindgen::boundary_only_types`].
-    boundary_only_types: HashSet<TypeKey>,
+    pub(crate) boundary_only_types: HashSet<TypeKey>,
     /// `None` = the adapter has no const declaration mechanism (all consts
     /// re-emitted verbatim, no scan, no warnings) — see
     /// [`Prebindgen::declared_consts`].
-    consts: Option<HashSet<syn::Ident>>,
-    ignored_consts: HashSet<syn::Ident>,
+    pub(crate) consts: Option<HashSet<syn::Ident>>,
+    pub(crate) ignored_consts: HashSet<syn::Ident>,
     /// Adapter-required extra output types (no `#[prebindgen]` item to
     /// scan — e.g. expression-constant value types); see
     /// [`Prebindgen::required_output_types`].
-    required_output_types: Vec<syn::Type>,
+    pub(crate) required_output_types: Vec<syn::Type>,
 }
 
-impl DeclaredItems {
-    fn from_adapter<E, M>(adapter: &E) -> Result<Self, ScanError>
-    where
-        E: Prebindgen<Metadata = M>,
-    {
-        let declared = Self {
-            functions: adapter.declared_functions(),
-            ignored_functions: adapter.ignored_functions(),
-            ignored_name_predicates: adapter.ignored_name_predicates(),
-            helper_functions: adapter.helper_functions(),
-            accessors: adapter.accessor_functions(),
-            method_receivers: adapter.method_receivers(),
-            types: adapter.declared_types(),
-            ignored_types: adapter.ignored_types(),
-            boundary_only_types: adapter.boundary_only_types(),
-            consts: adapter.declared_consts(),
-            ignored_consts: adapter.ignored_consts(),
-            required_output_types: adapter.required_output_types(),
-        };
+impl Declarations {
+    /// A binding that declares nothing.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Functions to emit.
+    pub fn functions(mut self, v: HashSet<syn::Ident>) -> Self {
+        self.functions = v;
+        self
+    }
+    /// Functions deliberately not emitted — acknowledged, so no warning.
+    pub fn ignored_functions(mut self, v: HashSet<syn::Ident>) -> Self {
+        self.ignored_functions = v;
+        self
+    }
+    /// Bulk-ignore predicates over item names, kind-agnostic. A declared item
+    /// matching one is unaffected: declaration wins.
+    pub fn ignored_name_predicates(
+        mut self,
+        v: Vec<crate::api::core::prebindgen::NamePredicate>,
+    ) -> Self {
+        self.ignored_name_predicates = v;
+        self
+    }
+    /// Signature-scanned but never emitted.
+    pub fn helper_functions(mut self, v: HashSet<syn::Ident>) -> Self {
+        self.helper_functions = v;
+        self
+    }
+    /// Functions used as accessors by a decomposition.
+    pub fn accessors(mut self, v: HashSet<syn::Ident>) -> Self {
+        self.accessors = v;
+        self
+    }
+    /// The receiver type of each function emitted as a method.
+    pub fn method_receivers(mut self, v: HashMap<syn::Ident, TypeKey>) -> Self {
+        self.method_receivers = v;
+        self
+    }
+    /// Types to emit.
+    pub fn types(mut self, v: HashSet<TypeKey>) -> Self {
+        self.types = v;
+        self
+    }
+    /// Types deliberately not emitted.
+    pub fn ignored_types(mut self, v: HashSet<TypeKey>) -> Self {
+        self.ignored_types = v;
+        self
+    }
+    /// Types that cross only through a plan, never whole. Acknowledged for
+    /// warnings and un-required once plans are applied.
+    pub fn boundary_only_types(mut self, v: HashSet<TypeKey>) -> Self {
+        self.boundary_only_types = v;
+        self
+    }
+    /// Consts to emit. `None` = this binding has no const mechanism, so every
+    /// const is re-emitted verbatim with no scan and no warnings.
+    pub fn consts(mut self, v: Option<HashSet<syn::Ident>>) -> Self {
+        self.consts = v;
+        self
+    }
+    /// Consts deliberately not emitted.
+    pub fn ignored_consts(mut self, v: HashSet<syn::Ident>) -> Self {
+        self.ignored_consts = v;
+        self
+    }
+    /// Output types with no `#[prebindgen]` item behind them — an expression
+    /// constant's value type, say — that still need a converter.
+    pub fn required_output_types(mut self, v: Vec<syn::Type>) -> Self {
+        self.required_output_types = v;
+        self
+    }
+
+    /// Reject a declaration that says two things at once.
+    fn check(self) -> Result<Self, ScanError> {
+        let declared = self;
 
         if let Some(name) = declared
             .functions
@@ -948,11 +1014,11 @@ impl<M> Registry<M> {
     where
         E: Prebindgen<Metadata = M>,
     {
-        let declared = DeclaredItems::from_adapter(ext)?;
+        let declared = ext.declarations().check()?;
         self.scan_declared_items(&declared)
     }
 
-    fn scan_declared_items(&mut self, declared: &DeclaredItems) -> Result<(), ScanError> {
+    fn scan_declared_items(&mut self, declared: &Declarations) -> Result<(), ScanError> {
         // Source-qualified declared types are a hard error (issue #95). The
         // key's own normalization already reduced `crate::`/`self::` and std
         // prelude spellings, so a remaining multi-segment declared path
@@ -1485,7 +1551,7 @@ impl<M> Registry<M> {
             // finds a captured fn — there is one index, and this is it.
             self.flat.add_local_function(lowered, origin);
         }
-        let declared = DeclaredItems::from_adapter(&adapter)?;
+        let declared = adapter.declarations().check()?;
         self.scan_declared_items(&declared)?;
         adapter
             .validate(&self)
@@ -1510,7 +1576,7 @@ impl<M> Registry<M> {
     fn apply_adapter_plans<E>(
         &mut self,
         ext: &E,
-        declared: &DeclaredItems,
+        declared: &Declarations,
     ) -> Result<(), WriteRustError>
     where
         E: Prebindgen<Metadata = M>,
