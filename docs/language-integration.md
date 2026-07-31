@@ -312,9 +312,9 @@ no ancestry, while the trees differ by nothing. Diff the content, not the histor
       model already names `TypeKind::Fallible`. 592 deletions against 124
       insertions, and the `ConverterImpl` tail extracted verbatim rather than
       rewritten. Ledger 202 → 167
-- [ ] L2a — **the scan walks model edges** (13)
-- [ ] L2b — **one layer read** (26)
-- [ ] L2c — **the enum shape and its numbers** (2)
+- [ ] L2a — **the scan walks model edges** (11)
+- [ ] L2b — **one layer read** (20)
+- [ ] L2c — **the enum shape and its numbers** (0)
 - [ ] L2d — **canonicalization moves home** (4)
 - [ ] L2e — **delete `TypeSubject::Adapter`** (0)
 
@@ -354,11 +354,33 @@ covertest-kotlin and produced no cells either.
 about `fallible_parts` logging zero. `zenoh-flat`'s consumers are out of tree and
 do not currently build.
 
-#### L2a — the scan walks model edges (13)
+#### L2 ends at 10, not 0 — and the reason is L3/L4
 
-- [ ] `registry/walk.rs` (9), `registry/scan.rs` (2), and the two ident extractors
-      `path_tail_ident` / `bare_path_ident` (2) — `TypeKind::Named` carries the
-      name, so there is no path to take apart
+Counted before starting: **every classifying helper in `types_util` has adapter
+callers**, most of them heavily — `option_inner_type` 40, `bare_path_ident` 22,
+`is_unit` 18, `first_type_arg` 14, `is_option_type` 13. A shared helper cannot be
+deleted while `jnigen` and `cbindgen` still call it, and it takes no `&Flat`, so it
+cannot consult the model from the inside either. L2 can stop `api/core` from
+*calling* them; only L3 and L4 can free them to be deleted.
+
+So the stage splits into what it can finish and what it can only unblock:
+
+| | Sites | |
+|---|---:|---|
+| `registry/walk` + `registry/scan` | 11 | L2a — deleted outright |
+| `unfold` + `expand` | 20 | L2b — migrated to the model |
+| `normalize_type` + `type_from_ident` | 4 | L2d — **zero** adapter callers, so they can move |
+| the rest of `types_util` | 10 | **stays** — waiting on L3/L4 |
+
+That is the honest end state, and it is what the "each entry's fate as it comes off
+the ledger" rule above asks for: the 10 that stay are named, and their reason is a
+dependency rather than a judgement about them. L2c is in the list below with a
+**0** because of exactly this — it removes `api/core`'s dependence on the enum
+classifiers without being able to delete them.
+
+#### L2a — the scan walks model edges (11)
+
+- [ ] `registry/walk.rs` (9) and `registry/scan.rs` (2)
 - [ ] `immediate_edges` already reads a declared type's **fields** off the element;
       the structural half becomes `TypeKind`'s own children — `Optional` /
       `Sequence` / `Ref` → inner, `Array` → elem, `Fallible` → ok + err,
@@ -372,31 +394,31 @@ do not currently build.
 - [ ] The `MaybeUninit<Payload>` cell stops existing. It resolves to no converter,
       so generated output should not move — **verified, not assumed**
 
-#### L2b — one layer read (26)
+#### L2b — one layer read (20)
 
-The largest, and it pre-pays L3 and L4: both adapters call this family.
+The largest, and it pre-pays L3 and L4: both adapters call this family, so the
+model-driven replacement is in place and proven before either of them reaches it.
 
-- [ ] `unfold` (16), `expand` (4) and the `types_util` peel family (6) are one
-      idiom — *peel `Option`, then `&`, and remember which layers were there* —
-      which is exactly `Optional(Ref { .. })`
+- [ ] `unfold` (16) and `expand` (4) are one idiom — *peel `Option`, then `&`, and
+      remember which layers were there* — which is exactly `Optional(Ref { .. })`
 - [ ] `TypeRef` gains the sibling its `walk()` / `extents()` / `array_extent()` are
       missing: a layer read that says which of `Optional` / `Ref` / `Sequence` were
       present and hands back the core. Driven by `kind`, and living where
       classification is allowed
-- [ ] `option_inner_type`, `vec_inner_type`, `result_parts` and its two halves, the
-      `is_*` predicates, `first_type_arg`, `peel_ref_option_vec` and
-      `unfold::peel_ref` are retired
-- [ ] This closes the **ident-name blind spot** the ledger header lists:
-      `is_option_type` and its siblings classify via `seg.ident == "Option"` and are
-      invisible only because `WATCHED` names two enums
-- [ ] Call sites in `jnigen` and `cbindgen` change mechanically to keep the build
-      green. That is not L3/L4 work, and claims none of their sites
+- [ ] `unfold::peel_ref` is deleted — the one member of the family with no adapter
+      caller. `option_inner_type`, `vec_inner_type`, `result_parts` and its halves,
+      the `is_*` predicates, `first_type_arg` and `peel_ref_option_vec` **stay**,
+      called by nothing in `api/core` and waiting on L3/L4
+- [ ] The **ident-name blind spot** the ledger header lists is where those 6 sites
+      live: `is_option_type` and its siblings classify via `seg.ident == "Option"`,
+      invisible only because `WATCHED` names two enums. L2 stops feeding it; it
+      closes when the last caller goes
 - [ ] The `Option<Summary>` cell stops existing
 - [ ] Subsumes the older `TypeKey`-from-a-`TypeRef` bullet: a lookup stops routing
       through a spelling. L1.5 got the first half, one canonicalization shared by
       `TypeKey` and the model's index
 
-#### L2c — the enum shape and its numbers (2)
+#### L2c — the enum shape and its numbers (0)
 
 - [ ] `enum_shape` and `first_payload_variant` re-derive from a `syn::ItemEnum` the
       one thing the model settles **by construction**: `Type::Variant` is a sum,
@@ -404,8 +426,11 @@ The largest, and it pre-pays L3 and L4: both adapters call this family.
       has to ask
 - [ ] `enum_discriminant_values` / `extract_int_literal` are a second numbering
       implementation; `EnumValue::discriminant` is the first (#226)
-- [ ] Two ledger sites, but a large blind-spot closure: the first two take a
-      `syn::ItemEnum`, which `WATCHED` cannot see at all
+- [ ] **Zero ledger movement, by construction**: all three have adapter callers, so
+      this PR removes `api/core`'s three call sites and nothing else. Its value is
+      the blind spot it stops feeding — `enum_shape` and `first_payload_variant`
+      take a `syn::ItemEnum`, which `WATCHED` cannot see at all, so the count would
+      never have shown this either way
 
 #### L2d — canonicalization moves home (4)
 
@@ -417,8 +442,8 @@ The largest, and it pre-pays L3 and L4: both adapters call this family.
       the ledger counts constructions
 - [ ] Both move into `core::flat`. **A move, not a migration** — the same
       distinction #248 gets above — justified by ownership rather than by the count
-- [ ] With it `api/core` leaves the ledger entirely, instead of shrinking to a
-      residue no one can explain
+- [ ] They are the only two helpers in the file with **zero** adapter callers, which
+      is what makes them movable at all while the other ten wait on L3/L4
 
 #### L2e — delete `TypeSubject::Adapter` (0)
 
