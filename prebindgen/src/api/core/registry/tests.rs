@@ -797,11 +797,24 @@ fn a_source_type_cell_carries_the_models_typeref() {
     assert!(matches!(inner.subject.kind(), Some(TypeKind::Scalar(_))));
 }
 
-/// A type only the binding authored has **no** reading and no location — a fact
-/// about it, not information that went missing. Declaring a type the source
-/// never mentions is the ordinary way to reach this state.
+/// A type only the binding authored is **classified but placeless**: it has a
+/// reading, because it is a type in this language, and no location, because no
+/// source wrote it. Declaring a type the source never mentions is the ordinary
+/// way to reach this state.
+///
+/// The two are separate facts, and this is the case that shows why. `Foreign` is
+/// a name — the frontend can say that much about any spelling that parses,
+/// whether or not it can *resolve* it — so refusing to classify it would be
+/// throwing away an answer the grammar has. What is genuinely absent is a file
+/// and line, and only that.
+///
+/// So the cell gets its reading from `ensure_entry`, which admits a composed or
+/// declared type to the model on the way in, the same way `add_local_function`
+/// admits a binding-local `sig!(..)`.
 #[test]
-fn an_adapter_authored_type_cell_has_no_source_reading() {
+fn an_adapter_authored_type_cell_is_classified_but_placeless() {
+    use crate::api::core::flat::TypeKind;
+
     let items = vec![fn_item("fn f(x: u64) -> u64 { x }")];
     let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
 
@@ -816,9 +829,15 @@ fn an_adapter_authored_type_cell_has_no_source_reading() {
 
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
-    assert!(matches!(cell.subject, TypeSubject::Adapter));
-    assert!(cell.subject.kind().is_none());
-    assert_eq!(cell.subject.location(), None);
+    assert!(
+        matches!(cell.subject.kind(), Some(TypeKind::Named { id }) if id.name == "Foreign"),
+        "a declared name is a name, and the grammar can say so"
+    );
+    assert_eq!(
+        cell.subject.location(),
+        None,
+        "nothing wrote it, so there is no position to report"
+    );
 }
 
 // ── The projection itself ──────────────────────────────────────────────
@@ -1460,21 +1479,40 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
         }
     }
 
-    // And `Node` really is a cycle: it reaches itself.
+    // And the fixture really is cyclic — otherwise "terminates" above says nothing.
+    // Walked with the registry's own edges, so this exercises the graph the cycle
+    // guard walks rather than a second walk that could drift from it.
+    //
+    // Stated as "some key repeats" rather than "`Node` reaches `Node`", because the
+    // loop does not pass back through that spelling: the fixture's field is
+    // `Option<Box<Node>>`, `Box<T>` **is** `T` in this language, and the model
+    // therefore keeps the `Box<Node>` spelling while classifying it `Named { Node }`.
+    // The loop is `Option<Box<Node>>` → `Box<Node>` → `Option<Box<Node>>`. Which
+    // spellings sit in the cycle is a modelling detail; that there *is* one is the
+    // fixture property this test needs.
     let node = TypeKey::parse("Node").expect("test type");
-    let reaches_self = reg
-        .immediate_edges(Direction::Output, &node.to_type())
-        .into_iter()
-        .any(|(_, t)| {
-            crate::api::core::registry::immediate_subtype_positions(&t)
-                .into_iter()
-                .any(|inner| {
-                    crate::api::core::registry::immediate_subtype_positions(&inner)
-                        .into_iter()
-                        .any(|i2| TypeKey::from_type(&i2) == node)
-                })
-        });
-    assert!(reaches_self, "fixture must actually be recursive");
+    let mut seen_keys: Set<TypeKey> = Set::new();
+    let mut frontier = vec![node.to_type()];
+    let mut revisited = false;
+    for _ in 0..8 {
+        let mut next = Vec::new();
+        for t in frontier {
+            if !seen_keys.insert(TypeKey::from_type(&t)) {
+                revisited = true;
+                break;
+            }
+            next.extend(
+                reg.immediate_edges(Direction::Output, &t)
+                    .into_iter()
+                    .map(|(_, sub)| sub),
+            );
+        }
+        if revisited {
+            break;
+        }
+        frontier = next;
+    }
+    assert!(revisited, "fixture must actually be recursive");
 }
 
 /// A built `Registry` has no route back into being described.

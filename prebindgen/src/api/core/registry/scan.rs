@@ -20,6 +20,15 @@ impl<M> Registry<M> {
         // match — the flat namespace keys are bare) or names a genuinely
         // foreign type (supported verbatim; warned about below only when it
         // shadows a captured item's name — the likely-mistake heuristic).
+        //
+        // The two syntax matches below **stay** as this file's boundary-ledger
+        // entries, and the reason is what they look at: `declared.types` are keys a
+        // *build script author* wrote, and this is a diagnostic about the spelling
+        // they wrote — is it path-qualified, and does its tail shadow a captured
+        // item? No source type is being classified, so there is no element to read
+        // instead; asking the model would answer about a type rather than about the
+        // declaration. This is the "legitimately the adapter's business" case the
+        // integration map (L2, #229) predicts, not a migration still owed.
         let mut qualified: Vec<(String, String)> = Vec::new();
         let mut probed: HashSet<&TypeKey> = HashSet::new();
         for key in declared
@@ -241,14 +250,26 @@ impl<M> Registry<M> {
     /// Create the cell for `ty` in `dir` if it has none, and mark it a root when
     /// the binding asked for it directly.
     ///
-    /// The one place a cell is born, which is what lets the subject be decided
-    /// once: the model's reading if the flat API mentions this type, an
-    /// adapter-authored type otherwise.
+    /// The one place a cell is born, and therefore the one place a type **enters
+    /// the pipeline** — so it is where a type the source never wrote is admitted to
+    /// the model. Expansion composes such spellings (an `Option<T>` around a `T` it
+    /// found) and hands them straight here via `require_input` / `require_output`.
+    ///
+    /// Admitting rather than classifying on the fly is the rule
+    /// [`Flat::add_local_function`](crate::api::core::flat::Flat::add_local_function)
+    /// already set for a binding-local `sig!(..)`: lower through the one grammar,
+    /// then record it, so the model keeps owning the only index of what a type
+    /// means. Every later lookup — this scan, the resolver, an adapter — then gets
+    /// the same answer from the same place.
+    ///
+    /// A spelling the grammar refuses leaves the cell subject-less. Nothing in tree
+    /// reaches that (measured: every composed type lowers), and #229's L2e is where
+    /// it is re-measured and the variant deleted.
     pub(super) fn ensure_entry(&mut self, dir: Direction, ty: &syn::Type, root: bool) {
         let key = TypeKey::from_type(ty);
-        let subject = match self.flat.type_ref(ty) {
-            Some(t) => TypeSubject::Source(Box::new(t.clone())),
-            None => TypeSubject::Adapter,
+        let subject = match self.flat.admit_type(ty) {
+            Ok(t) => TypeSubject::Source(Box::new(t.clone())),
+            Err(_) => TypeSubject::Adapter,
         };
         let cell = self
             .type_table_mut(dir)
@@ -261,36 +282,74 @@ impl<M> Registry<M> {
         cell.root |= root;
     }
 
-    /// Enumerate the immediate type-graph edges out of `(dir, ty)`:
-    /// generic args / Fn args / tuple elements / ref/array/slice/ptr targets,
-    /// plus — if `ty` is the bare ident of an indexed struct or enum — the
-    /// field types of that struct/enum.
+    /// Enumerate the immediate type-graph edges out of `(dir, ty)`: the model's
+    /// own children of this type, plus — if `ty` names a declared struct or sum —
+    /// the field types of that item.
     ///
-    /// `impl Fn(args)` arg types flow with `dir.flip()`; everything else
-    /// inherits `dir`. Used by both `register_type_inner` (during scan) and
-    /// the unresolved-descendants BFS in `resolve` (for diagnostics).
+    /// A callback's argument types flow with `dir.flip()`, because an argument the
+    /// binding *hands to* a callback crosses the other way; everything else
+    /// inherits `dir`. Used by both `register_type_inner` (during scan) and the
+    /// unresolved-descendants BFS in `resolve` (for diagnostics).
+    ///
+    /// The children come from [`TypeKind`], not from taking the syntax apart, and
+    /// the difference is load-bearing rather than cosmetic. `&mut MaybeUninit<T>`
+    /// is `Ref { mode: Out, inner: T }` — the model absorbed the `MaybeUninit`, so
+    /// the edge lands on `T` directly instead of on an intermediate
+    /// `MaybeUninit<T>` that no source ever wrote and no adapter can convert.
+    /// Each edge is still *spelled* from the child's own `origin.syntax`, which is
+    /// what the caller keys the table by.
+    ///
+    /// A plain index read: `ensure_entry` admitted this type to the model before
+    /// the walk reached it, so the reading is already there — including for a
+    /// spelling the binding composed. No reading means the grammar refused the
+    /// type, and a refused type has no structure to walk.
     pub(crate) fn immediate_edges(
         &self,
         dir: Direction,
         ty: &syn::Type,
     ) -> Vec<(Direction, syn::Type)> {
+        use crate::api::core::flat::TypeKind;
+
         let mut out: Vec<(Direction, syn::Type)> = Vec::new();
-        let (positions, child_dir) = if let Some(args) = extract_fn_trait_args(ty) {
-            (args, dir.flip())
-        } else {
-            (immediate_subtype_positions(ty), dir)
-        };
-        for sub in positions {
-            out.push((child_dir, sub));
+        if let Some(reading) = self.flat.type_ref(ty) {
+            let (children, child_dir): (Vec<&crate::api::core::flat::TypeRef>, Direction) =
+                match &reading.kind {
+                    TypeKind::Optional(t)
+                    | TypeKind::Sequence(t)
+                    | TypeKind::Ref { inner: t, .. } => (vec![t], dir),
+                    TypeKind::Array { elem, .. } => (vec![elem], dir),
+                    TypeKind::Fallible { ok, err } => (vec![ok, err], dir),
+                    TypeKind::Callback { args } => (args.iter().collect(), dir.flip()),
+                    // A name is a leaf in the type graph: its generic arguments are
+                    // lowered but not retained, because no declaration takes type
+                    // parameters. Its *fields* are the edges, and they come off the
+                    // element below.
+                    TypeKind::Named { .. }
+                    | TypeKind::Scalar(_)
+                    | TypeKind::Str
+                    | TypeKind::Unit => (Vec::new(), dir),
+                };
+            for child in children {
+                out.push((child_dir, child.origin.syntax.clone()));
+            }
         }
         // A declared type's own fields, read off the element rather than off its
         // `syn::Fields`: a positional field is an ordinary `Field` there, so the
         // named-only asymmetry the syntax walk had does not arise. An `Enum` has
         // no fields and an `Extern` declares none, which is what makes both
         // contribute nothing here.
-        if let Some(name) = bare_path_ident(ty) {
+        //
+        // The **name comes from the classification**, not from taking the spelling
+        // apart, and that is what makes a transparent wrapper work: `Box<Node>` is
+        // `Named { id: Node }` — `Box<T>` **is** `T` in this language — so it
+        // reaches `Node`'s fields, where asking the syntax for a bare ident would
+        // have answered `None` and dead-ended the walk.
+        if let Some(name) = self.flat.type_ref(ty).and_then(|r| match &r.kind {
+            TypeKind::Named { id } => Some(id.name.clone()),
+            _ => None,
+        }) {
             use crate::api::core::flat::{Field, Type};
-            let fields: Vec<&Field> = match self.flat.declared_type(&name) {
+            let fields: Vec<&Field> = match self.flat.declared_type(name.as_str()) {
                 Some(Type::Struct(s)) => s.fields.iter().collect(),
                 Some(Type::Variant(v)) => v
                     .alternatives

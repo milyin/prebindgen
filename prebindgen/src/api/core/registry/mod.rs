@@ -178,7 +178,6 @@ mod order;
 mod run;
 mod scan;
 mod view;
-mod walk;
 
 pub use self::{
     cell::{Direction, TypeEntry},
@@ -186,8 +185,10 @@ pub use self::{
     error::{DuplicateNameError, NotExpressibleEntry, ScanError, WriteRustError},
     key::{TypeKey, TypeKeyParseError},
     view::{Building, Conversions, Crossing},
-    walk::{extract_fn_trait_args, immediate_subtype_positions},
 };
+/// The callback grammar, which the source language owns — re-exported here for the
+/// call sites that have not yet reached L2–L4 of #229.
+pub use crate::api::core::flat::extract_fn_trait_args;
 
 /// Single owner of everything parsed from the prebindgen source stream.
 ///
