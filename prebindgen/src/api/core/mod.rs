@@ -3,10 +3,11 @@
 //! The pipeline is phase-oriented, and a generator drives it:
 //!
 //! 1. [`flat::Flat::builder`] parses `(syn::Item, SourceLocation)` records into
-//!    one flat namespace; [`registry::Registry::new`] projects the model.
+//!    one flat namespace; [`registry::Registry::builder`] starts describing a
+//!    binding over the model.
 //! 2. The generator states its binding — which elements it exports, which types
-//!    cross, how composites decompose — and [`registry::Registry::prepare`]
-//!    derives the crossing set from it.
+//!    cross, how composites decompose — and the builder derives the crossing
+//!    set from it.
 //! 3. [`registry::Registry::crossings`] hands that set over inner-first; the
 //!    generator builds a conversion for each and returns them all through
 //!    [`registry::Registry::supply`], which checks the set is complete.

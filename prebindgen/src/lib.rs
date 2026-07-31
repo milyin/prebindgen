@@ -113,10 +113,8 @@
 //!         .items(source.items_all())
 //!         .build()
 //!         .unwrap();
-//!     let generation = prebindgen::core::Registry::new(flat)
-//!         .unwrap()
-//!         .resolve(cbindgen)
-//!         .unwrap();
+//!     let builder = prebindgen::core::Registry::builder(flat).unwrap();
+//!     let generation = cbindgen.resolve(builder).unwrap();
 //!     let bindings_file = generation.write_rust("example_flat.rs").unwrap();
 //!
 //!     // Pass the generated file to cbindgen for C header generation.
@@ -266,7 +264,8 @@ macro_rules! ident {
 ///
 /// 1. [`Flat::builder`](core::Flat::builder) parses the
 ///    `(syn::Item, SourceLocation)` stream (typically [`Source::items_all`])
-///    into the model, and [`Registry::new`](core::Registry::new) projects it.
+///    into the model, and [`Registry::builder`](core::Registry::builder) starts
+///    describing a binding over it.
 /// 2. Your generator states its binding into the registry, then
 ///    [`Registry::crossings`](core::Registry::crossings) hands over every
 ///    crossing needing a conversion — inner types first, so each one can be

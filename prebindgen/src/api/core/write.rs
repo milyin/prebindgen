@@ -78,7 +78,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 
     // 2. Per-item Rust output from the adapter — only for items the adapter
     //    explicitly declared. Undeclared items were already announced
-    //    via `cargo:warning=` in `Registry::scan_declared`.
+    //    via `cargo:warning=` by the generator's own unclaimed-item report.
     let declared = registry.declared();
     let declared_fns = &declared.functions;
     let declared_types = &declared.types;

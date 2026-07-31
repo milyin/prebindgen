@@ -72,16 +72,20 @@
 //!
 //! # Using a registry
 //!
-//! **Configure it, hand over the answers, read it.** In that order, once each:
+//! **Describe it, hand over the answers, read it.** Two types, because those
+//! are two different things: a [`RegistryBuilder`] is still being described,
+//! and a [`Registry`] is finished and answerable.
 //!
 //! ```text
-//!   configure   new(flat) · export(name) · cross(type) · decompose(d)
-//!                                                    · depends(from, on)
+//!   describe    builder(flat) · export · cross · decompose · depends
 //!      ↓
-//!   the demand  crossings()  → every crossing needing a conversion,
-//!      ↓                       sorted so each type's inners come first
-//!   the answers supply(map)  → fails naming any reachable crossing with none
+//!   the demand  crossings()      → every crossing needing a conversion,
+//!      ↓                           sorted so each type's inners come first
+//!   the answers convert_with(f)  → one call per crossing, in that order
+//!      ↓        conversions(map) → or hand over a map you built yourself
 //!      ↓
+//!   close       build()          → fails naming any reachable crossing with
+//!      ↓                           no conversion
 //!   read        flat · exports · conversion(dir, ty) · decomposition(site) · …
 //! ```
 //!
@@ -98,26 +102,29 @@
 //! elements alone.
 //!
 //! ```ignore
-//! let mut reg = Registry::new(flat)?;
-//! for name in &self.exported     { reg.export(name)?; }
-//! for ty in &self.foreign_types  { reg.cross(ty.clone())?; }
-//! for d in self.decompositions() { reg.decompose(d)?; }
+//! let mut builder = Registry::builder(flat)?;
+//! for name in &self.exported    { builder = builder.export(name); }
+//! for ty in &self.foreign_types { builder = builder.cross(Direction::Output, ty); }
 //!
-//! // The generator's own loop, over a plain Vec — the registry is not in it.
-//! let mut built = HashMap::new();
-//! for c in reg.crossings() {
-//!     // `c`'s inners are already in `built`: that is what sorted means.
-//!     if let Some(conv) = self.convert(&c, &built) { built.insert(c, conv); }
-//! }
-//! reg.supply(built)?;
+//! let registry = builder
+//!     .decompose(self.decompositions())
+//!     // `built` already holds everything this crossing composes from: that is
+//!     // what sorted means.
+//!     .convert_with(|crossing, built| self.convert(crossing, built))?
+//!     .build()?;
 //!
-//! self.emit(&reg, out)   // read-only from here
+//! self.emit(&registry, out)   // read-only from here
 //! ```
+//!
+//! Prefer to drive the walk yourself? `crossings()` hands over the same list in
+//! the same order, and `conversions(map)` takes the result — the two compose,
+//! and neither is a second mechanism.
 //!
 //! **Nothing here calls back into the generator** — not by trait hook, and not
 //! by a `next_request`/`supply` pull loop either, which is the same protocol
-//! with the arrow flipped. The registry answers one question and grades one
-//! answer.
+//! with the arrow flipped. `convert_with` is not that: the walk finishes before
+//! it returns, the closure is the caller's, and the builder chooses nothing
+//! about when it runs. It is `crossings()` plus a `for` loop, written once.
 //!
 //! What makes a single hand-off possible is the **sort**. The demand's edges
 //! (`immediate_edges` — generic arguments, tuple/reference/slice targets,

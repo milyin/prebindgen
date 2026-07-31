@@ -23,7 +23,7 @@
 //! Every `#[prebindgen]` function must be assigned a Kotlin home — as a
 //! class member (`.method`/`.constructor` on a class decl) or a free function
 //! (`PackageDecl::fun`). Undeclared functions are skipped with a build
-//! warning (`Registry::scan_declared`); there is no "orphan" bucket.
+//! warning (the generator's unclaimed-item report); there is no "orphan" bucket.
 
 use super::*;
 use crate::api::{
