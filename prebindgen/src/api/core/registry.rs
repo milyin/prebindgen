@@ -886,14 +886,21 @@ impl<M> Registry<M> {
         })
     }
 
-    /// Whether a name declares a type with a **body** — a struct or either enum
-    /// shape, never an alias.
+    /// Whether the source declares a type under this name — **including an
+    /// alias**.
     ///
-    /// The predicate form of [`Self::declared_type_idents`], shared so its two
-    /// callers cannot drift: both warn about a declared-or-ignored type the
-    /// source does not define, and both must answer the same way about an alias.
-    fn declares_type_body(&self, ident: &syn::Ident) -> bool {
-        self.flat.struct_type(ident).is_some() || self.flat.enum_item(ident).is_some()
+    /// The question both type-diagnostic sites ask, shared so they cannot drift.
+    /// An alias counts because `#[prebindgen] pub type Handle = ..` *is* a
+    /// declaration of that name: it can be declared bare by an adapter (landing
+    /// in the no-indexed-body branch above, which is what
+    /// `ptr_class(ZKeyExpr<'static>)` relies on), so a diagnostic that says
+    /// "no such captured item" would be false.
+    ///
+    /// Distinct from [`Self::declared_type_idents`], which excludes aliases
+    /// because it feeds a *"skipping undeclared struct/enum"* warning — a
+    /// different question, about what an adapter left unclaimed.
+    fn declares_type(&self, ident: &syn::Ident) -> bool {
+        self.flat.declared_type(ident).is_some()
     }
 
     /// The origin crate's **module path** for an item, read off the element's
@@ -999,7 +1006,7 @@ impl<M> Registry<M> {
             let last = tp.path.segments.last().expect("len checked");
             if self.flat.source_modules().contains(&head) {
                 qualified.push((key.to_string(), last.to_token_stream().to_string()));
-            } else if self.declares_type_body(&last.ident) {
+            } else if self.declares_type(&last.ident) {
                 println!(
                     "cargo:warning=prebindgen: declared type `{}` is path-qualified, but a \
                      captured #[prebindgen] item `{}` exists — if you meant the source item, \
@@ -1114,7 +1121,7 @@ impl<M> Registry<M> {
 
         for key in &declared.ignored_types {
             let ty = key.to_type();
-            let matched = bare_path_ident(&ty).is_some_and(|ident| self.declares_type_body(&ident));
+            let matched = bare_path_ident(&ty).is_some_and(|ident| self.declares_type(&ident));
             if !matched {
                 println!(
                     "cargo:warning=prebindgen: ignored type `{}` not found among #[prebindgen] items",
