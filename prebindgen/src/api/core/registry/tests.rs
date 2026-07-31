@@ -1272,3 +1272,98 @@ fn an_alias_flows_through_both_type_diagnostics() {
             .expect("an alias is a captured item; neither site may fail");
     }
 }
+
+/// A type only a **binding-local** fn writes still has a frontend reading, and
+/// its cell must say so.
+///
+/// The ordering that made this wrong: the type index used to be built in
+/// `from_flat`, while local fns are inserted later by `resolve`. So their
+/// parameter types missed the index and their cells came out `Adapter` — "no
+/// reading" — even though `lower_signature` had produced `TypeRef`s for them.
+/// `Flat` owns the index now and `add_local_function` feeds it.
+#[test]
+fn a_type_only_a_local_fn_writes_still_has_a_reading() {
+    use crate::api::core::flat::TypeKind;
+
+    /// Resolves anything to itself, so declaring the local fn does not also
+    /// require an adapter that can convert its types.
+    struct AnyConverterExt(StubExt);
+    impl AnyConverterExt {
+        fn converter(ty: &syn::Type) -> Option<ConverterImpl<()>> {
+            Some(ConverterImpl {
+                destination: ty.clone(),
+                function: syn::parse_quote!(
+                    fn __id() {}
+                ),
+                pre_stages: vec![],
+                subs: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            })
+        }
+    }
+    impl Prebindgen for AnyConverterExt {
+        type Metadata = ();
+        fn declared_functions(&self) -> HashSet<syn::Ident> {
+            self.0.declared_functions()
+        }
+        fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+            self.0.local_functions()
+        }
+        fn on_function(&self, f: &syn::ItemFn, r: &Registry<()>) -> TokenStream {
+            self.0.on_function(f, r)
+        }
+        fn on_struct(&self, st: &syn::ItemStruct, r: &Registry<()>) -> TokenStream {
+            self.0.on_struct(st, r)
+        }
+        fn on_enum(&self, e: &syn::ItemEnum, r: &Registry<()>) -> TokenStream {
+            self.0.on_enum(e, r)
+        }
+        fn on_input_type(&self, t: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
+            Self::converter(t)
+        }
+        fn on_output_type(&self, t: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
+            Self::converter(t)
+        }
+    }
+
+    // `Option<u64>` appears nowhere in the captured stream.
+    let reg: Registry<()> =
+        Registry::from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")]).unwrap();
+    assert!(
+        reg.flat()
+            .type_ref(&syn::parse_quote!(Option<u64>))
+            .is_none(),
+        "fixture precondition: the captured stream never writes this type"
+    );
+
+    let ext = AnyConverterExt(StubExt {
+        local_fns: vec![(
+            syn::parse_str("fn helper(v: Option<u64>) -> u64 { 0 }").unwrap(),
+            "helpers".into(),
+        )],
+        functions: ["helper"]
+            .iter()
+            .map(|s| syn::parse_str(s).unwrap())
+            .collect(),
+        ..Default::default()
+    });
+    let gen = reg.resolve(ext).expect("resolve");
+    let reg = gen.registry();
+
+    // The model now holds the reading …
+    let read = reg
+        .flat()
+        .type_ref(&syn::parse_quote!(Option<u64>))
+        .expect("a local fn's parameter type is in the model");
+    assert!(matches!(read.kind, TypeKind::Optional(_)));
+
+    // … and the cell scanned from that parameter carries it, rather than
+    // claiming the type is one the binding invented.
+    let cell = &reg.input_types[&TypeKey::parse("Option<u64>").expect("test type")];
+    assert!(
+        matches!(cell.subject, TypeSubject::Source(_)),
+        "the frontend read this type; the cell must not call it adapter-authored"
+    );
+    assert!(matches!(cell.subject.kind(), Some(TypeKind::Optional(_))));
+}

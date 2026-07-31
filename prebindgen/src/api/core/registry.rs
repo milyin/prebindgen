@@ -102,11 +102,9 @@ impl TypeKey {
     /// Build a key directly from a `syn::Type` (normalizing a clone; the
     /// input is not modified).
     pub fn from_type(ty: &syn::Type) -> Self {
-        let mut t = ty.clone();
-        crate::api::core::types_util::normalize_type(
-            &mut t,
-            &crate::api::core::types_util::Normalization::prelude(),
-        );
+        // Off the shared reduction, so this key and the model's type index
+        // cannot drift apart about what a type is called.
+        let t = crate::api::core::types_util::canonical_type(ty);
         Self {
             canon: t.to_token_stream().to_string().into(),
             ty: std::rc::Rc::new(t),
@@ -299,15 +297,6 @@ pub struct Registry<M = ()> {
     pub input_types: HashMap<TypeKey, TypeCell<M>>,
     pub output_types: HashMap<TypeKey, TypeCell<M>>,
 
-    /// The frontend's reading of every type the flat API mentions, keyed the way
-    /// the tables are, so a cell gets its [`TypeSubject::Source`] by lookup
-    /// instead of by lowering the type a second time.
-    ///
-    /// Built once from [`Self::flat`] before anything is scanned. A type
-    /// mentioned in several places keeps the first mention in **element order** —
-    /// a property of the model, not of the order items were fed in.
-    type_refs: HashMap<TypeKey, crate::api::core::flat::TypeRef>,
-
     /// Resolved constructor-expansion plans, keyed by `(function, parameter)`.
     /// Filled by [`crate::api::core::expand::apply`] before resolution; read
     /// by language adapters at the parameter-emission site. Empty unless the
@@ -359,7 +348,6 @@ impl<M> Registry<M> {
             flat: crate::api::core::flat::Flat::default(),
             input_types: Default::default(),
             output_types: Default::default(),
-            type_refs: HashMap::new(),
             expansion_plans: HashMap::new(),
             unfold_plans: HashMap::new(),
             error_plans: HashMap::new(),
@@ -836,17 +824,6 @@ impl<M> Registry<M> {
         }
 
         let mut registry = Registry::empty();
-        // Every type the model mentions, indexed the way the type tables are.
-        // Read up front, from the whole model: which mention of a repeated type
-        // wins is then decided by element order rather than by when a scan
-        // happened to reach it.
-        for ty in flat.type_refs() {
-            registry
-                .type_refs
-                .entry(TypeKey::from_type(&ty.origin.syntax))
-                .or_insert_with(|| ty.clone());
-        }
-
         registry.flat = flat;
         Ok(registry)
     }
@@ -1391,7 +1368,7 @@ impl<M> Registry<M> {
     /// adapter-authored type otherwise.
     fn ensure_entry(&mut self, dir: Direction, ty: &syn::Type, root: bool) {
         let key = TypeKey::from_type(ty);
-        let subject = match self.type_refs.get(&key) {
+        let subject = match self.flat.type_ref(ty) {
             Some(t) => TypeSubject::Source(t.clone()),
             None => TypeSubject::Adapter(key.to_type()),
         };
