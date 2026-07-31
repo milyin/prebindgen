@@ -88,19 +88,22 @@ scoreboard for this whole program.
 Seeded by L0 at **202 classification sites** outside the frontend. The second
 population it was seeded alongside — **113** reads of the registry's `syn`-keyed
 item maps — is **gone**: L1.5 deleted those maps, so every one of those reads now
-goes through the model. What remains is the ledger.
+goes through the model. What remains is the ledger, and it now stands at **167**.
 
-| Area | Ledger sites | Stage |
-|---|---:|---|
-| `api/core` (`types_util` 40, `unfold` 16, `registry` 11, `expand` 4) | 71 | L2 |
-| `api/lang/cbindgen` | 25 | L3 |
-| `api/lang/jnigen` | 106 | L4 |
-| **total** | **202** | |
+| Area | Ledger sites | Seeded | Stage |
+|---|---:|---:|---|
+| `api/core` (`unfold` 16, `types_util` 14, `registry/walk` 9, `registry/scan` 2, `expand` 4) | 45 | 71 | L2 |
+| `api/lang/cbindgen` | 25 | 25 | L3 |
+| `api/lang/jnigen` | 97 | 106 | L4 |
+| **total** | **167** | **202** | |
 
-Still 202 in total, and that is the honest number: L1.5 moved reads off the
-deleted maps but took only two classifiers off the ledger (−2 in `registry`,
-`unfold` +1 elsewhere). **The ledger has not started falling yet** — L2 is where
-it does.
+**The ledger has started falling.** The whole −35 is
+[#248](https://github.com/milyin/prebindgen/pull/248), which deleted the pattern
+engine: `types_util` 40 → 14, `jnigen/builder` 13 → 4, and `registry` 11 split
+into `walk` 9 + `scan` 2. Not one of those sites was migrated to read an element —
+they went away because the code that held them went away, which is the cheaper
+half of L2 and the reason it was done first. L1.5 before it moved reads off the
+deleted maps but took only two classifiers off the ledger.
 
 Not every site must go: some inspect types the adapter itself *synthesized* —
 wire types, converter signatures — which is legitimately the adapter's business.
@@ -116,9 +119,10 @@ moves it.
 | L0.5 | `Flat`: the model, indexed and resolved | **done** — this branch |
 | L1 | `Registry` consumes elements | **done** — [#238](https://github.com/milyin/prebindgen/pull/238) |
 | L1.5 | The model is the only index | **done** — #239–#246 |
-| L2 | `api/core` stops classifying source syntax | not started |
+| L1.75 | The registry becomes describable | **merged, not yet on this branch** — #249–#253 |
+| L2 | `api/core` stops classifying source syntax | **in progress** — [#248](https://github.com/milyin/prebindgen/pull/248) took 35 of 71 |
 | L3 | `Cbindgen` consumes elements | not started |
-| L4 | `JniGen` consumes elements *(the long pole — 106 sites)* | not started |
+| L4 | `JniGen` consumes elements *(the long pole — 97 sites)* | not started |
 | L5 | Close the seam: the public contract stops being `syn` | not started |
 
 ### L0 — the parser — **done** (#227)
@@ -262,18 +266,66 @@ because the map should show where the program actually went.
 **What is left in `Registry` is now genuinely its own**: the two type tables
 (adapter answers plus roots) and the five adapter-declared plan maps.
 
-### L2 — `api/core` stops classifying source syntax
+### L1.75 — the registry becomes describable — **merged, not yet on this branch**
 
-- [ ] `types_util` — 40 sites, the largest single file. `normalize_type`,
-      `immediate_pattern_children`, `match_pattern`, the `is_*` predicates
-- [ ] `registry::immediate_subtype_positions` — near-duplicate of
-      `immediate_pattern_children`, and the two already diverge on `Type::Path`
-- [ ] `unfold` (16) and `expand` (4) read element types
+Also not planned as a stage, and it moves no ledger sites — the count is 167
+before it and 167 after. It is here for the same reason L1.5 is: once L1.5 made
+the registry a projection with nothing of its own to hide, its API could be
+closed, and closing it is what makes a generator for a fourth language writable
+by someone who has not read `resolve`. Tracked by
+[#251](https://github.com/milyin/prebindgen/issues/251).
+
+- [x] **The caller states its declarations; the registry stops asking**
+      ([#249](https://github.com/milyin/prebindgen/pull/249)) — the five
+      decomposition callbacks become one handed-over value
+- [x] **Say what the registry is for**
+      ([#250](https://github.com/milyin/prebindgen/pull/250)): *which type
+      conversions a binding needs, and whether it has them all.* Its module doc
+      had been a list of fields, and a stale one since #243 deleted them
+- [x] **State the shape, then build it**
+      ([#252](https://github.com/milyin/prebindgen/pull/252)): `RegistryBuilder`
+      and `Registry` are two types because being-described and finished are two
+      states. 13 `Prebindgen` hooks called from 9 points inside `resolve` become
+      `describe, hand over the answers, read it`. **Nothing calls back into the
+      generator** — not by trait hook, and not by a `next_request`/`supply` pull
+      loop, which is the same protocol with the arrow reversed
+- [x] **The generator owns the model and the registry**
+      ([#253](https://github.com/milyin/prebindgen/pull/253)): a build script
+      names one type. `JniGen::builder().source(..).build()` replaces the
+      `Flat::builder()` → `Registry::builder()` → `resolve` → `write_*` dance;
+      `Flat` and `Registry` stop being names a `build.rs` has to know
+
+**Merged into `flat-drop-pattern-engine`, not into this branch.** The stack landed
+PR-into-PR, so the only commit of it that reached `language-integration` is #248's.
+Re-merging that branch here is the next mechanical step, and nothing below should
+be started on top of a branch that is 28 commits behind it.
+
+### L2 — `api/core` stops classifying source syntax — **in progress**
+
+- [x] **The pattern engine is deleted**
+      ([#248](https://github.com/milyin/prebindgen/pull/248)): `match_pattern`,
+      `unify`, `immediate_pattern_children`, `substitute_wildcards`, both rank
+      tables. The general machinery composed converters for any parametrized type;
+      its tables held **one** entry in the whole crate, `Result<_, _>`, which the
+      model already names `TypeKind::Fallible`. 592 deletions against 124
+      insertions, and the `ConverterImpl` tail extracted verbatim rather than
+      rewritten. Ledger 202 → 167
+- [ ] `unfold` (16) — now the largest single file on the ledger
+- [ ] `types_util` (14) — `normalize_type` and the `is_*` predicates, which is
+      what survived the engine's deletion
+- [ ] `registry::walk::immediate_subtype_positions` (9) — the near-duplicate
+      outlived the original it duplicated, so there is no longer a divergence to
+      reconcile, only a walk to move onto the model
+- [ ] `registry/scan` (2) and `expand` (4) read element types
 - [ ] `TypeKey` derivable from a `TypeRef` so a lookup stops routing through a
       spelling. L1.5 got the first half — `TypeKey` and the model's type index
       now share one canonicalization (`types_util::canonical_type`)
 - [ ] Ledger down by the migrated count; every entry that *stays* is justified in
       the PR as adapter-synthesized
+
+**#248 is deletion, not migration**, and the distinction is worth keeping visible:
+35 sites left because their code left. The 45 that remain are the ones that have
+to actually start reading elements, so the rate so far is not the rate to expect.
 
 ### L3 — `Cbindgen` consumes elements
 
@@ -286,11 +338,12 @@ because the map should show where the program actually went.
 
 ### L4 — `JniGen` consumes elements
 
-The long pole. Split by area, each PR independently green.
+The long pole — 97 sites, down from 106 because #248 took `jni/builder` from 13 to
+4 with the rank tables. Split by area, each PR independently green.
 
-- [ ] `emit/names` (17), `jni/builder` (13), `jni/trait_impl` (11),
-      `emit/wrapper` (11), `emit/flat_input` (10), `render` (8), `selector` (7),
-      `iface` (5), and the rest
+- [ ] `emit/names` (17), `jni/trait_impl` (11), `emit/wrapper` (11),
+      `emit/flat_input` (10), `render` (8), `selector` (7), `iface` (5),
+      `jni/builder` (4), and the rest
 - [ ] `classify.rs` — a whole classifier with **zero** watched sites, so the
       ledger cannot see it: it must be migrated on its own merit
 - [ ] `prim_array_of` reads `ArrayExtent` instead of re-matching `Type::Array`
