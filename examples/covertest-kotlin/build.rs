@@ -118,7 +118,7 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 }
 
 fn main() {
-    let jni = JniGen::builder()
+    let binding = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
         .set_package_prefix("io.prebindgen.covertest")
@@ -708,8 +708,8 @@ fn main() {
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let gen = jni.build().expect("build failed");
-    let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
+    let jni = binding.build().expect("build failed");
+    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()
@@ -721,7 +721,7 @@ fn main() {
         .join("generated");
     // The root is prebindgen-owned: `write_kotlin` replaces marked output,
     // so no consumer-side cleanup is needed.
-    for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
+    for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
 
@@ -731,7 +731,7 @@ fn main() {
         std::path::Path::new(&crate_dir)
             .join("kotlin")
             .join("REPORT.md"),
-        gen.report(),
+        jni.report(),
     )
     .expect("write REPORT.md");
 }

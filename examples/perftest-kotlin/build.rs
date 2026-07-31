@@ -25,7 +25,7 @@ use prebindgen::{data_class, fun, lang::JniGen, package, ptr_class};
 
 fn main() {
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
-    let jni = JniGen::builder()
+    let binding = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
@@ -121,8 +121,8 @@ fn main() {
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let gen = jni.build().expect("build failed");
-    let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
+    let jni = binding.build().expect("build failed");
+    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()
@@ -132,7 +132,7 @@ fn main() {
     let kotlin_root = std::path::Path::new(&crate_dir)
         .join("kotlin")
         .join("generated");
-    for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
+    for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
 }
