@@ -75,7 +75,7 @@
 //! **Configure it, hand over the answers, read it.** In that order, once each:
 //!
 //! ```text
-//!   configure   new(flat) · export(name) · decompose(d)
+//!   configure   new(flat) · export(name) · cross(type) · decompose(d)
 //!      ↓
 //!   the demand  crossings()  → every crossing needing a conversion,
 //!      ↓                       sorted so each type's inners come first
@@ -84,9 +84,22 @@
 //!   read        flat · exports · conversion(dir, ty) · decomposition(site) · …
 //! ```
 //!
+//! Most types need no declaring: they are reached by walking a declared
+//! element's signature, and deriving them per **usage** is what keeps an
+//! output-only type from being demanded as an input too. Measured: dropping the
+//! declaration-as-root for every type with a captured body leaves the generated
+//! output byte-identical.
+//!
+//! But a type with **no captured item behind it** — `ptr_class!(zenoh::KeyExpr<'static>)`
+//! on a re-exported foreign type — appears in no signature this model can walk,
+//! so nothing derives it and the declaration is the only statement that it
+//! crosses at all. That is what `cross` is for, and why the input cannot be
+//! elements alone.
+//!
 //! ```ignore
 //! let mut reg = Registry::new(flat)?;
 //! for name in &self.exported     { reg.export(name)?; }
+//! for ty in &self.foreign_types  { reg.cross(ty.clone())?; }
 //! for d in self.decompositions() { reg.decompose(d)?; }
 //!
 //! // The generator's own loop, over a plain Vec — the registry is not in it.
