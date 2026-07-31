@@ -312,22 +312,119 @@ no ancestry, while the trees differ by nothing. Diff the content, not the histor
       model already names `TypeKind::Fallible`. 592 deletions against 124
       insertions, and the `ConverterImpl` tail extracted verbatim rather than
       rewritten. Ledger 202 → 167
-- [ ] `unfold` (16) — now the largest single file on the ledger
-- [ ] `types_util` (14) — `normalize_type` and the `is_*` predicates, which is
-      what survived the engine's deletion
-- [ ] `registry::walk::immediate_subtype_positions` (9) — the near-duplicate
-      outlived the original it duplicated, so there is no longer a divergence to
-      reconcile, only a walk to move onto the model
-- [ ] `registry/scan` (2) and `expand` (4) read element types
-- [ ] `TypeKey` derivable from a `TypeRef` so a lookup stops routing through a
-      spelling. L1.5 got the first half — `TypeKey` and the model's type index
-      now share one canonicalization (`types_util::canonical_type`)
-- [ ] Ledger down by the migrated count; every entry that *stays* is justified in
-      the PR as adapter-synthesized
+- [ ] L2a — **the scan walks model edges** (13)
+- [ ] L2b — **one layer read** (26)
+- [ ] L2c — **the enum shape and its numbers** (2)
+- [ ] L2d — **canonicalization moves home** (4)
+- [ ] L2e — **delete `TypeSubject::Adapter`** (0)
 
 **#248 is deletion, not migration**, and the distinction is worth keeping visible:
 35 sites left because their code left. The 45 that remain are the ones that have
 to actually start reading elements, so the rate so far is not the rate to expect.
+
+#### The exit criterion is not the ledger
+
+> **`TypeSubject::Adapter` reaches zero members, and the variant is deleted.**
+
+Stronger than a count, and it is what each PR below reports against. `TypeCell`'s
+subject collapses to the `TypeRef` itself; `location()` becomes `origin.location`
+gated by the existing `has_position()`, and `kind()` — already `#[cfg(test)]` —
+goes with it. Its only two production readers are in `resolve.rs`.
+
+That criterion exists because of a measurement. Instrumenting `ensure_entry` —
+the one place a type-table cell is born — across `example-cbindgen`,
+`covertest-kotlin`, `perftest-c` and `perftest-kotlin` produced **two** cells the
+model has no reading for:
+
+| Cell | Where it came from |
+|---|---|
+| `MaybeUninit<Payload>` | the source writes `&mut MaybeUninit<Payload>`; the scan peels the `&mut` **syntactically**. The model absorbed `MaybeUninit` into `RefMode::Out`, so it has no node for the peeled spelling — and the cell resolves to **no converter** at all |
+| `Option<Summary>` | the source writes `Option<&Summary>`; the peel family strips the `&` *inside* the `Option` and re-composes a spelling nothing wrote |
+
+So the variant does not hold "types the binding invented that the model cannot
+express". Both members are manufactured by the syntactic peeling this stage
+deletes, and both underlying types are ordinary source types. Nothing in `unfold`,
+`expand` or `registry/walk` so much as mentions `TypeEntry` or a wire type, so the
+*"legitimately the adapter's business"* exemption named above has **no members
+here** — every one of the 45 is classifying a source type. The `.cross()` path,
+which the code comments describe as the adapter-authored one, is exercised by
+covertest-kotlin and produced no cells either.
+
+**Measured in-tree only**, which is the honest scope: the same claim #248 makes
+about `fallible_parts` logging zero. `zenoh-flat`'s consumers are out of tree and
+do not currently build.
+
+#### L2a — the scan walks model edges (13)
+
+- [ ] `registry/walk.rs` (9), `registry/scan.rs` (2), and the two ident extractors
+      `path_tail_ident` / `bare_path_ident` (2) — `TypeKind::Named` carries the
+      name, so there is no path to take apart
+- [ ] `immediate_edges` already reads a declared type's **fields** off the element;
+      the structural half becomes `TypeKind`'s own children — `Optional` /
+      `Sequence` / `Ref` → inner, `Array` → elem, `Fallible` → ok + err,
+      `Callback` → args with `dir.flip()`, which retires the `extract_fn_trait_args`
+      special case
+- [ ] `registry/walk.rs` is deleted, and three of its arms go as **dead, not
+      migrated**: `lower_type` refuses non-unit tuples and raw pointers, and
+      `Group` / `Paren` are transparent in the model. Its `Type::Path` generic-args
+      arm is dead for a reason already written down — `named()` drops generic
+      arguments because no declaration takes type parameters
+- [ ] The `MaybeUninit<Payload>` cell stops existing. It resolves to no converter,
+      so generated output should not move — **verified, not assumed**
+
+#### L2b — one layer read (26)
+
+The largest, and it pre-pays L3 and L4: both adapters call this family.
+
+- [ ] `unfold` (16), `expand` (4) and the `types_util` peel family (6) are one
+      idiom — *peel `Option`, then `&`, and remember which layers were there* —
+      which is exactly `Optional(Ref { .. })`
+- [ ] `TypeRef` gains the sibling its `walk()` / `extents()` / `array_extent()` are
+      missing: a layer read that says which of `Optional` / `Ref` / `Sequence` were
+      present and hands back the core. Driven by `kind`, and living where
+      classification is allowed
+- [ ] `option_inner_type`, `vec_inner_type`, `result_parts` and its two halves, the
+      `is_*` predicates, `first_type_arg`, `peel_ref_option_vec` and
+      `unfold::peel_ref` are retired
+- [ ] This closes the **ident-name blind spot** the ledger header lists:
+      `is_option_type` and its siblings classify via `seg.ident == "Option"` and are
+      invisible only because `WATCHED` names two enums
+- [ ] Call sites in `jnigen` and `cbindgen` change mechanically to keep the build
+      green. That is not L3/L4 work, and claims none of their sites
+- [ ] The `Option<Summary>` cell stops existing
+- [ ] Subsumes the older `TypeKey`-from-a-`TypeRef` bullet: a lookup stops routing
+      through a spelling. L1.5 got the first half, one canonicalization shared by
+      `TypeKey` and the model's index
+
+#### L2c — the enum shape and its numbers (2)
+
+- [ ] `enum_shape` and `first_payload_variant` re-derive from a `syn::ItemEnum` the
+      one thing the model settles **by construction**: `Type::Variant` is a sum,
+      `Type::Enum` is C-style, and they are separate entities precisely so nobody
+      has to ask
+- [ ] `enum_discriminant_values` / `extract_int_literal` are a second numbering
+      implementation; `EnumValue::discriminant` is the first (#226)
+- [ ] Two ledger sites, but a large blind-spot closure: the first two take a
+      `syn::ItemEnum`, which `WATCHED` cannot see at all
+
+#### L2d — canonicalization moves home (4)
+
+- [ ] What is left in `types_util` is not classification. `normalize_type` /
+      `reduce_flat_path` (3) is spelling normalization — and #246 already made it
+      the single definition the model's type index and `TypeKey` both derive from,
+      so it is the frontend's own canonicalization living outside the module that
+      owns the index. `type_from_ident` (1) *constructs* a `syn::Type::Path`, and
+      the ledger counts constructions
+- [ ] Both move into `core::flat`. **A move, not a migration** — the same
+      distinction #248 gets above — justified by ownership rather than by the count
+- [ ] With it `api/core` leaves the ledger entirely, instead of shrinking to a
+      residue no one can explain
+
+#### L2e — delete `TypeSubject::Adapter` (0)
+
+- [ ] Re-run the `ensure_entry` instrumentation and **report the number before
+      deleting anything**. A surviving member is a real finding: the variant stays,
+      and the PR names the type
 
 ### L3 — `Cbindgen` consumes elements
 
