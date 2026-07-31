@@ -23,7 +23,7 @@ fn inline_output_gets_own_builder() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -121,7 +121,7 @@ fn error_unwrap_universal_records() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("errors")
@@ -253,25 +253,27 @@ fn method_constructor_and_inline_field_self() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .class(
-                crate::ptr_class!(ZThing)
-                    .method(crate::fun!(z_thing_name).name("name"))
-                    // A method with extra params: `&ZThing` receiver + a `name: String` param.
-                    .method(crate::fun!(z_thing_rename).name("rename"))
-                    // A constructor: factory returning ZThing.
-                    .constructor(crate::fun!(z_thing_make).name("make")),
-            )
-            // A free fn whose per-fn inline output decomposes to (handle, name).
-            .fun(
-                crate::fun!(z_get).expand_return(
-                    crate::expand_return!(ZThing)
-                        .field_self()
-                        .field(crate::fun!(z_thing_name).name("name")),
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .method(crate::fun!(z_thing_name).name("name"))
+                        // A method with extra params: `&ZThing` receiver + a `name: String` param.
+                        .method(crate::fun!(z_thing_rename).name("rename"))
+                        // A constructor: factory returning ZThing.
+                        .constructor(crate::fun!(z_thing_make).name("make")),
+                )
+                // A free fn whose per-fn inline output decomposes to (handle, name).
+                .fun(
+                    crate::fun!(z_get).expand_return(
+                        crate::expand_return!(ZThing)
+                            .field_self()
+                            .field(crate::fun!(z_thing_name).name("name")),
+                    ),
                 ),
-            ),
-    );
+        );
 
     let dir = unique_test_dir("jnigen_method_ctor");
     let _ = std::fs::remove_dir_all(&dir);
@@ -324,7 +326,7 @@ fn rust_side_only_error_type() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
         // No class declaration for ZErr anywhere — rust-side-only. The field
@@ -393,7 +395,7 @@ fn rust_side_only_input_type() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
         .expand(crate::expand_param!(ZOpts).variant(crate::fun!(z_opts_new)));
@@ -437,7 +439,7 @@ fn rust_side_only_variant_self_rejected() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
         .expand(crate::expand_param!(ZOpts).variant_self());
     let dir = unique_test_dir("jnigen_rso_self_in");
@@ -458,7 +460,7 @@ fn rust_side_only_field_self_rejected() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .package(crate::package!("ops").fun(crate::fun!(z_make)))
         .expand(crate::expand_return!(ZThing).field_self());
     let dir = unique_test_dir("jnigen_rso_self_out");
@@ -488,7 +490,7 @@ fn fn_expand_param_type_mismatch_rejected() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().package(
+    let jni = JniGenBuilder::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
             .class(crate::ptr_class!(ZOther))
@@ -524,7 +526,7 @@ fn fn_expand_return_type_mismatch_rejected() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().package(
+    let jni = JniGenBuilder::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
             .class(crate::ptr_class!(ZOther))
@@ -557,7 +559,7 @@ fn fn_expand_param_unknown_param_rejected() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().package(
+    let jni = JniGenBuilder::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
             .fun(crate::fun!(z_use).expand_param(
@@ -595,7 +597,7 @@ fn typo_in_expand_decl_is_hard_error() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
         // `z_err_mesage` (sic) exists nowhere among the indexed items.
@@ -639,7 +641,7 @@ fn ignore_matching_acknowledges_naming_family() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_len)))
         .ignore(crate::matching(|name| name.starts_with("detail_const_")))
@@ -736,13 +738,15 @@ fn method_without_receiver_rejected() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("t").class(
-            crate::ptr_class!(ZThing)
-                .method(crate::fun!(z_thing_free_standing))
-                .constructor(crate::fun!(z_make)),
-        ),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("t").class(
+                crate::ptr_class!(ZThing)
+                    .method(crate::fun!(z_thing_free_standing))
+                    .constructor(crate::fun!(z_make)),
+            ),
+        );
     let err = jni.resolve(registry).expect_err("receiver-less member");
     let msg = format!("{err}");
     assert!(
@@ -768,13 +772,15 @@ fn constructor_with_wrong_return_rejected() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("t").class(
-            crate::ptr_class!(ZThing)
-                .method(crate::fun!(z_thing_len))
-                .constructor(crate::fun!(z_make_number)),
-        ),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("t").class(
+                crate::ptr_class!(ZThing)
+                    .method(crate::fun!(z_thing_len))
+                    .constructor(crate::fun!(z_make_number)),
+            ),
+        );
     let err = jni.resolve(registry).expect_err("wrong ctor return");
     let msg = format!("{err}");
     assert!(
@@ -812,7 +818,7 @@ fn binding_local_field_conditional_handle() {
     }
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("enc")
@@ -897,7 +903,7 @@ fn binding_local_field_name_collision_rejected() {
     }
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("enc")
@@ -959,7 +965,7 @@ fn binding_local_field_splices_through_parent() {
     }
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("msg")
@@ -1034,7 +1040,7 @@ fn binding_local_functions_all_positions() {
     }
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("t")
@@ -1130,7 +1136,7 @@ fn binding_local_fn_names_flow_through_manglers() {
     }
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         // Custom hooks: prefix every derived name — proof the hook RAN and
         // received the camel-cased last segment with its context.
@@ -1186,7 +1192,7 @@ fn binding_local_fn_names_flow_through_manglers() {
 #[test]
 #[should_panic(expected = ".sig(sig!(")]
 fn binding_local_fun_missing_sig_rejected() {
-    let _ = JniGen::new()
+    let _ = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("t").fun(crate::fun!(crate::z_no_sig)));
 }
@@ -1220,12 +1226,12 @@ fn binding_local_fun_name_collision_rejected() {
     ));
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("t").class(crate::ptr_class!(ZThing)).fun(
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("t").class(crate::ptr_class!(ZThing)).fun(
             // shadows the #[prebindgen] fn of the same name
             crate::fun!(crate::z_thing_len).sig(crate::sig!((t: &ZThing) -> i64)),
-        ),
-    );
+        ));
     let err = jni
         .resolve(registry)
         .expect_err("collision must be rejected");
@@ -1274,17 +1280,19 @@ fn gc_managed_handle_lifecycle() {
     }
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("t")
-            .class(
-                crate::ptr_class!(ZThing)
-                    .gc_managed()
-                    .constructor(crate::fun!(z_thing_new)),
-            )
-            .class(crate::ptr_class!(ZOther).constructor(crate::fun!(z_other_new)))
-            .fun(crate::fun!(z_thing_use))
-            .fun(crate::fun!(z_other_use)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("t")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .gc_managed()
+                        .constructor(crate::fun!(z_thing_new)),
+                )
+                .class(crate::ptr_class!(ZOther).constructor(crate::fun!(z_other_new)))
+                .fun(crate::fun!(z_thing_use))
+                .fun(crate::fun!(z_other_use)),
+        );
     let raw = write_all(jni.resolve(registry).expect("resolve"), "jnigen_gc_managed");
     let all: String = raw.split_whitespace().collect();
 
@@ -1361,7 +1369,7 @@ fn split_fixture(extra: &[&str]) -> RegistryBuilder<KotlinMeta> {
     crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items")
 }
 
-pub(super) fn write_all(gen: crate::api::core::Generation<JniGen>, tag: &str) -> String {
+pub(super) fn write_all(gen: crate::api::core::Generation<JniGenBuilder>, tag: &str) -> String {
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1381,7 +1389,7 @@ pub(super) fn write_all(gen: crate::api::core::Generation<JniGen>, tag: &str) ->
 #[test]
 fn split_on_param_emits_typed_overloads() {
     let registry = split_fixture(&[]);
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1411,7 +1419,7 @@ fn split_on_param_emits_typed_overloads() {
 #[test]
 fn split_on_param_cartesian_product() {
     let registry = split_fixture(&[]);
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1469,7 +1477,7 @@ fn split_on_param_preserves_wrapper_generics() {
         "pub fn z_summary_total(s: &ZSummary) -> f64 { unimplemented!() }",
         "pub fn z_summarize(primary: ZSummary, fallback: ZSummary) -> ZSummary { unimplemented!() }",
     ]);
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1545,7 +1553,7 @@ fn split_on_param_product_ambiguous_rejected() {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops").class(crate::ptr_class!(ZThing)).fun(
@@ -1588,7 +1596,7 @@ fn split_declaration_colliding_variants_rejected() {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1626,7 +1634,7 @@ fn split_declaration_collision_fails_resolve() {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1669,7 +1677,7 @@ fn split_no_split_suppresses_check() {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1694,7 +1702,7 @@ fn split_no_split_suppresses_check() {
 #[should_panic(expected = "no parameter named")]
 fn split_on_unknown_param_rejected() {
     let registry = split_fixture(&[]);
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1718,7 +1726,7 @@ fn split_on_unknown_param_rejected() {
 fn split_on_option_param_emits_nullable_arm() {
     let registry =
         split_fixture(&["pub fn z_maybe(opt: Option<ZSummary>) -> bool { unimplemented!() }"]);
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1753,7 +1761,7 @@ fn split_on_option_param_without_single_leaf_arm_rejected() {
         "pub fn z_summary_scaled(units: String, factor: f64) -> ZSummary { unimplemented!() }",
         "pub fn z_maybe(opt: Option<ZSummary>) -> bool { unimplemented!() }",
     ]);
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1780,7 +1788,7 @@ fn split_on_param_optional_cartesian_with_plain() {
     let registry = split_fixture(&[
         "pub fn z_mixed(primary: ZSummary, fallback: Option<&ZSummary>) -> i64 { unimplemented!() }",
     ]);
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1855,7 +1863,7 @@ fn optional_selector_dispatch_end_to_end() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1915,7 +1923,7 @@ fn constructor_member_skips_default_output_expand() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -1982,11 +1990,13 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
-            .fun(crate::fun!(z_thing_get)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
+                .fun(crate::fun!(z_thing_get)),
+        );
     let dir = unique_test_dir("jnigen_q95");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

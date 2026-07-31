@@ -39,11 +39,13 @@ fn sealed_kotlin(rename_labeled: Option<&str>) -> String {
     if let Some(n) = rename_labeled {
         sealed = sealed.variant(crate::variant!(Labeled).name(n));
     }
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::enum_class!(Priority))
-            .class(sealed),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(sealed),
+        );
 
     let dir = unique_test_dir("jnigen_sealed");
     let _ = std::fs::remove_dir_all(&dir);
@@ -159,7 +161,7 @@ fn declarators_do_not_accept_each_others_shape() {
         let registry =
             crate::api::test_util::reg_from_items(declare_referenced(vec![(item, loc.clone())]))
                 .expect("index items");
-        let jni = JniGen::new()
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
         let dir = unique_test_dir(tag);
@@ -200,10 +202,12 @@ fn unknown_variant_is_an_error() {
             loc.clone(),
         )]))
         .expect("index items");
-        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-            crate::package!()
-                .class(crate::sealed_class!(Reading).variant(crate::variant!(Nope).name("X"))),
-        );
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::sealed_class!(Reading).variant(crate::variant!(Nope).name("X"))),
+            );
         let dir = unique_test_dir("sealed_unknown_variant");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -230,7 +234,7 @@ fn reopened_sealed_class_merges_variant_names() {
         loc.clone(),
     )]))
     .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!().class(
@@ -289,7 +293,7 @@ fn reopened_ptr_class_keeps_gc_managed() {
         let registry: RegistryBuilder<KotlinMeta> =
             crate::api::test_util::reg_from_items(declare_referenced(items()))
                 .expect("index items");
-        let jni = JniGen::new()
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(first).class(second));
         drop(registry);
@@ -347,7 +351,7 @@ fn a_type_gets_one_class_declarator() {
         let registry: RegistryBuilder<KotlinMeta> =
             crate::api::test_util::reg_from_items(declare_referenced(items()))
                 .expect("index items");
-        let _ = JniGen::new()
+        let _ = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(first).class(second));
         drop(registry);
@@ -452,7 +456,7 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
             loc.clone(),
         )]))
         .expect("index items");
-        let jni = JniGen::new()
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
         match jni.resolve(registry) {
@@ -521,7 +525,7 @@ fn variant_named_companion_moves_the_companion_not_the_variant() {
             loc.clone(),
         )]))
         .expect("index items");
-        let jni = JniGen::new()
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
         let dir = unique_test_dir(tag);
@@ -602,7 +606,7 @@ fn payload_without_output_converter_is_an_error() {
             loc.clone(),
         )]))
         .expect("index items");
-        let jni = JniGen::new()
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(crate::sealed_class!(Reading)));
         let dir = unique_test_dir("sealed_unmapped_payload");
@@ -638,7 +642,7 @@ fn sum_is_its_own_type_kind() {
         loc.clone(),
     )]))
     .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().class(crate::sealed_class!(Reading)));
     let ty: syn::Type = syn::parse_quote!(Reading);
@@ -683,12 +687,14 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
             (syn::Item::Fn(f), loc.clone()),
         ]))
         .expect("index items");
-        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-            crate::package!()
-                .class(crate::sealed_class!(Reading))
-                .class(crate::data_class!(Holder))
-                .fun(crate::fun!(holder_new)),
-        );
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::sealed_class!(Reading))
+                    .class(crate::data_class!(Holder))
+                    .fun(crate::fun!(holder_new)),
+            );
         let dir = unique_test_dir("sealed_vec_field");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -743,12 +749,14 @@ fn recursive_sum_shapes_fail_deterministically() {
             (syn::Item::Fn(f), loc.clone()),
         ]))
         .expect("index items");
-        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-            crate::package!()
-                .class(crate::sealed_class!(Node))
-                .class(crate::data_class!(Holder))
-                .fun(crate::fun!(holder_new)),
-        );
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::sealed_class!(Node))
+                    .class(crate::data_class!(Holder))
+                    .fun(crate::fun!(holder_new)),
+            );
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -883,20 +891,22 @@ fn sum_returns(tag: &str) -> (String, String) {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::enum_class!(Priority))
-            .class(crate::sealed_class!(Reading))
-            .class(crate::sealed_class!(Lookup))
-            .class(crate::ptr_class!(Probe))
-            .fun(crate::fun!(read_one))
-            .fun(crate::fun!(read_maybe))
-            .fun(crate::fun!(read_all))
-            .fun(crate::fun!(look_up))
-            .fun(crate::fun!(read_each))
-            .fun(crate::fun!(read_borrowed))
-            .fun(crate::fun!(read_borrowed_maybe)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::sealed_class!(Reading))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::ptr_class!(Probe))
+                .fun(crate::fun!(read_one))
+                .fun(crate::fun!(read_maybe))
+                .fun(crate::fun!(read_all))
+                .fun(crate::fun!(look_up))
+                .fun(crate::fun!(read_each))
+                .fun(crate::fun!(read_borrowed))
+                .fun(crate::fun!(read_borrowed_maybe)),
+        );
 
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
@@ -1200,13 +1210,15 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::ptr_class!(Probe))
-            .class(crate::sealed_class!(Lookup))
-            .class(crate::data_class!(Holder))
-            .fun(crate::fun!(holder_new)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Probe))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::data_class!(Holder))
+                .fun(crate::fun!(holder_new)),
+        );
     let dir = unique_test_dir("jnigen_sum_handle_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1293,13 +1305,15 @@ fn two_sum_callback_args_keep_their_own_selectors() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .class(crate::sealed_class!(Lookup))
-            .class(crate::ptr_class!(Probe))
-            .fun(crate::fun!(read_pair)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::ptr_class!(Probe))
+                .fun(crate::fun!(read_pair)),
+        );
     let dir = unique_test_dir("jnigen_two_sum_cb");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1373,12 +1387,14 @@ fn sum_in_result_ok_position_is_rejected_with_its_reason() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .class(crate::ptr_class!(Probe))
-            .fun(crate::fun!(read_try)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .class(crate::ptr_class!(Probe))
+                .fun(crate::fun!(read_try)),
+        );
     let err = jni
         .resolve(registry)
         .expect_err("must be rejected")
@@ -1424,11 +1440,13 @@ fn undeclared_sum_in_result_error_position_is_rejected() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .fun(crate::fun!(read_try)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_try)),
+        );
     let err = jni
         .resolve(registry)
         .expect_err("must be rejected")
@@ -1477,11 +1495,13 @@ fn the_diagnostic_names_the_whole_error_type_where_it_must() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .fun(crate::fun!(read_try)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_try)),
+        );
     let err = jni
         .resolve(registry)
         .expect_err("must be rejected")
@@ -1534,7 +1554,7 @@ fn declared_sum_in_result_error_position_resolves() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .expand(crate::expand_return!(Reading).field(crate::fun!(reading_code)))
         .package(
@@ -1578,11 +1598,13 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .fun(crate::fun!(read_batch)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_batch)),
+        );
     let err = jni
         .resolve(registry)
         .expect_err("must be rejected")

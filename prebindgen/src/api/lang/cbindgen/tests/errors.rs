@@ -17,7 +17,7 @@ fn result_error_not_declared_is_build_error() {
     .expect("index items");
 
     // Error declared as data_struct but NOT marked `.error()`.
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))
@@ -54,7 +54,7 @@ fn fallible_input_without_result_needs_panic() {
         loc.clone(),
     )]))
     .expect("index items");
-    let cb1 = Cbindgen::new()
+    let cb1 = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log));
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -70,7 +70,7 @@ fn fallible_input_without_result_needs_panic() {
         loc.clone(),
     )]))
     .expect("index items");
-    let cb2 = Cbindgen::new()
+    let cb2 = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log))
         .panic();
@@ -108,7 +108,7 @@ fn error_out_param_is_null_guarded() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))

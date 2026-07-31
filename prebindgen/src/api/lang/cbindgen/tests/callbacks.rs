@@ -23,7 +23,7 @@ fn takeable_callback_param() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_owned_struct(syn::parse_quote!(Sample), syn::parse_quote!(z_sample_t))
         .callback(syn::parse_quote!(impl Fn(Sample) + Send + Sync + 'static))
@@ -83,7 +83,7 @@ fn callback_subscriber_emits_closure_structs() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZSession))
@@ -179,7 +179,7 @@ fn callback_scalar_arg_not_module_qualified() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .data_struct(syn::parse_quote!(Error))
@@ -206,7 +206,7 @@ fn callback_scalar_arg_not_module_qualified() {
 
 /// Without a `.name(...)` override the closure-struct C name is composed
 /// generically from the args' configured C type names (`closure_<argCname>`)
-/// — `lang::Cbindgen` invents no target-language convention of its own.
+/// — `lang::CbindgenBuilder` invents no target-language convention of its own.
 #[test]
 fn callback_struct_name_defaults_generically() {
     let loc = SourceLocation::default();
@@ -224,7 +224,7 @@ fn callback_struct_name_defaults_generically() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZSession))

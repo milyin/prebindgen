@@ -1,7 +1,7 @@
 //! Flat, FFI-friendly example library demonstrating a **zero-copy** data struct.
 //!
 //! Every public function is annotated with `#[prebindgen]`, so `prebindgen`
-//! captures this surface and a language adapter (here `prebindgen::lang::Cbindgen`,
+//! captures this surface and a language adapter (here `prebindgen::lang::CbindgenBuilder`,
 //! driven by `perftest-c`) generates the FFI layer — no hand-written `extern "C"`
 //! glue.
 //!
@@ -228,7 +228,7 @@ pub fn payload_handler_new(f: impl Fn(&Payload) + Send + Sync + 'static) -> Payl
 /// element. In C the closure receives a `const payload_t *` (zero-copy); in Kotlin
 /// the borrowed `Payload` is delivered whole to the handler's
 /// `PayloadCallback.run(Payload)` (its fields cross as decoupled leaves and are
-/// reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
+/// reassembled on the Kotlin side — see `prebindgen::lang::JniGenBuilder`).
 #[prebindgen]
 pub fn storage_callback(s: &Storage, handler: &PayloadHandler) {
     for payload in &s.payloads {

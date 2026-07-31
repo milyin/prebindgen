@@ -1,6 +1,6 @@
 //! Declaration model: [`KtFile`] → [`KtDecl`] (classes, functions,
 //! properties, type aliases, raw blocks). Chained builders in the same
-//! style as the JniGen config builder. Rendering lives in
+//! style as the JniGenBuilder config builder. Rendering lives in
 //! [`super::render`]; this module is pure data.
 
 use super::{

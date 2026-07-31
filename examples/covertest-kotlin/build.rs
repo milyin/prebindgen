@@ -1,21 +1,21 @@
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using
-//! prebindgen's [`prebindgen::lang::JniGen`] adapter — exercising **every**
-//! JniGen feature so the hand-written `kotlin/.../Test.kt` can assert each one.
+//! prebindgen's [`prebindgen::lang::JniGenBuilder`] adapter — exercising **every**
+//! JniGenBuilder feature so the hand-written `kotlin/.../Test.kt` can assert each one.
 //!
 //! Unlike `examples/perftest-kotlin` (which maps only the lean perf surface in
 //! the performance-optimal shape), this binding maps the *same* flat library —
 //! including the coverage-only items in `perftest_flat::ext` — through the full
-//! adapter surface. `JniGen` accepts pre-built declaration objects (the
+//! adapter surface. `JniGenBuilder` accepts pre-built declaration objects (the
 //! `prebindgen::lang` decl types, built by the root decl macros) rather than a fluent typestate
 //! chain — each row below is a `PackageDecl`/`ConvertDecl`/etc. built
 //! independently and then handed to `jni.package(...)` / `jni.convert(...)`:
 //!
-//! | JniGen feature                       | Exercised by |
+//! | JniGenBuilder feature                       | Exercised by |
 //! |--------------------------------------|--------------|
 //! | default module (first stream origin)  | `perftest_flat` |
-//! | `JniGen::set_package_prefix`       | `io.prebindgen.covertest` |
-//! | `JniGen::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
-//! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
+//! | `JniGenBuilder::set_package_prefix`       | `io.prebindgen.covertest` |
+//! | `JniGenBuilder::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
+//! | `JniGenBuilder::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
 //! | `DataClassDecl`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
 //! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
@@ -70,13 +70,13 @@
 //! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
-//! | `JniGen::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
-//! | `JniGen::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
+//! | `JniGenBuilder::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGenBuilder::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
 //!
 //! One feature is deliberately left at its default and documented rather than
 //! toggled, because it is mutually exclusive with a richer path this example
 //! prefers to keep covered:
-//!   * `JniGen::set_emit_handle_locks` — kept ENABLED (default). Toggling
+//!   * `JniGenBuilder::set_emit_handle_locks` — kept ENABLED (default). Toggling
 //!     it OFF would remove the `withSortedHandleLocks` codegen this example
 //!     asserts against; a single binding can only be in one lock mode, so we
 //!     keep the locked one. (The toggle is a verification aid, not an
@@ -101,7 +101,7 @@ use prebindgen::{
     constant, convert,
     core::{Flat, Registry},
     data_class, enum_class, expand_param, expand_return, expr, fields, from, fun, into,
-    lang::JniGen,
+    lang::JniGenBuilder,
     matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant,
 };
 
@@ -120,7 +120,7 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 }
 
 fn main() {
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a

@@ -47,7 +47,7 @@ fn tagged_union_mirror_and_converters() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -140,7 +140,7 @@ fn owning_payload_gets_typed_drop() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -195,7 +195,7 @@ fn plain_data_union_has_no_drop() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -231,7 +231,7 @@ fn tagged_union_as_data_struct_field() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -302,7 +302,7 @@ fn a_union_nested_in_a_struct_payload_is_freed() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -351,7 +351,7 @@ fn plain_data_struct_decode_stays_infallible() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -387,7 +387,7 @@ fn declarators_do_not_accept_each_others_shape() {
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .free_memory_function("example_free")
             .mangle_type_name(|base| format!("{base}_t"))
@@ -409,7 +409,7 @@ fn declarators_do_not_accept_each_others_shape() {
             (syn::Item::Fn(unit_fn.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .mangle_type_name(|base| format!("{base}_t"))
             .tagged_union(syn::parse_quote!(Operation))
@@ -447,7 +447,7 @@ fn each_payload_rejection_names_its_own_reason() {
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .free_memory_function("example_free")
             .mangle_type_name(|base| format!("{base}_t"))
@@ -497,7 +497,7 @@ fn unsupported_payload_is_a_generation_error() {
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .mangle_type_name(|base| format!("{base}_t"))
             .tagged_union(syn::parse_quote!(Weird))
@@ -540,7 +540,7 @@ fn null_opaque_payload_is_reported_not_materialised() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -636,7 +636,7 @@ fn payload_wires_come_from_the_converter_destination() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -730,7 +730,7 @@ fn bool_payload_is_normalised_not_materialised() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))

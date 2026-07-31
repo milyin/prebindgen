@@ -1,5 +1,5 @@
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using
-//! prebindgen's [`prebindgen::lang::JniGen`] adapter. It produces:
+//! prebindgen's [`prebindgen::lang::JniGenBuilder`] adapter. It produces:
 //!   * `src/generated_bindings.rs` — the Rust-side JNI wrappers (included by
 //!     `src/lib.rs`), and
 //!   * `kotlin/generated/**` — the matching typed Kotlin classes.
@@ -13,7 +13,7 @@
 //! (no Java object is built on the Rust side).
 //!
 //! `Payload.label` is `Option<Box<String>>` (an opaque-pointer string field);
-//! JniGen maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
+//! JniGenBuilder maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
 //! `String?` automatically.
 //!
 //! The `large_*_input_sum` pair compares the two Kotlin→Rust data-class input
@@ -24,12 +24,12 @@
 use prebindgen::{
     core::{Flat, Registry},
     data_class, fun,
-    lang::JniGen,
+    lang::JniGenBuilder,
     package, ptr_class,
 };
 
 fn main() {
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
         // init (the single choke point through which every JNI call routes).

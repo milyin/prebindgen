@@ -1,4 +1,4 @@
-//! `Generation::<JniGen>::report()` — the resolved binding surface,
+//! `Generation::<JniGenBuilder>::report()` — the resolved binding surface,
 //! explained.
 //!
 //! Declarations act at a distance: one `expand_return!` / `convert!` /
@@ -11,7 +11,7 @@
 //! committed regen so a decl's effect is reviewable in a PR without
 //! reading generated Kotlin.
 //!
-//! The report is deliberately an inherent method of `Generation<JniGen>`
+//! The report is deliberately an inherent method of `Generation<JniGenBuilder>`
 //! (the `write_kotlin` seam): the *pattern* — describe your resolved
 //! surface — is adapter-universal, but the *content* is intrinsically in
 //! the destination language's vocabulary, so each adapter implements its
@@ -20,7 +20,7 @@
 use super::*;
 use crate::api::core::registry::Conversions;
 
-impl crate::api::core::Generation<JniGen> {
+impl crate::api::core::Generation<JniGenBuilder> {
     /// Render the resolved binding surface as a deterministic markdown
     /// report: per package / class the final Kotlin signature of every
     /// wrapper (exactly as generated) with the expand/error plans that
@@ -248,7 +248,7 @@ impl crate::api::core::Generation<JniGen> {
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Human-readable class-kind name of a declared type (report use).
     pub(crate) fn class_kind_name(&self, key: &TypeKey) -> &'static str {
         let Some(cfg) = self.types.get(key) else {

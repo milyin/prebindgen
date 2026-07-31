@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::core::registry::Conversions;
 
-impl Cbindgen {
+impl CbindgenBuilder {
     pub(crate) fn prereq_domain_constants(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items = Vec::new();
         for decl in &self.convert_decls {

@@ -19,7 +19,7 @@
 //!
 //! `prebindgen` solves this by generating language-specific proxy code from a common
 //! Rust library crate. The supported 0.5 surface is the language-neutral
-//! [`core`] pipeline and the JNI/Kotlin [`lang::JniGen`] adapter.
+//! [`core`] pipeline and the JNI/Kotlin [`lang::JniGenBuilder`] adapter.
 //!
 //! The C / cbindgen adapter is an experimental proof of concept. It is available
 //! only with the non-default `unstable-cbindgen` feature and is not covered by
@@ -35,7 +35,7 @@
 //! ### Stable core and JNI/Kotlin path
 //!
 //! The supported workflow reads captured items with [`Source`], resolves them
-//! through [`core::Registry`], and configures [`lang::JniGen`] to emit Rust JNI
+//! through [`core::Registry`], and configures [`lang::JniGenBuilder`] to emit Rust JNI
 //! wrappers plus Kotlin sources. The `covertest-kotlin` and `perftest-kotlin`
 //! workspace examples are the maintained references for that path.
 //!
@@ -74,7 +74,7 @@
 //! ### 2. Experimental C binding crate (`unstable-cbindgen`)
 //!
 //! Depend on the common FFI library (as both a normal and a build dependency) and
-//! drive the experimental `lang::Cbindgen` adapter from `build.rs`:
+//! drive the experimental `lang::CbindgenBuilder` adapter from `build.rs`:
 //!
 //! ```toml
 //! # example-cbindgen/Cargo.toml
@@ -98,7 +98,7 @@
 //!     let source = prebindgen::Source::new(example_flat::PREBINDGEN_OUT_DIR);
 //!
 //!     // Configure the C adapter: declare which items to export and how to name them.
-//!     let cbindgen = prebindgen::lang::Cbindgen::new()
+//!     let cbindgen = prebindgen::lang::CbindgenBuilder::new()
 //!         .source_module(pq!(example_flat))
 //!         .free_memory_function("example_free")
 //!         .mangle_type_name(|base| format!("{base}_t"))
@@ -135,7 +135,7 @@
 //! fall into two groups.
 //!
 //! **Declaration macros** construct a typed [`lang`] `*Decl` from bare Rust
-//! syntax — the domain vocabulary you compose and hand to [`lang::JniGen`]:
+//! syntax — the domain vocabulary you compose and hand to [`lang::JniGenBuilder`]:
 //!
 //! - Kotlin surface: [`package!`](crate::package), [`ptr_class!`](crate::ptr_class),
 //!   [`data_class!`](crate::data_class), [`enum_class!`](crate::enum_class)
@@ -290,7 +290,7 @@ macro_rules! ident {
 ///   info lives in that back-end's `Metadata`).
 ///
 /// The supported JNI / Kotlin adapter ships in [`mod@lang`] as
-/// [`lang::JniGen`]. The C / cbindgen proof of concept is available separately
+/// [`lang::JniGenBuilder`]. The C / cbindgen proof of concept is available separately
 /// with the `unstable-cbindgen` feature.
 pub mod core {
     /// The **flat API**: the parser from captured `#[prebindgen]` records to the
@@ -322,23 +322,23 @@ pub use crate::api::lang::jnigen::matching;
 
 /// Destination-language adapters implementing [`core::Prebindgen`].
 ///
-/// With the non-default `unstable-cbindgen` feature, `Cbindgen` is an
+/// With the non-default `unstable-cbindgen` feature, `CbindgenBuilder` is an
 /// experimental C / cbindgen adapter. Its API is not covered by the 0.5 semver
 /// guarantee.
 ///
-/// [`lang::JniGen`] is the JNI / Kotlin adapter: it turns a flat
+/// [`lang::JniGenBuilder`] is the JNI / Kotlin adapter: it turns a flat
 /// `#[prebindgen]` library into a Rust file of JNI `extern "C"` wrappers plus
 /// a fan-out of generated Kotlin sources (typed-handle classes, data/enum
 /// classes, exception classes).
 pub mod lang {
     #[cfg(feature = "unstable-cbindgen")]
-    pub use crate::api::lang::cbindgen::{snake_case, Cbindgen};
+    pub use crate::api::lang::cbindgen::{snake_case, CbindgenBuilder};
     pub use crate::api::lang::jnigen::{
         box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
         box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string, matching,
         null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
         ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
-        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen,
+        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGenBuilder,
         KotlinFile, PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl, WriteKotlinError,
     };
 }

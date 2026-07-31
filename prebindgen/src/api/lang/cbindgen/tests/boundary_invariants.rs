@@ -146,7 +146,7 @@ fn every_input_category() -> String {
     ))
     .expect("index items");
 
-    let mut cbindgen = Cbindgen::new()
+    let mut cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))

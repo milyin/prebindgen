@@ -42,13 +42,13 @@ fn build(fns: &[&str], tag: &str) -> String {
         items.push((syn::Item::Fn(f), loc.clone()));
     }
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(decls);
     super::flatten::write_all(jni.resolve(registry).expect("resolve"), tag)
 }
 
-/// The generation predicate on the Kotlin side. JniGen has no exclusive-borrow
+/// The generation predicate on the Kotlin side. JniGenBuilder has no exclusive-borrow
 /// mode of its own — `&T` and `&mut T` both reach Kotlin as a locked borrow —
 /// so the rule reduces to "at least one consumed handle, and any other handle
 /// in the same domain".

@@ -179,7 +179,7 @@ public fun payloadHandlerNew(
  * element. In C the closure receives a `const payload_t *` (zero-copy); in Kotlin
  * the borrowed `Payload` is delivered whole to the handler's
  * `PayloadCallback.run(Payload)` (its fields cross as decoupled leaves and are
- * reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
+ * reassembled on the Kotlin side — see `prebindgen::lang::JniGenBuilder`).
  */
 public fun storageCallback(s: Storage, handler: PayloadHandler, onError: JniErrorHandler<Unit>) {
     if (s.isClosed()) { onError.run("Operation on a closed native handle."); return }

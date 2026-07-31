@@ -656,7 +656,7 @@ fn wire_fixed_returns<M>(
             // All THREE peeled layers, the `Vec` element included. The shape
             // fold peels here, so the matching unrequire belongs here; leaving
             // the element out made the invariant depend on the adapter's
-            // `boundary_only_types` covering it — true for JniGen today, and
+            // `boundary_only_types` covering it — true for JniGenBuilder today, and
             // the only reason a `Vec<sum>`-only declaration resolves.
             registry.unrequire_output(&ret);
             registry.unrequire_output(&after_opt);

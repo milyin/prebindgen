@@ -12,7 +12,7 @@ use crate::api::core::{
 };
 
 /// Push-then-resolve, the way a real generator's `resolve` does. Test-only:
-/// production generators own this pairing themselves (`JniGen::resolve`).
+/// production generators own this pairing themselves (`JniGenBuilder::resolve`).
 trait DeclareAndResolve<M> {
     fn declare_and_resolve<E>(self, ext: E) -> Result<Generation<E>, WriteRustError>
     where

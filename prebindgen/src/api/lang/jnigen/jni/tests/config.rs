@@ -25,16 +25,18 @@ fn ptr_class_implements_adds_interface_supertypes() {
         .map(|src| (syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()))
         .collect();
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .class(
-                crate::ptr_class!(ZThing)
-                    .implements("io.other.Resource")
-                    .implements("LocalIface")
-                    .method(crate::fun!(z_thing_size)),
-            )
-            .fun(crate::fun!(z_thing_new)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .implements("io.other.Resource")
+                        .implements("LocalIface")
+                        .method(crate::fun!(z_thing_size)),
+                )
+                .fun(crate::fun!(z_thing_new)),
+        );
     let dir = unique_test_dir("jnigen_implements");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -75,16 +77,18 @@ fn ptr_class_interface_emits_generated_api() {
         .map(|src| (syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()))
         .collect();
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .class(
-                crate::ptr_class!(ZThing)
-                    .interface()
-                    .implements("io.other.Resource")
-                    .method(crate::fun!(z_thing_size)),
-            )
-            .fun(crate::fun!(z_thing_new)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .interface()
+                        .implements("io.other.Resource")
+                        .method(crate::fun!(z_thing_size)),
+                )
+                .fun(crate::fun!(z_thing_new)),
+        );
     let dir = unique_test_dir("jnigen_interface");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -135,7 +139,7 @@ fn interface_name_mangle_identity_rejected() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_interface_name_mangle(|package, n| {
             assert_eq!(package, "io.test.jni.thing");
@@ -181,7 +185,7 @@ fn interface_name_override_and_hook() {
         ),
     ];
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_interface_name_mangle(|package, n| {
             assert_eq!(package, "io.test.jni.m", "hook receives the target package");
@@ -243,13 +247,15 @@ fn data_class_interface_emits_generated_api() {
         ),
     ];
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("t").class(
-            crate::data_class!(ZStamp)
-                .interface()
-                .method(crate::fun!(z_stamp_secs).name("secs")),
-        ),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("t").class(
+                crate::data_class!(ZStamp)
+                    .interface()
+                    .method(crate::fun!(z_stamp_secs).name("secs")),
+            ),
+        );
     let dir = unique_test_dir("jnigen_data_iface");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -315,7 +321,7 @@ fn per_class_name_and_base_package_fun() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         // Rename the handle class; the mangle closures do NOT apply to it.
         .set_ptr_class_name_mangle(|package, n| {
@@ -393,7 +399,7 @@ fn setters_after_declarations_apply() {
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     // Declarations first, settings last.
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .package(
             crate::package!("things")
                 .class(crate::ptr_class!(ZThing))
@@ -429,7 +435,7 @@ fn setters_after_declarations_apply() {
     );
 }
 
-/// The I3 contract: after `JniGen::resolve`, `write_kotlin` and
+/// The I3 contract: after `JniGenBuilder::resolve`, `write_kotlin` and
 /// `write_rust` are pure reads on one receiver — calling Kotlin FIRST
 /// produces byte-identical output to the usual order.
 #[test]
@@ -443,7 +449,7 @@ fn generation_writes_are_order_free() {
             loc,
         )]))
         .expect("index");
-        let jni = JniGen::new()
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!("thing").fun(crate::fun!(z_ping)));
         jni.resolve(registry).expect("resolve")
@@ -500,7 +506,7 @@ fn method_hook_can_strip_flat_class_prefix() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_method_name_mangle(|package, class, name| {
             if class == "JNINative" {
@@ -579,7 +585,7 @@ fn method_name_mangle_hook_applies_order_independently() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("t").class(
@@ -630,7 +636,7 @@ fn harness_hook_receives_derived_default() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_harness_name_mangle(|n| {
             assert_eq!(n, "JNINative", "hook must receive the derived default");
@@ -667,7 +673,7 @@ fn function_and_native_method_hooks_receive_placement() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_fun_name_mangle(|package, name| {
             assert_eq!(package, "io.test.jni.session");
@@ -712,7 +718,7 @@ fn write_kotlin_owns_and_resets_the_root() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_ping)));
     let gen = jni.resolve(registry).expect("resolve");
@@ -761,7 +767,7 @@ fn report_explains_the_resolved_surface() {
         .collect();
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
@@ -878,7 +884,7 @@ fn docs_become_kdoc_with_shape_notes() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")

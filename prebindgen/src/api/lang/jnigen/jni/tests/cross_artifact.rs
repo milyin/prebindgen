@@ -259,7 +259,7 @@ fn assert_cross_artifact(rust_src: &str, kotlin: &BTreeMap<String, String>) {
 fn run_pipeline(
     tag: &str,
     items: Vec<(syn::Item, crate::SourceLocation)>,
-    jni: JniGen,
+    jni: JniGenBuilder,
 ) -> (String, BTreeMap<String, String>) {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
@@ -351,7 +351,7 @@ fn cross_artifact_representative_shapes_agree() {
             loc.clone(),
         ),
     ];
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!()
@@ -430,7 +430,7 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
             loc.clone(),
         ),
     ];
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -489,7 +489,7 @@ fn cross_artifact_optional_iterable_fold_agrees() {
             loc.clone(),
         ),
     ];
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")

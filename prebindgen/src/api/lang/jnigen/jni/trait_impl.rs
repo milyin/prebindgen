@@ -1,4 +1,4 @@
-//! [`Prebindgen`] implementation for [`JniGen`] plus its converter-
+//! [`Prebindgen`] implementation for [`JniGenBuilder`] plus its converter-
 //! selector / exception-routing helpers.
 //!
 //! Carved from the former monolithic JNI module; shares the `jni`
@@ -36,7 +36,7 @@ fn generated_converter_attr() -> syn::Attribute {
 // and consuming-crate wrapper exts like ZenohJniExt).
 // ──────────────────────────────────────────────────────────────────────
 
-impl JniGen {
+impl JniGenBuilder {
     /// Build the standard JNI input-converter `fn`. Body assumes in-scope
     /// `env: &mut JNIEnv` and `v: &<wire>` (or `v: <wire>` for raw-pointer
     /// wires); produces a value of `rust`. Returned function has its name
@@ -379,7 +379,7 @@ impl JniGen {
         // owner is a compile-time namespace, not a boundary type. Requiring it
         // to be declared would force an otherwise-unused Kotlin class into
         // existence just to make the generated Rust compile, and would be
-        // asymmetric with consts, which qualify whether or not JniGen declared
+        // asymmetric with consts, which qualify whether or not JniGenBuilder declared
         // them.
         // EVERY named item the registry indexes. A length is an arbitrary const
         // expression, so it can name a const, the type owning an associated
@@ -548,7 +548,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 /// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
 /// producing destructors that reference types not in scope.
 pub(crate) fn build_handle_destructor_items(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
@@ -614,12 +614,12 @@ pub(crate) fn build_handle_destructor_items(
 
 /// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
 /// `Option`). Each returns `Some(ConverterImpl)` only for the wildcard pattern
-/// it claims; [`JniGen::input_wrapper_shape`] chains them in priority order.
+/// it claims; [`JniGenBuilder::input_wrapper_shape`] chains them in priority order.
 /// Because [`pat_match`] is an exact match, the patterns are disjoint — except
 /// the two `Option<_>` sub-cases (direct-handle-by-value vs general), which
-/// share a pattern and so live together in [`JniGen::input_option`] to keep
+/// share a pattern and so live together in [`JniGenBuilder::input_option`] to keep
 /// their original fall-through.
-impl JniGen {
+impl JniGenBuilder {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
     /// `emit_jni_function_wrapper` adds `&decoded`). Exists so the
@@ -924,7 +924,7 @@ impl JniGen {
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
 
-impl JniGen {
+impl JniGenBuilder {
     /// State this binding into `registry`: what it exports, what crosses, and
     /// what it defines itself.
     ///
@@ -991,7 +991,7 @@ impl JniGen {
         for ident in self.helper_functions() {
             registry = registry.reference(&ident);
         }
-        // JniGen HAS a const mechanism, so const emission is declared-only even
+        // JniGenBuilder HAS a const mechanism, so const emission is declared-only even
         // when nothing is declared.
         registry = registry.declares_consts();
         for ident in self.declared_consts().into_iter().flatten() {
@@ -1053,7 +1053,7 @@ impl JniGen {
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     pub(crate) fn build_value_struct_decons(
         &self,
         registry: &impl Conversions<KotlinMeta>,
@@ -1163,7 +1163,7 @@ impl JniGen {
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     fn dispatch_fn_input(
         &self,
         args: &[syn::Type],
@@ -1187,7 +1187,7 @@ impl JniGen {
     }
 }
 
-impl Prebindgen for JniGen {
+impl Prebindgen for JniGenBuilder {
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
     /// handlers at the same point they build the wire/body; the
@@ -1210,7 +1210,7 @@ impl Prebindgen for JniGen {
         // Report what this binding left unclaimed. Here because it is the
         // earliest generator-owned hook that sees the model, and it runs
         // exactly where the binding used to print these itself. Moves into
-        // `JniGen::generate` once that exists (prebindgen#251 phase E).
+        // `JniGenBuilder::generate` once that exists (prebindgen#251 phase E).
         crate::core::warn_unclaimed(binding.flat(), &self.claimed());
 
         for (key, members) in &self.class_members {
@@ -1537,7 +1537,7 @@ impl Prebindgen for JniGen {
 /// Structural converter builders — the rank-0 terminal chains and the rank-1
 /// wrapper-shape handlers, now inherent helpers called by the structural
 /// [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`].
-impl JniGen {
+impl JniGenBuilder {
     // ── Input converters ─────────────────────────────────────────────
 
     /// Whole-type **input** terminal categories (opaque handle, enum,
@@ -1745,7 +1745,7 @@ impl JniGen {
         t1: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Disjoint wildcard patterns (see the `impl JniGen` block above), tried
+        // Disjoint wildcard patterns (see the `impl JniGenBuilder` block above), tried
         // in priority order. The borrow/option-ref/vec patterns are exact and
         // mutually exclusive; the two `Option<_>` sub-cases share a method.
         self.input_borrow(pat, t1, registry)
@@ -2154,7 +2154,7 @@ impl JniGen {
 /// These were trait methods the registry called back into the adapter from
 /// inside `resolve`. They are the adapter's own business now, gathered into the
 /// one value the registry is constructed from.
-impl JniGen {
+impl JniGenBuilder {
     /// Union of every `.fun(...)` list across all
     /// [`Self::package`] subpackage contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the
@@ -2188,7 +2188,7 @@ impl JniGen {
     }
     /// Functions ever referenced as a named `.field(fun!(...))` in any
     /// `expand_return!` decl, type-level or per-fn — see
-    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.method()`
+    /// [`JniGenBuilder::field_accessor_fns`]. Usage-derived, not tied to `.method()`
     /// class-member declarations: a function need not also be exposed as an
     /// instance method to be referenced this way.
     pub(crate) fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
@@ -2206,12 +2206,12 @@ impl JniGen {
             })
             .collect()
     }
-    /// Fns acknowledged-but-unbound via [`JniGen::ignore`] — suppresses
+    /// Fns acknowledged-but-unbound via [`JniGenBuilder::ignore`] — suppresses
     /// the registry's "skipping undeclared" warning, emits nothing.
     pub(crate) fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_fns.clone()
     }
-    /// Bulk name-family ignores from [`JniGen::ignore`] +
+    /// Bulk name-family ignores from [`JniGenBuilder::ignore`] +
     /// [`matching`](crate::lang::matching).
     pub(crate) fn ignored_name_predicates(
         &self,
@@ -2245,12 +2245,12 @@ impl JniGen {
         }
         Some(out)
     }
-    /// Consts acknowledged-but-unexposed via [`JniGen::ignore`].
+    /// Consts acknowledged-but-unexposed via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_const_idents.clone()
     }
     /// Union of every `.constant(...)` list across all
-    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGen
+    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGenBuilder
     /// HAS a const declaration mechanism, so const emission is declared-only
     /// and undeclared consts get the skip warning (see
     /// [`Prebindgen::declared_consts`]).
@@ -2267,7 +2267,7 @@ impl JniGen {
     /// Every type registered via one of the **class declarators**
     /// (`ptr_class!` / `enum_class!` / `sealed_class!` / `data_class!`)
     /// — i.e. every entry in the type table, whose only
-    /// writer is `JniGen::register_class`. These are the only structs/enums
+    /// writer is `JniGenBuilder::register_class`. These are the only structs/enums
     /// the per-item emitter walks, and the scan requires them in BOTH
     /// directions (their converters always resolve both ways). Wrapper
     /// registrations live in their own tables and are deliberately excluded: a
@@ -2276,7 +2276,7 @@ impl JniGen {
     pub(crate) fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
         self.types.keys().cloned().collect()
     }
-    /// Types acknowledged-but-undeclared via [`JniGen::ignore`].
+    /// Types acknowledged-but-undeclared via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()
     }

@@ -14,7 +14,7 @@
 //! `run` with raw typed `jvalue`s: no per-leaf boxing upcalls, no erased
 //! `FunctionN`.
 //!
-//! Each identity's spec is derived ONCE, through the [`JniGen::iface_spec`]
+//! Each identity's spec is derived ONCE, through the [`JniGenBuilder::iface_spec`]
 //! memo keyed by [`SpecKey`], and shared by all three sites — the
 //! FQN/descriptor pair cannot drift between the artifact tiers (issue #107).
 //! The constructors stay deterministic over `(ext, registry)`; in debug
@@ -668,7 +668,7 @@ fn subject_short(ty: &syn::Type) -> String {
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
-fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
+fn subject_package(ext: &JniGenBuilder, subject: &syn::Type) -> String {
     let key = TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject));
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
@@ -678,7 +678,7 @@ fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
 /// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], typed + raw views per leaf.
 fn plan_leaf_params(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
 ) -> Option<Vec<IfaceParam>> {
@@ -698,7 +698,7 @@ fn plan_leaf_params(
 /// inert-group nullability rule below have to hold at every one of those sites,
 /// not just where the plan happens to be walked as a whole.
 fn plan_leaf_param(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
@@ -743,7 +743,7 @@ fn plan_leaf_param(
 ///   the close-unless-taken contract needs the native side to `close()` the
 ///   wrapped object after the invoke.
 fn leaf_iface_param(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
     out_ty: &syn::Type,
@@ -855,7 +855,7 @@ fn leaf_iface_param(
 /// `run` (close-unless-taken). Replaces the former Rust-side `new_object` +
 /// post-invoke `close()`. `None` if the arg's projection FQN can't be resolved.
 pub(crate) fn owned_handle_iface_param(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
     out_ty: &syn::Type,
@@ -971,12 +971,12 @@ pub(crate) fn fixed_leaf_element_keys(
 }
 
 /// Derive the spec for one identity — the SINGLE construction point behind
-/// [`JniGen::iface_spec`]. Any `syn` context comes from the key's stored
+/// [`JniGenBuilder::iface_spec`]. Any `syn` context comes from the key's stored
 /// normalized type ([`TypeKey::to_type`] — a clone, not a reparse). A
 /// `Folder` derivation folds the fixed-builder typed-group view in per
 /// `DeconId` (see [`fixed_decon_ids`]).
 fn derive_iface_spec(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     key: &SpecKey,
 ) -> Option<IfaceSpec> {
@@ -999,7 +999,7 @@ fn derive_iface_spec(
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// The memoized spec for one interface identity: derived once per
     /// generator run and shared by every consumer — the resolve-time
     /// trampoline, the per-function plan, and the declaration emitter — so
@@ -1045,7 +1045,7 @@ impl JniGen {
 /// property types, not the wire — so it reassembles through the same inlined
 /// `when` over the tag that a sum-typed struct field gets.
 fn fixed_reassembly(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     source: &syn::Type,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
@@ -1070,7 +1070,7 @@ fn fixed_reassembly(
 /// returning `Unit`. Named `<ArgShorts>Callback` (`Fn()` → `VoidCallback`),
 /// placed in the first arg type's package (root for `Fn()`).
 pub(crate) fn callback_iface_spec(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     cb_args: &[syn::Type],
 ) -> Option<IfaceSpec> {
@@ -1302,7 +1302,7 @@ pub(crate) fn callback_iface_spec(
 /// function's own plan. Named `<decl-base>Builder`, placed in the source
 /// type's package.
 pub(crate) fn builder_iface_spec(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
@@ -1328,7 +1328,7 @@ pub(crate) fn builder_iface_spec(
 /// the element's deconstructor declaration. Named `<decl-base>Folder`,
 /// placed in the element type's package.
 pub(crate) fn folder_iface_spec(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
@@ -1354,7 +1354,7 @@ pub(crate) fn folder_iface_spec(
 /// without a deconstructor — no declaration involved):
 /// `run(acc: A, element): A`. One shape per element type by construction.
 pub(crate) fn whole_folder_iface_spec(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     element: &syn::Type,
 ) -> Option<IfaceSpec> {
@@ -1386,11 +1386,11 @@ pub(crate) fn whole_folder_iface_spec(
 
 /// The folder spec for an `Iterable` plan: declaration-keyed when the
 /// element decomposes, whole-element otherwise. Thin KEY dispatch into the
-/// [`JniGen::iface_spec`] memo — the fixed-builder typed-group view is
+/// [`JniGenBuilder::iface_spec`] memo — the fixed-builder typed-group view is
 /// applied there per `DeconId` (the declaration identity the JVM resolves
 /// against), not per this plan's own `fixed_builder` flag.
 pub(crate) fn folder_iface_for_plan(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     plan: &UnfoldPlan,
 ) -> Option<std::sync::Arc<IfaceSpec>> {
@@ -1415,7 +1415,7 @@ pub(crate) fn folder_iface_for_plan(
 /// emission (`write_iface_files`), keyed by the element's deconstructor so the
 /// two stay in lockstep.
 pub(crate) fn fixed_folder_typed_groups(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
@@ -1449,7 +1449,7 @@ pub(crate) fn fixed_folder_typed_groups(
 /// Keyed by the error type's deconstructor declaration. Named
 /// `<decl-base>Handler`, placed in the error type's package.
 pub(crate) fn error_handler_iface_spec(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
@@ -1481,7 +1481,7 @@ pub(crate) fn error_handler_iface_spec(
 /// The shared infallible handler `JniErrorHandler<out R> { run(je: String?): R }`
 /// — every function without an error plan takes one; placed in the root
 /// package.
-pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
+pub(crate) fn jni_error_handler_iface_spec(ext: &JniGenBuilder) -> IfaceSpec {
     let params = vec![IfaceParam::same(
         "je".to_string(),
         kt::KtType::string().nullable(),
@@ -1521,11 +1521,11 @@ pub(crate) struct ErrorIfaces {
 /// The onError handler interfaces for a declared function — the always-present
 /// binding `JniErrorHandler` plus, for a fallible function, its
 /// declaration-keyed typed domain `<Src>Handler`. Thin KEY dispatch into the
-/// [`JniGen::iface_spec`] memo. `None` = the domain handler is underivable
+/// [`JniGenBuilder::iface_spec`] memo. `None` = the domain handler is underivable
 /// (the Rust emitter panics, the Kotlin renderer skips) — the binding channel
 /// alone always derives.
 pub(crate) fn onerror_iface_spec(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     fn_ident: &syn::Ident,
 ) -> Option<ErrorIfaces> {

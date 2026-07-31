@@ -36,7 +36,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -222,7 +222,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -318,7 +318,7 @@ fn callback_double_option_unwrap_pipeline() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("query")
@@ -451,7 +451,7 @@ fn callback_double_option_unwrap_pipeline() {
 // ────────────────────────────────────────────────────────────────────────
 // Spec memo (issue #107): every consumer — resolve-time trampoline,
 // per-function plan, declaration emitter — reads ONE derivation per
-// interface identity through `JniGen::iface_spec`.
+// interface identity through `JniGenBuilder::iface_spec`.
 // ────────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -486,7 +486,7 @@ fn iface_spec_memo_shares_one_derivation() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -559,7 +559,7 @@ fn fn_plan_memo_shares_one_derivation() {
     )];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
     // resolve runs validation, which builds and stores every function's plan.

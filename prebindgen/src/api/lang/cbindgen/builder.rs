@@ -1,6 +1,6 @@
 use super::*;
 
-impl Cbindgen {
+impl CbindgenBuilder {
     fn clear_current(&mut self) {
         self.current = None;
     }
@@ -104,7 +104,7 @@ impl Cbindgen {
         self
     }
 
-    /// Declare a canonical scalar conversion shared with JniGen. A domain on
+    /// Declare a canonical scalar conversion shared with JniGenBuilder. A domain on
     /// the [`ConvertDecl`] is validated in both directions; invalid scalar
     /// values become by-value niches for `Option`/`Result`, with public C
     /// constants derived from the conversion's naming base.

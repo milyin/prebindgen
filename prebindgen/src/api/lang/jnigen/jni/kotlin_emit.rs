@@ -1,6 +1,6 @@
-//! `KotlinExt` impl for [`JniGen`].
+//! `KotlinExt` impl for [`JniGenBuilder`].
 //!
-//! [`JniGen::write_kotlin`] is the single entry point for every Kotlin
+//! [`JniGenBuilder::write_kotlin`] is the single entry point for every Kotlin
 //! file the JNI back-end emits. Each per-kind emitter builds in-memory
 //! [`kt::KtFile`] *model fragments* (declarations, not strings — the
 //! generator module `api::gen::kotlin` owns formatting and imports):
@@ -36,8 +36,8 @@ use crate::api::{
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
 ///
-/// Consumed by [`JniGen::write_typed_handles`] (and forwarded to
-/// [`JniGen::write_jni_wrappers`] so the same promotion list can carve
+/// Consumed by [`JniGenBuilder::write_typed_handles`] (and forwarded to
+/// [`JniGenBuilder::write_jni_wrappers`] so the same promotion list can carve
 /// the matching skip-list). Each entry says "this Kotlin class is the
 /// home for the named `#[prebindgen]` functions"; everything else stays
 /// in the catch-all `JNIWrappers` object.
@@ -54,7 +54,7 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
-impl crate::api::core::Generation<JniGen> {
+impl crate::api::core::Generation<JniGenBuilder> {
     /// Unified Kotlin emission — the JNI adapter's second artifact,
     /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
     /// builds in-memory [`kt::KtFile`] model fragments; they are merged
@@ -71,9 +71,9 @@ impl crate::api::core::Generation<JniGen> {
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Kotlin emission body — the public entry point is
-    /// `Generation::<JniGen>::write_kotlin`, which guarantees the registry
+    /// `Generation::<JniGenBuilder>::write_kotlin`, which guarantees the registry
     /// was resolved first.
     pub(crate) fn write_kotlin(
         &self,
@@ -462,7 +462,7 @@ pub(crate) struct OwnedTypedHandle {
     pub key: TypeKey,
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Emit one Kotlin `enum class` file per `enum_class`-declared type.
     /// Variants render in declaration order using SCREAMING_SNAKE_CASE names; the
     /// constructor stores the Rust discriminant value (or the ordinal as
@@ -1134,7 +1134,7 @@ impl JniGen {
         uses.into_iter()
             .filter_map(|u| {
                 // Every spec comes from the SAME memo the wrappers and the
-                // resolve-time trampoline read ([`JniGen::iface_spec`]) —
+                // resolve-time trampoline read ([`JniGenBuilder::iface_spec`]) —
                 // this site only classifies the extras: `is_error` ⇒ also
                 // emit the zero-alloc capture holder used by the generated
                 // wrappers' error channel; `fixed` carries a
@@ -1694,15 +1694,15 @@ impl JniGen {
     }
 
     /// Emit the centralized Native-object Kotlin file under `output_dir`
-    /// (class name from [`JniGen::jni_native_class_name`]). Holds one
+    /// (class name from [`JniGenBuilder::jni_native_class_name`]). Holds one
     /// `external fun` per `#[prebindgen]` function — names mangled as methods
-    /// via [`JniGen::set_method_name_mangle`], parameter and return types rendered at
+    /// via [`JniGenBuilder::set_method_name_mangle`], parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
     /// symbols generated under the spec-escaped
     /// `Java_<package>_<jni_native_class>_<name>` (see `symbol`, #86). Every generated native
     /// call routes through this object, so its static initializer is the
     /// single point at which native-library loading can be triggered: when
-    /// [`JniGen::jni_native_init`] is set, its Kotlin statement(s) are emitted
+    /// [`JniGenBuilder::jni_native_init`] is set, its Kotlin statement(s) are emitted
     /// inside an `init { … }` block here (e.g. a reference to the consumer's
     /// own loader object). Unset, the holder stays free of any loading logic
     /// and the wrapper layer is responsible for loading.
@@ -1843,7 +1843,7 @@ impl JniGen {
     /// same `handles` slice to both methods.
     ///
     /// Each handle's `kotlin_fqn` must be registered via
-    /// [`JniGen::kotlin_fqn`] so the generator can map it back to its
+    /// [`JniGenBuilder::kotlin_fqn`] so the generator can map it back to its
     /// Rust type-key (which identifies the first param to drop in each
     /// promoted method's signature).
     pub(crate) fn write_typed_handles(

@@ -6,7 +6,7 @@ use crate::api::core::registry::{Building, Conversions, Crossing, RegistryBuilde
 /// otherwise); [`Prebindgen::on_input_type`] chains them in priority order
 /// before the wrapper shapes. The categories are mutually exclusive, so the
 /// chain's fall-through is equivalent to a sequential `if … return` block.
-impl Cbindgen {
+impl CbindgenBuilder {
     /// Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
     /// handle → message). The wire is the bare handle pointer `*mut #c_struct`.
     pub(crate) fn in_opaque_handle(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
@@ -442,10 +442,10 @@ impl Cbindgen {
     }
 }
 
-/// Per-section [`Cbindgen::prerequisites`] emitters. Each returns the runtime-
+/// Per-section [`CbindgenBuilder::prerequisites`] emitters. Each returns the runtime-
 /// support items for one concern; the trait method concatenates them in order,
 /// so the emitted preamble is identical to the former single function.
-impl Cbindgen {
+impl CbindgenBuilder {
     /// C allocator extern + raw C-string allocator + the universal memory freer.
     /// Emitted when the layer hands `char*`/array memory to C. Panics if such
     /// memory is produced but no `.free_memory_function` is declared.
@@ -792,7 +792,7 @@ impl Cbindgen {
     /// Deliberately NOT routed through the shared
     /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values).
     /// That helper resolves each variant to a concrete `i64`, which is what an
-    /// adapter needs when it must *know the number* — JniGen's `jint` decode
+    /// adapter needs when it must *know the number* — JniGenBuilder's `jint` decode
     /// and the Kotlin `value(N)` constants. This mirror needs no number: it is
     /// Rust source that cbindgen re-reads, so passing the expression through
     /// keeps every discriminant C already accepted — a `const` or `cfg`-driven
@@ -839,7 +839,7 @@ impl Cbindgen {
     /// the idiomatic C tagged union, with no hand-written header fragment.
     /// Variant shape is mirrored faithfully (named stays named, tuple stays
     /// tuple, unit stays unit); each payload field takes the wire chosen by
-    /// [`Cbindgen::payload_field_wire`].
+    /// [`CbindgenBuilder::payload_field_wire`].
     ///
     /// A union whose payload wires own memory also gets a typed
     /// `<base>_drop(t_t *)` that frees the **active arm** and nulls the freed
@@ -1054,7 +1054,7 @@ impl Cbindgen {
     /// read from the front as a plain `c_int` and range-checked against the
     /// variants (the mirror carries no explicit discriminants, so its tags are
     /// declaration order `0..N`). Only then is the value `assume_init`ed —
-    /// which is sound because [`Cbindgen::payload_field_wire`] makes every
+    /// which is sound because [`CbindgenBuilder::payload_field_wire`] makes every
     /// payload wire bit-pattern-agnostic, leaving the tag as the sole
     /// obligation.
     pub(crate) fn in_tagged_union(
@@ -1447,8 +1447,8 @@ impl Cbindgen {
     }
 }
 
-impl Cbindgen {
-    /// State this binding into `registry` — see `JniGen::declare_into`.
+impl CbindgenBuilder {
+    /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
     ///
     /// Push, not pull: the build script calls this, and the registry never
     /// calls back. cbindgen declares no consts (it has no const mechanism, so
@@ -1478,7 +1478,7 @@ impl Cbindgen {
     }
 
     /// State this binding into `registry`, then resolve it — see
-    /// `JniGen::resolve`.
+    /// `JniGenBuilder::resolve`.
     pub fn resolve(
         self,
         registry: RegistryBuilder<()>,
@@ -1491,7 +1491,7 @@ impl Cbindgen {
         registry.finish(self)
     }
 
-    /// Build the conversion for one crossing — see `JniGen::convert_crossing`.
+    /// Build the conversion for one crossing — see `JniGenBuilder::convert_crossing`.
     fn convert_crossing(
         &self,
         crossing: &Crossing,
@@ -1528,7 +1528,7 @@ impl Cbindgen {
     }
 }
 
-impl Cbindgen {
+impl CbindgenBuilder {
     fn dispatch_fn_input(
         &self,
         args: &[syn::Type],
@@ -1641,11 +1641,11 @@ impl Cbindgen {
     }
 }
 
-impl Prebindgen for Cbindgen {
+impl Prebindgen for CbindgenBuilder {
     /// Report what this binding left unclaimed. Here because it is the
     /// earliest generator-owned hook that sees the model, and it runs exactly
     /// where the registry used to print these itself. Moves into
-    /// `Cbindgen::generate` once that exists (prebindgen#251 phase E).
+    /// `CbindgenBuilder::generate` once that exists (prebindgen#251 phase E).
     ///
     /// `consts: None` — cbindgen has no const declaration mechanism, so every
     /// captured const is re-emitted verbatim and none is ever a skip.
@@ -1689,7 +1689,7 @@ impl Prebindgen for Cbindgen {
         // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
         // same function (per element through the `z_free_array` macro), so the
         // allocator/freer prelude is needed for them too. Each section's emitter
-        // lives in the `impl Cbindgen` block above; order is significant.
+        // lives in the `impl CbindgenBuilder` block above; order is significant.
         let produces_array = self.produces_array(registry);
         let mut items: Vec<syn::Item> = Vec::new();
         items.extend(self.prereq_alloc_free(registry, produces_array));
@@ -1722,8 +1722,8 @@ impl Prebindgen for Cbindgen {
 }
 
 /// Output-direction terminal categories — the rank-0 chain, now an inherent
-/// helper called by [`Cbindgen::select_output_type`].
-impl Cbindgen {
+/// helper called by [`CbindgenBuilder::select_output_type`].
+impl CbindgenBuilder {
     pub(crate) fn out_terminal(
         &self,
         ty: &syn::Type,
@@ -1938,7 +1938,7 @@ impl Cbindgen {
 /// Structural wrapper-shape resolvers (the post-rank-machinery surface). Each
 /// peels `ty`'s outermost layer and composes the inner's converter; `subs`
 /// lists the immediate inner(s) it looked up.
-impl Cbindgen {
+impl CbindgenBuilder {
     /// `Option<X>` and reference (`&`/`&mut`/`&[E]`/`&str`) **input** shapes.
     pub(crate) fn in_wrappers(
         &self,
@@ -2393,7 +2393,7 @@ impl Cbindgen {
 /// These were trait methods the registry called back into the adapter from
 /// inside `resolve`. They are the adapter's own business now, gathered into the
 /// one value the registry is constructed from.
-impl Cbindgen {
+impl CbindgenBuilder {
     pub(crate) fn declared_functions(&self) -> HashSet<syn::Ident> {
         self.functions.keys().cloned().collect()
     }
