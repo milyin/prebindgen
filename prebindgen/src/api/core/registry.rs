@@ -731,10 +731,6 @@ pub(crate) struct Declared {
     pub(crate) accessors: HashSet<syn::Ident>,
     pub(crate) method_receivers: HashMap<syn::Ident, TypeKey>,
     pub(crate) types: HashSet<TypeKey>,
-    /// Types converted exclusively through the adapter's plans (built from
-    /// ingredients / decomposed into fields); un-required after plans — see
-    /// [`Prebindgen::boundary_only_types`].
-    pub(crate) boundary_only_types: HashSet<TypeKey>,
     /// Consts to scan and emit, or `None` when the adapter has no const
     /// declaration mechanism — then every captured const is re-emitted
     /// verbatim (see the const gate in [`crate::api::core::write`]).
@@ -747,6 +743,44 @@ pub(crate) struct Declared {
     /// Crossings with no `#[prebindgen]` element behind them, each in the one
     /// direction it actually crosses — see [`Registry::cross`].
     pub(crate) crossings: Vec<(Direction, syn::Type)>,
+    /// How composites cross in pieces — see [`Registry::decompose`].
+    pub(crate) decompositions: Decompositions,
+}
+
+/// How a binding's composites cross **in pieces** instead of whole.
+///
+/// One value, pushed once through [`Registry::decompose`], in place of the five
+/// separate hooks the registry used to call back for (`expansions`,
+/// `deconstructors`, `value_struct_decons`, `sum_decons`,
+/// `leaf_vec_fold_elements`). All five are implemented by one adapter and none
+/// of them ever needed more than the model, which is what makes stating them up
+/// front possible.
+///
+/// The fields are still the five declaration families, because unifying the
+/// plan IRs behind them is its own problem (see issue #223) and pretending
+/// otherwise here would only move the seam. What this settles is *when* they
+/// are stated and *by whom*.
+#[derive(Default)]
+pub struct Decompositions {
+    /// Parameter-side: values built on the Rust side from ingredients that
+    /// cross separately.
+    pub expansions: Option<crate::api::core::expand::Expansions>,
+    /// Return/error-side: values delivered as leaves the far side reassembles.
+    pub deconstructors: Option<crate::api::core::unfold::Deconstructors>,
+    /// By-value struct decompositions whose leaves the adapter computed.
+    pub value_structs: Vec<crate::api::core::unfold::ValueDecon>,
+    /// The selector-carrying sibling: a tag plus one leaf group per
+    /// alternative.
+    pub sums: Vec<crate::api::core::unfold::SumDecon>,
+    /// Element types of a `Vec<T>`/`&[T]` delivered element-by-element.
+    pub leaf_vec_elements: Vec<syn::Type>,
+    /// The whole-value crossings these decompositions make unnecessary.
+    ///
+    /// Stated **with** the decompositions rather than beside them: a type
+    /// crosses only in pieces *because* something decomposes it, and once the
+    /// plans are applied its own direct converter is genuinely not needed — for
+    /// a type with no destination representation, not even resolvable.
+    pub replaces: HashSet<TypeKey>,
 }
 
 impl<M> Registry<M> {
@@ -917,14 +951,12 @@ impl<M> Registry<M> {
             .insert(name.clone(), receiver);
     }
 
-    /// A type that crosses **only** through a plan, never whole — so its own
-    /// direct converter is not required once the plans are applied.
+    /// How this binding's composites cross **in pieces** instead of whole.
     ///
-    /// Becomes `Decomposition::replaces` in step 2 of #251, stated by the
-    /// decomposition that makes the whole-value crossing unnecessary rather
-    /// than listed separately from it.
-    pub fn crosses_only_in_pieces(&mut self, key: TypeKey) {
-        self.declared.boundary_only_types.insert(key);
+    /// Stated once, before [`Self::resolve`]. Replaces five separate callbacks
+    /// the registry used to make into the generator; see [`Decompositions`].
+    pub fn decompose(&mut self, d: Decompositions) {
+        self.declared.decompositions = d;
     }
 
     /// What the binding declared — read by the emitter's gate.
@@ -1047,7 +1079,7 @@ impl<M> Registry<M> {
         for key in declared
             .types
             .iter()
-            .chain(declared.boundary_only_types.iter())
+            .chain(declared.decompositions.replaces.iter())
         {
             if !probed.insert(key) {
                 continue;
@@ -1427,12 +1459,12 @@ impl<M> Registry<M> {
         E: Prebindgen<Metadata = M>,
         M: Clone + Default,
     {
-        let declared = std::mem::take(&mut self.declared);
+        let mut declared = std::mem::take(&mut self.declared);
         self.scan_declared_items(&declared)?;
         adapter
             .validate(&self)
             .map_err(|message| ScanError::AdapterInvariant { message })?;
-        self.apply_adapter_plans(&adapter, &declared)?;
+        self.apply_adapter_plans(&mut declared)?;
         self.declared = declared;
         crate::api::core::resolve::resolve(&mut self, &adapter)?;
         // Post-resolve validation runs ONCE here, so a `Generation` is valid
@@ -1450,58 +1482,59 @@ impl<M> Registry<M> {
         })
     }
 
-    fn apply_adapter_plans<E>(&mut self, ext: &E, declared: &Declared) -> Result<(), WriteRustError>
-    where
-        E: Prebindgen<Metadata = M>,
-    {
+    fn apply_adapter_plans(&mut self, declared: &mut Declared) -> Result<(), WriteRustError> {
         // The set of declared fns drives `.default()` auto-apply: a defaulted
         // constructor/deconstructor is synthesized for every matching declared
         // fn. `accessors` is the `.fun_accessor` subset: excluded from
         // constructor composition and the only fns a decomposer record may
         // reference.
-        if let Some(exp) = ext.expansions() {
+        let d = &mut declared.decompositions;
+        if let Some(exp) = &d.expansions {
             crate::api::core::expand::apply(
                 self,
-                &exp,
+                exp,
                 &declared.functions,
                 &declared.accessors,
                 &declared.method_receivers,
             )?;
         }
-        if let Some(dec) = ext.deconstructors(self) {
-            crate::api::core::unfold::apply(self, &dec, &declared.functions, &declared.accessors)?;
+        if let Some(dec) = &d.deconstructors {
+            crate::api::core::unfold::apply(self, dec, &declared.functions, &declared.accessors)?;
         }
-        // Synthesized by-value `data_class` decompositions: build the leaves
-        // (immutable borrow), then wire them into fixed-builder plans.
-        let value_decons = ext.value_struct_decons(self);
-        if !value_decons.is_empty() {
-            crate::api::core::unfold::apply_value_structs(self, value_decons, &declared.functions)?;
+        // Synthesized by-value `data_class` decompositions: the adapter already
+        // built the leaves; this wires them into fixed-builder plans.
+        if !d.value_structs.is_empty() {
+            crate::api::core::unfold::apply_value_structs(
+                self,
+                std::mem::take(&mut d.value_structs),
+                &declared.functions,
+            )?;
         }
-        // Synthesized sum decompositions: the same fixed-builder wiring for a
-        // value whose alternatives are chosen at runtime (tag + one leaf group
-        // per variant) rather than being a fixed product.
-        let sum_decons = ext.sum_decons(self);
-        if !sum_decons.is_empty() {
-            crate::api::core::unfold::apply_sum_returns(self, sum_decons, &declared.functions)?;
+        // The same wiring for a value whose alternatives are chosen at runtime
+        // (tag + one leaf group per variant) rather than being a fixed product.
+        if !d.sums.is_empty() {
+            crate::api::core::unfold::apply_sum_returns(
+                self,
+                std::mem::take(&mut d.sums),
+                &declared.functions,
+            )?;
         }
         // Single-leaf `Vec<T>`/`&[T]` whole-element folds — the dual of the
         // `data_class` folds above, for String / scalar / handle elements
         // (so the list is built on the foreign side, not via a Rust ArrayList).
-        let leaf_elements = ext.leaf_vec_fold_elements(self);
-        if !leaf_elements.is_empty() {
+        if !d.leaf_vec_elements.is_empty() {
             crate::api::core::unfold::apply_leaf_vec_folds(
                 self,
-                leaf_elements,
+                std::mem::take(&mut d.leaf_vec_elements),
                 &declared.functions,
             )?;
         }
-        // Boundary-only types: every crossing is now covered by a plan (fold
-        // in, unfold out / error channel), so the scan-time direct converter
-        // requirement is stale — and typically unresolvable, since the type
-        // has no destination-language representation. Drop it both ways; the
-        // entry stays in the table, so a converter is still produced if one
-        // happens to resolve.
-        for key in &declared.boundary_only_types {
+        // Every crossing these types make is now covered by a plan, so the
+        // scan-time direct converter requirement is stale — and typically
+        // unresolvable, since such a type has no destination representation.
+        // Drop it both ways; the cell stays, so a converter is still produced
+        // if one happens to resolve.
+        for key in &declared.decompositions.replaces {
             let ty = key.to_type();
             self.unrequire_input(&ty);
             self.unrequire_output(&ty);

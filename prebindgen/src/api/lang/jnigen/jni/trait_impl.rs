@@ -978,9 +978,6 @@ impl JniGen {
         for (ident, receiver) in self.method_receivers() {
             registry.method_receiver(&ident, receiver);
         }
-        for key in self.boundary_only_types() {
-            registry.crosses_only_in_pieces(key);
-        }
 
         // An expression constant's value type has no captured item to scan.
         for ty in self.required_output_types() {
@@ -998,71 +995,23 @@ impl JniGen {
                 registry.cross(Direction::Output, &ty);
             }
         }
+        // How composites cross in pieces. Every one of these reads only the
+        // model, which is what lets them be stated here rather than asked for
+        // mid-resolve.
+        registry.decompose(crate::core::Decompositions {
+            expansions: Some(self.build_expansions()),
+            deconstructors: Some(self.build_deconstructors(registry)),
+            value_structs: self.build_value_struct_decons(registry),
+            sums: self.build_sum_decons(registry),
+            leaf_vec_elements: self.build_leaf_vec_fold_elements(registry),
+            replaces: self.boundary_only_types(),
+        });
         Ok(())
     }
 }
 
-impl Prebindgen for JniGen {
-    /// Cross-language extras every JNI converter carries — currently
-    /// the Kotlin value-context type name. Filled by the rank-N
-    /// handlers at the same point they build the wire/body; the
-    /// resolver propagates it into [`crate::api::core::registry::TypeEntry::metadata`];
-    /// the Kotlin emitter reads it back to drive every wrapper /
-    /// typed-handle / `JNIWrappers` signature.
-    type Metadata = KotlinMeta;
-
-    // ── Structural type resolution ──────────────────────────────────────
-    // Try the terminal categories, then the `Result` peel, then the built-in
-    // wrapper shapes — peel
-    // `ty`'s outermost layer and dispatch to `{input,output}_wrapper_shape` with
-    // the reconstructed canonical pattern. `subs` = the captured inner(s).
-
-    fn on_input_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.select_input_type(ty, registry)
-    }
-
-    fn on_output_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.select_output_type(ty, registry)
-    }
-
-    /// Hand the registry this back-end's constructor-expansion declarations so
-    /// `write_rust` can resolve `.expand`s into fold plans before resolution.
-    /// Assembled on demand from the per-fn overrides plus the raw type-level
-    /// [`ExpandParamDecl`]s (see [`JniGen::build_expansions`]).
-    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
-        Some(self.build_expansions())
-    }
-
-    /// Hand the registry this back-end's output-expansion declarations so
-    /// `write_rust` can resolve them into unfold plans before resolution.
-    /// Assembled on demand — field names (member inheritance) resolve here,
-    /// against the complete declaration set (see
-    /// [`JniGen::build_deconstructors`]).
-    fn deconstructors(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<crate::api::core::unfold::Deconstructors> {
-        Some(self.build_deconstructors(registry))
-    }
-
-    /// Synthesize a field-decomposition for every `.data_class` type whose
-    /// fields the fixed builder can forward verbatim (see
-    /// [`synth_value_struct_leaves`]). The result drives
-    /// [`crate::api::core::unfold::apply_value_structs`] so such a struct
-    /// crosses Rust→Kotlin as decoupled leaves (reassembled by the generated
-    /// `fromParts` builder singleton) instead of a `JObject` built on the Rust
-    /// side via `call_static_method`. Types the synthesizer declines (enums /
-    /// projections / `Option`/`Vec`-nested) keep the whole-value
-    /// [`struct_output_body`] path.
-    fn value_struct_decons(
+impl JniGen {
+    pub(crate) fn build_value_struct_decons(
         &self,
         registry: &Registry<KotlinMeta>,
     ) -> Vec<crate::api::core::unfold::ValueDecon> {
@@ -1102,16 +1051,7 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Synthesize the tag-plus-groups decomposition of every `sealed_class`
-    /// type, so a function whose own return (or callback argument) IS the sum
-    /// delivers it as a tag plus one leaf group per variant — the same wire
-    /// layout a sum-typed struct field already gets, reassembled by the hoisted
-    /// builder singleton instead of by the parent's `fromParts`.
-    ///
-    /// Emitted for every declared sum, not only the ones currently returned: a
-    /// decomposition with no matching function wires no plan, and an unused
-    /// `DeconSpec` emits nothing.
-    fn sum_decons(
+    pub(crate) fn build_sum_decons(
         &self,
         registry: &Registry<KotlinMeta>,
     ) -> Vec<crate::api::core::unfold::SumDecon> {
@@ -1138,16 +1078,10 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Nominate every **single-leaf** element type that appears in a `Vec<T>` /
-    /// `Option<Vec<T>>` return or an `impl Fn(&[T])` callback arg, so
-    /// [`crate::api::core::unfold::apply_leaf_vec_folds`] routes the collection
-    /// through a foreign-built fold (no Rust `ArrayList`). A single-leaf element
-    /// is an opaque handle (→ a `jlong` pointer the Kotlin folder wraps into its
-    /// typed handle class) or a non-`data_class`
-    /// builtin with a JObject-shaped output wire (e.g. String). Multi-field
-    /// `data_class` elements are excluded — they go through
-    /// [`Self::value_struct_decons`].
-    fn leaf_vec_fold_elements(&self, registry: &Registry<KotlinMeta>) -> Vec<syn::Type> {
+    pub(crate) fn build_leaf_vec_fold_elements(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Vec<syn::Type> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut consider = |bare: syn::Type| {
@@ -1184,12 +1118,39 @@ impl Prebindgen for JniGen {
         }
         out
     }
+}
 
-    /// Binding-local fns to synthesize into the registry, from both entry
-    /// forms — path-built `fun!(crate::f).sig(…)` decls (full stated
-    /// signature) and `field!("name").with(ty, path)` output fields
-    /// (signature `fn f(v: &Target) -> Ty`). One fn may back several
-    /// declarations only with an identical synthesized signature.
+impl Prebindgen for JniGen {
+    /// Cross-language extras every JNI converter carries — currently
+    /// the Kotlin value-context type name. Filled by the rank-N
+    /// handlers at the same point they build the wire/body; the
+    /// resolver propagates it into [`crate::api::core::registry::TypeEntry::metadata`];
+    /// the Kotlin emitter reads it back to drive every wrapper /
+    /// typed-handle / `JNIWrappers` signature.
+    type Metadata = KotlinMeta;
+
+    // ── Structural type resolution ──────────────────────────────────────
+    // Try the terminal categories, then the `Result` peel, then the built-in
+    // wrapper shapes — peel
+    // `ty`'s outermost layer and dispatch to `{input,output}_wrapper_shape` with
+    // the reconstructed canonical pattern. `subs` = the captured inner(s).
+
+    fn on_input_type(
+        &self,
+        ty: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        self.select_input_type(ty, registry)
+    }
+
+    fn on_output_type(
+        &self,
+        ty: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        self.select_output_type(ty, registry)
+    }
+
     /// Member-shape invariants (N5), checked against registry signatures —
     /// the earliest possible moment. Without this, a receiver-less `.method()`
     /// member would silently emit a method that ignores `this`, and a
