@@ -428,7 +428,7 @@ impl JniFunctionPlan {
             let ty = (*pt.ty).clone();
 
             let form = if let Some(plan) = registry
-                .expansion_plans
+                .expansion_plans()
                 .get(&(f.sig.ident.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();

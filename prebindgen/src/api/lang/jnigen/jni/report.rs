@@ -204,7 +204,7 @@ impl crate::api::core::Generation<JniGen> {
         // Param expansions.
         let mut shaped: Vec<String> = Vec::new();
         let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry
-            .expansion_plans
+            .expansion_plans()
             .iter()
             .filter(|((func, _), _)| func == rust_ident)
             .map(|((_, param), plan)| (param, plan))

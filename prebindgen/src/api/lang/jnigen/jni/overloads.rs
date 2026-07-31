@@ -322,7 +322,7 @@ fn resolve_split<'a>(
 ) -> Split<'a> {
     let param = syn::Ident::new(param_name, Span::call_site());
     let plan = registry
-        .expansion_plans
+        .expansion_plans()
         .get(&(f.sig.ident.clone(), param.clone()))
         .unwrap_or_else(|| {
             panic!(

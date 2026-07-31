@@ -2249,7 +2249,7 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
     let mut notes: Vec<String> = Vec::new();
 
     let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry
-        .expansion_plans
+        .expansion_plans()
         .iter()
         .filter(|((func, _), _)| func == fn_ident)
         .map(|((_, param), plan)| (param, plan))
