@@ -2,6 +2,7 @@
 //! synthesis probe.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Resolve the typed-handle Kotlin FQN for a handle-bearing struct field
 /// and assert its folded strategy is one the struct encode/decode bridge
@@ -171,7 +172,7 @@ pub(crate) fn synth_value_struct_leaves(
 /// order and JVM descriptors agree by construction.
 pub(crate) fn flatten_struct_encode(
     ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
     access: &TokenStream,
     prefix: &str,
@@ -576,7 +577,7 @@ fn encode_field(
 pub(crate) fn struct_output_body(
     ext: &JniGen,
     s: &syn::ItemStruct,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.ident.to_string();
     // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
@@ -637,7 +638,7 @@ pub(crate) fn struct_output_body(
 
 pub(crate) fn struct_module_path(
     ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
 ) -> syn::Path {
     // The module the struct is reachable under from the generated file: its

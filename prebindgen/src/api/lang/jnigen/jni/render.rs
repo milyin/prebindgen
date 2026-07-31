@@ -5,6 +5,7 @@
 //! via `use super::*`.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 // ── Safe-wrapper emitters ──────────────────────────────────────────────
 
@@ -549,7 +550,7 @@ pub(crate) fn render_extern_decl(
     // erased to `Any` (JObject) on the wire; the wrapper passes a capture for
     // each. A domain plan ⇒ `error_plans` has this fn.
     params.push(kt::KtParam::new("errorSink", kt::KtType::any()));
-    if registry.error_plans.contains_key(&f.sig.ident) {
+    if registry.error_plans().contains_key(&f.sig.ident) {
         params.push(kt::KtParam::new("domainSink", kt::KtType::any()));
     }
 
@@ -1267,7 +1268,7 @@ fn classify_output(
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<OutputPlan> {
-    let unfold = registry.unfold_plans.get(&f.sig.ident);
+    let unfold = registry.unfold_plans().get(&f.sig.ident);
     // `builder_param` is the trailing **lambda** param (build / fold) as a
     // `(name, function-type)` pair. For the `Iterable` shape, the non-lambda
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
@@ -1627,7 +1628,7 @@ fn error_sink_parts(
     // plan; when present, both the interface spec and the error plan are.
     let domain = if let Some(domain_spec) = &ifaces.domain {
         let error_plan = registry
-            .error_plans
+            .error_plans()
             .get(&f.sig.ident)
             .expect("domain handler ⇒ error plan");
         // Per ze leaf: (raw capture Kotlin type, raw→typed wrap). The CAPTURE
@@ -2007,7 +2008,7 @@ fn render_body(
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
 pub(crate) fn unfold_leaf_kt(
     ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     out_ty: &syn::Type,
     nullable: bool,
     pk: &str,
@@ -2146,7 +2147,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 pub(crate) fn classify_return(
     ext: &JniGen,
     output: &syn::ReturnType,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(
     Option<kt::KtType>,
     Option<crate::api::lang::jnigen::jni::Projection>,
@@ -2248,7 +2249,7 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
     let mut notes: Vec<String> = Vec::new();
 
     let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry
-        .expansion_plans
+        .expansion_plans()
         .iter()
         .filter(|((func, _), _)| func == fn_ident)
         .map(|((_, param), plan)| (param, plan))
@@ -2291,7 +2292,7 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
         ));
     }
 
-    if let Some(plan) = registry.unfold_plans.get(fn_ident) {
+    if let Some(plan) = registry.unfold_plans().get(fn_ident) {
         let source = plan.source.to_token_stream().to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
@@ -2311,7 +2312,7 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
         }
     }
 
-    if let Some(plan) = registry.error_plans.get(fn_ident) {
+    if let Some(plan) = registry.error_plans().get(fn_ident) {
         let source = plan.source.to_token_stream().to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         notes.push(format!(

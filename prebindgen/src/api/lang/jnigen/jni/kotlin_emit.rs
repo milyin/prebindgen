@@ -26,9 +26,12 @@
 //! warning (`Registry::scan_declared`); there is no "orphan" bucket.
 
 use super::*;
-use crate::api::gen::{
-    kotlin as kt,
-    kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
+use crate::api::{
+    core::registry::Conversions,
+    gen::{
+        kotlin as kt,
+        kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
+    },
 };
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
@@ -1050,7 +1053,7 @@ impl JniGen {
         // A decomposition is a sum's when it carries the synthesized selector.
         let is_sum = |d: &DeconId| {
             registry
-                .decon_plans
+                .decon_plans()
                 .get(d)
                 .is_some_and(|p| is_sum_leaves(&p.leaves))
         };
@@ -1095,7 +1098,7 @@ impl JniGen {
                     }
                 }
                 if let Some(plan) = registry
-                    .unfold_plans
+                    .unfold_plans()
                     .get(&item_fn.sig.ident)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
@@ -1113,7 +1116,7 @@ impl JniGen {
                         _ => {}
                     }
                 }
-                match registry.error_plans.get(&item_fn.sig.ident) {
+                match registry.error_plans().get(&item_fn.sig.ident) {
                     Some(ep) => {
                         let d = ep
                             .decon
@@ -1253,7 +1256,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let source = &registry.decon_plans[decon].source;
+        let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
@@ -1296,7 +1299,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let source = &registry.decon_plans[decon].source;
+        let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
@@ -1351,7 +1354,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let plan = &registry.decon_plans[decon];
+        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
@@ -1390,7 +1393,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let plan = &registry.decon_plans[decon];
+        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
@@ -1433,7 +1436,7 @@ impl JniGen {
     /// its variant-constructor argument by [`Self::sum_ctor_arg`].
     pub(crate) fn sum_reconstruct(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         source: &syn::Type,
         leaves: &[crate::api::core::unfold::UnfoldLeaf],
         params: &[crate::api::lang::jnigen::jni::IfaceParam],
@@ -1507,7 +1510,7 @@ impl JniGen {
     ///    verbatim.
     fn sum_ctor_arg(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         leaf: &crate::api::core::unfold::UnfoldLeaf,
         param: &crate::api::lang::jnigen::jni::IfaceParam,
         name: &str,

@@ -11,6 +11,7 @@
 //! plan to function granularity; the output side follows in a later stage.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// The lowered plan for one bound function: one [`PlanParam`] per source
 /// `syn::Signature` parameter (non-`Typed`/non-`Ident` args — `self`,
@@ -427,7 +428,7 @@ impl JniFunctionPlan {
             let ty = (*pt.ty).clone();
 
             let form = if let Some(plan) = registry
-                .expansion_plans
+                .expansion_plans()
                 .get(&(f.sig.ident.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();
@@ -496,7 +497,7 @@ impl JniFunctionPlan {
             FnOutputPlan::Value(_) => 0,
         };
         slots += 1; // binding-error sink
-        if registry.error_plans.contains_key(&f.sig.ident) {
+        if registry.error_plans().contains_key(&f.sig.ident) {
             slots += 1;
         }
         slots
@@ -618,7 +619,7 @@ fn build_output(
         unfold::{Delivery, UnfoldShape},
     };
     let ident = &f.sig.ident;
-    let unfold_plan = registry.unfold_plans.get(ident);
+    let unfold_plan = registry.unfold_plans().get(ident);
 
     // Callback delivery: the return is decomposed to a foreign builder/fold
     // lambda; no output converter runs and the wire is the erased `JObject`.
@@ -664,7 +665,7 @@ fn build_output(
         syn::ReturnType::Default => syn::parse_quote!(()),
         syn::ReturnType::Type(_, ty) => (**ty).clone(),
     };
-    let error_plan = registry.error_plans.get(ident);
+    let error_plan = registry.error_plans().get(ident);
     let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
     let target_ty = match unfold_plan {
         Some(p) => p
@@ -712,7 +713,7 @@ impl ReturnSurface {
     /// and the former `canonical_return_ty`.
     pub fn classify(
         ext: &JniGen,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         output: &syn::ReturnType,
     ) -> (Self, syn::Type) {
         let ty = match output {

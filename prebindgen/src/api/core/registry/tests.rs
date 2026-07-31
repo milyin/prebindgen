@@ -14,13 +14,16 @@ use crate::api::core::{
 trait DeclareAndResolve<M> {
     fn declare_and_resolve<E>(self, ext: E) -> Result<Generation<E>, WriteRustError>
     where
-        E: Prebindgen<Metadata = M> + AsStub,
-        M: Clone + Default;
+        E: Prebindgen<Metadata = M> + AsStub;
 }
 
-/// How a test stub states what it declares.
+/// How a test stub states what it declares, and what it can convert.
 trait AsStub {
     fn stub(&self) -> &StubExt;
+    /// Default: converts nothing, so every required crossing is a gap.
+    fn converter(&self, _ty: &syn::Type) -> Option<ConverterImpl<()>> {
+        None
+    }
 }
 impl AsStub for StubExt {
     fn stub(&self) -> &StubExt {
@@ -28,14 +31,23 @@ impl AsStub for StubExt {
     }
 }
 
-impl<M> DeclareAndResolve<M> for Registry<M> {
+impl DeclareAndResolve<()> for Registry<()> {
     fn declare_and_resolve<E>(mut self, ext: E) -> Result<Generation<E>, WriteRustError>
     where
-        E: Prebindgen<Metadata = M> + AsStub,
-        M: Clone + Default,
+        E: Prebindgen<Metadata = ()> + AsStub,
     {
         ext.stub().declare_into_any(&mut self)?;
-        self.resolve(ext)
+        self.prepare(&ext)?;
+        // The generator's loop, as a real one does it.
+        let order = self.crossings();
+        let mut built = HashMap::new();
+        for crossing in &order {
+            if let Some(c) = ext.converter(&crossing.1.to_type()) {
+                built.insert(crossing.clone(), TypeEntry::from_converter(c));
+            }
+        }
+        self.supply(built)?;
+        self.finish(ext)
     }
 }
 
@@ -88,20 +100,6 @@ impl Prebindgen for StubExt {
     }
     fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<()>) -> TokenStream {
         TokenStream::new()
-    }
-    fn on_input_type(
-        &self,
-        _ty: &syn::Type,
-        _registry: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
-        None
-    }
-    fn on_output_type(
-        &self,
-        _ty: &syn::Type,
-        _registry: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
-        None
     }
 }
 
@@ -399,12 +397,6 @@ fn resolve_surfaces_adapter_invariant_errors() {
         }
         fn on_enum(&self, e: &syn::ItemEnum, r: &Registry<()>) -> TokenStream {
             self.0.on_enum(e, r)
-        }
-        fn on_input_type(&self, t: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
-            self.0.on_input_type(t, r)
-        }
-        fn on_output_type(&self, t: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
-            self.0.on_output_type(t, r)
         }
     }
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
@@ -1254,6 +1246,9 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         fn stub(&self) -> &StubExt {
             &self.0
         }
+        fn converter(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+            Self::converter(ty)
+        }
     }
     impl AnyConverterExt {
         fn converter(ty: &syn::Type) -> Option<ConverterImpl<()>> {
@@ -1279,12 +1274,6 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         }
         fn on_enum(&self, e: &syn::ItemEnum, r: &Registry<()>) -> TokenStream {
             self.0.on_enum(e, r)
-        }
-        fn on_input_type(&self, t: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
-            Self::converter(t)
-        }
-        fn on_output_type(&self, t: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
-            Self::converter(t)
         }
     }
 
@@ -1401,4 +1390,61 @@ fn an_unresolved_type_without_a_position_reports_none() {
         "a real position must still be reported:\n{}",
         err
     );
+}
+
+/// A self-referential type has no topological order, so `crossings` must break
+/// the cycle rather than loop or drop a node.
+///
+/// The one thing `regen-check` cannot verify: no example declares a recursive
+/// type, so byte-identical output says nothing about this path. What is pinned
+/// is that the walk terminates, and that every registered crossing is handed
+/// out exactly once — a generator can then fail to build the cycle member whose
+/// back edge is unanswered, and `supply` reports it like any other gap.
+#[test]
+fn a_recursive_type_is_handed_out_once_and_terminates() {
+    use std::collections::HashSet as Set;
+
+    let mut reg: Registry<()> = crate::api::test_util::reg_with(&[
+        "pub struct Node { pub next: Option<Box<Node>>, pub value: u64 }",
+        "pub fn walk(n: &Node) -> u64 { n.value }",
+    ]);
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("walk").unwrap());
+    ext.types.insert(TypeKey::parse("Node").expect("test type"));
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared()
+        .expect("a recursive struct is scannable");
+
+    // Terminates, and says each crossing exactly once.
+    let order = reg.crossings();
+    let mut seen: Set<Crossing> = Set::new();
+    for c in &order {
+        assert!(seen.insert(c.clone()), "`{:?}` handed out twice", c);
+    }
+
+    // Every registered crossing appears — breaking a cycle drops no node.
+    for dir in [Direction::Input, Direction::Output] {
+        for key in reg.type_table(dir).keys() {
+            assert!(
+                seen.contains(&(dir, key.clone())),
+                "`{key}` ({dir:?}) never handed out"
+            );
+        }
+    }
+
+    // And `Node` really is a cycle: it reaches itself.
+    let node = TypeKey::parse("Node").expect("test type");
+    let reaches_self = reg
+        .immediate_edges(Direction::Output, &node.to_type())
+        .into_iter()
+        .any(|(_, t)| {
+            crate::api::core::registry::immediate_subtype_positions(&t)
+                .into_iter()
+                .any(|inner| {
+                    crate::api::core::registry::immediate_subtype_positions(&inner)
+                        .into_iter()
+                        .any(|i2| TypeKey::from_type(&i2) == node)
+                })
+        });
+    assert!(reaches_self, "fixture must actually be recursive");
 }

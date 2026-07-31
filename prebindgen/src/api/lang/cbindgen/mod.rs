@@ -110,7 +110,7 @@ use crate::api::{
     core::{
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
-        registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
+        registry::{extract_fn_trait_args, Conversions, Direction, Registry, TypeKey},
     },
     lang::jnigen::{ConvertDecl, ConvertSpec},
 };
@@ -391,7 +391,7 @@ fn type_short(ty: &syn::Type) -> String {
 }
 
 /// The indexed `syn::ItemEnum` for a declared enum type, by tail ident.
-fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
+fn enum_item<'r>(registry: &'r impl Conversions<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
     let ident = type_path_tail(ty)?;
     registry.flat().enum_item(&ident)
 }

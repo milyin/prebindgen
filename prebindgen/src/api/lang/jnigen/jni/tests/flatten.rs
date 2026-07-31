@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Two fns returning the same type under different output decompositions:
 /// the type-level `expand_return!` default and a per-fn `.return_expand(...)`
@@ -1936,7 +1937,7 @@ fn constructor_member_skips_default_output_expand() {
     let registry = gen.registry();
     // …the free fn is decomposed…
     assert!(
-        registry.unfold_plans.contains_key(&syn::Ident::new(
+        registry.unfold_plans().contains_key(&syn::Ident::new(
             "z_thing_get",
             proc_macro2::Span::call_site()
         )),
@@ -1944,7 +1945,7 @@ fn constructor_member_skips_default_output_expand() {
     );
     // …but the constructor member is NOT (its return is the factory value).
     assert!(
-        !registry.unfold_plans.contains_key(&syn::Ident::new(
+        !registry.unfold_plans().contains_key(&syn::Ident::new(
             "z_thing_make",
             proc_macro2::Span::call_site()
         )),

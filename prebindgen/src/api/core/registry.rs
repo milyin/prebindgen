@@ -76,6 +76,7 @@
 //!
 //! ```text
 //!   configure   new(flat) · export(name) · cross(type) · decompose(d)
+//!                                                    · depends(from, on)
 //!      ↓
 //!   the demand  crossings()  → every crossing needing a conversion,
 //!      ↓                       sorted so each type's inners come first
@@ -130,6 +131,13 @@
 //! A `None` is not itself a failure. The scan over-approximates deliberately
 //! (see [`TypeCell::root`]); whether a gap matters is reachability from the
 //! exports, which `supply` decides.
+//!
+//! The structure covers almost every dependency, because an `Option<T>`
+//! visibly contains a `T`. What it cannot show is one a *declaration* creates —
+//! a `convert!` chaining through a helper's parameter type, or a callback
+//! argument delivered as plan leaves. Those are stated with `depends`, and
+//! getting one wrong is not silent: the conversion that needed the missing one
+//! cannot be built, and `supply` names it.
 //!
 //! **Cycles** are the one place the order cannot be honoured: a self-referential
 //! type (`struct Node { next: Option<Box<Node>> }`) has none. `crossings` breaks
@@ -364,6 +372,21 @@ pub struct TypeEntry<M = ()> {
 }
 
 impl<M> TypeEntry<M> {
+    /// The resolved form of what a generator built.
+    ///
+    /// The only difference is `subs`: a generator names its inners as types,
+    /// and the table keys them.
+    pub fn from_converter(c: crate::api::core::prebindgen::ConverterImpl<M>) -> Self {
+        Self {
+            destination: c.destination,
+            function: c.function,
+            pre_stages: c.pre_stages,
+            subs: c.subs.iter().map(TypeKey::from_type).collect(),
+            niches: c.niches,
+            metadata: c.metadata,
+        }
+    }
+
     /// Identifier of the wire-facing converter function.
     pub fn converter_ident(&self) -> &syn::Ident {
         &self.function.sig.ident
@@ -745,6 +768,207 @@ pub(crate) struct Declared {
     pub(crate) crossings: Vec<(Direction, syn::Type)>,
     /// How composites cross in pieces — see [`Registry::decompose`].
     pub(crate) decompositions: Decompositions,
+    /// Ordering edges no syntax shows — see [`Registry::depends`].
+    pub(crate) edges: Vec<(Crossing, Crossing)>,
+}
+
+/// One `(direction, type)` pair that crosses the boundary.
+///
+/// Direction is part of the identity, not a separate axis: `&str` inbound
+/// decodes a `jstring` and outbound allocates one, and one may be convertible
+/// while the other is not.
+pub type Crossing = (Direction, TypeKey);
+
+/// What a conversion is built against: the model, and the conversions already
+/// available.
+///
+/// Two implementors, and the reason there are two is the fill phase.
+/// [`Building`] is the partial view a generator sees while it is still
+/// producing conversions; [`Registry`] is the total one everything else sees.
+/// A helper that serves both — reading a signature off the model, say — takes
+/// `&impl Conversions<M>` and works either side of the boundary.
+pub trait Conversions<M> {
+    /// The model.
+    fn flat(&self) -> &crate::api::core::flat::Flat;
+
+    /// The conversion for `ty` in `dir`, if there is one.
+    fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>>;
+
+    /// Wire → rust.
+    fn input_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
+        self.conversion(Direction::Input, ty)
+    }
+
+    /// Rust → wire.
+    fn output_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
+        self.conversion(Direction::Output, ty)
+    }
+
+    /// The decomposition of a callback argument type, if it has one.
+    ///
+    /// On the trait because a callback converter needs it while being built,
+    /// and the emitter needs it again afterwards. Plans are applied by
+    /// `prepare`, so they are complete either side of that line.
+    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan>;
+
+    /// Every callback-argument decomposition, for the emitters that enumerate
+    /// them rather than look one up.
+    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan>;
+
+    /// The return decomposition of a function, if it has one.
+    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>;
+
+    /// The error-position decomposition of a fallible function.
+    fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>;
+
+    /// The parameter-side fold for a `(function, parameter)` position.
+    fn expansion_plans(
+        &self,
+    ) -> &HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan>;
+
+    /// The declaration-default decomposition behind each deconstructor.
+    fn decon_plans(
+        &self,
+    ) -> &HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec>;
+
+    /// Every type key that crosses in `dir`.
+    ///
+    /// The niche allocator needs the whole population, not one lookup: it picks
+    /// sentinel values no sibling conversion can produce.
+    fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey>;
+
+    /// The origin crate's module path for an item, or `None` when unknown.
+    fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
+        origin_module_of(self.flat(), ident)
+    }
+
+    /// The default module for references with no recorded origin.
+    fn default_module(&self) -> Option<syn::Path> {
+        default_module_of(self.flat())
+    }
+}
+
+impl<M> Conversions<M> for Building<'_, M> {
+    fn flat(&self) -> &crate::api::core::flat::Flat {
+        &self.registry.flat
+    }
+    fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>> {
+        self.built.get(&(dir, TypeKey::from_type(ty)))
+    }
+    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan> {
+        self.registry.callback_arg_plans.get(key)
+    }
+    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan> {
+        &self.registry.callback_arg_plans
+    }
+    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+        &self.registry.unfold_plans
+    }
+    fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+        &self.registry.error_plans
+    }
+    fn expansion_plans(
+        &self,
+    ) -> &HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan> {
+        &self.registry.expansion_plans
+    }
+    fn decon_plans(
+        &self,
+    ) -> &HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec> {
+        &self.registry.decon_plans
+    }
+    fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
+        self.all_keys
+            .iter()
+            .filter(|(d, _)| *d == dir)
+            .map(|(_, k)| k.clone())
+            .collect()
+    }
+}
+
+impl<M> Conversions<M> for Registry<M> {
+    fn flat(&self) -> &crate::api::core::flat::Flat {
+        &self.flat
+    }
+    fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>> {
+        self.type_table(dir)
+            .get(&TypeKey::from_type(ty))?
+            .entry
+            .as_ref()
+    }
+    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan> {
+        self.callback_arg_plans.get(key)
+    }
+    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan> {
+        &self.callback_arg_plans
+    }
+    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+        &self.unfold_plans
+    }
+    fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+        &self.error_plans
+    }
+    fn expansion_plans(
+        &self,
+    ) -> &HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan> {
+        &self.expansion_plans
+    }
+    fn decon_plans(
+        &self,
+    ) -> &HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec> {
+        &self.decon_plans
+    }
+    fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
+        self.type_table(dir).keys().cloned().collect()
+    }
+}
+
+/// The registry mid-fill: the model, plus the conversions supplied so far.
+///
+/// What a generator builds a conversion *against*. It sees every crossing it
+/// can compose from — [`Registry::crossings`] hands them out inner-first, so by
+/// the time `Option<Handle>` is asked for, `Handle` is already in here.
+///
+/// It exposes exactly the reads a conversion needs, which is what keeps the
+/// half-filled state from leaking anywhere else: the resolved [`Registry`] is
+/// what the emitters get, and it is total.
+pub struct Building<'a, M> {
+    /// The prepared registry: model, decompositions and the full crossing
+    /// population. Its conversion cells are still empty — [`Self::conversion`]
+    /// deliberately reads [`Self::built`] instead, so a generator can only see
+    /// what it has actually produced.
+    registry: &'a Registry<M>,
+    built: &'a HashMap<Crossing, TypeEntry<M>>,
+    /// Every crossing in the binding, resolved or not — the niche allocator
+    /// reads the population, not just what is built so far.
+    all_keys: &'a [Crossing],
+}
+
+impl<'a, M> Building<'a, M> {
+    pub(crate) fn new(
+        registry: &'a Registry<M>,
+        built: &'a HashMap<Crossing, TypeEntry<M>>,
+        all_keys: &'a [Crossing],
+    ) -> Self {
+        Self {
+            registry,
+            built,
+            all_keys,
+        }
+    }
+}
+
+/// Shared by [`Registry::origin_module`] and [`Building::origin_module`], so the
+/// two cannot answer differently.
+fn origin_module_of(flat: &crate::api::core::flat::Flat, ident: &syn::Ident) -> Option<syn::Path> {
+    let crate_name = flat.element(ident)?.location().crate_name.as_ref()?;
+    syn::parse_str(&crate_name.replace('-', "_")).ok()
+}
+
+fn default_module_of(flat: &crate::api::core::flat::Flat) -> Option<syn::Path> {
+    flat.source_modules()
+        .first()
+        .and_then(|m| syn::parse_str(m).ok())
 }
 
 /// How a binding's composites cross **in pieces** instead of whole.
@@ -890,6 +1114,21 @@ impl<M> Registry<M> {
         self.declared.crossings.push((dir, ty.clone()));
     }
 
+    /// `from`'s conversion needs `on`'s to exist first.
+    ///
+    /// [`Self::crossings`] derives its order from the type structure, which
+    /// covers almost everything: an `Option<T>` visibly contains a `T`. It
+    /// cannot see a dependency the *declaration* creates — a `convert!` whose
+    /// body chains through a helper function's parameter type, say, where
+    /// nothing about the target type mentions the other side.
+    ///
+    /// State those here, and the order accounts for them. Getting it wrong is
+    /// not silent: the conversion that needed the missing one simply cannot be
+    /// built, and [`Self::supply`] names it.
+    pub fn depends(&mut self, from: Crossing, on: Crossing) {
+        self.declared.edges.push((from, on));
+    }
+
     /// A function this binding **references but never emits** — a helper whose
     /// name appears in a declaration. Its absence is an error; its presence
     /// emits nothing.
@@ -1008,9 +1247,7 @@ impl<M> Registry<M> {
         // Off the element's own location, which covers both populations: a
         // captured item stamped at capture time, and a binding-local fn stamped
         // by `add_local_function`.
-        let crate_name = self.flat.element(&ident)?.location().crate_name.as_ref()?;
-        let module = crate_name.replace('-', "_");
-        syn::parse_str(&module).ok()
+        origin_module_of(&self.flat, ident)
     }
 
     /// The default module for references with no recorded origin: the
@@ -1021,10 +1258,7 @@ impl<M> Registry<M> {
     /// registry-level override could only fix ONE module, which is
     /// incomplete with chained multi-source streams.
     pub fn default_module(&self) -> Option<syn::Path> {
-        self.flat
-            .source_modules()
-            .first()
-            .and_then(|m| syn::parse_str(m).ok())
+        default_module_of(&self.flat)
     }
 
     /// Module paths of every ingested source, ingestion order — e.g. for a
@@ -1196,6 +1430,129 @@ impl<M> Registry<M> {
         }
 
         Ok(())
+    }
+
+    /// Every crossing this binding needs a conversion for, **inner types
+    /// first**.
+    ///
+    /// The order is the whole point: a generator walking this list has already
+    /// built everything a given crossing can compose from, so it can work from
+    /// a flat list instead of being called back per type. Derived from
+    /// [`Self::immediate_edges`], which is structural — generic arguments,
+    /// tuple/reference/slice targets, declared struct fields, and `impl Fn`
+    /// arguments with the direction flipped — so no generator is consulted to
+    /// produce it.
+    ///
+    /// **Cycles.** A self-referential type (`struct Node { next:
+    /// Option<Box<Node>> }`) has no topological order. The walk breaks such a
+    /// cycle at its entry, so exactly one member is handed out before an inner
+    /// it contains; a generator that cannot build it supplies nothing, and
+    /// [`Self::supply`] reports it like any other gap.
+    pub fn crossings(&self) -> Vec<Crossing> {
+        // Post-order DFS: a node is emitted only after everything it reaches,
+        // which IS inner-first. `visiting` breaks cycles — the back edge is
+        // simply not followed, so the node it points at lands later than its
+        // dependent, and that is the one documented exception above.
+        let mut order: Vec<Crossing> = Vec::new();
+        let mut done: HashSet<Crossing> = HashSet::new();
+        let mut visiting: HashSet<Crossing> = HashSet::new();
+
+        // Deterministic roots: same list every build, so a generator's output
+        // cannot depend on hash order.
+        let mut roots: Vec<Crossing> = Vec::new();
+        for dir in [Direction::Input, Direction::Output] {
+            let mut keys: Vec<&TypeKey> = self.type_table(dir).keys().collect();
+            keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+            roots.extend(keys.into_iter().map(|k| (dir, k.clone())));
+        }
+
+        for root in roots {
+            self.visit_crossing(root, &mut order, &mut done, &mut visiting);
+        }
+        order
+    }
+
+    fn visit_crossing(
+        &self,
+        node: Crossing,
+        order: &mut Vec<Crossing>,
+        done: &mut HashSet<Crossing>,
+        visiting: &mut HashSet<Crossing>,
+    ) {
+        if done.contains(&node) || !visiting.insert(node.clone()) {
+            return;
+        }
+        let (dir, key) = node.clone();
+        let ty = key.to_type();
+        let mut edges: Vec<Crossing> = self
+            .immediate_edges(dir, &ty)
+            .into_iter()
+            .chain(self.plan_edges(dir, &ty))
+            .chain(
+                self.declared
+                    .edges
+                    .iter()
+                    .filter(|(from, _)| *from == node)
+                    .map(|(_, on)| (on.0, on.1.to_type())),
+            )
+            .map(|(d, t)| (d, TypeKey::from_type(&t)))
+            // Only crossings the scan actually registered: a structural edge to
+            // a type nothing asked for is not a crossing.
+            .filter(|c| self.type_table(c.0).contains_key(&c.1))
+            .collect();
+        edges.sort_by(|a, b| (a.0 as u8, a.1.as_str()).cmp(&(b.0 as u8, b.1.as_str())));
+        for edge in edges {
+            self.visit_crossing(edge, order, done, visiting);
+        }
+        visiting.remove(&node);
+        if done.insert(node.clone()) {
+            order.push(node);
+        }
+    }
+
+    /// Dependencies a **decomposition** adds, which the structural walk cannot
+    /// see.
+    ///
+    /// A callback argument delivered as leaves needs each leaf's own conversion
+    /// before the callback's can be built — and a leaf is named by a plan, not
+    /// by the argument's syntax. Without this the order would be structurally
+    /// correct and still wrong, which is exactly the kind of gap the old
+    /// fixed-point loop papered over by retrying.
+    fn plan_edges(&self, dir: Direction, ty: &syn::Type) -> Vec<(Direction, syn::Type)> {
+        if dir != Direction::Input {
+            return Vec::new();
+        }
+        let Some(args) = crate::api::core::flat::extract_fn_trait_args(ty) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for arg in args {
+            if let Some(plan) = self.callback_arg_plans.get(&TypeKey::from_type(&arg)) {
+                for leaf in &plan.leaves {
+                    out.push((Direction::Output, leaf.out_ty.clone()));
+                }
+            }
+        }
+        out
+    }
+
+    /// Take every conversion the generator built, and check the set is
+    /// complete.
+    ///
+    /// A crossing absent from `conversions` is not itself a failure — the scan
+    /// over-approximates on purpose (see [`TypeCell::root`]). What matters is
+    /// whether anything reachable from an exported root lacks one, which is
+    /// what this decides, naming every gap at once.
+    pub fn supply(
+        &mut self,
+        conversions: HashMap<Crossing, TypeEntry<M>>,
+    ) -> Result<(), crate::api::core::resolve::ResolveError> {
+        for ((dir, key), entry) in conversions {
+            if let Some(cell) = self.type_table_mut(dir).get_mut(&key) {
+                cell.entry = Some(entry);
+            }
+        }
+        crate::api::core::resolve::check_complete(self)
     }
 
     /// Direction-indexed read access to the type-resolution tables.
@@ -1454,25 +1811,37 @@ impl<M> Registry<M> {
     /// gen.write_rust(&rust_dest)?;
     /// gen.write_kotlin(&kotlin_root)?;   // JNI adapter's second artifact
     /// ```
-    pub fn resolve<E>(mut self, adapter: E) -> Result<Generation<E>, WriteRustError>
+    /// Scan what was declared and apply its decompositions, leaving the
+    /// crossing set derived and ready to be filled.
+    ///
+    /// The first of the three steps a generator drives — [`Self::crossings`]
+    /// and [`Self::supply`] are the other two, and [`Self::finish`] closes it.
+    /// `adapter` is here only for its invariant check, which needs the scanned
+    /// signatures; nothing about *what to build* is asked of it.
+    pub fn prepare<E>(&mut self, adapter: &E) -> Result<(), WriteRustError>
     where
         E: Prebindgen<Metadata = M>,
-        M: Clone + Default,
     {
         let mut declared = std::mem::take(&mut self.declared);
         self.scan_declared_items(&declared)?;
         adapter
-            .validate(&self)
+            .validate(self)
             .map_err(|message| ScanError::AdapterInvariant { message })?;
         self.apply_adapter_plans(&mut declared)?;
         self.declared = declared;
-        crate::api::core::resolve::resolve(&mut self, &adapter)?;
-        // Post-resolve validation runs ONCE here, so a `Generation` is valid
-        // by construction and the `write_*` emitters are genuinely pure
-        // (previously each writer re-ran this, validating twice per build).
-        // Sibling of the pre-resolve `validate` above — same adapter-invariant
-        // channel. An invalid binding fails `resolve`; no `Generation` is
-        // produced, so nothing can be written.
+        Ok(())
+    }
+
+    /// Bind the filled registry to the adapter that filled it.
+    ///
+    /// Post-resolve validation runs ONCE here, so a [`Generation`] is valid by
+    /// construction and the `write_*` emitters are genuinely pure. An invalid
+    /// binding fails here; no `Generation` is produced, so nothing can be
+    /// written.
+    pub fn finish<E>(self, adapter: E) -> Result<Generation<E>, WriteRustError>
+    where
+        E: Prebindgen<Metadata = M>,
+    {
         adapter
             .validate_resolved(&self)
             .map_err(|message| ScanError::AdapterInvariant { message })?;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::core::registry::Conversions;
 
 fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     use crate::SourceLocation;
@@ -516,7 +517,7 @@ fn iface_spec_memo_shares_one_derivation() {
     // allocation — the wrapper surface and the interface declaration cannot
     // diverge from the fold upcall's descriptor.
     let plan = registry
-        .unfold_plans
+        .unfold_plans()
         .get(&syn::parse_str::<syn::Ident>("z_things_all").unwrap())
         .expect("fold plan");
     let via_plan = folder_iface_for_plan(ext, registry, plan).expect("folder spec");

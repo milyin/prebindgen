@@ -33,22 +33,6 @@ impl Prebindgen for IdentityExt {
     fn on_enum(&self, e: &syn::ItemEnum, _registry: &Registry<Self::Metadata>) -> TokenStream {
         e.to_token_stream()
     }
-
-    fn on_input_type(
-        &self,
-        _ty: &syn::Type,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-        None
-    }
-
-    fn on_output_type(
-        &self,
-        _ty: &syn::Type,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-        None
-    }
 }
 
 #[test]
@@ -223,7 +207,9 @@ fn guards_emit_ungated_and_in_stream_order() {
             ext: ConstGatingExt,
         ) -> Result<crate::core::Generation<ConstGatingExt>, crate::core::WriteRustError> {
             self.declares_consts();
-            self.resolve(ext)
+            self.prepare(&ext)?;
+            self.supply(std::collections::HashMap::new())?;
+            self.finish(ext)
         }
     }
 
@@ -238,20 +224,6 @@ fn guards_emit_ungated_and_in_stream_order() {
         }
         fn on_enum(&self, e: &syn::ItemEnum, _r: &Registry<()>) -> TokenStream {
             e.to_token_stream()
-        }
-        fn on_input_type(
-            &self,
-            _ty: &syn::Type,
-            _r: &Registry<()>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<()>> {
-            None
-        }
-        fn on_output_type(
-            &self,
-            _ty: &syn::Type,
-            _r: &Registry<()>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<()>> {
-            None
         }
     }
 

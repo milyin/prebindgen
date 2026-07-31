@@ -2,11 +2,12 @@
 //! expressions, and the Rust-side reconstruct.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 pub(crate) fn struct_input_body(
     ext: &JniGen,
     s: &syn::ItemStruct,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.ident.to_string();
     let struct_module = struct_module_path(ext, registry, s);
@@ -281,7 +282,7 @@ pub(crate) fn struct_input_body(
 pub(crate) fn sum_input_body(
     ext: &JniGen,
     e: &syn::ItemEnum,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     use crate::api::core::types_util::SumSpec;
 
@@ -377,7 +378,7 @@ pub(crate) fn sum_input_body(
 /// generated class rather than fields of a data class.
 fn read_kotlin_property(
     ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     receiver: &TokenStream,
     prop: &str,
     ty: &syn::Type,

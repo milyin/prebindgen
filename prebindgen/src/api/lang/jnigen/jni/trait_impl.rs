@@ -5,6 +5,7 @@
 //! namespace via `use super::*`.
 
 use super::*;
+use crate::api::core::registry::{Building, Conversions, Crossing, TypeEntry};
 
 /// The `#[allow(...)]` carried by every generated converter `fn`.
 ///
@@ -627,7 +628,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if !(pat_match(pat, "& _") || pat_match(pat, "& mut _")) {
             return None;
@@ -673,7 +674,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if !(pat_match(pat, "Option < & _ >") || pat_match(pat, "Option < & mut _ >")) {
             return None;
@@ -734,7 +735,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if !pat_match(pat, "Vec < _ >") {
             return None;
@@ -798,7 +799,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if pat_match(pat, "Option < _ >") {
             let inner = registry.input_entry(t1)?;
@@ -944,7 +945,38 @@ impl JniGen {
         mut registry: Registry<KotlinMeta>,
     ) -> Result<crate::core::Generation<Self>, crate::core::WriteRustError> {
         self.declare_into(&mut registry)?;
-        registry.resolve(self)
+        registry.prepare(&self)?;
+
+        // Take the demand once, in dependency order, and answer it. This loop
+        // is the generator's own: the registry hands over a list and grades the
+        // result, and never calls back into here.
+        let order = registry.crossings();
+        let mut built: HashMap<Crossing, TypeEntry<KotlinMeta>> = HashMap::new();
+        for crossing in &order {
+            let (dir, key) = crossing;
+            let ty = key.to_type();
+            // Scoped so `built` is free to grow again: everything this crossing
+            // can compose from is already in it, which is what `order` means.
+            let conv = {
+                let seen = Building::new(&registry, &built, &order);
+                match dir {
+                    Direction::Input => self.select_input_type(&ty, &seen).or_else(|| {
+                        // `impl Fn(args)` that nothing else claimed. Callback
+                        // args cross in the OPPOSITE direction, which is why
+                        // their required-ness rides `immediate_edges` rather
+                        // than this converter's `subs`.
+                        let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
+                        self.dispatch_fn_input(&args, &seen)
+                    }),
+                    Direction::Output => self.select_output_type(&ty, &seen),
+                }
+            };
+            if let Some(c) = conv {
+                built.insert(crossing.clone(), TypeEntry::from_converter(c));
+            }
+        }
+        registry.supply(built)?;
+        registry.finish(self)
     }
 
     pub fn declare_into(
@@ -987,13 +1019,27 @@ impl JniGen {
         // conversion's direction: an input fn's parameter type needs its own
         // input converter for the composed body to chain through; an output
         // fn's return type needs the output twin.
+        let mut convert_edges: Vec<(Crossing, Crossing)> = Vec::new();
         for decl in &self.convert_decls {
             if let Some((ty, _, _)) = self.convert_input_body(&decl.key, registry) {
                 registry.cross(Direction::Input, &ty);
+                // The target's conversion chains through this one, and nothing
+                // about the target type says so.
+                convert_edges.push((
+                    (Direction::Input, decl.key.clone()),
+                    (Direction::Input, TypeKey::from_type(&ty)),
+                ));
             }
             if let Some((ty, _, _)) = self.convert_output_body(&decl.key, registry) {
                 registry.cross(Direction::Output, &ty);
+                convert_edges.push((
+                    (Direction::Output, decl.key.clone()),
+                    (Direction::Output, TypeKey::from_type(&ty)),
+                ));
             }
+        }
+        for (from, on) in convert_edges {
+            registry.depends(from, on);
         }
         // How composites cross in pieces. Every one of these reads only the
         // model, which is what lets them be stated here rather than asked for
@@ -1120,6 +1166,30 @@ impl JniGen {
     }
 }
 
+impl JniGen {
+    fn dispatch_fn_input(
+        &self,
+        args: &[syn::Type],
+        registry: &impl Conversions<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let outer_ty = build_fn_type(args);
+        let (wire, body) = callback_input(self, args, registry)?;
+        let niches = default_niches_for_wire(&wire);
+        // `impl Fn(...)` crosses the extern tier as the erased lambda object
+        // (`Any`) — same as the unfold builder / error-sink params. The typed
+        // wrapper-level lambda signature is computed at render time from the
+        // arg types' callback plans, not carried in metadata.
+        Some(ConverterImpl {
+            subs: vec![],
+            pre_stages: vec![],
+            function: self.build_input_fn(&outer_ty, &wire, &body, None),
+            destination: wire,
+            niches,
+            metadata: self.framework_meta(Some(kt::KtType::any())),
+        })
+    }
+}
+
 impl Prebindgen for JniGen {
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
@@ -1134,22 +1204,6 @@ impl Prebindgen for JniGen {
     // wrapper shapes — peel
     // `ty`'s outermost layer and dispatch to `{input,output}_wrapper_shape` with
     // the reconstructed canonical pattern. `subs` = the captured inner(s).
-
-    fn on_input_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.select_input_type(ty, registry)
-    }
-
-    fn on_output_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.select_output_type(ty, registry)
-    }
 
     /// Member-shape invariants (N5), checked against registry signatures —
     /// the earliest possible moment. Without this, a receiver-less `.method()`
@@ -1481,28 +1535,6 @@ impl Prebindgen for JniGen {
             #wrapper
         }
     }
-
-    fn dispatch_fn_input(
-        &self,
-        args: &[syn::Type],
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args);
-        let (wire, body) = callback_input(self, args, registry)?;
-        let niches = default_niches_for_wire(&wire);
-        // `impl Fn(...)` crosses the extern tier as the erased lambda object
-        // (`Any`) — same as the unfold builder / error-sink params. The typed
-        // wrapper-level lambda signature is computed at render time from the
-        // arg types' callback plans, not carried in metadata.
-        Some(ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function: self.build_input_fn(&outer_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: self.framework_meta(Some(kt::KtType::any())),
-        })
-    }
 }
 
 /// Structural converter builders — the rank-0 terminal chains and the rank-1
@@ -1517,7 +1549,7 @@ impl JniGen {
     pub(crate) fn input_terminal(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Structured-config overrides first (opaque handles, then user-
         // registered rank-0 wrappers, then built-ins).
@@ -1714,7 +1746,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint wildcard patterns (see the `impl JniGen` block above), tried
         // in priority order. The borrow/option-ref/vec patterns are exact and
@@ -1733,7 +1765,7 @@ impl JniGen {
     pub(crate) fn output_terminal(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Structured-config overrides first (opaque handles, then built-ins).
         let key = TypeKey::from_type(ty);
@@ -1894,7 +1926,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
@@ -2066,7 +2098,7 @@ impl JniGen {
     pub(crate) fn output_slice(
         &self,
         elem: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let inner = registry.output_entry(elem)?;
         // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf

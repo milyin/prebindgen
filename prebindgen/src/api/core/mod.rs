@@ -42,7 +42,7 @@ pub use self::{
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
     registry::{
-        Decompositions, Direction, Generation, Registry, ScanError, TypeCell, TypeEntry, TypeKey,
-        TypeSubject, WriteRustError,
+        Building, Conversions, Crossing, Decompositions, Direction, Generation, Registry,
+        ScanError, TypeCell, TypeEntry, TypeKey, TypeSubject, WriteRustError,
     },
 };

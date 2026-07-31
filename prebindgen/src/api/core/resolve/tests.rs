@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::test_util::cell;
+use crate::api::{core::registry::TypeEntry, test_util::cell};
 
 /// Regression: when a required type is itself unresolved AND has fields
 /// that are also unresolved, the diagnostic must list both. Previously
@@ -22,7 +22,7 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     let zke_key = TypeKey::parse("ZKeyExpr").expect("test type");
     assert!(!reg.input_types[&zke_key].root, "the field is not a root");
 
-    let err = final_invariant_check(&reg).expect_err("must surface unresolved");
+    let err = check_complete(&reg).expect_err("must surface unresolved");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();
@@ -83,7 +83,7 @@ fn final_invariant_stops_at_resolved_nodes() {
     reg.input_types
         .insert(unrelated_key.clone(), cell(&unrelated_key, false, None));
 
-    let err = final_invariant_check(&reg).expect_err("must surface Outer");
+    let err = check_complete(&reg).expect_err("must surface Outer");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();
@@ -138,7 +138,7 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
     // `Mid` is present, unresolved, and NOT a root.
     reg.input_types.insert(mid.clone(), cell(&mid, false, None));
 
-    let err = final_invariant_check(&reg).expect_err("Mid must be reported");
+    let err = check_complete(&reg).expect_err("Mid must be reported");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();

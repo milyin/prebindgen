@@ -7,6 +7,7 @@
 //! JNI module; shares the `jni` namespace via `use super::*`.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 impl DeclaredKind {
     /// The declaring macro's name, for the conflict message.
@@ -74,7 +75,7 @@ impl JniGen {
     /// module (first-seen stream origin), else `crate`.
     pub(crate) fn fn_module(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         ident: &syn::Ident,
     ) -> syn::Path {
         registry
@@ -1365,7 +1366,7 @@ impl JniGen {
     pub(crate) fn convert_input_body(
         &self,
         key: &TypeKey,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         let target = key.to_type();
@@ -1441,7 +1442,7 @@ impl JniGen {
     pub(crate) fn convert_output_body(
         &self,
         key: &TypeKey,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         let target = key.to_type();
@@ -1676,7 +1677,7 @@ impl JniGen {
     fn conversion_domain_niches(
         &self,
         key: &TypeKey,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         direction: Direction,
         wire: &syn::Type,
     ) -> (Niches, Vec<String>) {
@@ -1695,8 +1696,8 @@ impl JniGen {
             return (Niches::empty(), Vec::new());
         }
         let demand = registry
-            .type_table(direction)
-            .keys()
+            .crossing_keys(direction)
+            .iter()
             .map(|candidate| {
                 let mut ty = candidate.to_type();
                 let mut depth = 0;
@@ -1762,7 +1763,7 @@ impl JniGen {
     pub(crate) fn lookup_input(
         &self,
         outer: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // A `convert!`-declared conversion is the only thing that answers here.
         // There was a wildcard-pattern table beside it; nothing ever wrote to
@@ -1865,7 +1866,7 @@ impl JniGen {
     pub(crate) fn lookup_output(
         &self,
         outer: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = TypeKey::from_type(outer);
         let (ty, exc_ty, body) = self.convert_output_body(&key, registry)?;
@@ -1884,7 +1885,7 @@ impl JniGen {
         outer: &syn::Type,
         ok: &syn::Type,
         err: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         self.build_output_converter(
             outer,
@@ -1908,7 +1909,7 @@ impl JniGen {
         ty: syn::Type,
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = TypeKey::from_type(outer);
         // The middle slot carries the `Result`'s raw Rust error type (or `None`

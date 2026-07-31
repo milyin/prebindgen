@@ -1,6 +1,7 @@
 //! Structural converter-selection policy for [`JniGen`].
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Clone a single-type-arg generic (`Option<X>` / `Vec<X>` / any `Path<X, …>`)
 /// replacing its last segment's first type argument with `repl` — yielding the
@@ -38,7 +39,7 @@ impl JniGen {
     pub(crate) fn select_input_type(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.input_terminal(ty, registry) {
@@ -105,7 +106,7 @@ impl JniGen {
     pub(crate) fn select_output_type(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.output_terminal(ty, registry) {
@@ -173,7 +174,7 @@ impl JniGen {
 /// already exists and already has six other callers.
 fn fallible_parts(
     ty: &syn::Type,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Type)> {
     use crate::api::core::flat::TypeKind;
     if let Some(TypeKind::Fallible { ok, err }) = registry.flat().type_ref(ty).map(|t| &t.kind) {

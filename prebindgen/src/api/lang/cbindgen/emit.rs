@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::core::registry::Conversions;
 
 impl Cbindgen {
     /// Whether the generated layer hands `char*` data memory to C — a `String`
@@ -298,7 +299,7 @@ impl Cbindgen {
     /// struct.
     pub(super) fn struct_fields(
         &self,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         ty: &syn::Type,
     ) -> Option<Vec<(syn::Ident, syn::Type)>> {
         let ident = type_path_tail(ty)?;

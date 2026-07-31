@@ -18,6 +18,7 @@
 //! own.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 impl crate::api::core::Generation<JniGen> {
     /// Render the resolved binding surface as a deterministic markdown
@@ -203,7 +204,7 @@ impl crate::api::core::Generation<JniGen> {
         // Param expansions.
         let mut shaped: Vec<String> = Vec::new();
         let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry
-            .expansion_plans
+            .expansion_plans()
             .iter()
             .filter(|((func, _), _)| func == rust_ident)
             .map(|((_, param), plan)| (param, plan))
@@ -224,7 +225,7 @@ impl crate::api::core::Generation<JniGen> {
                 variants.join(", ")
             ));
         }
-        if let Some(plan) = registry.unfold_plans.get(rust_ident) {
+        if let Some(plan) = registry.unfold_plans().get(rust_ident) {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "return `{}` decomposed → [{}] ({:?} delivery)",
@@ -233,7 +234,7 @@ impl crate::api::core::Generation<JniGen> {
                 plan.delivery
             ));
         }
-        if let Some(plan) = registry.error_plans.get(rust_ident) {
+        if let Some(plan) = registry.error_plans().get(rust_ident) {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "domain error `{}` decomposed → onError [{}] (binding failures → onBindingError)",

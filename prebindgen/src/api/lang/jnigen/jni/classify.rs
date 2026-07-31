@@ -3,6 +3,7 @@
 //! re-deriving it from `TypeConfig` flags and `registry.flat()` type probes.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// The adapter-declared kind of a **bare** (already `Option`/`&`-stripped)
 /// Rust type: the declared [`DeclaredKind`] when the type is declared to this
@@ -47,7 +48,7 @@ impl JniGen {
     /// wrapper folding is the resolver's business, not this table's.
     pub(crate) fn type_kind<'r, 'c>(
         &'c self,
-        registry: &'r Registry<KotlinMeta>,
+        registry: &'r impl Conversions<KotlinMeta>,
         bare: &syn::Type,
     ) -> TypeKind<'r, 'c> {
         let cfg = self.types.get(&TypeKey::from_type(bare));

@@ -2,7 +2,7 @@
 //! params, and the expanded-param path.
 
 use super::*;
-use crate::api::core::types_util::result_ok_type;
+use crate::api::core::{registry::Conversions, types_util::result_ok_type};
 
 pub(crate) fn emit_jni_function_wrapper(
     ext: &JniGen,
@@ -163,13 +163,13 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     //     value is **returned** directly through its ordinary output
     //     converter — the wrapper behaves exactly like a normal function
     //     whose return type is `convert_out_ty`.
-    let unfold_plan = registry.unfold_plans.get(original_ident);
+    let unfold_plan = registry.unfold_plans().get(original_ident);
     // Error-position expansion: when the fn returns `Result<T, E>` and an error
     // plan is declared, the **`?`** is applied here — the extern peels the
     // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
     // typed DOMAIN handler), and the success path uses `T`'s converter (not the
     // `Result<T, E>` rank-2 wrapper).
-    let error_plan = registry.error_plans.get(original_ident);
+    let error_plan = registry.error_plans().get(original_ident);
     let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
     // The output converter entry (`None` for callback delivery). The lookup
     // was validated at plan build; re-resolving here keeps the plan free of
@@ -440,7 +440,7 @@ fn emit_input_param(
     let leaf = match &param.form {
         ParamForm::Expanded(leaves) => {
             let fold = registry
-                .expansion_plans
+                .expansion_plans()
                 .get(&(original_ident.clone(), param.ident.clone()))
                 .expect("ParamForm::Expanded ⇒ expansion plan present");
             return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err);

@@ -1,6 +1,7 @@
 //! Structural converter-selection policy for [`Cbindgen`].
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 impl Cbindgen {
     /// Select the input converter for `ty`: terminal categories, then built-in
@@ -8,7 +9,7 @@ impl Cbindgen {
     pub(crate) fn select_input_type(
         &self,
         ty: &syn::Type,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         self.in_custom(ty, registry)
             .or_else(|| self.in_opaque_handle(ty))
@@ -28,7 +29,7 @@ impl Cbindgen {
     pub(crate) fn select_output_type(
         &self,
         ty: &syn::Type,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         self.out_custom(ty, registry)
             .or_else(|| self.out_terminal(ty, registry))
