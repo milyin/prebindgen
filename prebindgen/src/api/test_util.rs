@@ -6,16 +6,18 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::api::core::registry::{Registry, TypeCell, TypeEntry, TypeKey, TypeSubject};
+use crate::api::core::registry::{Registry, TypeCell, TypeEntry, TypeSubject};
 
 /// A type-table cell for a fixture.
 ///
 /// The subject is always [`TypeSubject::Adapter`]: a hand-built table has no
 /// `Flat` behind it, so no key in one has a source reading. A test that cares
 /// about the `Source` side builds its registry from items instead.
-pub(crate) fn cell<M>(key: &TypeKey, root: bool, entry: Option<TypeEntry<M>>) -> TypeCell<M> {
+///
+/// Takes no key: `Adapter` carries nothing, since nothing ever read it back.
+pub(crate) fn cell<M>(root: bool, entry: Option<TypeEntry<M>>) -> TypeCell<M> {
     TypeCell {
-        subject: TypeSubject::Adapter(key.to_type()),
+        subject: TypeSubject::Adapter,
         root,
         entry,
     }

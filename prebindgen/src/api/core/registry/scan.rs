@@ -277,7 +277,7 @@ impl<M> Registry<M> {
         let key = TypeKey::from_type(ty);
         let subject = match self.flat.type_ref(ty) {
             Some(t) => TypeSubject::Source(t.clone()),
-            None => TypeSubject::Adapter(key.to_type()),
+            None => TypeSubject::Adapter,
         };
         let cell = self
             .type_table_mut(dir)

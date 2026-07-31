@@ -128,9 +128,9 @@
 //! back per type. It also means each crossing is offered exactly once: a
 //! generator's `None` says *cannot*, never *not yet*.
 //!
-//! A `None` is not itself a failure. The scan over-approximates deliberately
-//! (see [`TypeCell::root`]); whether a gap matters is reachability from the
-//! exports, which `supply` decides.
+//! A `None` is not itself a failure. The scan over-approximates deliberately —
+//! every nested position, every declared struct in both directions — so whether
+//! a gap matters is reachability from the exports, which `supply` decides.
 //!
 //! The structure covers almost every dependency, because an `Option<T>`
 //! visibly contains a `T`. What it cannot show is one a *declaration* creates —
@@ -162,6 +162,7 @@ use crate::{
 };
 
 mod cell;
+pub(crate) use self::cell::{TypeCell, TypeSubject};
 mod declare;
 mod error;
 mod generation;
@@ -174,7 +175,7 @@ mod view;
 mod walk;
 
 pub use self::{
-    cell::{Direction, TypeCell, TypeEntry, TypeSubject},
+    cell::{Direction, TypeEntry},
     error::{DuplicateNameError, NotExpressibleEntry, ScanError, WriteRustError},
     generation::Generation,
     key::{TypeKey, TypeKeyParseError},

@@ -59,13 +59,11 @@ fn final_invariant_stops_at_resolved_nodes() {
     let inner_key = TypeKey::parse("Inner").expect("test type");
     let unrelated_key = TypeKey::parse("Unrelated").expect("test type");
 
-    reg.input_types
-        .insert(outer_key.clone(), cell(&outer_key, true, None));
+    reg.input_types.insert(outer_key.clone(), cell(true, None));
 
     reg.input_types.insert(
         inner_key.clone(),
         cell(
-            &inner_key,
             false,
             Some(TypeEntry {
                 destination: syn::parse_quote!(i64),
@@ -81,7 +79,7 @@ fn final_invariant_stops_at_resolved_nodes() {
     );
 
     reg.input_types
-        .insert(unrelated_key.clone(), cell(&unrelated_key, false, None));
+        .insert(unrelated_key.clone(), cell(false, None));
 
     let err = check_complete(&reg).expect_err("must surface Outer");
     let ResolveError::Unresolved { entries } = err;
@@ -121,7 +119,6 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
     reg.input_types.insert(
         outer.clone(),
         cell(
-            &outer,
             true,
             Some(TypeEntry {
                 destination: syn::parse_quote!(i64),
@@ -136,7 +133,7 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
         ),
     );
     // `Mid` is present, unresolved, and NOT a root.
-    reg.input_types.insert(mid.clone(), cell(&mid, false, None));
+    reg.input_types.insert(mid.clone(), cell(false, None));
 
     let err = check_complete(&reg).expect_err("Mid must be reported");
     let ResolveError::Unresolved { entries } = err;

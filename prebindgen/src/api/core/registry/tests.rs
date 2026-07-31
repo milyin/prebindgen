@@ -794,7 +794,7 @@ fn an_adapter_authored_type_cell_has_no_source_reading() {
 
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
-    assert!(matches!(cell.subject, TypeSubject::Adapter(_)));
+    assert!(matches!(cell.subject, TypeSubject::Adapter));
     assert!(cell.subject.kind().is_none());
     assert_eq!(cell.subject.location(), None);
 }

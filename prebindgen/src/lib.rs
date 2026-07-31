@@ -305,8 +305,8 @@ pub mod core {
         warn_unclaimed, Building, Claimed, Conversions, ConverterImpl, Crossing, Decompositions,
         Direction, DomainScalar, DuplicateNameError, Element, Flat, Generation, Gravestone,
         NicheSlot, Niches, NotExpressibleEntry, Prebindgen, Registry, RepresentationDomain,
-        ScalarValue, ScanError, Stage, Transmute, TypeCell, TypeEntry, TypeKey, TypeKeyParseError,
-        TypeSubject, WriteRustError,
+        ScalarValue, ScanError, Stage, Transmute, TypeEntry, TypeKey, TypeKeyParseError,
+        WriteRustError,
     };
 }
 

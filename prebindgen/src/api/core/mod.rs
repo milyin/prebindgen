@@ -39,7 +39,7 @@ pub use self::{
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
     registry::{
         Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError, Generation,
-        NotExpressibleEntry, Registry, ScanError, TypeCell, TypeEntry, TypeKey, TypeKeyParseError,
-        TypeSubject, WriteRustError,
+        NotExpressibleEntry, Registry, ScanError, TypeEntry, TypeKey, TypeKeyParseError,
+        WriteRustError,
     },
 };
