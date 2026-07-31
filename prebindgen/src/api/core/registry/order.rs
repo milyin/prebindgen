@@ -1,10 +1,10 @@
 //! Hand the demand over, and grade the answers.
 //!
 //! The two halves of the exchange with a generator: [`Registry::crossings`]
-//! sorts the derived set inner-first, [`Registry::supply`] takes every
+//! sorts the derived set inner-first, `RegistryBuilder::build` takes every
 //! conversion back at once and names whatever is missing.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use super::*;
 
@@ -24,8 +24,8 @@ impl<M> Registry<M> {
     /// Option<Box<Node>> }`) has no topological order. The walk breaks such a
     /// cycle at its entry, so exactly one member is handed out before an inner
     /// it contains; a generator that cannot build it supplies nothing, and
-    /// [`Self::supply`] reports it like any other gap.
-    pub fn crossings(&self) -> Vec<Crossing> {
+    /// `RegistryBuilder::build` reports it like any other gap.
+    pub(crate) fn crossings(&self) -> Vec<Crossing> {
         // Post-order DFS: a node is emitted only after everything it reaches,
         // which IS inner-first. `visiting` breaks cycles — the back edge is
         // simply not followed, so the node it points at lands later than its
@@ -111,24 +111,5 @@ impl<M> Registry<M> {
             }
         }
         out
-    }
-
-    /// Take every conversion the generator built, and check the set is
-    /// complete.
-    ///
-    /// A crossing absent from `conversions` is not itself a failure — the scan
-    /// over-approximates on purpose (see [`TypeCell::root`]). What matters is
-    /// whether anything reachable from an exported root lacks one, which is
-    /// what this decides, naming every gap at once.
-    pub fn supply(
-        &mut self,
-        conversions: HashMap<Crossing, TypeEntry<M>>,
-    ) -> Result<(), crate::api::core::resolve::ResolveError> {
-        for ((dir, key), entry) in conversions {
-            if let Some(cell) = self.type_table_mut(dir).get_mut(&key) {
-                cell.entry = Some(entry);
-            }
-        }
-        crate::api::core::resolve::check_complete(self)
     }
 }

@@ -10,7 +10,7 @@
 //!    set from it.
 //! 3. [`registry::Registry::crossings`] hands that set over inner-first; the
 //!    generator builds a conversion for each and returns them all through
-//!    [`registry::Registry::supply`], which checks the set is complete.
+//!    `RegistryBuilder::convert_with`, and `build` checks the set is complete.
 //! 4. The emitter writes prerequisites, converters, per-item wrapper Rust, and
 //!    verbatim anonymous consts.
 //!

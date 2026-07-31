@@ -137,14 +137,14 @@
 //!
 //! A `None` is not itself a failure. The scan over-approximates deliberately —
 //! every nested position, every declared struct in both directions — so whether
-//! a gap matters is reachability from the exports, which `supply` decides.
+//! a gap matters is reachability from the exports, which `build` decides.
 //!
 //! The structure covers almost every dependency, because an `Option<T>`
 //! visibly contains a `T`. What it cannot show is one a *declaration* creates —
 //! a `convert!` chaining through a helper's parameter type, or a callback
 //! argument delivered as plan leaves. Those are stated with `depends`, and
 //! getting one wrong is not silent: the conversion that needed the missing one
-//! cannot be built, and `supply` names it.
+//! cannot be built, and `build` names it.
 //!
 //! **Cycles** are the one place the order cannot be honoured: a self-referential
 //! type (`struct Node { next: Option<Box<Node>> }`) has none. `crossings` breaks
@@ -202,9 +202,8 @@ pub struct Registry<M = ()> {
     /// later stage can ask it what a name means through the registry it already
     /// has — see [`Self::flat`].
     flat: crate::api::core::flat::Flat,
-    /// What the binding declared, pushed in through [`Self::export`],
-    /// [`Self::export_type`], [`Self::cross`] and [`Self::reference`] before
-    /// [`Self::resolve`].
+    /// What the binding declared, pushed in through `RegistryBuilder`'s
+    /// `export` / `export_type` / `cross` / `reference` before its `build`.
     ///
     /// Stored rather than asked for: the registry never calls the generator to
     /// find out what to build. It is also read after resolution — `write`'s
@@ -216,9 +215,9 @@ pub struct Registry<M = ()> {
     /// the conversion once the generator supplies one.
     ///
     /// **Crate-internal.** Outside, a table is reached through
-    /// [`Conversions::conversion`] and [`Self::crossings`] — which is what makes
-    /// direction a parameter rather than half of a field name, and what stops
-    /// anyone observing a cell before [`Self::supply`] has graded it.
+    /// [`Conversions::conversion`] — which is what makes direction a parameter
+    /// rather than half of a field name, and what stops anyone observing a cell
+    /// before `RegistryBuilder::build` has graded it.
     pub(crate) input_types: HashMap<TypeKey, TypeCell<M>>,
     pub(crate) output_types: HashMap<TypeKey, TypeCell<M>>,
 

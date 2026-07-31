@@ -1425,7 +1425,7 @@ fn an_unresolved_type_without_a_position_reports_none() {
 /// type, so byte-identical output says nothing about this path. What is pinned
 /// is that the walk terminates, and that every registered crossing is handed
 /// out exactly once — a generator can then fail to build the cycle member whose
-/// back edge is unanswered, and `supply` reports it like any other gap.
+/// back edge is unanswered, and `build` reports it like any other gap.
 #[test]
 fn a_recursive_type_is_handed_out_once_and_terminates() {
     use std::collections::HashSet as Set;
@@ -1475,4 +1475,58 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
                 })
         });
     assert!(reaches_self, "fixture must actually be recursive");
+}
+
+/// A built `Registry` has no route back into being described.
+///
+/// The phase split is only worth having if it is enforced, and "enforced" here
+/// means there is no public `&mut self` on `Registry` at all — not that the
+/// obvious ones were removed. `supply` survived two commits that claimed
+/// otherwise (#252's `21c403c` and `b708c7e`) because the check for it was a
+/// single-line grep and its signature spans lines.
+///
+/// So this reads the source with **all** whitespace stripped, which makes a
+/// multi-line signature indistinguishable from a one-line one — the exact
+/// difference the original grep could not see.
+#[test]
+fn a_built_registry_exposes_no_mutation() {
+    let mut offenders: Vec<String> = Vec::new();
+
+    for entry in std::fs::read_dir(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/api/core/registry"
+    ))
+    .expect("registry module dir")
+    {
+        let path = entry.expect("dir entry").path();
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        // `declare.rs` is the builder's own file — `RegistryBuilder` is meant to
+        // be mutable; that is the whole point of it being a different type.
+        let name = path
+            .file_name()
+            .expect("file name")
+            .to_string_lossy()
+            .to_string();
+        if name == "declare.rs" || name == "tests.rs" {
+            continue;
+        }
+        let src = std::fs::read_to_string(&path).expect("read source");
+        let bare: String = src.chars().filter(|c| !c.is_whitespace()).collect();
+
+        let mut rest = bare.as_str();
+        while let Some(at) = rest.find("pubfn") {
+            rest = &rest[at + "pubfn".len()..];
+            let Some(open) = rest.find('(') else { break };
+            if rest[open..].starts_with("(&mutself") {
+                offenders.push(format!("{name}: pub fn {}(&mut self …)", &rest[..open]));
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "a built `Registry` must be read-only; found public mutation: {offenders:#?}"
+    );
 }

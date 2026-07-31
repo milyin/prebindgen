@@ -167,7 +167,7 @@ impl<M> RegistryBuilder<M> {
     ///
     /// State those here, and the order accounts for them. Getting it wrong is
     /// not silent: the conversion that needed the missing one simply cannot be
-    /// built, and [`Self::supply`] names it.
+    /// built, and [`Self::build`] names it.
     pub fn depends(mut self, from: Crossing, on: Crossing) -> Self {
         self.registry.declared.edges.push((from, on));
         self
