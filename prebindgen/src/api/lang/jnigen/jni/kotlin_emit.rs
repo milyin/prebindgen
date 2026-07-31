@@ -54,7 +54,7 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
-impl crate::api::core::Generation<JniGenBuilder> {
+impl super::JniGen {
     /// Unified Kotlin emission — the JNI adapter's second artifact,
     /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
     /// builds in-memory [`kt::KtFile`] model fragments; they are merged
@@ -67,13 +67,14 @@ impl crate::api::core::Generation<JniGenBuilder> {
     /// `write_rust`. Returns every path written (one per non-empty
     /// package).
     pub fn write_kotlin(&self, kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        self.adapter().write_kotlin(self.registry(), kotlin_root)
+        self.declarations()
+            .write_kotlin(self.registry(), kotlin_root)
     }
 }
 
 impl JniGenBuilder {
     /// Kotlin emission body — the public entry point is
-    /// `Generation::<JniGenBuilder>::write_kotlin`, which guarantees the registry
+    /// `JniGen::write_kotlin`, which guarantees the registry
     /// was resolved first.
     pub(crate) fn write_kotlin(
         &self,

@@ -109,7 +109,7 @@ impl JniGenBuilder {
     /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
     /// methods, add declarations with [`package`](Self::package),
     /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
-    /// result through `JniGenBuilder::resolve` → `Generation::write_rust` /
+    /// result through `JniGenBuilder::build` → `JniGen::write_rust` /
     /// `write_kotlin`. Settings and
     /// declarations may be interleaved in any order — the builder stores
     /// only raw inputs, and every setting-derived name is computed at the
@@ -142,6 +142,7 @@ impl JniGenBuilder {
             local_fns: Vec::new(),
             iface_specs: Default::default(),
             fn_plans: Default::default(),
+            sources: Default::default(),
         }
     }
 
@@ -249,6 +250,44 @@ impl JniGenBuilder {
     /// [`PackageDecl`], built with [`package!`](crate::package)). Call it once
     /// per package, or several times for the same package name — the
     /// declarations merge, so you can split a large package across calls.
+    /// Every `#[prebindgen]` item captured in `dir` — pass
+    /// `<source_crate>::PREBINDGEN_OUT_DIR`.
+    ///
+    /// The same feeder [`FlatBuilder::source`](crate::core::flat::FlatBuilder::source)
+    /// has, because it is that feeder: the binding says where its source is,
+    /// and the model is built from it at [`Self::build`].
+    pub fn source<P: AsRef<std::path::Path>>(mut self, dir: P) -> Self {
+        self.sources = std::mem::take(&mut self.sources).source(dir);
+        self
+    }
+
+    /// The same, for a dependency this crate **renames** in `Cargo.toml`.
+    ///
+    /// The origin recorded at capture time is the dependency's real package
+    /// name, which will not resolve from a crate that refers to it by another
+    /// name. `crate_name` is the name *this* crate uses. Per directory,
+    /// deliberately: a binding may layer several sources.
+    pub fn source_named<P: AsRef<std::path::Path>>(
+        mut self,
+        dir: P,
+        crate_name: impl Into<String>,
+    ) -> Self {
+        self.sources = std::mem::take(&mut self.sources).source_named(dir, crate_name);
+        self
+    }
+
+    /// Add a captured item stream — a group selection, an otherwise-configured
+    /// [`Source`](crate::Source), or synthetic items in a test.
+    ///
+    /// Accumulates, so it mixes freely with [`Self::source`].
+    pub fn items<I>(mut self, items: I) -> Self
+    where
+        I: IntoIterator<Item = (syn::Item, crate::SourceLocation)>,
+    {
+        self.sources = std::mem::take(&mut self.sources).items(items);
+        self
+    }
+
     pub fn package(mut self, decl: PackageDecl) -> Self {
         let PackageDecl {
             name,

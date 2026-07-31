@@ -25,7 +25,7 @@ use crate::api::{
 ///
 /// Binding validation is NOT here — it runs once in [`Registry::finish`]
 /// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
-/// before a `Generation` exists and never reaches a writer.
+/// before a built generator exists and never reaches a writer.
 #[derive(Debug)]
 pub enum WriteError {
     /// A `TokenStream` produced by an `on_*` trait method failed to parse
@@ -61,7 +61,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     ext: &E,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
-    // Validation already ran ONCE in `Registry::finish` — a `Generation`
+    // Validation already ran ONCE in the generator's `build` — a built generator
     // (the only source of a resolved registry) is valid by construction, so
     // this writer is a pure emission.
     let mut items: Vec<syn::Item> = Vec::new();

@@ -940,16 +940,44 @@ impl JniGenBuilder {
     /// The pair is always used together, and the generator is what knows both
     /// halves — so it drives, and the registry never calls back. Becomes the
     /// body of `generate(..)` once emission moves here too (#251 phase E).
-    pub fn resolve(
+    /// Read the source, resolve every crossing, and hand back the binding.
+    ///
+    /// Runs the whole pipeline a build script used to run by hand: parse the
+    /// declared sources into a model, describe this binding over it, answer
+    /// each crossing in dependency order, and check the set is complete. A
+    /// `Flat` and a `Registry` exist inside — they are simply not this caller's
+    /// problem.
+    pub fn build(self) -> Result<JniGen, crate::core::WriteRustError> {
+        let flat = self
+            .sources
+            .clone()
+            .build()
+            .map_err(crate::core::ScanError::from)?;
+        let registry = crate::core::Registry::builder(flat)?;
+        self.build_with(registry)
+    }
+
+    /// [`Self::build`] over a registry that was described elsewhere.
+    ///
+    /// The seam tests use to feed synthetic items without a source directory;
+    /// `build` is this with the model read from [`Self::source`].
+    pub(crate) fn build_with(
         self,
-        registry: RegistryBuilder<KotlinMeta>,
-    ) -> Result<crate::core::Generation<Self>, crate::core::WriteRustError> {
+        registry: crate::api::core::registry::RegistryBuilder<KotlinMeta>,
+    ) -> Result<JniGen, crate::core::WriteRustError> {
         let registry = self
             .declare_into(registry)?
             .validate_with(&self)?
             .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
             .build()?;
-        registry.finish(self)
+        // Post-resolve invariants, run once here so the writers are pure reads
+        // and a `JniGen` is valid by construction.
+        self.validate_resolved(&registry)
+            .map_err(|message| crate::core::ScanError::AdapterInvariant { message })?;
+        Ok(JniGen {
+            gen: self,
+            registry,
+        })
     }
 
     /// Build the conversion for one crossing, against what is already built.

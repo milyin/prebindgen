@@ -3,25 +3,6 @@
 use super::*;
 
 impl<M> Registry<M> {
-    /// Bind the filled registry to the adapter that filled it.
-    ///
-    /// Post-resolve validation runs ONCE here, so a [`Generation`] is valid by
-    /// construction and the `write_*` emitters are genuinely pure. An invalid
-    /// binding fails here; no `Generation` is produced, so nothing can be
-    /// written.
-    pub fn finish<E>(self, adapter: E) -> Result<Generation<E>, WriteRustError>
-    where
-        E: Prebindgen<Metadata = M>,
-    {
-        adapter
-            .validate_resolved(&self)
-            .map_err(|message| ScanError::AdapterInvariant { message })?;
-        Ok(Generation {
-            registry: self,
-            adapter,
-        })
-    }
-
     pub(super) fn apply_adapter_plans(
         &mut self,
         declared: &mut Declared,

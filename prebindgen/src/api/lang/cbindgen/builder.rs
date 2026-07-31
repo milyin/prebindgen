@@ -93,6 +93,33 @@ impl CbindgenBuilder {
     }
 
     /// Declare a `#[prebindgen]` function to convert into the C layer.
+    /// Every `#[prebindgen]` item captured in `dir` — see
+    /// `JniGenBuilder::source`.
+    pub fn source<P: AsRef<std::path::Path>>(mut self, dir: P) -> Self {
+        self.sources = std::mem::take(&mut self.sources).source(dir);
+        self
+    }
+
+    /// The same, for a dependency this crate **renames** in `Cargo.toml`.
+    pub fn source_named<P: AsRef<std::path::Path>>(
+        mut self,
+        dir: P,
+        crate_name: impl Into<String>,
+    ) -> Self {
+        self.sources = std::mem::take(&mut self.sources).source_named(dir, crate_name);
+        self
+    }
+
+    /// Add a captured item stream. Accumulates, so it mixes with
+    /// [`Self::source`].
+    pub fn items<I>(mut self, items: I) -> Self
+    where
+        I: IntoIterator<Item = (syn::Item, crate::SourceLocation)>,
+    {
+        self.sources = std::mem::take(&mut self.sources).items(items);
+        self
+    }
+
     pub fn function(mut self, ident: syn::Ident) -> Self {
         assert!(
             !self.ignored_functions.contains(&ident),

@@ -37,7 +37,7 @@
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
 //! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
-//! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
+//! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
@@ -98,11 +98,9 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen::{
-    constant, convert,
-    core::{Flat, Registry},
-    data_class, enum_class, expand_param, expand_return, expr, fields, from, fun, into,
-    lang::JniGenBuilder,
-    matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant,
+    constant, convert, data_class, enum_class, expand_param, expand_return, expr, fields, from,
+    fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig, try_from, ty,
+    variant,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -120,7 +118,9 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 }
 
 fn main() {
-    let jni = JniGenBuilder::new()
+    let jni = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a
@@ -702,20 +702,13 @@ fn main() {
     // so the stamp recorded at capture time (`covertest-helpers`) would not
     // resolve from this crate — `source_named` overrides it with the name this
     // crate actually uses, per directory.
-    let flat = Flat::builder()
-        .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
-        .build()
-        .expect("parse prebindgen items");
-    let registry = Registry::builder(flat).expect("describe the binding");
-
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let gen = jni.resolve(registry).expect("resolve failed");
+    let gen = jni.build().expect("build failed");
     let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",

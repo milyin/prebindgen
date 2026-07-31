@@ -1478,17 +1478,35 @@ impl CbindgenBuilder {
     }
 
     /// State this binding into `registry`, then resolve it — see
-    /// `JniGenBuilder::resolve`.
-    pub fn resolve(
+    /// `JniGenBuilder::build`.
+    /// Read the source, resolve every crossing, and hand back the binding —
+    /// see `JniGenBuilder::build`.
+    pub fn build(self) -> Result<Cbindgen, crate::core::WriteRustError> {
+        let flat = self
+            .sources
+            .clone()
+            .build()
+            .map_err(crate::core::ScanError::from)?;
+        let registry = crate::core::Registry::builder(flat)?;
+        self.build_with(registry)
+    }
+
+    /// [`Self::build`] over a registry described elsewhere — the test seam.
+    pub(crate) fn build_with(
         self,
-        registry: RegistryBuilder<()>,
-    ) -> Result<crate::core::Generation<Self>, crate::core::WriteRustError> {
+        registry: crate::api::core::registry::RegistryBuilder<()>,
+    ) -> Result<Cbindgen, crate::core::WriteRustError> {
         let registry = self
             .declare_into(registry)?
             .validate_with(&self)?
             .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
             .build()?;
-        registry.finish(self)
+        self.validate_resolved(&registry)
+            .map_err(|message| crate::core::ScanError::AdapterInvariant { message })?;
+        Ok(Cbindgen {
+            gen: self,
+            registry,
+        })
     }
 
     /// Build the conversion for one crossing — see `JniGenBuilder::convert_crossing`.

@@ -40,7 +40,7 @@ fn ptr_class_implements_adds_interface_supertypes() {
     let dir = unique_test_dir("jnigen_implements");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let thing = paths
@@ -92,7 +92,7 @@ fn ptr_class_interface_emits_generated_api() {
     let dir = unique_test_dir("jnigen_interface");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let thing = paths
@@ -129,7 +129,7 @@ fn ptr_class_duplicate_implements_rejected() {
 /// name and its result must differ from the class name. An identity hook
 /// makes the interface collide with the class in the same package — a
 /// COLLECTED error from the whole-artifact symbol pass (issue #89), surfaced
-/// by `resolve` (validation runs once there) before any `Generation` exists,
+/// by `build` (validation runs once there) before any `JniGen` exists,
 /// rather than an emission-time panic.
 #[test]
 fn interface_name_mangle_identity_rejected() {
@@ -151,7 +151,7 @@ fn interface_name_mangle_identity_rejected() {
                 .fun(crate::fun!(z_thing_new)),
         );
     let err = jni
-        .resolve(registry)
+        .build_with(registry)
         .expect_err("interface==class must fail resolve");
     let msg = err.to_string();
     assert!(
@@ -200,7 +200,7 @@ fn interface_name_override_and_hook() {
     let dir = unique_test_dir("jnigen_iface_name");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let all: String = paths
@@ -259,7 +259,7 @@ fn data_class_interface_emits_generated_api() {
     let dir = unique_test_dir("jnigen_data_iface");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let all: String = paths
@@ -338,7 +338,7 @@ fn per_class_name_and_base_package_fun() {
     let dir = unique_test_dir("jnigen_class_name_base_fun");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
@@ -414,7 +414,7 @@ fn setters_after_declarations_apply() {
     let dir = unique_test_dir("jnigen_setters_after_decls");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
@@ -452,7 +452,7 @@ fn generation_writes_are_order_free() {
         let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!("thing").fun(crate::fun!(z_ping)));
-        jni.resolve(registry).expect("resolve")
+        jni.build_with(registry).expect("resolve")
     };
     let read_all = |dir: &std::path::Path, paths: &[std::path::PathBuf]| -> String {
         let mut out = String::new();
@@ -539,7 +539,7 @@ fn method_hook_can_strip_flat_class_prefix() {
     let dir = unique_test_dir("jnigen_member_names");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let all: String = paths
@@ -608,7 +608,7 @@ fn method_name_mangle_hook_applies_order_independently() {
     let dir = unique_test_dir("jnigen_method_mangle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let all: String = paths
@@ -646,7 +646,7 @@ fn harness_hook_receives_derived_default() {
     let dir = unique_test_dir("jnigen_harness_mangle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     // The extern symbol path carries the replaced harness name.
@@ -690,7 +690,7 @@ fn function_and_native_method_hooks_receive_placement() {
     let dir = unique_test_dir("jnigen_placement_mangles");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let all = paths
@@ -721,7 +721,7 @@ fn write_kotlin_owns_and_resets_the_root() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_ping)));
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
 
     let dir = unique_test_dir("jnigen_owned_root");
     let _ = std::fs::remove_dir_all(&dir);
@@ -745,7 +745,7 @@ fn write_kotlin_owns_and_resets_the_root() {
     assert!(paths2.iter().all(|p| p.exists()));
 }
 
-/// C7: `Generation::report()` — the explain mode. The report carries the
+/// C7: `JniGen::report()` — the explain mode. The report carries the
 /// FINAL Kotlin signature of each fn (same render path as the emitters),
 /// the plans that shaped it, an unshaped fn with no `shaped by:` lines,
 /// and the type table. Deterministic across calls.
@@ -784,7 +784,7 @@ fn report_explains_the_resolved_surface() {
                 .field(crate::fun!(summary_count))
                 .field(crate::fun!(summary_total)),
         );
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let report = gen.report();
 
     // The reshaped fn: exact signature (builder callback form) + provenance.
@@ -902,7 +902,7 @@ fn docs_become_kdoc_with_shape_notes() {
                 .field(crate::fun!(summary_count))
                 .field(crate::fun!(summary_total)),
         );
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let dir = unique_test_dir("jnigen_kdoc");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

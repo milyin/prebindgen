@@ -43,7 +43,7 @@ pub use jni::{
     decode_byte_array, decode_string, encode_byte_array, encode_string, matching, null_byte_array,
     null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl, ConvertSourceDecl,
     DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
-    FunctionDecl, IgnoreDecl, JniBindingError, JniGenBuilder, PackageDecl, PtrClassDecl,
+    FunctionDecl, IgnoreDecl, JniBindingError, JniGen, JniGenBuilder, PackageDecl, PtrClassDecl,
     SealedClassDecl, VariantDecl,
 };
 

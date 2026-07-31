@@ -45,7 +45,7 @@ fn build(fns: &[&str], tag: &str) -> String {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(decls);
-    super::flatten::write_all(jni.resolve(registry).expect("resolve"), tag)
+    super::flatten::write_all(jni.build_with(registry).expect("resolve"), tag)
 }
 
 /// The generation predicate on the Kotlin side. JniGenBuilder has no exclusive-borrow

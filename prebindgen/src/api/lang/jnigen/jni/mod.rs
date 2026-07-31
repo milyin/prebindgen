@@ -362,6 +362,62 @@ pub(crate) type MethodNameMangle = Arc<dyn Fn(&str, &str, &str) -> String + Send
 ///     )
 ///     .expand(prebindgen::expand_return!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
 /// ```
+/// A resolved JNI binding: every crossing has a conversion, and the artifacts
+/// can be written.
+///
+/// Built by [`JniGenBuilder::build`]. Read-only — the registry inside it is
+/// complete, which is what lets every `write_*` be a pure emission that can run
+/// in any order, or not at all.
+pub struct JniGen {
+    /// What the binding declared. The emitters read it for names, classes and
+    /// decompositions.
+    pub(crate) gen: JniGenBuilder,
+    /// Every crossing this binding needs, each with its conversion.
+    pub(crate) registry: crate::core::Registry<KotlinMeta>,
+}
+
+// Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
+impl std::fmt::Debug for JniGen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("JniGen(..)")
+    }
+}
+
+impl JniGen {
+    /// Describe a JNI binding.
+    ///
+    /// The entry point: everything a binding states — its Kotlin surface, its
+    /// decompositions, and where its `#[prebindgen]` source lives — goes on the
+    /// builder, and [`JniGenBuilder::build`] turns it into a [`JniGen`].
+    pub fn builder() -> JniGenBuilder {
+        JniGenBuilder::new()
+    }
+
+    /// Write the generated Rust file — the JNI externs and the converters they
+    /// call. `out_path` may be relative (resolved against `OUT_DIR`) or
+    /// absolute; returns the path actually written.
+    pub fn write_rust(
+        &self,
+        out_path: impl AsRef<std::path::Path>,
+    ) -> Result<std::path::PathBuf, crate::core::WriteRustError> {
+        Ok(crate::api::core::write::write_rust(
+            &self.registry,
+            &self.gen,
+            out_path,
+        )?)
+    }
+
+    /// The resolved registry — conversions, decompositions, and the model.
+    pub fn registry(&self) -> &crate::core::Registry<KotlinMeta> {
+        &self.registry
+    }
+
+    /// What the binding declared.
+    pub fn declarations(&self) -> &JniGenBuilder {
+        &self.gen
+    }
+}
+
 #[derive(Clone)]
 pub struct JniGenBuilder {
     /// Single source of truth for the JVM/Kotlin namespace this binding
@@ -521,6 +577,14 @@ pub struct JniGenBuilder {
     /// "derived state, keyed by `(self, registry)`" contract as
     /// [`Self::iface_specs`].
     pub(crate) fn_plans: std::cell::RefCell<HashMap<syn::Ident, std::rc::Rc<JniFunctionPlan>>>,
+
+    /// Where the `#[prebindgen]` items come from.
+    ///
+    /// A [`FlatBuilder`](crate::core::flat::FlatBuilder), stated with the same
+    /// three feeders it has — so a build script says where the source is in the
+    /// vocabulary the model already uses, and never names a `Flat` or a
+    /// `Registry` itself.
+    pub(crate) sources: crate::api::core::flat::FlatBuilder,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────

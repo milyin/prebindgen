@@ -283,8 +283,55 @@ impl AliasAccess {
 
 /// C / cbindgen language adapter. Build it with [`CbindgenBuilder::new`], declare the
 /// items to convert with the fluent methods, then drive it through
-/// [`CbindgenBuilder::resolve`] →
-/// [`Generation::write_rust`](crate::core::Generation::write_rust).
+/// [`CbindgenBuilder::build`] → [`Cbindgen::write_rust`].
+///
+/// A resolved C binding: every crossing has a conversion, and the header-facing
+/// Rust file can be written.
+///
+/// Built by [`CbindgenBuilder::build`]. Read-only, so `write_rust` is a pure
+/// emission over a complete registry.
+pub struct Cbindgen {
+    pub(crate) gen: CbindgenBuilder,
+    pub(crate) registry: crate::core::Registry<()>,
+}
+
+// Opaque — exists so `Result<Cbindgen, _>::expect_err` works in tests.
+impl std::fmt::Debug for Cbindgen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Cbindgen(..)")
+    }
+}
+
+impl Cbindgen {
+    /// Describe a C binding.
+    pub fn builder() -> CbindgenBuilder {
+        CbindgenBuilder::new()
+    }
+
+    /// Write the generated Rust file — the `extern "C"` wrappers and their
+    /// converters, which `cbindgen` then reads to emit the header.
+    pub fn write_rust(
+        &self,
+        out_path: impl AsRef<std::path::Path>,
+    ) -> Result<std::path::PathBuf, crate::core::WriteRustError> {
+        Ok(crate::api::core::write::write_rust(
+            &self.registry,
+            &self.gen,
+            out_path,
+        )?)
+    }
+
+    /// The resolved registry — conversions, decompositions, and the model.
+    pub fn registry(&self) -> &crate::core::Registry<()> {
+        &self.registry
+    }
+
+    /// What the binding declared.
+    pub fn declarations(&self) -> &CbindgenBuilder {
+        &self.gen
+    }
+}
+
 #[derive(Default)]
 pub struct CbindgenBuilder {
     /// Module path the original `#[prebindgen]` items live under. Used to
@@ -351,6 +398,9 @@ pub struct CbindgenBuilder {
     mangle_callback: Option<MangleN>,
     /// Rust function ident → exported `#[no_mangle]` symbol.
     mangle_function: Option<Mangle1>,
+    /// Where the `#[prebindgen]` items come from — see
+    /// `JniGenBuilder::source`.
+    pub(crate) sources: crate::api::core::flat::FlatBuilder,
 }
 
 /// A mangler over a single name component (Rust short name, base, or fn ident).

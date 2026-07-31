@@ -14,7 +14,7 @@ use crate::api::core::{
 /// Push-then-resolve, the way a real generator's `resolve` does. Test-only:
 /// production generators own this pairing themselves (`JniGenBuilder::resolve`).
 trait DeclareAndResolve<M> {
-    fn declare_and_resolve<E>(self, ext: E) -> Result<Generation<E>, WriteRustError>
+    fn declare_and_resolve<E>(self, ext: E) -> Result<Registry<()>, WriteRustError>
     where
         E: Prebindgen<Metadata = M> + AsStub;
 }
@@ -34,16 +34,19 @@ impl AsStub for StubExt {
 }
 
 impl DeclareAndResolve<()> for RegistryBuilder<()> {
-    fn declare_and_resolve<E>(self, ext: E) -> Result<Generation<E>, WriteRustError>
+    fn declare_and_resolve<E>(self, ext: E) -> Result<Registry<()>, WriteRustError>
     where
         E: Prebindgen<Metadata = ()> + AsStub,
     {
-        ext.stub()
+        let registry = ext
+            .stub()
             .declare_into_any(self)?
             .validate_with(&ext)?
             .convert_with(|crossing, _built| ext.converter(&crossing.1.to_type()))?
-            .build()?
-            .finish(ext)
+            .build()?;
+        ext.validate_resolved(&registry)
+            .map_err(|message| ScanError::AdapterInvariant { message })?;
+        Ok(registry)
     }
 }
 
@@ -1155,7 +1158,7 @@ fn a_binding_local_fn_joins_the_index_but_not_the_source_modules() {
         ..Default::default()
     };
     let gen = reg.declare_and_resolve(ext).expect("resolve");
-    let reg = gen.registry();
+    let reg = &gen;
 
     // In the one index, reachable exactly like a captured fn.
     assert!(reg.flat().function("helper").is_some());
@@ -1323,7 +1326,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         ..Default::default()
     });
     let gen = reg.declare_and_resolve(ext).expect("resolve");
-    let reg = gen.registry();
+    let reg = &gen;
 
     // The model now holds the reading …
     let read = reg

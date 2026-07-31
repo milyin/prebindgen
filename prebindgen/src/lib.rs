@@ -262,20 +262,32 @@ macro_rules! ident {
 ///
 /// # Flow
 ///
-/// 1. [`Flat::builder`](core::Flat::builder) parses the
-///    `(syn::Item, SourceLocation)` stream (typically [`Source::items_all`])
-///    into the model, and [`Registry::builder`](core::Registry::builder) starts
+/// A build script sees one type — the generator — and never names a `Flat` or a
+/// `Registry`:
+///
+/// ```ignore
+/// let jni = JniGen::builder()
+///     .package(package!("io.zenoh"))
+///     .fun(fun!(session_open))
+///     .source(zenoh_flat::PREBINDGEN_OUT_DIR)
+///     .build()?;
+/// jni.write_rust(&rust_dest)?;
+/// jni.write_kotlin(&kotlin_root)?;
+/// ```
+///
+/// Inside `build()`, the generator does what it alone knows how to do:
+///
+/// 1. [`Flat::builder`](core::Flat::builder) parses the declared sources into
+///    the model, and [`Registry::builder`](core::Registry::builder) starts
 ///    describing a binding over it.
-/// 2. Your generator states its binding into the registry, then
+/// 2. The generator states that binding, then
 ///    [`Registry::crossings`](core::Registry::crossings) hands over every
 ///    crossing needing a conversion — inner types first, so each one can be
-///    built from those already done. [`Registry::supply`](core::Registry::supply)
-///    takes them back and names any gap, and
-///    [`Registry::finish`](core::Registry::finish) yields a
-///    [`Generation`](core::Generation) whose `write_rust` (and generator-specific
-///    `write_*`) methods emit the artifacts.
-/// 3. The back-end produces any secondary artifacts (C headers, Kotlin sources,
-///    …) by walking the resolved [`Registry`](core::Registry).
+///    built from those already done. `convert_with` answers them and
+///    `build` names any gap.
+/// 3. The resolved registry becomes a field of the built generator, whose
+///    `write_*` methods emit the artifacts — Rust wrappers, and whatever else
+///    that language needs (a C header, Kotlin sources, …).
 ///
 /// # Universality, by example
 ///
@@ -302,10 +314,9 @@ pub mod core {
     /// where an adapter reaches for it.
     pub use crate::api::core::{
         warn_unclaimed, Building, Claimed, Conversions, ConverterImpl, Crossing, Decompositions,
-        Direction, DomainScalar, DuplicateNameError, Element, Flat, Generation, Gravestone,
-        NicheSlot, Niches, NotExpressibleEntry, Prebindgen, Registry, RepresentationDomain,
-        ScalarValue, ScanError, Stage, Transmute, TypeEntry, TypeKey, TypeKeyParseError,
-        WriteRustError,
+        Direction, DomainScalar, DuplicateNameError, Element, Flat, Gravestone, NicheSlot, Niches,
+        NotExpressibleEntry, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError,
+        Stage, Transmute, TypeEntry, TypeKey, TypeKeyParseError, WriteRustError,
     };
 }
 
@@ -332,14 +343,15 @@ pub use crate::api::lang::jnigen::matching;
 /// classes, exception classes).
 pub mod lang {
     #[cfg(feature = "unstable-cbindgen")]
-    pub use crate::api::lang::cbindgen::{snake_case, CbindgenBuilder};
+    pub use crate::api::lang::cbindgen::{snake_case, Cbindgen, CbindgenBuilder};
     pub use crate::api::lang::jnigen::{
         box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
         box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string, matching,
         null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
         ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
-        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGenBuilder,
-        KotlinFile, PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl, WriteKotlinError,
+        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen,
+        JniGenBuilder, KotlinFile, PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl,
+        WriteKotlinError,
     };
 }
 

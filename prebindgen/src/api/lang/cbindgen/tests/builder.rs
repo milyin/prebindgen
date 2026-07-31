@@ -100,7 +100,7 @@ fn free_memory_function_required() {
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = cbindgen
-            .resolve(registry)
+            .build_with(registry)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nofree.rs")));
     }));
     assert!(

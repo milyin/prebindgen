@@ -71,7 +71,8 @@ fn generate_ffi_bindings() -> PathBuf {
 
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name, so no per-item `.name(...)` is needed.
-    let mut cbindgen = prebindgen::lang::CbindgenBuilder::new()
+    let mut cbindgen = prebindgen::lang::Cbindgen::builder()
+        .source(example_flat::PREBINDGEN_OUT_DIR)
         .source_module(pq!(example_flat))
         // Single universal freer for the `char*` data the layer hands out
         // (the `String` returns). Opaque handles keep their typed `*_drop`.
@@ -212,16 +213,11 @@ fn generate_ffi_bindings() -> PathBuf {
     }
 
     // Reads example-flat's `#[prebindgen]` output straight from its directory.
-    let flat = prebindgen::core::Flat::builder()
-        .source(example_flat::PREBINDGEN_OUT_DIR)
-        .build()
-        .expect("parse prebindgen items");
-    let registry = prebindgen::core::Registry::builder(flat).expect("describe the binding");
     // Always written to OUT_DIR under a stable name too, so the commented-out
     // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
     let out_file = cbindgen
-        .resolve(registry)
-        .expect("resolve prebindgen items")
+        .build()
+        .expect("build prebindgen items")
         .write_rust("example_flat.rs")
         .expect("write generated bindings");
 

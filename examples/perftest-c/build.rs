@@ -30,7 +30,8 @@ fn main() {
 fn generate_ffi_bindings() -> PathBuf {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
-    let mut cbindgen = prebindgen::lang::CbindgenBuilder::new()
+    let mut cbindgen = prebindgen::lang::Cbindgen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .source_module(pq!(perftest_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -128,14 +129,9 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
 
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
-    let flat = prebindgen::core::Flat::builder()
-        .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .build()
-        .expect("parse prebindgen items");
-    let registry = prebindgen::core::Registry::builder(flat).expect("describe the binding");
     let out_file = cbindgen
-        .resolve(registry)
-        .expect("resolve prebindgen items")
+        .build()
+        .expect("build prebindgen items")
         .write_rust("perftest.rs")
         .expect("write generated bindings");
 

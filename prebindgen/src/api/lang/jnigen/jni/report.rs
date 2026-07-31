@@ -1,4 +1,4 @@
-//! `Generation::<JniGenBuilder>::report()` — the resolved binding surface,
+//! `JniGen::report()` — the resolved binding surface,
 //! explained.
 //!
 //! Declarations act at a distance: one `expand_return!` / `convert!` /
@@ -11,7 +11,7 @@
 //! committed regen so a decl's effect is reviewable in a PR without
 //! reading generated Kotlin.
 //!
-//! The report is deliberately an inherent method of `Generation<JniGenBuilder>`
+//! The report is deliberately an inherent method of `JniGen`
 //! (the `write_kotlin` seam): the *pattern* — describe your resolved
 //! surface — is adapter-universal, but the *content* is intrinsically in
 //! the destination language's vocabulary, so each adapter implements its
@@ -20,14 +20,14 @@
 use super::*;
 use crate::api::core::registry::Conversions;
 
-impl crate::api::core::Generation<JniGenBuilder> {
+impl super::JniGen {
     /// Render the resolved binding surface as a deterministic markdown
     /// report: per package / class the final Kotlin signature of every
     /// wrapper (exactly as generated) with the expand/error plans that
     /// shaped it, then the type table (kind, Kotlin FQN, wire, conversion
     /// sources). Pure read over the resolved registry.
     pub fn report(&self) -> String {
-        let ext = self.adapter();
+        let ext = self.declarations();
         let registry = self.registry();
         let mut out = String::new();
         out.push_str("# JniGen binding report\n\n");
@@ -187,7 +187,7 @@ impl crate::api::core::Generation<JniGenBuilder> {
         kotlin_name: Option<&str>,
         receiver_key: Option<&TypeKey>,
     ) {
-        let ext = self.adapter();
+        let ext = self.declarations();
         let registry = self.registry();
         let Some(item_fn) = registry
             .flat()
