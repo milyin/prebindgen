@@ -821,11 +821,6 @@ pub trait Conversions<M> {
     /// The error-position decomposition of a fallible function.
     fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>;
 
-    /// The parameter-side fold for a `(function, parameter)` position.
-    fn expansion_plans(
-        &self,
-    ) -> &HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan>;
-
     /// The declaration-default decomposition behind each deconstructor.
     fn decon_plans(
         &self,
@@ -867,11 +862,6 @@ impl<M> Conversions<M> for Building<'_, M> {
     fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
         &self.registry.error_plans
     }
-    fn expansion_plans(
-        &self,
-    ) -> &HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan> {
-        &self.registry.expansion_plans
-    }
     fn decon_plans(
         &self,
     ) -> &HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec> {
@@ -907,11 +897,6 @@ impl<M> Conversions<M> for Registry<M> {
     }
     fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
         &self.error_plans
-    }
-    fn expansion_plans(
-        &self,
-    ) -> &HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan> {
-        &self.expansion_plans
     }
     fn decon_plans(
         &self,

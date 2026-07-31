@@ -440,7 +440,7 @@ fn emit_input_param(
     let leaf = match &param.form {
         ParamForm::Expanded(leaves) => {
             let fold = registry
-                .expansion_plans()
+                .expansion_plans
                 .get(&(original_ident.clone(), param.ident.clone()))
                 .expect("ParamForm::Expanded ⇒ expansion plan present");
             return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err);
