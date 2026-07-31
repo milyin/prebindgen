@@ -5,8 +5,8 @@ use super::*;
 
 /// Last-segment ident of a `TypeKey` — e.g. `"Publisher<'static>"` →
 /// `"Publisher"`, `"AdvancedSubscriber<()>"` → `"AdvancedSubscriber"`. Used by
-/// the structured builders ([`JniGen::ptr_class`],
-/// [`JniGen::data_class`]) to derive a default Kotlin class name from
+/// the structured builders ([`JniGenBuilder::ptr_class`],
+/// [`JniGenBuilder::data_class`]) to derive a default Kotlin class name from
 /// the Rust type-key. Panics for non-path types (e.g. closures, references) —
 /// the per-kind `*_name_mangle` closures see only path-shaped
 /// shorts. For verbatim Kotlin expressions on non-path types, use a
@@ -23,7 +23,7 @@ pub(crate) fn rust_short_name(key: &TypeKey) -> String {
 
 /// Fallible variant of [`rust_short_name`] — returns `None` for
 /// non-path types instead of panicking. Used by
-/// [`JniGen::note_wrapper_registration`] which is called for rank-0
+/// [`JniGenBuilder::note_wrapper_registration`] which is called for rank-0
 /// wrapper patterns including non-path shapes like `()` where there
 /// is no Kotlin short name to derive.
 pub(crate) fn rust_short_name_opt(key: &TypeKey) -> Option<String> {

@@ -23,9 +23,9 @@ use crate::api::{
 
 /// Errors surfaced by the file-emission phase.
 ///
-/// Binding validation is NOT here — it runs once in [`Registry::resolve`]
+/// Binding validation is NOT here — it runs once in [`Registry::finish`]
 /// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
-/// before a `Generation` exists and never reaches a writer.
+/// before a built generator exists and never reaches a writer.
 #[derive(Debug)]
 pub enum WriteError {
     /// A `TokenStream` produced by an `on_*` trait method failed to parse
@@ -61,7 +61,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     ext: &E,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
-    // Validation already ran ONCE in `Registry::resolve` — a `Generation`
+    // Validation already ran ONCE in the generator's `build` — a built generator
     // (the only source of a resolved registry) is valid by construction, so
     // this writer is a pure emission.
     let mut items: Vec<syn::Item> = Vec::new();
@@ -78,8 +78,8 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 
     // 2. Per-item Rust output from the adapter — only for items the adapter
     //    explicitly declared. Undeclared items were already announced
-    //    via `cargo:warning=` in `Registry::scan_declared`.
-    let declared = ext.declarations();
+    //    via `cargo:warning=` by the generator's own unclaimed-item report.
+    let declared = registry.declared();
     let declared_fns = &declared.functions;
     let declared_types = &declared.types;
     let flat = registry.flat();

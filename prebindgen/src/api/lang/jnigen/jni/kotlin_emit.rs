@@ -1,6 +1,6 @@
-//! `KotlinExt` impl for [`JniGen`].
+//! `KotlinExt` impl for [`JniGenBuilder`].
 //!
-//! [`JniGen::write_kotlin`] is the single entry point for every Kotlin
+//! [`JniGenBuilder::write_kotlin`] is the single entry point for every Kotlin
 //! file the JNI back-end emits. Each per-kind emitter builds in-memory
 //! [`kt::KtFile`] *model fragments* (declarations, not strings — the
 //! generator module `api::gen::kotlin` owns formatting and imports):
@@ -23,18 +23,21 @@
 //! Every `#[prebindgen]` function must be assigned a Kotlin home — as a
 //! class member (`.method`/`.constructor` on a class decl) or a free function
 //! (`PackageDecl::fun`). Undeclared functions are skipped with a build
-//! warning (`Registry::scan_declared`); there is no "orphan" bucket.
+//! warning (the generator's unclaimed-item report); there is no "orphan" bucket.
 
 use super::*;
-use crate::api::gen::{
-    kotlin as kt,
-    kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
+use crate::api::{
+    core::registry::Conversions,
+    gen::{
+        kotlin as kt,
+        kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
+    },
 };
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
 ///
-/// Consumed by [`JniGen::write_typed_handles`] (and forwarded to
-/// [`JniGen::write_jni_wrappers`] so the same promotion list can carve
+/// Consumed by [`JniGenBuilder::write_typed_handles`] (and forwarded to
+/// [`JniGenBuilder::write_jni_wrappers`] so the same promotion list can carve
 /// the matching skip-list). Each entry says "this Kotlin class is the
 /// home for the named `#[prebindgen]` functions"; everything else stays
 /// in the catch-all `JNIWrappers` object.
@@ -51,7 +54,7 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
-impl crate::api::core::Generation<JniGen> {
+impl super::JniGen {
     /// Unified Kotlin emission — the JNI adapter's second artifact,
     /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
     /// builds in-memory [`kt::KtFile`] model fragments; they are merged
@@ -64,20 +67,21 @@ impl crate::api::core::Generation<JniGen> {
     /// `write_rust`. Returns every path written (one per non-empty
     /// package).
     pub fn write_kotlin(&self, kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        self.adapter().write_kotlin(self.registry(), kotlin_root)
+        self.declarations()
+            .write_kotlin(self.registry(), kotlin_root)
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Kotlin emission body — the public entry point is
-    /// `Generation::<JniGen>::write_kotlin`, which guarantees the registry
+    /// `JniGen::write_kotlin`, which guarantees the registry
     /// was resolved first.
     pub(crate) fn write_kotlin(
         &self,
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // Validation already ran once in `Registry::resolve` — this emitter
+        // Validation already ran once in `Registry::finish` — this emitter
         // is a pure consumer of the resolved, validated registry.
         let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
@@ -459,7 +463,7 @@ pub(crate) struct OwnedTypedHandle {
     pub key: TypeKey,
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Emit one Kotlin `enum class` file per `enum_class`-declared type.
     /// Variants render in declaration order using SCREAMING_SNAKE_CASE names; the
     /// constructor stores the Rust discriminant value (or the ordinal as
@@ -1050,7 +1054,7 @@ impl JniGen {
         // A decomposition is a sum's when it carries the synthesized selector.
         let is_sum = |d: &DeconId| {
             registry
-                .decon_plans
+                .decon_plans()
                 .get(d)
                 .is_some_and(|p| is_sum_leaves(&p.leaves))
         };
@@ -1095,7 +1099,7 @@ impl JniGen {
                     }
                 }
                 if let Some(plan) = registry
-                    .unfold_plans
+                    .unfold_plans()
                     .get(&item_fn.sig.ident)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
@@ -1113,7 +1117,7 @@ impl JniGen {
                         _ => {}
                     }
                 }
-                match registry.error_plans.get(&item_fn.sig.ident) {
+                match registry.error_plans().get(&item_fn.sig.ident) {
                     Some(ep) => {
                         let d = ep
                             .decon
@@ -1131,7 +1135,7 @@ impl JniGen {
         uses.into_iter()
             .filter_map(|u| {
                 // Every spec comes from the SAME memo the wrappers and the
-                // resolve-time trampoline read ([`JniGen::iface_spec`]) —
+                // resolve-time trampoline read ([`JniGenBuilder::iface_spec`]) —
                 // this site only classifies the extras: `is_error` ⇒ also
                 // emit the zero-alloc capture holder used by the generated
                 // wrappers' error channel; `fixed` carries a
@@ -1253,7 +1257,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let source = &registry.decon_plans[decon].source;
+        let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
@@ -1296,7 +1300,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let source = &registry.decon_plans[decon].source;
+        let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
@@ -1351,7 +1355,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let plan = &registry.decon_plans[decon];
+        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
@@ -1390,7 +1394,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let plan = &registry.decon_plans[decon];
+        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
@@ -1433,7 +1437,7 @@ impl JniGen {
     /// its variant-constructor argument by [`Self::sum_ctor_arg`].
     pub(crate) fn sum_reconstruct(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         source: &syn::Type,
         leaves: &[crate::api::core::unfold::UnfoldLeaf],
         params: &[crate::api::lang::jnigen::jni::IfaceParam],
@@ -1507,7 +1511,7 @@ impl JniGen {
     ///    verbatim.
     fn sum_ctor_arg(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         leaf: &crate::api::core::unfold::UnfoldLeaf,
         param: &crate::api::lang::jnigen::jni::IfaceParam,
         name: &str,
@@ -1691,15 +1695,15 @@ impl JniGen {
     }
 
     /// Emit the centralized Native-object Kotlin file under `output_dir`
-    /// (class name from [`JniGen::jni_native_class_name`]). Holds one
+    /// (class name from [`JniGenBuilder::jni_native_class_name`]). Holds one
     /// `external fun` per `#[prebindgen]` function — names mangled as methods
-    /// via [`JniGen::set_method_name_mangle`], parameter and return types rendered at
+    /// via [`JniGenBuilder::set_method_name_mangle`], parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
     /// symbols generated under the spec-escaped
     /// `Java_<package>_<jni_native_class>_<name>` (see `symbol`, #86). Every generated native
     /// call routes through this object, so its static initializer is the
     /// single point at which native-library loading can be triggered: when
-    /// [`JniGen::jni_native_init`] is set, its Kotlin statement(s) are emitted
+    /// [`JniGenBuilder::jni_native_init`] is set, its Kotlin statement(s) are emitted
     /// inside an `init { … }` block here (e.g. a reference to the consumer's
     /// own loader object). Unset, the holder stays free of any loading logic
     /// and the wrapper layer is responsible for loading.
@@ -1840,7 +1844,7 @@ impl JniGen {
     /// same `handles` slice to both methods.
     ///
     /// Each handle's `kotlin_fqn` must be registered via
-    /// [`JniGen::kotlin_fqn`] so the generator can map it back to its
+    /// [`JniGenBuilder::kotlin_fqn`] so the generator can map it back to its
     /// Rust type-key (which identifies the first param to drop in each
     /// promoted method's signature).
     pub(crate) fn write_typed_handles(

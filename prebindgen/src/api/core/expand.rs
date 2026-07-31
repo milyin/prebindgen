@@ -166,7 +166,7 @@ fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
 /// claimed `#[prebindgen]` fn set — the domain over which `.default()`
 /// constructors auto-apply.
 ///
-/// Runs inside `write_rust` after `scan_declared` and before `resolve`, so
+/// Runs inside the builder's scan, before any conversion is built, so
 /// leaf converters resolve through the normal rank machinery.
 pub fn apply<M>(
     registry: &mut Registry<M>,

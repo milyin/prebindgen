@@ -3,7 +3,7 @@
 //!
 //! This crate exists to prove the multi-source model: a binding crate's
 //! `build.rs` chains SEVERAL prebindgen source streams into one registry
-//! (`Registry::from_items(flat.items_all().chain(helpers.items_all()))`) and
+//! (`Flat::builder().items(flat.items_all()).items(helpers.items_all())`) and
 //! the generated Rust qualifies each function with its origin crate.
 //! covertest-kotlin additionally RENAMES this dependency
 //! (`cov_helpers = { package = "covertest-helpers", .. }`) and overrides the

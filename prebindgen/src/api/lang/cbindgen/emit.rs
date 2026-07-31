@@ -1,6 +1,7 @@
 use super::*;
+use crate::api::core::registry::Conversions;
 
-impl Cbindgen {
+impl CbindgenBuilder {
     /// Whether the generated layer hands `char*` data memory to C — a `String`
     /// return value, or a declared data struct that is produced as output and has
     /// a `String` field. When true, a `free_memory_function` must be declared.
@@ -75,7 +76,7 @@ impl Cbindgen {
     /// — a declared `enum_type` (a discriminant no variant has) and `bool`
     /// (anything but `0`/`1`) — are wrapped in [`::core::mem::MaybeUninit`] so
     /// they do too. That is what makes the mirror's tag the *only* thing
-    /// [`Cbindgen::in_tagged_union`] has to validate before `assume_init`.
+    /// [`CbindgenBuilder::in_tagged_union`] has to validate before `assume_init`.
     ///
     /// A `bool` reached through a nested `data_struct` payload is covered by
     /// the same [`bool_wire`] policy, which [`c_field_wire`] and the plain
@@ -163,7 +164,7 @@ impl Cbindgen {
 
     /// Wire type of a `data_struct` field: the free [`c_field_wire`] policy
     /// (`String` → `char *`, scalar → itself) plus a declared
-    /// [`Cbindgen::tagged_union`] field, which crosses **by value** as its
+    /// [`CbindgenBuilder::tagged_union`] field, which crosses **by value** as its
     /// `#[repr(C)]` mirror — the same way it crosses as a parameter or a
     /// return. `None` ⇒ the field type is unsupported in a data struct.
     ///
@@ -190,7 +191,7 @@ impl Cbindgen {
     /// A nested `data_struct` payload crosses BY VALUE, so the wire itself is
     /// not a pointer, but its mirror's own fields may be: the union's drop
     /// then has to reach through and release each of them (see
-    /// [`Cbindgen::payload_free_stmt`]). Without this a `String` or handle
+    /// [`CbindgenBuilder::payload_free_stmt`]). Without this a `String` or handle
     /// inside a struct payload would leak, silently, for exactly the shape
     /// zenoh-flat#30 needs.
     pub(super) fn payload_wire_owns(
@@ -244,7 +245,7 @@ impl Cbindgen {
 
     /// Whether one `data_struct` **field** hands owned memory to C: its own wire
     /// is a pointer (`String` → `char *`), or it is a declared
-    /// [`Cbindgen::tagged_union`] with an owning arm — which crosses by value,
+    /// [`CbindgenBuilder::tagged_union`] with an owning arm — which crosses by value,
     /// so the pointer it owns is one level further down.
     fn data_field_owns(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
         if matches!(self.data_field_wire(fty), Some(syn::Type::Ptr(_))) {
@@ -257,7 +258,7 @@ impl Cbindgen {
     /// produced at all, and some arm's payload owns memory.
     ///
     /// This is the emission condition of that drop
-    /// ([`Cbindgen::prereq_tagged_unions`]) *and* the test for whether a
+    /// ([`CbindgenBuilder::prereq_tagged_unions`]) *and* the test for whether a
     /// containing struct has to call it, so a union nested inside a payload
     /// cannot be freed through a symbol that was never emitted. `false` for
     /// anything that is not a declared tagged union.
@@ -298,7 +299,7 @@ impl Cbindgen {
     /// struct.
     pub(super) fn struct_fields(
         &self,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         ty: &syn::Type,
     ) -> Option<Vec<(syn::Ident, syn::Type)>> {
         let ident = type_path_tail(ty)?;
@@ -320,9 +321,9 @@ impl Cbindgen {
     }
 
     /// Wire type of a `repr_c_struct` field in the generated **visible** mirror: a
-    /// scalar passes through; a declared [`Cbindgen::enum_type`] becomes its C enum;
+    /// scalar passes through; a declared [`CbindgenBuilder::enum_type`] becomes its C enum;
     /// an opaque pointer `Option<Box<T>>` / `Box<T>` (with `T` a declared
-    /// [`Cbindgen::opaque_ptr`]) becomes `*mut t_t`. The whole-struct `Transmute`
+    /// [`CbindgenBuilder::opaque_ptr`]) becomes `*mut t_t`. The whole-struct `Transmute`
     /// (size/align-equal, asserted) then reinterprets each source field's bits into
     /// this wire. `None` ⇒ the field type is unsupported in a `repr_c_struct`.
     ///
