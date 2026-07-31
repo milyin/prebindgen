@@ -35,11 +35,11 @@
 //! is the adapter's choice, and the registry records it so the emitter can call
 //! it by name and the destination side can be written to match.
 //!
-//! Conversions are **directional**: [`Registry::input_types`] and
-//! [`Registry::output_types`] are separate. `&str` inbound is a `jstring` to decode,
-//! outbound a `jstring` to allocate, and one direction may be convertible while
-//! the other is not. A callback flips it — `impl Fn(Sample)` is an *input* whose
-//! argument crosses *outbound*.
+//! Conversions are **directional**, which is why [`Direction`] is half of a
+//! [`Crossing`] rather than a name prefix on two tables. `&str` inbound is a
+//! `jstring` to decode, outbound a `jstring` to allocate, and one direction may
+//! be convertible while the other is not. A callback flips it — `impl
+//! Fn(Sample)` is an *input* whose argument crosses *outbound*.
 //!
 //! # What the registry does
 //!

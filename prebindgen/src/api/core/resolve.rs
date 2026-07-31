@@ -95,7 +95,7 @@ fn required_set<M>(registry: &Registry<M>) -> HashSet<(Direction, TypeKey)> {
     while let Some((dir, key)) = queue.pop_front() {
         // Subs travel in the same direction as the parent — they are the inner
         // converters this body delegates to. An unresolved cell has none to give,
-        // which is why this cannot run before the fixed-point loop.
+        // which is why this cannot run before `supply` has filled them.
         let Some(entry) = registry
             .type_table(dir)
             .get(&key)

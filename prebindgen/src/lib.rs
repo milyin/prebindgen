@@ -246,15 +246,14 @@ macro_rules! ident {
 ///
 /// # The plug-in point
 ///
-/// Implement the [`Prebindgen`](core::Prebindgen) trait once per destination
-/// language. The trait teaches the pipeline two things:
+/// Write one generator per destination language. It does two things:
 ///
-/// * **How the language represents Rust types on the wire** — the
-///   `on_input_type_rank_0..3` / `on_output_type_rank_0..3` methods return a
+/// * **Says how the language represents Rust types on the wire** — it builds a
 ///   [`ConverterImpl`](core::ConverterImpl) (a generated converter fn plus its
-///   wire type) for each required type.
-/// * **What wrapper code to emit per item** — `on_function` / `on_struct` /
-///   `on_enum` / `on_const`.
+///   wire type) for each crossing the registry hands it, and gives them all
+///   back through [`Registry::supply`](core::Registry::supply).
+/// * **Emits the wrapper code per item** — `on_function` / `on_struct` /
+///   `on_enum` / `on_const` on the [`Prebindgen`](core::Prebindgen) trait.
 ///
 /// Everything language-specific that must travel through the pipeline rides in
 /// the back-end's chosen [`Metadata`](core::Prebindgen::Metadata) type (a JNI
@@ -268,10 +267,14 @@ macro_rules! ident {
 /// 1. [`Flat::builder`](core::Flat::builder) parses the
 ///    `(syn::Item, SourceLocation)` stream (typically [`Source::items_all`])
 ///    into the model, and [`Registry::new`](core::Registry::new) projects it.
-/// 2. [`Registry::resolve`](core::Registry::resolve) resolves every required
-///    type via your back-end, yielding a [`Generation`](core::Generation);
-///    its `write_rust` (and adapter-specific `write_*`) methods emit the
-///    artifacts.
+/// 2. Your generator states its binding into the registry, then
+///    [`Registry::crossings`](core::Registry::crossings) hands over every
+///    crossing needing a conversion — inner types first, so each one can be
+///    built from those already done. [`Registry::supply`](core::Registry::supply)
+///    takes them back and names any gap, and
+///    [`Registry::finish`](core::Registry::finish) yields a
+///    [`Generation`](core::Generation) whose `write_rust` (and generator-specific
+///    `write_*`) methods emit the artifacts.
 /// 3. The back-end produces any secondary artifacts (C headers, Kotlin sources,
 ///    …) by walking the resolved [`Registry`](core::Registry).
 ///
