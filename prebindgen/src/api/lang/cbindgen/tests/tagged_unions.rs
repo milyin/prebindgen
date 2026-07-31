@@ -39,7 +39,7 @@ fn tagged_union_mirror_and_converters() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
@@ -47,7 +47,7 @@ fn tagged_union_mirror_and_converters() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -133,14 +133,14 @@ fn owning_payload_gets_typed_drop() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -189,13 +189,13 @@ fn plain_data_union_has_no_drop() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(e), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -223,7 +223,7 @@ fn tagged_union_as_data_struct_field() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Struct(st), loc.clone()),
@@ -231,7 +231,7 @@ fn tagged_union_as_data_struct_field() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -292,7 +292,7 @@ fn a_union_nested_in_a_struct_payload_is_freed() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Struct(drawing), loc.clone()),
@@ -302,7 +302,7 @@ fn a_union_nested_in_a_struct_payload_is_freed() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -345,13 +345,13 @@ fn plain_data_struct_decode_stays_infallible() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(f), loc.clone()),
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -381,13 +381,13 @@ fn declarators_do_not_accept_each_others_shape() {
 
     // Payload enum handed to `.enum_type()`.
     let payload_as_enum = || {
-        let registry = Registry::<()>::from_items(declare_referenced([
+        let registry = crate::api::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(shape_enum()), loc.clone()),
             (syn::Item::Enum(operation_enum()), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .free_memory_function("example_free")
             .mangle_type_name(|base| format!("{base}_t"))
@@ -404,12 +404,12 @@ fn declarators_do_not_accept_each_others_shape() {
         }
     );
     let unit_as_union = || {
-        let registry = Registry::<()>::from_items(declare_referenced([
+        let registry = crate::api::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(operation_enum()), loc.clone()),
             (syn::Item::Fn(unit_fn.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .mangle_type_name(|base| format!("{base}_t"))
             .tagged_union(syn::parse_quote!(Operation))
@@ -442,12 +442,12 @@ fn each_payload_rejection_names_its_own_reason() {
                 Many(Vec<u8>),
             }
         );
-        let registry = Registry::<()>::from_items(declare_referenced([
+        let registry = crate::api::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(e), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .free_memory_function("example_free")
             .mangle_type_name(|base| format!("{base}_t"))
@@ -492,12 +492,12 @@ fn unsupported_payload_is_a_generation_error() {
         }
     );
     let boom = || {
-        let registry = Registry::<()>::from_items(declare_referenced([
+        let registry = crate::api::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(e.clone()), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
         .expect("index items");
-        let cbindgen = Cbindgen::new()
+        let cbindgen = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(example_flat))
             .mangle_type_name(|base| format!("{base}_t"))
             .tagged_union(syn::parse_quote!(Weird))
@@ -533,14 +533,14 @@ fn null_opaque_payload_is_reported_not_materialised() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(e), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
         (syn::Item::Fn(take), loc.clone()),
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -633,9 +633,10 @@ fn payload_wires_come_from_the_converter_destination() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<()>::from_items(declare_referenced(items)).expect("index items");
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -726,9 +727,10 @@ fn bool_payload_is_normalised_not_materialised() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<()>::from_items(declare_referenced(items)).expect("index items");
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))

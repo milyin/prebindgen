@@ -17,8 +17,8 @@ fn bounded_duration_option_is_one_scalar_with_named_niche() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
-    let cbindgen = Cbindgen::new()
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
             crate::convert!(Duration)
@@ -75,8 +75,8 @@ fn bounded_float_option_uses_a_finite_bit_exact_niche() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
-    let cbindgen = Cbindgen::new()
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
             crate::convert!(Ratio)
@@ -121,8 +121,8 @@ fn custom_conversion_without_domain_stays_infallible() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
-    let cbindgen = Cbindgen::new()
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
             crate::convert!(Ratio)
@@ -151,8 +151,9 @@ fn custom_conversion_without_domain_stays_infallible() {
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {
-    let cbindgen = Cbindgen::new();
-    let registry: Registry<()> = Registry::empty();
+    let cbindgen = CbindgenBuilder::new();
+    let registry: RegistryBuilder<()> =
+        crate::api::test_util::reg_from_items(Vec::new()).expect("empty");
     let src = write(cbindgen, registry, "empty");
     assert!(src.trim().is_empty(), "expected empty output, got:\n{src}");
 }
@@ -169,13 +170,13 @@ fn keyexpr_try_from_lowering() {
         }
     );
 
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))
@@ -241,11 +242,13 @@ fn opaque_error_lowering() {
         }
     );
 
-    let registry =
-        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
-            .expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))

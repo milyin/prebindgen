@@ -34,23 +34,27 @@
 #   * helper delegation — `jnigen/jni/classify.rs` is a whole classifier with
 #     zero watched sites;
 #   * syn enums outside WATCHED: Item, Fields, FnArg, ReturnType,
-#     GenericArgument, Pat, ...;
-#   * `types_util::match_pattern` unification against `parse_quote!(_)`
-#     patterns, which adds a shape rule with no watched site at all.
+#     GenericArgument, Pat, ...
+#
+# One listed gap is closed rather than still open: `types_util::match_pattern`
+# unified against `parse_quote!(_)` patterns, adding shape rules with no watched
+# site. It is deleted — the wildcard tables it served held a single entry,
+# `Result<_, _>`, which the model already names `TypeKind::Fallible`.
 #
 # A check that silently under-reports is worse than no check, which is why the
 # gaps are listed here rather than implied away.
 
 4	api/core/expand.rs
-11	api/core/registry.rs
-40	api/core/types_util.rs
+2	api/core/registry/scan.rs
+9	api/core/registry/walk.rs
+14	api/core/types_util.rs
 16	api/core/unfold.rs
 8	api/lang/cbindgen/builder.rs
 1	api/lang/cbindgen/convert.rs
 5	api/lang/cbindgen/emit.rs
 5	api/lang/cbindgen/mod.rs
 6	api/lang/cbindgen/trait_impl.rs
-13	api/lang/jnigen/jni/builder.rs
+4	api/lang/jnigen/jni/builder.rs
 1	api/lang/jnigen/jni/emit/callback.rs
 4	api/lang/jnigen/jni/emit/convert.rs
 2	api/lang/jnigen/jni/emit/delivery.rs
@@ -70,4 +74,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 202
+# total: 167

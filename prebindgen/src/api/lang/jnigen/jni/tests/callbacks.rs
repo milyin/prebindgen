@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::core::registry::Conversions;
 
 fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     use crate::SourceLocation;
@@ -33,9 +34,9 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -57,7 +58,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
 
@@ -219,9 +220,9 @@ fn callback_root_identity_moved_after_nested_borrow() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -245,7 +246,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
     let dir = unique_test_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -315,9 +316,9 @@ fn callback_double_option_unwrap_pipeline() {
         loc.clone(),
     ));
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("query")
@@ -364,7 +365,7 @@ fn callback_double_option_unwrap_pipeline() {
     let dir = unique_test_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -450,7 +451,7 @@ fn callback_double_option_unwrap_pipeline() {
 // ────────────────────────────────────────────────────────────────────────
 // Spec memo (issue #107): every consumer — resolve-time trampoline,
 // per-function plan, declaration emitter — reads ONE derivation per
-// interface identity through `JniGen::iface_spec`.
+// interface identity through `JniGenBuilder::iface_spec`.
 // ────────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -484,8 +485,8 @@ fn iface_spec_memo_shares_one_derivation() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -498,8 +499,8 @@ fn iface_spec_memo_shares_one_derivation() {
                 .field_self()
                 .field(crate::fun!(z_thing_name)),
         );
-    let gen = registry.resolve(jni).expect("resolve");
-    let (ext, registry) = (gen.adapter(), gen.registry());
+    let gen = jni.build_with(registry).expect("resolve");
+    let (ext, registry) = (gen.declarations(), gen.registry());
 
     // Same key twice ⇒ the same allocation (resolve already populated the
     // memo through the trampoline — a hit also exercises the debug-build
@@ -516,7 +517,7 @@ fn iface_spec_memo_shares_one_derivation() {
     // allocation — the wrapper surface and the interface declaration cannot
     // diverge from the fold upcall's descriptor.
     let plan = registry
-        .unfold_plans
+        .unfold_plans()
         .get(&syn::parse_str::<syn::Ident>("z_things_all").unwrap())
         .expect("fold plan");
     let via_plan = folder_iface_for_plan(ext, registry, plan).expect("folder spec");
@@ -557,13 +558,13 @@ fn fn_plan_memo_shares_one_derivation() {
         loc.clone(),
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
     // resolve runs validation, which builds and stores every function's plan.
-    let gen = registry.resolve(jni).expect("resolve");
-    let (ext, registry) = (gen.adapter(), gen.registry());
+    let gen = jni.build_with(registry).expect("resolve");
+    let (ext, registry) = (gen.declarations(), gen.registry());
     let f = &registry
         .flat()
         .function("z_do_thing")

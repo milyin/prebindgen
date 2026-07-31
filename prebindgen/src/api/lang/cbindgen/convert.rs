@@ -1,6 +1,7 @@
 use super::*;
+use crate::api::core::registry::Conversions;
 
-impl Cbindgen {
+impl CbindgenBuilder {
     pub(crate) fn prereq_domain_constants(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items = Vec::new();
         for decl in &self.convert_decls {
@@ -51,7 +52,7 @@ impl Cbindgen {
     pub(crate) fn in_custom(
         &self,
         ty: &syn::Type,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
@@ -118,7 +119,7 @@ impl Cbindgen {
     pub(crate) fn out_custom(
         &self,
         ty: &syn::Type,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
@@ -187,7 +188,7 @@ impl Cbindgen {
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty(&decl.key.to_type());
         match spec {
@@ -231,7 +232,7 @@ impl Cbindgen {
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty(&decl.key.to_type());
         match spec {
@@ -274,15 +275,15 @@ impl Cbindgen {
     fn c_domain_niches(
         &self,
         decl: &ConvertDecl,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         direction: Direction,
     ) -> Niches {
         let Some(domain) = &decl.domain else {
             return Niches::empty();
         };
         let demand = registry
-            .type_table(direction)
-            .keys()
+            .crossing_keys(direction)
+            .iter()
             .map(|candidate| option_depth(candidate, &decl.key))
             .max()
             .unwrap_or(0);
@@ -310,7 +311,7 @@ impl Cbindgen {
         )
     }
 
-    fn conversion_fn_path(&self, registry: &Registry<()>, ident: &syn::Ident) -> syn::Path {
+    fn conversion_fn_path(&self, registry: &impl Conversions<()>, ident: &syn::Ident) -> syn::Path {
         let Some(mut module) = registry.origin_module(ident) else {
             return self.src_fn(ident);
         };

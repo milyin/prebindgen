@@ -138,7 +138,7 @@ public sealed interface Marker {
  * single-payload tuple variant, a multi-field named variant, and a tuple
  * variant whose payloads include a declared `enum_class`. The binding maps it
  * to a Kotlin `sealed interface` with the variants nested inside
- * (`lang::JniGen` `sealed_class!`).
+ * (`lang::JniGenBuilder` `sealed_class!`).
  *
  * JVM-side surface for the native Rust `Reading` sum: exactly one alternative is live.
  */

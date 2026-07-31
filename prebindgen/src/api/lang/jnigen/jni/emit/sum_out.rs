@@ -17,6 +17,7 @@
 //! parent's `fromParts`, a return's ride the hoisted builder singleton.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Leaf name of the synthesized selector. Distinct from every group slot by
 /// construction: a group slot always contains the `_` that separates its
@@ -40,7 +41,7 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 /// `variant!(V).name(...)` rename carries through to the builder's parameter
 /// names too.
 pub(crate) fn synth_sum_leaves(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     sum_cfg: &SumConfig,
     item_enum: &syn::ItemEnum,
 ) -> Vec<crate::api::core::unfold::UnfoldLeaf> {
@@ -104,7 +105,7 @@ pub(crate) struct Slot {
 }
 
 pub(crate) fn leaf_slot(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> Slot {
     use crate::api::core::unfold::LeafSource;
@@ -161,8 +162,8 @@ pub(crate) fn is_sum_leaves(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> 
 /// is that a leaf here is not an independent expression — its slot exists in
 /// every arm and only one arm computes it.
 pub(crate) fn encode_sum_group(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &JniGenBuilder,
+    registry: &impl Conversions<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
@@ -320,7 +321,7 @@ pub(crate) fn encode_sum_group(
 /// payload and a struct field of the same type reach their converter the same
 /// way.
 fn encode_group_leaf(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
     obj_ident: &syn::Ident,
     prim: bool,

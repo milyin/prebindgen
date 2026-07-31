@@ -1,12 +1,12 @@
-//! Structural converter-selection policy for [`JniGen`].
+//! Structural converter-selection policy for [`JniGenBuilder`].
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Clone a single-type-arg generic (`Option<X>` / `Vec<X>` / any `Path<X, …>`)
 /// replacing its last segment's first type argument with `repl` — yielding the
-/// canonical wildcard pattern (`Option<_>`) the rank-1 handlers `pat_match`,
-/// with the type's own path/qualification preserved exactly as the enumerator
-/// would have produced it.
+/// canonical shape (`Option<_>`) the built-in wrapper handlers key on, with the
+/// type's own path/qualification preserved exactly.
 fn with_first_arg(ty: &syn::Type, repl: syn::Type) -> syn::Type {
     let mut out = ty.clone();
     if let syn::Type::Path(tp) = &mut out {
@@ -33,20 +33,16 @@ fn ref_wildcard(r: &syn::TypeReference) -> syn::Type {
     syn::Type::Reference(pr)
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Select the input converter for `ty`: terminals, user wrappers, then
     /// built-in structural wrappers.
     pub(crate) fn select_input_type(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.input_terminal(ty, registry) {
-            return Some(c);
-        }
-        // 2. Higher-arity user-registered input patterns (any depth).
-        if let Some(c) = self.match_user_input(ty, registry) {
             return Some(c);
         }
         // 3. Built-in wrapper shapes. `Option<&T>` tries the DEEP `Option<&_>`
@@ -110,17 +106,20 @@ impl JniGen {
     pub(crate) fn select_output_type(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.output_terminal(ty, registry) {
             return Some(c);
         }
-        // 2. User-registered patterns, specificity-ordered — the built-in
-        //    `Result<_, _>` peel and any consumer override (`Result<_,
-        //    ConcreteErr>` wins over the catch-all). Any depth.
-        if let Some(c) = self.match_user_output(ty, registry) {
-            return Some(c);
+        // 2. `Result<T, E>`: succeeds as `T`, routes `E` to the error sink.
+        //    Read off the model, which calls this shape `TypeKind::Fallible`.
+        //    `result_parts` covers a `Result` the adapter composed itself, which
+        //    the frontend never read.
+        if let Some((ok, err)) = fallible_parts(ty, registry) {
+            if let Some(c) = self.result_peel(ty, &ok, &err, registry) {
+                return Some(c);
+            }
         }
         // 3. Built-in wrapper shapes (`Option<_>`, `Vec<_>`, `&T` borrow). An
         //    `Option<&Handle>` resolves via the shallow `Option<_>` whose inner
@@ -159,4 +158,27 @@ impl JniGen {
         }
         None
     }
+}
+
+/// The `Ok`/`Err` of a `Result`, preferring the frontend's reading.
+///
+/// The model classifies a `Result` as [`TypeKind::Fallible`]; the syntactic
+/// fallback is for a `Result` the adapter composed itself, which no captured
+/// item spells and the frontend therefore never read.
+///
+/// **Measured: the fallback never fires in-tree** — zero occurrences across
+/// covertest-kotlin and perftest-kotlin, because #246 indexes a binding-local
+/// fn's types, so even a `sig!((..) -> Result<Summary, String>)` has a reading.
+/// It is kept rather than made a hard error because an out-of-tree consumer may
+/// compose a `Result` the model never sees, and it costs nothing: `result_parts`
+/// already exists and already has six other callers.
+fn fallible_parts(
+    ty: &syn::Type,
+    registry: &impl Conversions<KotlinMeta>,
+) -> Option<(syn::Type, syn::Type)> {
+    use crate::api::core::flat::TypeKind;
+    if let Some(TypeKind::Fallible { ok, err }) = registry.flat().type_ref(ty).map(|t| &t.kind) {
+        return Some((ok.origin.syntax.clone(), err.origin.syntax.clone()));
+    }
+    crate::api::core::types_util::result_parts(ty)
 }
