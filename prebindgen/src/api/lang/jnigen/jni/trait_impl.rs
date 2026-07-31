@@ -929,14 +929,10 @@ impl Prebindgen for JniGen {
             .functions(self.declared_functions())
             .accessors(self.accessor_functions())
             .method_receivers(self.method_receivers())
-            .ignored_functions(self.ignored_functions())
-            .ignored_name_predicates(self.ignored_name_predicates())
             .helper_functions(self.helper_functions())
             .consts(self.declared_consts())
-            .ignored_consts(self.ignored_consts())
             .required_output_types(self.required_output_types())
             .types(self.declared_types())
-            .ignored_types(self.ignored_types())
             .boundary_only_types(self.boundary_only_types())
     }
 
@@ -1136,6 +1132,12 @@ impl Prebindgen for JniGen {
     /// member would silently emit a method that ignores `this`, and a
     /// wrong-return `.constructor()` a factory of the wrong type.
     fn validate(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+        // Report what this binding left unclaimed. Here because it is the
+        // earliest generator-owned hook that sees the model, and it runs
+        // exactly where the registry used to print these itself. Moves into
+        // `JniGen::generate` once that exists (prebindgen#251 phase E).
+        crate::core::warn_unclaimed(registry.flat(), &self.claimed());
+
         for (key, members) in &self.class_members {
             for m in members {
                 // A registry-absent fn already hard-errored in the scan.
@@ -2241,6 +2243,25 @@ impl JniGen {
     /// Types acknowledged-but-undeclared via [`JniGen::ignore`].
     pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()
+    }
+    /// What this binding claimed, for the unclaimed-item report. A helper is
+    /// claimed even though it is never emitted, and a boundary-only type even
+    /// though it never crosses whole: both are deliberate, so neither is a
+    /// skip worth reporting.
+    pub(crate) fn claimed(&self) -> crate::core::Claimed {
+        let mut functions = self.declared_functions();
+        functions.extend(self.helper_functions());
+        let mut types = self.declared_types();
+        types.extend(self.boundary_only_types());
+        crate::core::Claimed {
+            functions,
+            types,
+            consts: self.declared_consts(),
+            ignored_functions: self.ignored_functions(),
+            ignored_types: self.ignored_types(),
+            ignored_consts: self.ignored_consts(),
+            ignored_name_predicates: self.ignored_name_predicates(),
+        }
     }
     /// **Rust-side-only** types: boundary decls (`expand_param!` /
     /// `expand_return!`) whose type has no class declaration. They never

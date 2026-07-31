@@ -1446,10 +1446,32 @@ impl Prebindgen for Cbindgen {
     fn declarations(&self) -> crate::core::Declarations {
         crate::core::Declarations::new()
             .functions(self.declared_functions())
-            .ignored_functions(self.ignored_functions())
             .helper_functions(self.helper_functions())
             .types(self.declared_types())
-            .ignored_types(self.ignored_types())
+    }
+
+    /// Report what this binding left unclaimed. Here because it is the
+    /// earliest generator-owned hook that sees the model, and it runs exactly
+    /// where the registry used to print these itself. Moves into
+    /// `Cbindgen::generate` once that exists (prebindgen#251 phase E).
+    ///
+    /// `consts: None` — cbindgen has no const declaration mechanism, so every
+    /// captured const is re-emitted verbatim and none is ever a skip.
+    fn validate(&self, registry: &Registry<()>) -> Result<(), String> {
+        let mut functions = self.declared_functions();
+        functions.extend(self.helper_functions());
+        crate::core::warn_unclaimed(
+            registry.flat(),
+            &crate::core::Claimed {
+                functions,
+                types: self.declared_types(),
+                consts: None,
+                ignored_functions: self.ignored_functions(),
+                ignored_types: self.ignored_types(),
+                ..Default::default()
+            },
+        );
+        Ok(())
     }
 
     type Metadata = ();

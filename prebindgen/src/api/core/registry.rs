@@ -524,12 +524,6 @@ pub struct DuplicateNameError {
 #[derive(Debug)]
 pub enum ScanError {
     DuplicateName(Box<DuplicateNameError>),
-    ConflictingFunctionIntent {
-        name: syn::Ident,
-    },
-    ConflictingTypeIntent {
-        key: TypeKey,
-    },
     /// Items the flat language cannot express, all of them at once.
     ///
     /// The message for each comes from
@@ -584,12 +578,6 @@ impl fmt::Display for ScanError {
                     in_crate(&e.second_crate),
                     e.second
                 )
-            }
-            ScanError::ConflictingFunctionIntent { name } => {
-                write!(f, "function `{}` cannot be both declared and ignored", name)
-            }
-            ScanError::ConflictingTypeIntent { key } => {
-                write!(f, "type `{}` cannot be both declared and ignored", key)
             }
             ScanError::NotExpressible { entries } => {
                 write!(
@@ -717,29 +705,24 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
 #[derive(Default)]
 pub struct Declarations {
     pub(crate) functions: HashSet<syn::Ident>,
-    pub(crate) ignored_functions: HashSet<syn::Ident>,
-    /// Bulk-ignore predicates over item names — every matching *undeclared*
-    /// item (fn, struct/enum, const) is an acknowledged skip (no warning).
-    /// Kind-agnostic: prebindgen names live in one flat namespace. A
-    /// declared item matching a predicate is unaffected: declaration wins.
-    /// See [`Prebindgen::ignored_name_predicates`].
-    pub(crate) ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
     /// Signature-scanned but not emitted — see [`Prebindgen::helper_functions`].
     pub(crate) helper_functions: HashSet<syn::Ident>,
     pub(crate) accessors: HashSet<syn::Ident>,
     pub(crate) method_receivers: HashMap<syn::Ident, TypeKey>,
     pub(crate) types: HashSet<TypeKey>,
-    pub(crate) ignored_types: HashSet<TypeKey>,
     /// Types converted exclusively through the adapter's plans (built from
-    /// ingredients / decomposed into fields); acknowledged for warning
-    /// purposes and un-required after plans — see
+    /// ingredients / decomposed into fields); un-required after plans — see
     /// [`Prebindgen::boundary_only_types`].
     pub(crate) boundary_only_types: HashSet<TypeKey>,
-    /// `None` = the adapter has no const declaration mechanism (all consts
-    /// re-emitted verbatim, no scan, no warnings) — see
-    /// [`Prebindgen::declared_consts`].
+    /// Consts to scan and emit, or `None` when the adapter has no const
+    /// declaration mechanism — then every captured const is re-emitted
+    /// verbatim (see the const gate in [`crate::api::core::write`]).
+    ///
+    /// The two are identical for the *crossing set* — neither scans anything —
+    /// so this would be a plain `HashSet` if scanning were all it drove. It is
+    /// emission that needs the distinction, which is why the sentinel outlives
+    /// the skip warnings it also used to gate.
     pub(crate) consts: Option<HashSet<syn::Ident>>,
-    pub(crate) ignored_consts: HashSet<syn::Ident>,
     /// Adapter-required extra output types (no `#[prebindgen]` item to
     /// scan — e.g. expression-constant value types); see
     /// [`Prebindgen::required_output_types`].
@@ -755,20 +738,6 @@ impl Declarations {
     /// Functions to emit.
     pub fn functions(mut self, v: HashSet<syn::Ident>) -> Self {
         self.functions = v;
-        self
-    }
-    /// Functions deliberately not emitted — acknowledged, so no warning.
-    pub fn ignored_functions(mut self, v: HashSet<syn::Ident>) -> Self {
-        self.ignored_functions = v;
-        self
-    }
-    /// Bulk-ignore predicates over item names, kind-agnostic. A declared item
-    /// matching one is unaffected: declaration wins.
-    pub fn ignored_name_predicates(
-        mut self,
-        v: Vec<crate::api::core::prebindgen::NamePredicate>,
-    ) -> Self {
-        self.ignored_name_predicates = v;
         self
     }
     /// Signature-scanned but never emitted.
@@ -791,26 +760,16 @@ impl Declarations {
         self.types = v;
         self
     }
-    /// Types deliberately not emitted.
-    pub fn ignored_types(mut self, v: HashSet<TypeKey>) -> Self {
-        self.ignored_types = v;
-        self
-    }
-    /// Types that cross only through a plan, never whole. Acknowledged for
-    /// warnings and un-required once plans are applied.
+    /// Types that cross only through a plan, never whole — un-required once
+    /// plans are applied.
     pub fn boundary_only_types(mut self, v: HashSet<TypeKey>) -> Self {
         self.boundary_only_types = v;
         self
     }
     /// Consts to emit. `None` = this binding has no const mechanism, so every
-    /// const is re-emitted verbatim with no scan and no warnings.
+    /// captured const is re-emitted verbatim.
     pub fn consts(mut self, v: Option<HashSet<syn::Ident>>) -> Self {
         self.consts = v;
-        self
-    }
-    /// Consts deliberately not emitted.
-    pub fn ignored_consts(mut self, v: HashSet<syn::Ident>) -> Self {
-        self.ignored_consts = v;
         self
     }
     /// Output types with no `#[prebindgen]` item behind them — an expression
@@ -818,30 +777,6 @@ impl Declarations {
     pub fn required_output_types(mut self, v: Vec<syn::Type>) -> Self {
         self.required_output_types = v;
         self
-    }
-
-    /// Reject a declaration that says two things at once.
-    fn check(self) -> Result<Self, ScanError> {
-        let declared = self;
-
-        if let Some(name) = declared
-            .functions
-            .intersection(&declared.ignored_functions)
-            .cloned()
-            .min_by_key(|ident| ident.to_string())
-        {
-            return Err(ScanError::ConflictingFunctionIntent { name });
-        }
-        if let Some(key) = declared
-            .types
-            .intersection(&declared.ignored_types)
-            .cloned()
-            .min_by_key(|key| key.as_str().to_owned())
-        {
-            return Err(ScanError::ConflictingTypeIntent { key });
-        }
-
-        Ok(declared)
     }
 }
 
@@ -1040,34 +975,14 @@ impl<M> Registry<M> {
         })
     }
 
-    /// Every **struct or enum** name — either enum shape, never an alias.
-    ///
-    /// Named for its population rather than as the iterator form of
-    /// [`Self::declares_type`], which it is **not**: that predicate counts every
-    /// declared type, aliases included. This one feeds *"skipping undeclared
-    /// `#[prebindgen]` struct/enum"*, which names a kind an alias is not — so the
-    /// two answer differently on purpose, and the names now say so.
-    fn struct_enum_idents(&self) -> impl Iterator<Item = &syn::Ident> {
-        use crate::api::core::flat::Type;
-        self.flat.types().filter_map(|t| match t {
-            Type::Struct(_) | Type::Variant(_) | Type::Enum(_) => Some(t.name()),
-            Type::Extern(_) => None,
-        })
-    }
-
     /// Whether the source declares a type under this name — **including an
     /// alias**.
     ///
-    /// The question both type-diagnostic sites ask, shared so they cannot drift.
     /// An alias counts because `#[prebindgen] pub type Handle = ..` *is* a
     /// declaration of that name: it can be declared bare by an adapter (landing
-    /// in the no-indexed-body branch above, which is what
+    /// in the no-indexed-body branch below, which is what
     /// `ptr_class(ZKeyExpr<'static>)` relies on), so a diagnostic that says
     /// "no such captured item" would be false.
-    ///
-    /// Distinct from [`Self::struct_enum_idents`], which excludes aliases
-    /// because it feeds a *"skipping undeclared struct/enum"* warning — a
-    /// different question, about what an adapter left unclaimed.
     fn declares_type(&self, ident: &syn::Ident) -> bool {
         self.flat.declared_type(ident).is_some()
     }
@@ -1131,7 +1046,7 @@ impl<M> Registry<M> {
     where
         E: Prebindgen<Metadata = M>,
     {
-        let declared = ext.declarations().check()?;
+        let declared = ext.declarations();
         self.scan_declared_items(&declared)
     }
 
@@ -1148,7 +1063,6 @@ impl<M> Registry<M> {
         for key in declared
             .types
             .iter()
-            .chain(declared.ignored_types.iter())
             .chain(declared.boundary_only_types.iter())
         {
             if !probed.insert(key) {
@@ -1191,8 +1105,7 @@ impl<M> Registry<M> {
 
         // Declared-but-missing items are collected across all three loops and
         // reported together as one hard error (see
-        // [`ScanError::DeclaredNotFound`]); stale *ignore* entries below only
-        // warn.
+        // [`ScanError::DeclaredNotFound`]).
         let mut missing: Vec<(&'static str, String)> = Vec::new();
 
         // Scan declared functions.
@@ -1201,15 +1114,6 @@ impl<M> Registry<M> {
                 self.scan_fn_signature(&item_fn)?;
             } else {
                 missing.push(("function", ident.to_string()));
-            }
-        }
-
-        for ident in &declared.ignored_functions {
-            if self.flat.function(&ident).is_none() {
-                println!(
-                    "cargo:warning=prebindgen: ignored function `{}` not found among #[prebindgen] items",
-                    ident
-                );
             }
         }
 
@@ -1223,26 +1127,13 @@ impl<M> Registry<M> {
             }
         }
 
-        // Scan declared consts (only when the adapter has a const
-        // declaration mechanism): a const is a nullary source of its type,
-        // so the type is required in the output direction only.
-        if let Some(decl_consts) = &declared.consts {
-            for ident in decl_consts {
-                if let Some(item_const) =
-                    self.flat.constant(&ident).map(|c| c.origin.syntax.clone())
-                {
-                    self.ensure_entry(Direction::Output, &item_const.ty, true);
-                } else {
-                    missing.push(("constant", ident.to_string()));
-                }
-            }
-            for ident in &declared.ignored_consts {
-                if self.flat.constant(&ident).is_none() {
-                    println!(
-                        "cargo:warning=prebindgen: ignored const `{}` not found among #[prebindgen] items",
-                        ident
-                    );
-                }
+        // Scan declared consts: a const is a nullary source of its type, so
+        // the type is required in the output direction only.
+        for ident in declared.consts.iter().flatten() {
+            if let Some(item_const) = self.flat.constant(&ident).map(|c| c.origin.syntax.clone()) {
+                self.ensure_entry(Direction::Output, &item_const.ty, true);
+            } else {
+                missing.push(("constant", ident.to_string()));
             }
         }
 
@@ -1285,88 +1176,6 @@ impl<M> Registry<M> {
                 // tries to produce a converter for it.
                 self.ensure_entry(Direction::Input, &ty, true);
                 self.ensure_entry(Direction::Output, &ty, true);
-            }
-        }
-
-        for key in &declared.ignored_types {
-            let ty = key.to_type();
-            let matched = bare_path_ident(&ty).is_some_and(|ident| self.declares_type(&ident));
-            if !matched {
-                println!(
-                    "cargo:warning=prebindgen: ignored type `{}` not found among #[prebindgen] items",
-                    key.as_str()
-                );
-            }
-        }
-
-        // Warn about indexed items that the adapter never claimed. An
-        // ignore *predicate* acknowledges every matching item in bulk —
-        // kind-agnostic, since prebindgen names live in one flat namespace;
-        // a predicate matching nothing is silent by design (it is a filter,
-        // not a claim — match counts vary across feature configurations).
-        let pred_ignored = |name: &str| {
-            !declared.ignored_name_predicates.is_empty()
-                && declared.ignored_name_predicates.iter().any(|p| p(name))
-        };
-        let mut skipped_fns: Vec<String> = self
-            .flat
-            .functions()
-            .map(|f| &f.name)
-            .filter(|k| {
-                !declared.functions.contains(*k)
-                    && !declared.ignored_functions.contains(*k)
-                    && !declared.helper_functions.contains(*k)
-                    && !pred_ignored(&k.to_string())
-            })
-            .map(|k| k.to_string())
-            .collect();
-        skipped_fns.sort();
-        for name in &skipped_fns {
-            println!(
-                "cargo:warning=prebindgen: skipping undeclared #[prebindgen] fn `{}`",
-                name
-            );
-        }
-
-        let mut skipped_types: Vec<String> = Vec::new();
-        let type_acknowledged = |key: &TypeKey| {
-            declared.types.contains(key)
-                || declared.ignored_types.contains(key)
-                || declared.boundary_only_types.contains(key)
-        };
-        for ident in self.struct_enum_idents() {
-            let name = ident.to_string();
-            let key = TypeKey::from_ident(ident);
-            if !type_acknowledged(&key) && !pred_ignored(&name) {
-                skipped_types.push(name);
-            }
-        }
-        skipped_types.sort();
-        for name in &skipped_types {
-            println!(
-                "cargo:warning=prebindgen: skipping undeclared #[prebindgen] struct/enum `{}`",
-                name
-            );
-        }
-
-        if let Some(decl_consts) = &declared.consts {
-            let mut skipped_consts: Vec<String> = self
-                .flat
-                .constants()
-                .map(|c| &c.name)
-                .filter(|k| {
-                    !decl_consts.contains(*k)
-                        && !declared.ignored_consts.contains(*k)
-                        && !pred_ignored(&k.to_string())
-                })
-                .map(|k| k.to_string())
-                .collect();
-            skipped_consts.sort();
-            for name in &skipped_consts {
-                println!(
-                    "cargo:warning=prebindgen: skipping undeclared #[prebindgen] const `{}`",
-                    name
-                );
             }
         }
 
@@ -1668,7 +1477,7 @@ impl<M> Registry<M> {
             // finds a captured fn — there is one index, and this is it.
             self.flat.add_local_function(lowered, origin);
         }
-        let declared = adapter.declarations().check()?;
+        let declared = adapter.declarations();
         self.scan_declared_items(&declared)?;
         adapter
             .validate(&self)

@@ -294,10 +294,10 @@ pub mod core {
     /// a build script names, and the rest of the model stays in [`mod@flat`]
     /// where an adapter reaches for it.
     pub use crate::api::core::{
-        ConverterImpl, Declarations, Direction, DomainScalar, Element, Flat, Generation,
-        Gravestone, NicheSlot, Niches, Prebindgen, Registry, RegistryBuilder, RepresentationDomain,
-        ScalarValue, ScanError, Stage, Transmute, TypeCell, TypeEntry, TypeKey, TypeSubject,
-        WriteRustError,
+        warn_unclaimed, Claimed, ConverterImpl, Declarations, Direction, DomainScalar, Element,
+        Flat, Generation, Gravestone, NicheSlot, Niches, Prebindgen, Registry, RegistryBuilder,
+        RepresentationDomain, ScalarValue, ScanError, Stage, Transmute, TypeCell, TypeEntry,
+        TypeKey, TypeSubject, WriteRustError,
     };
 }
 

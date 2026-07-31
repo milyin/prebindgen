@@ -14,12 +14,9 @@ use crate::api::core::{
 #[derive(Default)]
 struct StubExt {
     functions: HashSet<syn::Ident>,
-    ignored_functions: HashSet<syn::Ident>,
-    ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
     helper_functions: HashSet<syn::Ident>,
     consts: Option<HashSet<syn::Ident>>,
     types: HashSet<TypeKey>,
-    ignored_types: HashSet<TypeKey>,
     local_fns: Vec<(syn::ItemFn, String)>,
 }
 
@@ -29,12 +26,9 @@ impl Prebindgen for StubExt {
     fn declarations(&self) -> Declarations {
         Declarations::new()
             .functions(self.functions.clone())
-            .ignored_functions(self.ignored_functions.clone())
-            .ignored_name_predicates(self.ignored_name_predicates.clone())
             .helper_functions(self.helper_functions.clone())
             .consts(self.consts.clone())
             .types(self.types.clone())
-            .ignored_types(self.ignored_types.clone())
     }
     fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         self.local_fns.clone()
@@ -106,37 +100,6 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
     assert!(!is_root(&reg.output_types, "u32"));
 }
 
-#[test]
-fn scan_declared_rejects_function_declared_and_ignored_overlap() {
-    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-    let ident: syn::Ident = syn::parse_str("good").unwrap();
-    let mut ext = StubExt::default();
-    ext.functions.insert(ident.clone());
-    ext.ignored_functions.insert(ident.clone());
-
-    match reg.scan_declared(&ext) {
-        Err(ScanError::ConflictingFunctionIntent { name }) if name == ident => (),
-        other => panic!("expected ConflictingFunctionIntent, got {:?}", other),
-    }
-}
-
-#[test]
-fn scan_declared_rejects_type_declared_and_ignored_overlap() {
-    let item: syn::ItemStruct = syn::parse_str("struct Thing { value: u64 }").unwrap();
-    let items = vec![(syn::Item::Struct(item), SourceLocation::default())];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-    let key = TypeKey::parse("Thing").expect("test type");
-    let mut ext = StubExt::default();
-    ext.types.insert(key.clone());
-    ext.ignored_types.insert(key.clone());
-
-    match reg.scan_declared(&ext) {
-        Err(ScanError::ConflictingTypeIntent { key: actual }) if actual == key => (),
-        other => panic!("expected ConflictingTypeIntent, got {:?}", other),
-    }
-}
-
 /// A declared function that matches no indexed item is a hard error, not a
 /// warning — explicit intent gone wrong (I7).
 #[test]
@@ -181,51 +144,6 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
         }
         other => panic!("expected DeclaredNotFound, got {:?}", other),
     }
-}
-
-/// A stale *ignore* entry stays a warning: the scan succeeds.
-#[test]
-fn scan_declared_missing_ignore_is_not_an_error() {
-    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-    let mut ext = StubExt::default();
-    ext.ignored_functions
-        .insert(syn::parse_str("gone_fn").unwrap());
-    reg.scan_declared(&ext)
-        .expect("stale ignore must only warn");
-}
-
-/// An ignore predicate acknowledges matching undeclared items of EVERY
-/// kind — fn, struct/enum, const (one flat namespace, so a name filter
-/// needs no kind) — and is silent when it matches nothing: a filter, not a
-/// claim.
-#[test]
-fn scan_declared_accepts_ignore_predicates() {
-    let s: syn::ItemStruct = syn::parse_str("struct HelperThing { v: u64 }").unwrap();
-    let c: syn::ItemConst = syn::parse_str("const HELPER_MAX: u64 = 1;").unwrap();
-    let items = vec![
-        fn_item("fn helper_a(x: u64) -> u64 { x }"),
-        fn_item("fn helper_b(x: u64) -> u64 { x }"),
-        (syn::Item::Struct(s), SourceLocation::default()),
-        (syn::Item::Const(c), SourceLocation::default()),
-    ];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-    // Const skip-warnings only run for adapters WITH a const mechanism.
-    let mut ext = StubExt {
-        consts: Some(HashSet::new()),
-        ..StubExt::default()
-    };
-    ext.ignored_name_predicates
-        .push(std::sync::Arc::new(|n: &str| {
-            let l = n.to_lowercase();
-            l.starts_with("helper")
-        }));
-    // A second, zero-match predicate is fine too.
-    ext.ignored_name_predicates
-        .push(std::sync::Arc::new(|n: &str| n.starts_with("nothing_")));
-    reg.scan_declared(&ext).expect("predicates must scan clean");
-    // Nothing was declared, so nothing became a root.
-    assert!(!reg.input_types.values().any(|c| c.root));
 }
 
 #[test]
@@ -1217,52 +1135,30 @@ fn every_declared_type_counts_including_an_alias() {
         assert!(!reg.declares_type(&id(name)), "`{name}` declares no type");
     }
 
-    // The sibling that must NOT change: it feeds a "skipping undeclared
-    // struct/enum" warning, so an alias — which is neither — stays out.
-    let bodies: HashSet<String> = reg.struct_enum_idents().map(|i| i.to_string()).collect();
-    assert_eq!(
-        bodies,
-        ["S", "Sum", "Flags"]
-            .map(String::from)
-            .into_iter()
-            .collect(),
-        "struct_enum_idents feeds a struct/enum message and must exclude aliases"
-    );
+    // The struct/enum population an alias must stay OUT of moved to
+    // `core::diagnostics` with the skip report that is its only reader.
 }
 
-/// Both diagnostic sites reach the predicate for an alias, and neither errors.
+/// A path-qualified declared type whose tail names an **alias** takes the
+/// "did you mean the bare name?" warn-and-pass-through branch, not the
+/// `QualifiedDeclaredTypes` hard error.
 ///
-/// `scan_declared` is the entry point for both: a path-qualified declared type
-/// whose tail names an alias (the "did you mean the bare name?" heuristic) and
-/// an ignored type that names one (the "not found among #[prebindgen] items"
-/// check). The messages themselves are `cargo:warning=` on stdout and are not
-/// captured here — what this pins is that an alias flows through the same path a
-/// struct does, without the `QualifiedDeclaredTypes` hard error.
+/// The message itself is a `cargo:warning=` on stdout and is not captured here;
+/// what this pins is that an alias flows through the same path a struct does.
+/// The ignore side of this question left with the skip report — see
+/// `core::diagnostics::ignoring_an_alias_is_not_stale`.
 #[test]
-fn an_alias_flows_through_both_type_diagnostics() {
-    let build = |declare_qualified: bool| {
-        let reg: Registry<()> = crate::api::test_util::reg_with(&[
-            "pub type Handle = other::Inner;",
-            "pub fn f(x: u64) -> u64 { x }",
-        ]);
-        let mut ext = StubExt::default();
-        if declare_qualified {
-            // Head is NOT a source module, so this is the warn-and-pass-through
-            // branch rather than the hard error.
-            ext.types
-                .insert(TypeKey::parse("foreign::Handle").expect("test type"));
-        } else {
-            ext.ignored_types
-                .insert(TypeKey::parse("Handle").expect("test type"));
-        }
-        (reg, ext)
-    };
-
-    for qualified in [true, false] {
-        let (mut reg, ext) = build(qualified);
-        reg.scan_declared(&ext)
-            .expect("an alias is a captured item; neither site may fail");
-    }
+fn a_qualified_alias_warns_rather_than_failing() {
+    let mut reg: Registry<()> = crate::api::test_util::reg_with(&[
+        "pub type Handle = other::Inner;",
+        "pub fn f(x: u64) -> u64 { x }",
+    ]);
+    let mut ext = StubExt::default();
+    // Head is NOT a source module, so this is the warn branch.
+    ext.types
+        .insert(TypeKey::parse("foreign::Handle").expect("test type"));
+    reg.scan_declared(&ext)
+        .expect("an alias is a captured item; this must not fail");
 }
 
 /// A type only a **binding-local** fn writes still has a frontend reading, and
