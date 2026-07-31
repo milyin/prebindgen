@@ -1,9 +1,9 @@
-//! Builder API for [`JniGen`].
+//! Builder API for [`JniGenBuilder`].
 //!
-//! [`JniGen::new`] starts from defaults; global settings are applied with
+//! [`JniGenBuilder::new`] starts from defaults; global settings are applied with
 //! the `set_*` methods (`config.rs`) and declarations are *accepted* as
-//! pre-built objects (`decl.rs`) via [`JniGen::package`], [`JniGen::expand`],
-//! and [`JniGen::convert`] — there is no fluent typestate cursor. Carved from the former monolithic
+//! pre-built objects (`decl.rs`) via [`JniGenBuilder::package`], [`JniGenBuilder::expand`],
+//! and [`JniGenBuilder::convert`] — there is no fluent typestate cursor. Carved from the former monolithic
 //! JNI module; shares the `jni` namespace via `use super::*`.
 
 use super::*;
@@ -67,7 +67,7 @@ impl DeclaredKind {
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// The module path a generated call to `#[prebindgen]` fn `ident` must be
     /// qualified with: the fn's **origin crate** as recorded from its
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
@@ -103,13 +103,13 @@ impl JniGen {
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Start a binding generator with default settings: empty base
     /// package, no `JNINative` init block, identity
     /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
     /// methods, add declarations with [`package`](Self::package),
     /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
-    /// result through `JniGen::resolve` → `Generation::write_rust` /
+    /// result through `JniGenBuilder::build` → `JniGen::write_rust` /
     /// `write_kotlin`. Settings and
     /// declarations may be interleaved in any order — the builder stores
     /// only raw inputs, and every setting-derived name is computed at the
@@ -142,6 +142,7 @@ impl JniGen {
             local_fns: Vec::new(),
             iface_specs: Default::default(),
             fn_plans: Default::default(),
+            sources: Default::default(),
         }
     }
 
@@ -236,7 +237,7 @@ impl JniGen {
     }
 }
 
-impl Default for JniGen {
+impl Default for JniGenBuilder {
     fn default() -> Self {
         Self::new()
     }
@@ -244,11 +245,49 @@ impl Default for JniGen {
 
 // ── Accepting a `PackageDecl` ────────────────────────────────────────────
 
-impl JniGen {
+impl JniGenBuilder {
     /// Register a package's worth of classes, functions and consts (a
     /// [`PackageDecl`], built with [`package!`](crate::package)). Call it once
     /// per package, or several times for the same package name — the
     /// declarations merge, so you can split a large package across calls.
+    /// Every `#[prebindgen]` item captured in `dir` — pass
+    /// `<source_crate>::PREBINDGEN_OUT_DIR`.
+    ///
+    /// The same feeder [`FlatBuilder::source`](crate::core::flat::FlatBuilder::source)
+    /// has, because it is that feeder: the binding says where its source is,
+    /// and the model is built from it at [`Self::build`].
+    pub fn source<P: AsRef<std::path::Path>>(mut self, dir: P) -> Self {
+        self.sources = std::mem::take(&mut self.sources).source(dir);
+        self
+    }
+
+    /// The same, for a dependency this crate **renames** in `Cargo.toml`.
+    ///
+    /// The origin recorded at capture time is the dependency's real package
+    /// name, which will not resolve from a crate that refers to it by another
+    /// name. `crate_name` is the name *this* crate uses. Per directory,
+    /// deliberately: a binding may layer several sources.
+    pub fn source_named<P: AsRef<std::path::Path>>(
+        mut self,
+        dir: P,
+        crate_name: impl Into<String>,
+    ) -> Self {
+        self.sources = std::mem::take(&mut self.sources).source_named(dir, crate_name);
+        self
+    }
+
+    /// Add a captured item stream — a group selection, an otherwise-configured
+    /// [`Source`](crate::Source), or synthetic items in a test.
+    ///
+    /// Accumulates, so it mixes freely with [`Self::source`].
+    pub fn items<I>(mut self, items: I) -> Self
+    where
+        I: IntoIterator<Item = (syn::Item, crate::SourceLocation)>,
+    {
+        self.sources = std::mem::take(&mut self.sources).items(items);
+        self
+    }
+
     pub fn package(mut self, decl: PackageDecl) -> Self {
         let PackageDecl {
             name,
@@ -331,7 +370,7 @@ impl JniGen {
     /// one-declarator-per-type rule is enforced for all kinds by
     /// [`DeclaredKind::merge`] and cannot be forgotten by a new one.
     /// No FQN is derived here — names materialize at read time via
-    /// [`JniGen::fqn_of`], against whatever the settings are then.
+    /// [`JniGenBuilder::fqn_of`], against whatever the settings are then.
     ///
     /// Returns the stored config so the caller can fold in its cross-kind
     /// options (`jobject_input`, interfaces).
@@ -556,7 +595,7 @@ impl JniGen {
 
 // ── Accepting boundary decls ─────────────────────────────────────────────
 
-impl JniGen {
+impl JniGenBuilder {
     /// Declare a type's **default boundary behavior** — either of the two
     /// [`ExpandDecl`] directions, the direction carried by the decl object
     /// (the boundary-decl peer of [`PackageDecl::class`]):
@@ -1331,7 +1370,7 @@ impl JniGen {
 
 // ── Accepting the convert decl ───────────────────────────────────────────
 
-impl JniGen {
+impl JniGenBuilder {
     /// Declare a type's **canonical single-value conversion** (a
     /// [`ConvertDecl`], built with [`convert!`](crate::convert)): a pair of
     /// `#[prebindgen]` functions carrying one value of the type across the
@@ -1660,7 +1699,7 @@ fn fn_return_type(item_fn: &syn::ItemFn) -> syn::Type {
     }
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Build a `KotlinMeta` carrying just the value-context Kotlin name.
     /// Used by every built-in converter (primitives, structs, `Option<_>`,
     /// `Vec<_>`, `impl Fn(...)` lambdas). Errors are routed uniformly to the
@@ -2008,7 +2047,7 @@ impl JniGen {
 /// `()` is deliberately **not** treated as a wire here: it is ambiguous
 /// (the void wire of a self-converter *and* the unit continue-type of
 /// `ZResult<()>`). The terminal-vs-composed decision in
-/// [`JniGen::lookup_input`] / [`JniGen::lookup_output`] resolves that
+/// [`JniGenBuilder::lookup_input`] / [`JniGenBuilder::lookup_output`] resolves that
 /// ambiguity via the self-check + registered-converter probe, so `()`
 /// flows correctly without being force-classified here.
 pub(crate) fn is_wire_type(ty: &syn::Type) -> bool {
@@ -2020,7 +2059,7 @@ pub(crate) fn is_wire_type(ty: &syn::Type) -> bool {
 /// converters use this as their `Result<…, _>` error type so their bodies'
 /// `<__JniErr as From<String>>::from(...)` calls keep compiling. A
 /// `Result<T, E>` return instead binds its own raw `E` (see
-/// [`JniGen::lookup_output`]); the extern's `Err` arm funnels both to the
+/// [`JniGenBuilder::lookup_output`]); the extern's `Err` arm funnels both to the
 /// per-call `signal_error` sink via `E: Display`.
 /// The origin-module prefix of a binding-local fn's declared path
 /// (`crate::sub::f` → `"crate::sub"`). Paths are validated ≥2 segments at

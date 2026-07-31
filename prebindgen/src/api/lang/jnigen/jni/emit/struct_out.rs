@@ -10,7 +10,7 @@ use crate::api::core::registry::Conversions;
 /// in `Nullable`) are encodable as a single `L<FQN>;` ctor arg; a
 /// collection layer (`Iterable`, i.e. `Vec<Handle>`) would need array
 /// codegen and is a loud build-time error until implemented.
-pub(crate) fn handle_field_fqn(ext: &JniGen, h: &Projection) -> String {
+pub(crate) fn handle_field_fqn(ext: &JniGenBuilder, h: &Projection) -> String {
     fn assert_scalar(s: &FoldStrategy) {
         match s {
             FoldStrategy::Base => {}
@@ -81,7 +81,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// model (`registry.flat()`) — both populated before `resolve` — never the
 /// output converter table (not yet built at this stage).
 pub(crate) fn synth_value_struct_leaves(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
     path_prefix: &[crate::api::core::unfold::PathStep],
@@ -171,7 +171,7 @@ pub(crate) fn synth_value_struct_leaves(
 /// plan `flatten_struct_factory` walks for the Kotlin side, so the slot
 /// order and JVM descriptors agree by construction.
 pub(crate) fn flatten_struct_encode(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
     access: &TokenStream,
@@ -575,7 +575,7 @@ fn encode_field(
 }
 
 pub(crate) fn struct_output_body(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     s: &syn::ItemStruct,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
@@ -637,7 +637,7 @@ pub(crate) fn struct_output_body(
 }
 
 pub(crate) fn struct_module_path(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
 ) -> syn::Path {

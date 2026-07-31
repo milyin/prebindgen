@@ -1266,7 +1266,7 @@ fn legacy_annotation_bridge_has_exactly_one_caller() {
 /// a module.
 ///
 /// The constructors below are crate-visible, so a hand-listed set of files is
-/// not an audit — a direct call from `expr.rs`, `file.rs` or any JniGen module
+/// not an audit — a direct call from `expr.rs`, `file.rs` or any JniGenBuilder module
 /// would simply not be looked at. This walks `src/` instead.
 fn crate_sources() -> Vec<(String, String)> {
     // The auditing file is skipped: it necessarily *spells* the constructors it
@@ -1345,7 +1345,7 @@ fn static_annotation_text_constructors_are_pinned_crate_wide() {
 /// producers is the mechanical check** behind #199's global exit.
 ///
 /// Scanned **crate-wide**, not over a hand-listed set of files: `KtExpr` is
-/// re-exported for JniGen and visible throughout it, so a
+/// re-exported for JniGenBuilder and visible throughout it, so a
 /// `kt::KtExpr::Raw(...)` in `api/lang/jnigen/…` would pass a `gen/kotlin`-only
 /// audit and the asserted exit would drift silently. Same visibility-boundary
 /// problem `crate_sources` already solves for `StaticAnnotationText`.

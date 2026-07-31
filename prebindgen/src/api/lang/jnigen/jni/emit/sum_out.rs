@@ -41,7 +41,7 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 /// `variant!(V).name(...)` rename carries through to the builder's parameter
 /// names too.
 pub(crate) fn synth_sum_leaves(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     sum_cfg: &SumConfig,
     item_enum: &syn::ItemEnum,
 ) -> Vec<crate::api::core::unfold::UnfoldLeaf> {
@@ -162,7 +162,7 @@ pub(crate) fn is_sum_leaves(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> 
 /// is that a leaf here is not an independent expression — its slot exists in
 /// every arm and only one arm computes it.
 pub(crate) fn encode_sum_group(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &impl Conversions<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
     obj_idents: &[syn::Ident],

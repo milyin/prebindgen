@@ -1,9 +1,9 @@
-//! Structural converter-selection policy for [`Cbindgen`].
+//! Structural converter-selection policy for [`CbindgenBuilder`].
 
 use super::*;
 use crate::api::core::registry::Conversions;
 
-impl Cbindgen {
+impl CbindgenBuilder {
     /// Select the input converter for `ty`: terminal categories, then built-in
     /// C structural wrappers.
     pub(crate) fn select_input_type(

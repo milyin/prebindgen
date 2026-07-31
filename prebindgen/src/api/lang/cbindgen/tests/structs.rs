@@ -29,7 +29,7 @@ fn opaque_owned_transmute_by_value() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
         .base_name("z_payload_t")
@@ -124,7 +124,7 @@ fn opaque_data_no_gravestone_writeback() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_data_struct(syn::parse_quote!(Stamp), syn::parse_quote!(z_stamp_t))
         .base_name("z_stamp_t")
@@ -205,7 +205,7 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -291,7 +291,7 @@ fn repr_c_struct_owned_inferred_field_nulls_without_default() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -343,7 +343,7 @@ fn repr_c_struct_plain_data_has_no_writeback() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -392,7 +392,7 @@ fn repr_c_struct_bare_box_field_keeps_full_gravestone() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -458,7 +458,7 @@ fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -532,7 +532,7 @@ fn repr_c_struct_restricted_validity_field_is_rejected() {
             ]))
             .expect("index items");
 
-            let cbindgen = Cbindgen::new()
+            let cbindgen = CbindgenBuilder::new()
                 .source_module(syn::parse_quote!(zenoh_flat))
                 .mangle_type_name(|base| format!("{base}_t"))
                 .mangle_destructor(|base| format!("{base}_drop"))
@@ -575,7 +575,7 @@ fn repr_c_struct_restricted_validity_field_accepted_when_acknowledged() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -620,7 +620,7 @@ fn repr_c_struct_restricted_validity_field_audited_even_when_output_only() {
     };
 
     let declare = |acknowledged: bool| {
-        let mut c = Cbindgen::new()
+        let mut c = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .mangle_type_name(|base| format!("{base}_t"))
             .mangle_destructor(|base| format!("{base}_drop"))

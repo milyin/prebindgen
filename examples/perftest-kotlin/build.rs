@@ -1,5 +1,5 @@
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using
-//! prebindgen's [`prebindgen::lang::JniGen`] adapter. It produces:
+//! prebindgen's [`prebindgen::lang::JniGenBuilder`] adapter. It produces:
 //!   * `src/generated_bindings.rs` — the Rust-side JNI wrappers (included by
 //!     `src/lib.rs`), and
 //!   * `kotlin/generated/**` — the matching typed Kotlin classes.
@@ -13,7 +13,7 @@
 //! (no Java object is built on the Rust side).
 //!
 //! `Payload.label` is `Option<Box<String>>` (an opaque-pointer string field);
-//! JniGen maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
+//! JniGenBuilder maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
 //! `String?` automatically.
 //!
 //! The `large_*_input_sum` pair compares the two Kotlin→Rust data-class input
@@ -21,15 +21,12 @@
 //! `ObjectBoundary64` is recursively flattened, while its structural twin
 //! `ObjectBoundary64Object` uses `.jobject_input()`.
 
-use prebindgen::{
-    core::{Flat, Registry},
-    data_class, fun,
-    lang::JniGen,
-    package, ptr_class,
-};
+use prebindgen::{data_class, fun, lang::JniGen, package, ptr_class};
 
 fn main() {
-    let jni = JniGen::new()
+    // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
+    let binding = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
         // init (the single choke point through which every JNI call routes).
@@ -118,21 +115,14 @@ fn main() {
                 .fun(fun!(storage_callback_vec)),
         );
 
-    // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
-    let flat = Flat::builder()
-        .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .build()
-        .expect("parse prebindgen items");
-    let registry = Registry::builder(flat).expect("describe the binding");
-
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let gen = jni.resolve(registry).expect("resolve failed");
-    let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
+    let jni = binding.build().expect("build failed");
+    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()
@@ -142,7 +132,7 @@ fn main() {
     let kotlin_root = std::path::Path::new(&crate_dir)
         .join("kotlin")
         .join("generated");
-    for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
+    for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
 }

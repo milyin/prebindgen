@@ -32,16 +32,18 @@ fn declared_consts_emit_getter_and_val() {
     let registry = crate::api::test_util::reg_from_items(declare_referenced(const_items()))
         .expect("index items");
 
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("cfg")
-            .constant(crate::constant!(MAX_LEN))
-            .constant(crate::constant!(GREETING).name("HELLO")),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("cfg")
+                .constant(crate::constant!(MAX_LEN))
+                .constant(crate::constant!(GREETING).name("HELLO")),
+        );
 
     let dir = unique_test_dir("jnigen_consts_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     // Path-alias const re-emission (the initializer tokens are never
@@ -116,13 +118,13 @@ fn unsigned_const_uses_ulong_surface() {
         myflat_loc(),
     )]))
     .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant(crate::constant!(MAX_UNSIGNED)));
     let dir = unique_test_dir("jnigen_consts_unsigned");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let kotlin = paths
@@ -139,7 +141,7 @@ fn unsigned_const_uses_ulong_surface() {
     assert!(kc.contains(".toULong()"), "{kotlin}");
 }
 
-/// An undeclared const emits nothing (JniGen has a const declaration
+/// An undeclared const emits nothing (JniGenBuilder has a const declaration
 /// mechanism, so const emission is declared-only); `ignore_const`
 /// acknowledges it without emitting.
 #[test]
@@ -147,7 +149,7 @@ fn undeclared_const_not_emitted() {
     let registry = crate::api::test_util::reg_from_items(declare_referenced(const_items()))
         .expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant(crate::constant!(MAX_LEN)))
         .ignore(crate::constant!(GREETING));
@@ -155,7 +157,7 @@ fn undeclared_const_not_emitted() {
     let dir = unique_test_dir("jnigen_consts_undeclared");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     assert!(rust.contains("pub const MAX_LEN"), "{rust}");
@@ -189,14 +191,14 @@ fn constant_fun_source_emits_val_over_ordinary_wrapper() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant(crate::constant!(THE_TAG).fun(crate::fun!(tag))));
 
     let dir = unique_test_dir("jnigen_constant_fun_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     // Ordinary declared-function wrapper: an extern calling `myflat::tag()`.
@@ -241,13 +243,15 @@ fn constant_fun_source_non_nullary_rejected() {
     )];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("cfg").constant(crate::constant!(SCALED).fun(crate::fun!(scaled))),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("cfg").constant(crate::constant!(SCALED).fun(crate::fun!(scaled))),
+        );
     let dir = unique_test_dir("jnigen_constant_fun_arity_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let _ = gen.write_kotlin(&dir.join("kotlin"));
 }
@@ -278,15 +282,17 @@ fn constant_fun_source_handle_return_rejected() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("things")
-            .class(crate::ptr_class!(ZThing))
-            .constant(crate::constant!(DEFAULT_THING).fun(crate::fun!(default_thing))),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("things")
+                .class(crate::ptr_class!(ZThing))
+                .constant(crate::constant!(DEFAULT_THING).fun(crate::fun!(default_thing))),
+        );
     let dir = unique_test_dir("jnigen_constant_fun_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let _ = gen.write_kotlin(&dir.join("kotlin"));
 }
@@ -311,16 +317,16 @@ fn constant_expr_emits_getter_and_val() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("cfg").fun(crate::fun!(tag_of)).constant(
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("cfg").fun(crate::fun!(tag_of)).constant(
             crate::constant!(DEFAULT_TAG).expr(crate::ty!(String), crate::expr!(tag_of(7))),
-        ),
-    );
+        ));
 
     let dir = unique_test_dir("jnigen_constant_expr_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -382,19 +388,22 @@ fn constant_expr_handle_type_rejected() {
     ];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("things")
-            .class(crate::ptr_class!(ZThing))
-            .fun(crate::fun!(thing_new))
-            .constant(
-                crate::constant!(DEFAULT_THING).expr(crate::ty!(ZThing), crate::expr!(thing_new())),
-            ),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("things")
+                .class(crate::ptr_class!(ZThing))
+                .fun(crate::fun!(thing_new))
+                .constant(
+                    crate::constant!(DEFAULT_THING)
+                        .expr(crate::ty!(ZThing), crate::expr!(thing_new())),
+                ),
+        );
     let dir = unique_test_dir("jnigen_constant_expr_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = jni
-        .resolve(registry)
+        .build_with(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -431,18 +440,20 @@ fn handle_const_rejected() {
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("things")
-            .class(crate::ptr_class!(ZThing))
-            .fun(crate::fun!(thing_new))
-            .constant(crate::constant!(DEFAULT_THING)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("things")
+                .class(crate::ptr_class!(ZThing))
+                .fun(crate::fun!(thing_new))
+                .constant(crate::constant!(DEFAULT_THING)),
+        );
 
     let dir = unique_test_dir("jnigen_consts_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = jni
-        .resolve(registry)
+        .build_with(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -463,16 +474,18 @@ fn constant_with_source_calls_path_verbatim() {
     )];
     let registry =
         crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("cfg").fun(crate::fun!(unrelated)).constant(
-            crate::constant!(COVER_VERSION)
-                .with(crate::ty!(String), crate::path!(crate::cover_version)),
-        ),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("cfg").fun(crate::fun!(unrelated)).constant(
+                crate::constant!(COVER_VERSION)
+                    .with(crate::ty!(String), crate::path!(crate::cover_version)),
+            ),
+        );
     let dir = unique_test_dir("jnigen_constant_with_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();

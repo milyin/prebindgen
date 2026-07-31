@@ -20,7 +20,7 @@ use crate::api::core::registry::Conversions;
 /// Errors cannot reach a caller-side error sink (the declaring call already
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     args: &[syn::Type],
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {

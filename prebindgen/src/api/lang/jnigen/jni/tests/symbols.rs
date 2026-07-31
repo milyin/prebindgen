@@ -8,14 +8,14 @@ use crate::api::core::registry::RegistryBuilder;
 
 /// Resolve the binding and return the result — `validate_resolved` (and thus
 /// `validate_symbols`) now runs inside `resolve`, so an invalid binding fails
-/// here and no `Generation` is produced (nothing can be written). On success,
+/// here and no `JniGen` is produced (nothing can be written). On success,
 /// a real `write_rust` confirms the valid binding also emits.
 fn resolve_result(
     tag: &str,
     registry: RegistryBuilder<KotlinMeta>,
-    jni: JniGen,
+    jni: JniGenBuilder,
 ) -> Result<(), String> {
-    match jni.resolve(registry) {
+    match jni.build_with(registry) {
         Ok(gen) => {
             let dir = unique_test_dir(tag);
             let _ = std::fs::remove_dir_all(&dir);
@@ -42,7 +42,7 @@ fn one_fn(src: &str) -> RegistryBuilder<KotlinMeta> {
 #[test]
 fn invalid_name_override_is_error() {
     let registry = one_fn("pub fn z_do_thing() -> i64 { 0 }");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing).name("when")));
     let err = resolve_result("jni_sym_name", registry, jni).expect_err("invalid .name()");
@@ -55,7 +55,7 @@ fn invalid_name_override_is_error() {
 #[test]
 fn invalid_hook_output_is_error() {
     let registry = one_fn("pub fn z_do_thing() -> i64 { 0 }");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_fun_name_mangle(|_pkg, _name| "1bad".to_string())
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
@@ -70,7 +70,7 @@ fn invalid_hook_output_is_error() {
 #[test]
 fn valid_default_names_pass() {
     let registry = one_fn("pub fn z_do_thing() -> i64 { 0 }");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
     resolve_result("jni_sym_ok", registry, jni).expect("valid names must pass");
@@ -95,7 +95,7 @@ fn duplicate_native_symbol_is_error() {
     // The JNINative extern method name (which the `Java_…` symbol derives
     // from) goes through the method hook; collapsing it onto one name for
     // every function forces two distinct fns to share a native symbol.
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_method_name_mangle(|_pkg, _class, _name| "collide".to_string())
         .package(
@@ -129,16 +129,18 @@ fn keyword_struct_field_is_sanitized_not_error() {
         ),
     ];
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .class(crate::data_class!(Payload))
-            .fun(crate::fun!(make)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::data_class!(Payload))
+                .fun(crate::fun!(make)),
+        );
     // The keyword field is sanitized (mangle → `object_`), not rejected.
     let dir = unique_test_dir("jni_sym_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.resolve(registry).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs"))
         .expect("keyword field sanitized, not an error");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
@@ -163,7 +165,7 @@ fn keyword_struct_field_is_sanitized_not_error() {
 #[test]
 fn class_interface_collision_is_error() {
     let registry = one_fn("pub fn z_thing_new() -> ZThing { unimplemented!() }");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_interface_name_mangle(|_pkg, n| n.to_string()) // identity → iface == class
         .package(
@@ -197,11 +199,13 @@ fn same_name_same_signature_functions_collide() {
     ];
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     // Both forced to Kotlin name `combine`; both take one `Long` → same sig.
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .fun(crate::fun!(z_alpha).name("combine"))
-            .fun(crate::fun!(z_beta).name("combine")),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .fun(crate::fun!(z_alpha).name("combine"))
+                .fun(crate::fun!(z_beta).name("combine")),
+        );
     let err = resolve_result("jni_ov_collide", registry, jni).expect_err("overload clash");
     assert!(err.contains("conflicting Kotlin overload"), "{err}");
     assert!(err.contains("combine"), "{err}");
@@ -223,11 +227,13 @@ fn same_name_distinct_signature_functions_allowed() {
     ];
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     // Same name `combine`, but one takes Long and the other Boolean.
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .fun(crate::fun!(z_alpha).name("combine"))
-            .fun(crate::fun!(z_beta).name("combine")),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .fun(crate::fun!(z_alpha).name("combine"))
+                .fun(crate::fun!(z_beta).name("combine")),
+        );
     resolve_result("jni_ov_ok", registry, jni).expect("distinct signatures are valid overloads");
 }
 
@@ -246,13 +252,15 @@ fn method_and_factory_same_name_do_not_collide() {
         ),
     ];
     let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing").class(
-            crate::ptr_class!(Thing)
-                .method(crate::fun!(thing_size).name("of"))
-                .constructor(crate::fun!(thing_make).name("of")),
-        ),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing").class(
+                crate::ptr_class!(Thing)
+                    .method(crate::fun!(thing_size).name("of"))
+                    .constructor(crate::fun!(thing_make).name("of")),
+            ),
+        );
     // Instance method `of()` and companion factory `of()` are distinct scopes.
     resolve_result("jni_ov_scopes", registry, jni).expect("method vs factory don't collide");
 }

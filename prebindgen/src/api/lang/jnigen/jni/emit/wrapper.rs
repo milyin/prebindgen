@@ -5,7 +5,7 @@ use super::*;
 use crate::api::core::{registry::Conversions, types_util::result_ok_type};
 
 pub(crate) fn emit_jni_function_wrapper(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
 ) -> TokenStream {
@@ -14,7 +14,7 @@ pub(crate) fn emit_jni_function_wrapper(
 
 /// The synthetic nullary getter signature a declared const is emitted
 /// through: `pub fn const_get_<ident_lower>() -> <const ty>`. Both sides —
-/// the Rust extern ([`JniGen::on_const`] via
+/// the Rust extern ([`JniGenBuilder::on_const`] via
 /// [`emit_jni_function_wrapper_with_callee`]) and the Kotlin `val`
 /// initializer (`render_const_val`) — derive the extern symbol from this one
 /// ident, so they stay in sync by construction. The body is never used.
@@ -32,7 +32,7 @@ pub(crate) fn const_getter_fn(c: &syn::ItemConst) -> syn::ItemFn {
 /// shared closeable `val` is semantically wrong (whose `close()` is it?).
 /// Expose a factory function instead — the established idiom (e.g. zenoh's
 /// `encoding_const_*` companion factories).
-pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
+pub(crate) fn reject_handle_const(ext: &JniGenBuilder, c: &syn::ItemConst) {
     reject_handle_constant_type(ext, &c.ty, "const", &c.ident.to_string());
 }
 
@@ -40,7 +40,12 @@ pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
 /// `&`/`Option`/`Vec` layers off `ty` and reject if what remains is a
 /// declared opaque handle. `what`/`ident` shape the error message
 /// (`const MAX_LEN` / `constant fn encoding_const_x_str`).
-pub(crate) fn reject_handle_constant_type(ext: &JniGen, ty: &syn::Type, what: &str, name: &str) {
+pub(crate) fn reject_handle_constant_type(
+    ext: &JniGenBuilder,
+    ty: &syn::Type,
+    what: &str,
+    name: &str,
+) {
     let mut ty = ty.clone();
     loop {
         if let syn::Type::Reference(r) = &ty {
@@ -74,7 +79,7 @@ pub(crate) fn reject_handle_constant_type(ext: &JniGen, ty: &syn::Type, what: &s
 /// the `val` initializer's throwing `JniErrorHandler` only fits the
 /// infallible wrapper shape), and its return type must not peel to a
 /// declared opaque handle (same rationale as [`reject_handle_const`]).
-pub(crate) fn validate_constant_fn(ext: &JniGen, f: &syn::ItemFn) {
+pub(crate) fn validate_constant_fn(ext: &JniGenBuilder, f: &syn::ItemFn) {
     assert!(
         f.sig.inputs.is_empty(),
         "constant fn `{}`: takes {} parameter(s) — a function-backed constant must be nullary \
@@ -110,7 +115,7 @@ pub(crate) fn const_expr_getter_fn(kotlin_name: &str, ty: &syn::Type) -> syn::It
 /// Validates an expression constant's declared value type (checked on both
 /// write paths): not a `Result` (a domain-fallible value is not a constant),
 /// not (peeled to) a declared opaque handle.
-pub(crate) fn validate_constant_expr(ext: &JniGen, kotlin_name: &str, ty: &syn::Type) {
+pub(crate) fn validate_constant_expr(ext: &JniGenBuilder, kotlin_name: &str, ty: &syn::Type) {
     assert!(
         result_ok_type(ty).is_none(),
         "constant expr `{kotlin_name}`: type is a `Result` — an expression constant must be \
@@ -122,11 +127,11 @@ pub(crate) fn validate_constant_expr(ext: &JniGen, kotlin_name: &str, ty: &syn::
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
 /// `None` = the ordinary `<origin module>::<fn ident>(args)` call; `Some(e)`
 /// splices `e` verbatim as the value the output phase converts. Used by the
-/// const getter emission (`JniGen::on_const`), whose synthetic nullary `f`
+/// const getter emission (`JniGenBuilder::on_const`), whose synthetic nullary `f`
 /// carries the signature while the value comes from
 /// `<origin module>::<CONST_IDENT>` — a path, not a call.
 pub(crate) fn emit_jni_function_wrapper_with_callee(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     callee: Option<syn::Expr>,
@@ -428,7 +433,7 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 /// site only renders each [`InputKind`]'s decode.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     original_ident: &syn::Ident,
     param: &PlanParam,
@@ -697,7 +702,7 @@ fn emit_plain_decode(
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::expand::FoldPlan,
     leaves: &[PlanLeaf],

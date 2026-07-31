@@ -17,7 +17,7 @@ fn result_error_not_declared_is_build_error() {
     .expect("index items");
 
     // Error declared as data_struct but NOT marked `.error()`.
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))
@@ -28,7 +28,7 @@ fn result_error_not_declared_is_build_error() {
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = cbindgen
-            .resolve(registry)
+            .build_with(registry)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope.rs")));
     }));
     assert!(
@@ -54,12 +54,12 @@ fn fallible_input_without_result_needs_panic() {
         loc.clone(),
     )]))
     .expect("index items");
-    let cb1 = Cbindgen::new()
+    let cb1 = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log));
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = cb1
-            .resolve(reg1)
+            .build_with(reg1)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope2.rs")));
     }));
     assert!(err.is_err(), "expected a build error without .panic()");
@@ -70,7 +70,7 @@ fn fallible_input_without_result_needs_panic() {
         loc.clone(),
     )]))
     .expect("index items");
-    let cb2 = Cbindgen::new()
+    let cb2 = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log))
         .panic();
@@ -108,7 +108,7 @@ fn error_out_param_is_null_guarded() {
     ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))

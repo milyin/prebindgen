@@ -172,7 +172,6 @@ mod cell;
 pub(crate) use self::cell::{TypeCell, TypeSubject};
 mod declare;
 mod error;
-mod generation;
 mod key;
 mod model;
 mod order;
@@ -185,7 +184,6 @@ pub use self::{
     cell::{Direction, TypeEntry},
     declare::RegistryBuilder,
     error::{DuplicateNameError, NotExpressibleEntry, ScanError, WriteRustError},
-    generation::Generation,
     key::{TypeKey, TypeKeyParseError},
     view::{Building, Conversions, Crossing},
     walk::{extract_fn_trait_args, immediate_subtype_positions},
@@ -261,6 +259,14 @@ pub struct Registry<M = ()> {
     /// construction.
     pub(crate) decon_plans:
         HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec>,
+}
+
+// Opaque — exists so `Result<Registry, _>::expect_err` works in tests, the way
+// `Generation`'s did before the generators took ownership of the built object.
+impl<M> std::fmt::Debug for Registry<M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Registry(..)")
+    }
 }
 
 impl<M> Registry<M> {

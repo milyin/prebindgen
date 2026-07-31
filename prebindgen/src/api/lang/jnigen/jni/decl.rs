@@ -1,20 +1,20 @@
 //! Declaration objects: one standalone, independently-constructible value
-//! type per kind of thing `JniGen` can be told about (a `ptr_class`, an
+//! type per kind of thing `JniGenBuilder` can be told about (a `ptr_class`, an
 //! `enum_class`, a function, a scalar wire mapping, …), plus the `PackageDecl`
 //! that aggregates the package-scoped ones. Each type is both its own
-//! "builder" and the final value `JniGen`/`PackageDecl` accepts — no separate
+//! "builder" and the final value `JniGenBuilder`/`PackageDecl` accepts — no separate
 //! `Builder`/`Decl` split, no terminal `.build()` call.
 //!
-//! `JniGen` itself only ever *accepts* fully-built values of these types
-//! (`JniGen::package`, `JniGen::expand`, `JniGen::convert`, in
+//! `JniGenBuilder` itself only ever *accepts* fully-built values of these types
+//! (`JniGenBuilder::package`, `JniGenBuilder::expand`, `JniGenBuilder::convert`, in
 //! `builder.rs`); none of them reach back
-//! into any `JniGen` state while being built.
+//! into any `JniGenBuilder` state while being built.
 
 use super::*;
 
 // ──────────────────────────────────────────────────────────────────────
 // Shared local accumulators (replayed into `Expansions`/`Deconstructors`
-// by the accept logic in `builder.rs` once a decl is handed to `JniGen`)
+// by the accept logic in `builder.rs` once a decl is handed to `JniGenBuilder`)
 // ──────────────────────────────────────────────────────────────────────
 
 /// One arm of an `expand_param!` `.variant*` list (type-level or per-fn).
@@ -325,7 +325,7 @@ macro_rules! fields {
 /// out.
 ///
 /// Build one with [`ptr_class!`](crate::ptr_class), add it to a
-/// [`PackageDecl`], and hand that to [`JniGen::package`].
+/// [`PackageDecl`], and hand that to [`JniGenBuilder::package`].
 ///
 /// A `PtrClassDecl` defines the **Kotlin class only** — its name
 /// ([`name`](Self::name)), its instance methods ([`method`](Self::method)), and its
@@ -333,7 +333,7 @@ macro_rules! fields {
 /// type crosses the FFI boundary by default — accepted as which parameter
 /// variants, returned as which field set — is declared separately with
 /// [`expand_param!`](crate::expand_param) / [`expand_return!`](crate::expand_return)
-/// handed to [`JniGen::expand`]; any single
+/// handed to [`JniGenBuilder::expand`]; any single
 /// function can override those defaults locally (see [`FunctionDecl`]).
 ///
 /// ```
@@ -374,7 +374,7 @@ macro_rules! class_interface_methods {
         /// public instance surface, and make the class implement it (every
         /// class-body member gains the `override` modifier). The interface
         /// is named by [`interface_name`](Self::interface_name), else the
-        /// [`JniGen::set_interface_name_mangle`] hook over the final class
+        /// [`JniGenBuilder::set_interface_name_mangle`] hook over the final class
         /// name (default: append `"Api"`).
         ///
         /// This is the compiler-checked half of the integration hatch: a
@@ -390,7 +390,7 @@ macro_rules! class_interface_methods {
         }
 
         /// Name the generated interface literally (relative, no dots),
-        /// bypassing the [`JniGen::set_interface_name_mangle`] hook.
+        /// bypassing the [`JniGenBuilder::set_interface_name_mangle`] hook.
         /// Implies [`interface`](Self::interface).
         pub fn interface_name(mut self, name: impl Into<String>) -> Self {
             let name = name.into();
@@ -474,7 +474,7 @@ impl PtrClassDecl {
     }
 
     /// Rename the generated Kotlin class. By default it is named after the
-    /// Rust type (via the [`JniGen::set_ptr_class_name_mangle`] hook); `.name("Foo")`
+    /// Rust type (via the [`JniGenBuilder::set_ptr_class_name_mangle`] hook); `.name("Foo")`
     /// sets it literally instead. Relative name, no dots — the package comes
     /// from the enclosing [`PackageDecl`].
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -524,7 +524,7 @@ impl From<syn::Type> for PtrClassDecl {
 ///
 /// Build one with [`expand_param!`](crate::expand_param), add arms with
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
-/// it to [`JniGen::expand`].
+/// it to [`JniGenBuilder::expand`].
 ///
 /// **Generated shape** — at the wire tier this is a selector dispatch: with
 /// more than one arm the parameter crosses as a selector `Int` plus one
@@ -642,7 +642,7 @@ impl ExpandParamDecl {
 ///
 /// Build one with [`expand_return!`](crate::expand_return), add fields with
 /// [`field`](Self::field) / [`field_self`](Self::field_self), and hand it to
-/// [`JniGen::expand`].
+/// [`JniGenBuilder::expand`].
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: every returned /
@@ -952,7 +952,7 @@ impl FieldsDecl {
     }
 }
 
-/// Unifies the two boundary decls into one type so [`JniGen::expand`] can
+/// Unifies the two boundary decls into one type so [`JniGenBuilder::expand`] can
 /// expose a single entry point — the boundary-decl peer of [`ClassDecl`].
 /// Deliberately **no** `impl From<syn::Type> for ExpandDecl` — a bare
 /// `syn::Type` alone doesn't say which direction it describes, so every
@@ -1234,7 +1234,7 @@ impl From<DataClassDecl> for ClassDecl {
 /// [`name`](Self::name) to set its Kotlin name.
 /// [`expand_param`](Self::expand_param) / [`expand_return`](Self::expand_return)
 /// **override, for this one function**, the boundary defaults its
-/// parameter/return types declare at the generator level ([`JniGen::expand`])
+/// parameter/return types declare at the generator level ([`JniGenBuilder::expand`])
 /// — using the very same decl objects, so the complete-set rule is identical
 /// at both scopes.
 pub struct FunctionDecl {
@@ -1532,7 +1532,7 @@ impl ConstDecl {
     /// exactly when nothing flows in (a unary conversion source must be a
     /// named callable — see [`ConvertDecl`]). Fns referenced only inside
     /// expressions are undeclared to the registry — acknowledge them via
-    /// [`JniGen::ignore`] (+ [`matching`](crate::lang::matching)).
+    /// [`JniGenBuilder::ignore`] (+ [`matching`](crate::lang::matching)).
     pub fn expr(self, ty: syn::Type, expr: syn::Expr) -> Self {
         self.set_source(ConstSource::Expr { ty, expr })
     }
@@ -1554,7 +1554,7 @@ pub(crate) struct ConstExprDecl {
 /// Declares a `#[prebindgen]` item this binding deliberately does NOT
 /// bind: nothing is emitted for it and the registry's per-item "skipping
 /// undeclared" warning is suppressed. One acceptor
-/// ([`JniGen::ignore`]), the kind carried by what you built:
+/// ([`JniGenBuilder::ignore`]), the kind carried by what you built:
 ///
 /// ```rust,ignore
 /// .ignore(fun!(string_len))                                // a fn
@@ -1627,7 +1627,7 @@ where
 /// (`package!("session")`, or `package!()` for the base package), fill it
 /// with [`class`](Self::class) / [`fun`](Self::fun) /
 /// [`constant`](Self::constant), and hand it to
-/// [`JniGen::package`]. Reopening the same subpackage across several
+/// [`JniGenBuilder::package`]. Reopening the same subpackage across several
 /// `PackageDecl`s is fine — they merge.
 pub struct PackageDecl {
     pub(crate) name: String,
@@ -1638,7 +1638,7 @@ pub struct PackageDecl {
 
 impl PackageDecl {
     /// `name` is dot-separated, relative to the base package set by
-    /// [`JniGen::set_package_prefix`]; the empty string is the base
+    /// [`JniGenBuilder::set_package_prefix`]; the empty string is the base
     /// package itself. See [`crate::package!`] for the equivalent macro form
     /// (`package!("model")` / `package!()`).
     pub fn new(name: impl Into<String>) -> Self {
@@ -1884,7 +1884,7 @@ pub struct ConvertDecl {
     pub(crate) output: Option<ConvertSpec>,
     pub(crate) domain: Option<crate::core::RepresentationDomain>,
     /// Binding-local fn sources declared on this convert (`fun!(crate::f)
-    /// .sig(…)`): drained into [`JniGen::local_fns`] at acceptance so the
+    /// .sig(…)`): drained into [`JniGenBuilder::local_fns`] at acceptance so the
     /// synthesis pre-pass covers them.
     pub(crate) locals: Vec<(syn::Ident, syn::Path, syn::Signature)>,
 }

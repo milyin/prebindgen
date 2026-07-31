@@ -203,14 +203,16 @@ fn guards_emit_ungated_and_in_stream_order() {
         fn resolve_gating(
             self,
             ext: ConstGatingExt,
-        ) -> Result<crate::core::Generation<ConstGatingExt>, crate::core::WriteRustError>;
+        ) -> Result<Registry<()>, crate::core::WriteRustError>;
     }
     impl ResolveGating for RegistryBuilder<()> {
         fn resolve_gating(
             self,
             ext: ConstGatingExt,
-        ) -> Result<crate::core::Generation<ConstGatingExt>, crate::core::WriteRustError> {
-            self.declares_consts().build()?.finish(ext)
+        ) -> Result<Registry<()>, crate::core::WriteRustError> {
+            let registry = self.declares_consts().build()?;
+            let _ = &ext;
+            Ok(registry)
         }
     }
 
@@ -261,10 +263,8 @@ fn guards_emit_ungated_and_in_stream_order() {
 
     let dir = crate::api::test_util::unique_test_dir("write_guards");
     std::fs::create_dir_all(&dir).unwrap();
-    let path = registry
-        .resolve_gating(ConstGatingExt)
-        .expect("resolve")
-        .write_rust(dir.join("gen.rs"))
+    let registry = registry.resolve_gating(ConstGatingExt).expect("resolve");
+    let path = crate::api::core::write::write_rust(&registry, &ConstGatingExt, dir.join("gen.rs"))
         .expect("write_rust");
     let src = std::fs::read_to_string(&path).unwrap();
 

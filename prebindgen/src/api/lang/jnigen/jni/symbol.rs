@@ -69,7 +69,7 @@ pub(crate) fn native_symbol(package: &str, class: &str, method: &str) -> String 
 /// The long native symbol for **overloaded** natives: the short name plus
 /// `__` and the escaped argument signature (the descriptor between `(` and
 /// `)`, e.g. `ILjava/lang/String;` — `/`→`_`, `;`→`_2`, `[`→`_3`). Nothing
-/// JniGen emits today is overloaded at the extern level (every `JNINative`
+/// JniGenBuilder emits today is overloaded at the extern level (every `JNINative`
 /// method is uniquely named), so this is provided-but-unwired per #86's
 /// direction: if overloaded natives are ever emitted, they must come from
 /// this same abstraction.
