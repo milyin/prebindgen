@@ -1,6 +1,6 @@
 //! One-stop classification of how a bare Rust type is declared to this
 //! adapter — the single precedence every emitter agrees on instead of each
-//! re-deriving it from `TypeConfig` flags and `registry.structs` probes.
+//! re-deriving it from `TypeConfig` flags and `registry.flat()` type probes.
 
 use super::*;
 
@@ -63,7 +63,11 @@ impl JniGen {
             }
         }
         if let Some(name) = bare_path_ident(bare) {
-            if let Some((st, _)) = registry.structs.get(&name) {
+            if let Some(st) = registry
+                .flat()
+                .struct_type(&name)
+                .map(|st| &st.origin.syntax)
+            {
                 return TypeKind::DataStruct { st, cfg };
             }
         }

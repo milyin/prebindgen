@@ -378,7 +378,21 @@ impl FlatBuilder {
             .enumerate()
             .filter_map(|(i, e)| e.name().map(|n| (n.to_string(), i)))
             .collect();
-        Ok(Flat { elements, by_name })
+        // Frozen here, from the captured stream alone. See the field's docs.
+        let mut source_modules: Vec<String> = Vec::new();
+        for element in &elements {
+            if let Some(crate_name) = element.location().crate_name.as_ref() {
+                let module = crate_name.replace('-', "_");
+                if !source_modules.contains(&module) {
+                    source_modules.push(module);
+                }
+            }
+        }
+        Ok(Flat {
+            elements,
+            by_name,
+            source_modules,
+        })
     }
 }
 
@@ -407,6 +421,15 @@ impl FlatBuilder {
 pub struct Flat {
     /// Source order, so iteration reports items as the sources were fed.
     elements: Vec<Element>,
+    /// Module name of every **captured** source, in first-seen order (crate
+    /// names, dashes normalized to underscores). The first doubles as the
+    /// default module for a reference with no recorded origin.
+    ///
+    /// Computed once in [`FlatBuilder::build`] and frozen: it is a property of
+    /// the ingested stream, so a binding-local function added later must not
+    /// extend it — that would change which module an unqualified reference
+    /// resolves against.
+    source_modules: Vec<String>,
     /// Name → position in [`Self::elements`].
     ///
     /// A map rather than a scan because every typed accessor and every
@@ -415,6 +438,71 @@ pub struct Flat {
     /// API. Positions rather than clones, so there is one copy of each element
     /// and source order stays available.
     by_name: std::collections::HashMap<String, usize>,
+}
+
+/// A name a lookup can be performed with.
+///
+/// Exists because callers hold different spellings of the same fact: an adapter
+/// walking captured items has a `syn::Ident`, a resolved reference has the
+/// `String` inside a [`TypeId`], and a test has a literal. One accessor takes all
+/// three rather than each call site converting.
+///
+/// **The conversion is moved, not removed.** `proc_macro2::Ident` hashes by
+/// `to_string()` and offers no borrow as `str`, so an `Ident` lookup allocates
+/// wherever it happens; doing it here keeps `&str` and `&String` callers — among
+/// them the per-edge and per-reference lookups in the scan and the resolver —
+/// allocation-free.
+///
+/// Sealed: what may name an element is the language's business, not a caller's.
+///
+/// ```
+/// # prebindgen::Source::init_doctest_simulate();
+/// use prebindgen::core::flat::Flat;
+///
+/// let flat = Flat::builder().source("source_ffi").build()?;
+/// let ident = quote::format_ident!("test_function");
+///
+/// // The same element, whichever spelling the caller happens to hold.
+/// assert!(flat.function("test_function").is_some());
+/// assert!(flat.function(&ident).is_some());
+/// # Ok::<_, prebindgen::core::flat::ParseError>(())
+/// ```
+pub trait Name: sealed::Sealed {
+    /// The name as a string, borrowed when the caller already holds one.
+    fn as_name(&self) -> std::borrow::Cow<'_, str>;
+}
+
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for str {}
+    impl Sealed for String {}
+    impl Sealed for syn::Ident {}
+    impl<T: ?Sized + Sealed> Sealed for &T {}
+}
+
+impl Name for str {
+    fn as_name(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::Borrowed(self)
+    }
+}
+
+impl Name for String {
+    fn as_name(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::Borrowed(self)
+    }
+}
+
+impl Name for syn::Ident {
+    fn as_name(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::Owned(self.to_string())
+    }
+}
+
+/// So a caller already holding a reference does not have to reborrow.
+impl<T: ?Sized + Name> Name for &T {
+    fn as_name(&self) -> std::borrow::Cow<'_, str> {
+        T::as_name(self)
+    }
 }
 
 impl Flat {
@@ -431,11 +519,12 @@ impl Flat {
     /// The element with this name, whatever kind it is — including an
     /// [`Element::Unsupported`], which still holds its name against the
     /// namespace.
-    pub fn element(&self, name: &str) -> Option<&Element> {
-        self.elements.get(*self.by_name.get(name)?)
+    pub fn element<N: Name + ?Sized>(&self, name: &N) -> Option<&Element> {
+        self.elements
+            .get(*self.by_name.get(name.as_name().as_ref())?)
     }
 
-    pub fn function(&self, name: &str) -> Option<&Function> {
+    pub fn function<N: Name + ?Sized>(&self, name: &N) -> Option<&Function> {
         match self.element(name)? {
             Element::Function(f) => Some(f),
             _ => None,
@@ -447,14 +536,14 @@ impl Flat {
     /// Named `declared_type` because `type` is a keyword; it is the accessor a
     /// resolved [`TypeKind::Named`] reference leads to, and [`Self::resolve`] is
     /// the same lookup taking a [`TypeId`].
-    pub fn declared_type(&self, name: &str) -> Option<&Type> {
+    pub fn declared_type<N: Name + ?Sized>(&self, name: &N) -> Option<&Type> {
         match self.element(name)? {
             Element::Type(t) => Some(t),
             _ => None,
         }
     }
 
-    pub fn constant(&self, name: &str) -> Option<&Constant> {
+    pub fn constant<N: Name + ?Sized>(&self, name: &N) -> Option<&Constant> {
         match self.element(name)? {
             Element::Constant(c) => Some(c),
             _ => None,
@@ -500,6 +589,40 @@ impl Flat {
             .flat_map(TypeRef::walk)
     }
 
+    /// The `struct` declared under this name, or `None` for any other shape.
+    ///
+    /// A tuple struct is an [`Extern`] rather than a `Struct`, so this answers
+    /// only for a product of fields that cross the boundary.
+    pub fn struct_type<N: Name + ?Sized>(&self, name: &N) -> Option<&Struct> {
+        match self.declared_type(name)? {
+            Type::Struct(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// The `syn::ItemEnum` behind **either** enum shape.
+    ///
+    /// A sum and a C-style enum are different elements — numbered differently
+    /// and consumed as different constructs — but both were spelled `enum` in
+    /// Rust and both keep that item. A consumer re-emitting the source wants the
+    /// item without caring which shape it is; one that acts on the distinction
+    /// reaches for [`Self::declared_type`].
+    pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
+        match self.declared_type(name)? {
+            Type::Variant(v) => Some(&v.origin.syntax),
+            Type::Enum(e) => Some(&e.origin.syntax),
+            _ => None,
+        }
+    }
+
+    /// Module name of every captured source, in first-seen order.
+    ///
+    /// The first entry is the default module for a reference with no recorded
+    /// origin. Empty for a hand-built stream that carried no crate stamps.
+    pub fn source_modules(&self) -> &[String] {
+        &self.source_modules
+    }
+
     /// Every anonymous const, in stream order — **zero or more**.
     ///
     /// Not part of the flat API — see [`Guard`] — but ingested with it, and a
@@ -524,7 +647,7 @@ impl Flat {
         })
     }
 
-    /// Check a function signature against the source language's grammar.
+    /// Lower a function signature written outside the captured stream.
     ///
     /// For the **one input that does not come through this module**: a binding's
     /// `local_functions`, whose signatures are written by hand in a build script
@@ -532,10 +655,12 @@ impl Flat {
     /// lowered here, so this exists to keep the grammar decided in one place
     /// rather than re-checked at the far end.
     ///
-    /// Grammar only. Whether the types it names are *declared* is a whole-model
-    /// question ([`resolve_references`]), and a binding-local fn may legitimately
-    /// name types the source crate never did.
-    pub fn check_signature(&self, f: &syn::ItemFn) -> Result<(), ItemError> {
+    /// Grammar only, and it **validates by lowering**: an `Err` is a shape the
+    /// language cannot express, an `Ok` is the element to admit. Whether the types
+    /// it names are *declared* is a whole-model question ([`resolve_references`]),
+    /// and a binding-local fn may legitimately name types the source crate never
+    /// did.
+    pub fn lower_signature(&self, f: &syn::ItemFn) -> Result<Function, ItemError> {
         // Rebuilt from the model rather than kept: this runs once per local fn,
         // and a stored index would be a second copy of what `constants()` says.
         let consts = ConstIndex::new(self.constants().map(|c| {
@@ -545,9 +670,29 @@ impl Flat {
                 c.origin.crate_name().map(str::to_owned),
             )
         }));
-        // A synthesized fn has no captured location; the caller names it.
+        // A synthesized fn has no captured location, but it does have an origin
+        // crate — the caller supplies it, and `add_local_function` records it.
         let at = Rc::new(SourceLocation::default());
-        lower_fn(f, &at, &consts).map(|_| ())
+        lower_fn(f, &at, &consts)
+    }
+
+    /// Admit a binding-local function: one a build script wrote via `sig!(..)`
+    /// rather than one a source crate marked.
+    ///
+    /// The model is the pipeline's only index, so a function nothing captured
+    /// still has to live here or nothing downstream can find it. `crate_name` is
+    /// the module its generated call qualifies against, stamped onto the
+    /// element's location where [`Element::location`] already looks for it.
+    ///
+    /// Deliberately does **not** extend [`Self::source_modules`]: see that
+    /// field's docs.
+    pub(crate) fn add_local_function(&mut self, mut f: Function, crate_name: String) {
+        f.origin.location = Rc::new(SourceLocation {
+            crate_name: Some(crate_name),
+            ..SourceLocation::default()
+        });
+        self.by_name.insert(f.name.to_string(), self.elements.len());
+        self.elements.push(Element::Function(f));
     }
 
     /// The declaration a reference denotes.

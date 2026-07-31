@@ -293,34 +293,6 @@ pub struct Registry<M = ()> {
     /// later stage can ask it what a name means through the registry it already
     /// has — see [`Self::flat`].
     flat: crate::api::core::flat::Flat,
-    pub functions: HashMap<syn::Ident, (syn::ItemFn, SourceLocation)>,
-    pub structs: HashMap<syn::Ident, (syn::ItemStruct, SourceLocation)>,
-    pub enums: HashMap<syn::Ident, (syn::ItemEnum, SourceLocation)>,
-    pub consts: HashMap<syn::Ident, (syn::ItemConst, SourceLocation)>,
-    /// Anonymous consts, in stream order, re-emitted verbatim — **zero or
-    /// more**. Not API: having no name, they cannot be declared, so they are
-    /// neither gated nor addressable. See
-    /// [`Guard`](crate::api::core::flat::Guard) for what produces them.
-    pub guards: Vec<crate::api::core::flat::Guard>,
-
-    /// Origin crate name of each named item (fn/struct/enum/const),
-    /// recorded by [`Self::from_items`] from each item's
-    /// [`SourceLocation::crate_name`] stamp (absent for hand-built,
-    /// origin-less item streams). Adapters
-    /// consult [`Self::origin_module`] so generated references qualify each
-    /// item with the module of the crate that actually defines it — the
-    /// multi-source model, where a binding layers helper `#[prebindgen]`
-    /// crates on top of the flat crate.
-    pub(crate) item_origins: HashMap<syn::Ident, String>,
-
-    /// Module name of every ingested source, in first-seen stream order
-    /// (crate names, dashes normalized to underscores). The FIRST entry
-    /// doubles as the **default module** for references with no recorded
-    /// origin (e.g. a declared type with no `#[prebindgen]` item);
-    /// origin-less hand-built streams leave it empty and adapters fall
-    /// back to `crate`.
-    pub(crate) source_modules: Vec<String>,
-
     /// Type tables, one per direction. Each scanned type gets a [`TypeCell`]
     /// holding what the key names, whether the binding asks for it directly, and
     /// the resolved [`TypeEntry`] once the structural resolver fills it.
@@ -385,13 +357,6 @@ impl<M> Registry<M> {
     pub(crate) fn empty() -> Self {
         Self {
             flat: crate::api::core::flat::Flat::default(),
-            functions: HashMap::new(),
-            structs: HashMap::new(),
-            enums: HashMap::new(),
-            consts: HashMap::new(),
-            guards: Vec::new(),
-            item_origins: HashMap::new(),
-            source_modules: Vec::new(),
             input_types: Default::default(),
             output_types: Default::default(),
             type_refs: HashMap::new(),
@@ -780,7 +745,7 @@ impl<M> Registry<M> {
     /// // Annotated only because nothing here resolves: in a build script `M` is
     /// // fixed by the adapter passed to `resolve`, so no call site names it.
     /// let registry: Registry<()> = Registry::builder().source("source_ffi").build()?;
-    /// assert!(registry.functions.contains_key(&quote::format_ident!("test_function")));
+    /// assert!(registry.flat().function("test_function").is_some());
     /// # Ok::<_, prebindgen::core::ScanError>(())
     /// ```
     ///
@@ -858,8 +823,6 @@ impl<M> Registry<M> {
     /// a source crate that needs migrating sees one list instead of one rebuild
     /// per item.
     pub fn from_flat(flat: crate::api::core::flat::Flat) -> Result<Self, ScanError> {
-        use crate::api::core::flat::{Element, Type};
-
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -884,67 +847,6 @@ impl<M> Registry<M> {
                 .or_insert_with(|| ty.clone());
         }
 
-        // First-seen order, which is what makes the first entry the default
-        // module. Derived from the elements rather than stored twice.
-        for element in flat.elements() {
-            if let Some(crate_name) = element.location().crate_name.as_ref() {
-                let module = crate_name.replace('-', "_");
-                if !registry.source_modules.contains(&module) {
-                    registry.source_modules.push(module);
-                }
-            }
-        }
-
-        for element in flat.elements() {
-            let crate_name = element.location().crate_name.clone();
-            let named = element.name().cloned();
-            match element {
-                Element::Function(f) => {
-                    registry.functions.insert(
-                        f.name.clone(),
-                        (f.origin.syntax.clone(), element.location().clone()),
-                    );
-                }
-                Element::Type(Type::Struct(t)) => {
-                    registry.structs.insert(
-                        t.name.clone(),
-                        (t.origin.syntax.clone(), element.location().clone()),
-                    );
-                }
-                Element::Type(Type::Variant(t)) => {
-                    registry.enums.insert(
-                        t.name.clone(),
-                        (t.origin.syntax.clone(), element.location().clone()),
-                    );
-                }
-                Element::Type(Type::Enum(t)) => {
-                    registry.enums.insert(
-                        t.name.clone(),
-                        (t.origin.syntax.clone(), element.location().clone()),
-                    );
-                }
-                // An anonymous const, re-emitted verbatim. No name means nothing
-                // can declare it, which is why it is in none of the API maps.
-                Element::Guard(g) => registry.guards.push(g.clone()),
-                Element::Constant(c) => {
-                    registry.consts.insert(
-                        c.name.clone(),
-                        (c.origin.syntax.clone(), element.location().clone()),
-                    );
-                }
-                // An `Extern` states that a name exists and its contents do not
-                // cross. There is no map for that, and adapters have never seen
-                // one — a type alias was already a no-op here. Reachable through
-                // [`Self::flat`] for the stages that will want it.
-                Element::Type(Type::Extern(_)) => {}
-                // Refused above.
-                Element::Unsupported(_) => unreachable!("checked before indexing"),
-            }
-            if let (Some(ident), Some(crate_name)) = (named, crate_name) {
-                registry.item_origins.insert(ident, crate_name);
-            }
-        }
-
         registry.flat = flat;
         Ok(registry)
     }
@@ -954,30 +856,66 @@ impl<M> Registry<M> {
         &self.flat
     }
 
-    /// The origin crate's **module path** for an item ingested via
-    /// the item's [`SourceLocation`] stamp, or `None` when unknown —
-    /// callers then fall
-    /// back to [`Self::default_module`].
-    /// Every **named** item the registry indexes — functions, structs, enums,
-    /// consts — regardless of whether the stream carried an origin stamp.
+    /// Every **named** item the model holds — functions, structs, either enum
+    /// shape, consts — regardless of whether the stream carried an origin stamp.
     ///
-    /// Lives here, beside the maps, so an adapter that needs "anything the
-    /// source crate defines" does not enumerate item kinds itself: a new kind
-    /// is added once, here, instead of drifting in each adapter. Deliberately
-    /// NOT keyed off [`Self::item_origins`], which holds only the items whose
-    /// [`SourceLocation::crate_name`] was set — an origin-less hand-built
-    /// stream indexes items that map never sees, and callers are expected to
-    /// pair this with `origin_module(..).unwrap_or_else(default_module)`.
+    /// Lives here so an adapter that needs "anything the source crate defines"
+    /// does not enumerate element kinds itself: a new kind is taught here once
+    /// instead of drifting in each adapter. An **alias is deliberately absent**
+    /// — see the arm below — and callers are expected to pair this with
+    /// `origin_module(..).unwrap_or_else(default_module)`.
     pub fn named_item_idents(&self) -> impl Iterator<Item = &syn::Ident> {
-        self.functions
-            .keys()
-            .chain(self.structs.keys())
-            .chain(self.enums.keys())
-            .chain(self.consts.keys())
+        use crate::api::core::flat::{Element, Type};
+        self.flat.elements().filter_map(|e| match e {
+            // An `Extern` names a type without declaring a body, and is
+            // deliberately absent: its caller decides which names to qualify in
+            // generated Rust, and qualifying an alias would move that output.
+            Element::Type(Type::Extern(_)) => None,
+            Element::Function(_) | Element::Type(_) | Element::Constant(_) => e.name(),
+            Element::Guard(_) | Element::Unsupported(_) => None,
+        })
     }
 
+    /// Every **struct or enum** name — either enum shape, never an alias.
+    ///
+    /// Named for its population rather than as the iterator form of
+    /// [`Self::declares_type`], which it is **not**: that predicate counts every
+    /// declared type, aliases included. This one feeds *"skipping undeclared
+    /// `#[prebindgen]` struct/enum"*, which names a kind an alias is not — so the
+    /// two answer differently on purpose, and the names now say so.
+    fn struct_enum_idents(&self) -> impl Iterator<Item = &syn::Ident> {
+        use crate::api::core::flat::Type;
+        self.flat.types().filter_map(|t| match t {
+            Type::Struct(_) | Type::Variant(_) | Type::Enum(_) => Some(t.name()),
+            Type::Extern(_) => None,
+        })
+    }
+
+    /// Whether the source declares a type under this name — **including an
+    /// alias**.
+    ///
+    /// The question both type-diagnostic sites ask, shared so they cannot drift.
+    /// An alias counts because `#[prebindgen] pub type Handle = ..` *is* a
+    /// declaration of that name: it can be declared bare by an adapter (landing
+    /// in the no-indexed-body branch above, which is what
+    /// `ptr_class(ZKeyExpr<'static>)` relies on), so a diagnostic that says
+    /// "no such captured item" would be false.
+    ///
+    /// Distinct from [`Self::struct_enum_idents`], which excludes aliases
+    /// because it feeds a *"skipping undeclared struct/enum"* warning — a
+    /// different question, about what an adapter left unclaimed.
+    fn declares_type(&self, ident: &syn::Ident) -> bool {
+        self.flat.declared_type(ident).is_some()
+    }
+
+    /// The origin crate's **module path** for an item, read off the element's
+    /// own [`SourceLocation`] stamp, or `None` when unknown — callers then fall
+    /// back to [`Self::default_module`].
     pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
-        let crate_name = self.item_origins.get(ident)?;
+        // Off the element's own location, which covers both populations: a
+        // captured item stamped at capture time, and a binding-local fn stamped
+        // by `add_local_function`.
+        let crate_name = self.flat.element(&ident)?.location().crate_name.as_ref()?;
         let module = crate_name.replace('-', "_");
         syn::parse_str(&module).ok()
     }
@@ -990,7 +928,8 @@ impl<M> Registry<M> {
     /// registry-level override could only fix ONE module, which is
     /// incomplete with chained multi-source streams.
     pub fn default_module(&self) -> Option<syn::Path> {
-        self.source_modules
+        self.flat
+            .source_modules()
             .first()
             .and_then(|m| syn::parse_str(m).ok())
     }
@@ -998,7 +937,8 @@ impl<M> Registry<M> {
     /// Module paths of every ingested source, ingestion order — e.g. for a
     /// glob import that must see all sources' items.
     pub fn all_source_modules(&self) -> Vec<syn::Path> {
-        self.source_modules
+        self.flat
+            .source_modules()
             .iter()
             .filter_map(|m| syn::parse_str(m).ok())
             .collect()
@@ -1069,10 +1009,9 @@ impl<M> Registry<M> {
                 .ident
                 .to_string();
             let last = tp.path.segments.last().expect("len checked");
-            if self.source_modules.contains(&head) {
+            if self.flat.source_modules().contains(&head) {
                 qualified.push((key.to_string(), last.to_token_stream().to_string()));
-            } else if self.structs.contains_key(&last.ident) || self.enums.contains_key(&last.ident)
-            {
+            } else if self.declares_type(&last.ident) {
                 println!(
                     "cargo:warning=prebindgen: declared type `{}` is path-qualified, but a \
                      captured #[prebindgen] item `{}` exists — if you meant the source item, \
@@ -1094,7 +1033,7 @@ impl<M> Registry<M> {
 
         // Scan declared functions.
         for ident in &declared.functions {
-            if let Some((item_fn, _)) = self.functions.get(ident).cloned() {
+            if let Some(item_fn) = self.flat.function(&ident).map(|f| f.origin.syntax.clone()) {
                 self.scan_fn_signature(&item_fn)?;
             } else {
                 missing.push(("function", ident.to_string()));
@@ -1102,7 +1041,7 @@ impl<M> Registry<M> {
         }
 
         for ident in &declared.ignored_functions {
-            if !self.functions.contains_key(ident) {
+            if self.flat.function(&ident).is_none() {
                 println!(
                     "cargo:warning=prebindgen: ignored function `{}` not found among #[prebindgen] items",
                     ident
@@ -1115,7 +1054,7 @@ impl<M> Registry<M> {
         // `extra_required_types`) — but they are referenced by name from
         // adapter declarations, so a missing one is a hard error.
         for ident in &declared.helper_functions {
-            if !self.functions.contains_key(ident) {
+            if self.flat.function(&ident).is_none() {
                 missing.push(("helper function", ident.to_string()));
             }
         }
@@ -1125,14 +1064,16 @@ impl<M> Registry<M> {
         // so the type is required in the output direction only.
         if let Some(decl_consts) = &declared.consts {
             for ident in decl_consts {
-                if let Some((item_const, _)) = self.consts.get(ident).cloned() {
+                if let Some(item_const) =
+                    self.flat.constant(&ident).map(|c| c.origin.syntax.clone())
+                {
                     self.ensure_entry(Direction::Output, &item_const.ty, true);
                 } else {
                     missing.push(("constant", ident.to_string()));
                 }
             }
             for ident in &declared.ignored_consts {
-                if !self.consts.contains_key(ident) {
+                if self.flat.constant(&ident).is_none() {
                     println!(
                         "cargo:warning=prebindgen: ignored const `{}` not found among #[prebindgen] items",
                         ident
@@ -1157,12 +1098,16 @@ impl<M> Registry<M> {
             let ty = key.to_type();
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
-                if let Some((s, _)) = self.structs.get(&ident).cloned() {
+                if let Some(s) = self
+                    .flat
+                    .struct_type(&ident)
+                    .map(|s| s.origin.syntax.clone())
+                {
                     self.scan_struct(&s)?;
                     self.ensure_entry(Direction::Input, &ty, true);
                     self.ensure_entry(Direction::Output, &ty, true);
                     matched = true;
-                } else if let Some((e, _)) = self.enums.get(&ident).cloned() {
+                } else if let Some(e) = self.flat.enum_item(&ident).cloned() {
                     self.scan_enum(&e)?;
                     self.ensure_entry(Direction::Input, &ty, true);
                     self.ensure_entry(Direction::Output, &ty, true);
@@ -1181,9 +1126,7 @@ impl<M> Registry<M> {
 
         for key in &declared.ignored_types {
             let ty = key.to_type();
-            let matched = bare_path_ident(&ty).is_some_and(|ident| {
-                self.structs.contains_key(&ident) || self.enums.contains_key(&ident)
-            });
+            let matched = bare_path_ident(&ty).is_some_and(|ident| self.declares_type(&ident));
             if !matched {
                 println!(
                     "cargo:warning=prebindgen: ignored type `{}` not found among #[prebindgen] items",
@@ -1202,8 +1145,9 @@ impl<M> Registry<M> {
                 && declared.ignored_name_predicates.iter().any(|p| p(name))
         };
         let mut skipped_fns: Vec<String> = self
-            .functions
-            .keys()
+            .flat
+            .functions()
+            .map(|f| &f.name)
             .filter(|k| {
                 !declared.functions.contains(*k)
                     && !declared.ignored_functions.contains(*k)
@@ -1226,7 +1170,7 @@ impl<M> Registry<M> {
                 || declared.ignored_types.contains(key)
                 || declared.boundary_only_types.contains(key)
         };
-        for ident in self.structs.keys().chain(self.enums.keys()) {
+        for ident in self.struct_enum_idents() {
             let name = ident.to_string();
             let key = TypeKey::from_ident(ident);
             if !type_acknowledged(&key) && !pred_ignored(&name) {
@@ -1243,8 +1187,9 @@ impl<M> Registry<M> {
 
         if let Some(decl_consts) = &declared.consts {
             let mut skipped_consts: Vec<String> = self
-                .consts
-                .keys()
+                .flat
+                .constants()
+                .map(|c| &c.name)
                 .filter(|k| {
                     !decl_consts.contains(*k)
                         && !declared.ignored_consts.contains(*k)
@@ -1354,7 +1299,7 @@ impl<M> Registry<M> {
         // No receiver or non-ident pattern can reach here: a captured item was
         // refused by the frontend and `from_flat` failed before indexing it, and
         // a binding-local fn was checked against the same grammar
-        // (`Flat::check_signature`) when `resolve` synthesized it.
+        // (`Flat::lower_signature`) when `resolve` synthesized it.
         for input in &f.sig.inputs {
             match input {
                 syn::FnArg::Receiver(_) => continue,
@@ -1490,7 +1435,7 @@ impl<M> Registry<M> {
         // contribute nothing here.
         if let Some(name) = bare_path_ident(ty) {
             use crate::api::core::flat::{Field, Type};
-            let fields: Vec<&Field> = match self.flat.declared_type(&name.to_string()) {
+            let fields: Vec<&Field> = match self.flat.declared_type(&name) {
                 Some(Type::Struct(s)) => s.fields.iter().collect(),
                 Some(Type::Variant(v)) => v
                     .alternatives
@@ -1531,18 +1476,21 @@ impl<M> Registry<M> {
         for (item_fn, origin) in adapter.local_functions() {
             let ident = item_fn.sig.ident.clone();
             // The one input that does not come through `Flat`: a `sig!(..)` is
-            // written by hand in a build script and inserted straight into the
-            // maps, so the grammar has to be checked here or nowhere. Silently
-            // dropping a `self` receiver or a pattern parameter would surface as
-            // an arity mismatch out of rustc on generated code, which is the
-            // wrong end of the pipeline to learn about a build.rs typo.
-            if let Err(error) = self.flat.check_signature(&item_fn) {
-                return Err(ScanError::AdapterInvariant {
-                    message: format!("binding-local fn `{ident}`: {error}"),
+            // written by hand in a build script, so the grammar has to be checked
+            // here or nowhere. Silently dropping a `self` receiver or a pattern
+            // parameter would surface as an arity mismatch out of rustc on
+            // generated code, which is the wrong end of the pipeline to learn
+            // about a build.rs typo.
+            let lowered = match self.flat.lower_signature(&item_fn) {
+                Ok(f) => f,
+                Err(error) => {
+                    return Err(ScanError::AdapterInvariant {
+                        message: format!("binding-local fn `{ident}`: {error}"),
+                    }
+                    .into())
                 }
-                .into());
-            }
-            if self.functions.contains_key(&ident) {
+            };
+            if self.flat.element(&ident).is_some() {
                 return Err(ScanError::AdapterInvariant {
                     message: format!(
                         "binding-local fn `{ident}` collides with a `#[prebindgen]` item — \
@@ -1552,9 +1500,9 @@ impl<M> Registry<M> {
                 }
                 .into());
             }
-            self.functions
-                .insert(ident.clone(), (item_fn, crate::SourceLocation::default()));
-            self.item_origins.insert(ident, origin);
+            // Into the model, so every downstream stage finds it exactly where it
+            // finds a captured fn — there is one index, and this is it.
+            self.flat.add_local_function(lowered, origin);
         }
         let declared = DeclaredItems::from_adapter(&adapter)?;
         self.scan_declared_items(&declared)?;

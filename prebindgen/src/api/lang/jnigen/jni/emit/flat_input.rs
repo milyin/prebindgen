@@ -882,7 +882,7 @@ fn build_flat_sum_field(
     use crate::api::core::types_util::SumSpec;
 
     let ident = bare_path_ident(sum_ty)?;
-    let (item_enum, _) = registry.enums.get(&ident)?;
+    let item_enum = registry.flat().enum_item(&ident)?;
     let cfg = ext.types.get(&TypeKey::from_ident(&ident))?;
     let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
@@ -1133,7 +1133,11 @@ pub(crate) fn build_flat_input_plan(
     let Some(name) = bare_path_ident(&struct_ty) else {
         return Ok(None);
     };
-    let Some((st, _)) = registry.structs.get(&name) else {
+    let Some(st) = registry
+        .flat()
+        .struct_type(&name)
+        .map(|st| &st.origin.syntax)
+    else {
         return Ok(None);
     };
     let key = TypeKey::from_type(&struct_ty);

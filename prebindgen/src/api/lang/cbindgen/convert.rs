@@ -193,10 +193,10 @@ impl Cbindgen {
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
-                    .functions
-                    .get(f)
-                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f))
-                    .0;
+                    .flat()
+                    .function(&f)
+                    .map(|func| &func.origin.syntax)
+                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (repr, by_ref) = one_param(item);
                 let ret = fn_ret(item);
                 let (ok, fallible) = match result_parts(&ret) {
@@ -237,10 +237,10 @@ impl Cbindgen {
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
-                    .functions
-                    .get(f)
-                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f))
-                    .0;
+                    .flat()
+                    .function(&f)
+                    .map(|func| &func.origin.syntax)
+                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);
                 assert_eq!(TypeKey::from_type(&param), decl.key);
                 let ret = fn_ret(item);

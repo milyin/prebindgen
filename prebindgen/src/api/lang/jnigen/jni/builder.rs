@@ -810,15 +810,19 @@ impl JniGen {
         decl: &FieldsDecl,
     ) -> Vec<crate::api::core::unfold::FieldRecord> {
         let func = &decl.func;
-        let (item_fn, _) = registry.functions.get(func).unwrap_or_else(|| {
-            panic!(
-                "expand_return!({}).fields(fields!({func})): no `#[prebindgen]` function \
+        let item_fn = registry
+            .flat()
+            .function(&func)
+            .map(|func| &func.origin.syntax)
+            .unwrap_or_else(|| {
+                panic!(
+                    "expand_return!({}).fields(fields!({func})): no `#[prebindgen]` function \
                  `{func}` — a value form is an accessor `fn {func}(v: &{}) -> {}Struct`",
-                key.as_str(),
-                key.as_str(),
-                key.as_str(),
-            )
-        });
+                    key.as_str(),
+                    key.as_str(),
+                    key.as_str(),
+                )
+            });
         let ret: syn::Type = match &item_fn.sig.output {
             syn::ReturnType::Type(_, t) => crate::api::core::unfold::peel_ref(t),
             syn::ReturnType::Default => panic!(
@@ -1029,9 +1033,9 @@ impl JniGen {
                         dotted,
                     );
                     let ident = bare_path_ident(&probe).expect("a sum type is a path type");
-                    let (item_enum, _) = registry
-                        .enums
-                        .get(&ident)
+                    let item_enum = registry
+                        .flat()
+                        .enum_item(&ident)
                         .expect("TypeKind::Sum implies an indexed enum");
                     let sum_cfg = self.types[&TypeKey::from_type(&probe)]
                         .sum()
@@ -1392,12 +1396,16 @@ impl JniGen {
         let target = key.to_type();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
-                let (item_fn, _) = registry.functions.get(f).unwrap_or_else(|| {
-                    panic!(
-                        "convert!({}).input({f}): function not found among #[prebindgen] items",
-                        key.as_str()
-                    )
-                });
+                let item_fn = registry
+                    .flat()
+                    .function(&f)
+                    .map(|func| &func.origin.syntax)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "convert!({}).input({f}): function not found among #[prebindgen] items",
+                            key.as_str()
+                        )
+                    });
                 let (param_ty, by_ref) = convert_single_param(key, f, item_fn, "input");
                 // Return: `T` (infallible) or `Result<T, E>` (fallible — E
                 // routes to the caller's error handler via the exc slot).
@@ -1464,12 +1472,16 @@ impl JniGen {
         let target = key.to_type();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
-                let (item_fn, _) = registry.functions.get(g).unwrap_or_else(|| {
-                    panic!(
+                let item_fn = registry
+                    .flat()
+                    .function(&g)
+                    .map(|func| &func.origin.syntax)
+                    .unwrap_or_else(|| {
+                        panic!(
                         "convert!({}).output({g}): function not found among #[prebindgen] items",
                         key.as_str()
                     )
-                });
+                    });
                 let (param_ty, by_ref) = convert_single_param_any(g, item_fn);
                 assert!(
                     TypeKey::from_type(&param_ty) == *key,

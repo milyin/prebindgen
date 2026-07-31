@@ -111,8 +111,12 @@ fn arm_erased_sig(
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
     match ctor {
-        Some(cf) => match registry.functions.get(cf) {
-            Some((item_fn, _)) => item_fn
+        Some(cf) => match registry
+            .flat()
+            .function(&cf)
+            .map(|func| &func.origin.syntax)
+        {
+            Some(item_fn) => item_fn
                 .sig
                 .inputs
                 .iter()
@@ -251,7 +255,10 @@ fn variant_typed_params(
     let origin_kt = kt_param_name(&origin.to_string());
     let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
         Some(cf) => {
-            let (item_fn, _) = registry.functions.get(cf)?;
+            let item_fn = registry
+                .flat()
+                .function(&cf)
+                .map(|func| &func.origin.syntax)?;
             let optional = item_fn
                 .sig
                 .inputs

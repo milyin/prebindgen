@@ -126,7 +126,7 @@ pub(crate) struct SumConfig {
 pub struct FunctionEntry {
     /// Rust function ident — must match a `#[prebindgen]`-marked free
     /// function in the registered source module. Looked up by
-    /// `registry.functions[ident]`.
+    /// `registry.flat().function(ident)`.
     pub rust_ident: syn::Ident,
     /// Kotlin-side name override, set by chaining `.name("...")` after
     /// the entry's registration. `None` = derive from `rust_ident` via
@@ -306,7 +306,7 @@ pub(crate) enum MemberKind {
 /// JSONL).
 #[derive(Clone, Debug)]
 pub(crate) struct ClassMember {
-    /// Rust function ident (`registry.functions[ident]`).
+    /// Rust function ident (`registry.flat().function(ident)`).
     pub rust_ident: syn::Ident,
     /// Per-member `.name()` override, stored RAW — the effective Kotlin
     /// name is derived at point of use by [`JniGen::class_method_kotlin_name`]

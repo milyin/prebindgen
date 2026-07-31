@@ -565,10 +565,11 @@ fn fn_plan_memo_shares_one_derivation() {
     let gen = registry.resolve(jni).expect("resolve");
     let (ext, registry) = (gen.adapter(), gen.registry());
     let f = &registry
-        .functions
-        .get(&syn::parse_str::<syn::Ident>("z_do_thing").unwrap())
+        .flat()
+        .function("z_do_thing")
         .expect("indexed")
-        .0;
+        .origin
+        .syntax;
 
     // The plan is already in the memo (populated at resolve by validation) —
     // repeated lookups return the SAME allocation, and it equals what a fresh

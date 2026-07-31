@@ -296,10 +296,10 @@ pub fn apply<M>(
         // fn's peeled (`Option`/`Vec`/`&`) return type — the typo guard for
         // `.expand_return(expand_return!(T)…)`.
         if let Some(declared) = &ed.declared_source {
-            let (item_fn, _) = registry
-                .functions
-                .get(&ed.func)
-                .cloned()
+            let item_fn = registry
+                .flat()
+                .function(&ed.func)
+                .map(|f| f.origin.syntax.clone())
                 .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
             let ret = fn_return(&item_fn);
             if !returns_type(&ret, &TypeKey::from_type(declared)) {
@@ -340,7 +340,11 @@ pub fn apply<M>(
             if accessor_fns.contains(func) {
                 continue;
             }
-            let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+            let Some(item_fn) = registry
+                .flat()
+                .function(&func)
+                .map(|f| f.origin.syntax.clone())
+            else {
                 continue;
             };
             let ret = fn_return(&item_fn);
@@ -393,7 +397,11 @@ pub fn apply<M>(
     // (there is no return-value lane in a callback invocation). A type without
     // a default deconstructor gets no plan and is delivered whole.
     for func in declared_fns {
-        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+        let Some(item_fn) = registry
+            .flat()
+            .function(&func)
+            .map(|f| f.origin.syntax.clone())
+        else {
             continue;
         };
         for input in &item_fn.sig.inputs {
@@ -601,7 +609,11 @@ fn wire_fixed_returns<M>(
     no_converter: bool,
 ) {
     for func in declared_fns {
-        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+        let Some(item_fn) = registry
+            .flat()
+            .function(&func)
+            .map(|f| f.origin.syntax.clone())
+        else {
             continue;
         };
         let ret = fn_return(&item_fn);
@@ -682,7 +694,11 @@ fn wire_fixed_callbacks<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for func in declared_fns {
-        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+        let Some(item_fn) = registry
+            .flat()
+            .function(&func)
+            .map(|f| f.origin.syntax.clone())
+        else {
             continue;
         };
         for input in &item_fn.sig.inputs {
@@ -765,7 +781,11 @@ pub fn apply_leaf_vec_folds<M>(
     // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
     let is_nominated = |bare: &syn::Type| elem_keys.contains(&TypeKey::from_type(bare));
     for func in declared_fns {
-        let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+        let Some(item_fn) = registry
+            .flat()
+            .function(&func)
+            .map(|f| f.origin.syntax.clone())
+        else {
             continue;
         };
         // Output position: `Vec<T>` / `Option<Vec<T>>` return. Skip if a plan
@@ -938,10 +958,10 @@ fn process_decl<M>(
     ed: &OutputDecl,
 ) -> Result<(), UnfoldError> {
     {
-        let (item_fn, _) = registry
-            .functions
-            .get(&ed.func)
-            .cloned()
+        let item_fn = registry
+            .flat()
+            .function(&ed.func)
+            .map(|f| f.origin.syntax.clone())
             .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
 
         // The value to decompose: the success return (`Output`) or the
@@ -1691,29 +1711,23 @@ fn accessor_signature<M>(
     registry: &Registry<M>,
     func: &syn::Ident,
 ) -> Result<(syn::Type, syn::Type), UnfoldError> {
-    let (item_fn, _) = registry
-        .functions
-        .get(func)
+    let f = registry
+        .flat()
+        .function(&func)
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
 
-    // First parameter is the receiver `&T`; peel the borrow to get `T`.
-    let takes = item_fn
-        .sig
-        .inputs
-        .iter()
-        .find_map(|input| match input {
-            syn::FnArg::Typed(pt) => Some((*pt.ty).clone()),
-            _ => None,
-        })
+    // First parameter is the receiver `&T`; peel the borrow to get `T`. The
+    // borrow is `TypeKind::Ref`, so the peel reads the classification instead of
+    // re-deciding it from `syn::Type::Reference`.
+    let first = f
+        .params
+        .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
-    let takes = match takes {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other,
+    let takes = match &first.ty.kind {
+        crate::api::core::flat::TypeKind::Ref { inner, .. } => inner.origin.syntax.clone(),
+        _ => first.ty.origin.syntax.clone(),
     };
-    let ret: syn::Type = match &item_fn.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, t) => (**t).clone(),
-    };
+    let ret: syn::Type = f.ret.origin.syntax.clone();
     Ok((takes, ret))
 }
 
@@ -1744,16 +1758,11 @@ fn place_is_owned(hoists: &[Hoist], path_prefix: &[PathStep], by_ref: bool) -> b
 /// compare target types, so `f(v: T)` and `f(v: &T)` are indistinguishable
 /// there by design.
 fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
-    registry.functions.get(func).is_some_and(|(f, _)| {
-        f.sig
-            .inputs
-            .iter()
-            .find_map(|input| match input {
-                syn::FnArg::Typed(pt) => Some(!matches!(*pt.ty, syn::Type::Reference(_))),
-                _ => None,
-            })
-            .unwrap_or(false)
-    })
+    registry
+        .flat()
+        .function(&func)
+        .and_then(|f| f.params.first())
+        .is_some_and(|p| !matches!(p.ty.kind, crate::api::core::flat::TypeKind::Ref { .. }))
 }
 
 fn check_takes(

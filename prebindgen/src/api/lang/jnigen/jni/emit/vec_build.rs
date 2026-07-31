@@ -65,7 +65,11 @@ pub(crate) fn collect_vec_build_elem_types(
 ) -> Vec<syn::Type> {
     let declared = ext.declared_functions();
     let mut seen: std::collections::BTreeMap<String, syn::Type> = std::collections::BTreeMap::new();
-    for (ident, (item_fn, _)) in &registry.functions {
+    for (ident, item_fn) in registry
+        .flat()
+        .functions()
+        .map(|f| (&f.name, &f.origin.syntax))
+    {
         if !declared.contains(ident) {
             continue;
         }

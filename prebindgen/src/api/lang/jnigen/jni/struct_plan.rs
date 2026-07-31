@@ -488,7 +488,7 @@ fn sum_plan_kind(
     let ident = bare_path_ident(ty).unwrap_or_else(|| {
         panic!("fromParts bridge: sealed-class field `{owner}` is not a path type")
     });
-    let (item_enum, _) = registry.enums.get(&ident).unwrap_or_else(|| {
+    let item_enum = registry.flat().enum_item(&ident).unwrap_or_else(|| {
         panic!("fromParts bridge: sealed-class field `{owner}` has no indexed enum `{ident}`")
     });
     let key = TypeKey::from_ident(&ident);

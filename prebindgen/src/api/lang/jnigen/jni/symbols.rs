@@ -127,8 +127,8 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
                 short.to_string(),
                 format!("sealed class `{key}` itself (its variants' supertype)"),
             )]);
-            if let Some((item_enum, _)) =
-                bare_path_ident(&key.to_type()).and_then(|i| registry.enums.get(&i))
+            if let Some(item_enum) =
+                bare_path_ident(&key.to_type()).and_then(|i| registry.flat().enum_item(&i))
             {
                 for v in &item_enum.variants {
                     let name = ext.sum_variant_class_name(sum_cfg, &v.ident);
@@ -172,7 +172,11 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             // surface signature (base + `.split_on_param` shells) comes from
             // the SAME `build_wrapper_surface` emission uses — a body-less
             // prototype, so the validator doesn't pay for body codegen.
-            if let Some((item_fn, _)) = registry.functions.get(&entry.rust_ident) {
+            if let Some(item_fn) = registry
+                .flat()
+                .function(&entry.rust_ident)
+                .map(|func| &func.origin.syntax)
+            {
                 if let Some(s) = build_wrapper_surface(ext, item_fn, registry, Some(&name), None) {
                     for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
                         add_overload(&fn_scope, &ov, &origin, &mut errors);
@@ -213,7 +217,11 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
         for m in &ext.class_members[key] {
             let name = ext.effective_method_name(key, m);
             check_ident(&name, &format!("method `{}`", m.rust_ident), &mut errors);
-            let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) else {
+            let Some(item_fn) = registry
+                .flat()
+                .function(&m.rust_ident)
+                .map(|func| &func.origin.syntax)
+            else {
                 continue;
             };
             let (scope, receiver) = match m.kind {
@@ -272,7 +280,11 @@ fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
             Some(i) => i,
             None => continue,
         };
-        if let Some((s, _)) = registry.structs.get(&ident) {
+        if let Some(s) = registry
+            .flat()
+            .struct_type(&ident)
+            .map(|st| &st.origin.syntax)
+        {
             for f in &s.fields {
                 if let Some(fname) = &f.ident {
                     let camel = kt_snake_to_camel(&fname.to_string());
@@ -285,7 +297,7 @@ fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
                 }
             }
         }
-        if let Some((e, _)) = registry.enums.get(&ident) {
+        if let Some(e) = registry.flat().enum_item(&ident) {
             for v in &e.variants {
                 let screaming =
                     crate::api::lang::jnigen::util::camel_to_screaming_snake(&v.ident.to_string());

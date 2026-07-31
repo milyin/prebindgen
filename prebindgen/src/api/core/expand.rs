@@ -26,7 +26,7 @@
 
 use std::collections::HashSet;
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::api::core::{
@@ -190,10 +190,10 @@ pub fn apply<M>(
         // (`Option`/`&`) type must equal the decl's declared type — the
         // typo guard for both coordinates of `.expand_param(name, decl)`.
         if let Some(declared) = &ed.declared_target {
-            let (item_fn, _) = registry
-                .functions
-                .get(&ed.func)
-                .cloned()
+            let item_fn = registry
+                .flat()
+                .function(&ed.func)
+                .map(|f| f.origin.syntax.clone())
                 .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
             let param_ty = find_param_type(&item_fn, &ed.param)
                 .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
@@ -237,7 +237,11 @@ pub fn apply<M>(
             if accessor_fns.contains(func) {
                 continue;
             }
-            let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+            let Some(item_fn) = registry
+                .flat()
+                .function(&func)
+                .map(|f| f.origin.syntax.clone())
+            else {
                 continue;
             };
             // A method's receiver (first param of its class type) binds to `this`
@@ -299,10 +303,10 @@ fn process_expand<M>(
     exp: &Expansions,
     ed: &ExpandDecl,
 ) -> Result<(), ExpandError> {
-    let (item_fn, _) = registry
-        .functions
-        .get(&ed.func)
-        .cloned()
+    let item_fn = registry
+        .flat()
+        .function(&ed.func)
+        .map(|f| f.origin.syntax.clone())
         .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
 
     let param_ty = find_param_type(&item_fn, &ed.param)
@@ -370,25 +374,20 @@ fn resolve_constructor<M>(
 /// Constructor signature: parameter `(name, type)` pairs, the produced
 /// (`Ok`) target type, and whether it is fallible (`-> Result<_, _>`).
 fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSig, ExpandError> {
-    let (item_fn, _) = registry
-        .functions
-        .get(func)
+    // Read off the element rather than re-walked from the signature: `params`
+    // and `ret` are the same facts, already decided once — including that an
+    // elided return and a written `-> ()` are one thing.
+    let f = registry
+        .flat()
+        .function(&func)
         .ok_or_else(|| ExpandError::UnknownConstructor(func.clone()))?;
 
-    let mut params: Vec<(syn::Ident, syn::Type)> = Vec::new();
-    for input in &item_fn.sig.inputs {
-        if let syn::FnArg::Typed(pt) = input {
-            let name = match &*pt.pat {
-                syn::Pat::Ident(pi) => pi.ident.clone(),
-                _ => syn::Ident::new("arg", Span::call_site()),
-            };
-            params.push((name, (*pt.ty).clone()));
-        }
-    }
-    let ret: syn::Type = match &item_fn.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, t) => (**t).clone(),
-    };
+    let params: Vec<(syn::Ident, syn::Type)> = f
+        .params
+        .iter()
+        .map(|p| (p.name.clone(), p.ty.origin.syntax.clone()))
+        .collect();
+    let ret: syn::Type = f.ret.origin.syntax.clone();
     let (target, fallible) = match result_ok_type(&ret) {
         Some(ok) => (ok, true),
         None => (ret, false),

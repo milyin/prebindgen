@@ -645,7 +645,10 @@ fn builder_reads_a_source_directory() {
     let dir = write_source_dir("plain", "flat-crate", "marked_fn");
     let registry: Registry<()> = Registry::builder().source(&dir).build().expect("indexes");
 
-    assert!(registry.functions.contains_key(&fn_ident("marked_fn")));
+    assert!(registry
+        .flat()
+        .function(&fn_ident("marked_fn").to_string())
+        .is_some());
     // Dashes normalize to underscores, as they must to be a Rust module path.
     assert_eq!(
         registry.default_module().map(module),
@@ -708,7 +711,13 @@ fn builder_composes_directories_and_streams() {
         .expect("indexes");
 
     for name in ["flat_fn", "helper_fn", "synthetic"] {
-        assert!(registry.functions.contains_key(&fn_ident(name)), "{name}");
+        assert!(
+            registry
+                .flat()
+                .function(&fn_ident(name).to_string())
+                .is_some(),
+            "{name}"
+        );
     }
     // Each directory keeps its own origin; the stream item has none to keep.
     assert_eq!(
@@ -745,12 +754,18 @@ fn builder_and_from_items_agree() {
     let streamed: Registry<()> =
         Registry::from_items(crate::Source::new(&dir).items_all()).expect("indexes");
 
-    assert_eq!(built.functions.len(), streamed.functions.len());
+    assert_eq!(
+        built.flat().functions().count(),
+        streamed.flat().functions().count()
+    );
     assert_eq!(
         built.default_module().map(module),
         streamed.default_module().map(module)
     );
-    assert_eq!(built.guards.len(), streamed.guards.len());
+    assert_eq!(
+        built.flat().guards().count(),
+        streamed.flat().guards().count()
+    );
 }
 
 // ── What a table cell knows about its type ─────────────────────────────
@@ -900,18 +915,22 @@ fn from_flat_projects_each_element_kind() {
     let reg: Registry<()> = Registry::from_flat(flat).expect("project");
 
     let id = |n: &str| syn::parse_str::<syn::Ident>(n).unwrap();
-    assert!(reg.functions.contains_key(&id("f")));
-    assert!(reg.structs.contains_key(&id("S")));
-    assert!(reg.enums.contains_key(&id("Sum")), "a sum is an enum here");
-    assert!(reg.enums.contains_key(&id("Flags")));
-    assert!(reg.consts.contains_key(&id("K")));
+    assert!(reg.flat().function(&id("f").to_string()).is_some());
+    assert!(reg.flat().struct_type(&id("S").to_string()).is_some());
+    assert!(
+        reg.flat().enum_item(&id("Sum").to_string()).is_some(),
+        "a sum is an enum here"
+    );
+    assert!(reg.flat().enum_item(&id("Flags").to_string()).is_some());
+    assert!(reg.flat().constant(&id("K").to_string()).is_some());
     assert_eq!(
-        reg.guards.len(),
+        reg.flat().guards().count(),
         2,
         "both anonymous consts, in stream order"
     );
     assert!(
-        !reg.structs.contains_key(&id("Handle")) && !reg.enums.contains_key(&id("Handle")),
+        reg.flat().struct_type(&id("Handle").to_string()).is_none()
+            && reg.flat().enum_item(&id("Handle").to_string()).is_none(),
         "an Extern names a type; it declares no body to index"
     );
 
@@ -1068,11 +1087,9 @@ fn a_guard_never_reaches_the_const_surface() {
     ];
     let mut reg: Registry<()> = Registry::from_items(items).unwrap();
 
-    assert_eq!(reg.guards.len(), 2);
-    assert_eq!(reg.consts.len(), 1);
-    assert!(reg
-        .consts
-        .contains_key(&syn::parse_str::<syn::Ident>("REAL").unwrap()));
+    assert_eq!(reg.flat().guards().count(), 2);
+    assert_eq!(reg.flat().constants().count(), 1);
+    assert!(reg.flat().constant("REAL").is_some());
 
     // An adapter WITH a const mechanism that declares nothing warns about `REAL`
     // only: a guard is not undeclared API, it is not API.
@@ -1081,4 +1098,177 @@ fn a_guard_never_reaches_the_const_surface() {
         ..Default::default()
     };
     reg.scan_declared(&ext).expect("guards are not declarable");
+}
+
+// ── One index: what the deleted maps used to guarantee ─────────────────
+
+/// `named_item_idents` must **not** name an alias.
+///
+/// It used to derive from the four maps, and an `Extern` was in none of them.
+/// Derived from the model it would include alias names unless filtered — and its
+/// caller uses it to decide which names generated Rust qualifies, so including
+/// one would move generated output. This is the assertion that keeps the filter.
+#[test]
+fn named_item_idents_omits_aliases() {
+    let reg: Registry<()> = crate::api::test_util::reg_with(&[
+        "pub fn f(x: u64) -> u64 { x }",
+        "pub struct S { pub a: u64 }",
+        "pub enum E { A }",
+        "pub const K: u64 = 7;",
+        "pub type Handle = other::Inner;",
+    ]);
+    let names: HashSet<String> = reg.named_item_idents().map(|i| i.to_string()).collect();
+    assert_eq!(
+        names,
+        ["f", "S", "E", "K"].map(String::from).into_iter().collect(),
+        "an alias names a type but declares no body; it must not be qualified"
+    );
+}
+
+/// A binding-local fn joins the one index, carries its adapter-supplied origin
+/// crate — and does **not** join the source-module list.
+///
+/// The last part is the subtle one: `source_modules` decides `default_module`,
+/// which is what an unqualified reference resolves against. If a fn a build
+/// script invented could extend it, adding one would silently change how
+/// captured items are qualified.
+#[test]
+fn a_binding_local_fn_joins_the_index_but_not_the_source_modules() {
+    let at = SourceLocation {
+        crate_name: Some("myflat".into()),
+        ..SourceLocation::default()
+    };
+    let reg: Registry<()> = Registry::from_items(vec![(
+        syn::parse_quote!(
+            pub fn captured(x: u64) -> u64 {
+                x
+            }
+        ),
+        at,
+    )])
+    .unwrap();
+    let before_default = reg.default_module();
+    let before_all = reg.all_source_modules();
+
+    let ext = StubExt {
+        local_fns: vec![(
+            syn::parse_str("fn helper(v: u64) -> u64 { v }").unwrap(),
+            "my-helpers".into(),
+        )],
+        ..Default::default()
+    };
+    let gen = reg.resolve(ext).expect("resolve");
+    let reg = gen.registry();
+
+    // In the one index, reachable exactly like a captured fn.
+    assert!(reg.flat().function("helper").is_some());
+    // With its own origin crate, which is what qualifies its generated call.
+    assert_eq!(
+        reg.origin_module(&syn::parse_str::<syn::Ident>("helper").unwrap()),
+        Some(syn::parse_quote!(my_helpers))
+    );
+    // But the module list is untouched.
+    assert_eq!(reg.default_module(), before_default);
+    assert_eq!(reg.all_source_modules(), before_all);
+    assert!(!reg
+        .flat()
+        .source_modules()
+        .contains(&"my_helpers".to_string()));
+}
+
+/// Both enum shapes answer to `enum_item` — the merge the old `enums` map made,
+/// which 30 adapter reads depend on.
+#[test]
+fn enum_item_answers_for_both_shapes() {
+    let reg: Registry<()> = crate::api::test_util::reg_with(&[
+        "pub enum Sum { A(u64), B }",
+        "pub enum Flags { X = 1, Y = 2 }",
+        "pub struct S { pub a: u64 }",
+    ]);
+    assert!(reg.flat().enum_item("Sum").is_some(), "a sum");
+    assert!(reg.flat().enum_item("Flags").is_some(), "a C-style enum");
+    assert!(reg.flat().enum_item("S").is_none(), "not a struct");
+    assert!(reg.flat().struct_type("S").is_some());
+    assert!(reg.flat().struct_type("Sum").is_none());
+}
+
+// ── An alias is a declaration of its name ──────────────────────────────
+
+/// The predicate both type diagnostics gate on counts **every** declared type,
+/// alias included.
+///
+/// An alias was excluded because the pre-`Flat` code asked the `structs`/`enums`
+/// maps, which never held one. That was an artefact of where the answer came
+/// from, not a decision: `#[prebindgen] pub type Handle = ..` declares the name
+/// `Handle`, an adapter may declare it bare, and a diagnostic that says "no such
+/// captured item" about it is simply false.
+#[test]
+fn every_declared_type_counts_including_an_alias() {
+    let reg: Registry<()> = crate::api::test_util::reg_with(&[
+        "pub struct S { pub a: u64 }",
+        "pub enum Sum { A(u64), B }",
+        "pub enum Flags { X = 1 }",
+        "pub type Handle = other::Inner;",
+        "pub fn f(x: u64) -> u64 { x }",
+        "pub const K: u64 = 7;",
+    ]);
+    let id = |n: &str| syn::parse_str::<syn::Ident>(n).unwrap();
+
+    for name in ["S", "Sum", "Flags", "Handle"] {
+        assert!(
+            reg.declares_type(&id(name)),
+            "`{name}` is a declared type and must count"
+        );
+    }
+    // Not types: a fn and a const share the flat namespace but declare no type.
+    for name in ["f", "K", "Absent"] {
+        assert!(!reg.declares_type(&id(name)), "`{name}` declares no type");
+    }
+
+    // The sibling that must NOT change: it feeds a "skipping undeclared
+    // struct/enum" warning, so an alias — which is neither — stays out.
+    let bodies: HashSet<String> = reg.struct_enum_idents().map(|i| i.to_string()).collect();
+    assert_eq!(
+        bodies,
+        ["S", "Sum", "Flags"]
+            .map(String::from)
+            .into_iter()
+            .collect(),
+        "struct_enum_idents feeds a struct/enum message and must exclude aliases"
+    );
+}
+
+/// Both diagnostic sites reach the predicate for an alias, and neither errors.
+///
+/// `scan_declared` is the entry point for both: a path-qualified declared type
+/// whose tail names an alias (the "did you mean the bare name?" heuristic) and
+/// an ignored type that names one (the "not found among #[prebindgen] items"
+/// check). The messages themselves are `cargo:warning=` on stdout and are not
+/// captured here — what this pins is that an alias flows through the same path a
+/// struct does, without the `QualifiedDeclaredTypes` hard error.
+#[test]
+fn an_alias_flows_through_both_type_diagnostics() {
+    let build = |declare_qualified: bool| {
+        let reg: Registry<()> = crate::api::test_util::reg_with(&[
+            "pub type Handle = other::Inner;",
+            "pub fn f(x: u64) -> u64 { x }",
+        ]);
+        let mut ext = StubExt::default();
+        if declare_qualified {
+            // Head is NOT a source module, so this is the warn-and-pass-through
+            // branch rather than the hard error.
+            ext.types
+                .insert(TypeKey::parse("foreign::Handle").expect("test type"));
+        } else {
+            ext.ignored_types
+                .insert(TypeKey::parse("Handle").expect("test type"));
+        }
+        (reg, ext)
+    };
+
+    for qualified in [true, false] {
+        let (mut reg, ext) = build(qualified);
+        reg.scan_declared(&ext)
+            .expect("an alias is a captured item; neither site may fail");
+    }
 }
