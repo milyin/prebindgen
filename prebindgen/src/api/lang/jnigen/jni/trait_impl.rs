@@ -933,8 +933,8 @@ impl Prebindgen for JniGen {
     type Metadata = KotlinMeta;
 
     // ── Structural type resolution ──────────────────────────────────────
-    // Try the terminal categories, then the user-wrapper table (`match_user_*`,
-    // any depth, specificity-ordered), then the built-in wrapper shapes — peel
+    // Try the terminal categories, then the `Result` peel, then the built-in
+    // wrapper shapes — peel
     // `ty`'s outermost layer and dispatch to `{input,output}_wrapper_shape` with
     // the reconstructed canonical pattern. `subs` = the captured inner(s).
 
@@ -1643,9 +1643,9 @@ impl Prebindgen for JniGen {
 impl JniGen {
     // ── Input converters ─────────────────────────────────────────────
 
-    /// Whole-type **input** terminal categories (opaque handle, enum, the
-    /// rank-0 user table, `str`, primitive, struct) — depends on
-    /// nothing, `subs` empty.
+    /// Whole-type **input** terminal categories (opaque handle, enum,
+    /// `convert!`, `str`, primitive, struct) — depends on nothing, `subs`
+    /// empty.
     pub(crate) fn input_terminal(
         &self,
         ty: &syn::Type,
@@ -1840,8 +1840,8 @@ impl JniGen {
     }
 
     /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
-    /// `t1` = its captured inner): the rank-1 user table, then the built-in
-    /// `&`/`Option<&>`/`Vec`/`Option` handlers.
+    /// `t1` = its captured inner): the built-in `&`/`Option<&>`/`Vec`/`Option`
+    /// handlers.
     pub(crate) fn input_wrapper_shape(
         &self,
         pat: &syn::Type,
@@ -1867,8 +1867,7 @@ impl JniGen {
         ty: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Structured-config overrides first (opaque handles, then the
-        // unified user-registered wrapper table, then built-ins).
+        // Structured-config overrides first (opaque handles, then built-ins).
         let key = TypeKey::from_type(ty);
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
@@ -2021,8 +2020,8 @@ impl JniGen {
     }
 
     /// **Output** wrapper shape (the dual of [`Self::input_wrapper_shape`]):
-    /// the rank-1 user table, then the built-in `&Handle`/`&str`/`Option`/`Vec`
-    /// handlers. An `Option<&Handle>` resolves via the shallow `Option<_>`.
+    /// the built-in `&Handle`/`&str`/`Option`/`Vec` handlers. An
+    /// `Option<&Handle>` resolves via the shallow `Option<_>`.
     pub(crate) fn output_wrapper_shape(
         &self,
         pat: &syn::Type,
@@ -2072,11 +2071,9 @@ impl JniGen {
                 return Some(self.str_ref_output());
             }
         }
-        // `Result<_, _>` is handled as a built-in rank-2 wrapper registered
-        // in `JniGen::new`. Bindings just declare the Err type via
-        // `.throwable()`. Per-error overrides are possible by registering a
-        // more specific rank-1 `output_wrapper(Result<_, ConcreteErr>, …)`
-        // — rank-1 fires before rank-2 in resolve and short-circuits here.
+        // `Result<T, E>` is peeled by the selector, off the model's
+        // `TypeKind::Fallible`. Bindings declare the `Err` type via
+        // `.throwable()`.
         if pat_match(pat, "Option < _ >") {
             let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
             let (wire, body, niches) = option_output(t1, registry)?;

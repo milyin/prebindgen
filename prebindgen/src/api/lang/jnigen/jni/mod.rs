@@ -406,9 +406,9 @@ pub struct JniGen {
     /// [`TypeConfig::kind`] is the one representation of which declarator it
     /// came from. Also holds the raw [`NameSpec`] (Kotlin FQNs are
     /// derived from it on read via [`JniGen::kotlin_fqn`] /
-    /// [`JniGen::fqn_of`]); the converter bodies themselves live in
-    /// [`Self::input_wrappers`] / [`Self::output_wrappers`]. The rank-0
-    /// dispatch order is opaque → enum → wrapper-table → primitive → struct.
+    /// [`JniGen::fqn_of`]). Terminal dispatch order is opaque → enum →
+    /// `convert!` → primitive → struct; see
+    /// [`JniGen::select_input_type`](crate::lang::JniGen)'s selector.
     pub(crate) types: HashMap<TypeKey, TypeConfig>,
 
     /// Free-standing package-level wrappers, keyed by subpackage path

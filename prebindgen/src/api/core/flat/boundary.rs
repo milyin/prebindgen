@@ -121,9 +121,12 @@ const HEADER: &str = "\
 #   * helper delegation — `jnigen/jni/classify.rs` is a whole classifier with
 #     zero watched sites;
 #   * syn enums outside WATCHED: Item, Fields, FnArg, ReturnType,
-#     GenericArgument, Pat, ...;
-#   * `types_util::match_pattern` unification against `parse_quote!(_)`
-#     patterns, which adds a shape rule with no watched site at all.
+#     GenericArgument, Pat, ...
+#
+# One listed gap is closed rather than still open: `types_util::match_pattern`
+# unified against `parse_quote!(_)` patterns, adding shape rules with no watched
+# site. It is deleted — the wildcard tables it served held a single entry,
+# `Result<_, _>`, which the model already names `TypeKind::Fallible`.
 #
 # A check that silently under-reports is worse than no check, which is why the
 # gaps are listed here rather than implied away.

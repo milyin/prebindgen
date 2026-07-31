@@ -1358,8 +1358,8 @@ impl JniGen {
     /// type: `(continue_ty, exc, body)` where `continue_ty` is the conversion
     /// fn's parameter type (by value) — the composed-converter machinery
     /// chains it through that type's own converter, so the wire and the
-    /// Kotlin surface derive from it. Consulted by [`Self::lookup_input`]
-    /// before the wrapper tables; signatures are read from the registry at
+    /// Kotlin surface derive from it. It is what [`Self::lookup_input`]
+    /// answers with; signatures are read from the registry at
     /// lookup time (order-independent, and multi-source qualification via
     /// [`Self::fn_module`]).
     pub(crate) fn convert_input_body(
@@ -1742,12 +1742,12 @@ impl JniGen {
         }
     }
 
-    // ── Wrapper-table lookups (used by Prebindgen impl) ───────────
+    // ── Converter lookups (used by the Prebindgen impl) ───────────
 
-    /// Look up a registered input converter for `pat` with `args`
-    /// substituted into its `_` slots. The closure's middle slot (see
-    /// [`WrapperFn`]) carries the bound exception — `None` ⇒ framework
-    /// `__JniErr` with an `Ok`-wrap, `Some(<Rust type>)` ⇒
+    /// The input converter a `convert!` declaration supplies for `outer`.
+    ///
+    /// The body triple's middle slot carries the bound exception — `None` ⇒
+    /// framework `__JniErr` with an `Ok`-wrap, `Some(<Rust type>)` ⇒
     /// `Result<ty, <Rust type>>` emitted verbatim, decided in
     /// [`Self::build_input_fn`].
     ///

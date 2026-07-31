@@ -4,9 +4,8 @@ use super::*;
 
 /// Clone a single-type-arg generic (`Option<X>` / `Vec<X>` / any `Path<X, …>`)
 /// replacing its last segment's first type argument with `repl` — yielding the
-/// canonical wildcard pattern (`Option<_>`) the rank-1 handlers `pat_match`,
-/// with the type's own path/qualification preserved exactly as the enumerator
-/// would have produced it.
+/// canonical shape (`Option<_>`) the built-in wrapper handlers key on, with the
+/// type's own path/qualification preserved exactly.
 fn with_first_arg(ty: &syn::Type, repl: syn::Type) -> syn::Type {
     let mut out = ty.clone();
     if let syn::Type::Path(tp) = &mut out {

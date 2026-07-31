@@ -50,9 +50,9 @@ pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
 ///    `Vec<u8>` ≡ `Bytes` turns a sequence into an extern — and no
 ///    key-shape refinement fixes the category error.
 /// 5. Lifetimes are NOT normalized (`&'a T` ≠ `&T`, `Foo<'static>` ≠ `Foo`)
-///    — [`match_pattern`] treats lifetimes as fixed structure and
-///    foreign-type declarations (`ptr_class!(ZKeyExpr<'static>)`) rely on
-///    the verbatim spelling.
+///    — a lifetime is part of the spelling a foreign-type declaration relies
+///    on (`ptr_class!(ZKeyExpr<'static>)`), so collapsing it would make two
+///    distinct declarations collide.
 ///
 /// Idempotent; recurses through references, slices, tuples, pointers,
 /// generic arguments, and `impl Trait` bounds. Paths with a qualified self
