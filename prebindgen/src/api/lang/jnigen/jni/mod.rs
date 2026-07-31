@@ -319,37 +319,6 @@ pub(crate) struct ClassMember {
     /// Member kind (method / constructor).
     pub kind: MemberKind,
 }
-
-/// Boxed closure that builds a converter when applied to the wildcard
-/// substitutions. Returns `None` to defer (an inner converter the
-/// builder depends on isn't yet resolved; the resolver retries on the
-/// next phase), or `Some((ty, exc, body))` where:
-///
-/// * `ty` — the type the body produces. Auto-classified at lookup:
-///   a wire shape (or the self-converter case) ⇒ terminal converter
-///   with `destination = ty`; a rust type with its own converter ⇒
-///   composed as a value-inspecting stage onto that converter's chain.
-/// * `exc` — the bound domain error **as a Rust type**: the `E` peeled
-///   from a source `Result<T, E>`, matched by exact canonical-form
-///   equality (use the same full path the source signature uses, e.g.
-///   `parse_quote!(zenoh_flat::errors::ZError)` — no short-name
-///   matching). `Some(...)` ⇒ domain-fallible: the body evaluates to
-///   `Result<ty, exc>` and is emitted as-is; a failure routes to the
-///   wrapper's error sink (never a JVM throw). `None` ⇒ binding-fallible
-///   only: the body evaluates to a bare `ty` and the framework wraps it
-///   `Ok(body)` with `Result<ty, __JniErr>` (= `JniBindingError`).
-/// * `body` — the closure body. The decision between Ok-wrap vs
-///   verbatim is keyed on `exc` (see [`JniGen::build_input_fn`] /
-///   [`JniGen::build_output_fn`]).
-///
-/// Receives `&Registry<KotlinMeta>` so the closure can look up
-/// inner-type entries (`registry.output_entry(t)`).
-pub(crate) type WrapperFn = Arc<
-    dyn Fn(&[syn::Type], &Registry<KotlinMeta>) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
-        + Send
-        + Sync,
->;
-
 /// Closure that transforms a Kotlin short name with the fully-qualified
 /// package in which the named object is emitted. Installed via [`JniGen`]'s
 /// per-kind `set_*_name_mangle` setters. Closure-unset = identity.
@@ -447,18 +416,6 @@ pub struct JniGen {
     /// base package itself). Populated by [`JniGen::package`], merging into
     /// whatever the named subpackage already holds.
     pub(crate) packages: BTreeMap<String, PackageConfig>,
-
-    /// Per-rank input converters — index `n` holds rank-`n` registrations
-    /// keyed by the pattern's `TypeKey`. Rank 0 is non-wildcard (e.g.
-    /// `"i32"`); ranks 1..3 carry that many `_` slots (e.g. `"Vec < _ >"`).
-    /// Each [`WrapperFn`] closure carries the builder body AND the bound
-    /// exception (the closure returns `(ty, exc, body)`); terminal vs
-    /// composed is derived at lookup time, throwing vs non-throwing
-    /// from the closure's `Option<String>` middle slot.
-    pub(crate) input_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
-
-    /// Per-rank output converters. Same shape as [`Self::input_wrappers`].
-    pub(crate) output_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
 
     /// Canonical single-value conversions ([`ConvertDecl`], accepted by
     /// [`JniGen::convert`]), stored raw — the rank-0 converter bodies derive

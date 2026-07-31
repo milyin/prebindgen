@@ -1703,7 +1703,7 @@ impl JniGen {
                 }
             }
         }
-        if let Some(conv) = self.lookup_input(ty, &[], registry) {
+        if let Some(conv) = self.lookup_input(ty, registry) {
             return Some(conv);
         }
         // `str` is unsized, so converters can't return it directly.
@@ -1848,9 +1848,6 @@ impl JniGen {
         t1: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        if let Some(conv) = self.lookup_input(pat, std::slice::from_ref(t1), registry) {
-            return Some(conv);
-        }
         // Disjoint wildcard patterns (see the `impl JniGen` block above), tried
         // in priority order. The borrow/option-ref/vec patterns are exact and
         // mutually exclusive; the two `Option<_>` sub-cases share a method.
@@ -1921,7 +1918,7 @@ impl JniGen {
                 }
             }
         }
-        if let Some(conv) = self.lookup_output(ty, &[], registry) {
+        if let Some(conv) = self.lookup_output(ty, registry) {
             return Some(conv);
         }
         // `str` is unsized, so it has no by-value output converter — but it is
@@ -2032,9 +2029,6 @@ impl JniGen {
         t1: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        if let Some(conv) = self.lookup_output(pat, std::slice::from_ref(t1), registry) {
-            return Some(conv);
-        }
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
         // return *borrowed* handles for the C tier's zero-copy borrows, but

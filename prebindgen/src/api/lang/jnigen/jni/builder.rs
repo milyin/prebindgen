@@ -114,7 +114,7 @@ impl JniGen {
     /// only raw inputs, and every setting-derived name is computed at the
     /// point of use.
     pub fn new() -> Self {
-        let mut jni = Self {
+        Self {
             package: String::new(),
             fun_name_mangle: None,
             ptr_class_name_mangle: None,
@@ -125,18 +125,6 @@ impl JniGen {
             interface_name_mangle: None,
             types: HashMap::new(),
             packages: BTreeMap::new(),
-            input_wrappers: [
-                HashMap::new(),
-                HashMap::new(),
-                HashMap::new(),
-                HashMap::new(),
-            ],
-            output_wrappers: [
-                HashMap::new(),
-                HashMap::new(),
-                HashMap::new(),
-                HashMap::new(),
-            ],
             emit_handle_locks: true,
             jni_native_init: None,
             convert_decls: Vec::new(),
@@ -153,20 +141,7 @@ impl JniGen {
             local_fns: Vec::new(),
             iface_specs: Default::default(),
             fn_plans: Default::default(),
-        };
-        // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
-        // as T and routes E to the error-sink on Err. The rank tables are
-        // internal — this is their only entry; `convert!` covers concrete
-        // types at rank 0.
-        let pattern: syn::Type = syn::parse_quote!(Result<_, _>);
-        let key = TypeKey::from_type(&pattern);
-        jni.output_wrappers[2].insert(
-            key,
-            Arc::new(|args: &[syn::Type], _: &Registry<KotlinMeta>| {
-                Some((args[0].clone(), Some(args[1].clone()), syn::parse_quote!(v)))
-            }),
-        );
-        jni
+        }
     }
 
     /// Apply the package-level function-name mangle closure to `name`.
@@ -1784,87 +1759,27 @@ impl JniGen {
     ///   [`Self::build_output_fn`]) prepended to the inner chain. Defer
     ///   (`None`) if the inner converter isn't resolved yet.
     ///
-    /// Structurally match `ty` against every registered **input** wrapper
-    /// pattern, most-specific-first (fewest wildcards win, e.g.
-    /// `Result<_, ConcreteErr>` over `Result<_, _>`), and build the first hit.
-    pub(crate) fn match_user_input(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        for pat in self.ordered_input_patterns() {
-            if let Some(args) = crate::api::core::types_util::match_pattern(ty, &pat) {
-                if let Some(c) = self.lookup_input(&pat, &args, registry) {
-                    return Some(c);
-                }
-            }
-        }
-        None
-    }
-
-    /// Output-direction peer of [`Self::match_user_input`].
-    pub(crate) fn match_user_output(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        for pat in self.ordered_output_patterns() {
-            if let Some(args) = crate::api::core::types_util::match_pattern(ty, &pat) {
-                if let Some(c) = self.lookup_output(&pat, &args, registry) {
-                    return Some(c);
-                }
-            }
-        }
-        None
-    }
-
-    /// Registered input-wrapper patterns, ordered most-specific (fewest
-    /// wildcards) first; ties keep registration-independent but stable order
-    /// (by canonical key) so resolution is deterministic.
-    fn ordered_input_patterns(&self) -> Vec<syn::Type> {
-        ordered_patterns(&self.input_wrappers)
-    }
-    fn ordered_output_patterns(&self) -> Vec<syn::Type> {
-        ordered_patterns(&self.output_wrappers)
-    }
-
     pub(crate) fn lookup_input(
         &self,
-        pat: &syn::Type,
-        args: &[syn::Type],
+        outer: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let rank = args.len();
-        if rank > 3 {
-            return None;
-        }
-        let key = TypeKey::from_type(pat);
-        // A `convert!`-declared conversion takes precedence at rank 0 (its
-        // signature-derived body is equivalent to a rank-0 registration,
-        // just computed at the point of use).
-        let (ty, exc_ty, body) = match if rank == 0 {
-            self.convert_input_body(&key, registry)
-        } else {
-            None
-        } {
-            Some(t) => t,
-            None => {
-                let f = self.input_wrappers[rank].get(&key)?;
-                f(args, registry)?
-            }
-        };
+        // A `convert!`-declared conversion is the only thing that answers here.
+        // There was a wildcard-pattern table beside it; nothing ever wrote to
+        // the input half, so every lookup through it returned `None`.
+        let key = TypeKey::from_type(outer);
+        let (ty, exc_ty, body) = self.convert_input_body(&key, registry)?;
         // The closure's middle slot carries the `Result`'s raw Rust error
         // type (or `None` for the framework `__JniErr`); it feeds the
         // converter signature `Result<_, E>` directly — no registration.
         let exc = exc_ty.as_ref();
-        let outer = substitute_wildcards(pat, args);
         // Terminal vs composed: `ty` is composed iff it's a *distinct*
         // rust type with its own input converter. The self-check guards
         // the void/identity case, and the registered-converter probe
         // distinguishes a rust continue-type (compose) from a wire
         // (terminal) without forcing `()` either way. A non-wire `ty` that
         // isn't yet resolved defers.
-        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(&outer);
+        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(outer);
         let inner = if is_self {
             None
         } else {
@@ -1873,21 +1788,17 @@ impl JniGen {
         match inner {
             None if is_self || is_wire_type(&ty) => {
                 // Terminal: `ty` is the wire; the body produces `outer`.
-                let (niches, kotlin_name) = if rank == 0 {
-                    let kn = self
-                        .types
-                        .get(&key)
-                        .and_then(|c| c.name_spec.as_ref())
-                        .map(|s| kt::KtType::cls(self.fqn_of(s)))
-                        .or_else(|| kotlin_for_wire(&ty));
-                    (Niches::empty(), kn)
-                } else {
-                    (default_niches_for_wire(&ty), None)
-                };
+                let kotlin_name = self
+                    .types
+                    .get(&key)
+                    .and_then(|c| c.name_spec.as_ref())
+                    .map(|s| kt::KtType::cls(self.fqn_of(s)))
+                    .or_else(|| kotlin_for_wire(&ty));
+                let niches = Niches::empty();
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn(&outer, &ty, &body, exc),
+                    function: self.build_input_fn(outer, &ty, &body, exc),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -1909,29 +1820,19 @@ impl JniGen {
                 // yields `outer`, i.e. the same shape an output converter
                 // has — so it's built with `build_output_fn`.
                 let stage = Stage {
-                    function: self.build_output_fn(&ty, &outer, &body, exc),
+                    function: self.build_output_fn(&ty, outer, &body, exc),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];
                 pre_stages.extend(inner.pre_stages.iter().cloned());
-                let (kotlin_name, value_rust_key) = if rank >= 1 {
-                    (
-                        inner.metadata.kotlin_name.clone(),
-                        Some(TypeKey::from_type(&args[0])),
-                    )
-                } else {
-                    (inner.metadata.kotlin_name.clone(), None)
-                };
-                let (niches, sentinels) = if rank == 0 {
-                    self.conversion_domain_niches(
-                        &key,
-                        registry,
-                        Direction::Input,
-                        &inner.destination,
-                    )
-                } else {
-                    (default_niches_for_wire(&inner.destination), Vec::new())
-                };
+                let kotlin_name = inner.metadata.kotlin_name.clone();
+                let value_rust_key = None;
+                let (niches, sentinels) = self.conversion_domain_niches(
+                    &key,
+                    registry,
+                    Direction::Input,
+                    &inner.destination,
+                );
                 let mut metadata = KotlinMeta {
                     kotlin_name,
                     value_rust_key,
@@ -1963,34 +1864,58 @@ impl JniGen {
     ///   (`None`) if `ty`'s converter isn't resolved yet.
     pub(crate) fn lookup_output(
         &self,
-        pat: &syn::Type,
-        args: &[syn::Type],
+        outer: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let rank = args.len();
-        if rank > 3 {
-            return None;
-        }
-        let key = TypeKey::from_type(pat);
-        // A `convert!`-declared conversion takes precedence at rank 0 — see
-        // [`Self::lookup_input`].
-        let (ty, exc_ty, body) = match if rank == 0 {
-            self.convert_output_body(&key, registry)
-        } else {
-            None
-        } {
-            Some(t) => t,
-            None => {
-                let f = self.output_wrappers[rank].get(&key)?;
-                f(args, registry)?
-            }
-        };
-        // The closure's middle slot carries the `Result`'s raw Rust error
-        // type (or `None` for the framework `__JniErr`) — see lookup_input.
+        let key = TypeKey::from_type(outer);
+        let (ty, exc_ty, body) = self.convert_output_body(&key, registry)?;
+        self.build_output_converter(outer, None, ty, exc_ty, body, registry)
+    }
+
+    /// The `Result<T, E>` output peel: the value succeeds as `T`, and `E` routes
+    /// to the error sink on `Err`.
+    ///
+    /// This was the sole entry in a four-rank wildcard-pattern table, reached
+    /// through a general unification engine. The model already calls this shape
+    /// [`TypeKind::Fallible`](crate::core::flat::TypeKind::Fallible), so the
+    /// engine expressed one fact the frontend states outright.
+    pub(crate) fn result_peel(
+        &self,
+        outer: &syn::Type,
+        ok: &syn::Type,
+        err: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        self.build_output_converter(
+            outer,
+            Some(ok),
+            ok.clone(),
+            Some(err.clone()),
+            syn::parse_quote!(v),
+            registry,
+        )
+    }
+
+    /// Assemble the output `ConverterImpl` from a body triple.
+    ///
+    /// `arg0` is the peeled inner type for a shape peel, `None` for a
+    /// `convert!`-declared conversion — which is what the old `rank == 0`
+    /// tested.
+    fn build_output_converter(
+        &self,
+        outer: &syn::Type,
+        arg0: Option<&syn::Type>,
+        ty: syn::Type,
+        exc_ty: Option<syn::Type>,
+        body: syn::Expr,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let key = TypeKey::from_type(outer);
+        // The middle slot carries the `Result`'s raw Rust error type (or `None`
+        // for the framework `__JniErr`).
         let exc = exc_ty.as_ref();
-        let outer = substitute_wildcards(pat, args);
         // Terminal vs composed — see [`Self::lookup_input`] for the rule.
-        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(&outer);
+        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(outer);
         let inner = if is_self {
             None
         } else {
@@ -1999,15 +1924,10 @@ impl JniGen {
         match inner {
             None if is_self || is_wire_type(&ty) => {
                 // Terminal: `ty` is the wire; the body produces it from `outer`.
-                let (kotlin_name, value_rust_key) = if rank >= 1 {
+                let (kotlin_name, value_rust_key) = if let Some(a0) = arg0 {
                     registry
-                        .output_entry(&args[0])
-                        .map(|e| {
-                            (
-                                e.metadata.kotlin_name.clone(),
-                                Some(TypeKey::from_type(&args[0])),
-                            )
-                        })
+                        .output_entry(a0)
+                        .map(|e| (e.metadata.kotlin_name.clone(), Some(TypeKey::from_type(a0))))
                         .unwrap_or((None, None))
                 } else {
                     let kn = self
@@ -2018,15 +1938,14 @@ impl JniGen {
                         .or_else(|| kotlin_for_wire(&ty));
                     (kn, None)
                 };
-                let niches = if rank == 0 {
-                    Niches::empty()
-                } else {
-                    default_niches_for_wire(&ty)
+                let niches = match arg0 {
+                    None => Niches::empty(),
+                    Some(_) => default_niches_for_wire(&ty),
                 };
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn(&outer, &ty, &body, exc),
+                    function: self.build_output_fn(outer, &ty, &body, exc),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -2043,28 +1962,21 @@ impl JniGen {
             Some(inner) => {
                 // Composed: `ty` is the continue rust type; chain its converter.
                 let stage = Stage {
-                    function: self.build_output_fn(&outer, &ty, &body, exc),
+                    function: self.build_output_fn(outer, &ty, &body, exc),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];
                 pre_stages.extend(inner.pre_stages.iter().cloned());
-                let (kotlin_name, value_rust_key) = if rank >= 1 {
-                    (
-                        inner.metadata.kotlin_name.clone(),
-                        Some(TypeKey::from_type(&args[0])),
-                    )
-                } else {
-                    (inner.metadata.kotlin_name.clone(), None)
-                };
-                let (niches, sentinels) = if rank == 0 {
-                    self.conversion_domain_niches(
+                let kotlin_name = inner.metadata.kotlin_name.clone();
+                let value_rust_key = arg0.map(TypeKey::from_type);
+                let (niches, sentinels) = match arg0 {
+                    None => self.conversion_domain_niches(
                         &key,
                         registry,
                         Direction::Output,
                         &inner.destination,
-                    )
-                } else {
-                    (default_niches_for_wire(&inner.destination), Vec::new())
+                    ),
+                    Some(_) => (default_niches_for_wire(&inner.destination), Vec::new()),
                 };
                 let mut metadata = KotlinMeta {
                     kotlin_name,
@@ -2144,69 +2056,4 @@ pub(crate) fn body_for_exc(body: &syn::Expr, exc: Option<&syn::Type>) -> syn::Ex
     } else {
         syn::parse_quote!(Ok(#body))
     }
-}
-
-/// Substitute the wildcard `_` slots of `pat` with `args` (left-to-right
-/// depth-first), returning the concrete outer `syn::Type`. Mirrors the
-/// substitution the resolver performs to derive a wildcard pattern from
-/// a concrete type.
-pub(crate) fn substitute_wildcards(pat: &syn::Type, args: &[syn::Type]) -> syn::Type {
-    let mut idx = 0usize;
-    fn walk(ty: &mut syn::Type, args: &[syn::Type], idx: &mut usize) {
-        match ty {
-            syn::Type::Infer(_) => {
-                if let Some(replacement) = args.get(*idx) {
-                    *ty = replacement.clone();
-                }
-                *idx += 1;
-            }
-            syn::Type::Path(tp) => {
-                for seg in &mut tp.path.segments {
-                    if let syn::PathArguments::AngleBracketed(ab) = &mut seg.arguments {
-                        for arg in &mut ab.args {
-                            if let syn::GenericArgument::Type(inner) = arg {
-                                walk(inner, args, idx);
-                            }
-                        }
-                    }
-                }
-            }
-            syn::Type::Reference(r) => walk(&mut r.elem, args, idx),
-            syn::Type::Tuple(t) => {
-                for e in &mut t.elems {
-                    walk(e, args, idx);
-                }
-            }
-            syn::Type::Array(a) => walk(&mut a.elem, args, idx),
-            syn::Type::Slice(s) => walk(&mut s.elem, args, idx),
-            syn::Type::Ptr(p) => walk(&mut p.elem, args, idx),
-            syn::Type::Paren(p) => walk(&mut p.elem, args, idx),
-            syn::Type::Group(g) => walk(&mut g.elem, args, idx),
-            _ => {}
-        }
-    }
-    let mut out = pat.clone();
-    walk(&mut out, args, &mut idx);
-    out
-}
-
-/// Flatten the rank-bucketed wrapper tables into one pattern list ordered
-/// most-specific-first: ascending wildcard count (so `Result<_, ConcreteErr>`
-/// is tried before `Result<_, _>`), then by canonical key for a deterministic
-/// tiebreak independent of `HashMap` iteration order.
-fn ordered_patterns(buckets: &[HashMap<TypeKey, WrapperFn>; 4]) -> Vec<syn::Type> {
-    let mut keys: Vec<(usize, String, syn::Type)> = buckets
-        .iter()
-        .flat_map(|m| m.keys())
-        .map(|k| {
-            let ty = k.to_type();
-            (
-                crate::api::core::types_util::wildcard_count(&ty),
-                k.as_str().to_string(),
-                ty,
-            )
-        })
-        .collect();
-    keys.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-    keys.into_iter().map(|(_, _, ty)| ty).collect()
 }
