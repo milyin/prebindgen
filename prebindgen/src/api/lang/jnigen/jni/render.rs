@@ -312,7 +312,7 @@ pub(crate) fn build_typed_handle(
         if let Some(item_fn) = registry
             .flat()
             .function(&m.rust_ident)
-            .map(|__f| &__f.origin.syntax)
+            .map(|func| &func.origin.syntax)
         {
             if let Some(f) = render_wrapper_fn(
                 ext,
@@ -425,7 +425,7 @@ pub(crate) fn build_typed_handle(
         if let Some(item_fn) = registry
             .flat()
             .function(&m.rust_ident)
-            .map(|__f| &__f.origin.syntax)
+            .map(|func| &func.origin.syntax)
         {
             if let Some(f) = render_wrapper_fn(
                 ext,

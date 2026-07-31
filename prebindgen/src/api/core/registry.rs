@@ -856,30 +856,14 @@ impl<M> Registry<M> {
         &self.flat
     }
 
-    /// The origin crate's **module path** for an item ingested via
-    /// the item's [`SourceLocation`] stamp, or `None` when unknown —
-    /// callers then fall
-    /// back to [`Self::default_module`].
-    /// Every **named** item the registry indexes — functions, structs, enums,
-    /// consts — regardless of whether the stream carried an origin stamp.
+    /// Every **named** item the model holds — functions, structs, either enum
+    /// shape, consts — regardless of whether the stream carried an origin stamp.
     ///
-    /// Lives here, beside the maps, so an adapter that needs "anything the
-    /// source crate defines" does not enumerate item kinds itself: a new kind
-    /// is added once, here, instead of drifting in each adapter. Deliberately
-    /// NOT keyed off [`Self::item_origins`], which holds only the items whose
-    /// [`SourceLocation::crate_name`] was set — an origin-less hand-built
-    /// stream indexes items that map never sees, and callers are expected to
-    /// pair this with `origin_module(..).unwrap_or_else(default_module)`.
-    /// Every **declared type** name — struct or either enum shape, never an
-    /// alias. The set the old `structs`/`enums` maps' keys formed together.
-    fn declared_type_idents(&self) -> impl Iterator<Item = &syn::Ident> {
-        use crate::api::core::flat::Type;
-        self.flat.types().filter_map(|t| match t {
-            Type::Struct(_) | Type::Variant(_) | Type::Enum(_) => Some(t.name()),
-            Type::Extern(_) => None,
-        })
-    }
-
+    /// Lives here so an adapter that needs "anything the source crate defines"
+    /// does not enumerate element kinds itself: a new kind is taught here once
+    /// instead of drifting in each adapter. An **alias is deliberately absent**
+    /// — see the arm below — and callers are expected to pair this with
+    /// `origin_module(..).unwrap_or_else(default_module)`.
     pub fn named_item_idents(&self) -> impl Iterator<Item = &syn::Ident> {
         use crate::api::core::flat::{Element, Type};
         self.flat.elements().filter_map(|e| match e {
@@ -892,6 +876,29 @@ impl<M> Registry<M> {
         })
     }
 
+    /// Every **declared type** name — struct or either enum shape, never an
+    /// alias. The set the old `structs`/`enums` map keys formed together.
+    fn declared_type_idents(&self) -> impl Iterator<Item = &syn::Ident> {
+        use crate::api::core::flat::Type;
+        self.flat.types().filter_map(|t| match t {
+            Type::Struct(_) | Type::Variant(_) | Type::Enum(_) => Some(t.name()),
+            Type::Extern(_) => None,
+        })
+    }
+
+    /// Whether a name declares a type with a **body** — a struct or either enum
+    /// shape, never an alias.
+    ///
+    /// The predicate form of [`Self::declared_type_idents`], shared so its two
+    /// callers cannot drift: both warn about a declared-or-ignored type the
+    /// source does not define, and both must answer the same way about an alias.
+    fn declares_type_body(&self, ident: &syn::Ident) -> bool {
+        self.flat.struct_type(ident).is_some() || self.flat.enum_item(ident).is_some()
+    }
+
+    /// The origin crate's **module path** for an item, read off the element's
+    /// own [`SourceLocation`] stamp, or `None` when unknown — callers then fall
+    /// back to [`Self::default_module`].
     pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
         // Off the element's own location, which covers both populations: a
         // captured item stamped at capture time, and a binding-local fn stamped
@@ -992,7 +999,7 @@ impl<M> Registry<M> {
             let last = tp.path.segments.last().expect("len checked");
             if self.flat.source_modules().contains(&head) {
                 qualified.push((key.to_string(), last.to_token_stream().to_string()));
-            } else if self.flat.declared_type(&last.ident).is_some() {
+            } else if self.declares_type_body(&last.ident) {
                 println!(
                     "cargo:warning=prebindgen: declared type `{}` is path-qualified, but a \
                      captured #[prebindgen] item `{}` exists — if you meant the source item, \
@@ -1107,9 +1114,7 @@ impl<M> Registry<M> {
 
         for key in &declared.ignored_types {
             let ty = key.to_type();
-            let matched = bare_path_ident(&ty).is_some_and(|ident| {
-                self.flat.struct_type(&ident).is_some() || self.flat.enum_item(&ident).is_some()
-            });
+            let matched = bare_path_ident(&ty).is_some_and(|ident| self.declares_type_body(&ident));
             if !matched {
                 println!(
                     "cargo:warning=prebindgen: ignored type `{}` not found among #[prebindgen] items",
@@ -1282,7 +1287,7 @@ impl<M> Registry<M> {
         // No receiver or non-ident pattern can reach here: a captured item was
         // refused by the frontend and `from_flat` failed before indexing it, and
         // a binding-local fn was checked against the same grammar
-        // (`Flat::check_signature`) when `resolve` synthesized it.
+        // (`Flat::lower_signature`) when `resolve` synthesized it.
         for input in &f.sig.inputs {
             match input {
                 syn::FnArg::Receiver(_) => continue,
@@ -1464,7 +1469,7 @@ impl<M> Registry<M> {
             // parameter would surface as an arity mismatch out of rustc on
             // generated code, which is the wrong end of the pipeline to learn
             // about a build.rs typo.
-            let lowered = match self.flat.check_signature(&item_fn) {
+            let lowered = match self.flat.lower_signature(&item_fn) {
                 Ok(f) => f,
                 Err(error) => {
                     return Err(ScanError::AdapterInvariant {

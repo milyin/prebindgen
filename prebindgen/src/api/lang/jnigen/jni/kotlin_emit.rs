@@ -896,7 +896,7 @@ impl JniGen {
             let Some(item_struct) = registry
                 .flat()
                 .struct_type(&ident)
-                .map(|__s| &__s.origin.syntax)
+                .map(|st| &st.origin.syntax)
             else {
                 continue;
             };
@@ -928,7 +928,7 @@ impl JniGen {
                 if let Some(item_fn) = registry
                     .flat()
                     .function(&m.rust_ident)
-                    .map(|__f| &__f.origin.syntax)
+                    .map(|func| &func.origin.syntax)
                 {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
@@ -962,7 +962,7 @@ impl JniGen {
                     if let Some(item_fn) = registry
                         .flat()
                         .function(&m.rust_ident)
-                        .map(|__f| &__f.origin.syntax)
+                        .map(|func| &func.origin.syntax)
                     {
                         if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                             self,
@@ -1082,7 +1082,7 @@ impl JniGen {
                 let Some(item_fn) = registry
                     .flat()
                     .function(&ident)
-                    .map(|__f| &__f.origin.syntax)
+                    .map(|func| &func.origin.syntax)
                 else {
                     continue;
                 };
@@ -1621,7 +1621,7 @@ impl JniGen {
             let item_const = registry
                 .flat()
                 .constant(&entry.rust_ident)
-                .map(|__c| &__c.origin.syntax)
+                .map(|konst| &konst.origin.syntax)
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: const `{}` registered via .constant(...) is \
@@ -1711,20 +1711,13 @@ impl JniGen {
         // shortens types, collects imports, and wraps long signatures (no
         // derivation-time import set).
         let mut externs: Vec<kt::KtFun> = Vec::new();
-        let mut idents: Vec<&syn::Ident> =
-            registry.flat().functions().map(|__f| &__f.name).collect();
-        idents.sort();
-        for ident in idents {
-            if !declared.contains(ident) {
+        let mut fns: Vec<&crate::api::core::flat::Function> = registry.flat().functions().collect();
+        fns.sort_by(|a, b| a.name.cmp(&b.name));
+        for f in fns {
+            if !declared.contains(&f.name) {
                 continue;
             }
-            let item_fn = &registry
-                .flat()
-                .function(&ident)
-                .expect("iterating the model's own function names")
-                .origin
-                .syntax;
-            if let Some(fun) = render_extern_decl(self, item_fn, registry) {
+            if let Some(fun) = render_extern_decl(self, &f.origin.syntax, registry) {
                 externs.push(fun);
             }
         }
@@ -1743,7 +1736,7 @@ impl JniGen {
             let Some(item_const) = registry
                 .flat()
                 .constant(&ident)
-                .map(|__c| &__c.origin.syntax)
+                .map(|konst| &konst.origin.syntax)
             else {
                 continue; // missing decl already warned by the scan
             };

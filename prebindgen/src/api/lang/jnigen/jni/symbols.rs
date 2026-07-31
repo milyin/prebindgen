@@ -175,7 +175,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             if let Some(item_fn) = registry
                 .flat()
                 .function(&entry.rust_ident)
-                .map(|__f| &__f.origin.syntax)
+                .map(|func| &func.origin.syntax)
             {
                 if let Some(s) = build_wrapper_surface(ext, item_fn, registry, Some(&name), None) {
                     for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
@@ -220,7 +220,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             let Some(item_fn) = registry
                 .flat()
                 .function(&m.rust_ident)
-                .map(|__f| &__f.origin.syntax)
+                .map(|func| &func.origin.syntax)
             else {
                 continue;
             };
@@ -283,7 +283,7 @@ fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
         if let Some(s) = registry
             .flat()
             .struct_type(&ident)
-            .map(|__s| &__s.origin.syntax)
+            .map(|st| &st.origin.syntax)
         {
             for f in &s.fields {
                 if let Some(fname) = &f.ident {

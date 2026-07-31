@@ -1136,7 +1136,7 @@ pub(crate) fn build_flat_input_plan(
     let Some(st) = registry
         .flat()
         .struct_type(&name)
-        .map(|__s| &__s.origin.syntax)
+        .map(|st| &st.origin.syntax)
     else {
         return Ok(None);
     };

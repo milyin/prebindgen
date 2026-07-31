@@ -1219,7 +1219,7 @@ impl Prebindgen for JniGen {
                 let Some(item_fn) = registry
                     .flat()
                     .function(&m.rust_ident)
-                    .map(|__f| &__f.origin.syntax)
+                    .map(|func| &func.origin.syntax)
                 else {
                     continue;
                 };
@@ -1290,7 +1290,7 @@ impl Prebindgen for JniGen {
             let Some(item_fn) = registry
                 .flat()
                 .function(&ident)
-                .map(|__f| &__f.origin.syntax)
+                .map(|func| &func.origin.syntax)
             else {
                 continue;
             };
@@ -1810,7 +1810,7 @@ impl JniGen {
             if let Some(s) = registry
                 .flat()
                 .struct_type(&name)
-                .map(|__s| &__s.origin.syntax)
+                .map(|st| &st.origin.syntax)
             {
                 let (wire, body) = struct_input_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
@@ -2001,7 +2001,7 @@ impl JniGen {
             if let Some(s) = registry
                 .flat()
                 .struct_type(&name)
-                .map(|__s| &__s.origin.syntax)
+                .map(|st| &st.origin.syntax)
             {
                 let (wire, body) = struct_output_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);

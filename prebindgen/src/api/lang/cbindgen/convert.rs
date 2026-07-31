@@ -195,7 +195,7 @@ impl Cbindgen {
                 let item = &registry
                     .flat()
                     .function(&f)
-                    .map(|__f| &__f.origin.syntax)
+                    .map(|func| &func.origin.syntax)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (repr, by_ref) = one_param(item);
                 let ret = fn_ret(item);
@@ -239,7 +239,7 @@ impl Cbindgen {
                 let item = &registry
                     .flat()
                     .function(&f)
-                    .map(|__f| &__f.origin.syntax)
+                    .map(|func| &func.origin.syntax)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);
                 assert_eq!(TypeKey::from_type(&param), decl.key);

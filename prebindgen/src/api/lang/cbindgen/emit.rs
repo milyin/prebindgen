@@ -305,7 +305,7 @@ impl Cbindgen {
         let item = registry
             .flat()
             .struct_type(&ident)
-            .map(|__s| &__s.origin.syntax)?;
+            .map(|st| &st.origin.syntax)?;
         if let syn::Fields::Named(named) = &item.fields {
             Some(
                 named

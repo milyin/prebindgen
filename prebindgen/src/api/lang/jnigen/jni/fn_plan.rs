@@ -296,19 +296,17 @@ pub(crate) fn validate_bindings(
     // Declared functions (incl. binding-local synthetics and fn-backed
     // constants), in deterministic ident order.
     let declared = ext.declared_functions();
-    let mut fn_idents: Vec<&syn::Ident> =
-        registry.flat().functions().map(|__f| &__f.name).collect();
-    fn_idents.sort();
-    for ident in fn_idents {
+    // The elements themselves, not their names: looking a name back up would be
+    // a second hash and an infallible-lookup-that-is-not. `Ident: Ord` is the
+    // string order, so the sort is unchanged.
+    let mut fns: Vec<&crate::api::core::flat::Function> = registry.flat().functions().collect();
+    fns.sort_by(|a, b| a.name.cmp(&b.name));
+    for f in fns {
+        let ident = &f.name;
         if !declared.contains(ident) {
             continue;
         }
-        let item_fn = &registry
-            .flat()
-            .function(&ident)
-            .expect("iterating the model's own function names")
-            .origin
-            .syntax;
+        let item_fn = &f.origin.syntax;
         match ext.fn_plan(registry, item_fn) {
             Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
             Err(e) => errors.push(e.message(ident)),
@@ -318,20 +316,15 @@ pub(crate) fn validate_bindings(
     // Declared consts: their synthetic nullary getters run through the same
     // plan machinery (`JniGen::on_const`).
     if let Some(declared_consts) = ext.declared_consts() {
-        let mut const_idents: Vec<&syn::Ident> =
-            registry.flat().constants().map(|__c| &__c.name).collect();
-        const_idents.sort();
-        for ident in const_idents {
+        let mut consts: Vec<&crate::api::core::flat::Constant> =
+            registry.flat().constants().collect();
+        consts.sort_by(|a, b| a.name.cmp(&b.name));
+        for c in consts {
+            let ident = &c.name;
             if !declared_consts.contains(ident) {
                 continue;
             }
-            let item_const = &registry
-                .flat()
-                .constant(&ident)
-                .expect("iterating the model's own const names")
-                .origin
-                .syntax;
-            let getter = const_getter_fn(item_const);
+            let getter = const_getter_fn(&c.origin.syntax);
             match ext.fn_plan(registry, &getter) {
                 Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
                 Err(e) => errors.push(e.message(&getter.sig.ident)),

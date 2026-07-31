@@ -111,7 +111,11 @@ fn arm_erased_sig(
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
     match ctor {
-        Some(cf) => match registry.flat().function(&cf).map(|__f| &__f.origin.syntax) {
+        Some(cf) => match registry
+            .flat()
+            .function(&cf)
+            .map(|func| &func.origin.syntax)
+        {
             Some(item_fn) => item_fn
                 .sig
                 .inputs
@@ -254,7 +258,7 @@ fn variant_typed_params(
             let item_fn = registry
                 .flat()
                 .function(&cf)
-                .map(|__f| &__f.origin.syntax)?;
+                .map(|func| &func.origin.syntax)?;
             let optional = item_fn
                 .sig
                 .inputs

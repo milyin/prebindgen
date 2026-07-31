@@ -813,7 +813,7 @@ impl JniGen {
         let item_fn = registry
             .flat()
             .function(&func)
-            .map(|__f| &__f.origin.syntax)
+            .map(|func| &func.origin.syntax)
             .unwrap_or_else(|| {
                 panic!(
                     "expand_return!({}).fields(fields!({func})): no `#[prebindgen]` function \
@@ -1399,7 +1399,7 @@ impl JniGen {
                 let item_fn = registry
                     .flat()
                     .function(&f)
-                    .map(|__f| &__f.origin.syntax)
+                    .map(|func| &func.origin.syntax)
                     .unwrap_or_else(|| {
                         panic!(
                             "convert!({}).input({f}): function not found among #[prebindgen] items",
@@ -1475,7 +1475,7 @@ impl JniGen {
                 let item_fn = registry
                     .flat()
                     .function(&g)
-                    .map(|__f| &__f.origin.syntax)
+                    .map(|func| &func.origin.syntax)
                     .unwrap_or_else(|| {
                         panic!(
                         "convert!({}).output({g}): function not found among #[prebindgen] items",

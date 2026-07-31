@@ -191,7 +191,7 @@ impl crate::api::core::Generation<JniGen> {
         let Some(item_fn) = registry
             .flat()
             .function(&rust_ident)
-            .map(|__f| &__f.origin.syntax)
+            .map(|func| &func.origin.syntax)
         else {
             return;
         };

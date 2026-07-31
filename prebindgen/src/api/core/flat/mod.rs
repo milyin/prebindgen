@@ -647,7 +647,7 @@ impl Flat {
         })
     }
 
-    /// Check a function signature against the source language's grammar.
+    /// Lower a function signature written outside the captured stream.
     ///
     /// For the **one input that does not come through this module**: a binding's
     /// `local_functions`, whose signatures are written by hand in a build script
@@ -655,10 +655,12 @@ impl Flat {
     /// lowered here, so this exists to keep the grammar decided in one place
     /// rather than re-checked at the far end.
     ///
-    /// Grammar only. Whether the types it names are *declared* is a whole-model
-    /// question ([`resolve_references`]), and a binding-local fn may legitimately
-    /// name types the source crate never did.
-    pub fn check_signature(&self, f: &syn::ItemFn) -> Result<Function, ItemError> {
+    /// Grammar only, and it **validates by lowering**: an `Err` is a shape the
+    /// language cannot express, an `Ok` is the element to admit. Whether the types
+    /// it names are *declared* is a whole-model question ([`resolve_references`]),
+    /// and a binding-local fn may legitimately name types the source crate never
+    /// did.
+    pub fn lower_signature(&self, f: &syn::ItemFn) -> Result<Function, ItemError> {
         // Rebuilt from the model rather than kept: this runs once per local fn,
         // and a stored index would be a second copy of what `constants()` says.
         let consts = ConstIndex::new(self.constants().map(|c| {

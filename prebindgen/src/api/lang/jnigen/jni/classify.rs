@@ -66,7 +66,7 @@ impl JniGen {
             if let Some(st) = registry
                 .flat()
                 .struct_type(&name)
-                .map(|__s| &__s.origin.syntax)
+                .map(|st| &st.origin.syntax)
             {
                 return TypeKind::DataStruct { st, cfg };
             }
