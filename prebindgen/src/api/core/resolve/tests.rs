@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::test_util::cell;
+use crate::api::{core::registry::TypeEntry, test_util::cell};
 
 /// Regression: when a required type is itself unresolved AND has fields
 /// that are also unresolved, the diagnostic must list both. Previously
@@ -16,13 +16,13 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     // catch. Driven through the real scan rather than simulated, so the state
     // under test is one the pipeline can actually produce.
     let mut reg: Registry<()> =
-        crate::api::test_util::reg_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
+        crate::api::test_util::scanned_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
     reg.require_input(&syn::parse_quote!(Outer));
 
     let zke_key = TypeKey::parse("ZKeyExpr").expect("test type");
     assert!(!reg.input_types[&zke_key].root, "the field is not a root");
 
-    let err = final_invariant_check(&reg).expect_err("must surface unresolved");
+    let err = check_complete(&reg).expect_err("must surface unresolved");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();
@@ -48,7 +48,7 @@ fn final_invariant_stops_at_resolved_nodes() {
 
     // Through the real scan, so the state under test is one the pipeline can
     // actually produce: `Unrelated` is a field type nothing declares.
-    let mut reg: Registry<()> = crate::api::test_util::reg_with(&[
+    let mut reg: Registry<()> = crate::api::test_util::scanned_with(&[
         "pub struct Outer { pub inner: Inner }",
         "pub struct Inner { pub unused: Unrelated }",
     ]);
@@ -59,13 +59,11 @@ fn final_invariant_stops_at_resolved_nodes() {
     let inner_key = TypeKey::parse("Inner").expect("test type");
     let unrelated_key = TypeKey::parse("Unrelated").expect("test type");
 
-    reg.input_types
-        .insert(outer_key.clone(), cell(&outer_key, true, None));
+    reg.input_types.insert(outer_key.clone(), cell(true, None));
 
     reg.input_types.insert(
         inner_key.clone(),
         cell(
-            &inner_key,
             false,
             Some(TypeEntry {
                 destination: syn::parse_quote!(i64),
@@ -81,9 +79,9 @@ fn final_invariant_stops_at_resolved_nodes() {
     );
 
     reg.input_types
-        .insert(unrelated_key.clone(), cell(&unrelated_key, false, None));
+        .insert(unrelated_key.clone(), cell(false, None));
 
-    let err = final_invariant_check(&reg).expect_err("must surface Outer");
+    let err = check_complete(&reg).expect_err("must surface Outer");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();
@@ -121,7 +119,6 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
     reg.input_types.insert(
         outer.clone(),
         cell(
-            &outer,
             true,
             Some(TypeEntry {
                 destination: syn::parse_quote!(i64),
@@ -136,9 +133,9 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
         ),
     );
     // `Mid` is present, unresolved, and NOT a root.
-    reg.input_types.insert(mid.clone(), cell(&mid, false, None));
+    reg.input_types.insert(mid.clone(), cell(false, None));
 
-    let err = final_invariant_check(&reg).expect_err("Mid must be reported");
+    let err = check_complete(&reg).expect_err("Mid must be reported");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();

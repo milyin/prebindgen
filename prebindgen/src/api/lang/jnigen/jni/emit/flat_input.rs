@@ -2,11 +2,12 @@
 //! expressions, and the Rust-side reconstruct.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 pub(crate) fn struct_input_body(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     s: &syn::ItemStruct,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.ident.to_string();
     let struct_module = struct_module_path(ext, registry, s);
@@ -279,9 +280,9 @@ pub(crate) fn struct_input_body(
 /// one field out of a `JObject` the caller already handed us costs nothing
 /// extra, so the asymmetry is real rather than an oversight.
 pub(crate) fn sum_input_body(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     e: &syn::ItemEnum,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     use crate::api::core::types_util::SumSpec;
 
@@ -376,8 +377,8 @@ pub(crate) fn sum_input_body(
 /// [`struct_input_body`] performs, for the positions that are properties of a
 /// generated class rather than fields of a data class.
 fn read_kotlin_property(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &JniGenBuilder,
+    registry: &impl Conversions<KotlinMeta>,
     receiver: &TokenStream,
     prop: &str,
     ty: &syn::Type,
@@ -868,7 +869,7 @@ fn wire_kotlin_type(entry: &crate::api::core::registry::TypeEntry<KotlinMeta>) -
 /// text spliced into a wrapper whose import set this plan does not own.
 #[allow(clippy::too_many_arguments)]
 fn build_flat_sum_field(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     sum_ty: &syn::Type,
     field: syn::Ident,
@@ -1115,7 +1116,7 @@ fn push_handle_leaf(
 /// `.jobject_input()` opt-in); an unmarked data class either returns a complete
 /// plan or a validation error — never a silent object fallback.
 pub(crate) fn build_flat_input_plan(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     arg_ty: &syn::Type,
@@ -1201,7 +1202,7 @@ pub(crate) fn build_flat_input_plan(
 
 #[allow(clippy::too_many_arguments)]
 fn build_flat_struct_node(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     st: &syn::ItemStruct,
     optional: bool,
@@ -1796,7 +1797,7 @@ pub(crate) struct OptionScalarInputPlan {
 /// only the cases that *would* box are intercepted — niche cases (already
 /// unboxed / ABI-clean) and opaque/value projections are left untouched.
 pub(crate) fn build_option_scalar_input_plan(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     arg_ty: &syn::Type,

@@ -64,7 +64,7 @@ pub enum ProjectionKind {
 #[derive(Clone, Debug)]
 pub struct Projection {
     /// Canonical key of the leaf type (e.g. `ZKeyExpr`, `ZenohId`); derive
-    /// the typed Kotlin FQN via `JniGen::kotlin_fqn` — a typed key, so the
+    /// the typed Kotlin FQN via `JniGenBuilder::kotlin_fqn` — a typed key, so the
     /// lookup cannot drift from the declaration table's constructor.
     pub leaf_key: crate::api::core::registry::TypeKey,
     /// `false` for `&T` borrows of a handle — still a projection (param

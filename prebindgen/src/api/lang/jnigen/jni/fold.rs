@@ -55,7 +55,7 @@ pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &kt::KtType) -> kt::
 /// Typed Kotlin leaf of a projection. Declared handle projections
 /// take their configured class FQN; the built-in `u64` projection is Kotlin's
 /// stable unsigned scalar type.
-pub(crate) fn projection_leaf_kt(ext: &JniGen, proj: &Projection) -> Option<kt::KtType> {
+pub(crate) fn projection_leaf_kt(ext: &JniGenBuilder, proj: &Projection) -> Option<kt::KtType> {
     match proj.kind {
         ProjectionKind::Handle => ext.kotlin_fqn(&proj.leaf_key).map(kt::KtType::cls),
         ProjectionKind::Unsigned64 => Some(kt::KtType::cls("ULong")),
@@ -169,7 +169,7 @@ pub(crate) fn is_kotlin_primitive_ty(t: &kt::KtType) -> bool {
 ///   optional) and a leaf reconstructs with its wrap.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_factory(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     prefix: &str,

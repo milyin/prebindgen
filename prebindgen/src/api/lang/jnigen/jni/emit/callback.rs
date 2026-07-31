@@ -2,6 +2,7 @@
 //! Kotlin `run`.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Build the input-converter body for an `impl Fn(args)` parameter: a
 /// trampoline that wraps the Kotlin **lambda** (`(leaves…) -> Unit`, erased to
@@ -19,9 +20,9 @@ use super::*;
 /// Errors cannot reach a caller-side error sink (the declaring call already
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     args: &[syn::Type],
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
@@ -70,8 +71,7 @@ pub(crate) fn callback_input(
         // user callback's `run(List<T>)`. Reuses the OUTPUT fold's folder
         // interface + appender singleton, driven from the trampoline.
         if let Some(plan) = registry
-            .callback_arg_plans
-            .get(&TypeKey::from_type(arg_ty))
+            .callback_arg_plan(&TypeKey::from_type(arg_ty))
             .filter(|p| super::render::is_iterable_fold(&p.shape))
         {
             // Every leaf converter must already be resolved (deferral safety).
@@ -162,7 +162,7 @@ pub(crate) fn callback_input(
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
-        if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(arg_ty)) {
+        if let Some(plan) = registry.callback_arg_plan(&TypeKey::from_type(arg_ty)) {
             // Deferral safety: every leaf converter (and identity-leaf
             // projection) must already be resolved — return None so the rank
             // resolver retries this converter later otherwise. A synthesized

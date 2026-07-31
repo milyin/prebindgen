@@ -13,7 +13,7 @@
 //! The generated wrapper's error callback receives a fixed first `je: String?`
 //! (the binding message, set only on `JniError`) plus the domain error
 //! converted/deconstructed into one or more leaves (set only on `UserError`).
-//! `JniGen::new()` pre-registers this type so `__JniErr` (= `JniBindingError<()>`)
+//! `JniGenBuilder::new()` pre-registers this type so `__JniErr` (= `JniBindingError<()>`)
 //! is always available to framework converter bodies.
 
 /// Framework error type for the JNI binding's error channel. `T` is the

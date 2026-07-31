@@ -232,7 +232,7 @@ fn option_box_fallback_exposes_no_niches() {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// End-to-end pipeline snapshot: drive a representative `JniGen` config
+// End-to-end pipeline snapshot: drive a representative `JniGenBuilder` config
 // through `write_rust` + `write_kotlin` and assert on the generated Rust and
 // Kotlin. Mirrors `cbindgen`'s `tests.rs` behavioural-assertion style (the
 // authoritative byte-for-byte check is the `zenoh-flat-jni` consumer diff);

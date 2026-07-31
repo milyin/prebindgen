@@ -233,7 +233,7 @@ use crate::SourceLocation;
 /// reach into, one set of source modules to normalize paths against, and every
 /// type reference resolving against every declaration. None can be
 /// decided per input, so every input is in hand before any of it is classified.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
 }

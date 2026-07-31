@@ -116,7 +116,7 @@ impl Normalization {
 
     /// Collect from a captured stream, before anything is normalized.
     ///
-    /// Both entry points — `FlatBuilder::build` and `Registry::from_items` — build
+    /// The single entry point — `FlatBuilder::build` — builds
     /// this, so they cannot normalize differently. Gathering every module and alias
     /// first is what makes reduction order-independent: a signature may name a type
     /// whose alias is declared later, or in another source.
@@ -218,7 +218,7 @@ pub fn normalize_type(ty: &mut syn::Type, against: &Normalization) {
 
 /// Apply [`normalize_type`] to every type position inside an item — fn
 /// signatures, struct fields, enum variants, const types. The ingest-time
-/// pass ([`crate::api::core::registry::Registry::from_items`]) that makes
+/// pass ([`crate::api::core::flat::FlatBuilder::build`]) that makes
 /// captured spellings canonical before any key is formed, so every
 /// downstream `TypeKey::from_type` sees the flat spelling.
 pub fn normalize_item_types(item: &mut syn::Item, against: &Normalization) {
@@ -484,7 +484,7 @@ pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
 /// which alternative is live — plus one **leaf group per variant**.
 ///
 /// Core describes the sum; adapters decide what its leaves look like on the
-/// wire (`JniGen` overlays the groups in the signature, `Cbindgen` overlays
+/// wire (`JniGenBuilder` overlays the groups in the signature, `CbindgenBuilder` overlays
 /// them in memory as a `#[repr(C)]` union). Nothing here names a wire
 /// detail — in particular a payload enum carries no `repr`, so tags are
 /// declaration order and never an explicit discriminant.
@@ -589,7 +589,7 @@ impl SumVariant {
 ///
 /// The single source of truth for every int↔variant mapping in the
 /// pipeline — the Kotlin `value(N)` constants, the generated `jint →
-/// variant` decode, and the `#[repr(C)]` mirror `Cbindgen` emits — keeping
+/// variant` decode, and the `#[repr(C)]` mirror `CbindgenBuilder` emits — keeping
 /// them from drifting and removing the need for a hand-written
 /// `TryFrom<i32>` on the source enum. Non-literal discriminants are
 /// rejected because prebindgen cannot reliably evaluate arbitrary

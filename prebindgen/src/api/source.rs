@@ -131,7 +131,7 @@ impl Source {
                     // captured JSONL doesn't carry it (the proc-macro runs
                     // inside the crate), but from here on the item streams
                     // are self-describing — streams from several sources can
-                    // be chained into one `Registry::from_items` call
+                    // be chained into one `Flat::builder().items(..)` call
                     // without losing per-item origins.
                     let (item, mut loc) = r.parse();
                     loc.crate_name = Some(crate_name.clone());

@@ -1,4 +1,4 @@
-//! JNI / Kotlin language adapter — the [`JniGen`] back-end.
+//! JNI / Kotlin language adapter — the [`JniGenBuilder`] back-end.
 //!
 //! Sibling of [`crate::api::lang::cbindgen`]: it implements the
 //! language-agnostic [`crate::api::core::prebindgen::Prebindgen`] trait to
@@ -6,18 +6,18 @@
 //! wrappers plus a fan-out of generated Kotlin sources.
 //!
 //! Pipeline:
-//!   1. [`crate::api::core::registry::Registry::from_items`] scans a stream of
+//!   1. [`crate::api::core::registry::Registry::builder`] describes a binding over a model built from
 //!      `(syn::Item, SourceLocation)` (typically `source.items_all()`).
 //!   2. [`crate::api::core::registry::Registry::write_rust`] resolves every
-//!      required type via a configured [`JniGen`] and writes the generated
+//!      required type via a configured [`JniGenBuilder`] and writes the generated
 //!      Rust bindings file.
-//!   3. [`jni::JniGen::write_kotlin`] walks the resolved registry to emit the
+//!   3. [`jni::JniGenBuilder::write_kotlin`] walks the resolved registry to emit the
 //!      secondary Kotlin artifacts (typed-handle classes, data/enum classes,
 //!      exception classes, the centralized `JNINative` holder).
 //!
 //! # Fixed-width unsigned integers
 //!
-//! JniGen exposes Rust's fixed-width unsigned scalars without narrowing their
+//! JniGenBuilder exposes Rust's fixed-width unsigned scalars without narrowing their
 //! domain at the Kotlin boundary:
 //!
 //! | Rust | Kotlin surface | JNI wire |
@@ -43,8 +43,8 @@ pub use jni::{
     decode_byte_array, decode_string, encode_byte_array, encode_string, matching, null_byte_array,
     null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl, ConvertSourceDecl,
     DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
-    FunctionDecl, IgnoreDecl, JniBindingError, JniGen, PackageDecl, PtrClassDecl, SealedClassDecl,
-    VariantDecl,
+    FunctionDecl, IgnoreDecl, JniBindingError, JniGen, JniGenBuilder, PackageDecl, PtrClassDecl,
+    SealedClassDecl, VariantDecl,
 };
 
 // Kotlin emission types now live in the standalone generator module
