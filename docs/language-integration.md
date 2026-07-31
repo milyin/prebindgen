@@ -1,7 +1,7 @@
 # Parse once, consume elements everywhere — integration map
 
-Umbrella for making every component of prebindgen consume
-[`core::language`]'s `Element`s instead of parsing captured Rust itself.
+Umbrella for making every component of prebindgen consume [`core::flat`]'s
+`Element`s instead of parsing captured Rust itself.
 
 [#211](https://github.com/milyin/prebindgen/issues/211) remains the authority on
 the invariants and the frontend/adapter boundary. This document does not restate
@@ -13,23 +13,32 @@ the umbrella PR body — never the other way round.
 ## The design
 
 ```
-Source(s) ──items──> Language ──Elements──> Registry ──> adapters
-  raw records          parse +               indexes        classify off `kind`
-  (syn::Item)          validate              elements       spell off `syntax`
+Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
+  raw records          parse +           projects       classify off `kind`
+  (syn::Item)          resolve           the model      spell off `origin`
 ```
 
 An `Element` is two things at once, and the pairing is the whole point:
 
-* a **closed classification** — `TypeKind`, `StructFields`, the variant list —
-  that says what the source *means*, in terms every destination language shares;
-* the **exact syntax** each part was built from, sliced down to the parameter,
-  field, variant and type.
+* a **closed classification** — `TypeKind`, the field list, which of the two enum
+  shapes an item is — that says what the source *means*, in terms every
+  destination language shares;
+* one `Origin`, carrying the **exact syntax** the node was built from and the
+  source it arrived in. Every node has one, at every level — item, parameter,
+  field, alternative, type, array extent.
 
 ```rust
-pub struct Type    { pub kind: TypeKind, pub syntax: syn::Type }
-pub struct Param   { pub name: syn::Ident, pub ty: Type, pub syntax: syn::PatType }
-pub struct Variant { pub tag: i32, pub discriminant: Option<i64>, pub fields: Vec<Field>,
-                     pub syntax: syn::Variant }
+pub struct Origin<S>  { pub syntax: S, pub location: Rc<SourceLocation> }
+pub struct TypeRef    { pub kind: TypeKind, pub origin: Origin<syn::Type> }
+pub struct Param      { pub name: syn::Ident, pub ty: TypeRef, pub origin: Origin<syn::PatType> }
+```
+
+The two enum shapes are separate entities, because they are numbered differently
+and consumed as different constructs:
+
+```rust
+pub struct Variant { pub name: syn::Ident, pub alternatives: Vec<Alternative>, .. }  // a sum
+pub struct Enum    { pub name: syn::Ident, pub values: Vec<EnumValue>, .. }          // C-style
 ```
 
 ### Why the syntax rides along
@@ -49,24 +58,26 @@ classification stays small and genuinely neutral:
 
 | Fact | Where it lives | Who reads it |
 |---|---|---|
-| `B()` vs `B` | `Variant::syntax` (via `Variant::spell`) | generated Rust only |
-| `= 0x07` vs `= 7` | `Variant::syntax.discriminant` | a C mirror re-emits it |
-| the number 7 | `Variant::discriminant` | Kotlin `NAME(7)`, `jint` decode |
-| `Foo<'a, T>` | `Type::syntax` | generated Rust only |
-| "it is a `Foo` with one type argument" | `TypeKind::Named` | every adapter |
-| `[u8; TAG_LEN]` — spelling / number / const identity | `Type::syntax` / `ArrayExtent::value` / `ExtentSource::Const` | C header / Kotlin / both |
+| `B()` vs `B` | `Alternative::origin.syntax` (via `spell::fields`) | generated Rust only |
+| `= 0x07` vs `= 7` | `EnumValue::origin.syntax.discriminant` | a C mirror re-emits it |
+| the number 7 | `EnumValue::discriminant` | Kotlin `NAME(7)`, `jint` decode |
+| which alternative of a sum | `Alternative::index` | a sum has no Rust number to borrow |
+| `Foo<'a, T>` | `TypeRef::origin.syntax` | generated Rust only |
+| "it is a `Foo`" | `TypeKind::Named` | every adapter |
+| `[u8; TAG_LEN]` — spelling / number / const identity | `TypeRef::origin.syntax` / `ArrayExtent::value` / `ExtentSource::Const` | C header / Kotlin / both |
+| where an item came from | `Origin::location` — **absent for a synthesized one** | diagnostics |
 
 ### The rule
 
 > **Classify off `kind`, spell off `syntax`.**
 >
-> Matching a `syn::Type` or `syn::Expr` variant outside `core::language` is a
-> classifier, and #211 says classification lives there alone. Passing a `syntax`
-> slice into `quote!` is spelling, and spelling the source is exactly what
-> generated Rust must do.
+> Matching a `syn::Type` or `syn::Expr` variant outside `core::flat` is a
+> classifier, and #211 says classification lives there alone. Passing an
+> `Origin`'s syntax into `quote!` is spelling, and spelling the source is exactly
+> what generated Rust must do.
 
 This is mechanically measured, and needed no new mechanism:
-`core::language::boundary` (ported from
+`core::flat::boundary` (ported from
 [#224](https://github.com/milyin/prebindgen/pull/224)) counts *variant mentions*
 of watched syn enums per file, so `quote!(#slice)` is invisible to it while
 `matches!(ty, syn::Type::Reference(_))` is counted. The committed ledger is the
@@ -74,15 +85,22 @@ scoreboard for this whole program.
 
 ## Size of the problem
 
-Seeded by L0 at **202 classification sites** outside `core::language`, plus
-**113** reads of the registry's `syn`-keyed item maps:
+Seeded by L0 at **202 classification sites** outside the frontend. The second
+population it was seeded alongside — **113** reads of the registry's `syn`-keyed
+item maps — is **gone**: L1.5 deleted those maps, so every one of those reads now
+goes through the model. What remains is the ledger.
 
-| Area | Ledger sites | Registry map reads | Stage |
-|---|---:|---:|---|
-| `api/core` (`types_util` 40, `unfold` 15, `registry` 13, `expand` 4) | 72 | 39 | L2 |
-| `api/lang/cbindgen` | 25 | 25 | L3 |
-| `api/lang/jnigen` | 105 | 49 | L4 |
-| **total** | **202** | **113** | |
+| Area | Ledger sites | Stage |
+|---|---:|---|
+| `api/core` (`types_util` 40, `unfold` 16, `registry` 11, `expand` 4) | 71 | L2 |
+| `api/lang/cbindgen` | 25 | L3 |
+| `api/lang/jnigen` | 106 | L4 |
+| **total** | **202** | |
+
+Still 202 in total, and that is the honest number: L1.5 moved reads off the
+deleted maps but took only two classifiers off the ledger (−2 in `registry`,
+`unfold` +1 elsewhere). **The ledger has not started falling yet** — L2 is where
+it does.
 
 Not every site must go: some inspect types the adapter itself *synthesized* —
 wire types, converter signatures — which is legitimately the adapter's business.
@@ -94,21 +112,25 @@ moves it.
 
 | Stage | Owns | State |
 |---|---|---|
-| L0 | `Language` + `Element` + the ledger | **done** — [#227](https://github.com/milyin/prebindgen/pull/227) |
+| L0 | The parser, `Element`, and the ledger | **done** — [#227](https://github.com/milyin/prebindgen/pull/227) |
 | L0.5 | `Flat`: the model, indexed and resolved | **done** — this branch |
-| L1 | `Registry` consumes elements | **done** — this branch |
+| L1 | `Registry` consumes elements | **done** — [#238](https://github.com/milyin/prebindgen/pull/238) |
+| L1.5 | The model is the only index | **done** — #239–#246 |
 | L2 | `api/core` stops classifying source syntax | not started |
 | L3 | `Cbindgen` consumes elements | not started |
-| L4 | `JniGen` consumes elements *(the long pole — 105 sites)* | not started |
+| L4 | `JniGen` consumes elements *(the long pole — 106 sites)* | not started |
 | L5 | Close the seam: the public contract stops being `syn` | not started |
 
 ### L0 — the parser — **done** (#227)
 
-- [x] `Language::parse` over any `(syn::Item, SourceLocation)` stream — the seam
+- [x] One parse over any `(syn::Item, SourceLocation)` stream — the seam
       `Registry::from_items` occupies, so multi-source composition is unchanged
-- [x] `Element` = `Function | Struct | Enum | Const | Unsupported | Passthrough`,
-      every element and component carrying its syntax slice
-- [x] `Type { kind, syntax }`; lowering total over the accepted grammar
+- [x] `Element` per modelled kind plus `Unsupported`, every element and component
+      carrying the syntax it was built from. (There is **no** verbatim-passthrough
+      variant: the proc-macro refuses to mark a `use`/`mod`/`macro_rules!`, so
+      nothing reached one. The exact variant list is L0.5's, below.)
+- [x] A type reference is a classification plus its syntax; lowering total over
+      the accepted grammar
 - [x] The array-length subgrammar and `ArrayExtent`, ported from #212
 - [x] Enum tag / discriminant numbering, ported from #226, with `checked_add`
 - [x] Round-trip tests: syntax slices are the source's tokens, including the
@@ -143,17 +165,23 @@ a model, and takes two bullets off L1 in the process.
       `Element::Unsupported` with `ItemError::UnresolvedType` — so a dangling name
       is reported here, by name, instead of surfacing downstream as an unresolved
       *converter* from whichever adapter looked first
-- [x] `MaybeUninit<T>` becomes `TypeKind::Uninit`: a boundary concept the adapter
-      was classifying, and the one foreign generic no alias can name
+- [x] `&mut MaybeUninit<T>` becomes `RefMode::Out` — an out-parameter is a
+      property of the **borrow**, not a wrapper type, and it is a boundary concept
+      every destination language has (C's `T *out`)
 - [x] The example flat APIs are closed, and covertest-kotlin's build script
       asserts they stay closed across both its sources
 - [x] **Did not move**: every generated artifact byte-identical
 
-**Still open**: `zenoh-flat` and its two consumers are separate repos. Their 28
-unmarked types (26 zenoh aliases, plus `Duration` and `Cow<'_, [u8]>`) need the
-same treatment before they parse. `Cow<'_, [u8]>` has no alias spelling — generic
-and lifetime-bearing — so `zbytes_to_bytes` needs either the `MaybeUninit`
-treatment or a signature change.
+`Cow<'_, T>` needed neither an alias nor a grammar addition in the end: it is
+transparent, exactly like `Box<T>`, so it lowers to whatever `T` is
+([#236](https://github.com/milyin/prebindgen/pull/236)). Both adapters already
+treated it as `Vec<T>`, which is what made the transparency the honest reading
+rather than a convenience.
+
+**Still open**: `zenoh-flat` and its two consumers are separate repos. Their
+unmarked types — the 26 zenoh aliases, plus `Duration`, which is not in the
+prelude and so needs a marked alias like any other foreign type — need the same
+treatment before they parse.
 
 ### L1 — `Registry` consumes elements — **done**
 
@@ -187,15 +215,63 @@ asserting shapes the subgrammar dropped in #212.
 **Still open**: `zenoh-flat`'s 26 unmarked aliases. Until they are marked,
 `zenoh-flat-c` and `zenoh-flat-jni` do not generate.
 
+### L1.5 — the model is the only index — **done**
+
+L1 made the registry a *projection* of the model, but it still kept its own copies.
+A projection that copies is two stores that can disagree, so this stage deleted the
+copies. Not planned as a stage; it fell out of reviewing L1 and is recorded here
+because the map should show where the program actually went.
+
+- [x] **The seven fields go** ([#243](https://github.com/milyin/prebindgen/pull/243)):
+      `functions`, `structs`, `enums`, `consts`, `guards`, `item_origins`,
+      `source_modules`. `Flat` grows `struct_type` / `enum_item` /
+      `source_modules`, and the registry answers `origin_module`,
+      `default_module`, `named_item_idents` off the model. The
+      `SourceLocation` half of every deleted map entry was provably **dead** — all
+      44 `.get()` sites bound it to `_`
+- [x] **Binding-local fns join the model**, lowered through the same grammar
+      (`Flat::lower_signature`) and admitted by `add_local_function` — otherwise
+      "one index" would be a lie, since a `sig!(..)` never passed through the parser
+- [x] **The type table carries the reading**
+      ([#239](https://github.com/milyin/prebindgen/pull/239)): a cell is
+      `TypeCell { subject, root, entry }` where `TypeSubject` is either the
+      frontend's `TypeRef` or an adapter-authored type. `required` stopped being
+      stored — it was one name over three storages — and is derived by `resolve`
+- [x] **`const _` is a `Guard`, not a `Constant`**
+      ([#240](https://github.com/milyin/prebindgen/pull/240)): an anonymous const
+      has no address, so it is not API. Four sentinel `ident == "_"` checks had
+      already gone dead without anyone noticing — the failure mode a sentinel invites
+- [x] **A lookup takes the name the caller holds**
+      ([#244](https://github.com/milyin/prebindgen/pull/244)): the sealed `Name`
+      trait, because `Ident` hashes via `to_string()` and has no `Borrow<str>` —
+      the allocation can be *moved*, never removed
+- [x] **An alias is a declaration of its name**
+      ([#245](https://github.com/milyin/prebindgen/pull/245)): the two type
+      diagnostics had excluded `Extern` as an artefact of asking the old
+      `structs`/`enums` maps, which had nowhere to put one
+- [x] **`Flat` owns the type index**
+      ([#246](https://github.com/milyin/prebindgen/pull/246)): the last index
+      living outside its owner. `from_flat` collapses to *check expressibility,
+      store the model*. Canonicalization becomes one definition
+      (`types_util::canonical_type`) that both the index and `TypeKey` derive from
+- [x] **A reading and a reportable position are different facts**: a synthesized
+      signature has readings but no file, so `SourceLocation::has_position` gates
+      what diagnostics print. Fixed a pre-existing `:0:0:` for hand-built streams
+      as well
+
+**What is left in `Registry` is now genuinely its own**: the two type tables
+(adapter answers plus roots) and the five adapter-declared plan maps.
+
 ### L2 — `api/core` stops classifying source syntax
 
 - [ ] `types_util` — 40 sites, the largest single file. `normalize_type`,
       `immediate_pattern_children`, `match_pattern`, the `is_*` predicates
 - [ ] `registry::immediate_subtype_positions` — near-duplicate of
       `immediate_pattern_children`, and the two already diverge on `Type::Path`
-- [ ] `unfold` (15) and `expand` (4) read element types
-- [ ] `TypeKey` derivable from a `Type` so a lookup stops routing through a
-      spelling
+- [ ] `unfold` (16) and `expand` (4) read element types
+- [ ] `TypeKey` derivable from a `TypeRef` so a lookup stops routing through a
+      spelling. L1.5 got the first half — `TypeKey` and the model's type index
+      now share one canonicalization (`types_util::canonical_type`)
 - [ ] Ledger down by the migrated count; every entry that *stays* is justified in
       the PR as adapter-synthesized
 
@@ -214,7 +290,7 @@ The long pole. Split by area, each PR independently green.
 
 - [ ] `emit/names` (17), `jni/builder` (13), `jni/trait_impl` (11),
       `emit/wrapper` (11), `emit/flat_input` (10), `render` (8), `selector` (7),
-      and the rest
+      `iface` (5), and the rest
 - [ ] `classify.rs` — a whole classifier with **zero** watched sites, so the
       ledger cannot see it: it must be migrated on its own merit
 - [ ] `prim_array_of` reads `ArrayExtent` instead of re-matching `Type::Array`
@@ -225,8 +301,9 @@ The long pole. Split by area, each PR independently green.
 The public contract stops being `syn`, which is what stops the population from
 growing back.
 
-- [ ] `Registry`'s public item maps stop being the adapter-facing contract —
-      relates to [#92](https://github.com/milyin/prebindgen/issues/92)
+- [x] `Registry`'s public item maps stop being the adapter-facing contract —
+      done early by L1.5, which deleted them outright; relates to
+      [#92](https://github.com/milyin/prebindgen/issues/92)
 - [ ] `Prebindgen::post_process_item(&mut syn::Item)` — the hook that let
       qualification live in an adapter in the first place
 - [ ] `ConverterImpl::function` / `TypeEntry::function` as `syn::ItemFn`;
@@ -243,7 +320,9 @@ growing back.
 
 #211's, restated for this design:
 
-- One documented entry point from captured records to elements — `Language::parse`.
+- One documented entry point from captured records to elements —
+  `Flat::builder().items(..).build()`, which `Registry::from_items` also routes
+  through.
 - Both `Cbindgen` and `JniGen` take every **source** fact from an element.
 - No component re-derives a source fact by matching captured syntax; the ledger
   has reached the irreducible set, and every remaining entry is documented as
@@ -263,17 +342,26 @@ dropped is the syn-free model itself — `SourceType::to_syn`,
 source's own slice does that job without a modelling cost.
 
 The `source-frontend` branch stays in place as the reference. Nothing depends on
-it, and it is not a base for anything here: every stage of this program targets
-`main`.
+it, and it is not a base for anything here: every stage of this program lands on
+`language-integration`, which merges to `main` when the program does.
 
 ## Review protocol
 
 Each stage PR states its own exit:
 
-- **Must not move** — byte-identical artifacts, enforced by
-  `examples/regen-check.sh`. A diff is a bug.
-- **Reviewed diff** — expected to change, cause stated up front. A diff outside
-  that cause is a bug.
+- **Reported** — what `examples/regen-check.sh` did, always. The check is
+  **instrumentation, not a constraint**: it says what moved, not whether the
+  change was allowed. Byte-identical is the strongest evidence a refactor did
+  nothing unintended and is worth claiming when it holds — but generated output
+  that moves without changing semantics or performance is fully acceptable, and
+  no architecture decision may be reshaped to keep bytes matching.
+- **Explained** — if output moved, why the change is semantically and
+  performance neutral. A movement outside that explanation is a bug.
 - **Asserted** — the invariant the stage adds, and the ledger delta it claims.
 
-[`core::language`]: ../prebindgen/src/api/core/language/mod.rs
+Run the check the way that makes it mean something: `git clean -fd examples/`
+first (an earlier `--all-features` run leaves artifacts the check reads as drift),
+then `cargo clean -p example-cbindgen -p example-flat` (it only regenerates what
+cargo decides to rebuild, so a cached run passes without checking anything).
+
+[`core::flat`]: ../prebindgen/src/api/core/flat/mod.rs
