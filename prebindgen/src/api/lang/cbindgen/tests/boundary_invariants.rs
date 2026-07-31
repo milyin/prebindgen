@@ -141,12 +141,12 @@ fn every_input_category() -> String {
         ),
     ];
 
-    let registry = Registry::<()>::from_items(declare_referenced(
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(
         items.into_iter().map(|i| (i, loc.clone())),
     ))
     .expect("index items");
 
-    let mut cbindgen = Cbindgen::new()
+    let mut cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))

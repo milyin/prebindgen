@@ -1,28 +1,23 @@
-//! `Prebindgen` — the single extension point for the new pipeline.
+//! `Prebindgen` — what a generator still hands the emitter.
 //!
 //! One method per `#[prebindgen]` item kind (`on_function`, `on_struct`,
-//! `on_enum`, `on_const`) returning the wrapper Rust tokens to emit, plus a
-//! pair of structural converter methods split by direction:
+//! `on_enum`, `on_const`) returning the wrapper Rust tokens to emit, plus the
+//! items they depend on (`prerequisites`), a cross-cutting rewrite
+//! (`post_process_item`) and two invariant checks.
 //!
-//! * Input  (wire → rust): `on_input_type`
-//! * Output (rust → wire): `on_output_type`
+//! **Conversion is not here.** A generator builds those itself, against the
+//! demand `RegistryBuilder::crossings` hands it, and gives them back through
+//! `RegistryBuilder::convert_with` — so there is no `on_input_type`, no deferral, and no
+//! fixed-point loop retrying until it converges.
 //!
-//! Each converter method returns `Some(ConverterImpl)` if the adapter handles
-//! the type, or `None` to defer. Deferred types are retried by the fixed-point
-//! resolver and ultimately reported as "unresolved required type" errors if no
-//! converter can fill the cell.
-//!
-//! `ConverterImpl::function` is the **complete** Rust function for the
-//! converter — signature, body, attributes, lifetimes. The adapter owns
-//! 100% of the shape. Other code that wants to call this converter reads
-//! the name from `function.sig.ident`; the wire form from `destination`.
+//! [`ConverterImpl::function`] is the **complete** Rust function for a
+//! converter — signature, body, attributes, lifetimes. The generator owns 100%
+//! of the shape. Callers read the name from `function.sig.ident` and the wire
+//! form from `destination`.
 
 use proc_macro2::TokenStream;
 
-use crate::api::core::{
-    niches::Niches,
-    registry::{Direction, Registry},
-};
+use crate::api::core::{niches::Niches, registry::Registry};
 
 /// A shared predicate over an item name, as used by
 /// [`Prebindgen::ignored_name_predicates`] (bulk ignores keyed on a naming
@@ -107,8 +102,8 @@ pub struct ConverterImpl<M = ()> {
     /// `input_entry`/`output_entry` the adapter looked up to build a wrapper
     /// (`Option<X>` → `[X]`, `Result<T,E>` → `[T, E]`, `&T` → `[&T]`). Empty
     /// for a terminal converter (scalar, opaque handle, string) and for
-    /// `dispatch_fn_input` (callback args are cross-direction — their
-    /// required-ness flows through `Registry::immediate_edges`, not here). The
+    /// a callback's own converter (callback args are cross-direction — their
+    /// required-ness flows through the registry's type-graph edges, not here). The
     /// resolver copies these into `TypeEntry::subs`, which `propagate_required`
     /// walks to mark reachable types required.
     pub subs: Vec<syn::Type>,
@@ -136,14 +131,20 @@ pub fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenS
 /// the language-agnostic [`Registry`] how that language represents Rust types
 /// on the wire and what wrapper code to emit.
 ///
-/// The trait has no language-specific concepts of its own. Two jobs:
-/// * **Type resolution.** The resolver asks `on_input_type` / `on_output_type`
-///   for the wire form of each required type and gets back a [`ConverterImpl`]
-///   (a generated converter fn + its wire type); these fill
-///   `Registry::input_types` / `output_types`.
-/// * **Per-item emission.** The file emitter calls `on_function` / `on_struct`
-///   / `on_enum` / `on_const` to produce the per-item wrapper code for the
-///   destination language.
+/// The trait has no language-specific concepts of its own, and — since the
+/// registry stopped asking it questions — one job left: **per-item emission**.
+/// The file emitter calls `on_function` / `on_struct` / `on_enum` / `on_const`
+/// to produce the per-item wrapper code, plus `prerequisites` and
+/// `post_process_item` around them and the two `validate` hooks for
+/// adapter invariants.
+///
+/// What used to be here and is not any more: which items to build, how
+/// composites decompose, and the wire form of each type. A generator states the
+/// first two into the builder (`RegistryBuilder::export`,
+/// `RegistryBuilder::decompose`)
+/// and answers the third by filling `RegistryBuilder::crossings` — so nothing in
+/// core calls back to ask. Moving emission out too is what would delete this
+/// trait entirely (prebindgen#251 phase E).
 ///
 /// Anything language-specific the rest of the pipeline must carry — a JNI
 /// adapter's Kotlin class names and exception info, a C adapter's header
@@ -172,134 +173,7 @@ pub trait Prebindgen {
         Vec::new()
     }
 
-    /// Constructor-expansion declarations for this adapter, or `None` if it
-    /// doesn't support expansion. Consulted by `write_rust` after scanning and
-    /// before resolution: each `.expand` is resolved into a
-    /// [`crate::api::core::expand::FoldPlan`] on the registry and its leaf
-    /// types are registered as required inputs.
-    ///
-    /// Returned by value so the adapter may assemble it on demand from its
-    /// raw declarations (keeping its builder free of stored derived state);
-    /// it is consulted exactly once per `write_rust`.
-    ///
-    /// Default: `None`.
-    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
-        None
-    }
-
-    /// Output-expansion (deconstructor / converter) declarations for this
-    /// adapter, or `None` if it doesn't support output expansion. Consulted by
-    /// `write_rust` after `expansions` and before resolution: each
-    /// `.deconstruct_output` / `.convert_output` is resolved into a
-    /// [`crate::api::core::unfold::UnfoldPlan`] on the registry and its leaf
-    /// types are registered as required outputs.
-    ///
-    /// Returned by value, same as [`Self::expansions`]. The registry is
-    /// available because a declaration may name a **value form** (an accessor
-    /// returning "this type's fields in one struct") whose fields have to be
-    /// read off the indexed struct to become records.
-    ///
-    /// Default: `None`.
-    fn deconstructors(
-        &self,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<crate::api::core::unfold::Deconstructors> {
-        let _ = registry;
-        None
-    }
-
-    /// Synthesized by-value `data_class` decompositions for this adapter. Each
-    /// names a value struct and its field-access leaves (the adapter knows the
-    /// per-field encoding — projections, enums, nested classes — so it builds
-    /// the leaves; the registry is available so field converters resolve).
-    /// Consulted by `write_rust` right after [`Self::deconstructors`]: each is
-    /// wired by [`crate::api::core::unfold::apply_value_structs`] into a
-    /// fixed-builder [`crate::api::core::unfold::UnfoldPlan`] for every function
-    /// that returns / callbacks the struct, so it crosses the boundary as
-    /// decoupled leaves (reassembled on the foreign side) instead of a Java
-    /// object built on the Rust side.
-    ///
-    /// Default: empty.
-    fn value_struct_decons(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Vec<crate::api::core::unfold::ValueDecon> {
-        Vec::new()
-    }
-
-    /// Synthesized **sum** decompositions for this adapter — the
-    /// selector-carrying sibling of [`Self::value_struct_decons`]. Each names a
-    /// data-carrying enum, its synthesized tag leaf and one leaf group per
-    /// alternative. Consulted by `write_rust` right after
-    /// [`Self::value_struct_decons`]: each is wired by
-    /// [`crate::api::core::unfold::apply_sum_returns`] into a fixed-builder
-    /// [`crate::api::core::unfold::UnfoldPlan`] for every function whose own
-    /// return (or callback argument) IS the sum, so the value crosses as a tag
-    /// plus tag-gated groups and the foreign side picks the live alternative.
-    ///
-    /// Default: empty.
-    fn sum_decons(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Vec<crate::api::core::unfold::SumDecon> {
-        Vec::new()
-    }
-
-    /// Element types the adapter nominates for a **whole-element leaf fold**: a
-    /// `Vec<T>` / `Option<Vec<T>>` return (or `impl Fn(&[T])` callback arg) whose
-    /// element `T` is a single boundary leaf (e.g. a String, a scalar, an
-    /// opaque handle) the foreign side can reassemble from one wire value. The
-    /// single-leaf analog of [`Self::value_struct_decons`]: consulted right after
-    /// it and wired by [`crate::api::core::unfold::apply_leaf_vec_folds`] so the
-    /// collection crosses as decoupled raw leaves folded into a foreign-built list
-    /// instead of a `java.util.ArrayList` built on the Rust side. Multi-field
-    /// `data_class` elements are excluded (they go through
-    /// [`Self::value_struct_decons`]).
-    ///
-    /// Default: empty.
-    fn leaf_vec_fold_elements(&self, _registry: &Registry<Self::Metadata>) -> Vec<syn::Type> {
-        Vec::new()
-    }
-
     // ── Declaration queries ────────────────────────────────────────
-
-    /// **Binding-local functions** to synthesize into the registry before
-    /// scanning: `(item, origin module path)` pairs built from
-    /// adapter-declared signatures (there is no `#[prebindgen]` item behind
-    /// them — the fn lives in the binding crate and the generated code calls
-    /// it qualified by `origin`). The item's body is never emitted; only its
-    /// signature is read. A synthesized ident colliding with a real
-    /// `#[prebindgen]` item is a hard resolve error. Adapters without the
-    /// concept return empty.
-    ///
-    /// Default: empty.
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-        Vec::new()
-    }
-
-    /// Extra converter requirements the adapter derives from its own decls
-    /// **with registry access** (e.g. a `convert!` conversion fn's
-    /// other-side type, in the conversion's direction, read from the fn's
-    /// registry signature). Consulted by `write_rust` after the adapter's
-    /// plans are applied and before resolution.
-    ///
-    /// Default: none.
-    fn extra_required_types(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Vec<(Direction, syn::Type)> {
-        Vec::new()
-    }
-
-    /// Everything this binding declares: which functions, types and consts it
-    /// emits, which it deliberately skips, and the extra types its plans need.
-    ///
-    /// **The registry's construction input, stated once.** This was twenty-one
-    /// getters the registry called back into the adapter from inside `resolve`,
-    /// which put configuring and using in the same call — and that is why a
-    /// converter could read a half-built registry. The caller states it all up
-    /// front; resolution then passes or fails.
-    fn declarations(&self) -> crate::api::core::registry::Declarations;
 
     /// Final post-processing pass applied to every emitted item right
     /// before write. Default: no-op.
@@ -314,7 +188,7 @@ pub trait Prebindgen {
 
     /// Adapter-invariant checks that need registry **signatures** — the
     /// earliest they can run (decl objects are built before any source is
-    /// read). Called by `Registry::resolve` right after the declaration
+    /// read). Called by `RegistryBuilder::validate_with` right after the declaration
     /// scan (so a missing fn has already hard-errored; validate sees only
     /// indexed items) and before plan application. An `Err` aborts the
     /// resolve as `ScanError::AdapterInvariant` with the message verbatim
@@ -322,7 +196,10 @@ pub trait Prebindgen {
     /// receiver parameter of the class type.
     ///
     /// Default: no checks.
-    fn validate(&self, _registry: &Registry<Self::Metadata>) -> Result<(), String> {
+    fn validate(
+        &self,
+        _binding: &crate::api::core::registry::Building<'_, Self::Metadata>,
+    ) -> Result<(), String> {
         Ok(())
     }
 
@@ -378,56 +255,5 @@ pub trait Prebindgen {
             Some(m) => const_path_alias(c, m),
             None => c.to_token_stream(),
         }
-    }
-
-    // ── Structural type resolution (the converter-resolution surface) ──
-
-    /// Resolve the **input** (wire → rust) converter for `ty`. The adapter
-    /// inspects `ty`'s outermost structure itself (peeling with
-    /// `core::types_util` helpers) and returns either a *terminal* converter
-    /// (`ConverterImpl::subs` empty) or a *wrapper* that looked up inner
-    /// converters via [`Registry::input_entry`] (listing those inners in
-    /// `subs`). Return `None` to **defer** — when an inner isn't resolved yet
-    /// the resolver retries on a later fixed-point iteration.
-    fn on_input_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    /// Resolve the **output** (rust → wire) converter for `ty`. The dual of
-    /// [`Self::on_input_type`]; same terminal-vs-wrapper / `subs` / defer
-    /// contract, looking up inners via [`Registry::output_entry`].
-    fn on_output_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    /// Build the wrapper converter for an
-    /// `impl Fn(args...) + Send + Sync + 'static` parameter, given the
-    /// already-extracted arg types in declaration order. The resolver calls
-    /// this only after [`Self::on_input_type`] returns `None`, so wrappers that
-    /// need custom callback dispatch can intercept earlier and skip this path.
-    ///
-    /// `args` are the rust-side argument types as they appear in the source
-    /// signature. Note that callback args flow inverse to the callback
-    /// parameter itself: the callback parameter is *input*, but its args are
-    /// produced by the rust side and consumed by the foreign side, so they are
-    /// *output* direction for converter resolution. The framework handles this
-    /// direction-flip at registration time (`register_type_inner` in
-    /// `core::registry`), so implementations of this method should look up
-    /// already-registered *output* converters for each arg type. The returned
-    /// `ConverterImpl::subs` should be empty — the callback-arg required-ness
-    /// flows through that direction-flipped `immediate_edges`, not `subs`.
-    ///
-    /// Default: `None`. Adapters that support `impl Fn` callbacks override this.
-    fn dispatch_fn_input(
-        &self,
-        args: &[syn::Type],
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>> {
-        let _ = (args, registry);
-        None
     }
 }

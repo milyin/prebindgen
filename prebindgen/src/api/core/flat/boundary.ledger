@@ -45,7 +45,8 @@
 # gaps are listed here rather than implied away.
 
 4	api/core/expand.rs
-11	api/core/registry.rs
+2	api/core/registry/scan.rs
+9	api/core/registry/walk.rs
 14	api/core/types_util.rs
 16	api/core/unfold.rs
 8	api/lang/cbindgen/builder.rs

@@ -4,7 +4,7 @@
 //! (`expectedSel: Int, expected00: Long?, …`); the raw call site passes magic
 //! ints and null-padding. Two mechanisms turn that into idiomatic Kotlin:
 //!
-//! * **Proactive splittability check** ([`JniGen::validate_split_declarations`]):
+//! * **Proactive splittability check** ([`JniGenBuilder::validate_split_declarations`]):
 //!   every multi-variant `expand_param!` declaration (type-level or per-fn) is
 //!   verified up front to be *splittable* — its arms surface as pairwise-distinct
 //!   JVM signatures — so a function can safely request overloads. A collision is
@@ -30,9 +30,12 @@
 //! still pairwise-distinct per the checks above.
 
 use super::*;
-use crate::api::core::expand::{FoldArg, FoldPlan};
+use crate::api::core::{
+    expand::{FoldArg, FoldPlan},
+    registry::Conversions,
+};
 
-impl JniGen {
+impl JniGenBuilder {
     /// Proactively verify every multi-variant `expand_param!` declaration is
     /// splittable (its arms have pairwise-distinct JVM-erased signatures), so
     /// [`FunctionDecl::split_on_param`](crate::fun) can emit unambiguous
@@ -105,7 +108,7 @@ impl JniGen {
 /// Uses the shared [`erase_kt_type`] model (issue #89 stage 2) so the split
 /// ambiguity check and the whole-artifact overload table agree on erasure.
 fn arm_erased_sig(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     target: &syn::Type,
     ctor: Option<&syn::Ident>,
@@ -138,7 +141,7 @@ fn arm_erased_sig(
 /// type with no resolved surface. References are peeled first (`&T` erases
 /// like `T`).
 fn rust_type_erased(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     ty: &syn::Type,
 ) -> ErasedJvmType {
@@ -245,7 +248,7 @@ fn is_option(ty: &syn::Type) -> bool {
 /// for an `Option<…>` parameter `null` encodes absence (nullable-arm rule).
 /// Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     variant: &crate::api::core::expand::FoldVariant,
     origin: &syn::Ident,
     block: &[kt::KtParam],
@@ -322,7 +325,7 @@ fn resolve_split<'a>(
 ) -> Split<'a> {
     let param = syn::Ident::new(param_name, Span::call_site());
     let plan = registry
-        .expansion_plans
+        .expansion_plans()
         .get(&(f.sig.ident.clone(), param.clone()))
         .unwrap_or_else(|| {
             panic!(
@@ -402,7 +405,7 @@ fn resolve_split<'a>(
 /// Emits the cartesian product of the named params' arms; panics (a build
 /// error) if the product has two combinations with the same JVM signature.
 pub(crate) fn render_param_overloads(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     sel_fun: &kt::KtFun,
@@ -607,10 +610,9 @@ mod tests {
             }
         };
         let registry =
-            Registry::<KotlinMeta>::from_items(crate::api::test_util::declare_referenced(vec![(
-                syn::Item::Fn(ctor),
-                SourceLocation::default(),
-            )]))
+            crate::api::test_util::reg_from_items(crate::api::test_util::declare_referenced(vec![
+                (syn::Item::Fn(ctor), SourceLocation::default()),
+            ]))
             .expect("index constructor");
         let variant = crate::api::core::expand::FoldVariant {
             ctor: Some(syn::parse_quote!(z_summary_optional)),

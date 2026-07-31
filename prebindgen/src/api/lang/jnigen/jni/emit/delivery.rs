@@ -1,7 +1,10 @@
 //! Output-expansion delivery: unfold plans and leaf encoding.
 
 use super::*;
-use crate::api::core::unfold::{steps_are_movable, PathStep};
+use crate::api::core::{
+    registry::Conversions,
+    unfold::{steps_are_movable, PathStep},
+};
 
 /// Emit the output-expansion delivery body (output phase) for a function
 /// marked `.expand_output()`. The return value (`__out`) is decomposed by the
@@ -27,7 +30,7 @@ use crate::api::core::unfold::{steps_are_movable, PathStep};
 /// [`UnfoldShape::Base`]: crate::api::core::unfold::UnfoldShape::Base
 /// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     iface: Option<&IfaceSpec>,
@@ -785,8 +788,8 @@ fn reach_leaf(
 /// arm of fallible externs (whose `fail` falls back to a binding-error
 /// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &JniGenBuilder,
+    registry: &impl Conversions<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     obj_idents: &[syn::Ident],
     value: &TokenStream,
@@ -1302,7 +1305,7 @@ pub(crate) fn encode_plan_leaves(
 /// [`crate::api::lang::jnigen::jni::iface`] derives for the same leaf — a
 /// nullable primitive boxes (object chunk), object wires pass as objects.
 pub(crate) fn leaf_is_prim(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> bool {
     // The synthesized sum selector is a `jint` by definition — it is assigned,
@@ -1326,7 +1329,7 @@ pub(crate) fn leaf_is_prim(
 /// primitive** slot? Split out so the interface derivation can ask the question
 /// about a leaf whose own `nullable` flag it is in the middle of computing (an
 /// inert sum group slot).
-pub(crate) fn leaf_ty_is_prim(registry: &Registry<KotlinMeta>, out_ty: &syn::Type) -> bool {
+pub(crate) fn leaf_ty_is_prim(registry: &impl Conversions<KotlinMeta>, out_ty: &syn::Type) -> bool {
     let Some(entry) = registry.output_entry(out_ty) else {
         return false;
     };

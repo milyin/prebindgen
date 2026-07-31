@@ -16,6 +16,7 @@
 //! instead of by hand-synchronized parallel walks.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// The flattened `fromParts` bridge plan of one struct.
 pub(crate) struct StructPlan {
@@ -182,8 +183,8 @@ pub(crate) struct SumPlanField {
 /// name) — consistently for BOTH sides, where the former parallel walks
 /// could silently diverge on such edge cases.
 pub(crate) fn build_struct_plan(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &JniGenBuilder,
+    registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
     depth: usize,
 ) -> Option<StructPlan> {
@@ -214,8 +215,8 @@ pub(crate) fn build_struct_plan(
 /// `owner` is the dotted path used in diagnostics (`Config.mode`,
 /// `Reading::Exact.v0`).
 pub(crate) fn classify_field(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &JniGenBuilder,
+    registry: &impl Conversions<KotlinMeta>,
     ty: &syn::Type,
     owner: &str,
     depth: usize,
@@ -463,8 +464,8 @@ impl PlanFieldKind {
 /// whenever a payload's converter happened to resolve later than this plan
 /// was first attempted.
 fn sum_plan_kind(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &JniGenBuilder,
+    registry: &impl Conversions<KotlinMeta>,
     ty: &syn::Type,
     owner: &str,
     optional: bool,

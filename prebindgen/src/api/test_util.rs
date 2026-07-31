@@ -6,16 +6,18 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::api::core::registry::{Registry, TypeCell, TypeEntry, TypeKey, TypeSubject};
+use crate::api::core::registry::{Registry, RegistryBuilder, TypeCell, TypeEntry, TypeSubject};
 
 /// A type-table cell for a fixture.
 ///
 /// The subject is always [`TypeSubject::Adapter`]: a hand-built table has no
 /// `Flat` behind it, so no key in one has a source reading. A test that cares
 /// about the `Source` side builds its registry from items instead.
-pub(crate) fn cell<M>(key: &TypeKey, root: bool, entry: Option<TypeEntry<M>>) -> TypeCell<M> {
+///
+/// Takes no key: `Adapter` carries nothing, since nothing ever read it back.
+pub(crate) fn cell<M>(root: bool, entry: Option<TypeEntry<M>>) -> TypeCell<M> {
     TypeCell {
-        subject: TypeSubject::Adapter(key.to_type()),
+        subject: TypeSubject::Adapter,
         root,
         entry,
     }
@@ -27,7 +29,7 @@ pub(crate) fn cell<M>(key: &TypeKey, root: bool, entry: Option<TypeEntry<M>>) ->
 /// Whatever it does *not* declare is supplied by [`declare_referenced`], because
 /// these fixtures exist to exercise plan shapes and a handle declaration is noise
 /// in them.
-pub(crate) fn reg_with(sources: &[&str]) -> Registry<()> {
+pub(crate) fn reg_with<M>(sources: &[&str]) -> RegistryBuilder<M> {
     let items = sources
         .iter()
         .map(|src| {
@@ -35,7 +37,27 @@ pub(crate) fn reg_with(sources: &[&str]) -> Registry<()> {
             (item, crate::SourceLocation::default())
         })
         .collect::<Vec<_>>();
-    Registry::from_items(declare_referenced(items)).expect("index")
+    reg_from_items(declare_referenced(items)).expect("index")
+}
+
+/// A **scanned** registry from item sources — for tests that drive `expand` /
+/// `unfold` directly and need the type tables populated, without going through
+/// a generator's conversion loop.
+pub(crate) fn scanned_with<M>(sources: &[&str]) -> Registry<M> {
+    reg_with(sources).scanned().expect("scan")
+}
+
+/// Build a `Registry` from an item stream, the way `Registry::from_items` used
+/// to before reading captured output became `FlatBuilder`'s job alone.
+///
+/// Test-only sugar: the two steps are one line each in a build script, but they
+/// appear in dozens of fixtures here.
+pub(crate) fn reg_from_items<M, I>(items: I) -> Result<RegistryBuilder<M>, crate::core::ScanError>
+where
+    I: IntoIterator<Item = (syn::Item, crate::SourceLocation)>,
+{
+    let flat = crate::core::Flat::builder().items(items).build()?;
+    Registry::builder(flat)
 }
 
 /// Append a marked type alias for every nominal type the stream names but never

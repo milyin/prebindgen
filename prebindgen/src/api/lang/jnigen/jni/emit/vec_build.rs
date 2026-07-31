@@ -30,7 +30,7 @@ pub(crate) fn slice_or_vec_elem(arg_ty: &syn::Type) -> Option<(syn::Type, bool)>
 /// classifier, `render_extern_decl`, and the synthetic-extern emitter so all
 /// four sites agree on which params take the handle path.
 pub(crate) fn vec_build_elem(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     arg_ty: &syn::Type,
 ) -> Option<(syn::Type, bool)> {
@@ -60,7 +60,7 @@ pub(crate) fn vec_build_elem(
 /// Deduped by [`TypeKey`] and sorted for deterministic output (mirrors
 /// [`build_handle_destructor_items`]).
 pub(crate) fn collect_vec_build_elem_types(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Type> {
     let declared = ext.declared_functions();
@@ -99,7 +99,7 @@ pub(crate) struct VecBuildHelpers {
 /// from the element's **Kotlin** data-class short name (first char lowercased) so
 /// the generated methods read naturally (`Payload` → `payloadVec`).
 pub(crate) fn vec_build_helpers(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
     elem: &syn::Type,
 ) -> Option<VecBuildHelpers> {
@@ -137,7 +137,7 @@ pub(crate) fn vec_build_helpers(
 /// through the method mangler like every other `JNINative` extern. The Rust JNI symbol
 /// (see [`vec_helper_symbol`]) and the Kotlin call site both use this, so they
 /// agree.
-pub(crate) fn vec_helper_method_name(ext: &JniGen, base: &str, suffix: &str) -> String {
+pub(crate) fn vec_helper_method_name(ext: &JniGenBuilder, base: &str, suffix: &str) -> String {
     ext.mangle_jni_method(&format!("{base}{suffix}"))
 }
 
@@ -145,7 +145,7 @@ pub(crate) fn vec_helper_method_name(ext: &JniGen, base: &str, suffix: &str) -> 
 /// `Java_<pkg>_<JNINative>_…` scheme function wrappers use via the plan's
 /// `native_symbol` (see `symbol`, #86); these helpers live on the
 /// `JNINative` object, so they share its class path.
-fn vec_helper_symbol(ext: &JniGen, base: &str, suffix: &str) -> String {
+fn vec_helper_symbol(ext: &JniGenBuilder, base: &str, suffix: &str) -> String {
     ext.native_method_symbol(&vec_helper_method_name(ext, base, suffix))
 }
 
@@ -164,7 +164,7 @@ fn vec_helper_symbol(ext: &JniGen, base: &str, suffix: &str) -> String {
 /// shared across all callers of a given element type). This keeps the Kotlin
 /// push loop free of a per-element failure check.
 pub(crate) fn build_vec_build_helper_items(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();

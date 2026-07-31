@@ -1,33 +1,30 @@
-use std::{
-    collections::HashSet,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 
 use super::*;
-use crate::{api::test_util::cell, SourceLocation};
+use crate::{
+    api::{core::registry::RegistryBuilder, test_util::cell},
+    SourceLocation,
+};
 
 struct IdentityExt;
 
+impl IdentityExt {
+    fn declare_into(&self, mut reg: RegistryBuilder<()>) -> RegistryBuilder<()> {
+        for f in [syn::parse_quote!(a_fn), syn::parse_quote!(b_fn)] {
+            reg = reg.export(&f);
+        }
+        for t in ["AEnum", "AStruct", "BEnum", "BStruct"] {
+            reg = reg.export_type(TypeKey::parse(t).expect("test type"));
+        }
+        reg
+    }
+}
+
 impl Prebindgen for IdentityExt {
     type Metadata = ();
-
-    fn declarations(&self) -> crate::core::Declarations {
-        crate::core::Declarations::new()
-            .functions(
-                [syn::parse_quote!(a_fn), syn::parse_quote!(b_fn)]
-                    .into_iter()
-                    .collect(),
-            )
-            .types(
-                ["AEnum", "AStruct", "BEnum", "BStruct"]
-                    .into_iter()
-                    .map(|s| TypeKey::parse(s).expect("test type"))
-                    .collect(),
-            )
-    }
 
     fn on_function(&self, f: &syn::ItemFn, _registry: &Registry<Self::Metadata>) -> TokenStream {
         f.to_token_stream()
@@ -39,22 +36,6 @@ impl Prebindgen for IdentityExt {
 
     fn on_enum(&self, e: &syn::ItemEnum, _registry: &Registry<Self::Metadata>) -> TokenStream {
         e.to_token_stream()
-    }
-
-    fn on_input_type(
-        &self,
-        _ty: &syn::Type,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-        None
-    }
-
-    fn on_output_type(
-        &self,
-        _ty: &syn::Type,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-        None
     }
 }
 
@@ -69,7 +50,6 @@ fn dedup_and_sort() {
     reg.input_types.insert(
         key_a.clone(),
         cell(
-            &key_a,
             true,
             Some(TypeEntry {
                 destination: wire.clone(),
@@ -88,7 +68,6 @@ fn dedup_and_sort() {
     reg.input_types.insert(
         key_b.clone(),
         cell(
-            &key_b,
             true,
             Some(TypeEntry {
                 destination: wire2.clone(),
@@ -172,7 +151,10 @@ fn write_rust_sorts_declared_items_by_ident() {
             loc,
         ),
     ];
-    let reg: Registry<()> = Registry::from_items(items).expect("index");
+    let reg: Registry<()> = IdentityExt
+        .declare_into(crate::api::test_util::reg_from_items(items).expect("index"))
+        .scanned()
+        .expect("scan");
 
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -213,16 +195,30 @@ fn bad_generated_tokens_report_emission_phase() {
 /// on the way out.
 #[test]
 fn guards_emit_ungated_and_in_stream_order() {
-    /// Declares a const mechanism (`Some`) and declares nothing through it.
+    /// Declares a const mechanism and declares nothing through it, so
+    /// `KEPT_OUT` must not emit.
     struct ConstGatingExt;
+
+    trait ResolveGating {
+        fn resolve_gating(
+            self,
+            ext: ConstGatingExt,
+        ) -> Result<Registry<()>, crate::core::WriteRustError>;
+    }
+    impl ResolveGating for RegistryBuilder<()> {
+        fn resolve_gating(
+            self,
+            ext: ConstGatingExt,
+        ) -> Result<Registry<()>, crate::core::WriteRustError> {
+            let registry = self.declares_consts().build()?;
+            let _ = &ext;
+            Ok(registry)
+        }
+    }
 
     impl Prebindgen for ConstGatingExt {
         type Metadata = ();
 
-        fn declarations(&self) -> crate::core::Declarations {
-            // The gate exists and is empty: `KEPT_OUT` must not emit.
-            crate::core::Declarations::new().consts(Some(HashSet::new()))
-        }
         fn on_function(&self, f: &syn::ItemFn, _r: &Registry<()>) -> TokenStream {
             f.to_token_stream()
         }
@@ -231,20 +227,6 @@ fn guards_emit_ungated_and_in_stream_order() {
         }
         fn on_enum(&self, e: &syn::ItemEnum, _r: &Registry<()>) -> TokenStream {
             e.to_token_stream()
-        }
-        fn on_input_type(
-            &self,
-            _ty: &syn::Type,
-            _r: &Registry<()>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<()>> {
-            None
-        }
-        fn on_output_type(
-            &self,
-            _ty: &syn::Type,
-            _r: &Registry<()>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<()>> {
-            None
         }
     }
 
@@ -275,15 +257,14 @@ fn guards_emit_ungated_and_in_stream_order() {
             loc.clone(),
         ),
     ];
-    let registry: Registry<()> = Registry::from_items(items).expect("index");
+    let registry: RegistryBuilder<()> =
+        crate::api::test_util::reg_from_items(items).expect("index");
     assert_eq!(registry.flat().guards().count(), 2);
 
     let dir = crate::api::test_util::unique_test_dir("write_guards");
     std::fs::create_dir_all(&dir).unwrap();
-    let path = registry
-        .resolve(ConstGatingExt)
-        .expect("resolve")
-        .write_rust(dir.join("gen.rs"))
+    let registry = registry.resolve_gating(ConstGatingExt).expect("resolve");
+    let path = crate::api::core::write::write_rust(&registry, &ConstGatingExt, dir.join("gen.rs"))
         .expect("write_rust");
     let src = std::fs::read_to_string(&path).unwrap();
 

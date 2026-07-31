@@ -1,10 +1,11 @@
-//! [`Prebindgen`] implementation for [`JniGen`] plus its converter-
+//! [`Prebindgen`] implementation for [`JniGenBuilder`] plus its converter-
 //! selector / exception-routing helpers.
 //!
 //! Carved from the former monolithic JNI module; shares the `jni`
 //! namespace via `use super::*`.
 
 use super::*;
+use crate::api::core::registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 /// The `#[allow(...)]` carried by every generated converter `fn`.
 ///
@@ -35,7 +36,7 @@ fn generated_converter_attr() -> syn::Attribute {
 // and consuming-crate wrapper exts like ZenohJniExt).
 // ──────────────────────────────────────────────────────────────────────
 
-impl JniGen {
+impl JniGenBuilder {
     /// Build the standard JNI input-converter `fn`. Body assumes in-scope
     /// `env: &mut JNIEnv` and `v: &<wire>` (or `v: <wire>` for raw-pointer
     /// wires); produces a value of `rust`. Returned function has its name
@@ -378,7 +379,7 @@ impl JniGen {
         // owner is a compile-time namespace, not a boundary type. Requiring it
         // to be declared would force an otherwise-unused Kotlin class into
         // existence just to make the generated Rust compile, and would be
-        // asymmetric with consts, which qualify whether or not JniGen declared
+        // asymmetric with consts, which qualify whether or not JniGenBuilder declared
         // them.
         // EVERY named item the registry indexes. A length is an arbitrary const
         // expression, so it can name a const, the type owning an associated
@@ -547,7 +548,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 /// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
 /// producing destructors that reference types not in scope.
 pub(crate) fn build_handle_destructor_items(
-    ext: &JniGen,
+    ext: &JniGenBuilder,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
@@ -613,12 +614,12 @@ pub(crate) fn build_handle_destructor_items(
 
 /// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
 /// `Option`). Each returns `Some(ConverterImpl)` only for the wildcard pattern
-/// it claims; [`JniGen::input_wrapper_shape`] chains them in priority order.
+/// it claims; [`JniGenBuilder::input_wrapper_shape`] chains them in priority order.
 /// Because [`pat_match`] is an exact match, the patterns are disjoint — except
 /// the two `Option<_>` sub-cases (direct-handle-by-value vs general), which
-/// share a pattern and so live together in [`JniGen::input_option`] to keep
+/// share a pattern and so live together in [`JniGenBuilder::input_option`] to keep
 /// their original fall-through.
-impl JniGen {
+impl JniGenBuilder {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
     /// `emit_jni_function_wrapper` adds `&decoded`). Exists so the
@@ -627,7 +628,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if !(pat_match(pat, "& _") || pat_match(pat, "& mut _")) {
             return None;
@@ -673,7 +674,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if !(pat_match(pat, "Option < & _ >") || pat_match(pat, "Option < & mut _ >")) {
             return None;
@@ -734,7 +735,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if !pat_match(pat, "Vec < _ >") {
             return None;
@@ -798,7 +799,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if pat_match(pat, "Option < _ >") {
             let inner = registry.input_entry(t1)?;
@@ -923,85 +924,167 @@ impl JniGen {
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
 
-impl Prebindgen for JniGen {
-    fn declarations(&self) -> crate::core::Declarations {
-        crate::core::Declarations::new()
-            .functions(self.declared_functions())
-            .accessors(self.accessor_functions())
-            .method_receivers(self.method_receivers())
-            .ignored_functions(self.ignored_functions())
-            .ignored_name_predicates(self.ignored_name_predicates())
-            .helper_functions(self.helper_functions())
-            .consts(self.declared_consts())
-            .ignored_consts(self.ignored_consts())
-            .required_output_types(self.required_output_types())
-            .types(self.declared_types())
-            .ignored_types(self.ignored_types())
-            .boundary_only_types(self.boundary_only_types())
+impl JniGenBuilder {
+    /// State this binding into `registry`: what it exports, what crosses, and
+    /// what it defines itself.
+    ///
+    /// **Push, not pull.** The registry does not call back to ask — the build
+    /// script calls this, and the registry stays a passive recorder. That is
+    /// what makes "a converter reads a half-built registry" unrepresentable
+    /// rather than merely avoided.
+    ///
+    /// Order-independent, and idempotent apart from the local-fn collision
+    /// check: every method it calls records rather than derives.
+    /// State this binding into `registry`, then resolve it.
+    ///
+    /// The pair is always used together, and the generator is what knows both
+    /// halves — so it drives, and the registry never calls back. Becomes the
+    /// body of `generate(..)` once emission moves here too (#251 phase E).
+    /// Read the source, resolve every crossing, and hand back the binding.
+    ///
+    /// Runs the whole pipeline a build script used to run by hand: parse the
+    /// declared sources into a model, describe this binding over it, answer
+    /// each crossing in dependency order, and check the set is complete. A
+    /// `Flat` and a `Registry` exist inside — they are simply not this caller's
+    /// problem.
+    pub fn build(self) -> Result<JniGen, crate::core::WriteRustError> {
+        let flat = self
+            .sources
+            .clone()
+            .build()
+            .map_err(crate::core::ScanError::from)?;
+        let registry = crate::core::Registry::builder(flat)?;
+        self.build_with(registry)
     }
 
-    /// Cross-language extras every JNI converter carries — currently
-    /// the Kotlin value-context type name. Filled by the rank-N
-    /// handlers at the same point they build the wire/body; the
-    /// resolver propagates it into [`crate::api::core::registry::TypeEntry::metadata`];
-    /// the Kotlin emitter reads it back to drive every wrapper /
-    /// typed-handle / `JNIWrappers` signature.
-    type Metadata = KotlinMeta;
+    /// [`Self::build`] over a registry that was described elsewhere.
+    ///
+    /// The seam tests use to feed synthetic items without a source directory;
+    /// `build` is this with the model read from [`Self::source`].
+    pub(crate) fn build_with(
+        self,
+        registry: crate::api::core::registry::RegistryBuilder<KotlinMeta>,
+    ) -> Result<JniGen, crate::core::WriteRustError> {
+        let registry = self
+            .declare_into(registry)?
+            .validate_with(&self)?
+            .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
+            .build()?;
+        // Post-resolve invariants, run once here so the writers are pure reads
+        // and a `JniGen` is valid by construction.
+        self.validate_resolved(&registry)
+            .map_err(|message| crate::core::ScanError::AdapterInvariant { message })?;
+        Ok(JniGen {
+            gen: self,
+            registry,
+        })
+    }
 
-    // ── Structural type resolution ──────────────────────────────────────
-    // Try the terminal categories, then the `Result` peel, then the built-in
-    // wrapper shapes — peel
-    // `ty`'s outermost layer and dispatch to `{input,output}_wrapper_shape` with
-    // the reconstructed canonical pattern. `subs` = the captured inner(s).
-
-    fn on_input_type(
+    /// Build the conversion for one crossing, against what is already built.
+    ///
+    /// `None` is *cannot*, never *not yet*: `crossings` hands them out
+    /// inner-first, so everything this could compose from is already in `built`.
+    fn convert_crossing(
         &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        crossing: &Crossing,
+        built: &Building<'_, KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.select_input_type(ty, registry)
+        let (dir, key) = crossing;
+        let ty = key.to_type();
+        match dir {
+            Direction::Input => self.select_input_type(&ty, built).or_else(|| {
+                // `impl Fn(args)` that nothing else claimed. Callback args cross
+                // in the OPPOSITE direction, which is why their required-ness
+                // rides `immediate_edges` rather than this converter's `subs`.
+                let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
+                self.dispatch_fn_input(&args, built)
+            }),
+            Direction::Output => self.select_output_type(&ty, built),
+        }
     }
 
-    fn on_output_type(
+    pub fn declare_into(
         &self,
-        ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.select_output_type(ty, registry)
-    }
+        mut registry: RegistryBuilder<KotlinMeta>,
+    ) -> Result<RegistryBuilder<KotlinMeta>, crate::core::ScanError> {
+        // Binding-local fns first: they become model, and everything below may
+        // name one.
+        for (item_fn, origin) in self.collect_local_functions() {
+            registry = registry.local_function(item_fn, origin)?;
+        }
 
-    /// Hand the registry this back-end's constructor-expansion declarations so
-    /// `write_rust` can resolve `.expand`s into fold plans before resolution.
-    /// Assembled on demand from the per-fn overrides plus the raw type-level
-    /// [`ExpandParamDecl`]s (see [`JniGen::build_expansions`]).
-    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
-        Some(self.build_expansions())
-    }
+        for ident in self.declared_functions() {
+            registry = registry.export(&ident);
+        }
+        for ident in self.helper_functions() {
+            registry = registry.reference(&ident);
+        }
+        // JniGenBuilder HAS a const mechanism, so const emission is declared-only even
+        // when nothing is declared.
+        registry = registry.declares_consts();
+        for ident in self.declared_consts().into_iter().flatten() {
+            registry = registry.export_const(&ident);
+        }
+        for key in self.declared_types() {
+            registry = registry.export_type(key);
+        }
+        for ident in self.accessor_functions() {
+            registry = registry.accessor(&ident);
+        }
+        for (ident, receiver) in self.method_receivers() {
+            registry = registry.method_receiver(&ident, receiver);
+        }
 
-    /// Hand the registry this back-end's output-expansion declarations so
-    /// `write_rust` can resolve them into unfold plans before resolution.
-    /// Assembled on demand — field names (member inheritance) resolve here,
-    /// against the complete declaration set (see
-    /// [`JniGen::build_deconstructors`]).
-    fn deconstructors(
+        // An expression constant's value type has no captured item to scan.
+        for ty in self.required_output_types() {
+            registry = registry.cross(Direction::Output, &ty);
+        }
+        // The other-side type of every `convert!` conversion, in the
+        // conversion's direction: an input fn's parameter type needs its own
+        // input converter for the composed body to chain through; an output
+        // fn's return type needs the output twin.
+        let mut convert_edges: Vec<(Crossing, Crossing)> = Vec::new();
+        for decl in &self.convert_decls {
+            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, &registry) {
+                registry = registry.cross(Direction::Input, &ty);
+                // The target's conversion chains through this one, and nothing
+                // about the target type says so.
+                convert_edges.push((
+                    (Direction::Input, decl.key.clone()),
+                    (Direction::Input, TypeKey::from_type(&ty)),
+                ));
+            }
+            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, &registry) {
+                registry = registry.cross(Direction::Output, &ty);
+                convert_edges.push((
+                    (Direction::Output, decl.key.clone()),
+                    (Direction::Output, TypeKey::from_type(&ty)),
+                ));
+            }
+        }
+        for (from, on) in convert_edges {
+            registry = registry.depends(from, on);
+        }
+        // How composites cross in pieces. Every one of these reads only the
+        // model, which is what lets them be stated here rather than asked for
+        // mid-resolve.
+        let decompositions = crate::core::Decompositions {
+            expansions: Some(self.build_expansions()),
+            deconstructors: Some(self.build_deconstructors(&registry)),
+            value_structs: self.build_value_struct_decons(&registry),
+            sums: self.build_sum_decons(&registry),
+            leaf_vec_elements: self.build_leaf_vec_fold_elements(&registry),
+            replaces: self.boundary_only_types(),
+        };
+        registry = registry.decompose(decompositions);
+        Ok(registry)
+    }
+}
+
+impl JniGenBuilder {
+    pub(crate) fn build_value_struct_decons(
         &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<crate::api::core::unfold::Deconstructors> {
-        Some(self.build_deconstructors(registry))
-    }
-
-    /// Synthesize a field-decomposition for every `.data_class` type whose
-    /// fields the fixed builder can forward verbatim (see
-    /// [`synth_value_struct_leaves`]). The result drives
-    /// [`crate::api::core::unfold::apply_value_structs`] so such a struct
-    /// crosses Rust→Kotlin as decoupled leaves (reassembled by the generated
-    /// `fromParts` builder singleton) instead of a `JObject` built on the Rust
-    /// side via `call_static_method`. Types the synthesizer declines (enums /
-    /// projections / `Option`/`Vec`-nested) keep the whole-value
-    /// [`struct_output_body`] path.
-    fn value_struct_decons(
-        &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Vec<crate::api::core::unfold::ValueDecon> {
         let mut out = Vec::new();
         for (ident, item_struct) in registry.flat().types().filter_map(|t| match t {
@@ -1039,18 +1122,9 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Synthesize the tag-plus-groups decomposition of every `sealed_class`
-    /// type, so a function whose own return (or callback argument) IS the sum
-    /// delivers it as a tag plus one leaf group per variant — the same wire
-    /// layout a sum-typed struct field already gets, reassembled by the hoisted
-    /// builder singleton instead of by the parent's `fromParts`.
-    ///
-    /// Emitted for every declared sum, not only the ones currently returned: a
-    /// decomposition with no matching function wires no plan, and an unused
-    /// `DeconSpec` emits nothing.
-    fn sum_decons(
+    pub(crate) fn build_sum_decons(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Vec<crate::api::core::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -1075,16 +1149,10 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Nominate every **single-leaf** element type that appears in a `Vec<T>` /
-    /// `Option<Vec<T>>` return or an `impl Fn(&[T])` callback arg, so
-    /// [`crate::api::core::unfold::apply_leaf_vec_folds`] routes the collection
-    /// through a foreign-built fold (no Rust `ArrayList`). A single-leaf element
-    /// is an opaque handle (→ a `jlong` pointer the Kotlin folder wraps into its
-    /// typed handle class) or a non-`data_class`
-    /// builtin with a JObject-shaped output wire (e.g. String). Multi-field
-    /// `data_class` elements are excluded — they go through
-    /// [`Self::value_struct_decons`].
-    fn leaf_vec_fold_elements(&self, registry: &Registry<KotlinMeta>) -> Vec<syn::Type> {
+    pub(crate) fn build_leaf_vec_fold_elements(
+        &self,
+        registry: &impl Conversions<KotlinMeta>,
+    ) -> Vec<syn::Type> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut consider = |bare: syn::Type| {
@@ -1121,25 +1189,62 @@ impl Prebindgen for JniGen {
         }
         out
     }
+}
 
-    /// Binding-local fns to synthesize into the registry, from both entry
-    /// forms — path-built `fun!(crate::f).sig(…)` decls (full stated
-    /// signature) and `field!("name").with(ty, path)` output fields
-    /// (signature `fn f(v: &Target) -> Ty`). One fn may back several
-    /// declarations only with an identical synthesized signature.
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-        self.collect_local_functions()
+impl JniGenBuilder {
+    fn dispatch_fn_input(
+        &self,
+        args: &[syn::Type],
+        registry: &impl Conversions<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let outer_ty = build_fn_type(args);
+        let (wire, body) = callback_input(self, args, registry)?;
+        let niches = default_niches_for_wire(&wire);
+        // `impl Fn(...)` crosses the extern tier as the erased lambda object
+        // (`Any`) — same as the unfold builder / error-sink params. The typed
+        // wrapper-level lambda signature is computed at render time from the
+        // arg types' callback plans, not carried in metadata.
+        Some(ConverterImpl {
+            subs: vec![],
+            pre_stages: vec![],
+            function: self.build_input_fn(&outer_ty, &wire, &body, None),
+            destination: wire,
+            niches,
+            metadata: self.framework_meta(Some(kt::KtType::any())),
+        })
     }
+}
+
+impl Prebindgen for JniGenBuilder {
+    /// Cross-language extras every JNI converter carries — currently
+    /// the Kotlin value-context type name. Filled by the rank-N
+    /// handlers at the same point they build the wire/body; the
+    /// resolver propagates it into [`crate::api::core::registry::TypeEntry::metadata`];
+    /// the Kotlin emitter reads it back to drive every wrapper /
+    /// typed-handle / `JNIWrappers` signature.
+    type Metadata = KotlinMeta;
+
+    // ── Structural type resolution ──────────────────────────────────────
+    // Try the terminal categories, then the `Result` peel, then the built-in
+    // wrapper shapes — peel
+    // `ty`'s outermost layer and dispatch to `{input,output}_wrapper_shape` with
+    // the reconstructed canonical pattern. `subs` = the captured inner(s).
 
     /// Member-shape invariants (N5), checked against registry signatures —
     /// the earliest possible moment. Without this, a receiver-less `.method()`
     /// member would silently emit a method that ignores `this`, and a
     /// wrong-return `.constructor()` a factory of the wrong type.
-    fn validate(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+    fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
+        // Report what this binding left unclaimed. Here because it is the
+        // earliest generator-owned hook that sees the model, and it runs
+        // exactly where the binding used to print these itself. Moves into
+        // `JniGenBuilder::generate` once that exists (prebindgen#251 phase E).
+        crate::core::warn_unclaimed(binding.flat(), &self.claimed());
+
         for (key, members) in &self.class_members {
             for m in members {
-                // A registry-absent fn already hard-errored in the scan.
-                let Some(item_fn) = registry
+                // A binding-absent fn already hard-errored in the scan.
+                let Some(item_fn) = binding
                     .flat()
                     .function(&m.rust_ident)
                     .map(|func| &func.origin.syntax)
@@ -1210,7 +1315,7 @@ impl Prebindgen for JniGen {
         // something that must not exist. Reject them here, where the message
         // can say what is actually unsupported and what to write instead.
         for ident in self.declared_functions() {
-            let Some(item_fn) = registry
+            let Some(item_fn) = binding
                 .flat()
                 .function(&ident)
                 .map(|func| &func.origin.syntax)
@@ -1225,7 +1330,7 @@ impl Prebindgen for JniGen {
             if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
                 if let Some(ok) = crate::api::core::types_util::result_ok_type(ret) {
                     let core = crate::api::core::types_util::peel_ref_option_vec(&ok);
-                    if matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding, &core), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
                              supported in the success position of a fallible return. A sum \
@@ -1263,7 +1368,7 @@ impl Prebindgen for JniGen {
                         .return_expand_decls
                         .iter()
                         .any(|d| d.key == TypeKey::from_type(&err_ty));
-                    if !declared && matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                    if !declared && matches!(self.type_kind(binding, &core), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
                              but nothing decomposes it in the error position, so it would be \
@@ -1313,7 +1418,7 @@ impl Prebindgen for JniGen {
                         syn::Type::Reference(r) => (*r.elem).clone(),
                         other => other.clone(),
                     };
-                    if matches!(self.type_kind(registry, &elem), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding, &elem), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
                              is not supported as a callback argument. A sum crosses as a tag \
@@ -1348,23 +1453,6 @@ impl Prebindgen for JniGen {
     /// Signatures are read from the registry (missing fns are reported by
     /// the scan's helper-function warning; the body derivation later
     /// hard-errors with the precise decl).
-    fn extra_required_types(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> Vec<(crate::api::core::registry::Direction, syn::Type)> {
-        use crate::api::core::registry::Direction;
-        let mut out = Vec::new();
-        for decl in &self.convert_decls {
-            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, registry) {
-                out.push((Direction::Input, ty));
-            }
-            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, registry) {
-                out.push((Direction::Output, ty));
-            }
-        }
-        out
-    }
-
     /// Emit the `OwnedObject<T>` borrow wrapper used by
     /// [`Self::opaque_handle_input`] into the destination file.
     /// The struct is referenced by an unqualified `OwnedObject` from
@@ -1472,34 +1560,12 @@ impl Prebindgen for JniGen {
             #wrapper
         }
     }
-
-    fn dispatch_fn_input(
-        &self,
-        args: &[syn::Type],
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args);
-        let (wire, body) = callback_input(self, args, registry)?;
-        let niches = default_niches_for_wire(&wire);
-        // `impl Fn(...)` crosses the extern tier as the erased lambda object
-        // (`Any`) — same as the unfold builder / error-sink params. The typed
-        // wrapper-level lambda signature is computed at render time from the
-        // arg types' callback plans, not carried in metadata.
-        Some(ConverterImpl {
-            subs: vec![],
-            pre_stages: vec![],
-            function: self.build_input_fn(&outer_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: self.framework_meta(Some(kt::KtType::any())),
-        })
-    }
 }
 
 /// Structural converter builders — the rank-0 terminal chains and the rank-1
 /// wrapper-shape handlers, now inherent helpers called by the structural
 /// [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`].
-impl JniGen {
+impl JniGenBuilder {
     // ── Input converters ─────────────────────────────────────────────
 
     /// Whole-type **input** terminal categories (opaque handle, enum,
@@ -1508,7 +1574,7 @@ impl JniGen {
     pub(crate) fn input_terminal(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Structured-config overrides first (opaque handles, then user-
         // registered rank-0 wrappers, then built-ins).
@@ -1705,9 +1771,9 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Disjoint wildcard patterns (see the `impl JniGen` block above), tried
+        // Disjoint wildcard patterns (see the `impl JniGenBuilder` block above), tried
         // in priority order. The borrow/option-ref/vec patterns are exact and
         // mutually exclusive; the two `Option<_>` sub-cases share a method.
         self.input_borrow(pat, t1, registry)
@@ -1724,7 +1790,7 @@ impl JniGen {
     pub(crate) fn output_terminal(
         &self,
         ty: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Structured-config overrides first (opaque handles, then built-ins).
         let key = TypeKey::from_type(ty);
@@ -1885,7 +1951,7 @@ impl JniGen {
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
@@ -2057,7 +2123,7 @@ impl JniGen {
     pub(crate) fn output_slice(
         &self,
         elem: &syn::Type,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let inner = registry.output_entry(elem)?;
         // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf
@@ -2116,7 +2182,7 @@ impl JniGen {
 /// These were trait methods the registry called back into the adapter from
 /// inside `resolve`. They are the adapter's own business now, gathered into the
 /// one value the registry is constructed from.
-impl JniGen {
+impl JniGenBuilder {
     /// Union of every `.fun(...)` list across all
     /// [`Self::package`] subpackage contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the
@@ -2150,7 +2216,7 @@ impl JniGen {
     }
     /// Functions ever referenced as a named `.field(fun!(...))` in any
     /// `expand_return!` decl, type-level or per-fn — see
-    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.method()`
+    /// [`JniGenBuilder::field_accessor_fns`]. Usage-derived, not tied to `.method()`
     /// class-member declarations: a function need not also be exposed as an
     /// instance method to be referenced this way.
     pub(crate) fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
@@ -2168,12 +2234,12 @@ impl JniGen {
             })
             .collect()
     }
-    /// Fns acknowledged-but-unbound via [`JniGen::ignore`] — suppresses
+    /// Fns acknowledged-but-unbound via [`JniGenBuilder::ignore`] — suppresses
     /// the registry's "skipping undeclared" warning, emits nothing.
     pub(crate) fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_fns.clone()
     }
-    /// Bulk name-family ignores from [`JniGen::ignore`] +
+    /// Bulk name-family ignores from [`JniGenBuilder::ignore`] +
     /// [`matching`](crate::lang::matching).
     pub(crate) fn ignored_name_predicates(
         &self,
@@ -2207,12 +2273,12 @@ impl JniGen {
         }
         Some(out)
     }
-    /// Consts acknowledged-but-unexposed via [`JniGen::ignore`].
+    /// Consts acknowledged-but-unexposed via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_const_idents.clone()
     }
     /// Union of every `.constant(...)` list across all
-    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGen
+    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGenBuilder
     /// HAS a const declaration mechanism, so const emission is declared-only
     /// and undeclared consts get the skip warning (see
     /// [`Prebindgen::declared_consts`]).
@@ -2229,7 +2295,7 @@ impl JniGen {
     /// Every type registered via one of the **class declarators**
     /// (`ptr_class!` / `enum_class!` / `sealed_class!` / `data_class!`)
     /// — i.e. every entry in the type table, whose only
-    /// writer is `JniGen::register_class`. These are the only structs/enums
+    /// writer is `JniGenBuilder::register_class`. These are the only structs/enums
     /// the per-item emitter walks, and the scan requires them in BOTH
     /// directions (their converters always resolve both ways). Wrapper
     /// registrations live in their own tables and are deliberately excluded: a
@@ -2238,9 +2304,28 @@ impl JniGen {
     pub(crate) fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
         self.types.keys().cloned().collect()
     }
-    /// Types acknowledged-but-undeclared via [`JniGen::ignore`].
+    /// Types acknowledged-but-undeclared via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()
+    }
+    /// What this binding claimed, for the unclaimed-item report. A helper is
+    /// claimed even though it is never emitted, and a boundary-only type even
+    /// though it never crosses whole: both are deliberate, so neither is a
+    /// skip worth reporting.
+    pub(crate) fn claimed(&self) -> crate::core::Claimed {
+        let mut functions = self.declared_functions();
+        functions.extend(self.helper_functions());
+        let mut types = self.declared_types();
+        types.extend(self.boundary_only_types());
+        crate::core::Claimed {
+            functions,
+            types,
+            consts: self.declared_consts(),
+            ignored_functions: self.ignored_functions(),
+            ignored_types: self.ignored_types(),
+            ignored_consts: self.ignored_consts(),
+            ignored_name_predicates: self.ignored_name_predicates(),
+        }
     }
     /// **Rust-side-only** types: boundary decls (`expand_param!` /
     /// `expand_return!`) whose type has no class declaration. They never
