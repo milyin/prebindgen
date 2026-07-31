@@ -387,9 +387,9 @@ impl JniGen {
         // (`named_item_idents`) where a new kind is added once.
         //
         // The NAME SET is independent of origin stamps and the VALUE falls back
-        // to the default module: an origin-less hand-built stream indexes items
-        // that `item_origins` never sees, and those still need qualifying (core
-        // documents `crate` as their module).
+        // to the default module: an origin-less hand-built stream holds elements
+        // whose location carries no crate name, and those still need qualifying
+        // (core documents `crate` as their module).
         let length_names: std::collections::HashMap<String, syn::Path> = registry
             .named_item_idents()
             .map(|ident| {

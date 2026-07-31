@@ -1,6 +1,6 @@
 //! One-stop classification of how a bare Rust type is declared to this
 //! adapter — the single precedence every emitter agrees on instead of each
-//! re-deriving it from `TypeConfig` flags and `registry.structs` probes.
+//! re-deriving it from `TypeConfig` flags and `registry.flat()` type probes.
 
 use super::*;
 

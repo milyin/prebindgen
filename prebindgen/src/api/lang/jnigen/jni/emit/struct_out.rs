@@ -76,9 +76,9 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// data-class behind `Option` / `Vec`. (Those are handled by the slower
 /// [`struct_output_body`] until the synthesizer is widened to wrap them.)
 ///
-/// Classification reads only `ext.types` (`opaque`/`enum_cfg`) and
-/// `registry.structs` — both populated before `resolve` — never the output
-/// converter table (not yet built at this stage).
+/// Classification reads only `ext.types` (`opaque`/`enum_cfg`) and the parsed
+/// model (`registry.flat()`) — both populated before `resolve` — never the
+/// output converter table (not yet built at this stage).
 pub(crate) fn synth_value_struct_leaves(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
