@@ -6,7 +6,7 @@
 //! wrappers plus a fan-out of generated Kotlin sources.
 //!
 //! Pipeline:
-//!   1. [`crate::api::core::registry::Registry::from_items`] scans a stream of
+//!   1. [`crate::api::core::registry::Registry::new`] projects a model built from
 //!      `(syn::Item, SourceLocation)` (typically `source.items_all()`).
 //!   2. [`crate::api::core::registry::Registry::write_rust`] resolves every
 //!      required type via a configured [`JniGen`] and writes the generated

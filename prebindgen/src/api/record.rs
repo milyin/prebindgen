@@ -35,7 +35,7 @@ pub struct SourceLocation {
     /// consumers under a name only they know) — `Source` stamps it while
     /// parsing records, so every item stream carries its origin and streams
     /// from different sources can be `chain`ed into one
-    /// `Registry::from_items` call without losing per-item origins.
+    /// `Flat::builder().items(..)` call without losing per-item origins.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crate_name: Option<String>,
 }

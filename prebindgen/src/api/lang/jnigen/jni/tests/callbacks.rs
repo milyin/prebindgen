@@ -33,7 +33,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -219,7 +219,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -315,7 +315,7 @@ fn callback_double_option_unwrap_pipeline() {
         loc.clone(),
     ));
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -484,7 +484,7 @@ fn iface_spec_memo_shares_one_derivation() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -557,7 +557,7 @@ fn fn_plan_memo_shares_one_derivation() {
         loc.clone(),
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));

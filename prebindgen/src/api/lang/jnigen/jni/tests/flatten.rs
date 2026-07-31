@@ -20,7 +20,7 @@ fn inline_output_gets_own_builder() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -118,7 +118,7 @@ fn error_unwrap_universal_records() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -250,7 +250,7 @@ fn method_constructor_and_inline_field_self() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -321,7 +321,7 @@ fn rust_side_only_error_type() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -390,7 +390,7 @@ fn rust_side_only_input_type() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -434,7 +434,7 @@ fn rust_side_only_variant_self_rejected() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
@@ -455,7 +455,7 @@ fn rust_side_only_field_self_rejected() {
     let loc = myflat_loc();
     let f: syn::ItemFn = syn::parse_str("pub fn z_make() -> ZThing { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .package(crate::package!("ops").fun(crate::fun!(z_make)))
@@ -486,7 +486,7 @@ fn fn_expand_param_type_mismatch_rejected() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
@@ -522,7 +522,7 @@ fn fn_expand_return_type_mismatch_rejected() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
@@ -555,7 +555,7 @@ fn fn_expand_param_unknown_param_rejected() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
@@ -592,7 +592,7 @@ fn typo_in_expand_decl_is_hard_error() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -637,7 +637,7 @@ fn ignore_matching_acknowledges_naming_family() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_len)))
@@ -734,7 +734,7 @@ fn method_without_receiver_rejected() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t").class(
             crate::ptr_class!(ZThing)
@@ -766,7 +766,7 @@ fn constructor_with_wrong_return_rejected() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t").class(
             crate::ptr_class!(ZThing)
@@ -810,7 +810,7 @@ fn binding_local_field_conditional_handle() {
         ));
     }
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -895,7 +895,7 @@ fn binding_local_field_name_collision_rejected() {
         ));
     }
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -957,7 +957,7 @@ fn binding_local_field_splices_through_parent() {
         ));
     }
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1032,7 +1032,7 @@ fn binding_local_functions_all_positions() {
         ));
     }
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1128,7 +1128,7 @@ fn binding_local_fn_names_flow_through_manglers() {
         items.push((syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()));
     }
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         // Custom hooks: prefix every derived name — proof the hook RAN and
@@ -1218,7 +1218,7 @@ fn binding_local_fun_name_collision_rejected() {
         loc.clone(),
     ));
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t").class(crate::ptr_class!(ZThing)).fun(
             // shadows the #[prebindgen] fn of the same name
@@ -1272,7 +1272,7 @@ fn gc_managed_handle_lifecycle() {
         ));
     }
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t")
             .class(
@@ -1357,7 +1357,7 @@ fn split_fixture(extra: &[&str]) -> Registry<KotlinMeta> {
             loc.clone(),
         ));
     }
-    Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items")
+    crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items")
 }
 
 pub(super) fn write_all(gen: crate::api::core::Generation<JniGen>, tag: &str) -> String {
@@ -1543,7 +1543,7 @@ fn split_on_param_product_ambiguous_rejected() {
     for s in srcs {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1586,7 +1586,7 @@ fn split_declaration_colliding_variants_rejected() {
     for s in srcs {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1624,7 +1624,7 @@ fn split_declaration_collision_fails_resolve() {
     for s in srcs {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1667,7 +1667,7 @@ fn split_no_split_suppresses_check() {
     for s in srcs {
         items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
     }
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1853,7 +1853,7 @@ fn optional_selector_dispatch_end_to_end() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1913,7 +1913,7 @@ fn constructor_member_skips_default_output_expand() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1980,7 +1980,7 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
             .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))

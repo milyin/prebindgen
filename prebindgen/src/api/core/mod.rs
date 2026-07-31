@@ -2,9 +2,10 @@
 //!
 //! The new API pipeline is intentionally phase-oriented:
 //!
-//! 1. [`registry::Registry::from_items`] indexes `(syn::Item, SourceLocation)`
-//!    records into one flat namespace. This phase is index-only: it does not
-//!    inspect function signatures or mark any type required.
+//! 1. [`flat::Flat::builder`] parses `(syn::Item, SourceLocation)` records into
+//!    one flat namespace, and [`registry::Registry::new`] projects the model.
+//!    This phase is index-only: it does not inspect function signatures or mark
+//!    any type required.
 //! 2. [`registry::Registry::scan_declared`] asks the configured
 //!    [`prebindgen::Prebindgen`] adapter which functions and types it claims,
 //!    then scans only those items into input/output type requirements.
@@ -41,7 +42,7 @@ pub use self::{
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
     registry::{
-        Declarations, Direction, Generation, Registry, RegistryBuilder, ScanError, TypeCell,
-        TypeEntry, TypeKey, TypeSubject, WriteRustError,
+        Declarations, Direction, Generation, Registry, ScanError, TypeCell, TypeEntry, TypeKey,
+        TypeSubject, WriteRustError,
     },
 };

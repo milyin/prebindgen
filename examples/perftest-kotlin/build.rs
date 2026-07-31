@@ -21,7 +21,12 @@
 //! `ObjectBoundary64` is recursively flattened, while its structural twin
 //! `ObjectBoundary64Object` uses `.jobject_input()`.
 
-use prebindgen::{core::Registry, data_class, fun, lang::JniGen, package, ptr_class};
+use prebindgen::{
+    core::{Flat, Registry},
+    data_class, fun,
+    lang::JniGen,
+    package, ptr_class,
+};
 
 fn main() {
     let jni = JniGen::new()
@@ -114,10 +119,11 @@ fn main() {
         );
 
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
-    let registry = Registry::builder()
+    let flat = Flat::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .build()
-        .expect("scan prebindgen items");
+        .expect("parse prebindgen items");
+    let registry = Registry::new(flat).expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

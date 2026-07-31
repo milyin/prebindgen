@@ -4,6 +4,7 @@ use proc_macro2::TokenStream;
 
 use super::*;
 use crate::api::core::{
+    flat::Flat,
     niches::Niches,
     prebindgen::{ConverterImpl, Prebindgen},
 };
@@ -73,7 +74,7 @@ fn fn_item(src: &str) -> (syn::Item, SourceLocation) {
 #[test]
 fn scan_declared_empty_ext_marks_nothing_required() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let ext = StubExt::default();
     reg.scan_declared(&ext).expect("empty ext = no scan");
     assert!(!reg.input_types.values().any(|c| c.root));
@@ -86,7 +87,7 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
         fn_item("fn a(x: u64) -> u64 { x }"),
         fn_item("fn b(x: u32) -> u32 { x }"),
     ];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("a").unwrap());
     reg.scan_declared(&ext).unwrap();
@@ -105,7 +106,7 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
 #[test]
 fn scan_declared_missing_function_is_hard_error() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("good").unwrap());
     ext.functions.insert(syn::parse_str("typo_fn").unwrap());
@@ -122,7 +123,7 @@ fn scan_declared_missing_function_is_hard_error() {
 #[test]
 fn scan_declared_collects_all_missing_kinds_in_one_error() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("typo_fn").unwrap());
     ext.helper_functions
@@ -224,7 +225,7 @@ fn type_entry_helpers_expose_converter_chain_contract() {
 /// judgement now, and its diagnosis is richer: it names the parameter.
 #[test]
 fn from_items_rejects_what_the_language_cannot_express() {
-    let err = match Registry::<()>::from_items(vec![
+    let err = match crate::api::test_util::reg_from_items::<(), _>(vec![
         fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }"),
         fn_item("fn worse(self) -> u64 { 0 }"),
     ]) {
@@ -273,10 +274,11 @@ fn duplicate_name_across_sources_names_both_crates() {
 
     let a = make_source("first-crate");
     let b = make_source("second-crate");
-    let msg = match Registry::<()>::from_items(a.items_all().chain(b.items_all())) {
-        Ok(_) => panic!("collision must fail"),
-        Err(e) => e.to_string(),
-    };
+    let msg =
+        match crate::api::test_util::reg_from_items::<(), _>(a.items_all().chain(b.items_all())) {
+            Ok(_) => panic!("collision must fail"),
+            Err(e) => e.to_string(),
+        };
     assert!(msg.contains("same_name"), "{msg}");
     assert!(msg.contains("first-crate"), "{msg}");
     assert!(msg.contains("second-crate"), "{msg}");
@@ -297,7 +299,7 @@ fn from_items_records_origins_from_location_stamps() {
     let f_b: syn::ItemFn = syn::parse_str("fn from_helper(x: u64) -> u64 { x }").unwrap();
     let a = vec![(syn::Item::Fn(f_a), loc("flat-crate"))];
     let b = vec![(syn::Item::Fn(f_b), loc("helper-crate"))];
-    let reg: Registry<()> = Registry::from_items(a.into_iter().chain(b)).unwrap();
+    let reg: Registry<()> = crate::api::test_util::reg_from_items(a.into_iter().chain(b)).unwrap();
 
     let path = |p: syn::Path| p.to_token_stream().to_string();
     assert_eq!(
@@ -355,7 +357,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
         }
     }
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let reg: Registry<()> = Registry::from_items(items).unwrap();
+    let reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let err = reg
         .resolve(FailingExt(StubExt::default()))
         .expect_err("validate Err must abort resolve");
@@ -426,7 +428,7 @@ fn qualified_signature_matches_bare_declaration() {
         (syn::Item::Struct(s), crate_loc("myflat")),
         (syn::Item::Fn(f), crate_loc("myflat")),
     ];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("get").unwrap());
     ext.types
@@ -456,7 +458,7 @@ fn multi_source_rename_cross_reference_normalizes() {
         (syn::Item::Struct(b_ty), crate_loc("cov-helpers")),
         (syn::Item::Struct(a_ty), crate_loc("srca")),
     ];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("use_a").unwrap());
     ext.types
@@ -475,7 +477,7 @@ fn qualified_declared_type_is_hard_error() {
     // a collected hard error with the bare fix-it, not a silent miss.
     let s: syn::ItemStruct = syn::parse_str("pub struct Thing { pub v: u64 }").unwrap();
     let items = vec![(syn::Item::Struct(s), crate_loc("myflat"))];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.types
         .insert(TypeKey::parse("myflat::Thing").expect("test type"));
@@ -497,7 +499,7 @@ fn foreign_qualified_declared_type_stays_supported() {
     // module, so the declaration passes through verbatim and is marked
     // required under its own spelling (the no-indexed-body arm).
     let items = vec![fn_item("fn touch(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     let foreign = TypeKey::parse("zenoh::KeyExpr<'static>").expect("test type");
     ext.types.insert(foreign.clone());
@@ -553,7 +555,8 @@ fn fn_ident(name: &str) -> syn::Ident {
 #[test]
 fn builder_reads_a_source_directory() {
     let dir = write_source_dir("plain", "flat-crate", "marked_fn");
-    let registry: Registry<()> = Registry::builder().source(&dir).build().expect("indexes");
+    let registry: Registry<()> =
+        Registry::new(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
 
     assert!(registry
         .flat()
@@ -578,16 +581,20 @@ fn builder_source_named_overrides_the_captured_crate() {
     let dir = write_source_dir("renamed", "real-package-name", "helper_fn");
 
     // Without the override, the registry believes the package name.
-    let plain: Registry<()> = Registry::builder().source(&dir).build().expect("indexes");
+    let plain: Registry<()> =
+        Registry::new(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
     assert_eq!(
         plain.origin_module(&fn_ident("helper_fn")).map(module),
         Some("real_package_name".to_string())
     );
 
-    let renamed: Registry<()> = Registry::builder()
-        .source_named(&dir, "as_renamed")
-        .build()
-        .expect("indexes");
+    let renamed: Registry<()> = Registry::new(
+        Flat::builder()
+            .source_named(&dir, "as_renamed")
+            .build()
+            .expect("parses"),
+    )
+    .expect("indexes");
     assert_eq!(
         renamed.origin_module(&fn_ident("helper_fn")).map(module),
         Some("as_renamed".to_string())
@@ -606,19 +613,22 @@ fn builder_composes_directories_and_streams() {
     let flat = write_source_dir("multi_flat", "flat-crate", "flat_fn");
     let helper = write_source_dir("multi_helper", "real-helper-name", "helper_fn");
 
-    let registry: Registry<()> = Registry::builder()
-        .source(&flat)
-        .source_named(&helper, "renamed_helper")
-        .items(vec![(
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn synthetic() -> i32 {
-                    2
-                }
-            )),
-            crate::SourceLocation::default(),
-        )])
-        .build()
-        .expect("indexes");
+    let registry: Registry<()> = Registry::new(
+        Flat::builder()
+            .source(&flat)
+            .source_named(&helper, "renamed_helper")
+            .items(vec![(
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn synthetic() -> i32 {
+                        2
+                    }
+                )),
+                crate::SourceLocation::default(),
+            )])
+            .build()
+            .expect("parses"),
+    )
+    .expect("indexes");
 
     for name in ["flat_fn", "helper_fn", "synthetic"] {
         assert!(
@@ -660,9 +670,11 @@ fn builder_composes_directories_and_streams() {
 fn builder_and_from_items_agree() {
     let dir = write_source_dir("agree", "flat-crate", "marked_fn");
 
-    let built: Registry<()> = Registry::builder().source(&dir).build().expect("indexes");
+    let built: Registry<()> =
+        Registry::new(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
     let streamed: Registry<()> =
-        Registry::from_items(crate::Source::new(&dir).items_all()).expect("indexes");
+        crate::api::test_util::reg_from_items(crate::Source::new(&dir).items_all())
+            .expect("indexes");
 
     assert_eq!(
         built.flat().functions().count(),
@@ -694,7 +706,8 @@ fn a_source_type_cell_carries_the_models_typeref() {
         crate_name: Some("myflat".into()),
     };
     let item: syn::Item = syn::parse_str("pub fn f(v: Option<u64>) -> u64 { v.unwrap() }").unwrap();
-    let mut reg: Registry<()> = Registry::from_items([(item, loc.clone())]).unwrap();
+    let mut reg: Registry<()> =
+        crate::api::test_util::reg_from_items([(item, loc.clone())]).unwrap();
 
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("f").unwrap());
@@ -722,7 +735,7 @@ fn a_source_type_cell_carries_the_models_typeref() {
 #[test]
 fn an_adapter_authored_type_cell_has_no_source_reading() {
     let items = vec![fn_item("fn f(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
 
     let mut ext = StubExt::default();
     ext.types
@@ -822,7 +835,7 @@ fn from_flat_projects_each_element_kind() {
         .items(items)
         .build()
         .expect("parse");
-    let reg: Registry<()> = Registry::from_flat(flat).expect("project");
+    let reg: Registry<()> = Registry::new(flat).expect("project");
 
     let id = |n: &str| syn::parse_str::<syn::Ident>(n).unwrap();
     assert!(reg.flat().function(&id("f").to_string()).is_some());
@@ -892,7 +905,7 @@ fn not_expressible_report_names_the_crate_of_each_offender() {
             at("helpers"),
         ),
     ];
-    let Err(err) = Registry::<()>::from_items(items) else {
+    let Err(err) = crate::api::test_util::reg_from_items::<(), _>(items) else {
         panic!("both items are inexpressible")
     };
     let msg = err.to_string();
@@ -925,7 +938,8 @@ fn a_binding_local_fn_is_checked_against_the_grammar() {
         ("async fn is_async() {}", "async"),
     ] {
         let reg: Registry<()> =
-            Registry::from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")]).unwrap();
+            crate::api::test_util::reg_from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")])
+                .unwrap();
         let ext = StubExt {
             local_fns: vec![(syn::parse_str(src).expect("parse local fn"), "b".into())],
             ..Default::default()
@@ -951,7 +965,8 @@ fn a_binding_local_fn_is_checked_against_the_grammar() {
 #[test]
 fn a_well_formed_binding_local_fn_passes() {
     let reg: Registry<()> =
-        Registry::from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")]).unwrap();
+        crate::api::test_util::reg_from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")])
+            .unwrap();
     let ext = StubExt {
         local_fns: vec![(
             syn::parse_str("fn helper(s: &Undeclared) -> u64 { 0 }").expect("parse"),
@@ -995,7 +1010,7 @@ fn a_guard_never_reaches_the_const_surface() {
             loc.clone(),
         ),
     ];
-    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
 
     assert_eq!(reg.flat().guards().count(), 2);
     assert_eq!(reg.flat().constants().count(), 1);
@@ -1048,7 +1063,7 @@ fn a_binding_local_fn_joins_the_index_but_not_the_source_modules() {
         crate_name: Some("myflat".into()),
         ..SourceLocation::default()
     };
-    let reg: Registry<()> = Registry::from_items(vec![(
+    let reg: Registry<()> = crate::api::test_util::reg_from_items(vec![(
         syn::parse_quote!(
             pub fn captured(x: u64) -> u64 {
                 x
@@ -1217,7 +1232,8 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
 
     // `Option<u64>` appears nowhere in the captured stream.
     let reg: Registry<()> =
-        Registry::from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")]).unwrap();
+        crate::api::test_util::reg_from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")])
+            .unwrap();
     assert!(
         reg.flat()
             .type_ref(&syn::parse_quote!(Option<u64>))
@@ -1273,7 +1289,8 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
 #[test]
 fn an_unresolved_type_without_a_position_reports_none() {
     let reg: Registry<()> =
-        Registry::from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")]).unwrap();
+        crate::api::test_util::reg_from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")])
+            .unwrap();
     let ext = StubExt {
         local_fns: vec![(
             syn::parse_str("fn helper(v: Option<u64>) -> u64 { 0 }").unwrap(),
@@ -1300,7 +1317,7 @@ fn an_unresolved_type_without_a_position_reports_none() {
     );
 
     // A captured item that DOES have a position still reports it.
-    let located: Registry<()> = Registry::from_items(vec![(
+    let located: Registry<()> = crate::api::test_util::reg_from_items(vec![(
         syn::parse_quote!(
             pub fn f(x: u64) -> u64 {
                 x

@@ -1718,7 +1718,7 @@ impl PackageDecl {
 /// an otherwise legal domain. A `try_` source's `Err`
 /// routes to the caller's error handler. Conversion fns may live in the flat
 /// crate or in a **helper crate** whose item stream is chained into the same
-/// [`crate::core::Registry::from_items`] call; generated calls qualify each
+/// [`crate::core::Flat::builder`] parse; generated calls qualify each
 /// function with its origin crate.
 ///
 /// Distinct from the [`expand_param!`](crate::expand_param) /

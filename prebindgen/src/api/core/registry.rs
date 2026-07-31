@@ -132,7 +132,6 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
-    marker::PhantomData,
 };
 
 use quote::ToTokens;
@@ -462,8 +461,7 @@ impl<M> Registry<M> {
     /// **Not public.** A `Registry` is a projection of a [`Flat`], and one built
     /// this way projects nothing — [`Self::flat`] would hand a later stage an
     /// empty model that claims to be this registry's source. Outside this crate
-    /// the entry points are [`Self::from_items`], [`Self::from_flat`] and
-    /// [`Self::builder`], each of which has a model behind it.
+    /// the entry point is [`Self::new`], which has a model behind it.
     pub(crate) fn empty() -> Self {
         Self {
             flat: crate::api::core::flat::Flat::default(),
@@ -513,7 +511,7 @@ pub struct DuplicateNameError {
     pub first: SourceLocation,
     pub second: SourceLocation,
     /// Origin crates of the colliding items, when known (multi-source
-    /// ingestion via [`Registry::from_items`]) — the `SourceLocation`
+    /// ingestion via several `Flat::builder().source(..)` feeders) — the `SourceLocation`
     /// file paths are crate-relative, so with several sources they alone
     /// may not identify the colliding crates.
     pub first_crate: Option<String>,
@@ -780,159 +778,42 @@ impl Declarations {
     }
 }
 
-/// Collects what a [`Registry`] will index, then hands over the registry.
-///
-/// The same shape [`Flat`](crate::core::flat) reads prebindgen data with — name a
-/// directory, or feed a stream, then `build()` — so there is one way to say where
-/// captured items come from, whoever consumes them.
-///
-/// Feeders accumulate, so mix them freely.
-pub struct RegistryBuilder<M> {
-    items: Vec<(syn::Item, SourceLocation)>,
-    /// `M` is fixed by the adapter a caller eventually `resolve`s with, and is
-    /// carried through so `Registry::builder()` needs no turbofish: it threads
-    /// from here to [`Self::build`] and is inferred at the `resolve` call.
-    _metadata: PhantomData<M>,
-}
-
-impl<M> RegistryBuilder<M> {
-    /// Every `#[prebindgen]` item captured in `dir` — pass
-    /// `<source_crate>::PREBINDGEN_OUT_DIR`.
-    ///
-    /// Panics the way [`Source::new`](crate::Source::new) does if `dir` is not
-    /// readable prebindgen output: a build script has nothing to recover with.
-    pub fn source<P: AsRef<std::path::Path>>(self, dir: P) -> Self {
-        let source = crate::Source::new(dir);
-        self.items(source.items_all())
-    }
-
-    /// The same, for a dependency this crate **renames** in `Cargo.toml`.
-    ///
-    /// The origin recorded at capture time is the dependency's real package name,
-    /// which will not resolve from a crate that refers to it by another name.
-    /// `crate_name` is the name *this* crate uses.
-    ///
-    /// Per directory, deliberately: a registry-level override could only fix one
-    /// module, and a registry may layer several sources.
-    pub fn source_named<P: AsRef<std::path::Path>>(
-        self,
-        dir: P,
-        crate_name: impl Into<String>,
-    ) -> Self {
-        let source = crate::Source::builder(dir).crate_name(crate_name).build();
-        self.items(source.items_all())
-    }
-
-    /// Add a captured item stream — a group selection, an otherwise-configured
-    /// [`Source`](crate::Source), or synthetic items in a test.
-    pub fn items<I>(mut self, items: I) -> Self
-    where
-        I: IntoIterator<Item = (syn::Item, SourceLocation)>,
-    {
-        self.items.extend(items);
-        self
-    }
-
-    /// Index everything collected so far.
-    ///
-    /// Sugar over [`Registry::from_items`], which stays the primitive: one place
-    /// decides what a stream of items means.
-    pub fn build(self) -> Result<Registry<M>, ScanError> {
-        Registry::from_items(self.items)
-    }
-}
-
 impl<M> Registry<M> {
-    /// Start collecting what to index.
+    /// A registry over this model.
     ///
-    /// The way a build script reads prebindgen output: name the directory and get
-    /// a registry, with no [`Source`](crate::Source) in between.
+    /// A `Flat` is what a registry projects, and reading captured prebindgen
+    /// output into one is [`FlatBuilder`](crate::core::flat::FlatBuilder)'s job
+    /// — so a build script says where items come from at the layer that owns
+    /// the question, and there is one such layer rather than two:
     ///
     /// ```
     /// # prebindgen::Source::init_doctest_simulate();
-    /// use prebindgen::core::Registry;
+    /// use prebindgen::core::{Flat, Registry};
     ///
+    /// let flat = Flat::builder().source("source_ffi").build()?;
     /// // Annotated only because nothing here resolves: in a build script `M` is
     /// // fixed by the adapter passed to `resolve`, so no call site names it.
-    /// let registry: Registry<()> = Registry::builder().source("source_ffi").build()?;
+    /// let registry: Registry<()> = Registry::new(flat)?;
     /// assert!(registry.flat().function("test_function").is_some());
-    /// # Ok::<_, prebindgen::core::ScanError>(())
+    /// # Ok::<_, Box<dyn std::error::Error>>(())
     /// ```
     ///
-    /// Several directories compose, including one this crate renames:
+    /// Several sources compose there too, including one this crate renames:
     ///
     /// ```ignore
-    /// let registry = Registry::builder()
+    /// let flat = Flat::builder()
     ///     .source(flat_crate::PREBINDGEN_OUT_DIR)
     ///     .source_named(helpers::PREBINDGEN_OUT_DIR, "helpers")
     ///     .build()?;
     /// ```
-    pub fn builder() -> RegistryBuilder<M> {
-        RegistryBuilder {
-            items: Vec::new(),
-            _metadata: PhantomData,
-        }
-    }
-
-    /// Construct a `Registry` by indexing a stream of source items.
-    ///
-    /// The primitive: [`Self::builder`] is sugar over this, and is what a build
-    /// script reading a directory should reach for. Callers feed any
-    /// `(syn::Item, SourceLocation)` iterator — typically `source.items_all()`,
-    /// `source.items_except_groups(...)`, or a hand-rolled filter chain — so
-    /// item-level selection happens upstream of the registry rather than inside
-    /// it. Streams from several sources combine with plain iterator composition:
-    ///
-    /// ```ignore
-    /// let registry = Registry::from_items(
-    ///     flat.items_all().chain(helpers.items_all()),
-    /// )?;
-    /// ```
-    ///
-    /// Each item's **origin crate** rides its [`SourceLocation`] (stamped
-    /// by [`Source`](crate::Source) when parsing records): named items get
-    /// their origin recorded for qualified references in generated code
-    /// (`flat_crate::…` vs `helper_crate::…`), and the first origin seen
-    /// becomes the default module ([`Self::default_module`]). When a
-    /// dependency is renamed in Cargo.toml, override the stamp at the
-    /// source: `Source::builder(dir).crate_name("myflat")` — being
-    /// per-source, it composes across chained streams (a registry-level
-    /// override could only fix one module).
-    ///
-    /// This step only populates the item maps (`functions`, `structs`,
-    /// `enums`, `consts`, `guards`). Signature/body scanning that
-    /// drives type-resolution requirements happens later, in
-    /// [`Self::scan_declared`], and is gated on what the language adapter
-    /// has explicitly declared. An **API** item that is never declared remains
-    /// in the registry but never drives type resolution and never emits.
-    ///
-    /// `guards` is the exception, and it is not one of the API maps: an
-    /// anonymous const has no name to declare, so it is outside the gate
-    /// entirely and always emits.
-    pub fn from_items<I>(items: I) -> Result<Self, ScanError>
-    where
-        I: IntoIterator<Item = (syn::Item, SourceLocation)>,
-    {
-        let flat = crate::api::core::flat::Flat::builder()
-            .items(items)
-            .build()?;
-        Self::from_flat(flat)
-    }
-
-    /// Index a parsed [`Flat`](crate::api::core::flat::Flat) model.
-    ///
-    /// The registry is a **projection** of the model, not a second reading of the
-    /// source: `Flat` decided what every item means, and this arranges those
-    /// decisions into the maps adapters read. The model itself is kept
-    /// ([`Self::flat`]) so later stages can ask it questions rather than
-    /// re-deriving them.
     ///
     /// **Fails on anything the language cannot express** — a `self` receiver, an
     /// `async fn`, a generic binder, a type form outside the grammar, or a
     /// reference to a type the flat API does not declare. All of them at once, so
     /// a source crate that needs migrating sees one list instead of one rebuild
-    /// per item.
-    pub fn from_flat(flat: crate::api::core::flat::Flat) -> Result<Self, ScanError> {
+    /// per item. This is independent of what any binding declares: an
+    /// inexpressible item is a hard error whether or not it is ever named.
+    pub fn new(flat: crate::api::core::flat::Flat) -> Result<Self, ScanError> {
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -1433,7 +1314,8 @@ impl<M> Registry<M> {
     /// whose `Metadata` matches this registry's `M` parameter.
     ///
     /// ```ignore
-    /// let gen = Registry::from_items(source.items_all())?.resolve(jni)?;
+    /// let gen = Registry::new(Flat::builder().items(source.items_all()).build()?)?
+    ///     .resolve(jni)?;
     /// gen.write_rust(&rust_dest)?;
     /// gen.write_kotlin(&kotlin_root)?;   // JNI adapter's second artifact
     /// ```

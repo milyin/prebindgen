@@ -25,8 +25,11 @@ fn resolve_result(tag: &str, registry: Registry<KotlinMeta>, jni: JniGen) -> Res
 
 fn one_fn(src: &str) -> Registry<KotlinMeta> {
     let f: syn::ItemFn = syn::parse_str(src).unwrap();
-    Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), myflat_loc())]))
-        .expect("index")
+    crate::api::test_util::reg_from_items(declare_referenced(vec![(
+        syn::Item::Fn(f),
+        myflat_loc(),
+    )]))
+    .expect("index")
 }
 
 /// A `.name()` override that isn't a legal Kotlin identifier is a hard error
@@ -83,7 +86,7 @@ fn duplicate_native_symbol_is_error() {
             myflat_loc(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     // The JNINative extern method name (which the `Java_…` symbol derives
     // from) goes through the method hook; collapsing it onto one name for
     // every function forces two distinct fns to share a native symbol.
@@ -120,7 +123,7 @@ fn keyword_struct_field_is_sanitized_not_error() {
             myflat_loc(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
             .class(crate::data_class!(Payload))
@@ -187,7 +190,7 @@ fn same_name_same_signature_functions_collide() {
             myflat_loc(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     // Both forced to Kotlin name `combine`; both take one `Long` → same sig.
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -213,7 +216,7 @@ fn same_name_distinct_signature_functions_allowed() {
             myflat_loc(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     // Same name `combine`, but one takes Long and the other Boolean.
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -237,7 +240,7 @@ fn method_and_factory_same_name_do_not_collide() {
             myflat_loc(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing").class(
             crate::ptr_class!(Thing)

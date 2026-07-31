@@ -29,8 +29,8 @@ fn const_items() -> Vec<(syn::Item, crate::SourceLocation)> {
 /// private helpers, and `JNINative` declares the matching `external fun`s.
 #[test]
 fn declared_consts_emit_getter_and_val() {
-    let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(const_items())).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(const_items()))
+        .expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg")
@@ -109,7 +109,7 @@ fn declared_consts_emit_getter_and_val() {
 /// return: public `ULong`, private/native `Long`, with a bit-preserving wrap.
 #[test]
 fn unsigned_const_uses_ulong_surface() {
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(vec![(
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![(
         syn::Item::Const(syn::parse_quote!(
             pub const MAX_UNSIGNED: u64 = u64::MAX;
         )),
@@ -144,8 +144,8 @@ fn unsigned_const_uses_ulong_surface() {
 /// acknowledges it without emitting.
 #[test]
 fn undeclared_const_not_emitted() {
-    let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(const_items())).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(const_items()))
+        .expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -187,7 +187,7 @@ fn constant_fun_source_emits_val_over_ordinary_wrapper() {
         loc.clone(),
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -240,7 +240,7 @@ fn constant_fun_source_non_nullary_rejected() {
         loc.clone(),
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg").constant(crate::constant!(SCALED).fun(crate::fun!(scaled))),
     );
@@ -277,7 +277,7 @@ fn constant_fun_source_handle_return_rejected() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
@@ -309,7 +309,7 @@ fn constant_expr_emits_getter_and_val() {
         loc.clone(),
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg").fun(crate::fun!(tag_of)).constant(
@@ -381,7 +381,7 @@ fn constant_expr_handle_type_rejected() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
@@ -429,7 +429,7 @@ fn handle_const_rejected() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
@@ -462,7 +462,7 @@ fn constant_with_source_calls_path_verbatim() {
         loc.clone(),
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg").fun(crate::fun!(unrelated)).constant(
             crate::constant!(COVER_VERSION)

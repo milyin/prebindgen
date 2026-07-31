@@ -74,7 +74,7 @@ fn value_form_items() -> Vec<(syn::Item, crate::SourceLocation)> {
 /// Build the fixture through `JniGen`, letting the caller adjust the
 /// `ZSample` boundary decl. Returns the generated Rust + the joined Kotlin.
 fn value_form_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> (String, String) {
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(value_form_items()))
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(value_form_items()))
         .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -219,7 +219,7 @@ fn deriving_matches_the_equivalent_hand_written_list() {
         let mut all = items.clone();
         all.extend(extra);
         let registry =
-            Registry::<KotlinMeta>::from_items(declare_referenced(all)).expect("index items");
+            crate::api::test_util::reg_from_items(declare_referenced(all)).expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(
@@ -396,7 +396,7 @@ fn sum_field_gen(tag: &str) -> (String, String) {
         loc,
     ));
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -494,7 +494,7 @@ fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
             ),
         ];
         let registry =
-            Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(
@@ -536,8 +536,9 @@ fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
 #[test]
 fn an_adjustment_naming_an_unknown_field_is_an_error() {
     let build = |decl: crate::lang::FieldsDecl| {
-        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(value_form_items()))
-            .expect("index");
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(value_form_items()))
+                .expect("index");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(
@@ -645,7 +646,7 @@ fn a_single_leaf_value_form_delivers_an_owned_field() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -705,7 +706,7 @@ fn a_single_leaf_consuming_value_form_moves_its_field() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -771,7 +772,7 @@ fn a_handle_field_of_a_consuming_value_form_moves() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -842,7 +843,7 @@ fn a_sole_handle_field_of_a_consuming_value_form_moves() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -914,7 +915,7 @@ fn an_optional_handle_field_of_a_consuming_value_form_moves() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -985,7 +986,7 @@ fn a_sole_optional_handle_field_takes_callback_delivery() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1052,7 +1053,7 @@ fn an_owned_root_identity_moves_without_any_value_form() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1084,8 +1085,9 @@ fn an_owned_root_identity_moves_without_any_value_form() {
 #[test]
 fn a_per_field_override_must_name_the_field_s_own_type() {
     let build = || {
-        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(value_form_items()))
-            .expect("index");
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(value_form_items()))
+                .expect("index");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(
@@ -1181,7 +1183,7 @@ fn a_nested_value_form_is_hoisted_too() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1297,7 +1299,7 @@ fn a_nested_consuming_value_form_moves_the_parent_s_field() {
         ),
     ] {
         let registry =
-            Registry::<KotlinMeta>::from_items(declare_referenced(items(outer_by_value)))
+            crate::api::test_util::reg_from_items(declare_referenced(items(outer_by_value)))
                 .expect("index items");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
@@ -1407,7 +1409,7 @@ fn nested_review_jni(outer: crate::lang::ExpandReturnDecl) -> JniGen {
 /// `Option` it cannot unwrap.
 #[test]
 fn an_optional_nested_value_form_is_rejected_before_emission() {
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(nested_review_items()))
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(nested_review_items()))
         .expect("index items");
     let jni = nested_review_jni(
         crate::expand_return!(ZReviewOuter).fields(crate::fields!(z_review_outer_to_struct)),
@@ -1452,7 +1454,7 @@ fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
         ),
     ]);
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1529,7 +1531,7 @@ fn conditional_owned_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> Stri
         ),
     ]);
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1584,7 +1586,7 @@ fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
         ),
     ]);
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1656,7 +1658,7 @@ fn a_rebased_hoist_projects_its_leading_fields_past_a_sibling_move() {
         ),
     ]);
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1719,7 +1721,7 @@ fn a_consuming_value_form_keeps_its_by_value_boundary_behind_accessors() {
         ),
     ]);
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1787,7 +1789,7 @@ fn an_owned_intermediate_result_is_borrowed_for_the_next_step() {
         ),
     ]);
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1901,7 +1903,7 @@ fn a_sum_field_of_a_conditional_value_form_stays_inside_the_arm() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -1954,7 +1956,7 @@ fn a_sum_field_of_a_conditional_value_form_stays_inside_the_arm() {
 fn a_vec_field_override_must_name_the_whole_vec_type() {
     let build = || {
         let registry =
-            Registry::<KotlinMeta>::from_items(declare_referenced(nested_review_items()))
+            crate::api::test_util::reg_from_items(declare_referenced(nested_review_items()))
                 .expect("index items");
         let jni = nested_review_jni(
             crate::expand_return!(ZReviewOuter).fields(
@@ -2024,7 +2026,7 @@ fn consuming_items() -> Vec<(syn::Item, crate::SourceLocation)> {
 }
 
 fn consuming_gen(tag: &str, decl: crate::lang::ExpandReturnDecl) -> String {
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(consuming_items()))
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(consuming_items()))
         .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -2102,7 +2104,7 @@ fn a_borrowed_plan_clones_before_consuming() {
         loc,
     ));
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -2167,7 +2169,7 @@ fn a_consuming_value_form_rejects_a_plain_field_sibling() {
 #[test]
 fn the_declarator_and_the_accessor_s_receiver_must_agree() {
     let build = |decl: crate::lang::ExpandReturnDecl| -> String {
-        let registry = Registry::<KotlinMeta>::from_items(declare_referenced(consuming_items()))
+        let registry = crate::api::test_util::reg_from_items(declare_referenced(consuming_items()))
             .expect("index");
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")

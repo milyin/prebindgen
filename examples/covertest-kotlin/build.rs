@@ -98,9 +98,11 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen::{
-    constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    fields, from, fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig,
-    try_from, ty, variant,
+    constant, convert,
+    core::{Flat, Registry},
+    data_class, enum_class, expand_param, expand_return, expr, fields, from, fun, into,
+    lang::JniGen,
+    matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -700,11 +702,12 @@ fn main() {
     // so the stamp recorded at capture time (`covertest-helpers`) would not
     // resolve from this crate — `source_named` overrides it with the name this
     // crate actually uses, per directory.
-    let registry = Registry::builder()
+    let flat = Flat::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
         .build()
-        .expect("scan prebindgen items");
+        .expect("parse prebindgen items");
+    let registry = Registry::new(flat).expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

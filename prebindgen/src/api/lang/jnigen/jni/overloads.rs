@@ -607,10 +607,9 @@ mod tests {
             }
         };
         let registry =
-            Registry::<KotlinMeta>::from_items(crate::api::test_util::declare_referenced(vec![(
-                syn::Item::Fn(ctor),
-                SourceLocation::default(),
-            )]))
+            crate::api::test_util::reg_from_items(crate::api::test_util::declare_referenced(vec![
+                (syn::Item::Fn(ctor), SourceLocation::default()),
+            ]))
             .expect("index constructor");
         let variant = crate::api::core::expand::FoldVariant {
             ctor: Some(syn::parse_quote!(z_summary_optional)),

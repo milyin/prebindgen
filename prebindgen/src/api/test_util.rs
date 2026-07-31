@@ -35,7 +35,20 @@ pub(crate) fn reg_with(sources: &[&str]) -> Registry<()> {
             (item, crate::SourceLocation::default())
         })
         .collect::<Vec<_>>();
-    Registry::from_items(declare_referenced(items)).expect("index")
+    reg_from_items(declare_referenced(items)).expect("index")
+}
+
+/// Build a `Registry` from an item stream, the way `Registry::from_items` used
+/// to before reading captured output became `FlatBuilder`'s job alone.
+///
+/// Test-only sugar: the two steps are one line each in a build script, but they
+/// appear in dozens of fixtures here.
+pub(crate) fn reg_from_items<M, I>(items: I) -> Result<Registry<M>, crate::core::ScanError>
+where
+    I: IntoIterator<Item = (syn::Item, crate::SourceLocation)>,
+{
+    let flat = crate::core::Flat::builder().items(items).build()?;
+    Registry::new(flat)
 }
 
 /// Append a marked type alias for every nominal type the stream names but never

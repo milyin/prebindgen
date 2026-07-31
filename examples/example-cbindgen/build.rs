@@ -212,10 +212,11 @@ fn generate_ffi_bindings() -> PathBuf {
     }
 
     // Reads example-flat's `#[prebindgen]` output straight from its directory.
-    let registry = prebindgen::core::Registry::builder()
+    let flat = prebindgen::core::Flat::builder()
         .source(example_flat::PREBINDGEN_OUT_DIR)
         .build()
-        .expect("scan prebindgen items");
+        .expect("parse prebindgen items");
+    let registry = prebindgen::core::Registry::new(flat).expect("scan prebindgen items");
     // Always written to OUT_DIR under a stable name too, so the commented-out
     // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
     let out_file = registry

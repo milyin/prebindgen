@@ -172,7 +172,7 @@ fn write_rust_sorts_declared_items_by_ident() {
             loc,
         ),
     ];
-    let reg: Registry<()> = Registry::from_items(items).expect("index");
+    let reg: Registry<()> = crate::api::test_util::reg_from_items(items).expect("index");
 
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -275,7 +275,7 @@ fn guards_emit_ungated_and_in_stream_order() {
             loc.clone(),
         ),
     ];
-    let registry: Registry<()> = Registry::from_items(items).expect("index");
+    let registry: Registry<()> = crate::api::test_util::reg_from_items(items).expect("index");
     assert_eq!(registry.flat().guards().count(), 2);
 
     let dir = crate::api::test_util::unique_test_dir("write_guards");

@@ -17,7 +17,7 @@ fn bounded_duration_option_is_one_scalar_with_named_niche() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
@@ -75,7 +75,7 @@ fn bounded_float_option_uses_a_finite_bit_exact_niche() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
@@ -121,7 +121,7 @@ fn custom_conversion_without_domain_stays_infallible() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<()>::from_items(declare_referenced(items)).unwrap();
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
@@ -169,7 +169,7 @@ fn keyexpr_try_from_lowering() {
         }
     );
 
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
@@ -241,9 +241,11 @@ fn opaque_error_lowering() {
         }
     );
 
-    let registry =
-        Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
-            .expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))

@@ -16,7 +16,7 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).unwrap();
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -109,7 +109,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -178,7 +178,7 @@ fn duration_requires_an_explicit_conversion() {
     let function: syn::ItemFn =
         syn::parse_str("pub fn duration_echo(v: Duration) -> Duration { unimplemented!() }")
             .unwrap();
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (alias, myflat_loc()),
         (syn::Item::Fn(function), myflat_loc()),
     ]))
@@ -209,7 +209,7 @@ fn conversion_domain_must_match_the_representation() {
         (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).unwrap();
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
     let jni = JniGen::new()
         .convert(
             crate::convert!(Duration)
@@ -251,7 +251,7 @@ fn option_scalar_param_crosses_as_present_value_pair() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -349,7 +349,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -433,7 +433,7 @@ fn option_scalar_struct_field_flattens() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
@@ -549,7 +549,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -666,7 +666,7 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::data_class!(FlatChild))
@@ -740,7 +740,7 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::ptr_class!(Token))
@@ -796,7 +796,7 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
         }
     );
     let loc = myflat_loc();
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(wide.clone()), loc.clone()),
         (syn::Item::Fn(use_wide.clone()), loc.clone()),
     ]))
@@ -816,7 +816,7 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
     // The explicit object boundary keeps the same public Kotlin data class,
     // but the native method receives it in one slot and performs the legacy
     // whole-object field decode instead of producing an illegal signature.
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(wide), loc.clone()),
         (syn::Item::Fn(use_wide), loc),
     ]))
@@ -852,7 +852,7 @@ fn output_only_convert_resolves_without_input_twin() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
@@ -897,7 +897,7 @@ fn convert_fn_qualifies_with_origin_crate() {
         "my-helpers",
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(flat.into_iter().chain(helpers)))
+        crate::api::test_util::reg_from_items(declare_referenced(flat.into_iter().chain(helpers)))
             .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -934,7 +934,7 @@ fn convert_input_target_mismatch_rejected() {
         })
         .collect();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new()
         .convert(crate::convert!(Len).input(crate::fun!(from_long)))
         .package(crate::package!("len").fun(crate::fun!(use_len)));
@@ -955,7 +955,7 @@ fn convert_via_trait_impls() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn temp_double(c: Celsius) -> Celsius { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -991,7 +991,7 @@ fn convert_via_try_from_is_fallible() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn pct_use(p: Percent) -> i32 { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -1026,7 +1026,7 @@ fn option_composition_normalizes_fallible_stage_errors() {
     )
     .unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -1064,7 +1064,7 @@ fn convert_via_local_fns() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -1133,7 +1133,7 @@ fn convert_via_local_try_fn_is_fallible() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -1192,7 +1192,7 @@ fn data_class_members_reenter_as_field_leaves() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!().class(
             crate::data_class!(Point)
@@ -1292,7 +1292,7 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::data_class!(Unsigned))
@@ -1421,7 +1421,7 @@ fn data_class_properties_match_their_from_parts_params() {
         ),
     ];
     let registry =
-        Registry::<KotlinMeta>::from_items(declare_referenced(items)).expect("index items");
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
             .class(crate::ptr_class!(Handle))
@@ -1517,7 +1517,7 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         )),
         loc.clone(),
     ));
-    let registry = Registry::<KotlinMeta>::from_items(declare_referenced(items)).unwrap();
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("blob")
             .class(crate::data_class!(Blob))

@@ -128,10 +128,11 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
 
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
-    let registry = prebindgen::core::Registry::builder()
+    let flat = prebindgen::core::Flat::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .build()
-        .expect("scan prebindgen items");
+        .expect("parse prebindgen items");
+    let registry = prebindgen::core::Registry::new(flat).expect("scan prebindgen items");
     let out_file = registry
         .resolve(cbindgen)
         .expect("resolve prebindgen items")

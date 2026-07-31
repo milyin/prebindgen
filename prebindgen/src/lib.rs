@@ -109,7 +109,11 @@
 //!         .function(pq!(calculator_get_value)).panic();
 //!
 //!     // Resolve types, then write the Rust file of `extern "C"` wrappers.
-//!     let generation = prebindgen::core::Registry::from_items(source.items_all())
+//!     let flat = prebindgen::core::Flat::builder()
+//!         .items(source.items_all())
+//!         .build()
+//!         .unwrap();
+//!     let generation = prebindgen::core::Registry::new(flat)
 //!         .unwrap()
 //!         .resolve(cbindgen)
 //!         .unwrap();
@@ -261,8 +265,9 @@ macro_rules! ident {
 ///
 /// # Flow
 ///
-/// 1. [`Registry::from_items`](core::Registry::from_items) indexes the
-///    `(syn::Item, SourceLocation)` stream (typically [`Source::items_all`]).
+/// 1. [`Flat::builder`](core::Flat::builder) parses the
+///    `(syn::Item, SourceLocation)` stream (typically [`Source::items_all`])
+///    into the model, and [`Registry::new`](core::Registry::new) projects it.
 /// 2. [`Registry::resolve`](core::Registry::resolve) resolves every required
 ///    type via your back-end, yielding a [`Generation`](core::Generation);
 ///    its `write_rust` (and adapter-specific `write_*`) methods emit the
@@ -295,7 +300,7 @@ pub mod core {
     /// where an adapter reaches for it.
     pub use crate::api::core::{
         warn_unclaimed, Claimed, ConverterImpl, Declarations, Direction, DomainScalar, Element,
-        Flat, Generation, Gravestone, NicheSlot, Niches, Prebindgen, Registry, RegistryBuilder,
+        Flat, Generation, Gravestone, NicheSlot, Niches, Prebindgen, Registry,
         RepresentationDomain, ScalarValue, ScanError, Stage, Transmute, TypeCell, TypeEntry,
         TypeKey, TypeSubject, WriteRustError,
     };

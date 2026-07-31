@@ -10,8 +10,11 @@ fn function_name_renames_symbol() {
             unimplemented!()
         }
     );
-    let reg = Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
-        .expect("index items");
+    let reg = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
     let cb = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(rust_init))
@@ -81,7 +84,7 @@ fn free_memory_function_required() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
@@ -122,7 +125,7 @@ fn manglers_generate_all_names() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
@@ -211,8 +214,11 @@ fn qualified_signature_spelling_matches_bare_opaque_ptr() {
             unimplemented!()
         }
     );
-    let reg = Registry::<()>::from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
-        .expect("index items");
+    let reg = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
     let cb = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))
@@ -244,7 +250,7 @@ fn enum_mirror_preserves_the_source_discriminant_domain() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items(declare_referenced([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(e), loc.clone()),
         (syn::Item::Fn(f), loc.clone()),
     ]))
