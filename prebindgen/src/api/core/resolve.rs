@@ -2,7 +2,7 @@
 //! them.
 //!
 //! What survives here is the completeness check. The generator fills the cells
-//! itself (`Registry::crossings` → `Registry::supply`); this decides whether the
+//! itself (`RegistryBuilder::crossings` → `convert_with`); this decides whether the
 //! set it produced covers everything reachable from an exported root.
 //!
 //! There is no loop. `Registry::crossings` hands the demand out inner-first, so
@@ -95,7 +95,7 @@ fn required_set<M>(registry: &Registry<M>) -> HashSet<(Direction, TypeKey)> {
     while let Some((dir, key)) = queue.pop_front() {
         // Subs travel in the same direction as the parent — they are the inner
         // converters this body delegates to. An unresolved cell has none to give,
-        // which is why this cannot run before `supply` has filled them.
+        // which is why this cannot run before the conversions have filled them.
         let Some(entry) = registry
             .type_table(dir)
             .get(&key)

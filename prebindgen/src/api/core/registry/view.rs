@@ -144,7 +144,7 @@ impl<M> Conversions<M> for Registry<M> {
 /// The registry mid-fill: the model, plus the conversions supplied so far.
 ///
 /// What a generator builds a conversion *against*. It sees every crossing it
-/// can compose from — [`Registry::crossings`] hands them out inner-first, so by
+/// can compose from — `RegistryBuilder::crossings` hands them out inner-first, so by
 /// the time `Option<Handle>` is asked for, `Handle` is already in here.
 ///
 /// It exposes exactly the reads a conversion needs, which is what keeps the
