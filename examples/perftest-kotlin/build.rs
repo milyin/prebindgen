@@ -131,7 +131,7 @@ fn main() {
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let gen = registry.resolve(jni).expect("resolve failed");
+    let gen = jni.resolve(registry).expect("resolve failed");
     let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",

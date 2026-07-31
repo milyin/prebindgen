@@ -47,7 +47,7 @@ fn sealed_kotlin(rename_labeled: Option<&str>) -> String {
     let dir = unique_test_dir("jnigen_sealed");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     paths
         .iter()
@@ -164,7 +164,7 @@ fn declarators_do_not_accept_each_others_shape() {
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.resolve(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
 
@@ -206,7 +206,7 @@ fn unknown_variant_is_an_error() {
         let dir = unique_test_dir("sealed_unknown_variant");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.resolve(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).is_err());
@@ -246,7 +246,7 @@ fn reopened_sealed_class_merges_variant_names() {
     let dir = unique_test_dir("sealed_reopen");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let kt: String = paths
         .iter()
@@ -454,7 +454,7 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
         let jni = JniGen::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
-        match registry.resolve(jni) {
+        match jni.resolve(registry) {
             Ok(_) => String::new(),
             Err(e) => e.to_string(),
         }
@@ -526,7 +526,7 @@ fn variant_named_companion_moves_the_companion_not_the_variant() {
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.resolve(registry).expect("resolve");
         gen.write_kotlin(&dir.join("kotlin"))
             .expect("write_kotlin")
             .iter()
@@ -607,7 +607,7 @@ fn payload_without_output_converter_is_an_error() {
         let dir = unique_test_dir("sealed_unmapped_payload");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.resolve(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).expect_err("must fail");
@@ -691,8 +691,8 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
         let dir = unique_test_dir("sealed_vec_field");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let _ = registry
-            .resolve(jni)
+        let _ = jni
+            .resolve(registry)
             .map(|g| g.write_rust(dir.join("g.rs")));
     };
 
@@ -752,8 +752,7 @@ fn recursive_sum_shapes_fail_deterministically() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            registry
-                .resolve(jni)
+            jni.resolve(registry)
                 .map(|g| g.write_rust(dir.join("g.rs")))
                 .map(|_| ())
                 .map_err(|e| e.to_string())
@@ -901,7 +900,7 @@ fn sum_returns(tag: &str) -> (String, String) {
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let kotlin = gen
@@ -1210,7 +1209,7 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
     let dir = unique_test_dir("jnigen_sum_handle_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     let kotlin = gen
@@ -1303,7 +1302,7 @@ fn two_sum_callback_args_keep_their_own_selectors() {
     let dir = unique_test_dir("jnigen_two_sum_cb");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let kotlin = gen
         .write_kotlin(&dir.join("kotlin"))
         .expect("write_kotlin")
@@ -1379,8 +1378,8 @@ fn sum_in_result_ok_position_is_rejected_with_its_reason() {
             .class(crate::ptr_class!(Probe))
             .fun(crate::fun!(read_try)),
     );
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -1429,8 +1428,8 @@ fn undeclared_sum_in_result_error_position_is_rejected() {
             .class(crate::sealed_class!(Reading))
             .fun(crate::fun!(read_try)),
     );
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -1482,8 +1481,8 @@ fn the_diagnostic_names_the_whole_error_type_where_it_must() {
             .class(crate::sealed_class!(Reading))
             .fun(crate::fun!(read_try)),
     );
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("must be rejected")
         .to_string();
     let compact: String = err.split_whitespace().collect();
@@ -1542,8 +1541,7 @@ fn declared_sum_in_result_error_position_resolves() {
                 .class(crate::sealed_class!(Reading))
                 .fun(crate::fun!(read_try)),
         );
-    registry
-        .resolve(jni)
+    jni.resolve(registry)
         .expect("a declared error deconstructor is the supported shape");
 }
 
@@ -1584,8 +1582,8 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
             .class(crate::sealed_class!(Reading))
             .fun(crate::fun!(read_batch)),
     );
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(

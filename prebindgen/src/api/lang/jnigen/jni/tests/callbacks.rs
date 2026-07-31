@@ -57,7 +57,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
 
@@ -245,7 +245,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
     let dir = unique_test_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -364,7 +364,7 @@ fn callback_double_option_unwrap_pipeline() {
     let dir = unique_test_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -498,7 +498,7 @@ fn iface_spec_memo_shares_one_derivation() {
                 .field_self()
                 .field(crate::fun!(z_thing_name)),
         );
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let (ext, registry) = (gen.adapter(), gen.registry());
 
     // Same key twice ⇒ the same allocation (resolve already populated the
@@ -562,7 +562,7 @@ fn fn_plan_memo_shares_one_derivation() {
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
     // resolve runs validation, which builds and stores every function's plan.
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let (ext, registry) = (gen.adapter(), gen.registry());
     let f = &registry
         .flat()

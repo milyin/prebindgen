@@ -923,19 +923,86 @@ impl JniGen {
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
 
-impl Prebindgen for JniGen {
-    fn declarations(&self) -> crate::core::Declarations {
-        crate::core::Declarations::new()
-            .functions(self.declared_functions())
-            .accessors(self.accessor_functions())
-            .method_receivers(self.method_receivers())
-            .helper_functions(self.helper_functions())
-            .consts(self.declared_consts())
-            .required_output_types(self.required_output_types())
-            .types(self.declared_types())
-            .boundary_only_types(self.boundary_only_types())
+impl JniGen {
+    /// State this binding into `registry`: what it exports, what crosses, and
+    /// what it defines itself.
+    ///
+    /// **Push, not pull.** The registry does not call back to ask — the build
+    /// script calls this, and the registry stays a passive recorder. That is
+    /// what makes "a converter reads a half-built registry" unrepresentable
+    /// rather than merely avoided.
+    ///
+    /// Order-independent, and idempotent apart from the local-fn collision
+    /// check: every method it calls records rather than derives.
+    /// State this binding into `registry`, then resolve it.
+    ///
+    /// The pair is always used together, and the generator is what knows both
+    /// halves — so it drives, and the registry never calls back. Becomes the
+    /// body of `generate(..)` once emission moves here too (#251 phase E).
+    pub fn resolve(
+        self,
+        mut registry: Registry<KotlinMeta>,
+    ) -> Result<crate::core::Generation<Self>, crate::core::WriteRustError> {
+        self.declare_into(&mut registry)?;
+        registry.resolve(self)
     }
 
+    pub fn declare_into(
+        &self,
+        registry: &mut Registry<KotlinMeta>,
+    ) -> Result<(), crate::core::ScanError> {
+        // Binding-local fns first: they become model, and everything below may
+        // name one.
+        for (item_fn, origin) in self.collect_local_functions() {
+            registry.local_function(item_fn, origin)?;
+        }
+
+        for ident in self.declared_functions() {
+            registry.export(&ident);
+        }
+        for ident in self.helper_functions() {
+            registry.reference(&ident);
+        }
+        // JniGen HAS a const mechanism, so const emission is declared-only even
+        // when nothing is declared.
+        registry.declares_consts();
+        for ident in self.declared_consts().into_iter().flatten() {
+            registry.export_const(&ident);
+        }
+        for key in self.declared_types() {
+            registry.export_type(key);
+        }
+        for ident in self.accessor_functions() {
+            registry.accessor(&ident);
+        }
+        for (ident, receiver) in self.method_receivers() {
+            registry.method_receiver(&ident, receiver);
+        }
+        for key in self.boundary_only_types() {
+            registry.crosses_only_in_pieces(key);
+        }
+
+        // An expression constant's value type has no captured item to scan.
+        for ty in self.required_output_types() {
+            registry.cross(Direction::Output, &ty);
+        }
+        // The other-side type of every `convert!` conversion, in the
+        // conversion's direction: an input fn's parameter type needs its own
+        // input converter for the composed body to chain through; an output
+        // fn's return type needs the output twin.
+        for decl in &self.convert_decls {
+            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, registry) {
+                registry.cross(Direction::Input, &ty);
+            }
+            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, registry) {
+                registry.cross(Direction::Output, &ty);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Prebindgen for JniGen {
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
     /// handlers at the same point they build the wire/body; the
@@ -1123,10 +1190,6 @@ impl Prebindgen for JniGen {
     /// signature) and `field!("name").with(ty, path)` output fields
     /// (signature `fn f(v: &Target) -> Ty`). One fn may back several
     /// declarations only with an identical synthesized signature.
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-        self.collect_local_functions()
-    }
-
     /// Member-shape invariants (N5), checked against registry signatures —
     /// the earliest possible moment. Without this, a receiver-less `.method()`
     /// member would silently emit a method that ignores `this`, and a
@@ -1350,23 +1413,6 @@ impl Prebindgen for JniGen {
     /// Signatures are read from the registry (missing fns are reported by
     /// the scan's helper-function warning; the body derivation later
     /// hard-errors with the precise decl).
-    fn extra_required_types(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> Vec<(crate::api::core::registry::Direction, syn::Type)> {
-        use crate::api::core::registry::Direction;
-        let mut out = Vec::new();
-        for decl in &self.convert_decls {
-            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, registry) {
-                out.push((Direction::Input, ty));
-            }
-            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, registry) {
-                out.push((Direction::Output, ty));
-            }
-        }
-        out
-    }
-
     /// Emit the `OwnedObject<T>` borrow wrapper used by
     /// [`Self::opaque_handle_input`] into the destination file.
     /// The struct is referenced by an unqualified `OwnedObject` from

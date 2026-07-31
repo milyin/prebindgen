@@ -99,8 +99,8 @@ fn free_memory_function_required() {
         .function(syn::parse_quote!(z_describe));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = registry
-            .resolve(cbindgen)
+        let _ = cbindgen
+            .resolve(registry)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nofree.rs")));
     }));
     assert!(

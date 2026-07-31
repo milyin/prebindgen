@@ -56,7 +56,7 @@ fn inline_output_gets_own_builder() {
     let dir = unique_test_dir("jnigen_inline_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -146,7 +146,7 @@ fn error_unwrap_universal_records() {
     let dir = unique_test_dir("jnigen_err_universal");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -275,7 +275,7 @@ fn method_constructor_and_inline_field_self() {
     let dir = unique_test_dir("jnigen_method_ctor");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
@@ -333,7 +333,7 @@ fn rust_side_only_error_type() {
     let dir = unique_test_dir("jnigen_rust_side_only_err");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -400,7 +400,7 @@ fn rust_side_only_input_type() {
     let dir = unique_test_dir("jnigen_rust_side_only_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -442,8 +442,8 @@ fn rust_side_only_variant_self_rejected() {
     let dir = unique_test_dir("jnigen_rso_self_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry
-        .resolve(jni)
+    let _ = jni
+        .resolve(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -463,8 +463,8 @@ fn rust_side_only_field_self_rejected() {
     let dir = unique_test_dir("jnigen_rso_self_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry
-        .resolve(jni)
+    let _ = jni
+        .resolve(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -500,7 +500,7 @@ fn fn_expand_param_type_mismatch_rejected() {
     let dir = unique_test_dir("jnigen_fn_param_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let err = registry.resolve(jni).expect_err("type mismatch must fail");
+    let err = jni.resolve(registry).expect_err("type mismatch must fail");
     let msg = format!("{err}");
     assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
 }
@@ -533,7 +533,7 @@ fn fn_expand_return_type_mismatch_rejected() {
     let dir = unique_test_dir("jnigen_fn_return_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let err = registry.resolve(jni).expect_err("type mismatch must fail");
+    let err = jni.resolve(registry).expect_err("type mismatch must fail");
     let msg = format!("{err}");
     assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
 }
@@ -567,7 +567,7 @@ fn fn_expand_param_unknown_param_rejected() {
     let dir = unique_test_dir("jnigen_fn_param_unknown");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let err = registry.resolve(jni).expect_err("unknown param must fail");
+    let err = jni.resolve(registry).expect_err("unknown param must fail");
     assert!(format!("{err}").contains("typo"), "{err}");
 }
 
@@ -602,8 +602,8 @@ fn typo_in_expand_decl_is_hard_error() {
     let dir = unique_test_dir("jnigen_expand_typo_hard_error");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("typo'd expand accessor must fail the scan");
     match err {
         WriteRustError::Scan(ScanError::DeclaredNotFound { entries }) => {
@@ -657,7 +657,7 @@ fn ignore_matching_acknowledges_naming_family() {
     let dir = unique_test_dir("jnigen_ignore_funs_where");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     assert!(rust.contains("Java_io_test_jni_JNINative_zLen"), "{rust}");
@@ -742,7 +742,7 @@ fn method_without_receiver_rejected() {
                 .constructor(crate::fun!(z_make)),
         ),
     );
-    let err = registry.resolve(jni).expect_err("receiver-less member");
+    let err = jni.resolve(registry).expect_err("receiver-less member");
     let msg = format!("{err}");
     assert!(
         msg.contains("method `z_thing_free_standing`") && msg.contains("`ZThing`"),
@@ -774,7 +774,7 @@ fn constructor_with_wrong_return_rejected() {
                 .constructor(crate::fun!(z_make_number)),
         ),
     );
-    let err = registry.resolve(jni).expect_err("wrong ctor return");
+    let err = jni.resolve(registry).expect_err("wrong ctor return");
     let msg = format!("{err}");
     assert!(
         msg.contains("constructor `z_make_number`") && msg.contains("it returns `i64`"),
@@ -830,7 +830,7 @@ fn binding_local_field_conditional_handle() {
     let dir = unique_test_dir("jnigen_local_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -912,8 +912,8 @@ fn binding_local_field_name_collision_rejected() {
                     .name("id"),
             ),
         );
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("collision must be rejected");
     let msg = format!("{err}");
     assert!(msg.contains("collides"), "{msg}");
@@ -983,7 +983,7 @@ fn binding_local_field_splices_through_parent() {
     let dir = unique_test_dir("jnigen_local_field_splice");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1068,7 +1068,7 @@ fn binding_local_functions_all_positions() {
     let dir = unique_test_dir("jnigen_local_funs");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1168,7 +1168,7 @@ fn binding_local_fn_names_flow_through_manglers() {
                 .field_self(),
         );
     let raw = write_all(
-        registry.resolve(jni).expect("resolve"),
+        jni.resolve(registry).expect("resolve"),
         "jnigen_local_mangle",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1225,8 +1225,8 @@ fn binding_local_fun_name_collision_rejected() {
             crate::fun!(crate::z_thing_len).sig(crate::sig!((t: &ZThing) -> i64)),
         ),
     );
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("collision must be rejected");
     assert!(format!("{err}").contains("collides"), "{err}");
 }
@@ -1284,7 +1284,7 @@ fn gc_managed_handle_lifecycle() {
             .fun(crate::fun!(z_thing_use))
             .fun(crate::fun!(z_other_use)),
     );
-    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_gc_managed");
+    let raw = write_all(jni.resolve(registry).expect("resolve"), "jnigen_gc_managed");
     let all: String = raw.split_whitespace().collect();
 
     // Shared harness: cell-backed base, CAS helper, shared Cleaner, register fn.
@@ -1392,7 +1392,7 @@ fn split_on_param_emits_typed_overloads() {
                 .variant(crate::fun!(z_summary_new))
                 .variant_self(),
         );
-    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_one");
+    let raw = write_all(jni.resolve(registry).expect("resolve"), "jnigen_split_one");
     let all: String = raw.split_whitespace().collect();
     assert!(all.contains("expectedSel:Int"), "{raw}"); // selector retained
     assert!(
@@ -1426,7 +1426,7 @@ fn split_on_param_cartesian_product() {
                 .variant(crate::fun!(z_summary_new))
                 .variant_self(),
         );
-    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_prod");
+    let raw = write_all(jni.resolve(registry).expect("resolve"), "jnigen_split_prod");
     let all: String = raw.split_whitespace().collect();
     // build / build
     assert!(
@@ -1490,7 +1490,7 @@ fn split_on_param_preserves_wrapper_generics() {
                 .field(crate::fun!(z_summary_total)),
         );
     let raw = write_all(
-        registry.resolve(jni).expect("resolve"),
+        jni.resolve(registry).expect("resolve"),
         "jnigen_split_generic",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1559,7 +1559,7 @@ fn split_on_param_product_ambiguous_rejected() {
                 .variant(crate::fun!(z_thing_two)),
         );
     let _ = write_all(
-        registry.resolve(jni).expect("resolve"),
+        jni.resolve(registry).expect("resolve"),
         "jnigen_split_ambig",
     );
 }
@@ -1599,7 +1599,7 @@ fn split_declaration_colliding_variants_rejected() {
                 .variant(crate::fun!(z_name_from_text))
                 .variant(crate::fun!(z_name_from_label)),
         );
-    let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_decl");
+    let _ = write_all(jni.resolve(registry).expect("resolve"), "jnigen_split_decl");
 }
 
 /// #90: the validation boundary is now in `resolve` — a colliding split
@@ -1637,8 +1637,8 @@ fn split_declaration_collision_fails_resolve() {
                 .variant(crate::fun!(z_name_from_text))
                 .variant(crate::fun!(z_name_from_label)),
         );
-    let err = registry
-        .resolve(jni)
+    let err = jni
+        .resolve(registry)
         .expect_err("colliding split declaration must fail resolve");
     assert!(
         err.to_string().contains("same JVM signature"),
@@ -1682,7 +1682,7 @@ fn split_no_split_suppresses_check() {
                 .no_split(),
         );
     // No panic: the colliding variants are tolerated as selector-only.
-    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_no_split");
+    let raw = write_all(jni.resolve(registry).expect("resolve"), "jnigen_no_split");
     let all: String = raw.split_whitespace().collect();
     assert!(all.contains("nameSel:Int"), "{raw}"); // selector form emitted
 }
@@ -1705,7 +1705,7 @@ fn split_on_unknown_param_rejected() {
                 .variant(crate::fun!(z_summary_new))
                 .variant_self(),
         );
-    let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_typo");
+    let _ = write_all(jni.resolve(registry).expect("resolve"), "jnigen_split_typo");
 }
 
 /// Nullable-arm rule: `.split_on_param` on an `Option<T>` parameter emits
@@ -1729,7 +1729,7 @@ fn split_on_option_param_emits_nullable_arm() {
                 .variant(crate::fun!(z_summary_new))
                 .variant_self(),
         );
-    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_opt");
+    let raw = write_all(jni.resolve(registry).expect("resolve"), "jnigen_split_opt");
     let all: String = raw.split_whitespace().collect();
     // Selector form retained; single nullable overload for the identity arm.
     assert!(all.contains("optSel:Int"), "{raw}");
@@ -1765,7 +1765,7 @@ fn split_on_option_param_without_single_leaf_arm_rejected() {
                 .variant(crate::fun!(z_summary_scaled)),
         );
     let _ = write_all(
-        registry.resolve(jni).expect("resolve"),
+        jni.resolve(registry).expect("resolve"),
         "jnigen_split_opt_no_arm",
     );
 }
@@ -1796,7 +1796,7 @@ fn split_on_param_optional_cartesian_with_plain() {
                 .variant_self(),
         );
     let raw = write_all(
-        registry.resolve(jni).expect("resolve"),
+        jni.resolve(registry).expect("resolve"),
         "jnigen_split_opt_prod",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1869,7 +1869,7 @@ fn optional_selector_dispatch_end_to_end() {
     let dir = unique_test_dir("jnigen_opt_selector");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1932,7 +1932,7 @@ fn constructor_member_skips_default_output_expand() {
                 .field_self()
                 .field(crate::fun!(z_thing_name)),
         );
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let registry = gen.registry();
     // …the free fn is decomposed…
     assert!(
@@ -1989,7 +1989,7 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
     let dir = unique_test_dir("jnigen_q95");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("qualified spellings resolve");
+    let gen = jni.resolve(registry).expect("qualified spellings resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let all: String = paths

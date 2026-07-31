@@ -424,6 +424,15 @@ pub struct Registry<M = ()> {
     /// later stage can ask it what a name means through the registry it already
     /// has — see [`Self::flat`].
     flat: crate::api::core::flat::Flat,
+    /// What the binding declared, pushed in through [`Self::export`],
+    /// [`Self::export_type`], [`Self::cross`] and [`Self::reference`] before
+    /// [`Self::resolve`].
+    ///
+    /// Stored rather than asked for: the registry never calls the generator to
+    /// find out what to build. It is also read after resolution — `write`'s
+    /// emission gate is "did the binding declare this item" — so it outlives
+    /// the scan that consumes it.
+    declared: Declared,
     /// Type tables, one per direction. Each scanned type gets a [`TypeCell`]
     /// holding what the key names, whether the binding asks for it directly, and
     /// the resolved [`TypeEntry`] once the structural resolver fills it.
@@ -478,6 +487,7 @@ impl<M> Registry<M> {
     pub(crate) fn empty() -> Self {
         Self {
             flat: crate::api::core::flat::Flat::default(),
+            declared: Declared::default(),
             input_types: Default::default(),
             output_types: Default::default(),
             expansion_plans: HashMap::new(),
@@ -714,7 +724,7 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
 /// *defer* and *cannot*. The caller fills this first; `resolve` then passes or
 /// fails.
 #[derive(Default)]
-pub struct Declarations {
+pub(crate) struct Declared {
     pub(crate) functions: HashSet<syn::Ident>,
     /// Signature-scanned but not emitted — see [`Prebindgen::helper_functions`].
     pub(crate) helper_functions: HashSet<syn::Ident>,
@@ -734,61 +744,9 @@ pub struct Declarations {
     /// emission that needs the distinction, which is why the sentinel outlives
     /// the skip warnings it also used to gate.
     pub(crate) consts: Option<HashSet<syn::Ident>>,
-    /// Adapter-required extra output types (no `#[prebindgen]` item to
-    /// scan — e.g. expression-constant value types); see
-    /// [`Prebindgen::required_output_types`].
-    pub(crate) required_output_types: Vec<syn::Type>,
-}
-
-impl Declarations {
-    /// A binding that declares nothing.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Functions to emit.
-    pub fn functions(mut self, v: HashSet<syn::Ident>) -> Self {
-        self.functions = v;
-        self
-    }
-    /// Signature-scanned but never emitted.
-    pub fn helper_functions(mut self, v: HashSet<syn::Ident>) -> Self {
-        self.helper_functions = v;
-        self
-    }
-    /// Functions used as accessors by a decomposition.
-    pub fn accessors(mut self, v: HashSet<syn::Ident>) -> Self {
-        self.accessors = v;
-        self
-    }
-    /// The receiver type of each function emitted as a method.
-    pub fn method_receivers(mut self, v: HashMap<syn::Ident, TypeKey>) -> Self {
-        self.method_receivers = v;
-        self
-    }
-    /// Types to emit.
-    pub fn types(mut self, v: HashSet<TypeKey>) -> Self {
-        self.types = v;
-        self
-    }
-    /// Types that cross only through a plan, never whole — un-required once
-    /// plans are applied.
-    pub fn boundary_only_types(mut self, v: HashSet<TypeKey>) -> Self {
-        self.boundary_only_types = v;
-        self
-    }
-    /// Consts to emit. `None` = this binding has no const mechanism, so every
-    /// captured const is re-emitted verbatim.
-    pub fn consts(mut self, v: Option<HashSet<syn::Ident>>) -> Self {
-        self.consts = v;
-        self
-    }
-    /// Output types with no `#[prebindgen]` item behind them — an expression
-    /// constant's value type, say — that still need a converter.
-    pub fn required_output_types(mut self, v: Vec<syn::Type>) -> Self {
-        self.required_output_types = v;
-        self
-    }
+    /// Crossings with no `#[prebindgen]` element behind them, each in the one
+    /// direction it actually crosses — see [`Registry::cross`].
+    pub(crate) crossings: Vec<(Direction, syn::Type)>,
 }
 
 impl<M> Registry<M> {
@@ -842,6 +800,136 @@ impl<M> Registry<M> {
         let mut registry = Registry::empty();
         registry.flat = flat;
         Ok(registry)
+    }
+
+    // ── configure: what this binding builds ───────────────────────────
+    //
+    // Pushed in by the generator before `resolve`. The registry never asks —
+    // it records, then derives the crossing set from what it was given.
+
+    /// An element this binding **exports**.
+    ///
+    /// The model says how to derive its crossings, so the caller does not: a
+    /// function's signature gives its parameters (in) and its return (out); a
+    /// const gives its value type (out). A name matching no element is an
+    /// error, reported with every other missing name at once by `resolve`
+    /// rather than here — a build script with three typos should learn all
+    /// three in one build.
+    pub fn export(&mut self, name: &syn::Ident) {
+        self.declared.functions.insert(name.clone());
+    }
+
+    /// A const this binding exports.
+    ///
+    /// Separate from [`Self::export`] only because *having a const mechanism at
+    /// all* is itself a fact: a binding that never calls this re-emits every
+    /// captured const verbatim, while one that calls it emits exactly what it
+    /// names. See [`Self::declares_consts`].
+    pub fn export_const(&mut self, name: &syn::Ident) {
+        self.declared
+            .consts
+            .get_or_insert_with(HashSet::new)
+            .insert(name.clone());
+    }
+
+    /// Declare that this binding has a const mechanism, even if it exports no
+    /// consts. Without it every captured const is re-emitted verbatim.
+    pub fn declares_consts(&mut self) {
+        self.declared.consts.get_or_insert_with(HashSet::new);
+    }
+
+    /// A type this binding **exports**: it crosses in both directions, and its
+    /// body — a struct's fields, an enum's payloads — is scanned too.
+    pub fn export_type(&mut self, key: TypeKey) {
+        self.declared.types.insert(key);
+    }
+
+    /// A type that **crosses** in one direction without being exported.
+    ///
+    /// The escape hatch for a crossing no signature can yield: a re-exported
+    /// foreign type named by a class declaration, or the value type of a
+    /// constant the binding synthesizes. Direction is explicit because these
+    /// are genuinely one-sided — which is what stops an output-only crossing
+    /// from silently lacking its input twin, the asymmetry the old
+    /// `required_output_types` had.
+    pub fn cross(&mut self, dir: Direction, ty: &syn::Type) {
+        self.declared.crossings.push((dir, ty.clone()));
+    }
+
+    /// A function this binding **references but never emits** — a helper whose
+    /// name appears in a declaration. Its absence is an error; its presence
+    /// emits nothing.
+    pub fn reference(&mut self, name: &syn::Ident) {
+        self.declared.helper_functions.insert(name.clone());
+    }
+
+    /// A function the **binding crate itself** defines, with the module path
+    /// generated calls should qualify it by.
+    ///
+    /// There is no `#[prebindgen]` item behind it, so this is the one input
+    /// that adds to the model rather than selecting from it: only the
+    /// signature is read, never the body. A name colliding with a captured
+    /// item is an error — the generated call would resolve the wrong function.
+    pub fn local_function(
+        &mut self,
+        item_fn: syn::ItemFn,
+        origin: String,
+    ) -> Result<(), ScanError> {
+        let ident = item_fn.sig.ident.clone();
+        // Written by hand in a build script, so the grammar is checked here or
+        // nowhere: a dropped `self` receiver would surface as an arity mismatch
+        // out of rustc on generated code, which is the wrong end of the pipeline
+        // to learn about a build.rs typo.
+        let lowered =
+            self.flat
+                .lower_signature(&item_fn)
+                .map_err(|error| ScanError::AdapterInvariant {
+                    message: format!("binding-local fn `{ident}`: {error}"),
+                })?;
+        if self.flat.element(&ident).is_some() {
+            return Err(ScanError::AdapterInvariant {
+                message: format!(
+                    "binding-local fn `{ident}` collides with a `#[prebindgen]` item — \
+                     the generated call would resolve the wrong fn; rename the \
+                     binding-local fn"
+                ),
+            });
+        }
+        self.flat.add_local_function(lowered, origin);
+        Ok(())
+    }
+
+    /// A function a decomposition reaches through rather than emits — excluded
+    /// from constructor composition, and the only functions a decomposer record
+    /// may name.
+    ///
+    /// Rides here until decompositions carry their own shape (step 2 of #251);
+    /// it is a property of the decomposition, not of the binding.
+    pub fn accessor(&mut self, name: &syn::Ident) {
+        self.declared.accessors.insert(name.clone());
+    }
+
+    /// The receiver type of a function emitted as a method. Same temporary
+    /// home as [`Self::accessor`].
+    pub fn method_receiver(&mut self, name: &syn::Ident, receiver: TypeKey) {
+        self.declared
+            .method_receivers
+            .insert(name.clone(), receiver);
+    }
+
+    /// A type that crosses **only** through a plan, never whole — so its own
+    /// direct converter is not required once the plans are applied.
+    ///
+    /// Becomes `Decomposition::replaces` in step 2 of #251, stated by the
+    /// decomposition that makes the whole-value crossing unnecessary rather
+    /// than listed separately from it.
+    pub fn crosses_only_in_pieces(&mut self, key: TypeKey) {
+        self.declared.boundary_only_types.insert(key);
+    }
+
+    /// What the binding declared — read by the emitter's gate.
+    pub(crate) fn declared(&self) -> &Declared {
+        &self.declared
     }
 
     /// The parsed model this registry projects.
@@ -936,15 +1024,17 @@ impl<M> Registry<M> {
     /// warning (likely a typo in the build script). Indexed items that
     /// were neither declared nor ignored also get a `cargo:warning=` skip
     /// line so the user sees the remaining unexpected skips per build.
-    pub fn scan_declared<E>(&mut self, ext: &E) -> Result<(), ScanError>
-    where
-        E: Prebindgen<Metadata = M>,
-    {
-        let declared = ext.declarations();
-        self.scan_declared_items(&declared)
+    /// Scan everything pushed in through the configure methods.
+    ///
+    /// Takes no adapter: what to build was stated by the caller, not asked for.
+    pub fn scan_declared(&mut self) -> Result<(), ScanError> {
+        let declared = std::mem::take(&mut self.declared);
+        let out = self.scan_declared_items(&declared);
+        self.declared = declared;
+        out
     }
 
-    fn scan_declared_items(&mut self, declared: &Declarations) -> Result<(), ScanError> {
+    fn scan_declared_items(&mut self, declared: &Declared) -> Result<(), ScanError> {
         // Source-qualified declared types are a hard error (issue #95). The
         // key's own normalization already reduced `crate::`/`self::` and std
         // prelude spellings, so a remaining multi-segment declared path
@@ -1036,10 +1126,10 @@ impl<M> Registry<M> {
             return Err(ScanError::DeclaredNotFound { entries: missing });
         }
 
-        // Adapter-required extra output types — synthesized values with no
-        // `#[prebindgen]` item behind them (e.g. expression constants).
-        for ty in &declared.required_output_types {
-            self.ensure_entry(Direction::Output, ty, true);
+        // Declared crossings with no element behind them (a foreign class type,
+        // a synthesized constant's value type), each in its own direction.
+        for (dir, ty) in &declared.crossings {
+            self.ensure_entry(*dir, ty, true);
         }
 
         // Scan declared types.
@@ -1337,47 +1427,13 @@ impl<M> Registry<M> {
         E: Prebindgen<Metadata = M>,
         M: Clone + Default,
     {
-        // Synthesis pre-pass: adapter-declared BINDING-LOCAL fns become
-        // ordinary registry entries (signature read from the synthesized
-        // item, calls qualified by the recorded origin), so every downstream
-        // stage treats them exactly like `#[prebindgen]` fns.
-        for (item_fn, origin) in adapter.local_functions() {
-            let ident = item_fn.sig.ident.clone();
-            // The one input that does not come through `Flat`: a `sig!(..)` is
-            // written by hand in a build script, so the grammar has to be checked
-            // here or nowhere. Silently dropping a `self` receiver or a pattern
-            // parameter would surface as an arity mismatch out of rustc on
-            // generated code, which is the wrong end of the pipeline to learn
-            // about a build.rs typo.
-            let lowered = match self.flat.lower_signature(&item_fn) {
-                Ok(f) => f,
-                Err(error) => {
-                    return Err(ScanError::AdapterInvariant {
-                        message: format!("binding-local fn `{ident}`: {error}"),
-                    }
-                    .into())
-                }
-            };
-            if self.flat.element(&ident).is_some() {
-                return Err(ScanError::AdapterInvariant {
-                    message: format!(
-                        "binding-local fn `{ident}` collides with a `#[prebindgen]` item — \
-                         the generated call would resolve the wrong fn; rename the \
-                         binding-local fn"
-                    ),
-                }
-                .into());
-            }
-            // Into the model, so every downstream stage finds it exactly where it
-            // finds a captured fn — there is one index, and this is it.
-            self.flat.add_local_function(lowered, origin);
-        }
-        let declared = adapter.declarations();
+        let declared = std::mem::take(&mut self.declared);
         self.scan_declared_items(&declared)?;
         adapter
             .validate(&self)
             .map_err(|message| ScanError::AdapterInvariant { message })?;
         self.apply_adapter_plans(&adapter, &declared)?;
+        self.declared = declared;
         crate::api::core::resolve::resolve(&mut self, &adapter)?;
         // Post-resolve validation runs ONCE here, so a `Generation` is valid
         // by construction and the `write_*` emitters are genuinely pure
@@ -1394,11 +1450,7 @@ impl<M> Registry<M> {
         })
     }
 
-    fn apply_adapter_plans<E>(
-        &mut self,
-        ext: &E,
-        declared: &Declarations,
-    ) -> Result<(), WriteRustError>
+    fn apply_adapter_plans<E>(&mut self, ext: &E, declared: &Declared) -> Result<(), WriteRustError>
     where
         E: Prebindgen<Metadata = M>,
     {
@@ -1442,14 +1494,6 @@ impl<M> Registry<M> {
                 leaf_elements,
                 &declared.functions,
             )?;
-        }
-        // Adapter-derived extra requirements (registry-aware — e.g. the
-        // other-side types of `convert!` conversion fns, per direction).
-        for (dir, ty) in ext.extra_required_types(self) {
-            match dir {
-                Direction::Input => self.require_input(&ty),
-                Direction::Output => self.require_output(&ty),
-            }
         }
         // Boundary-only types: every crossing is now covered by a plan (fold
         // in, unfold out / error channel), so the scan-time direct converter

@@ -266,7 +266,7 @@ fn run_pipeline(
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");

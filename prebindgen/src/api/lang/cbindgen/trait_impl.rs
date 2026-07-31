@@ -1442,14 +1442,64 @@ impl Cbindgen {
     }
 }
 
-impl Prebindgen for Cbindgen {
-    fn declarations(&self) -> crate::core::Declarations {
-        crate::core::Declarations::new()
-            .functions(self.declared_functions())
-            .helper_functions(self.helper_functions())
-            .types(self.declared_types())
+impl Cbindgen {
+    /// State this binding into `registry` — see `JniGen::declare_into`.
+    ///
+    /// Push, not pull: the build script calls this, and the registry never
+    /// calls back. cbindgen declares no consts (it has no const mechanism, so
+    /// every captured const re-emits verbatim) and no decompositions.
+    /// Binding-local fns declared by `convert!(..).local(..)`.
+    fn collect_local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+        let mut result = Vec::new();
+        let mut seen = HashMap::<syn::Ident, String>::new();
+        for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| &decl.locals) {
+            let origin = crate::api::lang::jnigen::jni::local_path_prefix(path);
+            let mut sig = sig.clone();
+            sig.ident = ident.clone();
+            let signature = quote!(#origin #sig).to_string();
+            match seen.get(ident) {
+                Some(previous) if previous == &signature => continue,
+                Some(_) => panic!(
+                    "binding-local conversion fn `{ident}` is declared with two different signatures"
+                ),
+                None => {
+                    seen.insert(ident.clone(), signature);
+                }
+            }
+            let item: syn::ItemFn = syn::parse_quote!(#sig { unimplemented!() });
+            result.push((item, origin));
+        }
+        result
     }
 
+    /// State this binding into `registry`, then resolve it — see
+    /// `JniGen::resolve`.
+    pub fn resolve(
+        self,
+        mut registry: Registry<()>,
+    ) -> Result<crate::core::Generation<Self>, crate::core::WriteRustError> {
+        self.declare_into(&mut registry)?;
+        registry.resolve(self)
+    }
+
+    pub fn declare_into(&self, registry: &mut Registry<()>) -> Result<(), crate::core::ScanError> {
+        for (item_fn, origin) in self.collect_local_functions() {
+            registry.local_function(item_fn, origin)?;
+        }
+        for ident in self.declared_functions() {
+            registry.export(&ident);
+        }
+        for ident in self.helper_functions() {
+            registry.reference(&ident);
+        }
+        for key in self.declared_types() {
+            registry.export_type(key);
+        }
+        Ok(())
+    }
+}
+
+impl Prebindgen for Cbindgen {
     /// Report what this binding left unclaimed. Here because it is the
     /// earliest generator-owned hook that sees the model, and it runs exactly
     /// where the registry used to print these itself. Moves into
@@ -1497,29 +1547,6 @@ impl Prebindgen for Cbindgen {
 
     fn on_output_type(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
         self.select_output_type(ty, r)
-    }
-
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-        let mut result = Vec::new();
-        let mut seen = HashMap::<syn::Ident, String>::new();
-        for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| &decl.locals) {
-            let origin = crate::api::lang::jnigen::jni::local_path_prefix(path);
-            let mut sig = sig.clone();
-            sig.ident = ident.clone();
-            let signature = quote!(#origin #sig).to_string();
-            match seen.get(ident) {
-                Some(previous) if previous == &signature => continue,
-                Some(_) => panic!(
-                    "binding-local conversion fn `{ident}` is declared with two different signatures"
-                ),
-                None => {
-                    seen.insert(ident.clone(), signature);
-                }
-            }
-            let item: syn::ItemFn = syn::parse_quote!(#sig { unimplemented!() });
-            result.push((item, origin));
-        }
-        result
     }
 
     fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {

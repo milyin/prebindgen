@@ -19,10 +19,7 @@
 
 use proc_macro2::TokenStream;
 
-use crate::api::core::{
-    niches::Niches,
-    registry::{Direction, Registry},
-};
+use crate::api::core::{niches::Niches, registry::Registry};
 
 /// A shared predicate over an item name, as used by
 /// [`Prebindgen::ignored_name_predicates`] (bulk ignores keyed on a naming
@@ -262,44 +259,6 @@ pub trait Prebindgen {
     }
 
     // ── Declaration queries ────────────────────────────────────────
-
-    /// **Binding-local functions** to synthesize into the registry before
-    /// scanning: `(item, origin module path)` pairs built from
-    /// adapter-declared signatures (there is no `#[prebindgen]` item behind
-    /// them — the fn lives in the binding crate and the generated code calls
-    /// it qualified by `origin`). The item's body is never emitted; only its
-    /// signature is read. A synthesized ident colliding with a real
-    /// `#[prebindgen]` item is a hard resolve error. Adapters without the
-    /// concept return empty.
-    ///
-    /// Default: empty.
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-        Vec::new()
-    }
-
-    /// Extra converter requirements the adapter derives from its own decls
-    /// **with registry access** (e.g. a `convert!` conversion fn's
-    /// other-side type, in the conversion's direction, read from the fn's
-    /// registry signature). Consulted by `write_rust` after the adapter's
-    /// plans are applied and before resolution.
-    ///
-    /// Default: none.
-    fn extra_required_types(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Vec<(Direction, syn::Type)> {
-        Vec::new()
-    }
-
-    /// Everything this binding declares: which functions, types and consts it
-    /// emits, which it deliberately skips, and the extra types its plans need.
-    ///
-    /// **The registry's construction input, stated once.** This was twenty-one
-    /// getters the registry called back into the adapter from inside `resolve`,
-    /// which put configuring and using in the same call — and that is why a
-    /// converter could read a half-built registry. The caller states it all up
-    /// front; resolution then passes or fails.
-    fn declarations(&self) -> crate::api::core::registry::Declarations;
 
     /// Final post-processing pass applied to every emitted item right
     /// before write. Default: no-op.

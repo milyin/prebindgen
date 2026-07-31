@@ -29,7 +29,7 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let dir = unique_test_dir("jnigen_bounded_duration");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).unwrap();
+    let generation = jni.resolve(registry).unwrap();
     let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let paths = generation.write_kotlin(&dir.join("kotlin")).unwrap();
@@ -127,7 +127,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
     let dir = unique_test_dir("jnigen_flat_staged_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.resolve(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -187,8 +187,8 @@ fn duration_requires_an_explicit_conversion() {
         .set_package_prefix("io.test.jni")
         .package(crate::package!("time").fun(crate::fun!(duration_echo)));
 
-    let error = registry
-        .resolve(jni)
+    let error = jni
+        .resolve(registry)
         .expect_err("Duration must not have an implicit unchecked converter")
         .to_string();
     assert!(error.contains("Duration"), "{error}");
@@ -218,7 +218,7 @@ fn conversion_domain_must_match_the_representation() {
         )
         .package(crate::package!("time").fun(crate::fun!(duration_use)));
 
-    let _ = registry.resolve(jni);
+    let _ = jni.resolve(registry);
 }
 
 /// Phase 4: a bare `Option<primitive>` / `Option<enum>` **input** parameter
@@ -261,7 +261,7 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -361,7 +361,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
     let dir = unique_test_dir("jnigen_vec_handle_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -444,7 +444,7 @@ fn option_scalar_struct_field_flattens() {
     let dir = unique_test_dir("jnigen_optfield");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -568,7 +568,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let dir = unique_test_dir("jnigen_fromparts_optbox");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -678,7 +678,7 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let dir = unique_test_dir("jnigen_hybrid_jobject_input");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.resolve(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -750,7 +750,7 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     let dir = unique_test_dir("jnigen_recursive_handles");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.resolve(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -806,8 +806,8 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
             .class(crate::data_class!(Wide))
             .fun(crate::fun!(use_wide)),
     );
-    let error = registry
-        .resolve(jni)
+    let error = jni
+        .resolve(registry)
         .expect_err("256 JVM slots must fail")
         .to_string();
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
@@ -826,8 +826,8 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
             .class(crate::data_class!(Wide).jobject_input())
             .fun(crate::fun!(use_wide)),
     );
-    let generation = registry
-        .resolve(jni)
+    let generation = jni
+        .resolve(registry)
         .expect("JObject boundary must bypass the flattened slot limit");
     assert!(generation.report().contains("input `JObject` opt-in"));
 }
@@ -860,8 +860,8 @@ fn output_only_convert_resolves_without_input_twin() {
     let dir = unique_test_dir("jnigen_outonly_convert");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry
-        .resolve(jni)
+    let gen = jni
+        .resolve(registry)
         .expect("an output-only convert type must not require an input twin");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
@@ -906,7 +906,7 @@ fn convert_fn_qualifies_with_origin_crate() {
     let dir = unique_test_dir("jnigen_convert_origin");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -941,8 +941,8 @@ fn convert_input_target_mismatch_rejected() {
     let dir = unique_test_dir("jnigen_convert_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry
-        .resolve(jni)
+    let _ = jni
+        .resolve(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -968,7 +968,7 @@ fn convert_via_trait_impls() {
     let dir = unique_test_dir("jnigen_convert_trait");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1000,7 +1000,7 @@ fn convert_via_try_from_is_fallible() {
     let dir = unique_test_dir("jnigen_convert_tryfrom");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1042,7 +1042,7 @@ fn option_composition_normalizes_fallible_stage_errors() {
     let dir = unique_test_dir("jnigen_option_fallible_stages");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1077,7 +1077,7 @@ fn convert_via_local_fns() {
     let dir = unique_test_dir("jnigen_convert_local");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1149,7 +1149,7 @@ fn convert_via_local_try_fn_is_fallible() {
     let dir = unique_test_dir("jnigen_convert_local_try");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1203,7 +1203,7 @@ fn data_class_members_reenter_as_field_leaves() {
     let dir = unique_test_dir("jnigen_data_members");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.resolve(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 
     let kdir = dir.join("kotlin");
@@ -1304,7 +1304,7 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
     let dir = unique_test_dir("jnigen_unsigned");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.resolve(registry).expect("resolve");
     let rust_path = generation
         .write_rust(dir.join("gen.rs"))
         .expect("write_rust");
@@ -1435,7 +1435,7 @@ fn data_class_properties_match_their_from_parts_params() {
     let dir = unique_test_dir("jnigen_data_class_props");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.resolve(registry).expect("resolve");
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()
@@ -1526,7 +1526,7 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     let dir = unique_test_dir(&format!("jnigen_array_len_const_{module}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).unwrap();
+    let generation = jni.resolve(registry).unwrap();
     let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();

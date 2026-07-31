@@ -9,6 +9,36 @@ use crate::api::core::{
     prebindgen::{ConverterImpl, Prebindgen},
 };
 
+/// Push-then-resolve, the way a real generator's `resolve` does. Test-only:
+/// production generators own this pairing themselves (`JniGen::resolve`).
+trait DeclareAndResolve<M> {
+    fn declare_and_resolve<E>(self, ext: E) -> Result<Generation<E>, WriteRustError>
+    where
+        E: Prebindgen<Metadata = M> + AsStub,
+        M: Clone + Default;
+}
+
+/// How a test stub states what it declares.
+trait AsStub {
+    fn stub(&self) -> &StubExt;
+}
+impl AsStub for StubExt {
+    fn stub(&self) -> &StubExt {
+        self
+    }
+}
+
+impl<M> DeclareAndResolve<M> for Registry<M> {
+    fn declare_and_resolve<E>(mut self, ext: E) -> Result<Generation<E>, WriteRustError>
+    where
+        E: Prebindgen<Metadata = M> + AsStub,
+        M: Clone + Default,
+    {
+        ext.stub().declare_into_any(&mut self)?;
+        self.resolve(ext)
+    }
+}
+
 /// Minimal `Prebindgen` for scan-pipeline tests. Carries the
 /// declared sets the test wants and stubs every emission/converter
 /// hook into something inert.
@@ -21,19 +51,34 @@ struct StubExt {
     local_fns: Vec<(syn::ItemFn, String)>,
 }
 
+impl StubExt {
+    /// Push what this stub declares, the way a real generator does. Generic
+    /// over `M` so a stub can configure any adapter's registry.
+    fn declare_into_any<M>(&self, reg: &mut Registry<M>) -> Result<(), ScanError> {
+        for (item_fn, origin) in self.local_fns.clone() {
+            reg.local_function(item_fn, origin)?;
+        }
+        for i in &self.functions {
+            reg.export(i);
+        }
+        for i in &self.helper_functions {
+            reg.reference(i);
+        }
+        if let Some(consts) = &self.consts {
+            reg.declares_consts();
+            for i in consts {
+                reg.export_const(i);
+            }
+        }
+        for k in &self.types {
+            reg.export_type(k.clone());
+        }
+        Ok(())
+    }
+}
+
 impl Prebindgen for StubExt {
     type Metadata = ();
-
-    fn declarations(&self) -> Declarations {
-        Declarations::new()
-            .functions(self.functions.clone())
-            .helper_functions(self.helper_functions.clone())
-            .consts(self.consts.clone())
-            .types(self.types.clone())
-    }
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-        self.local_fns.clone()
-    }
 
     fn on_function(&self, _f: &syn::ItemFn, _registry: &Registry<()>) -> TokenStream {
         TokenStream::new()
@@ -76,7 +121,8 @@ fn scan_declared_empty_ext_marks_nothing_required() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
     let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let ext = StubExt::default();
-    reg.scan_declared(&ext).expect("empty ext = no scan");
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared().expect("empty ext = no scan");
     assert!(!reg.input_types.values().any(|c| c.root));
     assert!(!reg.output_types.values().any(|c| c.root));
 }
@@ -90,7 +136,8 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
     let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("a").unwrap());
-    reg.scan_declared(&ext).unwrap();
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared().unwrap();
     let is_root = |t: &HashMap<TypeKey, TypeCell<()>>, k: &str| {
         t.get(&TypeKey::parse(k).expect("test type"))
             .is_some_and(|c| c.root)
@@ -110,7 +157,8 @@ fn scan_declared_missing_function_is_hard_error() {
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("good").unwrap());
     ext.functions.insert(syn::parse_str("typo_fn").unwrap());
-    match reg.scan_declared(&ext) {
+    ext.declare_into_any(&mut reg).expect("declare");
+    match reg.scan_declared() {
         Err(ScanError::DeclaredNotFound { entries }) => {
             assert_eq!(entries, vec![("function", "typo_fn".to_string())]);
         }
@@ -129,7 +177,8 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
     ext.helper_functions
         .insert(syn::parse_str("typo_helper").unwrap());
     ext.consts = Some(HashSet::from([syn::parse_str("TYPO_CONST").unwrap()]));
-    match reg.scan_declared(&ext) {
+    ext.declare_into_any(&mut reg).expect("declare");
+    match reg.scan_declared() {
         Err(ScanError::DeclaredNotFound { entries }) => {
             assert_eq!(
                 entries,
@@ -332,11 +381,13 @@ fn from_items_records_origins_from_location_stamps() {
 #[test]
 fn resolve_surfaces_adapter_invariant_errors() {
     struct FailingExt(StubExt);
+    impl AsStub for FailingExt {
+        fn stub(&self) -> &StubExt {
+            &self.0
+        }
+    }
     impl Prebindgen for FailingExt {
         type Metadata = ();
-        fn declarations(&self) -> Declarations {
-            self.0.declarations()
-        }
         fn validate(&self, _registry: &Registry<()>) -> Result<(), String> {
             Err("member fun `f` has no receiver".to_string())
         }
@@ -359,7 +410,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
     let reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let err = reg
-        .resolve(FailingExt(StubExt::default()))
+        .declare_and_resolve(FailingExt(StubExt::default()))
         .expect_err("validate Err must abort resolve");
     let msg = format!("{err}");
     assert!(msg.contains("member fun `f` has no receiver"), "{msg}");
@@ -433,7 +484,8 @@ fn qualified_signature_matches_bare_declaration() {
     ext.functions.insert(syn::parse_str("get").unwrap());
     ext.types
         .insert(TypeKey::parse("Thing").expect("test type"));
-    reg.scan_declared(&ext).unwrap();
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared().unwrap();
     assert!(reg.input_types[&TypeKey::parse("&Thing").expect("test type")].root);
     assert!(reg.output_types[&TypeKey::parse("Vec<Thing>").expect("test type")].root);
     // No spelling-variant duplicate cells survive anywhere.
@@ -465,7 +517,8 @@ fn multi_source_rename_cross_reference_normalizes() {
         .insert(TypeKey::parse("TypeA").expect("test type"));
     ext.types
         .insert(TypeKey::parse("TypeB").expect("test type"));
-    reg.scan_declared(&ext).unwrap();
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared().unwrap();
     assert!(reg.input_types[&TypeKey::parse("&TypeA").expect("test type")].root);
     assert!(reg.output_types[&TypeKey::parse("TypeB").expect("test type")].root);
 }
@@ -481,7 +534,8 @@ fn qualified_declared_type_is_hard_error() {
     let mut ext = StubExt::default();
     ext.types
         .insert(TypeKey::parse("myflat::Thing").expect("test type"));
-    match reg.scan_declared(&ext) {
+    ext.declare_into_any(&mut reg).expect("declare");
+    match reg.scan_declared() {
         Err(ScanError::QualifiedDeclaredTypes { entries }) => {
             assert_eq!(entries.len(), 1);
             assert_eq!(entries[0].0, "myflat :: Thing");
@@ -503,7 +557,8 @@ fn foreign_qualified_declared_type_stays_supported() {
     let mut ext = StubExt::default();
     let foreign = TypeKey::parse("zenoh::KeyExpr<'static>").expect("test type");
     ext.types.insert(foreign.clone());
-    reg.scan_declared(&ext)
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared()
         .expect("foreign qualified declaration is supported");
     assert!(reg.input_types[&foreign].root);
     assert!(reg.output_types[&foreign].root);
@@ -711,7 +766,8 @@ fn a_source_type_cell_carries_the_models_typeref() {
 
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("f").unwrap());
-    reg.scan_declared(&ext).unwrap();
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared().unwrap();
 
     let key = TypeKey::parse("Option<u64>").expect("test type");
     let cell = &reg.input_types[&key];
@@ -740,7 +796,8 @@ fn an_adapter_authored_type_cell_has_no_source_reading() {
     let mut ext = StubExt::default();
     ext.types
         .insert(TypeKey::parse("Foreign").expect("test type"));
-    reg.scan_declared(&ext).unwrap();
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared().unwrap();
 
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
@@ -945,7 +1002,7 @@ fn a_binding_local_fn_is_checked_against_the_grammar() {
             ..Default::default()
         };
         let err = reg
-            .resolve(ext)
+            .declare_and_resolve(ext)
             .expect_err(&format!("`{src}` must be refused"));
         let msg = err.to_string();
         assert!(
@@ -974,7 +1031,7 @@ fn a_well_formed_binding_local_fn_passes() {
         )],
         ..Default::default()
     };
-    reg.resolve(ext)
+    reg.declare_and_resolve(ext)
         .expect("a grammatical local fn passes, undeclared types and all");
 }
 
@@ -1022,7 +1079,8 @@ fn a_guard_never_reaches_the_const_surface() {
         consts: Some(HashSet::new()),
         ..Default::default()
     };
-    reg.scan_declared(&ext).expect("guards are not declarable");
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared().expect("guards are not declarable");
 }
 
 // ── One index: what the deleted maps used to guarantee ─────────────────
@@ -1082,7 +1140,7 @@ fn a_binding_local_fn_joins_the_index_but_not_the_source_modules() {
         )],
         ..Default::default()
     };
-    let gen = reg.resolve(ext).expect("resolve");
+    let gen = reg.declare_and_resolve(ext).expect("resolve");
     let reg = gen.registry();
 
     // In the one index, reachable exactly like a captured fn.
@@ -1172,7 +1230,8 @@ fn a_qualified_alias_warns_rather_than_failing() {
     // Head is NOT a source module, so this is the warn branch.
     ext.types
         .insert(TypeKey::parse("foreign::Handle").expect("test type"));
-    reg.scan_declared(&ext)
+    ext.declare_into_any(&mut reg).expect("declare");
+    reg.scan_declared()
         .expect("an alias is a captured item; this must not fail");
 }
 
@@ -1191,6 +1250,11 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
     /// Resolves anything to itself, so declaring the local fn does not also
     /// require an adapter that can convert its types.
     struct AnyConverterExt(StubExt);
+    impl AsStub for AnyConverterExt {
+        fn stub(&self) -> &StubExt {
+            &self.0
+        }
+    }
     impl AnyConverterExt {
         fn converter(ty: &syn::Type) -> Option<ConverterImpl<()>> {
             Some(ConverterImpl {
@@ -1207,12 +1271,6 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
     }
     impl Prebindgen for AnyConverterExt {
         type Metadata = ();
-        fn declarations(&self) -> Declarations {
-            self.0.declarations()
-        }
-        fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-            self.0.local_functions()
-        }
         fn on_function(&self, f: &syn::ItemFn, r: &Registry<()>) -> TokenStream {
             self.0.on_function(f, r)
         }
@@ -1252,7 +1310,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             .collect(),
         ..Default::default()
     });
-    let gen = reg.resolve(ext).expect("resolve");
+    let gen = reg.declare_and_resolve(ext).expect("resolve");
     let reg = gen.registry();
 
     // The model now holds the reading …
@@ -1304,7 +1362,9 @@ fn an_unresolved_type_without_a_position_reports_none() {
     };
     // `StubExt` supplies no converters, so every scanned type is unresolved:
     // `Option<u64>` reached only through the local fn, `u64` through both.
-    let err = reg.resolve(ext).expect_err("StubExt resolves nothing");
+    let err = reg
+        .declare_and_resolve(ext)
+        .expect_err("StubExt resolves nothing");
     let msg = err.to_string();
 
     assert!(
@@ -1333,7 +1393,9 @@ fn an_unresolved_type_without_a_position_reports_none() {
     .unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("f").unwrap());
-    let err = located.resolve(ext).expect_err("StubExt resolves nothing");
+    let err = located
+        .declare_and_resolve(ext)
+        .expect_err("StubExt resolves nothing");
     assert!(
         err.to_string().contains("src/lib.rs:12:3: error:"),
         "a real position must still be reported:\n{}",

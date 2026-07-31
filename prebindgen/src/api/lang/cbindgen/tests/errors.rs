@@ -27,8 +27,8 @@ fn result_error_not_declared_is_build_error() {
         .function(syn::parse_quote!(z_keyexpr_try_from));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = registry
-            .resolve(cbindgen)
+        let _ = cbindgen
+            .resolve(registry)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope.rs")));
     }));
     assert!(
@@ -58,8 +58,8 @@ fn fallible_input_without_result_needs_panic() {
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log));
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = reg1
-            .resolve(cb1)
+        let _ = cb1
+            .resolve(reg1)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope2.rs")));
     }));
     assert!(err.is_err(), "expected a build error without .panic()");

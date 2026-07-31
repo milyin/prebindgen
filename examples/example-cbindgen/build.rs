@@ -219,8 +219,8 @@ fn generate_ffi_bindings() -> PathBuf {
     let registry = prebindgen::core::Registry::new(flat).expect("scan prebindgen items");
     // Always written to OUT_DIR under a stable name too, so the commented-out
     // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
-    let out_file = registry
-        .resolve(cbindgen)
+    let out_file = cbindgen
+        .resolve(registry)
         .expect("resolve prebindgen items")
         .write_rust("example_flat.rs")
         .expect("write generated bindings");

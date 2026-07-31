@@ -133,8 +133,8 @@ fn generate_ffi_bindings() -> PathBuf {
         .build()
         .expect("parse prebindgen items");
     let registry = prebindgen::core::Registry::new(flat).expect("scan prebindgen items");
-    let out_file = registry
-        .resolve(cbindgen)
+    let out_file = cbindgen
+        .resolve(registry)
         .expect("resolve prebindgen items")
         .write_rust("perftest.rs")
         .expect("write generated bindings");
