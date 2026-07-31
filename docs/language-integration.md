@@ -119,7 +119,7 @@ moves it.
 | L0.5 | `Flat`: the model, indexed and resolved | **done** — this branch |
 | L1 | `Registry` consumes elements | **done** — [#238](https://github.com/milyin/prebindgen/pull/238) |
 | L1.5 | The model is the only index | **done** — #239–#246 |
-| L1.75 | The registry becomes describable | **merged, not yet on this branch** — #249–#253 |
+| L1.75 | The registry becomes describable | **done** — #249–#253, squashed into #248's commit |
 | L2 | `api/core` stops classifying source syntax | **in progress** — [#248](https://github.com/milyin/prebindgen/pull/248) took 35 of 71 |
 | L3 | `Cbindgen` consumes elements | not started |
 | L4 | `JniGen` consumes elements *(the long pole — 97 sites)* | not started |
@@ -266,7 +266,7 @@ because the map should show where the program actually went.
 **What is left in `Registry` is now genuinely its own**: the two type tables
 (adapter answers plus roots) and the five adapter-declared plan maps.
 
-### L1.75 — the registry becomes describable — **merged, not yet on this branch**
+### L1.75 — the registry becomes describable — **done**
 
 Also not planned as a stage, and it moves no ledger sites — the count is 167
 before it and 167 after. It is here for the same reason L1.5 is: once L1.5 made
@@ -295,10 +295,12 @@ by someone who has not read `resolve`. Tracked by
       `Flat::builder()` → `Registry::builder()` → `resolve` → `write_*` dance;
       `Flat` and `Registry` stop being names a `build.rs` has to know
 
-**Merged into `flat-drop-pattern-engine`, not into this branch.** The stack landed
-PR-into-PR, so the only commit of it that reached `language-integration` is #248's.
-Re-merging that branch here is the next mechanical step, and nothing below should
-be started on top of a branch that is 28 commits behind it.
+**All of it is on this branch, in one commit.** The stack landed PR-into-PR onto
+`flat-drop-pattern-engine`, and #248 squash-merged that branch afterwards, so
+`d845c8f` — titled for the pattern engine — carries the registry and generator
+redesign too. Do not read the commit log as the inventory: `flat-drop-pattern-engine`
+still reports 28 commits ahead of `language-integration` because a squash records
+no ancestry, while the trees differ by nothing. Diff the content, not the history.
 
 ### L2 — `api/core` stops classifying source syntax — **in progress**
 
