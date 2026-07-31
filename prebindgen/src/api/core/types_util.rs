@@ -168,6 +168,29 @@ fn constructor_key(path: &syn::Path) -> String {
     out
 }
 
+/// A type reduced to the spelling everything keys on: prelude-normalized, so
+/// `std::option::Option<T>` and `Option<T>` are one entry.
+///
+/// The **single** definition of that reduction. Two things key on it — the
+/// model's type index ([`Flat::type_ref`](crate::core::flat::Flat::type_ref))
+/// and [`TypeKey`](crate::core::TypeKey) — and they have to agree, so neither
+/// spells it out itself.
+///
+/// Deliberately `prelude()` rather than a source-module-aware normalization: a
+/// key must mean the same thing before and after ingestion knows what the source
+/// modules are.
+pub fn canonical_type(ty: &syn::Type) -> syn::Type {
+    let mut t = ty.clone();
+    normalize_type(&mut t, &Normalization::prelude());
+    t
+}
+
+/// [`canonical_type`] as tokens — the string form both indexes use as their key.
+pub fn canonical_spelling(ty: &syn::Type) -> String {
+    use quote::ToTokens;
+    canonical_type(ty).to_token_stream().to_string()
+}
+
 pub fn normalize_type(ty: &mut syn::Type, against: &Normalization) {
     use syn::visit_mut::VisitMut;
     struct Normalizer<'a> {

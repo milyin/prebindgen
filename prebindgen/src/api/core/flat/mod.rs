@@ -388,11 +388,16 @@ impl FlatBuilder {
                 }
             }
         }
-        Ok(Flat {
+        let mut flat = Flat {
             elements,
             by_name,
             source_modules,
-        })
+            by_type: std::collections::HashMap::new(),
+        };
+        for i in 0..flat.elements.len() {
+            flat.index_types_of(i);
+        }
+        Ok(flat)
     }
 }
 
@@ -438,6 +443,21 @@ pub struct Flat {
     /// API. Positions rather than clones, so there is one copy of each element
     /// and source order stays available.
     by_name: std::collections::HashMap<String, usize>,
+    /// Normalized type spelling → this module's reading of it.
+    ///
+    /// Every type the API **mentions** — a parameter, a return, a field, a
+    /// constant's type, and everything nested inside those — keyed so a consumer
+    /// holding a `syn::Type` can ask what the frontend made of it without
+    /// lowering it a second time.
+    ///
+    /// A type mentioned in several places keeps the **first mention in element
+    /// order**, a property of the model rather than of ingestion order.
+    ///
+    /// Unlike [`Self::source_modules`] this *is* extended by
+    /// [`Self::add_local_function`]: a binding-local fn's parameter types have
+    /// readings like any others, and a lookup that missed them would report
+    /// "no reading" for one that exists.
+    by_type: std::collections::HashMap<String, TypeRef>,
 }
 
 /// A name a lookup can be performed with.
@@ -571,24 +591,6 @@ impl Flat {
         })
     }
 
-    /// Every type the API **mentions**, at every nesting depth — as distinct from
-    /// [`Self::types`], which is every type it **declares**.
-    ///
-    /// A parameter, a return, a field, a constant's type, and everything reachable
-    /// inside those. The same type mentioned in several places yields one
-    /// [`TypeRef`] per mention, each with its own spelling and origin; a consumer
-    /// that wants one per type indexes them and picks, and element order makes
-    /// that pick deterministic.
-    ///
-    /// This is how a later stage gets the frontend's reading of a type it holds
-    /// only as syntax, without lowering it a second time.
-    pub fn type_refs(&self) -> impl Iterator<Item = &TypeRef> {
-        self.elements
-            .iter()
-            .flat_map(element_type_refs)
-            .flat_map(TypeRef::walk)
-    }
-
     /// The `struct` declared under this name, or `None` for any other shape.
     ///
     /// A tuple struct is an [`Extern`] rather than a `Struct`, so this answers
@@ -632,6 +634,37 @@ impl Flat {
             Element::Guard(g) => Some(g),
             _ => None,
         })
+    }
+
+    /// This module's reading of `ty`, if the flat API mentions that type.
+    ///
+    /// `None` means no captured item and no binding-local fn writes this type —
+    /// it is one the binding invented, and there is nothing for the frontend to
+    /// have decided about it.
+    ///
+    /// The argument is normalized the way [`TypeKey`](crate::core::TypeKey) does
+    /// before lookup, so an adapter-authored spelling finds the same entry a
+    /// captured one does.
+    pub fn type_ref(&self, ty: &syn::Type) -> Option<&TypeRef> {
+        self.by_type
+            .get(&crate::api::core::types_util::canonical_spelling(ty))
+    }
+
+    /// Index every type the element at `pos` writes. Idempotent per key: the
+    /// first mention in element order wins.
+    fn index_types_of(&mut self, pos: usize) {
+        let refs: Vec<TypeRef> = element_type_refs(&self.elements[pos])
+            .into_iter()
+            .flat_map(TypeRef::walk)
+            .cloned()
+            .collect();
+        for ty in refs {
+            self.by_type
+                .entry(crate::api::core::types_util::canonical_spelling(
+                    &ty.origin.syntax,
+                ))
+                .or_insert(ty);
+        }
     }
 
     /// Every item the language could not express, with its diagnosis.
@@ -693,6 +726,7 @@ impl Flat {
         });
         self.by_name.insert(f.name.to_string(), self.elements.len());
         self.elements.push(Element::Function(f));
+        self.index_types_of(self.elements.len() - 1);
     }
 
     /// The declaration a reference denotes.
