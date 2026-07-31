@@ -876,9 +876,14 @@ impl<M> Registry<M> {
         })
     }
 
-    /// Every **declared type** name — struct or either enum shape, never an
-    /// alias. The set the old `structs`/`enums` map keys formed together.
-    fn declared_type_idents(&self) -> impl Iterator<Item = &syn::Ident> {
+    /// Every **struct or enum** name — either enum shape, never an alias.
+    ///
+    /// Named for its population rather than as the iterator form of
+    /// [`Self::declares_type`], which it is **not**: that predicate counts every
+    /// declared type, aliases included. This one feeds *"skipping undeclared
+    /// `#[prebindgen]` struct/enum"*, which names a kind an alias is not — so the
+    /// two answer differently on purpose, and the names now say so.
+    fn struct_enum_idents(&self) -> impl Iterator<Item = &syn::Ident> {
         use crate::api::core::flat::Type;
         self.flat.types().filter_map(|t| match t {
             Type::Struct(_) | Type::Variant(_) | Type::Enum(_) => Some(t.name()),
@@ -896,7 +901,7 @@ impl<M> Registry<M> {
     /// `ptr_class(ZKeyExpr<'static>)` relies on), so a diagnostic that says
     /// "no such captured item" would be false.
     ///
-    /// Distinct from [`Self::declared_type_idents`], which excludes aliases
+    /// Distinct from [`Self::struct_enum_idents`], which excludes aliases
     /// because it feeds a *"skipping undeclared struct/enum"* warning — a
     /// different question, about what an adapter left unclaimed.
     fn declares_type(&self, ident: &syn::Ident) -> bool {
@@ -1165,7 +1170,7 @@ impl<M> Registry<M> {
                 || declared.ignored_types.contains(key)
                 || declared.boundary_only_types.contains(key)
         };
-        for ident in self.declared_type_idents() {
+        for ident in self.struct_enum_idents() {
             let name = ident.to_string();
             let key = TypeKey::from_ident(ident);
             if !type_acknowledged(&key) && !pred_ignored(&name) {

@@ -1227,14 +1227,14 @@ fn every_declared_type_counts_including_an_alias() {
 
     // The sibling that must NOT change: it feeds a "skipping undeclared
     // struct/enum" warning, so an alias — which is neither — stays out.
-    let bodies: HashSet<String> = reg.declared_type_idents().map(|i| i.to_string()).collect();
+    let bodies: HashSet<String> = reg.struct_enum_idents().map(|i| i.to_string()).collect();
     assert_eq!(
         bodies,
         ["S", "Sum", "Flags"]
             .map(String::from)
             .into_iter()
             .collect(),
-        "declared_type_idents feeds a struct/enum message and must exclude aliases"
+        "struct_enum_idents feeds a struct/enum message and must exclude aliases"
     );
 }
 
