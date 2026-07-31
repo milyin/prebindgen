@@ -277,7 +277,7 @@ pub fn apply<M>(
     validate_declarations(acc)?;
     // Binding-local accessors (`LocalAcc` records) resolve through registry
     // entries synthesized by the adapter's `local_functions()` pre-pass in
-    // `Registry::resolve` — by this point they read exactly like
+    // the builder's scan — by this point they read exactly like
     // `#[prebindgen]` accessors.
 
     // Gate: every accessor-function record of every declared deconstructor must

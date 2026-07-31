@@ -132,7 +132,7 @@ fn generate_ffi_bindings() -> PathBuf {
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .build()
         .expect("parse prebindgen items");
-    let registry = prebindgen::core::Registry::new(flat).expect("scan prebindgen items");
+    let registry = prebindgen::core::Registry::builder(flat).expect("describe the binding");
     let out_file = cbindgen
         .resolve(registry)
         .expect("resolve prebindgen items")

@@ -16,7 +16,7 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     // catch. Driven through the real scan rather than simulated, so the state
     // under test is one the pipeline can actually produce.
     let mut reg: Registry<()> =
-        crate::api::test_util::reg_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
+        crate::api::test_util::scanned_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
     reg.require_input(&syn::parse_quote!(Outer));
 
     let zke_key = TypeKey::parse("ZKeyExpr").expect("test type");
@@ -48,7 +48,7 @@ fn final_invariant_stops_at_resolved_nodes() {
 
     // Through the real scan, so the state under test is one the pipeline can
     // actually produce: `Unrelated` is a field type nothing declares.
-    let mut reg: Registry<()> = crate::api::test_util::reg_with(&[
+    let mut reg: Registry<()> = crate::api::test_util::scanned_with(&[
         "pub struct Outer { pub inner: Inner }",
         "pub struct Inner { pub unused: Unrelated }",
     ]);

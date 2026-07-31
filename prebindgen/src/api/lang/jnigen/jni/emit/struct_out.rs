@@ -82,7 +82,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// output converter table (not yet built at this stage).
 pub(crate) fn synth_value_struct_leaves(
     ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
     path_prefix: &[crate::api::core::unfold::PathStep],
     name_prefix: &str,

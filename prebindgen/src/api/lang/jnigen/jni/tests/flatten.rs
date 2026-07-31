@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::core::registry::Conversions;
+use crate::api::core::registry::{Conversions, RegistryBuilder};
 
 /// Two fns returning the same type under different output decompositions:
 /// the type-level `expand_return!` default and a per-fn `.return_expand(...)`
@@ -1337,7 +1337,7 @@ fn gc_managed_handle_lifecycle() {
 /// #52 shared fixture: a `ZSummary` ptr class, its `(count, total)` builder, a
 /// splittable 2-variant type-level `expand_param!`, and functions taking one or
 /// two `ZSummary` params. `extra` fns are appended before indexing.
-fn split_fixture(extra: &[&str]) -> Registry<KotlinMeta> {
+fn split_fixture(extra: &[&str]) -> RegistryBuilder<KotlinMeta> {
     let loc = myflat_loc();
     let base: &[&str] = &[
         "pub fn z_summary_new(count: i64, total: f64) -> ZSummary { unimplemented!() }",

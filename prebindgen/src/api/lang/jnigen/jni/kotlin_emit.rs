@@ -80,7 +80,7 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // Validation already ran once in `Registry::resolve` — this emitter
+        // Validation already ran once in `Registry::finish` — this emitter
         // is a pure consumer of the resolved, validated registry.
         let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());

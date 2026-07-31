@@ -109,7 +109,7 @@ impl JniGen {
     /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
     /// methods, add declarations with [`package`](Self::package),
     /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
-    /// result through `Registry::resolve` → `Generation::write_rust` /
+    /// result through `JniGen::resolve` → `Generation::write_rust` /
     /// `write_kotlin`. Settings and
     /// declarations may be interleaved in any order — the builder stores
     /// only raw inputs, and every setting-derived name is computed at the
@@ -724,7 +724,7 @@ impl JniGen {
     /// once, on the member), else the camel-cased Rust name.
     fn lower_fields(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         fields: &[LocalField],
     ) -> Vec<crate::api::core::unfold::DeconRecord> {
@@ -781,7 +781,7 @@ impl JniGen {
     /// a field renamed upstream must not silently lose its adjustment.
     fn lower_value_form(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         decl: &FieldsDecl,
     ) -> Vec<crate::api::core::unfold::FieldRecord> {
@@ -861,7 +861,7 @@ impl JniGen {
     #[allow(clippy::too_many_arguments)]
     fn walk_value_form(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         decl: &FieldsDecl,
         st: &syn::ItemStruct,
@@ -1047,7 +1047,7 @@ impl JniGen {
     /// output-flattened.
     pub(crate) fn build_deconstructors(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> crate::api::core::unfold::Deconstructors {
         use crate::api::core::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,

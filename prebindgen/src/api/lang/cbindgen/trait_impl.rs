@@ -1,5 +1,5 @@
 use super::{builder::callback_fn_type, *};
-use crate::api::core::registry::{Building, Conversions, Crossing, TypeEntry};
+use crate::api::core::registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 /// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
@@ -1481,55 +1481,50 @@ impl Cbindgen {
     /// `JniGen::resolve`.
     pub fn resolve(
         self,
-        mut registry: Registry<()>,
+        registry: RegistryBuilder<()>,
     ) -> Result<crate::core::Generation<Self>, crate::core::WriteRustError> {
-        self.declare_into(&mut registry)?;
-        registry.prepare(&self)?;
-
-        // The generator's own loop over the demand, in dependency order — see
-        // `JniGen::resolve`.
-        let order = registry.crossings();
-        let mut built: std::collections::HashMap<Crossing, TypeEntry<()>> =
-            std::collections::HashMap::new();
-        for crossing in &order {
-            let (dir, key) = crossing;
-            let ty = key.to_type();
-            let conv = {
-                let seen = Building::new(&registry, &built, &order);
-                match dir {
-                    Direction::Input => self.select_input_type(&ty, &seen).or_else(|| {
-                        // `impl Fn(args)` nothing else claimed. Callback args
-                        // cross in the OPPOSITE direction, which is why their
-                        // required-ness rides `immediate_edges` rather than
-                        // this converter's `subs`.
-                        let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
-                        self.dispatch_fn_input(&args, &seen)
-                    }),
-                    Direction::Output => self.select_output_type(&ty, &seen),
-                }
-            };
-            if let Some(c) = conv {
-                built.insert(crossing.clone(), TypeEntry::from_converter(c));
-            }
-        }
-        registry.supply(built)?;
+        let registry = self
+            .declare_into(registry)?
+            .validate_with(&self)?
+            .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
+            .build()?;
         registry.finish(self)
     }
 
-    pub fn declare_into(&self, registry: &mut Registry<()>) -> Result<(), crate::core::ScanError> {
+    /// Build the conversion for one crossing — see `JniGen::convert_crossing`.
+    fn convert_crossing(
+        &self,
+        crossing: &Crossing,
+        built: &Building<'_, ()>,
+    ) -> Option<ConverterImpl<()>> {
+        let (dir, key) = crossing;
+        let ty = key.to_type();
+        match dir {
+            Direction::Input => self.select_input_type(&ty, built).or_else(|| {
+                let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
+                self.dispatch_fn_input(&args, built)
+            }),
+            Direction::Output => self.select_output_type(&ty, built),
+        }
+    }
+
+    pub fn declare_into(
+        &self,
+        mut registry: RegistryBuilder<()>,
+    ) -> Result<RegistryBuilder<()>, crate::core::ScanError> {
         for (item_fn, origin) in self.collect_local_functions() {
-            registry.local_function(item_fn, origin)?;
+            registry = registry.local_function(item_fn, origin)?;
         }
         for ident in self.declared_functions() {
-            registry.export(&ident);
+            registry = registry.export(&ident);
         }
         for ident in self.helper_functions() {
-            registry.reference(&ident);
+            registry = registry.reference(&ident);
         }
         for key in self.declared_types() {
-            registry.export_type(key);
+            registry = registry.export_type(key);
         }
-        Ok(())
+        Ok(registry)
     }
 }
 
@@ -1654,11 +1649,11 @@ impl Prebindgen for Cbindgen {
     ///
     /// `consts: None` — cbindgen has no const declaration mechanism, so every
     /// captured const is re-emitted verbatim and none is ever a skip.
-    fn validate(&self, registry: &Registry<()>) -> Result<(), String> {
+    fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
         crate::core::warn_unclaimed(
-            registry.flat(),
+            binding.flat(),
             &crate::core::Claimed {
                 functions,
                 types: self.declared_types(),

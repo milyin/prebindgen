@@ -4,12 +4,17 @@
 //! surfaced before any file is written.
 
 use super::*;
+use crate::api::core::registry::RegistryBuilder;
 
 /// Resolve the binding and return the result — `validate_resolved` (and thus
 /// `validate_symbols`) now runs inside `resolve`, so an invalid binding fails
 /// here and no `Generation` is produced (nothing can be written). On success,
 /// a real `write_rust` confirms the valid binding also emits.
-fn resolve_result(tag: &str, registry: Registry<KotlinMeta>, jni: JniGen) -> Result<(), String> {
+fn resolve_result(
+    tag: &str,
+    registry: RegistryBuilder<KotlinMeta>,
+    jni: JniGen,
+) -> Result<(), String> {
     match jni.resolve(registry) {
         Ok(gen) => {
             let dir = unique_test_dir(tag);
@@ -23,7 +28,7 @@ fn resolve_result(tag: &str, registry: Registry<KotlinMeta>, jni: JniGen) -> Res
     }
 }
 
-fn one_fn(src: &str) -> Registry<KotlinMeta> {
+fn one_fn(src: &str) -> RegistryBuilder<KotlinMeta> {
     let f: syn::ItemFn = syn::parse_str(src).unwrap();
     crate::api::test_util::reg_from_items(declare_referenced(vec![(
         syn::Item::Fn(f),

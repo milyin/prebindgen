@@ -30,7 +30,10 @@
 //! still pairwise-distinct per the checks above.
 
 use super::*;
-use crate::api::core::expand::{FoldArg, FoldPlan};
+use crate::api::core::{
+    expand::{FoldArg, FoldPlan},
+    registry::Conversions,
+};
 
 impl JniGen {
     /// Proactively verify every multi-variant `expand_param!` declaration is
@@ -245,7 +248,7 @@ fn is_option(ty: &syn::Type) -> bool {
 /// for an `Option<…>` parameter `null` encodes absence (nullable-arm rule).
 /// Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     variant: &crate::api::core::expand::FoldVariant,
     origin: &syn::Ident,
     block: &[kt::KtParam],

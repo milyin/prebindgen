@@ -6,8 +6,8 @@
 //! (`post_process_item`) and two invariant checks.
 //!
 //! **Conversion is not here.** A generator builds those itself, against the
-//! demand [`Registry::crossings`] hands it, and gives them back through
-//! [`Registry::supply`] — so there is no `on_input_type`, no deferral, and no
+//! demand `RegistryBuilder::crossings` hands it, and gives them back through
+//! `RegistryBuilder::convert_with` — so there is no `on_input_type`, no deferral, and no
 //! fixed-point loop retrying until it converges.
 //!
 //! [`ConverterImpl::function`] is the **complete** Rust function for a
@@ -140,8 +140,9 @@ pub fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenS
 ///
 /// What used to be here and is not any more: which items to build, how
 /// composites decompose, and the wire form of each type. A generator states the
-/// first two into the registry ([`Registry::export`], [`Registry::decompose`])
-/// and answers the third by filling [`Registry::crossings`] — so nothing in
+/// first two into the builder (`RegistryBuilder::export`,
+/// `RegistryBuilder::decompose`)
+/// and answers the third by filling `RegistryBuilder::crossings` — so nothing in
 /// core calls back to ask. Moving emission out too is what would delete this
 /// trait entirely (prebindgen#251 phase E).
 ///
@@ -187,7 +188,7 @@ pub trait Prebindgen {
 
     /// Adapter-invariant checks that need registry **signatures** — the
     /// earliest they can run (decl objects are built before any source is
-    /// read). Called by [`Registry::prepare`] right after the declaration
+    /// read). Called by `RegistryBuilder::validate_with` right after the declaration
     /// scan (so a missing fn has already hard-errored; validate sees only
     /// indexed items) and before plan application. An `Err` aborts the
     /// resolve as `ScanError::AdapterInvariant` with the message verbatim
@@ -195,7 +196,10 @@ pub trait Prebindgen {
     /// receiver parameter of the class type.
     ///
     /// Default: no checks.
-    fn validate(&self, _registry: &Registry<Self::Metadata>) -> Result<(), String> {
+    fn validate(
+        &self,
+        _binding: &crate::api::core::registry::Building<'_, Self::Metadata>,
+    ) -> Result<(), String> {
         Ok(())
     }
 

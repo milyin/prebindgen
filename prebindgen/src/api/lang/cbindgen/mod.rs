@@ -283,7 +283,7 @@ impl AliasAccess {
 
 /// C / cbindgen language adapter. Build it with [`Cbindgen::new`], declare the
 /// items to convert with the fluent methods, then drive it through
-/// [`Registry::resolve`](crate::core::Registry::resolve) →
+/// [`Cbindgen::resolve`] →
 /// [`Generation::write_rust`](crate::core::Generation::write_rust).
 #[derive(Default)]
 pub struct Cbindgen {

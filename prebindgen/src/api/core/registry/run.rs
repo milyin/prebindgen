@@ -1,43 +1,8 @@
-//! Run a binding end to end, and bind the result to the generator that made it.
+//! Bind a finished registry to the generator that filled it.
 
 use super::*;
 
 impl<M> Registry<M> {
-    /// Resolve the binding: scan the adapter's declarations, apply its
-    /// plans, and run type resolution — consuming both the registry and the
-    /// adapter into a [`Generation`], whose `write_*` methods are pure,
-    /// order-free emissions. This is the single public entry point for
-    /// language-specific binding generation; language-agnostic because
-    /// `adapter` is any [`crate::api::core::prebindgen::Prebindgen`] impl
-    /// whose `Metadata` matches this registry's `M` parameter.
-    ///
-    /// ```ignore
-    /// let gen = Registry::new(Flat::builder().items(source.items_all()).build()?)?
-    ///     .resolve(jni)?;
-    /// gen.write_rust(&rust_dest)?;
-    /// gen.write_kotlin(&kotlin_root)?;   // JNI adapter's second artifact
-    /// ```
-    /// Scan what was declared and apply its decompositions, leaving the
-    /// crossing set derived and ready to be filled.
-    ///
-    /// The first of the three steps a generator drives — [`Self::crossings`]
-    /// and [`Self::supply`] are the other two, and [`Self::finish`] closes it.
-    /// `adapter` is here only for its invariant check, which needs the scanned
-    /// signatures; nothing about *what to build* is asked of it.
-    pub fn prepare<E>(&mut self, adapter: &E) -> Result<(), WriteRustError>
-    where
-        E: Prebindgen<Metadata = M>,
-    {
-        let mut declared = std::mem::take(&mut self.declared);
-        self.scan_declared_items(&declared)?;
-        adapter
-            .validate(self)
-            .map_err(|message| ScanError::AdapterInvariant { message })?;
-        self.apply_adapter_plans(&mut declared)?;
-        self.declared = declared;
-        Ok(())
-    }
-
     /// Bind the filled registry to the adapter that filled it.
     ///
     /// Post-resolve validation runs ONCE here, so a [`Generation`] is valid by

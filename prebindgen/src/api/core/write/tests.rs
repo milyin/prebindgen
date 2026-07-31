@@ -4,18 +4,22 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 
 use super::*;
-use crate::{api::test_util::cell, SourceLocation};
+use crate::{
+    api::{core::registry::RegistryBuilder, test_util::cell},
+    SourceLocation,
+};
 
 struct IdentityExt;
 
 impl IdentityExt {
-    fn declare_into(&self, reg: &mut Registry<()>) {
+    fn declare_into(&self, mut reg: RegistryBuilder<()>) -> RegistryBuilder<()> {
         for f in [syn::parse_quote!(a_fn), syn::parse_quote!(b_fn)] {
-            reg.export(&f);
+            reg = reg.export(&f);
         }
         for t in ["AEnum", "AStruct", "BEnum", "BStruct"] {
-            reg.export_type(TypeKey::parse(t).expect("test type"));
+            reg = reg.export_type(TypeKey::parse(t).expect("test type"));
         }
+        reg
     }
 }
 
@@ -147,8 +151,10 @@ fn write_rust_sorts_declared_items_by_ident() {
             loc,
         ),
     ];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).expect("index");
-    IdentityExt.declare_into(&mut reg);
+    let reg: Registry<()> = IdentityExt
+        .declare_into(crate::api::test_util::reg_from_items(items).expect("index"))
+        .scanned()
+        .expect("scan");
 
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -199,15 +205,12 @@ fn guards_emit_ungated_and_in_stream_order() {
             ext: ConstGatingExt,
         ) -> Result<crate::core::Generation<ConstGatingExt>, crate::core::WriteRustError>;
     }
-    impl ResolveGating for Registry<()> {
+    impl ResolveGating for RegistryBuilder<()> {
         fn resolve_gating(
-            mut self,
+            self,
             ext: ConstGatingExt,
         ) -> Result<crate::core::Generation<ConstGatingExt>, crate::core::WriteRustError> {
-            self.declares_consts();
-            self.prepare(&ext)?;
-            self.supply(std::collections::HashMap::new())?;
-            self.finish(ext)
+            self.declares_consts().build()?.finish(ext)
         }
     }
 
@@ -252,7 +255,8 @@ fn guards_emit_ungated_and_in_stream_order() {
             loc.clone(),
         ),
     ];
-    let registry: Registry<()> = crate::api::test_util::reg_from_items(items).expect("index");
+    let registry: RegistryBuilder<()> =
+        crate::api::test_util::reg_from_items(items).expect("index");
     assert_eq!(registry.flat().guards().count(), 2);
 
     let dir = crate::api::test_util::unique_test_dir("write_guards");

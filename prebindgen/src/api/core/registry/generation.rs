@@ -5,7 +5,7 @@ use std::fmt;
 use super::*;
 
 /// A **resolved** binding generation: the [`Registry`] after
-/// [`Registry::resolve`] ran the adapter's scan, plans, and type
+/// `RegistryBuilder::build` ran the scan, the plans, and the
 /// resolution, bound together with the adapter that produced it. Both
 /// halves of a generation run are methods here — [`Self::write_rust`] and
 /// any adapter-specific artifact (e.g. `write_kotlin` for the JNI
@@ -28,7 +28,7 @@ impl<E: Prebindgen> Generation<E> {
     /// Write the generated Rust bindings file. `out_path` may be relative
     /// (resolved against `OUT_DIR`) or absolute; returns the path actually
     /// written. Pure emission — the registry was fully resolved by
-    /// [`Registry::resolve`].
+    /// `RegistryBuilder::build`.
     pub fn write_rust(
         &self,
         out_path: impl AsRef<std::path::Path>,

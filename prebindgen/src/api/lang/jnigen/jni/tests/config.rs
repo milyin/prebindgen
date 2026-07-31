@@ -429,7 +429,7 @@ fn setters_after_declarations_apply() {
     );
 }
 
-/// The I3 contract: after `Registry::resolve`, `write_kotlin` and
+/// The I3 contract: after `JniGen::resolve`, `write_kotlin` and
 /// `write_rust` are pure reads on one receiver — calling Kotlin FIRST
 /// produces byte-identical output to the usual order.
 #[test]

@@ -152,7 +152,8 @@ fn custom_conversion_without_domain_stays_infallible() {
 #[test]
 fn empty_adapter_writes_empty_file() {
     let cbindgen = Cbindgen::new();
-    let registry: Registry<()> = Registry::empty();
+    let registry: RegistryBuilder<()> =
+        crate::api::test_util::reg_from_items(Vec::new()).expect("empty");
     let src = write(cbindgen, registry, "empty");
     assert!(src.trim().is_empty(), "expected empty output, got:\n{src}");
 }

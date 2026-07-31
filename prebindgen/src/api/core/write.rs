@@ -23,7 +23,7 @@ use crate::api::{
 
 /// Errors surfaced by the file-emission phase.
 ///
-/// Binding validation is NOT here — it runs once in [`Registry::resolve`]
+/// Binding validation is NOT here — it runs once in [`Registry::finish`]
 /// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
 /// before a `Generation` exists and never reaches a writer.
 #[derive(Debug)]
@@ -61,7 +61,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     ext: &E,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
-    // Validation already ran ONCE in `Registry::resolve` — a `Generation`
+    // Validation already ran ONCE in `Registry::finish` — a `Generation`
     // (the only source of a resolved registry) is valid by construction, so
     // this writer is a pure emission.
     let mut items: Vec<syn::Item> = Vec::new();

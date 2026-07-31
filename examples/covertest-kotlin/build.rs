@@ -707,7 +707,7 @@ fn main() {
         .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
         .build()
         .expect("parse prebindgen items");
-    let registry = Registry::new(flat).expect("scan prebindgen items");
+    let registry = Registry::builder(flat).expect("describe the binding");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

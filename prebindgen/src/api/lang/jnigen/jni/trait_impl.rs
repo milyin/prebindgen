@@ -5,7 +5,7 @@
 //! namespace via `use super::*`.
 
 use super::*;
-use crate::api::core::registry::{Building, Conversions, Crossing, TypeEntry};
+use crate::api::core::registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 /// The `#[allow(...)]` carried by every generated converter `fn`.
 ///
@@ -942,78 +942,74 @@ impl JniGen {
     /// body of `generate(..)` once emission moves here too (#251 phase E).
     pub fn resolve(
         self,
-        mut registry: Registry<KotlinMeta>,
+        registry: RegistryBuilder<KotlinMeta>,
     ) -> Result<crate::core::Generation<Self>, crate::core::WriteRustError> {
-        self.declare_into(&mut registry)?;
-        registry.prepare(&self)?;
-
-        // Take the demand once, in dependency order, and answer it. This loop
-        // is the generator's own: the registry hands over a list and grades the
-        // result, and never calls back into here.
-        let order = registry.crossings();
-        let mut built: HashMap<Crossing, TypeEntry<KotlinMeta>> = HashMap::new();
-        for crossing in &order {
-            let (dir, key) = crossing;
-            let ty = key.to_type();
-            // Scoped so `built` is free to grow again: everything this crossing
-            // can compose from is already in it, which is what `order` means.
-            let conv = {
-                let seen = Building::new(&registry, &built, &order);
-                match dir {
-                    Direction::Input => self.select_input_type(&ty, &seen).or_else(|| {
-                        // `impl Fn(args)` that nothing else claimed. Callback
-                        // args cross in the OPPOSITE direction, which is why
-                        // their required-ness rides `immediate_edges` rather
-                        // than this converter's `subs`.
-                        let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
-                        self.dispatch_fn_input(&args, &seen)
-                    }),
-                    Direction::Output => self.select_output_type(&ty, &seen),
-                }
-            };
-            if let Some(c) = conv {
-                built.insert(crossing.clone(), TypeEntry::from_converter(c));
-            }
-        }
-        registry.supply(built)?;
+        let registry = self
+            .declare_into(registry)?
+            .validate_with(&self)?
+            .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
+            .build()?;
         registry.finish(self)
+    }
+
+    /// Build the conversion for one crossing, against what is already built.
+    ///
+    /// `None` is *cannot*, never *not yet*: `crossings` hands them out
+    /// inner-first, so everything this could compose from is already in `built`.
+    fn convert_crossing(
+        &self,
+        crossing: &Crossing,
+        built: &Building<'_, KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let (dir, key) = crossing;
+        let ty = key.to_type();
+        match dir {
+            Direction::Input => self.select_input_type(&ty, built).or_else(|| {
+                // `impl Fn(args)` that nothing else claimed. Callback args cross
+                // in the OPPOSITE direction, which is why their required-ness
+                // rides `immediate_edges` rather than this converter's `subs`.
+                let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
+                self.dispatch_fn_input(&args, built)
+            }),
+            Direction::Output => self.select_output_type(&ty, built),
+        }
     }
 
     pub fn declare_into(
         &self,
-        registry: &mut Registry<KotlinMeta>,
-    ) -> Result<(), crate::core::ScanError> {
+        mut registry: RegistryBuilder<KotlinMeta>,
+    ) -> Result<RegistryBuilder<KotlinMeta>, crate::core::ScanError> {
         // Binding-local fns first: they become model, and everything below may
         // name one.
         for (item_fn, origin) in self.collect_local_functions() {
-            registry.local_function(item_fn, origin)?;
+            registry = registry.local_function(item_fn, origin)?;
         }
 
         for ident in self.declared_functions() {
-            registry.export(&ident);
+            registry = registry.export(&ident);
         }
         for ident in self.helper_functions() {
-            registry.reference(&ident);
+            registry = registry.reference(&ident);
         }
         // JniGen HAS a const mechanism, so const emission is declared-only even
         // when nothing is declared.
-        registry.declares_consts();
+        registry = registry.declares_consts();
         for ident in self.declared_consts().into_iter().flatten() {
-            registry.export_const(&ident);
+            registry = registry.export_const(&ident);
         }
         for key in self.declared_types() {
-            registry.export_type(key);
+            registry = registry.export_type(key);
         }
         for ident in self.accessor_functions() {
-            registry.accessor(&ident);
+            registry = registry.accessor(&ident);
         }
         for (ident, receiver) in self.method_receivers() {
-            registry.method_receiver(&ident, receiver);
+            registry = registry.method_receiver(&ident, receiver);
         }
 
         // An expression constant's value type has no captured item to scan.
         for ty in self.required_output_types() {
-            registry.cross(Direction::Output, &ty);
+            registry = registry.cross(Direction::Output, &ty);
         }
         // The other-side type of every `convert!` conversion, in the
         // conversion's direction: an input fn's parameter type needs its own
@@ -1021,8 +1017,8 @@ impl JniGen {
         // fn's return type needs the output twin.
         let mut convert_edges: Vec<(Crossing, Crossing)> = Vec::new();
         for decl in &self.convert_decls {
-            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, registry) {
-                registry.cross(Direction::Input, &ty);
+            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, &registry) {
+                registry = registry.cross(Direction::Input, &ty);
                 // The target's conversion chains through this one, and nothing
                 // about the target type says so.
                 convert_edges.push((
@@ -1030,8 +1026,8 @@ impl JniGen {
                     (Direction::Input, TypeKey::from_type(&ty)),
                 ));
             }
-            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, registry) {
-                registry.cross(Direction::Output, &ty);
+            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, &registry) {
+                registry = registry.cross(Direction::Output, &ty);
                 convert_edges.push((
                     (Direction::Output, decl.key.clone()),
                     (Direction::Output, TypeKey::from_type(&ty)),
@@ -1039,27 +1035,28 @@ impl JniGen {
             }
         }
         for (from, on) in convert_edges {
-            registry.depends(from, on);
+            registry = registry.depends(from, on);
         }
         // How composites cross in pieces. Every one of these reads only the
         // model, which is what lets them be stated here rather than asked for
         // mid-resolve.
-        registry.decompose(crate::core::Decompositions {
+        let decompositions = crate::core::Decompositions {
             expansions: Some(self.build_expansions()),
-            deconstructors: Some(self.build_deconstructors(registry)),
-            value_structs: self.build_value_struct_decons(registry),
-            sums: self.build_sum_decons(registry),
-            leaf_vec_elements: self.build_leaf_vec_fold_elements(registry),
+            deconstructors: Some(self.build_deconstructors(&registry)),
+            value_structs: self.build_value_struct_decons(&registry),
+            sums: self.build_sum_decons(&registry),
+            leaf_vec_elements: self.build_leaf_vec_fold_elements(&registry),
             replaces: self.boundary_only_types(),
-        });
-        Ok(())
+        };
+        registry = registry.decompose(decompositions);
+        Ok(registry)
     }
 }
 
 impl JniGen {
     pub(crate) fn build_value_struct_decons(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Vec<crate::api::core::unfold::ValueDecon> {
         let mut out = Vec::new();
         for (ident, item_struct) in registry.flat().types().filter_map(|t| match t {
@@ -1099,7 +1096,7 @@ impl JniGen {
 
     pub(crate) fn build_sum_decons(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Vec<crate::api::core::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -1126,7 +1123,7 @@ impl JniGen {
 
     pub(crate) fn build_leaf_vec_fold_elements(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
     ) -> Vec<syn::Type> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
@@ -1209,17 +1206,17 @@ impl Prebindgen for JniGen {
     /// the earliest possible moment. Without this, a receiver-less `.method()`
     /// member would silently emit a method that ignores `this`, and a
     /// wrong-return `.constructor()` a factory of the wrong type.
-    fn validate(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+    fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
         // Report what this binding left unclaimed. Here because it is the
         // earliest generator-owned hook that sees the model, and it runs
-        // exactly where the registry used to print these itself. Moves into
+        // exactly where the binding used to print these itself. Moves into
         // `JniGen::generate` once that exists (prebindgen#251 phase E).
-        crate::core::warn_unclaimed(registry.flat(), &self.claimed());
+        crate::core::warn_unclaimed(binding.flat(), &self.claimed());
 
         for (key, members) in &self.class_members {
             for m in members {
-                // A registry-absent fn already hard-errored in the scan.
-                let Some(item_fn) = registry
+                // A binding-absent fn already hard-errored in the scan.
+                let Some(item_fn) = binding
                     .flat()
                     .function(&m.rust_ident)
                     .map(|func| &func.origin.syntax)
@@ -1290,7 +1287,7 @@ impl Prebindgen for JniGen {
         // something that must not exist. Reject them here, where the message
         // can say what is actually unsupported and what to write instead.
         for ident in self.declared_functions() {
-            let Some(item_fn) = registry
+            let Some(item_fn) = binding
                 .flat()
                 .function(&ident)
                 .map(|func| &func.origin.syntax)
@@ -1305,7 +1302,7 @@ impl Prebindgen for JniGen {
             if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
                 if let Some(ok) = crate::api::core::types_util::result_ok_type(ret) {
                     let core = crate::api::core::types_util::peel_ref_option_vec(&ok);
-                    if matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding, &core), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
                              supported in the success position of a fallible return. A sum \
@@ -1343,7 +1340,7 @@ impl Prebindgen for JniGen {
                         .return_expand_decls
                         .iter()
                         .any(|d| d.key == TypeKey::from_type(&err_ty));
-                    if !declared && matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                    if !declared && matches!(self.type_kind(binding, &core), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
                              but nothing decomposes it in the error position, so it would be \
@@ -1393,7 +1390,7 @@ impl Prebindgen for JniGen {
                         syn::Type::Reference(r) => (*r.elem).clone(),
                         other => other.clone(),
                     };
-                    if matches!(self.type_kind(registry, &elem), TypeKind::Sum) {
+                    if matches!(self.type_kind(binding, &elem), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
                              is not supported as a callback argument. A sum crosses as a tag \

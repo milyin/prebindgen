@@ -8,6 +8,7 @@ use crate::api::core::{
     flat::Flat,
     niches::Niches,
     prebindgen::{ConverterImpl, Prebindgen},
+    registry::RegistryBuilder,
 };
 
 /// Push-then-resolve, the way a real generator's `resolve` does. Test-only:
@@ -32,23 +33,17 @@ impl AsStub for StubExt {
     }
 }
 
-impl DeclareAndResolve<()> for Registry<()> {
-    fn declare_and_resolve<E>(mut self, ext: E) -> Result<Generation<E>, WriteRustError>
+impl DeclareAndResolve<()> for RegistryBuilder<()> {
+    fn declare_and_resolve<E>(self, ext: E) -> Result<Generation<E>, WriteRustError>
     where
         E: Prebindgen<Metadata = ()> + AsStub,
     {
-        ext.stub().declare_into_any(&mut self)?;
-        self.prepare(&ext)?;
-        // The generator's loop, as a real one does it.
-        let order = self.crossings();
-        let mut built = HashMap::new();
-        for crossing in &order {
-            if let Some(c) = ext.converter(&crossing.1.to_type()) {
-                built.insert(crossing.clone(), TypeEntry::from_converter(c));
-            }
-        }
-        self.supply(built)?;
-        self.finish(ext)
+        ext.stub()
+            .declare_into_any(self)?
+            .validate_with(&ext)?
+            .convert_with(|crossing, _built| ext.converter(&crossing.1.to_type()))?
+            .build()?
+            .finish(ext)
     }
 }
 
@@ -67,26 +62,29 @@ struct StubExt {
 impl StubExt {
     /// Push what this stub declares, the way a real generator does. Generic
     /// over `M` so a stub can configure any adapter's registry.
-    fn declare_into_any<M>(&self, reg: &mut Registry<M>) -> Result<(), ScanError> {
+    fn declare_into_any<M>(
+        &self,
+        mut reg: RegistryBuilder<M>,
+    ) -> Result<RegistryBuilder<M>, ScanError> {
         for (item_fn, origin) in self.local_fns.clone() {
-            reg.local_function(item_fn, origin)?;
+            reg = reg.local_function(item_fn, origin)?;
         }
         for i in &self.functions {
-            reg.export(i);
+            reg = reg.export(i);
         }
         for i in &self.helper_functions {
-            reg.reference(i);
+            reg = reg.reference(i);
         }
         if let Some(consts) = &self.consts {
-            reg.declares_consts();
+            reg = reg.declares_consts();
             for i in consts {
-                reg.export_const(i);
+                reg = reg.export_const(i);
             }
         }
         for k in &self.types {
-            reg.export_type(k.clone());
+            reg = reg.export_type(k.clone());
         }
-        Ok(())
+        Ok(reg)
     }
 }
 
@@ -118,10 +116,13 @@ fn fn_item(src: &str) -> (syn::Item, SourceLocation) {
 #[test]
 fn scan_declared_empty_ext_marks_nothing_required() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let ext = StubExt::default();
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared().expect("empty ext = no scan");
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .expect("empty ext = no scan");
     assert!(!reg.input_types.values().any(|c| c.root));
     assert!(!reg.output_types.values().any(|c| c.root));
 }
@@ -132,11 +133,14 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
         fn_item("fn a(x: u64) -> u64 { x }"),
         fn_item("fn b(x: u32) -> u32 { x }"),
     ];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("a").unwrap());
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared().unwrap();
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .unwrap();
     let is_root = |t: &HashMap<TypeKey, TypeCell<()>>, k: &str| {
         t.get(&TypeKey::parse(k).expect("test type"))
             .is_some_and(|c| c.root)
@@ -152,16 +156,16 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
 #[test]
 fn scan_declared_missing_function_is_hard_error() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("good").unwrap());
     ext.functions.insert(syn::parse_str("typo_fn").unwrap());
-    ext.declare_into_any(&mut reg).expect("declare");
-    match reg.scan_declared() {
+    match ext.declare_into_any(reg).expect("declare").scanned() {
         Err(ScanError::DeclaredNotFound { entries }) => {
             assert_eq!(entries, vec![("function", "typo_fn".to_string())]);
         }
-        other => panic!("expected DeclaredNotFound, got {:?}", other),
+        Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
+        Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
     }
 }
 
@@ -170,14 +174,13 @@ fn scan_declared_missing_function_is_hard_error() {
 #[test]
 fn scan_declared_collects_all_missing_kinds_in_one_error() {
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("typo_fn").unwrap());
     ext.helper_functions
         .insert(syn::parse_str("typo_helper").unwrap());
     ext.consts = Some(HashSet::from([syn::parse_str("TYPO_CONST").unwrap()]));
-    ext.declare_into_any(&mut reg).expect("declare");
-    match reg.scan_declared() {
+    match ext.declare_into_any(reg).expect("declare").scanned() {
         Err(ScanError::DeclaredNotFound { entries }) => {
             assert_eq!(
                 entries,
@@ -191,7 +194,8 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
             let msg = ScanError::DeclaredNotFound { entries }.to_string();
             assert!(msg.contains("typo_fn") && msg.contains("TYPO_CONST"));
         }
-        other => panic!("expected DeclaredNotFound, got {:?}", other),
+        Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
+        Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
     }
 }
 
@@ -347,7 +351,8 @@ fn from_items_records_origins_from_location_stamps() {
     let f_b: syn::ItemFn = syn::parse_str("fn from_helper(x: u64) -> u64 { x }").unwrap();
     let a = vec![(syn::Item::Fn(f_a), loc("flat-crate"))];
     let b = vec![(syn::Item::Fn(f_b), loc("helper-crate"))];
-    let reg: Registry<()> = crate::api::test_util::reg_from_items(a.into_iter().chain(b)).unwrap();
+    let reg: RegistryBuilder<()> =
+        crate::api::test_util::reg_from_items(a.into_iter().chain(b)).unwrap();
 
     let path = |p: syn::Path| p.to_token_stream().to_string();
     assert_eq!(
@@ -387,7 +392,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
     }
     impl Prebindgen for FailingExt {
         type Metadata = ();
-        fn validate(&self, _registry: &Registry<()>) -> Result<(), String> {
+        fn validate(&self, _binding: &Building<'_, ()>) -> Result<(), String> {
             Err("member fun `f` has no receiver".to_string())
         }
         fn on_function(&self, f: &syn::ItemFn, r: &Registry<()>) -> TokenStream {
@@ -401,7 +406,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
         }
     }
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
-    let reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let err = reg
         .declare_and_resolve(FailingExt(StubExt::default()))
         .expect_err("validate Err must abort resolve");
@@ -472,13 +477,16 @@ fn qualified_signature_matches_bare_declaration() {
         (syn::Item::Struct(s), crate_loc("myflat")),
         (syn::Item::Fn(f), crate_loc("myflat")),
     ];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("get").unwrap());
     ext.types
         .insert(TypeKey::parse("Thing").expect("test type"));
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared().unwrap();
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .unwrap();
     assert!(reg.input_types[&TypeKey::parse("&Thing").expect("test type")].root);
     assert!(reg.output_types[&TypeKey::parse("Vec<Thing>").expect("test type")].root);
     // No spelling-variant duplicate cells survive anywhere.
@@ -503,15 +511,18 @@ fn multi_source_rename_cross_reference_normalizes() {
         (syn::Item::Struct(b_ty), crate_loc("cov-helpers")),
         (syn::Item::Struct(a_ty), crate_loc("srca")),
     ];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("use_a").unwrap());
     ext.types
         .insert(TypeKey::parse("TypeA").expect("test type"));
     ext.types
         .insert(TypeKey::parse("TypeB").expect("test type"));
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared().unwrap();
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .unwrap();
     assert!(reg.input_types[&TypeKey::parse("&TypeA").expect("test type")].root);
     assert!(reg.output_types[&TypeKey::parse("TypeB").expect("test type")].root);
 }
@@ -523,12 +534,11 @@ fn qualified_declared_type_is_hard_error() {
     // a collected hard error with the bare fix-it, not a silent miss.
     let s: syn::ItemStruct = syn::parse_str("pub struct Thing { pub v: u64 }").unwrap();
     let items = vec![(syn::Item::Struct(s), crate_loc("myflat"))];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.types
         .insert(TypeKey::parse("myflat::Thing").expect("test type"));
-    ext.declare_into_any(&mut reg).expect("declare");
-    match reg.scan_declared() {
+    match ext.declare_into_any(reg).expect("declare").scanned() {
         Err(ScanError::QualifiedDeclaredTypes { entries }) => {
             assert_eq!(entries.len(), 1);
             assert_eq!(entries[0].0, "myflat :: Thing");
@@ -536,7 +546,8 @@ fn qualified_declared_type_is_hard_error() {
             let msg = ScanError::QualifiedDeclaredTypes { entries }.to_string();
             assert!(msg.contains("declare it as `Thing`"), "{msg}");
         }
-        other => panic!("expected QualifiedDeclaredTypes, got {:?}", other),
+        Ok(_) => panic!("expected QualifiedDeclaredTypes, scan succeeded"),
+        Err(other) => panic!("expected QualifiedDeclaredTypes, got {other:?}"),
     }
 }
 
@@ -546,12 +557,14 @@ fn foreign_qualified_declared_type_stays_supported() {
     // module, so the declaration passes through verbatim and is marked
     // required under its own spelling (the no-indexed-body arm).
     let items = vec![fn_item("fn touch(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     let foreign = TypeKey::parse("zenoh::KeyExpr<'static>").expect("test type");
     ext.types.insert(foreign.clone());
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared()
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
         .expect("foreign qualified declaration is supported");
     assert!(reg.input_types[&foreign].root);
     assert!(reg.output_types[&foreign].root);
@@ -603,8 +616,8 @@ fn fn_ident(name: &str) -> syn::Ident {
 #[test]
 fn builder_reads_a_source_directory() {
     let dir = write_source_dir("plain", "flat-crate", "marked_fn");
-    let registry: Registry<()> =
-        Registry::new(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
+    let registry: RegistryBuilder<()> =
+        Registry::builder(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
 
     assert!(registry
         .flat()
@@ -629,14 +642,14 @@ fn builder_source_named_overrides_the_captured_crate() {
     let dir = write_source_dir("renamed", "real-package-name", "helper_fn");
 
     // Without the override, the registry believes the package name.
-    let plain: Registry<()> =
-        Registry::new(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
+    let plain: RegistryBuilder<()> =
+        Registry::builder(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
     assert_eq!(
         plain.origin_module(&fn_ident("helper_fn")).map(module),
         Some("real_package_name".to_string())
     );
 
-    let renamed: Registry<()> = Registry::new(
+    let renamed: RegistryBuilder<()> = Registry::builder(
         Flat::builder()
             .source_named(&dir, "as_renamed")
             .build()
@@ -661,7 +674,7 @@ fn builder_composes_directories_and_streams() {
     let flat = write_source_dir("multi_flat", "flat-crate", "flat_fn");
     let helper = write_source_dir("multi_helper", "real-helper-name", "helper_fn");
 
-    let registry: Registry<()> = Registry::new(
+    let registry: RegistryBuilder<()> = Registry::builder(
         Flat::builder()
             .source(&flat)
             .source_named(&helper, "renamed_helper")
@@ -718,9 +731,9 @@ fn builder_composes_directories_and_streams() {
 fn builder_and_from_items_agree() {
     let dir = write_source_dir("agree", "flat-crate", "marked_fn");
 
-    let built: Registry<()> =
-        Registry::new(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
-    let streamed: Registry<()> =
+    let built: RegistryBuilder<()> =
+        Registry::builder(Flat::builder().source(&dir).build().expect("parses")).expect("indexes");
+    let streamed: RegistryBuilder<()> =
         crate::api::test_util::reg_from_items(crate::Source::new(&dir).items_all())
             .expect("indexes");
 
@@ -754,13 +767,16 @@ fn a_source_type_cell_carries_the_models_typeref() {
         crate_name: Some("myflat".into()),
     };
     let item: syn::Item = syn::parse_str("pub fn f(v: Option<u64>) -> u64 { v.unwrap() }").unwrap();
-    let mut reg: Registry<()> =
+    let reg: RegistryBuilder<()> =
         crate::api::test_util::reg_from_items([(item, loc.clone())]).unwrap();
 
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("f").unwrap());
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared().unwrap();
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .unwrap();
 
     let key = TypeKey::parse("Option<u64>").expect("test type");
     let cell = &reg.input_types[&key];
@@ -784,13 +800,16 @@ fn a_source_type_cell_carries_the_models_typeref() {
 #[test]
 fn an_adapter_authored_type_cell_has_no_source_reading() {
     let items = vec![fn_item("fn f(x: u64) -> u64 { x }")];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
 
     let mut ext = StubExt::default();
     ext.types
         .insert(TypeKey::parse("Foreign").expect("test type"));
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared().unwrap();
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .unwrap();
 
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
@@ -885,7 +904,7 @@ fn from_flat_projects_each_element_kind() {
         .items(items)
         .build()
         .expect("parse");
-    let reg: Registry<()> = Registry::new(flat).expect("project");
+    let reg: RegistryBuilder<()> = Registry::builder(flat).expect("project");
 
     let id = |n: &str| syn::parse_str::<syn::Ident>(n).unwrap();
     assert!(reg.flat().function(&id("f").to_string()).is_some());
@@ -987,7 +1006,7 @@ fn a_binding_local_fn_is_checked_against_the_grammar() {
         ("fn takes_impl(x: impl std::fmt::Debug) {}", "impl Trait"),
         ("async fn is_async() {}", "async"),
     ] {
-        let reg: Registry<()> =
+        let reg: RegistryBuilder<()> =
             crate::api::test_util::reg_from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")])
                 .unwrap();
         let ext = StubExt {
@@ -1014,7 +1033,7 @@ fn a_binding_local_fn_is_checked_against_the_grammar() {
 /// declared, which a binding-local fn legitimately may not be.
 #[test]
 fn a_well_formed_binding_local_fn_passes() {
-    let reg: Registry<()> =
+    let reg: RegistryBuilder<()> =
         crate::api::test_util::reg_from_items(vec![fn_item("fn good(x: u64) -> u64 { x }")])
             .unwrap();
     let ext = StubExt {
@@ -1060,7 +1079,7 @@ fn a_guard_never_reaches_the_const_surface() {
             loc.clone(),
         ),
     ];
-    let mut reg: Registry<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
 
     assert_eq!(reg.flat().guards().count(), 2);
     assert_eq!(reg.flat().constants().count(), 1);
@@ -1072,8 +1091,10 @@ fn a_guard_never_reaches_the_const_surface() {
         consts: Some(HashSet::new()),
         ..Default::default()
     };
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared().expect("guards are not declarable");
+    ext.declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .expect("guards are not declarable");
 }
 
 // ── One index: what the deleted maps used to guarantee ─────────────────
@@ -1086,7 +1107,7 @@ fn a_guard_never_reaches_the_const_surface() {
 /// one would move generated output. This is the assertion that keeps the filter.
 #[test]
 fn named_item_idents_omits_aliases() {
-    let reg: Registry<()> = crate::api::test_util::reg_with(&[
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_with(&[
         "pub fn f(x: u64) -> u64 { x }",
         "pub struct S { pub a: u64 }",
         "pub enum E { A }",
@@ -1114,7 +1135,7 @@ fn a_binding_local_fn_joins_the_index_but_not_the_source_modules() {
         crate_name: Some("myflat".into()),
         ..SourceLocation::default()
     };
-    let reg: Registry<()> = crate::api::test_util::reg_from_items(vec![(
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(vec![(
         syn::parse_quote!(
             pub fn captured(x: u64) -> u64 {
                 x
@@ -1156,7 +1177,7 @@ fn a_binding_local_fn_joins_the_index_but_not_the_source_modules() {
 /// which 30 adapter reads depend on.
 #[test]
 fn enum_item_answers_for_both_shapes() {
-    let reg: Registry<()> = crate::api::test_util::reg_with(&[
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_with(&[
         "pub enum Sum { A(u64), B }",
         "pub enum Flags { X = 1, Y = 2 }",
         "pub struct S { pub a: u64 }",
@@ -1180,7 +1201,7 @@ fn enum_item_answers_for_both_shapes() {
 /// captured item" about it is simply false.
 #[test]
 fn every_declared_type_counts_including_an_alias() {
-    let reg: Registry<()> = crate::api::test_util::reg_with(&[
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_with(&[
         "pub struct S { pub a: u64 }",
         "pub enum Sum { A(u64), B }",
         "pub enum Flags { X = 1 }",
@@ -1215,7 +1236,7 @@ fn every_declared_type_counts_including_an_alias() {
 /// `core::diagnostics::ignoring_an_alias_is_not_stale`.
 #[test]
 fn a_qualified_alias_warns_rather_than_failing() {
-    let mut reg: Registry<()> = crate::api::test_util::reg_with(&[
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_with(&[
         "pub type Handle = other::Inner;",
         "pub fn f(x: u64) -> u64 { x }",
     ]);
@@ -1223,8 +1244,9 @@ fn a_qualified_alias_warns_rather_than_failing() {
     // Head is NOT a source module, so this is the warn branch.
     ext.types
         .insert(TypeKey::parse("foreign::Handle").expect("test type"));
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared()
+    ext.declare_into_any(reg)
+        .expect("declare")
+        .scanned()
         .expect("an alias is a captured item; this must not fail");
 }
 
@@ -1279,7 +1301,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
     }
 
     // `Option<u64>` appears nowhere in the captured stream.
-    let reg: Registry<()> =
+    let reg: RegistryBuilder<()> =
         crate::api::test_util::reg_from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")])
             .unwrap();
     assert!(
@@ -1336,7 +1358,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
 /// position at all.
 #[test]
 fn an_unresolved_type_without_a_position_reports_none() {
-    let reg: Registry<()> =
+    let reg: RegistryBuilder<()> =
         crate::api::test_util::reg_from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")])
             .unwrap();
     let ext = StubExt {
@@ -1367,7 +1389,7 @@ fn an_unresolved_type_without_a_position_reports_none() {
     );
 
     // A captured item that DOES have a position still reports it.
-    let located: Registry<()> = crate::api::test_util::reg_from_items(vec![(
+    let located: RegistryBuilder<()> = crate::api::test_util::reg_from_items(vec![(
         syn::parse_quote!(
             pub fn f(x: u64) -> u64 {
                 x
@@ -1405,15 +1427,17 @@ fn an_unresolved_type_without_a_position_reports_none() {
 fn a_recursive_type_is_handed_out_once_and_terminates() {
     use std::collections::HashSet as Set;
 
-    let mut reg: Registry<()> = crate::api::test_util::reg_with(&[
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_with(&[
         "pub struct Node { pub next: Option<Box<Node>>, pub value: u64 }",
         "pub fn walk(n: &Node) -> u64 { n.value }",
     ]);
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("walk").unwrap());
     ext.types.insert(TypeKey::parse("Node").expect("test type"));
-    ext.declare_into_any(&mut reg).expect("declare");
-    reg.scan_declared()
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
         .expect("a recursive struct is scannable");
 
     // Terminates, and says each crossing exactly once.

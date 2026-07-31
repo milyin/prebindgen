@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::core::registry::RegistryBuilder;
 
 /// Emit the Kotlin surface for a `sealed_class!`-declared sum, optionally
 /// with a per-variant rename, and return the single generated file's text.
@@ -285,7 +286,7 @@ fn reopened_ptr_class_keeps_gc_managed() {
         )]
     };
     let gc_managed_of = |first: crate::lang::PtrClassDecl, second: crate::lang::PtrClassDecl| {
-        let registry: Registry<KotlinMeta> =
+        let registry: RegistryBuilder<KotlinMeta> =
             crate::api::test_util::reg_from_items(declare_referenced(items()))
                 .expect("index items");
         let jni = JniGen::new()
@@ -343,7 +344,7 @@ fn a_type_gets_one_class_declarator() {
         ]
     };
     let declare = |first: crate::lang::ClassDecl, second: crate::lang::ClassDecl| {
-        let registry: Registry<KotlinMeta> =
+        let registry: RegistryBuilder<KotlinMeta> =
             crate::api::test_util::reg_from_items(declare_referenced(items()))
                 .expect("index items");
         let _ = JniGen::new()

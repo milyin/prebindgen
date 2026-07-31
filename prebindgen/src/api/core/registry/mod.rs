@@ -176,6 +176,7 @@ mod walk;
 
 pub use self::{
     cell::{Direction, TypeEntry},
+    declare::RegistryBuilder,
     error::{DuplicateNameError, NotExpressibleEntry, ScanError, WriteRustError},
     generation::Generation,
     key::{TypeKey, TypeKeyParseError},
@@ -313,7 +314,7 @@ pub(crate) struct Declared {
 
 /// How a binding's composites cross **in pieces** instead of whole.
 ///
-/// One value, pushed once through [`Registry::decompose`], in place of the five
+/// One value, pushed once through `RegistryBuilder::decompose`, in place of the five
 /// separate hooks the registry used to call back for (`expansions`,
 /// `deconstructors`, `value_struct_decons`, `sum_decons`,
 /// `leaf_vec_fold_elements`). All five are implemented by one adapter and none

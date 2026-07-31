@@ -123,7 +123,7 @@ fn main() {
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .build()
         .expect("parse prebindgen items");
-    let registry = Registry::new(flat).expect("scan prebindgen items");
+    let registry = Registry::builder(flat).expect("describe the binding");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
