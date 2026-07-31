@@ -1191,3 +1191,84 @@ fn enum_item_answers_for_both_shapes() {
     assert!(reg.flat().struct_type("S").is_some());
     assert!(reg.flat().struct_type("Sum").is_none());
 }
+
+// ── An alias is a declaration of its name ──────────────────────────────
+
+/// The predicate both type diagnostics gate on counts **every** declared type,
+/// alias included.
+///
+/// An alias was excluded because the pre-`Flat` code asked the `structs`/`enums`
+/// maps, which never held one. That was an artefact of where the answer came
+/// from, not a decision: `#[prebindgen] pub type Handle = ..` declares the name
+/// `Handle`, an adapter may declare it bare, and a diagnostic that says "no such
+/// captured item" about it is simply false.
+#[test]
+fn every_declared_type_counts_including_an_alias() {
+    let reg: Registry<()> = crate::api::test_util::reg_with(&[
+        "pub struct S { pub a: u64 }",
+        "pub enum Sum { A(u64), B }",
+        "pub enum Flags { X = 1 }",
+        "pub type Handle = other::Inner;",
+        "pub fn f(x: u64) -> u64 { x }",
+        "pub const K: u64 = 7;",
+    ]);
+    let id = |n: &str| syn::parse_str::<syn::Ident>(n).unwrap();
+
+    for name in ["S", "Sum", "Flags", "Handle"] {
+        assert!(
+            reg.declares_type(&id(name)),
+            "`{name}` is a declared type and must count"
+        );
+    }
+    // Not types: a fn and a const share the flat namespace but declare no type.
+    for name in ["f", "K", "Absent"] {
+        assert!(!reg.declares_type(&id(name)), "`{name}` declares no type");
+    }
+
+    // The sibling that must NOT change: it feeds a "skipping undeclared
+    // struct/enum" warning, so an alias — which is neither — stays out.
+    let bodies: HashSet<String> = reg.struct_enum_idents().map(|i| i.to_string()).collect();
+    assert_eq!(
+        bodies,
+        ["S", "Sum", "Flags"]
+            .map(String::from)
+            .into_iter()
+            .collect(),
+        "struct_enum_idents feeds a struct/enum message and must exclude aliases"
+    );
+}
+
+/// Both diagnostic sites reach the predicate for an alias, and neither errors.
+///
+/// `scan_declared` is the entry point for both: a path-qualified declared type
+/// whose tail names an alias (the "did you mean the bare name?" heuristic) and
+/// an ignored type that names one (the "not found among #[prebindgen] items"
+/// check). The messages themselves are `cargo:warning=` on stdout and are not
+/// captured here — what this pins is that an alias flows through the same path a
+/// struct does, without the `QualifiedDeclaredTypes` hard error.
+#[test]
+fn an_alias_flows_through_both_type_diagnostics() {
+    let build = |declare_qualified: bool| {
+        let reg: Registry<()> = crate::api::test_util::reg_with(&[
+            "pub type Handle = other::Inner;",
+            "pub fn f(x: u64) -> u64 { x }",
+        ]);
+        let mut ext = StubExt::default();
+        if declare_qualified {
+            // Head is NOT a source module, so this is the warn-and-pass-through
+            // branch rather than the hard error.
+            ext.types
+                .insert(TypeKey::parse("foreign::Handle").expect("test type"));
+        } else {
+            ext.ignored_types
+                .insert(TypeKey::parse("Handle").expect("test type"));
+        }
+        (reg, ext)
+    };
+
+    for qualified in [true, false] {
+        let (mut reg, ext) = build(qualified);
+        reg.scan_declared(&ext)
+            .expect("an alias is a captured item; neither site may fail");
+    }
+}

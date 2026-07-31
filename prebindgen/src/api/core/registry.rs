@@ -876,9 +876,14 @@ impl<M> Registry<M> {
         })
     }
 
-    /// Every **declared type** name — struct or either enum shape, never an
-    /// alias. The set the old `structs`/`enums` map keys formed together.
-    fn declared_type_idents(&self) -> impl Iterator<Item = &syn::Ident> {
+    /// Every **struct or enum** name — either enum shape, never an alias.
+    ///
+    /// Named for its population rather than as the iterator form of
+    /// [`Self::declares_type`], which it is **not**: that predicate counts every
+    /// declared type, aliases included. This one feeds *"skipping undeclared
+    /// `#[prebindgen]` struct/enum"*, which names a kind an alias is not — so the
+    /// two answer differently on purpose, and the names now say so.
+    fn struct_enum_idents(&self) -> impl Iterator<Item = &syn::Ident> {
         use crate::api::core::flat::Type;
         self.flat.types().filter_map(|t| match t {
             Type::Struct(_) | Type::Variant(_) | Type::Enum(_) => Some(t.name()),
@@ -886,14 +891,21 @@ impl<M> Registry<M> {
         })
     }
 
-    /// Whether a name declares a type with a **body** — a struct or either enum
-    /// shape, never an alias.
+    /// Whether the source declares a type under this name — **including an
+    /// alias**.
     ///
-    /// The predicate form of [`Self::declared_type_idents`], shared so its two
-    /// callers cannot drift: both warn about a declared-or-ignored type the
-    /// source does not define, and both must answer the same way about an alias.
-    fn declares_type_body(&self, ident: &syn::Ident) -> bool {
-        self.flat.struct_type(ident).is_some() || self.flat.enum_item(ident).is_some()
+    /// The question both type-diagnostic sites ask, shared so they cannot drift.
+    /// An alias counts because `#[prebindgen] pub type Handle = ..` *is* a
+    /// declaration of that name: it can be declared bare by an adapter (landing
+    /// in the no-indexed-body branch above, which is what
+    /// `ptr_class(ZKeyExpr<'static>)` relies on), so a diagnostic that says
+    /// "no such captured item" would be false.
+    ///
+    /// Distinct from [`Self::struct_enum_idents`], which excludes aliases
+    /// because it feeds a *"skipping undeclared struct/enum"* warning — a
+    /// different question, about what an adapter left unclaimed.
+    fn declares_type(&self, ident: &syn::Ident) -> bool {
+        self.flat.declared_type(ident).is_some()
     }
 
     /// The origin crate's **module path** for an item, read off the element's
@@ -999,7 +1011,7 @@ impl<M> Registry<M> {
             let last = tp.path.segments.last().expect("len checked");
             if self.flat.source_modules().contains(&head) {
                 qualified.push((key.to_string(), last.to_token_stream().to_string()));
-            } else if self.declares_type_body(&last.ident) {
+            } else if self.declares_type(&last.ident) {
                 println!(
                     "cargo:warning=prebindgen: declared type `{}` is path-qualified, but a \
                      captured #[prebindgen] item `{}` exists — if you meant the source item, \
@@ -1114,7 +1126,7 @@ impl<M> Registry<M> {
 
         for key in &declared.ignored_types {
             let ty = key.to_type();
-            let matched = bare_path_ident(&ty).is_some_and(|ident| self.declares_type_body(&ident));
+            let matched = bare_path_ident(&ty).is_some_and(|ident| self.declares_type(&ident));
             if !matched {
                 println!(
                     "cargo:warning=prebindgen: ignored type `{}` not found among #[prebindgen] items",
@@ -1158,7 +1170,7 @@ impl<M> Registry<M> {
                 || declared.ignored_types.contains(key)
                 || declared.boundary_only_types.contains(key)
         };
-        for ident in self.declared_type_idents() {
+        for ident in self.struct_enum_idents() {
             let name = ident.to_string();
             let key = TypeKey::from_ident(ident);
             if !type_acknowledged(&key) && !pred_ignored(&name) {
