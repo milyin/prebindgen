@@ -1367,3 +1367,71 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
     );
     assert!(matches!(cell.subject.kind(), Some(TypeKind::Optional(_))));
 }
+
+/// A type with no source position must not get an invented one.
+///
+/// Three facts have to stay apart: a type can have a **frontend reading**
+/// (`TypeSubject::Source`), a **reportable position**, or neither. A
+/// binding-local fn's parameter types have the first and not the second —
+/// `lower_signature` lowers them against `SourceLocation::default()`, since
+/// `Origin` needs a location and a `sig!(..)` has no file.
+///
+/// Indexing those types (this PR) flipped their cells from `Adapter` to
+/// `Source`, and `location()` returned the default unconditionally, so the
+/// diagnostic read `:0:0: error:` — a position that looks real. The same fault
+/// already showed for any hand-built stream, whose captured items also carry
+/// default locations; both are fixed by asking whether the location has a
+/// position at all.
+#[test]
+fn an_unresolved_type_without_a_position_reports_none() {
+    let reg: Registry<()> =
+        Registry::from_items(vec![fn_item("fn captured(x: u64) -> u64 { x }")]).unwrap();
+    let ext = StubExt {
+        local_fns: vec![(
+            syn::parse_str("fn helper(v: Option<u64>) -> u64 { 0 }").unwrap(),
+            "helpers".into(),
+        )],
+        functions: ["helper"]
+            .iter()
+            .map(|s| syn::parse_str(s).unwrap())
+            .collect(),
+        ..Default::default()
+    };
+    // `StubExt` supplies no converters, so every scanned type is unresolved:
+    // `Option<u64>` reached only through the local fn, `u64` through both.
+    let err = reg.resolve(ext).expect_err("StubExt resolves nothing");
+    let msg = err.to_string();
+
+    assert!(
+        !msg.contains(":0:0:"),
+        "no file and no line means no position to print:\n{msg}"
+    );
+    assert!(
+        msg.contains("error: unresolved prebindgen input type `Option < u64 >`"),
+        "the local-only type is still reported, just without a position:\n{msg}"
+    );
+
+    // A captured item that DOES have a position still reports it.
+    let located: Registry<()> = Registry::from_items(vec![(
+        syn::parse_quote!(
+            pub fn f(x: u64) -> u64 {
+                x
+            }
+        ),
+        SourceLocation {
+            file: "src/lib.rs".into(),
+            line: 12,
+            column: 3,
+            crate_name: Some("myflat".into()),
+        },
+    )])
+    .unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("f").unwrap());
+    let err = located.resolve(ext).expect_err("StubExt resolves nothing");
+    assert!(
+        err.to_string().contains("src/lib.rs:12:3: error:"),
+        "a real position must still be reported:\n{}",
+        err
+    );
+}

@@ -445,8 +445,11 @@ pub struct Flat {
     by_name: std::collections::HashMap<String, usize>,
     /// Normalized type spelling → this module's reading of it.
     ///
-    /// The keyed form of [`Self::type_refs`]: a consumer holding a `syn::Type`
-    /// asks what the frontend made of it without lowering it a second time.
+    /// Every type the API **mentions** — a parameter, a return, a field, a
+    /// constant's type, and everything nested inside those — keyed so a consumer
+    /// holding a `syn::Type` can ask what the frontend made of it without
+    /// lowering it a second time.
+    ///
     /// A type mentioned in several places keeps the **first mention in element
     /// order**, a property of the model rather than of ingestion order.
     ///
@@ -586,24 +589,6 @@ impl Flat {
             Element::Constant(c) => Some(c),
             _ => None,
         })
-    }
-
-    /// Every type the API **mentions**, at every nesting depth — as distinct from
-    /// [`Self::types`], which is every type it **declares**.
-    ///
-    /// A parameter, a return, a field, a constant's type, and everything reachable
-    /// inside those. The same type mentioned in several places yields one
-    /// [`TypeRef`] per mention, each with its own spelling and origin; a consumer
-    /// that wants one per type indexes them and picks, and element order makes
-    /// that pick deterministic.
-    ///
-    /// This is how a later stage gets the frontend's reading of a type it holds
-    /// only as syntax, without lowering it a second time.
-    pub fn type_refs(&self) -> impl Iterator<Item = &TypeRef> {
-        self.elements
-            .iter()
-            .flat_map(element_type_refs)
-            .flat_map(TypeRef::walk)
     }
 
     /// The `struct` declared under this name, or `None` for any other shape.

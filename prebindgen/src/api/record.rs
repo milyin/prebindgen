@@ -47,6 +47,20 @@ impl std::fmt::Display for SourceLocation {
 }
 
 impl SourceLocation {
+    /// Whether this names an actual place in an actual file.
+    ///
+    /// Not everything with a `SourceLocation` has one. A signature a build
+    /// script wrote (`sig!(..)`), or a hand-built item stream in a test, is
+    /// lowered against [`SourceLocation::default`] because [`Origin`] requires
+    /// *a* location — but there is no file and no line, and a diagnostic that
+    /// renders it anyway emits `:0:0:`, which reads as a real position and is
+    /// worse than saying nothing.
+    ///
+    /// [`Origin`]: crate::core::flat::Origin
+    pub fn has_position(&self) -> bool {
+        !self.file.is_empty()
+    }
+
     pub fn from_span(span: &proc_macro2::Span) -> Self {
         if_rust_version::if_rust_version! { >= 1.88 {
             // Convert proc_macro2::Span to proc_macro::Span to access file() method

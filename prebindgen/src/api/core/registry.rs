@@ -155,7 +155,11 @@ impl TypeSubject {
     /// Where the source wrote this type, or `None` when no source did.
     pub fn location(&self) -> Option<&SourceLocation> {
         match self {
-            TypeSubject::Source(t) => Some(&t.origin.location),
+            // Having a reading and having a reportable position are different
+            // facts: a binding-local fn's types are lowered — so they have
+            // readings — against no file at all. Reporting `:0:0` would invent a
+            // position; `None` says what is true.
+            TypeSubject::Source(t) => Some(&*t.origin.location).filter(|l| l.has_position()),
             TypeSubject::Adapter(_) => None,
         }
     }
