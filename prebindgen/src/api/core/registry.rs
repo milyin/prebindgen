@@ -1,16 +1,74 @@
-//! Single owner of everything parsed from the prebindgen source stream.
+//! Which type conversions a binding needs, and whether it has them all.
 //!
-//! [`Registry`] holds:
-//! * Item maps (`functions`, `structs`, `enums`, `consts`) indexed by ident.
-//!   Duplicate names across kinds OR within a kind are an error — prebindgen
-//!   items live in one flat namespace.
-//! * `guards` — anonymous consts, emitted verbatim. Not API: having no name,
-//!   they cannot be declared, so they are neither gated nor addressable.
-//! * `input_types` / `output_types` — direction-specific type tables. Each
-//!   scanned type maps to either a resolved [`TypeEntry`] or an unresolved cell
-//!   that the fixed-point resolver can retry.
-//! * Expansion/deconstruction sidecars — adapter declarations are resolved into
-//!   plans before type resolution, then consumed at wrapper-emission sites.
+//! # The boundary
+//!
+//! [`Flat`](crate::core::flat::Flat) describes the source Rust code. A binding
+//! puts a wrapper on each side of an FFI boundary — generated Rust that the
+//! destination language can call, and destination-language code shaped to match
+//! it (`#[repr(C)]` structs and a C header; JNI externs and Kotlin classes).
+//!
+//! ```text
+//!    source flat API              generated wrapper            destination
+//!    (idiomatic Rust)                                            language
+//!    ────────────────             ─────────────────            ────────────
+//!    fn ledger_filed(&Ledger) ──► #[no_mangle] extern fn  ◄──►  external fun
+//!         -> Option<Report>         (jlong) -> jlong             fun filed(): Report?
+//!                                       ▲
+//!                                       └── the boundary: the WIRE
+//!                                           jlong / jint / jobject  (JNI)
+//!                                           *const T / size_t       (C)
+//! ```
+//!
+//! The wrapper's **body** speaks source Rust; its **signature** speaks wire. The
+//! translation between the two is a *conversion*, and collecting them is this
+//! module's whole job.
+//!
+//! # What a conversion is
+//!
+//! A [`TypeEntry`]: a `destination` (the wire type), a wire-facing `function`,
+//! and `pre_stages` — the Rust-side stages that compose with it. **A chain, not a
+//! function**, which is how composition works: `Option<Handle>`'s chain embeds
+//! `Handle`'s.
+//!
+//! A composite need not cross whole. `Option<T>` may cross as a `T` carrying a
+//! niche value, as a `(bool, T)` pair, or as leaves delivered separately — which,
+//! is the adapter's choice, and the registry records it so the emitter can call
+//! it by name and the destination side can be written to match.
+//!
+//! Conversions are **directional**: [`Registry::input_types`] and
+//! [`Registry::output_types`] are separate. `&str` inbound is a `jstring` to decode,
+//! outbound a `jstring` to allocate, and one direction may be convertible while
+//! the other is not. A callback flips it — `impl Fn(Sample)` is an *input* whose
+//! argument crosses *outbound*.
+//!
+//! # What the registry does
+//!
+//! It **derives** the set, then **checks it is complete**.
+//!
+//! A binding names a surface: these functions, these types, these consts. Far
+//! more types than that must convert — parameter and return types, type
+//! arguments, struct fields, enum payloads, callback arguments in the flipped
+//! direction, and the leaves a decomposed value arrives in. Computing that
+//! closure is the work; completeness is meaningful precisely because the set is
+//! derived here rather than handed over.
+//!
+//! **It never writes a conversion.** It cannot — only a language adapter knows
+//! what a `jlong` handle or a `*const T` is. The registry decides *which* are
+//! needed, asks the adapter for each, and fails naming any that could not be
+//! supplied.
+//!
+//! # In, and out
+//!
+//! | in | |
+//! |---|---|
+//! | the model | [`Flat`](crate::core::flat::Flat) — what the source offers |
+//! | the crossings | which `(direction, type)` pairs actually cross |
+//! | the decompositions | how a composite crosses in pieces: which leaf crossings that adds, and which whole-value crossing it removes |
+//! | a conversion builder | the [`Prebindgen`] adapter |
+//!
+//! Out: a conversion for every type in the closure — or a failure naming the
+//! ones that must convert and cannot. The emitter then writes the file: the
+//! conversions, and the per-item wrappers that call them.
 
 use std::{
     collections::{HashMap, HashSet},
