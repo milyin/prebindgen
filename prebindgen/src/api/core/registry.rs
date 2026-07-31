@@ -69,6 +69,65 @@
 //! Out: a conversion for every type in the closure — or a failure naming the
 //! ones that must convert and cannot. The emitter then writes the file: the
 //! conversions, and the per-item wrappers that call them.
+//!
+//! # Using a registry
+//!
+//! **Configure it, hand over the answers, read it.** In that order, once each:
+//!
+//! ```text
+//!   configure   new(flat) · export(name) · decompose(d)
+//!      ↓
+//!   the demand  crossings()  → every crossing needing a conversion,
+//!      ↓                       sorted so each type's inners come first
+//!   the answers supply(map)  → fails naming any reachable crossing with none
+//!      ↓
+//!   read        flat · exports · conversion(dir, ty) · decomposition(site) · …
+//! ```
+//!
+//! ```ignore
+//! let mut reg = Registry::new(flat)?;
+//! for name in &self.exported     { reg.export(name)?; }
+//! for d in self.decompositions() { reg.decompose(d)?; }
+//!
+//! // The generator's own loop, over a plain Vec — the registry is not in it.
+//! let mut built = HashMap::new();
+//! for c in reg.crossings() {
+//!     // `c`'s inners are already in `built`: that is what sorted means.
+//!     if let Some(conv) = self.convert(&c, &built) { built.insert(c, conv); }
+//! }
+//! reg.supply(built)?;
+//!
+//! self.emit(&reg, out)   // read-only from here
+//! ```
+//!
+//! **Nothing here calls back into the generator** — not by trait hook, and not
+//! by a `next_request`/`supply` pull loop either, which is the same protocol
+//! with the arrow flipped. The registry answers one question and grades one
+//! answer.
+//!
+//! What makes a single hand-off possible is the **sort**. The demand's edges
+//! (`immediate_edges` — generic arguments, tuple/reference/slice targets,
+//! declared struct fields, and `impl Fn` arguments with the direction flipped)
+//! are structural, so they are known without asking anyone. Ordering
+//! the closure by them means a generator building `Option<Handle>` already holds
+//! `Handle`, which is why it can work from a flat list instead of being called
+//! back per type. It also means each crossing is offered exactly once: a
+//! generator's `None` says *cannot*, never *not yet*.
+//!
+//! A `None` is not itself a failure. The scan over-approximates deliberately
+//! (see [`TypeCell::root`]); whether a gap matters is reachability from the
+//! exports, which `supply` decides.
+//!
+//! **Cycles** are the one place the order cannot be honoured: a self-referential
+//! type (`struct Node { next: Option<Box<Node>> }`) has none. `crossings` breaks
+//! such a cycle at its entry, so exactly one member is offered before an inner
+//! it contains. A generator that cannot build it omits it, and it is reported
+//! like any other gap.
+//!
+//! Direction is a **parameter**, never part of a name: [`Direction`] already
+//! carries it, and one `conversion(dir, ty)` cannot drift the way an
+//! `input_`/`output_` pair can — as `required_output_types`, which never grew an
+//! input peer, shows.
 
 use std::{
     collections::{HashMap, HashSet},
