@@ -276,7 +276,7 @@ impl<M> Registry<M> {
     pub(super) fn ensure_entry(&mut self, dir: Direction, ty: &syn::Type, root: bool) {
         let key = TypeKey::from_type(ty);
         let subject = match self.flat.type_ref(ty) {
-            Some(t) => TypeSubject::Source(t.clone()),
+            Some(t) => TypeSubject::Source(Box::new(t.clone())),
             None => TypeSubject::Adapter,
         };
         let cell = self

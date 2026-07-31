@@ -11,7 +11,7 @@ use super::*;
 #[derive(Clone, Debug)]
 pub(crate) enum TypeSubject {
     /// A type the flat API contains — the frontend's own reading, unmodified.
-    Source(crate::api::core::flat::TypeRef),
+    Source(Box<crate::api::core::flat::TypeRef>),
     /// A type only the binding authored: a declared wire type with no
     /// `#[prebindgen]` item behind it, an [`unfold`](crate::api::core::unfold)
     /// leaf. It has no reading and no source location — a fact about it, rather
