@@ -85,25 +85,23 @@ scoreboard for this whole program.
 
 ## Size of the problem
 
-Seeded by L0 at **202 classification sites** outside the frontend. The second
-population it was seeded alongside — **113** reads of the registry's `syn`-keyed
-item maps — is **gone**: L1.5 deleted those maps, so every one of those reads now
-goes through the model. What remains is the ledger, and it now stands at **167**.
+Seeded by L0 at **202 classification sites** outside the frontend, split
+`api/core` 71, `cbindgen` 25, `jnigen` 106. The second population it was seeded
+alongside — **113** reads of the registry's `syn`-keyed item maps — is **gone**:
+L1.5 deleted those maps, so every one of those reads now goes through the model.
 
-| Area | Ledger sites | Seeded | Stage |
-|---|---:|---:|---|
-| `api/core` (`unfold` 16, `types_util` 14, `registry/walk` 9, `registry/scan` 2, `expand` 4) | 45 | 71 | L2 |
-| `api/lang/cbindgen` | 25 | 25 | L3 |
-| `api/lang/jnigen` | 97 | 106 | L4 |
-| **total** | **167** | **202** | |
+Those are the numbers this document keeps, because a seed is a fixed fact. **The
+current count is in `boundary.ledger`**, which is generated, and its stage-by-stage
+history is in [#229](https://github.com/milyin/prebindgen/pull/229). A table of
+live counts copied into prose here would be wrong after the next merge, and was.
 
-**The ledger has started falling.** The whole −35 is
-[#248](https://github.com/milyin/prebindgen/pull/248), which deleted the pattern
-engine: `types_util` 40 → 14, `jnigen/builder` 13 → 4, and `registry` 11 split
-into `walk` 9 + `scan` 2. Not one of those sites was migrated to read an element —
-they went away because the code that held them went away, which is the cheaper
-half of L2 and the reason it was done first. L1.5 before it moved reads off the
-deleted maps but took only two classifiers off the ledger.
+Two things the falling count has taught, which the count itself does not show:
+
+**A site leaving is not the same as a site migrating.** The largest single drop was
+[#248](https://github.com/milyin/prebindgen/pull/248) deleting a pattern engine
+whose tables held one entry in the whole crate. Nothing was migrated to read an
+element; the code holding the sites went away. Both are real progress, and a stage
+that does not say which one it achieved is not reporting.
 
 Not every site must go: some inspect types the adapter itself *synthesized* —
 wire types, converter signatures — which is legitimately the adapter's business.
@@ -122,7 +120,7 @@ moves it.
 | L1.75 | The registry becomes describable | **done** — #249–#253, squashed into #248's commit |
 | L2 | `api/core` stops classifying source syntax | **in progress** — [#248](https://github.com/milyin/prebindgen/pull/248) took 35 of 71 |
 | L3 | `Cbindgen` consumes elements | not started |
-| L4 | `JniGen` consumes elements *(the long pole — 97 sites)* | not started |
+| L4 | `JniGen` consumes elements *(the long pole)* | not started |
 | L5 | Close the seam: the public contract stops being `syn` | not started |
 
 ### L0 — the parser — **done** (#227)
