@@ -69,18 +69,12 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
 pub(crate) fn build_data_class(
     ext: &Declarations,
     class_name: &str,
-    item_struct: &syn::ItemStruct,
+    item_struct: &crate::api::core::flat::Struct,
     registry: &Registry<KotlinMeta>,
 ) -> kt::KtClass {
-    let fields_named = match &item_struct.fields {
-        syn::Fields::Named(n) => &n.named,
-        _ => {
-            panic!(
-                "render_data_class_source: struct `{}` must use named fields to map onto Kotlin data class properties",
-                item_struct.ident
-            )
-        }
-    };
+    // A tuple struct is an `Extern` in the model, never a `Struct`, so every
+    // field here is named by construction.
+    let fields_named = &item_struct.fields;
 
     // The class declaration is derived from the SAME plan the `fromParts`
     // factory and the Rust encoder walk. Deriving it separately — a third
@@ -92,7 +86,7 @@ pub(crate) fn build_data_class(
              field needs a resolved OUTPUT converter (that direction declares the slot the \
              encoder fills) AND the Kotlin metadata that converter carries — a `kotlin_name`, \
              or a registered class for a projection leaf",
-            item_struct.ident
+            item_struct.name
         )
     });
 
@@ -105,14 +99,14 @@ pub(crate) fn build_data_class(
     let mut destructible_fields: Vec<(String, crate::api::lang::jnigen::jni::FoldStrategy)> =
         Vec::new();
     for (field, pf) in fields_named.iter().zip(&plan.fields) {
-        let field_ident = field.ident.as_ref().unwrap_or_else(|| {
+        let field_ident = field.name.as_ref().unwrap_or_else(|| {
             panic!(
                 "render_data_class_source: struct `{}` has an unnamed field in named-fields context",
-                item_struct.ident
+                item_struct.name
             )
         });
         let kotlin_field_name = mangle_kotlin_ident(&kt_snake_to_camel(&field_ident.to_string()));
-        let owner = format!("{}.{}", item_struct.ident, field_ident);
+        let owner = format!("{}.{}", item_struct.name, field_ident);
 
         // The declaration reads ONE direction — output — because that is the
         // direction that declares the `fromParts` slots the encoder fills, and
@@ -129,7 +123,7 @@ pub(crate) fn build_data_class(
         // disagreed. Reject it at the declaration instead.
         if !matches!(pf.kind, PlanFieldKind::Projection { .. }) {
             if let Some(proj) = registry
-                .input_entry(&field.ty)
+                .input_entry(&field.ty.origin.syntax)
                 .and_then(|e| e.metadata.projection.clone())
             {
                 panic!(
@@ -172,7 +166,8 @@ pub(crate) fn build_data_class(
     });
 
     let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
-    if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.attrs) {
+    if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.origin.syntax.attrs)
+    {
         class = class.kdoc(doc);
     }
     for p in ctor_params {

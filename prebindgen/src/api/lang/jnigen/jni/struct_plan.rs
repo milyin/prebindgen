@@ -185,21 +185,20 @@ pub(crate) struct SumPlanField {
 pub(crate) fn build_struct_plan(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    s: &syn::ItemStruct,
+    s: &crate::api::core::flat::Struct,
     depth: usize,
 ) -> Option<StructPlan> {
     assert!(
         depth <= 16,
         "struct fromParts plan: recursion too deep at struct `{}` (cyclic data_class?)",
-        s.ident
+        s.name
     );
-    let syn::Fields::Named(named) = &s.fields else {
-        return None;
-    };
     let mut fields: Vec<PlanField> = Vec::new();
-    for field in &named.named {
-        let fname = field.ident.as_ref()?.clone();
-        let owner = format!("{}.{}", s.ident, fname);
+    for field in &s.fields {
+        // A tuple struct is an `Extern` in the model, never a `Struct`, so a
+        // nameless field cannot reach here.
+        let fname = field.name.as_ref()?.clone();
+        let owner = format!("{}.{}", s.name, fname);
         let kind = classify_field(ext, registry, &field.ty, &owner, depth)?;
         fields.push(PlanField { fname, kind });
     }
@@ -217,11 +216,16 @@ pub(crate) fn build_struct_plan(
 pub(crate) fn classify_field(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    ty: &syn::Type,
+    reading: &crate::api::core::flat::TypeRef,
     owner: &str,
     depth: usize,
 ) -> Option<PlanFieldKind> {
-    let effective_ty = ty.clone();
+    // The **reading**, not a spelling. Every layer question below is answered
+    // from `kind` and cannot fail: holding a `TypeRef` is proof the model
+    // classified this type. Taking a `syn::Type` meant asking the registry per
+    // question, and a type it had never seen answered "no layer" rather than
+    // saying so — which is the missing `?` of #273 waiting to happen again.
+    let effective_ty = reading.origin.syntax.clone();
 
     // A sum is classified FIRST, because it is the one kind with no converter
     // of its own: it crosses as a tag plus one leaf group per variant, never
@@ -238,12 +242,11 @@ pub(crate) fn classify_field(
     // as `Option<T>` does. Peeling by path segment answered "not optional" for
     // it, and the seven peels in this function would then disagree with each
     // other about the same field (#273).
-    let optional_inner = registry.optional_inner(&effective_ty);
-    let bare = optional_inner
-        .clone()
-        .unwrap_or_else(|| effective_ty.clone());
-    let seq_elem = registry.sequence_elem(&bare);
-    let core = seq_elem.clone().unwrap_or_else(|| bare.clone());
+    let optional_inner = reading.optional_inner();
+    let bare_ref = optional_inner.unwrap_or(reading);
+    let bare = bare_ref.origin.syntax.clone();
+    let seq_elem = bare_ref.sequence_elem();
+    let core = seq_elem.map_or_else(|| bare.clone(), |e| e.origin.syntax.clone());
     if matches!(ext.type_kind(registry, &core), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
@@ -279,7 +282,7 @@ pub(crate) fn classify_field(
             return Some(PlanFieldKind::Enum { conv, kotlin });
         }
         // `Option<enum>` leaf.
-        if let Some(inner) = optional_inner.clone() {
+        if let Some(inner) = optional_inner.map(|i| i.origin.syntax.clone()) {
             if ext.is_kotlin_enum(&inner) {
                 let kotlin = registry
                     .output_entry(&inner)?
@@ -302,7 +305,7 @@ pub(crate) fn classify_field(
             let child_fqn = cfg
                 .and_then(|c| c.name_spec.as_ref())
                 .map(|s| ext.fqn_of(s));
-            let plan = build_struct_plan(ext, registry, &st.origin.syntax, depth + 1)?;
+            let plan = build_struct_plan(ext, registry, st, depth + 1)?;
             return Some(PlanFieldKind::Nested {
                 optional: optional_inner.is_some(),
                 child_fqn,
@@ -320,8 +323,7 @@ pub(crate) fn classify_field(
                 // Object-shaped wire with no fixed descriptor; the JVM slot
                 // must be the field's actual declared type (Option-stripped).
                 let slot_ty = optional_inner
-                    .clone()
-                    .unwrap_or_else(|| effective_ty.clone());
+                    .map_or_else(|| effective_ty.clone(), |i| i.origin.syntax.clone());
                 let descriptor = registry
                     .output_entry(&slot_ty)
                     .and_then(|e| jni_field_access(&e.destination))
@@ -495,6 +497,13 @@ fn sum_plan_kind(
     let item_enum = registry.flat().enum_item(&ident).unwrap_or_else(|| {
         panic!("fromParts bridge: sealed-class field `{owner}` has no indexed enum `{ident}`")
     });
+    // The sum as the MODEL holds it: its alternatives' payloads are `TypeRef`s
+    // already, so classifying one asks nothing and cannot be asked about a type
+    // the model never saw.
+    let Some(crate::api::core::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
+    else {
+        panic!("fromParts bridge: sealed-class field `{owner}`: `{ident}` is not a sum")
+    };
     let key = TypeKey::from_ident(&ident);
     let cfg = ext
         .types
@@ -511,16 +520,16 @@ fn sum_plan_kind(
 
     let spec = SumSpec::from_item_enum(item_enum);
     let mut variants: Vec<SumPlanVariant> = Vec::new();
-    for (v, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
+    for (v, alt) in spec.variants.iter().zip(&sum.alternatives) {
         let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.ident);
         let mut fields: Vec<SumPlanField> = Vec::new();
-        for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
+        for (f, alt_field) in v.fields.iter().zip(alt.fields.iter()) {
             let prop = sum_field_prop_name(f);
             let slot = sum_slot_fragment(&kotlin_name, &prop);
             let owner = format!("{ident}::{}.{prop}", v.ident);
             // `?` — a payload whose converter has not resolved yet defers the
             // whole plan to the next iteration, it does not fail the build.
-            let kind = classify_field(ext, registry, &item_field.ty, &owner, depth + 1)?;
+            let kind = classify_field(ext, registry, &alt_field.ty, &owner, depth + 1)?;
             fields.push(SumPlanField {
                 member: f.member.clone(),
                 slot,

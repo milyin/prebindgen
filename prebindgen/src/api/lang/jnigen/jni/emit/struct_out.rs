@@ -83,7 +83,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    s: &syn::ItemStruct,
+    s: &crate::api::core::flat::Struct,
     path_prefix: &[crate::api::core::unfold::PathStep],
     name_prefix: &str,
     depth: usize,
@@ -92,13 +92,11 @@ pub(crate) fn synth_value_struct_leaves(
     if depth > 16 {
         return None;
     }
-    let syn::Fields::Named(named) = &s.fields else {
-        return None;
-    };
+    // Named by construction — a tuple struct is an `Extern`, not a `Struct`.
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
-    for field in &named.named {
-        let fname = field.ident.as_ref()?.clone();
-        let effective_ty = field.ty.clone();
+    for field in &s.fields {
+        let fname = field.name.as_ref()?.clone();
+        let effective_ty = field.ty.origin.syntax.clone();
         let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
         let leaf_name = if name_prefix.is_empty() {
             camel
@@ -127,7 +125,7 @@ pub(crate) fn synth_value_struct_leaves(
             // converter for it, failing the resolve with the sum named rather
             // than the unsupported position.
             TypeKind::Handle | TypeKind::Enum | TypeKind::Sum => return None,
-            TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.origin.syntax.clone()),
+            TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
             _ => None,
         };
         if let Some(child) = nested {
@@ -173,7 +171,7 @@ pub(crate) fn synth_value_struct_leaves(
 pub(crate) fn flatten_struct_encode(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    s: &syn::ItemStruct,
+    s: &crate::api::core::flat::Struct,
     access: &TokenStream,
     prefix: &str,
     depth: usize,
@@ -588,15 +586,15 @@ fn encode_field(
 
 pub(crate) fn struct_output_body(
     ext: &Declarations,
-    s: &syn::ItemStruct,
+    s: &crate::api::core::flat::Struct,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
-    let struct_name = s.ident.to_string();
+    let struct_name = s.name.to_string();
     // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
     // mangle closure flows through; fall back to the bare struct ident
     // qualified with the package when no `data_class` /
     // `ptr_class` declaration exists for this Rust type.
-    let struct_ident = &s.ident;
+    let struct_ident = &s.name;
     let struct_ty: syn::Type = syn::parse_quote!(#struct_ident);
     let registered_fqn = ext
         .types
@@ -651,11 +649,13 @@ pub(crate) fn struct_output_body(
 pub(crate) fn struct_module_path(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    s: &syn::ItemStruct,
+    name: &syn::Ident,
 ) -> syn::Path {
     // The module the struct is reachable under from the generated file: its
-    // origin crate (multi-source registries) or the default module.
-    ext.fn_module(registry, &s.ident)
+    // origin crate (multi-source registries) or the default module. Takes the
+    // NAME, which is all it needs — so it serves a caller holding the element
+    // and one still holding the item.
+    ext.fn_module(registry, name)
 }
 
 // ──────────────────────────────────────────────────────────────────────

@@ -897,11 +897,7 @@ impl Declarations {
             }) else {
                 continue;
             };
-            let Some(item_struct) = registry
-                .flat()
-                .struct_type(&ident)
-                .map(|st| &st.origin.syntax)
-            else {
+            let Some(item_struct) = registry.flat().struct_type(&ident) else {
                 continue;
             };
 
@@ -909,8 +905,8 @@ impl Declarations {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            if item_struct.ident != class_name {
-                aliases.push((item_struct.ident.to_string(), class_name.clone()));
+            if item_struct.name != class_name {
+                aliases.push((item_struct.name.to_string(), class_name.clone()));
             }
             let mut class = build_data_class(self, &class_name, item_struct, registry);
             // The data class is self-contained (property/factory types +
