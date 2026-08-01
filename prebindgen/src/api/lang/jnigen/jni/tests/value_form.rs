@@ -531,6 +531,109 @@ fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
     }
 }
 
+/// An `Option` the reading sees through a transparent wrapper is **reserved**,
+/// and says so by name.
+///
+/// `Box<T>` *is* `T` in the model, deliberately — so a field spelled
+/// `Box<Option<Child>>` peels to `Child` and records an optional access step
+/// that has no way to say "deref first". The emitter then matches `Option`'s
+/// patterns against a value still typed `Box<Option<Child>>`, which is `E0308`.
+///
+/// The shape used to be *accepted* and mis-emitted: nothing in this suite
+/// compiles the generated Rust, so `contains` assertions passed over it happily.
+/// Rejecting at the declaration is what makes it visible — see #268, which owns
+/// teaching the path algebra the wrapper.
+///
+/// The plain `Option<Child>` case is asserted alongside, because a guard that
+/// also rejected the ordinary spelling would be worse than no guard.
+#[test]
+fn an_option_behind_a_transparent_wrapper_is_reserved_by_name() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZSampleStruct {
+                        pub kex: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_to_struct(s: &ZSample) -> ZSampleStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_keyexpr_as_str(k: &ZKeyExpr) -> &str {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZSample))
+                    .class(crate::ptr_class!(ZKeyExpr))
+                    .fun(crate::fun!(z_sample_sub)),
+            )
+            .expand(crate::expand_return!(ZKeyExpr).field(crate::fun!(z_keyexpr_as_str)))
+            .expand(crate::expand_return!(ZSample).fields(crate::fields!(z_sample_to_struct)));
+        let dir = unique_test_dir("jnigen_vf_boxed_opt");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _ = jni
+            .build_with(registry)
+            .map(|g| g.write_rust(dir.join("g.rs")));
+    };
+
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        build(syn::parse_quote!(Box<Option<ZKeyExpr>>))
+    }))
+    .expect_err("an Option behind a transparent wrapper must be rejected");
+    let msg = err
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_default();
+    assert!(
+        msg.contains("transparent wrapper"),
+        "the message names the shape: {msg}"
+    );
+    assert!(
+        msg.contains("ZSampleStruct.kex"),
+        "the message names the offending field: {msg}"
+    );
+    // Reserved, not refused: the diagnosis says where the work is tracked.
+    assert!(
+        msg.contains("issues/268"),
+        "a reserved shape names its issue: {msg}"
+    );
+
+    // The ordinary spelling is untouched.
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        build(syn::parse_quote!(Option<ZKeyExpr>))
+    }))
+    .expect("a plain `Option<T>` field is the supported shape");
+}
+
 /// Naming a field the value form does not have is the very drift this
 /// declarator exists to catch, so it is an error rather than a silent no-op.
 #[test]

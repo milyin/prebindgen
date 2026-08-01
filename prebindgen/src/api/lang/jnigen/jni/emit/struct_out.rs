@@ -127,7 +127,7 @@ pub(crate) fn synth_value_struct_leaves(
             // converter for it, failing the resolve with the sum named rather
             // than the unsupported position.
             TypeKind::Handle | TypeKind::Enum | TypeKind::Sum => return None,
-            TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
+            TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.origin.syntax.clone()),
             _ => None,
         };
         if let Some(child) = nested {

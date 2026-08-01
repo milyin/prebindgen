@@ -105,8 +105,17 @@ pub struct FieldRecord {
     pub members: Vec<syn::Ident>,
     /// The leaf name (already `__`-joined across inlined nesting).
     pub name: String,
-    /// The field's type as written, `Option` / `Vec` layers included.
-    pub ty: syn::Type,
+    /// The field's **reading**, `Option` / `Vec` layers included — and its
+    /// syntax with it, which is what a leaf's `out_ty` spells.
+    ///
+    /// The declaration carries this rather than naming a `syn::Type` for the
+    /// walk to look up, because there was nothing to look up: a field record is
+    /// built from an element whose every field already has a reading, and the
+    /// types it names are the ones the caller registers *after* the walk
+    /// returns. Asking the registry here was asking before registration
+    /// (#266) — a lookup that could only miss, answered by a second source of
+    /// readings that hid the ordering.
+    pub ty: crate::api::core::flat::TypeRef,
     /// How this field decomposes.
     pub decon: FieldDecon,
 }
@@ -935,14 +944,6 @@ fn peel_borrow(ty: &crate::api::core::flat::TypeRef) -> (bool, &crate::api::core
     }
 }
 
-/// Strip a single leading `&` (one level) from a type.
-pub(crate) fn peel_ref(ty: &syn::Type) -> syn::Type {
-    match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    }
-}
-
 /// True when `ret` is `T` / `&T` / `Option<T|&T>` / `Vec<T|&T>` with
 /// `T == key` — the default-output match. `Result<_, _>` is NOT peeled, so a
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
@@ -1460,18 +1461,17 @@ fn flatten<M>(
                 });
 
                 for fr in fields {
-                    // A field record is adapter-declared, so it has no element —
-                    // but the scan took its reading when the cell was born, and
-                    // that is what this reads. Nothing is re-classified.
-                    let fr_reading = registry.reading(&fr.ty);
+                    // The declaration carries the field's reading, so nothing is
+                    // looked up and nothing is re-classified.
+                    //
                     // A field's own `Option` makes everything under it nullable,
                     // exactly as an `Option`-returning accessor step does.
-                    let (opt, core) = match fr_reading.as_ref().and_then(|r| r.optional_inner()) {
-                        Some(inner) => (true, inner.origin.syntax.clone()),
-                        None => (false, fr.ty.clone()),
+                    let (opt, core) = match fr.ty.optional_inner() {
+                        Some(inner) => (true, inner),
+                        None => (false, &fr.ty),
                     };
-                    let child_ty = peel_ref(&core);
-                    let child_key = TypeKey::from_type(&child_ty);
+                    let child_ty = core.borrow_target().unwrap_or(core);
+                    let child_key = child_ty.key();
 
                     // Same three-way choice a `.field()` record makes: declared
                     // override, else the field type's own deconstructor, else
@@ -1535,13 +1535,8 @@ fn flatten<M>(
                             acc,
                             registry,
                             &child_records,
-                            // Again the registry's answer, not a new one.
-                            &registry.reading(&child_ty).ok_or_else(|| {
-                                UnfoldError::Unsupported {
-                                    func: func.clone(),
-                                    reason: "a field type the language cannot express",
-                                }
-                            })?,
+                            // The declaration's reading, peeled — not a new one.
+                            child_ty,
                             &field_path,
                             &seg_name(&fr.name),
                             by_ref,
@@ -1559,7 +1554,7 @@ fn flatten<M>(
                         leaves.push(UnfoldLeaf {
                             name: seg_name(&fr.name).join("__"),
                             path: field_path,
-                            out_ty: fr.ty.clone(),
+                            out_ty: fr.ty.origin.syntax.clone(),
                             identity: false,
                             nullable,
                             source: LeafSource::Field,

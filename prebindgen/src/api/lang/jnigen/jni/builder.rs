@@ -838,33 +838,31 @@ impl Declarations {
         decl: &FieldsDecl,
     ) -> Vec<crate::api::core::unfold::FieldRecord> {
         let func = &decl.func;
-        let item_fn = registry
-            .flat()
-            .function(&func)
-            .map(|func| &func.origin.syntax)
-            .unwrap_or_else(|| {
-                panic!(
-                    "expand_return!({}).fields(fields!({func})): no `#[prebindgen]` function \
+        let accessor = registry.flat().function(&func).unwrap_or_else(|| {
+            panic!(
+                "expand_return!({}).fields(fields!({func})): no `#[prebindgen]` function \
                  `{func}` — a value form is an accessor `fn {func}(v: &{}) -> {}Struct`",
-                    key.as_str(),
-                    key.as_str(),
-                    key.as_str(),
-                )
-            });
-        let ret: syn::Type = match &item_fn.sig.output {
-            syn::ReturnType::Type(_, t) => crate::api::core::unfold::peel_ref(t),
-            syn::ReturnType::Default => panic!(
-                "expand_return!({}).fields(fields!({func})): `{func}` returns nothing — a \
-                 value form returns the struct holding this type's fields",
-                key.as_str()
-            ),
-        };
-        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret) else {
+                key.as_str(),
+                key.as_str(),
+                key.as_str(),
+            )
+        });
+        // The accessor's return as the model read it, peeled of a leading `&`.
+        // An elided return and a written `-> ()` are one thing here, because the
+        // model already normalized them.
+        let ret = accessor.ret.borrow_target().unwrap_or(&accessor.ret);
+        assert!(
+            !matches!(ret.kind, crate::api::core::flat::TypeKind::Unit),
+            "expand_return!({}).fields(fields!({func})): `{func}` returns nothing — a \
+             value form returns the struct holding this type's fields",
+            key.as_str(),
+        );
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret.origin.syntax) else {
             panic!(
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
                 key.as_str(),
-                ret.to_token_stream(),
+                ret.origin.syntax.to_token_stream(),
             )
         };
         let st = st.clone();
@@ -890,7 +888,7 @@ impl Declarations {
                 named.contains(field),
                 "fields!({func}).field(\"{field}\", ...): `{}` has no field `{field}` \
                  (fields: {})",
-                st.ident,
+                st.name,
                 named.iter().cloned().collect::<Vec<_>>().join(", "),
             );
         }
@@ -899,7 +897,7 @@ impl Declarations {
                 named.contains(field),
                 "fields!({func}).name(\"{field}\", ...): `{}` has no field `{field}` \
                  (fields: {})",
-                st.ident,
+                st.name,
                 named.iter().cloned().collect::<Vec<_>>().join(", "),
             );
         }
@@ -916,22 +914,13 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         decl: &FieldsDecl,
-        st: &syn::ItemStruct,
+        st: &crate::api::core::flat::Struct,
         members: &[syn::Ident],
         name_prefix: &str,
         depth: usize,
         out: &mut Vec<crate::api::core::unfold::FieldRecord>,
     ) {
         use crate::api::core::unfold::{FieldDecon, FieldRecord};
-        let syn::Fields::Named(named) = &st.fields else {
-            panic!(
-                "expand_return!({}).fields(fields!({})): `{}` has no named fields — a value \
-                 form is a plain struct whose fields become the leaves",
-                key.as_str(),
-                decl.func,
-                st.ident,
-            )
-        };
         // A value form holding itself would expand forever; the cycle rule for
         // everything reachable BELOW a field is core's `visited` check.
         assert!(
@@ -940,10 +929,13 @@ impl Declarations {
              deep — is a value form holding itself?",
             key.as_str(),
             decl.func,
-            st.ident,
+            st.name,
         );
-        for field in &named.named {
-            let Some(fname) = field.ident.as_ref() else {
+        // A tuple struct is an `Extern` rather than a `Struct`, so it never
+        // reaches here — `lower_value_form`'s "not a struct" diagnosis catches
+        // it at the return type, which is where the author wrote it.
+        for field in &st.fields {
+            let Some(fname) = field.name.as_ref() else {
                 continue;
             };
             let mut member_path = members.to_vec();
@@ -966,6 +958,38 @@ impl Declarations {
                 format!("{name_prefix}__{name}")
             };
 
+            // An `Option` the READING sees but the SYNTAX still wraps — `Box<
+            // Option<T>>`. `Box<T>` *is* `T` in the model, deliberately, so the
+            // peel below reaches the `T` and records an optional access step.
+            // That step carries the field name and the optional flag and
+            // nothing else: the wrapper is dropped, and the emitter applies
+            // `Option`'s match to a value whose Rust type still spells `Box`,
+            // which does not compile (match ergonomics does not deref a `Box`).
+            //
+            // Rejected here, at the declaration, rather than emitted and
+            // discovered by rustc. This is a RESERVED shape, not a refused one
+            // — see #268, which owns teaching the path algebra to deref a
+            // transparent wrapper.
+            assert!(
+                field.ty.optional_inner().is_none()
+                    || option_inner_type(&field.ty.origin.syntax).is_some(),
+                "expand_return!({}).fields(fields!({})): field `{}.{dotted}` is `{}` — an \
+                 `Option` behind a transparent wrapper. The wrapper is invisible to the \
+                 model and load-bearing in the generated Rust, and the leaf access path \
+                 cannot yet say `deref, then match` (reserved — see \
+                 https://github.com/milyin/prebindgen/issues/268). Spell the field \
+                 `Option<{}>`, or override it with .field(\"{dotted}\", ...)",
+                key.as_str(),
+                decl.func,
+                st.name,
+                field.ty.origin.syntax.to_token_stream(),
+                field
+                    .ty
+                    .optional_inner()
+                    .map(|i| i.origin.syntax.to_token_stream().to_string())
+                    .unwrap_or_default(),
+            );
+
             // An explicit override replaces the field type's default
             // decomposition wholesale — including any nesting it would have had.
             if let Some((_, ovr)) = decl.overrides.iter().find(|(f, _)| *f == dotted) {
@@ -980,17 +1004,16 @@ impl Declarations {
                 // Mirror that exact normalization here; peeling `Vec` would
                 // accept `expand_return!(T)` and only fail later when core
                 // applies its records to `Vec<T>`.
-                let peeled = option_inner_type(&field.ty)
-                    .map(|t| crate::api::core::unfold::peel_ref(&t))
-                    .unwrap_or_else(|| crate::api::core::unfold::peel_ref(&field.ty));
-                let actual = TypeKey::from_type(&peeled);
+                let under_opt = field.ty.optional_inner().unwrap_or(&field.ty);
+                let peeled = under_opt.borrow_target().unwrap_or(under_opt);
+                let actual = peeled.key();
                 assert!(
                     actual == ovr.key,
                     "fields!({}).field(\"{dotted}\", expand_return!({})): `{}.{dotted}` is \
                      `{}`, not `{}` — a per-field override names the field's own type",
                     decl.func,
                     ovr.key.as_str(),
-                    st.ident,
+                    st.name,
                     actual.as_str(),
                     ovr.key.as_str(),
                 );
@@ -1008,12 +1031,12 @@ impl Declarations {
             // object (the rule `synth_value_struct_leaves` already follows).
             // A `sealed_class!` field has no whole-value converter at all, so it
             // must decompose into its selector and groups wherever it appears.
-            let bare = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
-            let probe = vec_inner_type(&bare).unwrap_or_else(|| bare.clone());
-            match self.type_kind(registry, &probe) {
+            let bare = field.ty.optional_inner().unwrap_or(&field.ty);
+            let probe = bare.sequence_elem().unwrap_or(bare);
+            match self.type_kind(registry, &probe.origin.syntax) {
                 TypeKind::DataStruct { st, cfg: Some(_) }
-                    if option_inner_type(&field.ty).is_none()
-                        && vec_inner_type(&field.ty).is_none() =>
+                    if field.ty.optional_inner().is_none()
+                        && field.ty.sequence_elem().is_none() =>
                 {
                     let child = st.clone();
                     self.walk_value_form(
@@ -1036,18 +1059,18 @@ impl Declarations {
                     // (the `fromParts` bridge's `PlanFieldKind::Sum` does — a
                     // data-class field can be `Option<sum>`).
                     assert!(
-                        vec_inner_type(&bare).is_none(),
+                        bare.sequence_elem().is_none(),
                         "expand_return!({}).fields(fields!({})): field `{}.{}` is a \
                          `Vec<{}>` — a sequence of tag-gated groups has variable arity and \
                          cannot be laid out in a fixed leaf list",
                         key.as_str(),
                         decl.func,
-                        st.ident,
+                        st.name,
                         dotted,
-                        probe.to_token_stream(),
+                        probe.origin.syntax.to_token_stream(),
                     );
                     assert!(
-                        option_inner_type(&field.ty).is_none(),
+                        field.ty.optional_inner().is_none(),
                         "expand_return!({}).fields(fields!({})): field `{}.{}` is an \
                          `Option<{}>` — an optional sum would need a present flag beside its \
                          tag, which an output leaf list cannot carry. Give the field a \
@@ -1055,17 +1078,21 @@ impl Declarations {
                          or override it with .field(\"{}\", ...)",
                         key.as_str(),
                         decl.func,
-                        st.ident,
+                        st.name,
                         dotted,
-                        probe.to_token_stream(),
+                        probe.origin.syntax.to_token_stream(),
                         dotted,
                     );
-                    let ident = bare_path_ident(&probe).expect("a sum type is a path type");
+                    // The name is the reading's, not a path taken apart to
+                    // re-derive one.
+                    let crate::api::core::flat::TypeKind::Named { id } = &probe.kind else {
+                        panic!("a sum type is a named type")
+                    };
                     let item_enum = registry
                         .flat()
-                        .enum_item(&ident)
+                        .enum_item(&id.name)
                         .expect("TypeKind::Sum implies an indexed enum");
-                    let sum_cfg = self.types[&TypeKey::from_type(&probe)]
+                    let sum_cfg = self.types[&probe.key()]
                         .sum()
                         .expect("TypeKind::Sum implies a sealed-class config");
                     out.push(FieldRecord {

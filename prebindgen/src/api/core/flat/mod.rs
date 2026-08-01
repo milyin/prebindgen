@@ -673,10 +673,14 @@ impl Flat {
     /// `origin.syntax` is reasoning from the spelling, which is what `origin` is
     /// not for. This exists for the one case with no element behind it: a type a
     /// build script declared, or one expansion composed. `ensure_entry` is its
-    /// only caller, and `classify_has_exactly_one_caller` keeps it that way.
+    /// only caller — the single call in the whole crate — and
+    /// `classify_has_no_caller_outside_the_registry` keeps it that way.
     ///
     /// Whoever asks is expected to keep the answer. The registry does: a reading is
-    /// taken once when a type-table cell is born, and lives in that cell.
+    /// taken once when a type-table cell is born, and lives in that cell — and
+    /// [`Registry::reading`](crate::api::core::registry::Registry::reading) hands
+    /// back only what is in one, so a second source of readings cannot reappear
+    /// here (#266).
     ///
     /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
     /// about a type the *binding* built, not a cache miss.

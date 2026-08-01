@@ -417,31 +417,31 @@ impl<M> Registry<M> {
             .entry = entry;
     }
 
-    /// The reading for `ty` — stored if the scan took one, lowered if it did not.
+    /// The reading the scan stored for `ty` — **a lookup, and only a lookup**.
     ///
     /// **The registry is the authority on what a type means**, because it is the
     /// thing that stores readings: `ensure_entry` asks the grammar once when a cell
     /// is born, and this hands that answer back. `Flat::classify` is its private
-    /// tool, and the two calls in this module are its only callers.
+    /// tool, and `ensure_entry` is its only caller.
     ///
-    /// The fallback is not the round trip this design forbids. That one is a
-    /// consumer holding an **element** — whose `ret` / `ty` is already a `TypeRef`
-    /// — reaching into `origin.syntax` and re-deriving what it was handed; the
-    /// signatures in `unfold` and `expand` now make it impossible. This is a type
-    /// the *binding* composed, with no element behind it and no cell yet: a value
-    /// form's field record naming a combination the scan never registered whole.
-    /// There is nothing to look up, so the grammar is asked — once, here, rather
-    /// than by each consumer.
+    /// This used to classify on a miss, which meant there were two sources of
+    /// readings and no way to tell them apart. The fallback fired constantly, and
+    /// on **scalars** — `i64`, `String`, `bool` — which are certainly registered by
+    /// the time a binding is built. That was the tell: the misses were not unknown
+    /// types but an inverted order, [`unfold`](crate::api::core::unfold) asking
+    /// about the leaves its caller registers one loop later. Because `classify`
+    /// answered correctly, nothing downstream was wrong and nothing showed it
+    /// (#266). The declarations now carry their own readings, so there is no such
+    /// caller left.
+    ///
+    /// `None` therefore means the type never entered the pipeline — a caller
+    /// asking out of order, not a cache miss to paper over.
     pub(crate) fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
         let key = TypeKey::from_type(ty);
-        if let Some(cell) = self
-            .input_types
+        self.input_types
             .get(&key)
             .or_else(|| self.output_types.get(&key))
-        {
-            return Some((*cell.subject).clone());
-        }
-        self.flat.classify(ty).ok()
+            .map(|cell| (*cell.subject).clone())
     }
 
     /// Register `ty` (and its nested positions) as a required **input** so

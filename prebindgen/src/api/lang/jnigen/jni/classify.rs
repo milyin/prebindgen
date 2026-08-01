@@ -25,8 +25,13 @@ pub(crate) enum TypeKind<'r, 'c> {
     Sum,
     /// A `#[prebindgen]` struct from the source crate that is none of the
     /// special kinds; flattens field-by-field when emitters support it.
+    ///
+    /// The **element**, not its `syn::ItemStruct`. A flattening emitter wants
+    /// each field's reading, and the model already decided one per field; going
+    /// through the syntax means asking some other authority for it again. An
+    /// emitter that only re-emits the struct reads `st.origin.syntax`.
     DataStruct {
-        st: &'r syn::ItemStruct,
+        st: &'r crate::api::core::flat::Struct,
         cfg: Option<&'c TypeConfig>,
     },
     /// Scalars, `String`, undeclared / non-path types.
@@ -59,16 +64,12 @@ impl Declarations {
                 DeclaredKind::Sealed(_) => return TypeKind::Sum,
                 // A data class is exactly a declared source struct — fall
                 // through to the registry probe below, which supplies the
-                // `syn::ItemStruct` its emitters flatten.
+                // element its emitters flatten.
                 DeclaredKind::Data => {}
             }
         }
         if let Some(name) = bare_path_ident(bare) {
-            if let Some(st) = registry
-                .flat()
-                .struct_type(&name)
-                .map(|st| &st.origin.syntax)
-            {
+            if let Some(st) = registry.flat().struct_type(&name) {
                 return TypeKind::DataStruct { st, cfg };
             }
         }
