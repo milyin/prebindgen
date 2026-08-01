@@ -67,7 +67,7 @@ impl DeclaredKind {
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     /// The module path a generated call to `#[prebindgen]` fn `ident` must be
     /// qualified with: the fn's **origin crate** as recorded from its
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
@@ -103,18 +103,8 @@ impl JniGenBuilder {
     }
 }
 
-impl JniGenBuilder {
-    /// Start a binding generator with default settings: empty base
-    /// package, no `JNINative` init block, identity
-    /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
-    /// methods, add declarations with [`package`](Self::package),
-    /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
-    /// result through `JniGenBuilder::build` → `JniGen::write_rust` /
-    /// `write_kotlin`. Settings and
-    /// declarations may be interleaved in any order — the builder stores
-    /// only raw inputs, and every setting-derived name is computed at the
-    /// point of use.
-    pub fn new() -> Self {
+impl Default for Declarations {
+    fn default() -> Self {
         Self {
             package: String::new(),
             fun_name_mangle: None,
@@ -142,10 +132,27 @@ impl JniGenBuilder {
             local_fns: Vec::new(),
             iface_specs: Default::default(),
             fn_plans: Default::default(),
-            sources: Default::default(),
         }
     }
+}
 
+impl JniGenBuilder {
+    /// Start a binding generator with default settings: empty base
+    /// package, no `JNINative` init block, identity
+    /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
+    /// methods, add declarations with [`package`](Self::package),
+    /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
+    /// result through [`build`](Self::build) → `JniGen::write_rust` /
+    /// `write_kotlin`. Settings and
+    /// declarations may be interleaved in any order — the builder stores
+    /// only raw inputs, and every setting-derived name is computed at the
+    /// point of use.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Declarations {
     /// Apply the package-level function-name mangle closure to `name`.
     pub(crate) fn mangle_fun(&self, package: &str, name: &str) -> String {
         match &self.fun_name_mangle {
@@ -237,14 +244,12 @@ impl JniGenBuilder {
     }
 }
 
-impl Default for JniGenBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 // ── Accepting a `PackageDecl` ────────────────────────────────────────────
 
+/// The describing surface: everything that *adds* to [`Declarations`].
+///
+/// Every method here takes `self` or `&mut self`; not one of them exists on
+/// `Declarations`, which is the whole point of the two types.
 impl JniGenBuilder {
     /// Register a package's worth of classes, functions and consts (a
     /// [`PackageDecl`], built with [`package!`](crate::package)). Call it once
@@ -295,7 +300,7 @@ impl JniGenBuilder {
             functions,
             constants,
         } = decl;
-        self.packages.entry(name.clone()).or_default();
+        self.decls.packages.entry(name.clone()).or_default();
         for class in classes {
             self.accept_class(&name, class);
         }
@@ -306,7 +311,7 @@ impl JniGenBuilder {
         // source was already lowered to an expression (`path()`) at decl
         // time, so only three storage kinds exist internally.
         for c in constants {
-            let pkg = self.packages.entry(name.clone()).or_default();
+            let pkg = self.decls.packages.entry(name.clone()).or_default();
             match c.source {
                 super::decl::ConstSource::Item => {
                     let mut entry = FunctionEntry::new(c.rust_ident);
@@ -340,16 +345,16 @@ impl JniGenBuilder {
     pub fn ignore(mut self, decl: impl Into<IgnoreDecl>) -> Self {
         match decl.into().0 {
             super::decl::IgnoreKind::Fun(ident) => {
-                self.ignored_fns.insert(ident);
+                self.decls.ignored_fns.insert(ident);
             }
             super::decl::IgnoreKind::Type(key) => {
-                self.ignored_class_types.insert(key);
+                self.decls.ignored_class_types.insert(key);
             }
             super::decl::IgnoreKind::Const(ident) => {
-                self.ignored_const_idents.insert(ident);
+                self.decls.ignored_const_idents.insert(ident);
             }
             super::decl::IgnoreKind::Matching(pred) => {
-                self.ignored_name_predicates.push(pred);
+                self.decls.ignored_name_predicates.push(pred);
             }
         }
         self
@@ -397,7 +402,7 @@ impl JniGenBuilder {
             );
         }
         let short = rust_short_name(key);
-        match self.types.entry(key.clone()) {
+        match self.decls.types.entry(key.clone()) {
             std::collections::hash_map::Entry::Occupied(e) => {
                 let cfg = e.into_mut();
                 cfg.kind.merge(kind, &short);
@@ -414,6 +419,7 @@ impl JniGenBuilder {
     /// idempotent).
     fn store_iface_opts(&mut self, key: &TypeKey, iface: IfaceOpts) {
         let cfg = self
+            .decls
             .types
             .get_mut(key)
             .expect("register_class created the entry");
@@ -527,7 +533,8 @@ impl JniGenBuilder {
             // A constructor member's return is a factory, never
             // output-flattened — derived from `class_members` in
             // `build_deconstructors` (`skip_output`), not stored separately.
-            self.class_members
+            self.decls
+                .class_members
                 .entry(key.clone())
                 .or_default()
                 .push(ClassMember {
@@ -541,7 +548,8 @@ impl JniGenBuilder {
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
         let mut entry = FunctionEntry::new(decl.rust_ident.clone());
         entry.kotlin_name_override = decl.kotlin_name_override.clone();
-        self.packages
+        self.decls
+            .packages
             .entry(subpackage.to_string())
             .or_default()
             .functions
@@ -578,17 +586,20 @@ impl JniGenBuilder {
                     p = quote::quote!(#path)
                 );
             };
-            self.local_fns.push((rust_ident.clone(), path, sig));
+            self.decls.local_fns.push((rust_ident.clone(), path, sig));
         }
         for (param, pdecl) in param_expands {
-            self.fn_param_expands
+            self.decls
+                .fn_param_expands
                 .push((rust_ident.clone(), param, pdecl));
         }
         if let Some(rdecl) = return_expand {
-            self.fn_return_expands.push((rust_ident.clone(), rdecl));
+            self.decls
+                .fn_return_expands
+                .push((rust_ident.clone(), rdecl));
         }
         for param in split_on_params {
-            self.fn_split_params.push((rust_ident.clone(), param));
+            self.decls.fn_split_params.push((rust_ident.clone(), param));
         }
     }
 }
@@ -619,7 +630,7 @@ impl JniGenBuilder {
                      .variant_self()",
                     decl.key.as_str()
                 );
-                self.param_expand_decls.push(decl);
+                self.decls.param_expand_decls.push(decl);
             }
             ExpandDecl::Return(decl) => {
                 assert!(
@@ -628,12 +639,14 @@ impl JniGenBuilder {
                      .field_self()",
                     decl.key.as_str()
                 );
-                self.return_expand_decls.push(decl);
+                self.decls.return_expand_decls.push(decl);
             }
         }
         self
     }
+}
 
+impl Declarations {
     /// The Kotlin name of `func` as a declared member (`.method`/`.constructor`)
     /// of the class keyed by `key`, if it is one — the name-inheritance
     /// source for [`ExpandReturnDecl::field`].
@@ -1389,11 +1402,13 @@ impl JniGenBuilder {
         // Binding-local fn sources (`fun!(crate::f).sig(…)`) join the same
         // synthesis list as fun/method/constructor sites — after the
         // pre-pass they lower exactly like `#[prebindgen]` fn sources.
-        self.local_fns.append(&mut decl.locals);
-        self.convert_decls.push(decl);
+        self.decls.local_fns.append(&mut decl.locals);
+        self.decls.convert_decls.push(decl);
         self
     }
+}
 
+impl Declarations {
     /// Derive the rank-0 **input** converter body for a `convert!`-declared
     /// type: `(continue_ty, exc, body)` where `continue_ty` is the conversion
     /// fn's parameter type (by value) — the composed-converter machinery
@@ -1699,7 +1714,7 @@ fn fn_return_type(item_fn: &syn::ItemFn) -> syn::Type {
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     /// Build a `KotlinMeta` carrying just the value-context Kotlin name.
     /// Used by every built-in converter (primitives, structs, `Option<_>`,
     /// `Vec<_>`, `impl Fn(...)` lambdas). Errors are routed uniformly to the

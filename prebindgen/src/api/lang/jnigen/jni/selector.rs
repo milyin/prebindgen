@@ -1,4 +1,4 @@
-//! Structural converter-selection policy for [`JniGenBuilder`].
+//! Structural converter-selection policy for [`Declarations`].
 
 use super::*;
 use crate::api::core::registry::Conversions;
@@ -33,7 +33,7 @@ fn ref_wildcard(r: &syn::TypeReference) -> syn::Type {
     syn::Type::Reference(pr)
 }
 
-impl JniGenBuilder {
+impl Declarations {
     /// Select the input converter for `ty`: terminals, user wrappers, then
     /// built-in structural wrappers.
     pub(crate) fn select_input_type(

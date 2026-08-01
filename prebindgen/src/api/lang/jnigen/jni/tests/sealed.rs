@@ -298,7 +298,8 @@ fn reopened_ptr_class_keeps_gc_managed() {
             .package(crate::package!().class(first).class(second));
         drop(registry);
         let key = TypeKey::from_type(&syn::parse_quote!(Session));
-        jni.types
+        jni.decls
+            .types
             .get(&key)
             .expect("declared")
             .opaque()
@@ -647,10 +648,14 @@ fn sum_is_its_own_type_kind() {
         .package(crate::package!().class(crate::sealed_class!(Reading)));
     let ty: syn::Type = syn::parse_quote!(Reading);
     assert!(matches!(
-        jni.type_kind(&registry, &ty),
+        jni.decls.type_kind(&registry, &ty),
         crate::api::lang::jnigen::jni::classify::TypeKind::Sum
     ));
-    let cfg = jni.types.get(&TypeKey::from_type(&ty)).expect("declared");
+    let cfg = jni
+        .decls
+        .types
+        .get(&TypeKey::from_type(&ty))
+        .expect("declared");
     assert!(cfg.special_decl());
 }
 

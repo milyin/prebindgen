@@ -77,12 +77,12 @@ impl JniGenBuilder {
         // directly by many emitters, so mangling at this single storage
         // point keeps every reader consistent; warn here (the raw input is
         // only available now) when a segment was changed.
-        self.package = mangle_package(&trimmed);
-        if self.package != trimmed {
+        self.decls.package = mangle_package(&trimmed);
+        if self.decls.package != trimmed {
             println!(
                 "cargo:warning=prebindgen: package prefix `{trimmed}` sanitized to `{}` \
                  (invalid Kotlin package identifier)",
-                self.package
+                self.decls.package
             );
         }
         self
@@ -99,7 +99,7 @@ impl JniGenBuilder {
     /// keeps the generator free of any concrete loading logic. Unset = no
     /// init block.
     pub fn set_jni_native_init(mut self, code: impl Into<String>) -> Self {
-        self.jni_native_init = Some(code.into());
+        self.decls.jni_native_init = Some(code.into());
         self
     }
 
@@ -112,7 +112,7 @@ impl JniGenBuilder {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.harness_name_mangle = Some(Arc::new(f));
+        self.decls.harness_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -124,7 +124,7 @@ impl JniGenBuilder {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.fun_name_mangle = Some(Arc::new(f));
+        self.decls.fun_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -140,7 +140,7 @@ impl JniGenBuilder {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.interface_name_mangle = Some(Arc::new(f));
+        self.decls.interface_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -151,7 +151,7 @@ impl JniGenBuilder {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.ptr_class_name_mangle = Some(Arc::new(f));
+        self.decls.ptr_class_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -163,7 +163,7 @@ impl JniGenBuilder {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.data_class_name_mangle = Some(Arc::new(f));
+        self.decls.data_class_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -174,7 +174,7 @@ impl JniGenBuilder {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.enum_name_mangle = Some(Arc::new(f));
+        self.decls.enum_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -187,7 +187,7 @@ impl JniGenBuilder {
     where
         F: Fn(&str, &str, &str) -> String + Send + Sync + 'static,
     {
-        self.method_name_mangle = Some(Arc::new(f));
+        self.decls.method_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -204,12 +204,12 @@ impl JniGenBuilder {
     /// re-verified on your own workload — generate once with `false`,
     /// benchmark both, and keep the default — not as an optimization knob.
     pub fn set_emit_handle_locks(mut self, emit: bool) -> Self {
-        self.emit_handle_locks = emit;
+        self.decls.emit_handle_locks = emit;
         self
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     /// Materialize a [`NameSpec`] into a concrete Kotlin FQN under the
     /// current settings. Precedence for a declared class: per-decl
     /// `name_override` (package-resolved, mangle-bypassed), then the mangle

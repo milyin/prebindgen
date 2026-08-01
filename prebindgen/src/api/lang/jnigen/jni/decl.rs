@@ -1,20 +1,20 @@
 //! Declaration objects: one standalone, independently-constructible value
-//! type per kind of thing `JniGenBuilder` can be told about (a `ptr_class`, an
+//! type per kind of thing `Declarations` can be told about (a `ptr_class`, an
 //! `enum_class`, a function, a scalar wire mapping, …), plus the `PackageDecl`
 //! that aggregates the package-scoped ones. Each type is both its own
-//! "builder" and the final value `JniGenBuilder`/`PackageDecl` accepts — no separate
+//! "builder" and the final value `Declarations`/`PackageDecl` accepts — no separate
 //! `Builder`/`Decl` split, no terminal `.build()` call.
 //!
-//! `JniGenBuilder` itself only ever *accepts* fully-built values of these types
+//! `Declarations` itself only ever *accepts* fully-built values of these types
 //! (`JniGenBuilder::package`, `JniGenBuilder::expand`, `JniGenBuilder::convert`, in
 //! `builder.rs`); none of them reach back
-//! into any `JniGenBuilder` state while being built.
+//! into any `Declarations` state while being built.
 
 use super::*;
 
 // ──────────────────────────────────────────────────────────────────────
 // Shared local accumulators (replayed into `Expansions`/`Deconstructors`
-// by the accept logic in `builder.rs` once a decl is handed to `JniGenBuilder`)
+// by the accept logic in `builder.rs` once a decl is handed to `Declarations`)
 // ──────────────────────────────────────────────────────────────────────
 
 /// One arm of an `expand_param!` `.variant*` list (type-level or per-fn).
@@ -1884,7 +1884,7 @@ pub struct ConvertDecl {
     pub(crate) output: Option<ConvertSpec>,
     pub(crate) domain: Option<crate::core::RepresentationDomain>,
     /// Binding-local fn sources declared on this convert (`fun!(crate::f)
-    /// .sig(…)`): drained into [`JniGenBuilder::local_fns`] at acceptance so the
+    /// .sig(…)`): drained into [`Declarations::local_fns`] at acceptance so the
     /// synthesis pre-pass covers them.
     pub(crate) locals: Vec<(syn::Ident, syn::Path, syn::Signature)>,
 }
