@@ -722,6 +722,33 @@ pub(crate) fn bind_hoists(
     out
 }
 
+/// Bind `e` so it can be destructured as an `Option` **whatever Rust
+/// representation the source used for it**.
+///
+/// `kind` says a position is optional; it deliberately does not say whether
+/// Rust spells that `Option<T>`, `Box<Option<T>>`, or something else — the flat
+/// model states the destination-language invariant, and the side interpreting
+/// it is the side that must accept any representation. Matching the reached
+/// place directly assumed one, which is `classify off kind, spell off syntax`
+/// broken in the direction nothing was watching: the classification was right
+/// and the *spelling* came from it too. `Box<Option<T>>` then produced
+/// `match &place { Some(..) => .. }` and `E0308` (#268).
+///
+/// A type-ascribed `let` is a coercion site, and deref coercion is transitive
+/// **and** a no-op when the types already match — so this one shape serves
+/// every representation, and the plain `Option<T>` case is unchanged in
+/// behaviour. The payload stays `_`: what it is, is the source's business.
+///
+/// `e` is expected to be a **reference** already — [`compose_step`] composes a
+/// field read as `&(e).f` — so nothing is borrowed here. Borrowing only: an
+/// owned position cannot be made representation-agnostic this way, because
+/// deref coercion applies to references and moving out of a wrapper is
+/// something only some of them permit (`Box` does, `Rc` cannot). A site that
+/// must MOVE the payload keeps its direct match; see `owned_place` below.
+pub(crate) fn bind_as_option(e: &TokenStream, bind: &syn::Ident) -> TokenStream {
+    quote! { let #bind: &::core::option::Option<_> = #e; }
+}
+
 /// Reach a leaf's input by folding its `path` over `base`, then hand the
 /// reached expression to `body` (which renders the encode and yields
 /// `JObject`). Every optional nesting step becomes a `match`: its `None` arm
@@ -765,10 +792,33 @@ fn reach_leaf(
                 depth + 1,
                 body,
             );
-            quote! {
-                match #opt_e {
-                    ::core::option::Option::Some(#nested) => { #inner }
-                    ::core::option::Option::None => jni::objects::JObject::null(),
+            // A FIELD read composes to a borrow (`&(e).f`), so it goes through
+            // a coercion site and the destructuring stops caring which
+            // representation the source spelled the optional as.
+            //
+            // A CALL composes to the accessor's own returned value, which is
+            // owned and whose payload downstream may move. Borrowing it to
+            // coerce would change that ownership, so it keeps its direct match
+            // — and an owned position could not be made representation-agnostic
+            // this way regardless (see [`bind_as_option`]).
+            if path[k].is_field() {
+                let opt_bind = format_ident!("__o{}", depth);
+                let coerce = bind_as_option(&opt_e, &opt_bind);
+                quote! {
+                    {
+                        #coerce
+                        match #opt_bind {
+                            ::core::option::Option::Some(#nested) => { #inner }
+                            ::core::option::Option::None => jni::objects::JObject::null(),
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    match #opt_e {
+                        ::core::option::Option::Some(#nested) => { #inner }
+                        ::core::option::Option::None => jni::objects::JObject::null(),
+                    }
                 }
             }
         }

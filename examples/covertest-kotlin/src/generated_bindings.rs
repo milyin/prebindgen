@@ -836,7 +836,8 @@ pub(crate) unsafe fn HoldPolicy_to_JObject_d2a5bcc4<'a>(
         let ___grace_present: jni::sys::jboolean;
         let ___grace__tag: jni::sys::jint;
         let ___grace_g0: jni::sys::jlong;
-        match &v.grace {
+        let __oc0: &::core::option::Option<_> = &v.grace;
+        match __oc0 {
             ::core::option::Option::Some(__o0) => {
                 ___grace_present = 1u8;
                 match __o0 {
@@ -7444,7 +7445,8 @@ pub(crate) unsafe fn Observation_to_JObject_435b0724<'a>(
         let ___fallback_g3: jni::objects::JObject;
         let ___fallback_g4: jni::sys::jint;
         let ___fallback_g5: jni::sys::jlong;
-        match &v.fallback {
+        let __oc0: &::core::option::Option<_> = &v.fallback;
+        match __oc0 {
             ::core::option::Option::Some(__o0) => {
                 ___fallback_present = 1u8;
                 match __o0 {
