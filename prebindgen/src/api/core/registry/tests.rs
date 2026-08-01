@@ -1431,6 +1431,53 @@ fn an_unresolved_type_without_a_position_reports_none() {
     );
 }
 
+/// The same rule for the *not-expressible* report, which has its own renderer.
+///
+/// Two producers reach it — an unsupported captured element, and a type the scan
+/// could not classify — and neither is guaranteed a file: a hand-built stream and
+/// a spelling a binding composed both carry `SourceLocation::default()`. Printing
+/// it renders `:0:0:`, which reads as a real position.
+///
+/// Pinned separately from the unresolved-type test above because it is a separate
+/// `Display` arm: the two were written months apart and only one had the guard.
+#[test]
+fn a_not_expressible_report_omits_a_position_it_does_not_have() {
+    let located = SourceLocation {
+        file: "src/lib.rs".into(),
+        line: 7,
+        column: 1,
+        crate_name: Some("myflat".into()),
+    };
+    let err: ScanError = ScanError::NotExpressible {
+        entries: vec![
+            NotExpressibleEntry {
+                name: None,
+                reason: "type `*const u8` is a form the language does not accept".into(),
+                location: SourceLocation::default(),
+            },
+            NotExpressibleEntry {
+                name: Some(syn::parse_str("Placed").unwrap()),
+                reason: "is unsupported".into(),
+                location: located,
+            },
+        ],
+    };
+    let msg = err.to_string();
+
+    assert!(
+        !msg.contains(":0:0"),
+        "a placeless entry must print no position:\n{msg}"
+    );
+    assert!(
+        msg.contains("type `*const u8` is a form the language does not accept"),
+        "it is still reported, and the reason names the offender:\n{msg}"
+    );
+    assert!(
+        msg.contains("src/lib.rs:7:1 in crate `myflat`: Placed is unsupported"),
+        "an entry that HAS a position still prints it, with its crate:\n{msg}"
+    );
+}
+
 /// A self-referential type has no topological order, so `crossings` must break
 /// the cycle rather than loop or drop a node.
 ///

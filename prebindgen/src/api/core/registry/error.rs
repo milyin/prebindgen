@@ -116,15 +116,29 @@ impl fmt::Display for ScanError {
                     // several sources, two offenders both read `src/lib.rs:..`
                     // and the location alone says nothing about which one to fix.
                     // Same reason the duplicate-name diagnostic carries it.
-                    let in_crate = match &e.location.crate_name {
-                        Some(c) => format!(" in crate `{c}`"),
-                        None => String::new(),
-                    };
-                    match &e.name {
-                        Some(name) => {
-                            write!(f, "\n  {}{in_crate}: {name} {}", e.location, e.reason)?
+                    //
+                    // Gated on `has_position`, because not every offender has a
+                    // place: a type a binding composed was never written in a file,
+                    // and neither was an item from a hand-built stream. Rendering
+                    // the default location anyway prints `:0:0:`, which reads as a
+                    // real position — the fault this whole `has_position` split
+                    // exists to prevent, and it is worse than saying nothing.
+                    let mut prefix = String::new();
+                    if e.location.has_position() {
+                        prefix.push_str(&e.location.to_string());
+                    }
+                    if let Some(c) = &e.location.crate_name {
+                        if !prefix.is_empty() {
+                            prefix.push(' ');
                         }
-                        None => write!(f, "\n  {}{in_crate}: {}", e.location, e.reason)?,
+                        prefix.push_str(&format!("in crate `{c}`"));
+                    }
+                    if !prefix.is_empty() {
+                        prefix.push_str(": ");
+                    }
+                    match &e.name {
+                        Some(name) => write!(f, "\n  {prefix}{name} {}", e.reason)?,
+                        None => write!(f, "\n  {prefix}{}", e.reason)?,
                     }
                 }
                 Ok(())
