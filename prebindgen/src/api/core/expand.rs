@@ -31,7 +31,7 @@ use quote::quote;
 
 use crate::api::core::{
     registry::{Registry, TypeKey},
-    types_util::{ident, option_inner_type, result_ok_type},
+    types_util::ident,
 };
 
 mod error;
@@ -197,11 +197,7 @@ pub fn apply<M>(
                 .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
             let param_ty = find_param_type(&item_fn, &ed.param)
                 .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
-            let inner = option_inner_type(&param_ty).unwrap_or(param_ty);
-            let bare = match &inner {
-                syn::Type::Reference(r) => (*r.elem).clone(),
-                other => other.clone(),
-            };
+            let bare = crossing_core(registry.flat(), &param_ty);
             if TypeKey::from_type(&bare) != TypeKey::from_type(declared) {
                 return Err(ExpandError::ParamTypeMismatch {
                     func: ed.func.clone(),
@@ -249,11 +245,7 @@ pub fn apply<M>(
             let receiver_key = method_receivers.get(func);
             let mut receiver_skipped = false;
             for (pname, pty) in fn_params(&item_fn) {
-                let core = option_inner_type(&pty).unwrap_or(pty);
-                let bare = match &core {
-                    syn::Type::Reference(r) => (*r.elem).clone(),
-                    other => other.clone(),
-                };
+                let bare = crossing_core(registry.flat(), &pty);
                 let bare_key = TypeKey::from_type(&bare);
                 if !receiver_skipped && receiver_key == Some(&bare_key) {
                     receiver_skipped = true;
@@ -312,16 +304,16 @@ fn process_expand<M>(
     let param_ty = find_param_type(&item_fn, &ed.param)
         .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
 
-    // Peel `Option<…>` (whole param optional) then a leading `&` (borrow):
-    // `Option<&T>` → optional + by_ref, `Option<T>` → optional, `&T` → by_ref.
-    let (optional, inner) = match option_inner_type(&param_ty) {
-        Some(i) => (true, i),
-        None => (false, param_ty.clone()),
-    };
-    let (by_ref, target) = match &inner {
-        syn::Type::Reference(r) => (true, (*r.elem).clone()),
-        other => (false, other.clone()),
-    };
+    // The boundary layers: `Option<&T>` → optional + by_ref, `Option<T>` →
+    // optional, `&T` → by_ref, and `target` is what is left under them.
+    let reading = registry.flat().classify(&param_ty).ok();
+    let layers = reading.as_ref().map(|r| r.layers());
+    let optional = layers.as_ref().is_some_and(|l| l.optional);
+    let by_ref = layers.as_ref().is_some_and(|l| l.by_ref);
+    let target = layers
+        .as_ref()
+        .map(|l| l.core.origin.syntax.clone())
+        .unwrap_or_else(|| param_ty.clone());
     let target_key = TypeKey::from_type(&target);
 
     let variants = resolve_constructor(exp, registry, &target_key, ed)?;
@@ -387,10 +379,11 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
         .iter()
         .map(|p| (p.name.clone(), p.ty.origin.syntax.clone()))
         .collect();
-    let ret: syn::Type = f.ret.origin.syntax.clone();
-    let (target, fallible) = match result_ok_type(&ret) {
-        Some(ok) => (ok, true),
-        None => (ret, false),
+    // The model already read this return; `fallible_parts` is that reading, not a
+    // second look at the spelling.
+    let (target, fallible) = match f.ret.fallible_parts() {
+        Some((ok, _)) => (ok.origin.syntax.clone(), true),
+        None => (f.ret.origin.syntax.clone(), false),
     };
     Ok(CtorSig {
         params,
@@ -669,15 +662,15 @@ fn build_arg<M>(
     leaves: &mut Vec<FoldLeaf>,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldArg, ExpandError> {
-    // Peel `Option<…>` then a leading `&` to reach the parameter's core type.
-    let (popt, core) = match option_inner_type(pty) {
-        Some(i) => (true, i),
-        None => (false, pty.clone()),
-    };
-    let (pby_ref, bare) = match &core {
-        syn::Type::Reference(r) => (true, (*r.elem).clone()),
-        other => (false, other.clone()),
-    };
+    // The boundary layers down to the parameter's core type.
+    let preading = registry.flat().classify(pty).ok();
+    let players = preading.as_ref().map(|r| r.layers());
+    let popt = players.as_ref().is_some_and(|l| l.optional);
+    let pby_ref = players.as_ref().is_some_and(|l| l.by_ref);
+    let bare = players
+        .as_ref()
+        .map(|l| l.core.origin.syntax.clone())
+        .unwrap_or_else(|| pty.clone());
     let key = TypeKey::from_type(&bare);
     // A default constructor for the parameter's type ⇒ recursive nested build.
     let canon = exp
@@ -1087,6 +1080,24 @@ fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: 
 // ──────────────────────────────────────────────────────────────────────
 // Small helpers
 // ──────────────────────────────────────────────────────────────────────
+
+/// The type a value finally crosses as: the boundary layers off, read off the
+/// model's classification instead of by taking the spelling apart.
+///
+/// `Option<&T>` and `&T` and `T` all answer `T`, which is what every caller here
+/// wants — they are matching a declared target, and a declaration names the type,
+/// not the way a particular parameter happens to wrap it.
+///
+/// A type the grammar cannot express answers itself. That is the identity, not a
+/// fallback classifier: a type with no reading has no layers to peel, and nothing
+/// that reaches here can have one — every signature in play was accepted by the
+/// frontend before the scan registered it.
+fn crossing_core(flat: &crate::api::core::flat::Flat, ty: &syn::Type) -> syn::Type {
+    match flat.classify(ty) {
+        Ok(reading) => reading.layers().core.origin.syntax.clone(),
+        Err(_) => ty.clone(),
+    }
+}
 
 fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Type> {
     for input in &item_fn.sig.inputs {

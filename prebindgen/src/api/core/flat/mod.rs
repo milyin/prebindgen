@@ -181,7 +181,10 @@ pub use self::{
     },
     origin::Origin,
     spelling::{canonical_spelling, canonical_type, type_from_ident},
-    ty::{RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
+    ty::{
+        Layers, RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType,
+        UnsupportedTypeReason,
+    },
 };
 use crate::SourceLocation;
 

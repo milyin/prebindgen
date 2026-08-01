@@ -41,7 +41,88 @@ pub struct TypeRef {
     pub origin: Origin<syn::Type>,
 }
 
+/// The boundary layers a type wraps its payload in, and what is underneath.
+///
+/// See [`TypeRef::layers`].
+#[derive(Clone, Copy, Debug)]
+pub struct Layers<'a> {
+    /// An [`Optional`](TypeKind::Optional) was outermost.
+    pub optional: bool,
+    /// A [`Sequence`](TypeKind::Sequence) came next — a run of the core type.
+    pub iterable: bool,
+    /// The core is reached through a borrow.
+    pub by_ref: bool,
+    /// This type, then what is left after the optional peel, then after the
+    /// sequence peel. A layer that is absent repeats the one before it, so the
+    /// three are always present and always in that order.
+    ///
+    /// These are the spellings a boundary fold **registers** — the whole type,
+    /// the collection, the element — which is a different question from what
+    /// finally crosses. A layer delivered leaf-by-leaf needs each of them
+    /// un-required, and there is no converter for any of them.
+    pub wrappers: [&'a TypeRef; 3],
+    /// Past the borrow as well: the type that actually crosses.
+    pub core: &'a TypeRef,
+}
+
 impl TypeRef {
+    /// Peel the boundary layers: an optional, of a run of, borrowed `T`.
+    ///
+    /// The shape nearly every crossing is some subset of, and the question a
+    /// dozen sites used to ask by taking the spelling apart — `option_inner_type`,
+    /// then `vec_inner_type`, then a `syn::Type::Reference` match, each rebuilding
+    /// the peeled type as it went.
+    ///
+    /// **The order is fixed and each layer is peeled at most once**: `Optional`,
+    /// then `Sequence`, then `Ref`. That is not a convention, it is the shape of a
+    /// boundary — *an optional list of borrowed things* — and reading layers in
+    /// whatever order they appear would call `Vec<Option<T>>` an optional list,
+    /// which is a different type. A layer out of that position stays on the core,
+    /// where a caller that cares matches [`kind`](Self::kind) directly: `&[T]`
+    /// reports `by_ref` with a `Sequence` core, because the borrow is outside the
+    /// run.
+    ///
+    /// Every answer is a fact about the **classification**, so a spelling the
+    /// language does not distinguish cannot change it: `Box<Vec<T>>` reads the
+    /// same as `Vec<T>`, and `Cow<'_, [T]>` the same as either.
+    pub fn layers(&self) -> Layers<'_> {
+        let whole = self;
+        let mut core = self;
+
+        let optional = matches!(core.kind, TypeKind::Optional(_));
+        if let TypeKind::Optional(inner) = &core.kind {
+            core = inner;
+        }
+        let after_opt = core;
+
+        let iterable = matches!(core.kind, TypeKind::Sequence(_));
+        if let TypeKind::Sequence(inner) = &core.kind {
+            core = inner;
+        }
+        let after_seq = core;
+
+        let by_ref = matches!(core.kind, TypeKind::Ref { .. });
+        if let TypeKind::Ref { inner, .. } = &core.kind {
+            core = inner;
+        }
+
+        Layers {
+            optional,
+            iterable,
+            by_ref,
+            wrappers: [whole, after_opt, after_seq],
+            core,
+        }
+    }
+
+    /// The `Ok` and `Err` sides when this is a `Result`, else `None`.
+    pub fn fallible_parts(&self) -> Option<(&TypeRef, &TypeRef)> {
+        match &self.kind {
+            TypeKind::Fallible { ok, err } => Some((ok, err)),
+            _ => None,
+        }
+    }
+
     /// The extent of this type when it is an array, else `None`.
     pub fn array_extent(&self) -> Option<&ArrayExtent> {
         match &self.kind {
