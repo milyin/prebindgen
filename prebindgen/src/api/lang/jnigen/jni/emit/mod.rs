@@ -106,10 +106,12 @@ mod destructure_ledger {
     const LEDGER: &[(&str, usize)] = &[
         ("callback.rs", 0),
         // The `Option<T>` output converters' niche and boxed-primitive arms.
-        // They destructure `v`, the converter's own parameter — whose Rust type
-        // is the crossing's SPELLING. Correct today only because a wrapped
-        // spelling gets no converter at all (#270); if that is fixed and
-        // `Box<Option<T>>` becomes a crossing, these two need coercing.
+        // They destructure `v`, the converter's own parameter — and #270 made a
+        // wrapped spelling a real crossing, so that prediction came due. They
+        // are correct now for the reason the note said they were not: the
+        // caller (`output_wrapper_shape`) binds the CANONICAL `Option<T>` from
+        // the spelling before handing the body `v`, so what these destructure
+        // is an `Option` by construction rather than by luck.
         ("convert.rs", 2),
         // 2 fn-return matches (owned), 2 leaf reaches (one coerced, one owned
         // accessor return), 1 owned identity move, 1 emitter-bound local.
