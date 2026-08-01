@@ -371,9 +371,13 @@ pub(crate) type MethodNameMangle = Arc<dyn Fn(&str, &str, &str) -> String + Send
 pub struct JniGen {
     /// What the binding declared. The emitters read it for names, classes and
     /// decompositions.
-    pub(crate) gen: JniGenBuilder,
+    ///
+    /// A [`Declarations`], not the [`JniGenBuilder`] it came from: the builder's
+    /// mutators would otherwise ride into the finished object, and "finished"
+    /// would be a comment rather than a type.
+    decls: Declarations,
     /// Every crossing this binding needs, each with its conversion.
-    pub(crate) registry: crate::core::Registry<KotlinMeta>,
+    registry: crate::core::Registry<KotlinMeta>,
 }
 
 // Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
@@ -402,7 +406,7 @@ impl JniGen {
     ) -> Result<std::path::PathBuf, crate::core::WriteRustError> {
         Ok(crate::api::core::write::write_rust(
             &self.registry,
-            &self.gen,
+            &self.decls,
             out_path,
         )?)
     }
@@ -413,19 +417,34 @@ impl JniGen {
     }
 
     /// What the binding declared.
-    pub fn declarations(&self) -> &JniGenBuilder {
-        &self.gen
+    pub fn declarations(&self) -> &Declarations {
+        &self.decls
     }
 }
 
+/// Everything a binding **declared**, once it is done declaring.
+///
+/// The read-only half of what used to be one `JniGenBuilder`. Splitting it is what
+/// keeps the phase separation now that a generator owns its own registry: before
+/// [#253](https://github.com/milyin/prebindgen/pull/253) a build script held a
+/// `RegistryBuilder` and then a `Registry`, and that type split *was* the
+/// enforcement. Once `JniGen::builder().source(..).build()` moved both inside the
+/// generator, the built object was left holding the builder — mutators and all.
+///
+/// So the mutators live on [`JniGenBuilder`] and nothing else, and this type — the
+/// one a [`JniGen`] keeps and every emitter reads — **has no `&mut self` method at
+/// all**. Not "the obvious ones were removed": none, which
+/// `a_built_jnigen_exposes_no_mutation` checks by reading the source, because a
+/// one-line grep once missed a multi-line signature and let `Registry::supply`
+/// survive two commits that claimed it was gone.
 #[derive(Clone)]
-pub struct JniGenBuilder {
+pub struct Declarations {
     /// Single source of truth for the JVM/Kotlin namespace this binding
     /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
     /// Every derived form — slash-separated for `FindClass`
-    /// (`JniGenBuilder::java_class_prefix()`), `_`-mangled for JNI extern idents
-    /// (`JniGenBuilder::jni_class_path()`), dot-separated for Kotlin `package`
-    /// declarations — is computed from this at the point of use.
+    /// ([`Declarations::java_class_prefix`]), `_`-mangled for JNI extern idents,
+    /// dot-separated for Kotlin `package` declarations — is computed from this at
+    /// the point of use.
     /// `pub(crate)`: consumers go through [`JniGenBuilder::set_package_prefix`],
     /// whose trimming a direct field write would bypass.
     pub(crate) package: String,
@@ -577,6 +596,18 @@ pub struct JniGenBuilder {
     /// "derived state, keyed by `(self, registry)`" contract as
     /// [`Self::iface_specs`].
     pub(crate) fn_plans: std::cell::RefCell<HashMap<syn::Ident, std::rc::Rc<JniFunctionPlan>>>,
+}
+
+/// Describe a JNI binding: state the Kotlin surface, then [`build`](Self::build).
+///
+/// Holds the [`Declarations`] being filled and the sources to parse, and it is the
+/// only type with mutators. `build` consumes it, hands the declarations to the
+/// registry, and stores them in a [`JniGen`] — from where nothing can declare
+/// anything again, because this type is gone by then.
+#[derive(Clone, Default)]
+pub struct JniGenBuilder {
+    /// What has been declared so far. Moved out whole by [`Self::build`].
+    pub(crate) decls: Declarations,
 
     /// Where the `#[prebindgen]` items come from.
     ///
@@ -584,6 +615,10 @@ pub struct JniGenBuilder {
     /// three feeders it has — so a build script says where the source is in the
     /// vocabulary the model already uses, and never names a `Flat` or a
     /// `Registry` itself.
+    ///
+    /// Not a declaration, which is why it stays here rather than moving across:
+    /// it is *input to* building, and keeping it out is what makes
+    /// [`Declarations`] mean one thing.
     pub(crate) sources: crate::api::core::flat::FlatBuilder,
 }
 

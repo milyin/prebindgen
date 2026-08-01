@@ -655,10 +655,11 @@ fn ignore_matching_acknowledges_naming_family() {
         .ignore(crate::ty!(ZUnusedThing));
     // The predicate flows through the Prebindgen hook…
     {
-        let preds = jni.ignored_name_predicates();
+        let preds = jni.decls.ignored_name_predicates();
         assert_eq!(preds.len(), 1);
         assert!(preds[0]("detail_const_a") && !preds[0]("z_len"));
         assert!(jni
+            .decls
             .ignored_types()
             .contains(&TypeKey::parse("ZUnusedThing").expect("test type")));
     }

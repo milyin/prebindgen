@@ -183,7 +183,7 @@ pub(crate) struct SumPlanField {
 /// name) — consistently for BOTH sides, where the former parallel walks
 /// could silently diverge on such edge cases.
 pub(crate) fn build_struct_plan(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     s: &syn::ItemStruct,
     depth: usize,
@@ -215,7 +215,7 @@ pub(crate) fn build_struct_plan(
 /// `owner` is the dotted path used in diagnostics (`Config.mode`,
 /// `Reading::Exact.v0`).
 pub(crate) fn classify_field(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     ty: &syn::Type,
     owner: &str,
@@ -464,7 +464,7 @@ impl PlanFieldKind {
 /// whenever a payload's converter happened to resolve later than this plan
 /// was first attempted.
 fn sum_plan_kind(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     ty: &syn::Type,
     owner: &str,

@@ -248,7 +248,7 @@ impl super::JniGen {
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     /// Human-readable class-kind name of a declared type (report use).
     pub(crate) fn class_kind_name(&self, key: &TypeKey) -> &'static str {
         let Some(cfg) = self.types.get(key) else {

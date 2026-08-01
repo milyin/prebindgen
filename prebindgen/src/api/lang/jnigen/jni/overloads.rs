@@ -4,7 +4,7 @@
 //! (`expectedSel: Int, expected00: Long?, …`); the raw call site passes magic
 //! ints and null-padding. Two mechanisms turn that into idiomatic Kotlin:
 //!
-//! * **Proactive splittability check** ([`JniGenBuilder::validate_split_declarations`]):
+//! * **Proactive splittability check** ([`Declarations::validate_split_declarations`]):
 //!   every multi-variant `expand_param!` declaration (type-level or per-fn) is
 //!   verified up front to be *splittable* — its arms surface as pairwise-distinct
 //!   JVM signatures — so a function can safely request overloads. A collision is
@@ -35,7 +35,7 @@ use crate::api::core::{
     registry::Conversions,
 };
 
-impl JniGenBuilder {
+impl Declarations {
     /// Proactively verify every multi-variant `expand_param!` declaration is
     /// splittable (its arms have pairwise-distinct JVM-erased signatures), so
     /// [`FunctionDecl::split_on_param`](crate::fun) can emit unambiguous
@@ -108,7 +108,7 @@ impl JniGenBuilder {
 /// Uses the shared [`erase_kt_type`] model (issue #89 stage 2) so the split
 /// ambiguity check and the whole-artifact overload table agree on erasure.
 fn arm_erased_sig(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     target: &syn::Type,
     ctor: Option<&syn::Ident>,
@@ -141,7 +141,7 @@ fn arm_erased_sig(
 /// type with no resolved surface. References are peeled first (`&T` erases
 /// like `T`).
 fn rust_type_erased(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     ty: &syn::Type,
 ) -> ErasedJvmType {
@@ -405,7 +405,7 @@ fn resolve_split<'a>(
 /// Emits the cartesian product of the named params' arms; panics (a build
 /// error) if the product has two combinations with the same JVM signature.
 pub(crate) fn render_param_overloads(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     sel_fun: &kt::KtFun,

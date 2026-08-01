@@ -31,6 +31,7 @@ mod consts;
 mod cross_artifact;
 mod flatten;
 mod niches;
+mod phases;
 mod sealed;
 mod snapshots;
 mod symbols;

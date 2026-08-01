@@ -31,7 +31,7 @@ pub(crate) struct JniFunctionPlan {
     /// The onError handler interfaces — the always-present binding
     /// `JniErrorHandler` plus, for a fallible function, its typed domain
     /// `<Err>Handler` (see [`ErrorIfaces`]). Shared from the
-    /// [`JniGenBuilder::iface_spec`] memo: one derivation per channel feeds the Rust
+    /// [`Declarations::iface_spec`] memo: one derivation per channel feeds the Rust
     /// `__SINK_*` statics, the Kotlin sink wiring, and the interface
     /// declarations, so the FQN/descriptor pairs of the cached `run` lookups
     /// cannot drift. `None` = the domain channel is underivable (the Rust
@@ -150,7 +150,7 @@ pub(crate) struct UnfoldOutputPlan {
     /// The builder/folder `fun interface` spec the delivery calls into —
     /// [`folder_iface_for_plan`] for an iterable fold (incl. the fixed
     /// whole-element form), the memoized [`SpecKey::Builder`] spec
-    /// otherwise. Shared from the [`JniGenBuilder::iface_spec`] memo: one
+    /// otherwise. Shared from the [`Declarations::iface_spec`] memo: one
     /// derivation feeds the Rust upcall statics, every Kotlin surface read,
     /// and the interface declaration, so the cached `run` FQN/descriptor
     /// pair cannot drift. `None` = underivable (the Rust emitter keeps its
@@ -242,7 +242,7 @@ impl PlanError {
             ),
             PlanError::UnresolvedOutput { ty } => format!(
                 "JniGen::on_function: return type `{}` of `{}` has no registered output \
-                 converter — register one via `JniGenBuilder::output_wrapper(pat, |…| Some((ty, exc, body)))` \
+                 converter — register one via `Declarations::output_wrapper(pat, |…| Some((ty, exc, body)))` \
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
                   to bind a domain exception)",
                 ty, fn_ident,
@@ -267,7 +267,7 @@ impl PlanError {
 ///
 /// [`Prebindgen::validate_resolved`]: crate::api::core::prebindgen::Prebindgen::validate_resolved
 pub(crate) fn validate_bindings(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
 ) -> Result<(), String> {
     let mut errors: Vec<String> = Vec::new();
@@ -315,7 +315,7 @@ pub(crate) fn validate_bindings(
     }
 
     // Declared consts: their synthetic nullary getters run through the same
-    // plan machinery (`JniGenBuilder::on_const`).
+    // plan machinery (`Declarations::on_const`).
     if let Some(declared_consts) = ext.declared_consts() {
         let mut consts: Vec<&crate::api::core::flat::Constant> =
             registry.flat().constants().collect();
@@ -372,7 +372,7 @@ impl FnOutputPlan {
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     /// The memoized lowered plan for one bound function — the "build the plan
     /// once and store it" stage [`JniFunctionPlan::build`] anticipated (issue
     /// #90). Keyed by the function's ident (bound functions live in one flat
@@ -382,7 +382,7 @@ impl JniGenBuilder {
     /// (an unresolved converter) is passed through — it only occurs at the
     /// validation phase, which reports it and fails `resolve` before any
     /// emitter runs. Same interior-mutable contract as
-    /// [`JniGenBuilder::iface_spec`]; drift is guarded externally by the byte-identity
+    /// [`Declarations::iface_spec`]; drift is guarded externally by the byte-identity
     /// regen check (a plan change alters generated code).
     pub(crate) fn fn_plan(
         &self,
@@ -402,10 +402,10 @@ impl JniGenBuilder {
 
 impl JniFunctionPlan {
     /// Lower `f`'s inputs. Deterministic over `(ext, registry, f)`. Emission
-    /// and validation go through the memo [`JniGenBuilder::fn_plan`], so the plan is
+    /// and validation go through the memo [`Declarations::fn_plan`], so the plan is
     /// built ONCE per function and shared; this is the underlying derivation.
     pub fn build(
-        ext: &JniGenBuilder,
+        ext: &Declarations,
         registry: &Registry<KotlinMeta>,
         f: &syn::ItemFn,
     ) -> Result<Self, PlanError> {
@@ -516,7 +516,7 @@ fn kotlin_jvm_slots(ty: &str) -> usize {
 /// collection helper; recursive data-class leaves are valid in constructor
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
 fn classify_leaf(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     ident: &syn::Ident,
     ty: &syn::Type,
@@ -610,7 +610,7 @@ fn classify_leaf(
 /// declared-surface facts from `classify_return`'s inputs
 /// (render_extern_decl's `ret_decl` reconstruction).
 fn build_output(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     f: &syn::ItemFn,
 ) -> Result<FnOutputPlan, PlanError> {
@@ -712,7 +712,7 @@ impl ReturnSurface {
     /// the single peel that subsumed both `classify_return`'s inline peel
     /// and the former `canonical_return_ty`.
     pub fn classify(
-        ext: &JniGenBuilder,
+        ext: &Declarations,
         registry: &impl Conversions<KotlinMeta>,
         output: &syn::ReturnType,
     ) -> (Self, syn::Type) {

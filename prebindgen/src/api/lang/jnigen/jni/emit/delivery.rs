@@ -30,7 +30,7 @@ use crate::api::core::{
 /// [`UnfoldShape::Base`]: crate::api::core::unfold::UnfoldShape::Base
 /// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     iface: Option<&IfaceSpec>,
@@ -788,7 +788,7 @@ fn reach_leaf(
 /// arm of fallible externs (whose `fail` falls back to a binding-error
 /// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     obj_idents: &[syn::Ident],

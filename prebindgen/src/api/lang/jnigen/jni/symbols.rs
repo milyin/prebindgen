@@ -34,10 +34,7 @@ use super::*;
 ///   names colliding in one package, including a collision the mangler
 ///   created.
 /// * **Warnings** — where the default mangler sanitized a Rust-derived name.
-pub(crate) fn validate_symbols(
-    ext: &JniGenBuilder,
-    registry: &Registry<KotlinMeta>,
-) -> Vec<String> {
+pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMeta>) -> Vec<String> {
     let mut errors: Vec<String> = Vec::new();
     // (package, name) → origin, for top-level-unique Kotlin declarations.
     let mut top_level: BTreeMap<(String, String), String> = BTreeMap::new();
@@ -113,7 +110,7 @@ pub(crate) fn validate_symbols(
         // name `Companion` is ours — an artifact of emitting a companion at
         // all, not a name Kotlin reserves — so when a variant wants it the
         // generator renames the companion instead of making the source crate
-        // rename a legitimate variant (`JniGenBuilder::sum_companion_name`).
+        // rename a legitimate variant (`Declarations::sum_companion_name`).
         //
         // The interface's own name is different: BOTH colliding names come
         // from the source crate (the enum's name and its variant's), so the
@@ -262,7 +259,7 @@ fn check_ident(name: &str, origin: &str, errors: &mut Vec<String>) {
 
 /// Emit a `cargo:warning` for each Rust struct field (data-class property) or
 /// enum variant whose Kotlin name the default mangler had to change.
-fn warn_derived_name_changes(ext: &JniGenBuilder, registry: &Registry<KotlinMeta>) {
+fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>) {
     let warn = |raw: &str, mangled: &str, what: &str, owner: &str| {
         if raw != mangled {
             println!(

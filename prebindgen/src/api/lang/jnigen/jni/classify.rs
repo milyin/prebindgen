@@ -42,7 +42,7 @@ impl TypeConfig {
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     /// Classify `bare` against the declared-type table and the registry's
     /// captured structs. Callers strip `Option<_>` / `&_` layers first —
     /// wrapper folding is the resolver's business, not this table's.

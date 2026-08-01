@@ -67,7 +67,7 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
 /// them), and the `fromParts` factory's raw-text class references carry their
 /// imports on the factory body `Code`.
 pub(crate) fn build_data_class(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     class_name: &str,
     item_struct: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
@@ -254,7 +254,7 @@ pub(crate) fn build_data_class(
 /// to the matching `Java_<pkg>_<class>_<mangled-freePtr>`
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     class_name: &str,
     rust_doc_name: &str,
@@ -464,7 +464,7 @@ pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) ->
 /// `kt_return` (Unit is no return type). `None` if a param's converter isn't
 /// resolved. Full-FQN types throughout — no derivation-time shortening.
 pub(crate) fn render_extern_decl(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
 ) -> Option<kt::KtFun> {
@@ -752,7 +752,7 @@ pub(crate) struct WrapperSurface {
 /// import set. Validation calls this directly and skips the body work
 /// (`build_native_call` / `render_body` / KDoc / opaque-lock collection).
 pub(crate) fn build_wrapper_surface(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
@@ -831,7 +831,7 @@ pub(crate) fn build_wrapper_surface(
 }
 
 pub(crate) fn render_wrapper_fn(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
@@ -888,7 +888,7 @@ pub(crate) fn render_wrapper_fn(
 /// the ordinary output machinery — plus the public lazily-initialized `val`
 /// that calls it once, on first use (see [`render_val_over_helper`]).
 pub(crate) fn render_const_val(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     package: &str,
     c: &syn::ItemConst,
     registry: &Registry<KotlinMeta>,
@@ -919,7 +919,7 @@ pub(crate) fn render_const_val(
 /// computed once, on first use, through the ordinary generated wrapper
 /// (one JNI call, exactly like a const getter).
 pub(crate) fn render_constant_fn_val(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     package: &str,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
@@ -949,7 +949,7 @@ pub(crate) fn render_constant_fn_val(
 /// is the binding-defined expression, evaluated once, on first use, through
 /// the generated getter.
 pub(crate) fn render_const_expr_val(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     package: &str,
     decl: &crate::api::lang::jnigen::jni::decl::ConstExprDecl,
     registry: &Registry<KotlinMeta>,
@@ -982,7 +982,7 @@ pub(crate) fn render_const_expr_val(
 /// `error(...)` at first use). Lazy, not eager: a consts-heavy package must
 /// not fire one JNI call per `val` at class-load (issue #58).
 fn render_val_over_helper(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     mut helper: kt::KtFun,
     val_name: String,
@@ -1072,7 +1072,7 @@ struct DomainSink {
 /// instance-method receiver (the first param whose peeled type matches
 /// `receiver_key`), which is bound to `this` and dropped from the signature.
 fn classify_params(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1262,7 +1262,7 @@ fn classify_params(
 /// with no such projection ⇒ the callback is passed directly (M1–M4
 /// unchanged).
 fn classify_output(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     f: &syn::ItemFn,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
@@ -1434,7 +1434,7 @@ fn classify_output(
 /// deliberately deferred to [`build_success_return`], after the native error
 /// captures have been checked.
 fn build_native_call(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     jni_call: &str,
     params: &[Param],
     out: &OutputPlan,
@@ -1530,7 +1530,7 @@ fn build_native_call(
 /// This expression is emitted only after binding/domain captures have been
 /// checked, so a native failure placeholder can never reach an enum lookup,
 /// value projection, or erased-result cast.
-fn build_success_return(ext: &JniGenBuilder, out: &OutputPlan, raw: &str) -> String {
+fn build_success_return(ext: &Declarations, out: &OutputPlan, raw: &str) -> String {
     if let Some(p) = &out.projection {
         // Fold the wrap through the projection strategy. The wrap class is
         // the projection leaf's typed short name (a Handle's typed-handle
@@ -1807,7 +1807,7 @@ fn render_value_stmt(bind: &str, body_expr: &str, opaques: &[Opaque]) -> kt::Cod
 /// statements are needed) so the caller can bind it to `__ret`, rethrow a
 /// captured sink error, then return.
 fn render_core_stmt(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     opaques: &[Opaque],
     body_expr: &str,
     imports: &mut BTreeSet<String>,
@@ -1912,7 +1912,7 @@ enum BodyReturn {
 }
 
 fn render_body(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     params: &[Param],
     opaques: &[Opaque],
     sink: &ErrorSink,
@@ -2007,7 +2007,7 @@ fn render_body(
 /// value projection that can't be built Rust-side).
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
 pub(crate) fn unfold_leaf_kt(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     out_ty: &syn::Type,
     nullable: bool,
@@ -2145,7 +2145,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 ///   and pick the JNI extern's wire return (`Long` for `Handle`). `None` for
 ///   plain non-projection returns.
 pub(crate) fn classify_return(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     output: &syn::ReturnType,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(

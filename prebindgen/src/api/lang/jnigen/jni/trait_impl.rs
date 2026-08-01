@@ -36,7 +36,7 @@ fn generated_converter_attr() -> syn::Attribute {
 // and consuming-crate wrapper exts like ZenohJniExt).
 // ──────────────────────────────────────────────────────────────────────
 
-impl JniGenBuilder {
+impl Declarations {
     /// Build the standard JNI input-converter `fn`. Body assumes in-scope
     /// `env: &mut JNIEnv` and `v: &<wire>` (or `v: <wire>` for raw-pointer
     /// wires); produces a value of `rust`. Returned function has its name
@@ -548,7 +548,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 /// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
 /// producing destructors that reference types not in scope.
 pub(crate) fn build_handle_destructor_items(
-    ext: &JniGenBuilder,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
@@ -619,7 +619,7 @@ pub(crate) fn build_handle_destructor_items(
 /// the two `Option<_>` sub-cases (direct-handle-by-value vs general), which
 /// share a pattern and so live together in [`JniGenBuilder::input_option`] to keep
 /// their original fall-through.
-impl JniGenBuilder {
+impl Declarations {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
     /// `emit_jni_function_wrapper` adds `&decoded`). Exists so the
@@ -961,25 +961,31 @@ impl JniGenBuilder {
     ///
     /// The seam tests use to feed synthetic items without a source directory;
     /// `build` is this with the model read from [`Self::source`].
+    ///
+    /// **This is the phase change.** The declarations are taken out of the
+    /// builder here and never put back: everything below runs against
+    /// `&decls`, and what it produces is stored in a [`JniGen`], which has no
+    /// route to a `JniGenBuilder` at all.
     pub(crate) fn build_with(
         self,
         registry: crate::api::core::registry::RegistryBuilder<KotlinMeta>,
     ) -> Result<JniGen, crate::core::WriteRustError> {
-        let registry = self
+        let decls = self.decls;
+        let registry = decls
             .declare_into(registry)?
-            .validate_with(&self)?
-            .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
+            .validate_with(&decls)?
+            .convert_with(|crossing, built| decls.convert_crossing(crossing, built))?
             .build()?;
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
-        self.validate_resolved(&registry)
+        decls
+            .validate_resolved(&registry)
             .map_err(|message| crate::core::ScanError::AdapterInvariant { message })?;
-        Ok(JniGen {
-            gen: self,
-            registry,
-        })
+        Ok(JniGen { decls, registry })
     }
+}
 
+impl Declarations {
     /// Build the conversion for one crossing, against what is already built.
     ///
     /// `None` is *cannot*, never *not yet*: `crossings` hands them out
@@ -1081,7 +1087,7 @@ impl JniGenBuilder {
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
         registry: &impl Conversions<KotlinMeta>,
@@ -1191,7 +1197,7 @@ impl JniGenBuilder {
     }
 }
 
-impl JniGenBuilder {
+impl Declarations {
     fn dispatch_fn_input(
         &self,
         args: &[syn::Type],
@@ -1215,7 +1221,7 @@ impl JniGenBuilder {
     }
 }
 
-impl Prebindgen for JniGenBuilder {
+impl Prebindgen for Declarations {
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
     /// handlers at the same point they build the wire/body; the
@@ -1565,7 +1571,7 @@ impl Prebindgen for JniGenBuilder {
 /// Structural converter builders — the rank-0 terminal chains and the rank-1
 /// wrapper-shape handlers, now inherent helpers called by the structural
 /// [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`].
-impl JniGenBuilder {
+impl Declarations {
     // ── Input converters ─────────────────────────────────────────────
 
     /// Whole-type **input** terminal categories (opaque handle, enum,
@@ -2182,7 +2188,7 @@ impl JniGenBuilder {
 /// These were trait methods the registry called back into the adapter from
 /// inside `resolve`. They are the adapter's own business now, gathered into the
 /// one value the registry is constructed from.
-impl JniGenBuilder {
+impl Declarations {
     /// Union of every `.fun(...)` list across all
     /// [`Self::package`] subpackage contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the
