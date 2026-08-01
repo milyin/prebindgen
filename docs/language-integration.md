@@ -118,7 +118,7 @@ moves it.
 | L1 | `Registry` consumes elements | **done** — [#238](https://github.com/milyin/prebindgen/pull/238) |
 | L1.5 | The model is the only index | **done** — #239–#246 |
 | L1.75 | The registry becomes describable | **done** — #249–#253, squashed into #248's commit |
-| L2 | `api/core` stops classifying source syntax | **in progress** — [#248](https://github.com/milyin/prebindgen/pull/248) took 35 of 71 |
+| L2 | `api/core` stops classifying source syntax | **done** — #248, #257, #258, #261, #263 |
 | L3 | `Cbindgen` consumes elements | not started |
 | L4 | `JniGen` consumes elements *(the long pole)* | not started |
 | L5 | Close the seam: the public contract stops being `syn` | not started |
@@ -304,7 +304,7 @@ redesign too. Do not read the commit log as the inventory: `flat-drop-pattern-en
 still reports 28 commits ahead of `language-integration` because a squash records
 no ancestry, while the trees differ by nothing. Diff the content, not the history.
 
-### L2 — `api/core` stops classifying source syntax — **in progress**
+### L2 — `api/core` stops classifying source syntax — **done**
 
 - [x] **The pattern engine is deleted**
       ([#248](https://github.com/milyin/prebindgen/pull/248)): `match_pattern`,
@@ -333,20 +333,98 @@ no ancestry, while the trees differ by nothing. Diff the content, not the histor
       `type_from_ident` and the rest become `core::flat::spelling`. They decide what
       spelling a type *has* before anything keys on it — the same authority that
       decides what it *means*. Ledger 158 → 154
+- [x] **One layer read** ([#261](https://github.com/milyin/prebindgen/pull/261)):
+      the twenty sites in `unfold` and `expand` that peeled `Option`, then `Vec`,
+      then `&` by taking a spelling apart now read the model's arity stack.
+      Ledger 154 → 135
+- [x] **The reading is carried, not re-derived**
+      ([#263](https://github.com/milyin/prebindgen/pull/263)): fourteen sites still
+      reached into `origin.syntax` for a fact the element already held — a
+      `Function::ret` that is a `TypeRef`, callback arguments that are `TypeRef`s.
+      The helpers now take `&TypeRef`, so the round trip does not compile. **The
+      ledger did not move**, which is the finding, not a footnote — see below
 
 **#248 is deletion, not migration**, and the distinction is worth keeping visible:
-35 sites left because their code left. The ones that remain are the ones that have
-to actually start reading elements, so the rate so far is not the rate to expect.
-The same caveat applies to the spelling move above, which is a **move**.
+35 sites left because their code left. The same caveat applies to the spelling
+move, which is a **move**. Only the last item above is a migration in the full
+sense, and it is the one that took the most arguing.
 
-**What is left, and why it is not all of it.** Every classifying helper still in
-`api/core/types_util` is called overwhelmingly from the adapters —
-`option_inner_type` 40 times, `bare_path_ident` 22, `is_unit` 18 — and none takes
-the model as an argument, so it cannot consult it from the inside. L2 can stop
-`api/core` from *calling* them; only L3 and L4 can free them to be deleted. The
-remaining migration (`unfold` 16, `expand` 4) and the running plan live in
-[#229](https://github.com/milyin/prebindgen/pull/229), which is where stage state
-is edited.
+#### What L2 taught: a peel must match what the consumer can build
+
+Three defects in the layer read, all one root — a peel that answered more than its
+caller could represent — and none of them visible to the evidence this programme
+usually relies on. The suite passed and regen stayed byte-identical through all
+three, because no in-tree example exercises the shapes involved.
+
+- **`Vec<T>` matched a `T` constructor.** Expansion builds one value; its plan
+  shape has no iterable arm. A peel that removed the `Sequence` anyway made a
+  `Vec<T>` parameter match a `T` constructor, and the wrapper would have handed one
+  reconstructed `T` to a parameter expecting the collection.
+- **The stack recursed past its own contract.** `Vec<Option<T>>` read as an
+  optional inside a run, so a return matched a decomposition target `T` and
+  installed a fold — for a type the explicit path next to it refuses outright. Two
+  paths disagreeing about one return, the silent one winning.
+- **`Layers` was a fourth copy** of `core::shape::Shape`, whose own module doc says
+  it replaced three. Encoded as flags, so a caller could only *ignore* a layer it
+  could not build; the stack lets it **decline** by not matching.
+
+What came out of it is the rule, and it outlives the stage: **the peel is chosen by
+the consumer's capability, not by the type's structure.** `TypeRef` therefore
+offers both — `layer_stack` for a consumer that implements every layer, and
+`optional_inner` / `sequence_elem` / `borrow_target` for one that composes exactly
+what it can honour.
+
+#### What L2 taught twice: the ledger measures the wrong thing for this
+
+The fourth defect was the measurement itself, and it is the one worth carrying
+furthest. L2 was first reported done on the strength of the count falling 154 → 135.
+Then a review pointed at this, which had survived all of it:
+
+```rust
+let item_fn = flat.function(&f).map(|f| f.origin.syntax.clone())?;
+let ret = fn_return(&item_fn);        // dig the return out of raw syntax
+returns_type(registry, &ret, &key)    // -> classify() -> re-lower it
+```
+
+`Function::ret` is **already** a `TypeRef` with `kind` computed at parse time. The
+model handed the answer over; the code reached into `origin` and derived it again —
+in six places, with five more re-extracting callback arguments the model held as
+`TypeRef`s, and three digging parameters out of a cloned `ItemFn`.
+
+The ledger could not see any of it. It counts **variant mentions of watched syn
+enums per file, outside `core::flat`**, so moving a match into one shared classifier
+drops the count without changing the data flow. Both facts are real, and they are
+different facts:
+
+> The ledger measures **who matches syn variants**. It does not measure **who
+> reasons from `origin`**. Those came apart the moment the matching moved into one
+> place, and only the second is what #211 asks for.
+
+The fix is a signature rather than a checker — `peel`, `peel_borrow` and
+`returns_type` take a `&TypeRef`, so a caller must already hold a reading and the
+round trip does not compile. `Flat::classify` belongs to the registry, which is the
+authority on what a type means because it is the thing that **stores** readings.
+`origin.syntax` is read only where a value is stored for emission.
+
+**So a count is a proxy, and this one has a known blind spot.** A stage that reports
+only its delta is reporting the proxy. Where a rule can be made structural, it
+should be — the deltas L3 and L4 report are worth exactly as much as the invariants
+they can point at underneath them.
+
+#### Where `api/core` ends, and why it is not zero
+
+**13 sites**: `types_util` 10, `registry/scan` 2, `unfold` 1.
+
+Every classifying helper still in `types_util` is called overwhelmingly from the
+adapters — `option_inner_type` 40 times, `bare_path_ident` 22, `is_unit` 18 — and
+none takes the model as an argument, so it cannot consult it from the inside. L2
+stopped `api/core` from *calling* them; only L3 and L4 can free them to be deleted.
+`unfold`'s one is `peel_ref`, in the same position with three jnigen callers.
+
+The two in `registry/scan` are different and stay for good: they inspect a key a
+**build-script author** wrote, to diagnose that spelling — no source type is being
+classified, so there is no element to read instead. They are the first entries to
+land in the *"legitimately the adapter's business"* category this document predicts.
 
 ### L3 — `Cbindgen` consumes elements
 
