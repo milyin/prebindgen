@@ -334,16 +334,22 @@ fn encode_field(
                         child_slots.iter().map(|sl| sl.ident.clone()).collect();
                     let defaults: Vec<TokenStream> =
                         child_slots.iter().map(|sl| sl.default.clone()).collect();
+                    // Destructured through a coercion site: `kind` says this
+                    // field is optional, and how Rust spells that is the
+                    // source's business (#268).
+                    let obind = format_ident!("__on{}", depth);
+                    let coerce = bind_as_option(&quote!(&#value), &obind);
                     preludes.extend(quote! {
                         let #flag_id: jni::sys::jboolean;
                         #( let #outer_ids: #outer_tys; )*
-                        match &#value {
-                            Some(#cbind) => {
+                        #coerce
+                        match #obind {
+                            ::core::option::Option::Some(#cbind) => {
                                 #child_pre
                                 #flag_id = 1u8;
                                 #( #outer_ids = #inner_ids; )*
                             }
-                            None => {
+                            ::core::option::Option::None => {
                                 #flag_id = 0u8;
                                 #( #outer_ids = #defaults; )*
                             }
@@ -485,10 +491,16 @@ fn encode_field(
                     let sbind = format_ident!("__o{}", depth);
                     let inner_arms: Vec<TokenStream> =
                         arm_code.iter().map(|a| quote! { #a }).collect();
+                    // Destructured through a coercion site: `kind` says this
+                    // field is optional, and how Rust spells that is the
+                    // source's business (#268).
+                    let obind = format_ident!("__oc{}", depth);
+                    let coerce = bind_as_option(&quote!(&#value), &obind);
                     preludes.extend(quote! {
                         let #flag_id: jni::sys::jboolean;
                         #decls
-                        match &#value {
+                        #coerce
+                        match #obind {
                             ::core::option::Option::Some(#sbind) => {
                                 #flag_id = 1u8;
                                 match #sbind { #(#inner_arms)* }

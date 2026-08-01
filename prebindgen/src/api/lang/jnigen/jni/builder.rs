@@ -958,38 +958,6 @@ impl Declarations {
                 format!("{name_prefix}__{name}")
             };
 
-            // An `Option` the READING sees but the SYNTAX still wraps — `Box<
-            // Option<T>>`. `Box<T>` *is* `T` in the model, deliberately, so the
-            // peel below reaches the `T` and records an optional access step.
-            // That step carries the field name and the optional flag and
-            // nothing else: the wrapper is dropped, and the emitter applies
-            // `Option`'s match to a value whose Rust type still spells `Box`,
-            // which does not compile (match ergonomics does not deref a `Box`).
-            //
-            // Rejected here, at the declaration, rather than emitted and
-            // discovered by rustc. This is a RESERVED shape, not a refused one
-            // — see #268, which owns teaching the path algebra to deref a
-            // transparent wrapper.
-            assert!(
-                field.ty.optional_inner().is_none()
-                    || option_inner_type(&field.ty.origin.syntax).is_some(),
-                "expand_return!({}).fields(fields!({})): field `{}.{dotted}` is `{}` — an \
-                 `Option` behind a transparent wrapper. The wrapper is invisible to the \
-                 model and load-bearing in the generated Rust, and the leaf access path \
-                 cannot yet say `deref, then match` (reserved — see \
-                 https://github.com/milyin/prebindgen/issues/268). Spell the field \
-                 `Option<{}>`, or override it with .field(\"{dotted}\", ...)",
-                key.as_str(),
-                decl.func,
-                st.name,
-                field.ty.origin.syntax.to_token_stream(),
-                field
-                    .ty
-                    .optional_inner()
-                    .map(|i| i.origin.syntax.to_token_stream().to_string())
-                    .unwrap_or_default(),
-            );
-
             // An explicit override replaces the field type's default
             // decomposition wholesale — including any nesting it would have had.
             if let Some((_, ovr)) = decl.overrides.iter().find(|(f, _)| *f == dotted) {

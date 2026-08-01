@@ -418,8 +418,9 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
         let ___alternate_o2: jni::sys::jdouble;
         let ___alternate_o3: jni::sys::jboolean;
         let ___alternate_o4: jni::objects::JObject;
-        match &v.alternate {
-            Some(__c0) => {
+        let __on0: &::core::option::Option<_> = &v.alternate;
+        match __on0 {
+            ::core::option::Option::Some(__c0) => {
                 let ___alternate_id: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
                     env,
                     __c0.id.clone(),
@@ -448,7 +449,7 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
                 ___alternate_o3 = ___alternate_flag;
                 ___alternate_o4 = ___alternate_label;
             }
-            None => {
+            ::core::option::Option::None => {
                 ___alternate_present = 0u8;
                 ___alternate_o0 = 0i64;
                 ___alternate_o1 = 0i32;
@@ -836,7 +837,8 @@ pub(crate) unsafe fn HoldPolicy_to_JObject_d2a5bcc4<'a>(
         let ___grace_present: jni::sys::jboolean;
         let ___grace__tag: jni::sys::jint;
         let ___grace_g0: jni::sys::jlong;
-        match &v.grace {
+        let __oc0: &::core::option::Option<_> = &v.grace;
+        match __oc0 {
             ::core::option::Option::Some(__o0) => {
                 ___grace_present = 1u8;
                 match __o0 {
@@ -7444,7 +7446,8 @@ pub(crate) unsafe fn Observation_to_JObject_435b0724<'a>(
         let ___fallback_g3: jni::objects::JObject;
         let ___fallback_g4: jni::sys::jint;
         let ___fallback_g5: jni::sys::jlong;
-        match &v.fallback {
+        let __oc0: &::core::option::Option<_> = &v.fallback;
+        match __oc0 {
             ::core::option::Option::Some(__o0) => {
                 ___fallback_present = 1u8;
                 match __o0 {

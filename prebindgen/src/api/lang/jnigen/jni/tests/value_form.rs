@@ -531,25 +531,29 @@ fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
     }
 }
 
-/// An `Option` the reading sees through a transparent wrapper is **reserved**,
-/// and says so by name.
+/// A field's optional-ness is read off `kind`; **how Rust spells it is the
+/// source's business**, and the emitter must accept any of the spellings.
 ///
-/// `Box<T>` *is* `T` in the model, deliberately — so a field spelled
-/// `Box<Option<Child>>` peels to `Child` and records an optional access step
-/// that has no way to say "deref first". The emitter then matches `Option`'s
-/// patterns against a value still typed `Box<Option<Child>>`, which is `E0308`.
+/// `Box<T>` *is* `T` in the model, deliberately: the flat model states the
+/// destination-language invariant, and no target language can tell an
+/// `Option<T>` field from a `Box<Option<T>>` one. The emitter used to classify
+/// off `kind` correctly ("optional ⇒ needs a `Some`/`None` split") and then
+/// *spell* off `kind` too, matching `Option`'s patterns against a place still
+/// typed `Box<Option<Child>>` — `E0308` (#268).
 ///
-/// The shape used to be *accepted* and mis-emitted: nothing in this suite
-/// compiles the generated Rust, so `contains` assertions passed over it happily.
-/// Rejecting at the declaration is what makes it visible — see #268, which owns
-/// teaching the path algebra the wrapper.
+/// So the destructuring goes through a coercion site. Deref coercion is
+/// transitive and a no-op when the types already match, which is why one shape
+/// serves every representation and the plain spelling is unchanged.
 ///
-/// The plain `Option<Child>` case is asserted alongside, because a guard that
-/// also rejected the ordinary spelling would be worse than no guard.
+/// Both spellings are asserted to reach the SAME leaf surface: if the wrapper
+/// changed what crosses, the model would be leaking a Rust detail it exists to
+/// hide. (What this cannot yet assert is that the result compiles — nothing in
+/// this suite compiles generated Rust, which is exactly how the bug survived.
+/// #269 owns that, and names this test.)
 #[test]
-fn an_option_behind_a_transparent_wrapper_is_reserved_by_name() {
+fn an_optional_field_crosses_the_same_however_rust_spells_it() {
     let loc = myflat_loc();
-    let build = |field_ty: syn::Type| {
+    let build = |field_ty: syn::Type| -> String {
         let items = vec![
             (
                 syn::Item::Struct(syn::parse_quote!(
@@ -599,39 +603,41 @@ fn an_option_behind_a_transparent_wrapper_is_reserved_by_name() {
         let dir = unique_test_dir("jnigen_vf_boxed_opt");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let _ = jni
-            .build_with(registry)
-            .map(|g| g.write_rust(dir.join("g.rs")));
+        let gen = jni.build_with(registry).expect("resolve");
+        std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+            .expect("read rust")
     };
 
-    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        build(syn::parse_quote!(Box<Option<ZKeyExpr>>))
-    }))
-    .expect_err("an Option behind a transparent wrapper must be rejected");
-    let msg = err
-        .downcast_ref::<String>()
-        .cloned()
-        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
-        .unwrap_or_default();
-    assert!(
-        msg.contains("transparent wrapper"),
-        "the message names the shape: {msg}"
-    );
-    assert!(
-        msg.contains("ZSampleStruct.kex"),
-        "the message names the offending field: {msg}"
-    );
-    // Reserved, not refused: the diagnosis says where the work is tracked.
-    assert!(
-        msg.contains("issues/268"),
-        "a reserved shape names its issue: {msg}"
-    );
+    let plain = build(syn::parse_quote!(Option<ZKeyExpr>));
+    let boxed = build(syn::parse_quote!(Box<Option<ZKeyExpr>>));
 
-    // The ordinary spelling is untouched.
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        build(syn::parse_quote!(Option<ZKeyExpr>))
-    }))
-    .expect("a plain `Option<T>` field is the supported shape");
+    for (label, rust) in [("Option<T>", &plain), ("Box<Option<T>>", &boxed)] {
+        let rc: String = rust.split_whitespace().collect();
+        // The destructuring is coerced, never applied to the raw place — the
+        // one thing that makes it representation-agnostic.
+        assert!(
+            rc.contains("let__o0:&::core::option::Option<_>=&"),
+            "{label}: the optional field is reached through a coercion site:\n{rust}"
+        );
+        assert!(
+            !rc.contains("match&(&__vf0).kex"),
+            "{label}: the raw place is never destructured directly:\n{rust}"
+        );
+        // …and the field still crosses as the child's own expansion.
+        assert!(
+            rc.contains("myflat::z_keyexpr_as_str(__n0)"),
+            "{label}: the child's boundary still applies:\n{rust}"
+        );
+    }
+
+    // The wrapper changes the Rust spelling and NOTHING that crosses. Compared
+    // after normalizing the one legitimate difference — the field's own type is
+    // spelled in the generated converter signatures.
+    assert_eq!(
+        plain.replace("Box<Option<ZKeyExpr>>", "Option<ZKeyExpr>"),
+        boxed.replace("Box<Option<ZKeyExpr>>", "Option<ZKeyExpr>"),
+        "a transparent wrapper must not change what crosses the boundary"
+    );
 }
 
 /// Naming a field the value form does not have is the very drift this
