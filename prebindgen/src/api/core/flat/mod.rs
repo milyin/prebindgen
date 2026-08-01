@@ -166,6 +166,7 @@ mod boundary;
 mod element;
 mod origin;
 pub mod spell;
+pub(crate) mod spelling;
 mod ty;
 
 #[cfg(test)]
@@ -179,6 +180,7 @@ pub use self::{
         Struct, Type, Unsupported, Variant,
     },
     origin::Origin,
+    spelling::{canonical_spelling, canonical_type, type_from_ident},
     ty::{RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
@@ -329,9 +331,9 @@ impl FlatBuilder {
         // The consequence is deliberate and stated on `Origin`: a slice
         // is the spelling generation must EMIT, which is the normalized one —
         // the flat namespace is what the generated crate can actually name.
-        let normalization = crate::api::core::types_util::Normalization::from_items(&items);
+        let normalization = crate::api::core::flat::spelling::Normalization::from_items(&items);
         for (item, _) in &mut items {
-            crate::api::core::types_util::normalize_item_types(item, &normalization);
+            crate::api::core::flat::spelling::normalize_item_types(item, &normalization);
         }
 
         // Pass 1: the consts an array length may name. Unnamed items are
@@ -647,50 +649,46 @@ impl Flat {
     /// captured one does.
     pub fn type_ref(&self, ty: &syn::Type) -> Option<&TypeRef> {
         self.by_type
-            .get(&crate::api::core::types_util::canonical_spelling(ty))
+            .get(&crate::api::core::flat::canonical_spelling(ty))
     }
 
-    /// Admit `ty` to the model: lower it through the grammar, index the reading,
-    /// and answer with it.
+    /// This module's reading of `ty` — the index's if the source wrote it, freshly
+    /// lowered if not.
     ///
-    /// The peer of [`Self::add_local_function`], for the same reason and by the
-    /// same rule. A binding composes type *spellings* the source never wrote — an
-    /// `Option<T>` around a `T` expansion found, a split overload's nullable arm —
-    /// and those are ordinary types in this language; they are simply not in an
-    /// index of what the source wrote. Both entry points therefore do the same
-    /// thing: lower through the one grammar, then **record the result**, so the
-    /// model still owns the only index of what a type means.
+    /// **Answers without remembering, and that is deliberate.** The model is what
+    /// the source said, and stays that way: [`Self::type_ref`]'s index means *every
+    /// type the API mentions*, so growing it with a spelling no source wrote would
+    /// destroy the one thing it is good for. This is the grammar being consulted,
+    /// not the model being extended.
     ///
-    /// Recording is the whole point, and is what separates this from classifying
-    /// on demand. Answering a caller and forgetting would make every later lookup
-    /// re-derive the same reading, and would leave the index disagreeing with what
-    /// the pipeline is actually working with — the "one index" #243 established
-    /// would be a lie the moment a binding composed anything.
+    /// It is therefore **not** the peer of [`Self::add_local_function`], which does
+    /// extend the model — a binding-local `sig!(..)` is an API item, a function the
+    /// binding declares as if it had been marked. A composed type is not an API
+    /// item; it is an intermediate in some binding's crossing graph, and it belongs
+    /// in the table that tracks crossings.
     ///
-    /// Idempotent: an already-indexed type is returned untouched, so the first
-    /// reading of a spelling wins, exactly as during ingestion.
+    /// Whoever asks is expected to keep the answer. The registry does: a reading is
+    /// taken once when a type-table cell is born, and lives in that cell.
     ///
-    /// `Err` means the composed spelling is outside the accepted grammar. That is a
-    /// real diagnosis about a type the *binding* built, not a cache miss.
-    pub(crate) fn admit_type(&mut self, ty: &syn::Type) -> Result<&TypeRef, UnsupportedType> {
-        let key = crate::api::core::types_util::canonical_spelling(ty);
-        if !self.by_type.contains_key(&key) {
-            // Rebuilt rather than kept, for the reason `lower_signature` gives: a
-            // stored index would be a second copy of what `constants()` says.
-            let consts = ConstIndex::new(self.constants().map(|c| {
-                (
-                    c.name.to_string(),
-                    (*c.origin.syntax.expr).clone(),
-                    c.origin.crate_name().map(str::to_owned),
-                )
-            }));
-            // No file wrote this one; `has_position` already gates what a
-            // diagnostic prints for a positionless location.
-            let at = Rc::new(SourceLocation::default());
-            let reading = lower_type(ty, &consts, &at)?;
-            self.by_type.insert(key.clone(), reading);
+    /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
+    /// about a type the *binding* built, not a cache miss.
+    pub(crate) fn classify(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
+        if let Some(indexed) = self.type_ref(ty) {
+            return Ok(indexed.clone());
         }
-        Ok(self.by_type.get(&key).expect("just inserted"))
+        // Rebuilt rather than kept, for the reason `lower_signature` gives: a
+        // stored index would be a second copy of what `constants()` says.
+        let consts = ConstIndex::new(self.constants().map(|c| {
+            (
+                c.name.to_string(),
+                (*c.origin.syntax.expr).clone(),
+                c.origin.crate_name().map(str::to_owned),
+            )
+        }));
+        // No file wrote this one; `has_position` already gates what a diagnostic
+        // prints for a positionless location.
+        let at = Rc::new(SourceLocation::default());
+        lower_type(ty, &consts, &at)
     }
 
     /// Index every type the element at `pos` writes. Idempotent per key: the
@@ -703,7 +701,7 @@ impl Flat {
             .collect();
         for ty in refs {
             self.by_type
-                .entry(crate::api::core::types_util::canonical_spelling(
+                .entry(crate::api::core::flat::canonical_spelling(
                     &ty.origin.syntax,
                 ))
                 .or_insert(ty);

@@ -785,16 +785,16 @@ fn a_source_type_cell_carries_the_models_typeref() {
     let cell = &reg.input_types[&key];
     assert!(cell.root, "a top-level parameter is a root");
     assert!(
-        matches!(cell.subject.kind(), Some(TypeKind::Optional(_))),
+        matches!(cell.subject.kind, TypeKind::Optional(_)),
         "the frontend classified it, so the cell has that classification"
     );
     // One location per cell, and it is the model's — not a copy the scan made.
-    assert_eq!(cell.subject.location(), Some(&loc));
+    assert_eq!(&*cell.subject.origin.location, &loc);
 
     // The nested position is in the model too, and is not a root.
     let inner = &reg.input_types[&TypeKey::parse("u64").expect("test type")];
     assert!(!inner.root);
-    assert!(matches!(inner.subject.kind(), Some(TypeKind::Scalar(_))));
+    assert!(matches!(inner.subject.kind, TypeKind::Scalar(_)));
 }
 
 /// A type only the binding authored is **classified but placeless**: it has a
@@ -808,9 +808,10 @@ fn a_source_type_cell_carries_the_models_typeref() {
 /// throwing away an answer the grammar has. What is genuinely absent is a file
 /// and line, and only that.
 ///
-/// So the cell gets its reading from `ensure_entry`, which admits a composed or
-/// declared type to the model on the way in, the same way `add_local_function`
-/// admits a binding-local `sig!(..)`.
+/// So the cell gets its reading from `ensure_entry`, which asks the grammar once
+/// when the cell is born. The model is consulted, not extended: a declared type the
+/// source never mentioned is this binding's business, not a new fact about the
+/// source API.
 #[test]
 fn an_adapter_authored_type_cell_is_classified_but_placeless() {
     use crate::api::core::flat::TypeKind;
@@ -830,12 +831,11 @@ fn an_adapter_authored_type_cell_is_classified_but_placeless() {
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
     assert!(
-        matches!(cell.subject.kind(), Some(TypeKind::Named { id }) if id.name == "Foreign"),
+        matches!(&cell.subject.kind, TypeKind::Named { id } if id.name == "Foreign"),
         "a declared name is a name, and the grammar can say so"
     );
-    assert_eq!(
-        cell.subject.location(),
-        None,
+    assert!(
+        !cell.subject.origin.location.has_position(),
         "nothing wrote it, so there is no position to report"
     );
 }
@@ -1001,7 +1001,12 @@ fn not_expressible_report_names_the_crate_of_each_offender() {
     };
     let msg = err.to_string();
 
-    assert!(msg.contains("2 `#[prebindgen]` item(s)"), "{msg}");
+    // Not "`#[prebindgen]` item(s)" — a declared crossing reaches this same report
+    // and is not one. These two are marked items, and their own lines say so.
+    assert!(
+        msg.contains("cannot express 2 of this binding's items and types"),
+        "{msg}"
+    );
     assert!(msg.contains("in crate `myflat`"), "{msg}");
     assert!(msg.contains("in crate `helpers`"), "{msg}");
     // Both share a file path, so the crate is the only thing telling them apart.
@@ -1354,30 +1359,24 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         .expect("a local fn's parameter type is in the model");
     assert!(matches!(read.kind, TypeKind::Optional(_)));
 
-    // … and the cell scanned from that parameter carries it, rather than
-    // claiming the type is one the binding invented.
+    // … and the cell scanned from that parameter carries that same reading,
+    // rather than a second one made at the table.
     let cell = &reg.input_types[&TypeKey::parse("Option<u64>").expect("test type")];
-    assert!(
-        matches!(cell.subject, TypeSubject::Source(_)),
-        "the frontend read this type; the cell must not call it adapter-authored"
-    );
-    assert!(matches!(cell.subject.kind(), Some(TypeKind::Optional(_))));
+    assert!(matches!(cell.subject.kind, TypeKind::Optional(_)));
 }
 
 /// A type with no source position must not get an invented one.
 ///
-/// Three facts have to stay apart: a type can have a **frontend reading**
-/// (`TypeSubject::Source`), a **reportable position**, or neither. A
-/// binding-local fn's parameter types have the first and not the second —
-/// `lower_signature` lowers them against `SourceLocation::default()`, since
-/// `Origin` needs a location and a `sig!(..)` has no file.
+/// A **reading** and a **reportable position** are two facts, and every cell now
+/// has the first: a binding-local fn's parameter types are lowered against
+/// `SourceLocation::default()`, because `Origin` needs a location and a `sig!(..)`
+/// has no file. So the reading exists and the position does not.
 ///
-/// Indexing those types (this PR) flipped their cells from `Adapter` to
-/// `Source`, and `location()` returned the default unconditionally, so the
-/// diagnostic read `:0:0: error:` — a position that looks real. The same fault
-/// already showed for any hand-built stream, whose captured items also carry
-/// default locations; both are fixed by asking whether the location has a
-/// position at all.
+/// When indexing those types first gave their cells readings, the location was
+/// returned unconditionally and the diagnostic read `:0:0: error:` — a position
+/// that looks real. The same fault already showed for any hand-built stream, whose
+/// captured items also carry default locations. Both are fixed by asking whether
+/// the location has a position at all, which is the only thing that now gates it.
 #[test]
 fn an_unresolved_type_without_a_position_reports_none() {
     let reg: RegistryBuilder<()> =
@@ -1434,6 +1433,93 @@ fn an_unresolved_type_without_a_position_reports_none() {
         err.to_string().contains("src/lib.rs:12:3: error:"),
         "a real position must still be reported:\n{}",
         err
+    );
+}
+
+/// A crossing the *binding* declared, which the grammar refuses, is reported as
+/// what it is — not as a `#[prebindgen]` item.
+///
+/// This path is **newly reachable**: such a type used to become a cell with no
+/// reading and no complaint, so the diagnostic never ran. Now that it does, it must
+/// not send the reader looking for a marked item that was never written — the
+/// offending type is in a build script, and `*const u8` is exactly the shape a
+/// binding author reaches for and the source language refuses.
+#[test]
+fn a_declared_crossing_the_grammar_refuses_is_not_called_a_prebindgen_item() {
+    let reg: RegistryBuilder<()> =
+        crate::api::test_util::reg_from_items(vec![fn_item("fn f(x: u64) -> u64 { x }")]).unwrap();
+
+    let mut ext = StubExt::default();
+    ext.types
+        .insert(TypeKey::parse("*const u8").expect("a key can hold it; the language cannot"));
+
+    let err = ext
+        .declare_into_any(reg)
+        .expect("declaring is not where it fails")
+        .scanned()
+        .expect_err("the scan must refuse it");
+    let msg = err.to_string();
+
+    assert!(
+        !msg.contains("#[prebindgen]"),
+        "no source item is at fault here, and naming one sends the reader to the wrong crate:\n{msg}"
+    );
+    assert!(
+        // Token spacing, not the source spelling: the reason renders the type from
+        // its tokens, so `*const u8` comes back as `* const u8`.
+        msg.contains("const u8"),
+        "the offending type must be named:\n{msg}"
+    );
+    assert!(
+        !msg.contains(":0:0"),
+        "a build script's declaration has no file position:\n{msg}"
+    );
+}
+
+/// The same rule for the *not-expressible* report, which has its own renderer.
+///
+/// Two producers reach it — an unsupported captured element, and a type the scan
+/// could not classify — and neither is guaranteed a file: a hand-built stream and
+/// a spelling a binding composed both carry `SourceLocation::default()`. Printing
+/// it renders `:0:0:`, which reads as a real position.
+///
+/// Pinned separately from the unresolved-type test above because it is a separate
+/// `Display` arm: the two were written months apart and only one had the guard.
+#[test]
+fn a_not_expressible_report_omits_a_position_it_does_not_have() {
+    let located = SourceLocation {
+        file: "src/lib.rs".into(),
+        line: 7,
+        column: 1,
+        crate_name: Some("myflat".into()),
+    };
+    let err: ScanError = ScanError::NotExpressible {
+        entries: vec![
+            NotExpressibleEntry {
+                name: None,
+                reason: "type `*const u8` is a form the language does not accept".into(),
+                location: SourceLocation::default(),
+            },
+            NotExpressibleEntry {
+                name: Some(syn::parse_str("Placed").unwrap()),
+                reason: "is unsupported".into(),
+                location: located,
+            },
+        ],
+    };
+    let msg = err.to_string();
+
+    assert!(
+        !msg.contains(":0:0"),
+        "a placeless entry must print no position:\n{msg}"
+    );
+    assert!(
+        msg.contains("type `*const u8` is a form the language does not accept"),
+        "it is still reported, and the reason names the offender:\n{msg}"
+    );
+    assert!(
+        msg.contains("src/lib.rs:7:1 in crate `myflat`: Placed is unsupported"),
+        "an entry that HAS a position still prints it, with its crate:\n{msg}"
     );
 }
 

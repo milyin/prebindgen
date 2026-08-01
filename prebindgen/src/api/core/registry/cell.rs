@@ -3,52 +3,21 @@
 
 use super::*;
 
-/// What a type-table key names.
-///
-/// Two populations, and saying which is which is what keeps one origin per cell:
-/// a type the flat API contains **is** a [`TypeRef`](crate::api::core::flat::TypeRef), reused whole, so its
-/// classification and its source location are already there.
-#[derive(Clone, Debug)]
-pub(crate) enum TypeSubject {
-    /// A type the flat API contains — the frontend's own reading, unmodified.
-    Source(Box<crate::api::core::flat::TypeRef>),
-    /// A type only the binding authored: a declared wire type with no
-    /// `#[prebindgen]` item behind it, an [`unfold`](crate::api::core::unfold)
-    /// leaf. It has no reading and no source location — a fact about it, rather
-    /// than information that went missing.
-    Adapter,
-}
-
-impl TypeSubject {
-    /// Where the source wrote this type, or `None` when no source did.
-    pub fn location(&self) -> Option<&SourceLocation> {
-        match self {
-            // Having a reading and having a reportable position are different
-            // facts: a binding-local fn's types are lowered — so they have
-            // readings — against no file at all. Reporting `:0:0` would invent a
-            // position; `None` says what is true.
-            TypeSubject::Source(t) => Some(&*t.origin.location).filter(|l| l.has_position()),
-            TypeSubject::Adapter => None,
-        }
-    }
-
-    /// The frontend's classification, or `None` for an adapter-authored type.
-    ///
-    /// Test-only: the cells carry it so a test can pin that a source reading
-    /// survives into the table, but no production path re-reads it.
-    #[cfg(test)]
-    pub fn kind(&self) -> Option<&crate::api::core::flat::TypeKind> {
-        match self {
-            TypeSubject::Source(t) => Some(&t.kind),
-            TypeSubject::Adapter => None,
-        }
-    }
-}
-
 /// One type-table cell: what the key names, and the adapter's answer for it.
 pub(crate) struct TypeCell<M = ()> {
-    /// The type itself, as the frontend reads it when it can.
-    pub subject: TypeSubject,
+    /// The frontend's reading of this type, reused whole — so its classification
+    /// and its origin are already here rather than re-derived per consumer.
+    ///
+    /// **Every** cell has one. There used to be a second variant for "a type only
+    /// the binding authored", on the assumption that a declared wire type or an
+    /// [`unfold`](crate::api::core::unfold) leaf had no reading to give. It did:
+    /// those are ordinary types in this language, they were simply absent from an
+    /// index of what the *source* wrote. `ensure_entry` takes the reading from the
+    /// grammar when the cell is born and stores it right here, so it is always
+    /// present, and a spelling the grammar genuinely refuses is a
+    /// [`ScanError::NotExpressible`] naming it rather than a cell that quietly means
+    /// less than its neighbours.
+    pub subject: Box<crate::api::core::flat::TypeRef>,
     /// The binding asks for this cell **directly** — a declared fn's signature, a
     /// declared type, an `unfold` leaf — as opposed to reaching it through some
     /// converter's [`TypeEntry::subs`].

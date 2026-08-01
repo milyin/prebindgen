@@ -238,9 +238,12 @@ because the map should show where the program actually went.
       "one index" would be a lie, since a `sig!(..)` never passed through the parser
 - [x] **The type table carries the reading**
       ([#239](https://github.com/milyin/prebindgen/pull/239)): a cell is
-      `TypeCell { subject, root, entry }` where `TypeSubject` is either the
-      frontend's `TypeRef` or an adapter-authored type. `required` stopped being
-      stored — it was one name over three storages — and is derived by `resolve`
+      `TypeCell { subject, root, entry }`, the subject being the frontend's
+      `TypeRef`. `required` stopped being stored — it was one name over three
+      storages — and is derived by `resolve`. The subject was originally a
+      two-variant `TypeSubject`, the second variant meaning *"a type only the
+      binding authored, with no reading"*; L2 found that population empty and
+      deleted it, so every cell now carries a reading
 - [x] **`const _` is a `Guard`, not a `Constant`**
       ([#240](https://github.com/milyin/prebindgen/pull/240)): an anonymous const
       has no address, so it is not API. Four sentinel `ident == "_"` checks had
@@ -257,7 +260,8 @@ because the map should show where the program actually went.
       ([#246](https://github.com/milyin/prebindgen/pull/246)): the last index
       living outside its owner. `from_flat` collapses to *check expressibility,
       store the model*. Canonicalization becomes one definition
-      (`types_util::canonical_type`) that both the index and `TypeKey` derive from
+      (`canonical_type`, moved into `core::flat::spelling` by L2) that both the
+      index and `TypeKey` derive from
 - [x] **A reading and a reportable position are different facts**: a synthesized
       signature has readings but no file, so `SourceLocation::has_position` gates
       what diagnostics print. Fixed a pre-existing `:0:0:` for hand-built streams
@@ -312,22 +316,39 @@ no ancestry, while the trees differ by nothing. Diff the content, not the histor
       model already names `TypeKind::Fallible`. 592 deletions against 124
       insertions, and the `ConverterImpl` tail extracted verbatim rather than
       rewritten. Ledger 202 → 167
-- [ ] `unfold` (16) — now the largest single file on the ledger
-- [ ] `types_util` (14) — `normalize_type` and the `is_*` predicates, which is
-      what survived the engine's deletion
-- [ ] `registry::walk::immediate_subtype_positions` (9) — the near-duplicate
-      outlived the original it duplicated, so there is no longer a divergence to
-      reconcile, only a walk to move onto the model
-- [ ] `registry/scan` (2) and `expand` (4) read element types
-- [ ] `TypeKey` derivable from a `TypeRef` so a lookup stops routing through a
-      spelling. L1.5 got the first half — `TypeKey` and the model's type index
-      now share one canonicalization (`types_util::canonical_type`)
-- [ ] Ledger down by the migrated count; every entry that *stays* is justified in
-      the PR as adapter-synthesized
+- [x] **The scan walks the model's edges**
+      ([#257](https://github.com/milyin/prebindgen/pull/257)): `registry/walk.rs`
+      is deleted and `immediate_edges` takes its children from `TypeKind`. Three of
+      its arms were dead rather than migrated — the grammar refuses non-unit tuples
+      and raw pointers, and `Group`/`Paren` are transparent. Ledger 167 → 158
+- [x] **A composed type is classified where it enters, and the answer is kept**:
+      expansion builds spellings the source never wrote, so `ensure_entry` asks the
+      grammar once, when a cell is born, and stores the reading **in that cell**.
+      `Flat` is consulted, never extended — its index means *what the source
+      wrote*, and a wire-side intermediate is not that
+- [x] **Every cell carries a reading**: with the above, the "no reading" half of
+      `TypeSubject` had no members left (measured: zero refusals across every
+      in-tree example and the whole suite), so the enum is gone. A spelling the
+      grammar really does refuse is now a reported error naming it, rather than a
+      cell that quietly means less than its neighbours
+- [x] **Spelling moves to its owner**: `canonical_type`, `normalize_type`,
+      `type_from_ident` and the rest become `core::flat::spelling`. They decide what
+      spelling a type *has* before anything keys on it — the same authority that
+      decides what it *means*. Ledger 158 → 154
 
 **#248 is deletion, not migration**, and the distinction is worth keeping visible:
-35 sites left because their code left. The 45 that remain are the ones that have
+35 sites left because their code left. The ones that remain are the ones that have
 to actually start reading elements, so the rate so far is not the rate to expect.
+The same caveat applies to the spelling move above, which is a **move**.
+
+**What is left, and why it is not all of it.** Every classifying helper still in
+`api/core/types_util` is called overwhelmingly from the adapters —
+`option_inner_type` 40 times, `bare_path_ident` 22, `is_unit` 18 — and none takes
+the model as an argument, so it cannot consult it from the inside. L2 can stop
+`api/core` from *calling* them; only L3 and L4 can free them to be deleted. The
+remaining migration (`unfold` 16, `expand` 4) and the running plan live in
+[#229](https://github.com/milyin/prebindgen/pull/229), which is where stage state
+is edited.
 
 ### L3 — `Cbindgen` consumes elements
 

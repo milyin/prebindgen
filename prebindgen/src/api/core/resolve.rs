@@ -150,7 +150,9 @@ fn collect_unresolved_descendants<M>(
                 out.push(UnresolvedEntry {
                     key: key.clone(),
                     direction: dir,
-                    location: cell.subject.location().cloned(),
+                    location: Some(&*cell.subject.origin.location)
+                        .filter(|l| l.has_position())
+                        .cloned(),
                 });
                 enqueue_edges_from(dir, &key, &mut queue, seen);
             }
@@ -189,7 +191,9 @@ pub(crate) fn check_complete<M>(registry: &Registry<M>) -> Result<(), ResolveErr
             entries.push(UnresolvedEntry {
                 key: key.clone(),
                 direction: dir,
-                location: cell.subject.location().cloned(),
+                location: Some(&*cell.subject.origin.location)
+                    .filter(|l| l.has_position())
+                    .cloned(),
             });
         }
     }

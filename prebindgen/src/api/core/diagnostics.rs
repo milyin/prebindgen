@@ -12,10 +12,10 @@
 use std::collections::HashSet;
 
 use crate::api::core::{
-    flat::Flat,
+    flat::{type_from_ident, Flat},
     prebindgen::NamePredicate,
     registry::TypeKey,
-    types_util::{bare_path_ident, type_from_ident},
+    types_util::bare_path_ident,
 };
 
 /// What a binding claimed, so everything else can be reported.

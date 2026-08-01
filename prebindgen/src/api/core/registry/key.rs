@@ -5,7 +5,7 @@ use std::fmt;
 use quote::ToTokens;
 
 /// Canonical type-shape key: identity is the token string of the
-/// **normalized** type ([`crate::api::core::types_util::normalize_type`] —
+/// **normalized** type ([`crate::api::core::flat::spelling::normalize_type`] —
 /// group/paren unwrap, `crate::`/`self::` and std-prelude path reduction;
 /// the complete equivalence rule set is documented there). The normalized
 /// parsed form is kept alongside the string, so [`Self::to_type`] is an
@@ -79,7 +79,7 @@ impl TypeKey {
     pub fn from_type(ty: &syn::Type) -> Self {
         // Off the shared reduction, so this key and the model's type index
         // cannot drift apart about what a type is called.
-        let t = crate::api::core::types_util::canonical_type(ty);
+        let t = crate::api::core::flat::canonical_type(ty);
         Self {
             canon: t.to_token_stream().to_string().into(),
             ty: std::rc::Rc::new(t),
@@ -89,7 +89,7 @@ impl TypeKey {
     /// Build a key for a bare item ident — infallible by construction (an
     /// ident IS a single-segment path type; nothing to parse or normalize).
     pub fn from_ident(ident: &syn::Ident) -> Self {
-        Self::from_type(&crate::api::core::types_util::type_from_ident(ident))
+        Self::from_type(&crate::api::core::flat::type_from_ident(ident))
     }
 
     /// The canonical string form.
