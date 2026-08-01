@@ -1001,7 +1001,12 @@ fn not_expressible_report_names_the_crate_of_each_offender() {
     };
     let msg = err.to_string();
 
-    assert!(msg.contains("2 `#[prebindgen]` item(s)"), "{msg}");
+    // Not "`#[prebindgen]` item(s)" — a declared crossing reaches this same report
+    // and is not one. These two are marked items, and their own lines say so.
+    assert!(
+        msg.contains("cannot express 2 of this binding's items and types"),
+        "{msg}"
+    );
     assert!(msg.contains("in crate `myflat`"), "{msg}");
     assert!(msg.contains("in crate `helpers`"), "{msg}");
     // Both share a file path, so the crate is the only thing telling them apart.
@@ -1428,6 +1433,46 @@ fn an_unresolved_type_without_a_position_reports_none() {
         err.to_string().contains("src/lib.rs:12:3: error:"),
         "a real position must still be reported:\n{}",
         err
+    );
+}
+
+/// A crossing the *binding* declared, which the grammar refuses, is reported as
+/// what it is — not as a `#[prebindgen]` item.
+///
+/// This path is **newly reachable**: such a type used to become a cell with no
+/// reading and no complaint, so the diagnostic never ran. Now that it does, it must
+/// not send the reader looking for a marked item that was never written — the
+/// offending type is in a build script, and `*const u8` is exactly the shape a
+/// binding author reaches for and the source language refuses.
+#[test]
+fn a_declared_crossing_the_grammar_refuses_is_not_called_a_prebindgen_item() {
+    let reg: RegistryBuilder<()> =
+        crate::api::test_util::reg_from_items(vec![fn_item("fn f(x: u64) -> u64 { x }")]).unwrap();
+
+    let mut ext = StubExt::default();
+    ext.types
+        .insert(TypeKey::parse("*const u8").expect("a key can hold it; the language cannot"));
+
+    let err = ext
+        .declare_into_any(reg)
+        .expect("declaring is not where it fails")
+        .scanned()
+        .expect_err("the scan must refuse it");
+    let msg = err.to_string();
+
+    assert!(
+        !msg.contains("#[prebindgen]"),
+        "no source item is at fault here, and naming one sends the reader to the wrong crate:\n{msg}"
+    );
+    assert!(
+        // Token spacing, not the source spelling: the reason renders the type from
+        // its tokens, so `*const u8` comes back as `* const u8`.
+        msg.contains("const u8"),
+        "the offending type must be named:\n{msg}"
+    );
+    assert!(
+        !msg.contains(":0:0"),
+        "a build script's declaration has no file position:\n{msg}"
     );
 }
 

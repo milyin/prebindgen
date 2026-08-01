@@ -106,9 +106,15 @@ impl fmt::Display for ScanError {
                 )
             }
             ScanError::NotExpressible { entries } => {
+                // Not "`#[prebindgen]` item(s)": two populations reach this report
+                // and only one of them is a marked item. The other is a type the
+                // *binding* put on the boundary — a declared crossing, or a
+                // spelling expansion composed — which no source crate ever wrote
+                // and whose author would go looking for a `#[prebindgen]` that is
+                // not there. Each entry's own line says which it is.
                 write!(
                     f,
-                    "{} `#[prebindgen]` item(s) the flat language cannot express:",
+                    "the flat language cannot express {} of this binding's items and types:",
                     entries.len()
                 )?;
                 for e in entries {
