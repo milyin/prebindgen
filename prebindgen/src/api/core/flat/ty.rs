@@ -64,17 +64,31 @@ impl TypeRef {
     /// matches those and falls through on anything else, instead of silently
     /// consuming a layer it cannot honour.
     pub fn layer_stack(&self) -> (crate::api::core::shape::Shape, &TypeRef) {
-        match &self.kind {
-            TypeKind::Optional(inner) => {
-                let (rest, core) = inner.layer_stack();
-                (crate::api::core::shape::Shape::optional((), rest), core)
-            }
-            TypeKind::Sequence(inner) => {
-                let (rest, core) = inner.layer_stack();
-                (crate::api::core::shape::Shape::iterable(rest), core)
-            }
-            _ => (crate::api::core::shape::Shape::Base, self),
+        use crate::api::core::shape::Shape;
+        // Bounded on purpose, and not a recursion: the accepted crossing is
+        // `Option<Vec<T>>` — at most one optional, then at most one run, in that
+        // order. Recursing would accept `Vec<Option<T>>` as `Iterable(Optional)`,
+        // which reads the inner optional as a boundary layer when it is part of
+        // the element, and `Option<Option<T>>` as two nullable layers when the
+        // boundary has one way to say absent.
+        let mut core = self;
+        let optional = matches!(core.kind, TypeKind::Optional(_));
+        if let TypeKind::Optional(inner) = &core.kind {
+            core = inner;
         }
+        let iterable = matches!(core.kind, TypeKind::Sequence(_));
+        if let TypeKind::Sequence(inner) = &core.kind {
+            core = inner;
+        }
+
+        let mut shape = Shape::Base;
+        if iterable {
+            shape = Shape::iterable(shape);
+        }
+        if optional {
+            shape = Shape::optional((), shape);
+        }
+        (shape, core)
     }
 
     /// Every type on the way down through the arity layers, outermost first and
@@ -84,11 +98,16 @@ impl TypeRef {
     /// crosses: a value delivered layer-by-layer needs each of these un-required,
     /// and none of them has a converter of its own.
     pub fn layer_types(&self) -> Vec<&TypeRef> {
+        // Stops exactly where `layer_stack` stops, or the registration view would
+        // un-require types the shape says are part of the element.
         let mut out = vec![self];
         let mut cur = self;
-        while let TypeKind::Optional(inner) | TypeKind::Sequence(inner) = &cur.kind {
+        if let TypeKind::Optional(inner) = &cur.kind {
             out.push(inner);
             cur = inner;
+        }
+        if let TypeKind::Sequence(inner) = &cur.kind {
+            out.push(inner);
         }
         out
     }

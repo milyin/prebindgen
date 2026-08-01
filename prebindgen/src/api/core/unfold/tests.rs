@@ -1834,3 +1834,46 @@ fn sum_callback_arg_is_a_fixed_builder_plan() {
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.leaves[0].source, LeafSource::SumTag);
 }
+
+/// A `Vec<Option<T>>` return does not match a `T` decomposition.
+///
+/// The boundary accepts `Option<Vec<T>>` — an optional list — and the layer stack
+/// stops at any layer out of that order. So the optional inside a `Vec` belongs
+/// to the **element**, the return's core is `Option<Payload>` rather than
+/// `Payload`, and no fixed fold is installed.
+///
+/// This is the pairing that matters: the explicit decomposition path a few
+/// hundred lines up refuses `Vec<Option<…>>` outright as unsupported, so a
+/// silently-installed nested fold here would mean the two paths disagree about
+/// the same return type. An unbounded layer peel makes exactly that happen —
+/// verified by sabotage, not assumed.
+#[test]
+fn a_vec_of_optionals_installs_no_fixed_fold() {
+    let mut reg: Registry<()> =
+        reg_with(&["fn storage_get_vec(s: &Storage) -> Vec<Option<Payload>> { todo!() }"]);
+    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
+        name: name.to_string(),
+        path: vec![PathStep::field(ident(name), false)],
+        out_ty: ty,
+        identity: false,
+        nullable: false,
+        source: LeafSource::Field,
+        group: None,
+    };
+    let vd = ValueDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+        source: syn::parse_quote!(Payload),
+        leaves: vec![
+            leaf("id", syn::parse_quote!(i64)),
+            leaf("seq", syn::parse_quote!(i32)),
+        ],
+    };
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["storage_get_vec"].iter().map(|s| ident(s)).collect();
+    apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
+
+    assert!(
+        !reg.unfold_plans.contains_key(&ident("storage_get_vec")),
+        "a Vec<Option<Payload>> return must not fold as a Payload decomposition"
+    );
+}
