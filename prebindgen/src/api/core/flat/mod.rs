@@ -650,6 +650,49 @@ impl Flat {
             .get(&crate::api::core::types_util::canonical_spelling(ty))
     }
 
+    /// Admit `ty` to the model: lower it through the grammar, index the reading,
+    /// and answer with it.
+    ///
+    /// The peer of [`Self::add_local_function`], for the same reason and by the
+    /// same rule. A binding composes type *spellings* the source never wrote — an
+    /// `Option<T>` around a `T` expansion found, a split overload's nullable arm —
+    /// and those are ordinary types in this language; they are simply not in an
+    /// index of what the source wrote. Both entry points therefore do the same
+    /// thing: lower through the one grammar, then **record the result**, so the
+    /// model still owns the only index of what a type means.
+    ///
+    /// Recording is the whole point, and is what separates this from classifying
+    /// on demand. Answering a caller and forgetting would make every later lookup
+    /// re-derive the same reading, and would leave the index disagreeing with what
+    /// the pipeline is actually working with — the "one index" #243 established
+    /// would be a lie the moment a binding composed anything.
+    ///
+    /// Idempotent: an already-indexed type is returned untouched, so the first
+    /// reading of a spelling wins, exactly as during ingestion.
+    ///
+    /// `Err` means the composed spelling is outside the accepted grammar. That is a
+    /// real diagnosis about a type the *binding* built, not a cache miss.
+    pub(crate) fn admit_type(&mut self, ty: &syn::Type) -> Result<&TypeRef, UnsupportedType> {
+        let key = crate::api::core::types_util::canonical_spelling(ty);
+        if !self.by_type.contains_key(&key) {
+            // Rebuilt rather than kept, for the reason `lower_signature` gives: a
+            // stored index would be a second copy of what `constants()` says.
+            let consts = ConstIndex::new(self.constants().map(|c| {
+                (
+                    c.name.to_string(),
+                    (*c.origin.syntax.expr).clone(),
+                    c.origin.crate_name().map(str::to_owned),
+                )
+            }));
+            // No file wrote this one; `has_position` already gates what a
+            // diagnostic prints for a positionless location.
+            let at = Rc::new(SourceLocation::default());
+            let reading = lower_type(ty, &consts, &at)?;
+            self.by_type.insert(key.clone(), reading);
+        }
+        Ok(self.by_type.get(&key).expect("just inserted"))
+    }
+
     /// Index every type the element at `pos` writes. Idempotent per key: the
     /// first mention in element order wins.
     fn index_types_of(&mut self, pos: usize) {

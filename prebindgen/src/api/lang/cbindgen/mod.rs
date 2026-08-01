@@ -649,16 +649,6 @@ fn is_scalar(ty: &syn::Type) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether an array-producing output appears anywhere in `ty` (including nested
-/// under `Result`/`Option`/references).
-fn type_contains_vec(ty: &syn::Type) -> bool {
-    is_vec(ty)
-        || cow_slice_elem(ty).is_some()
-        || crate::api::core::registry::immediate_subtype_positions(ty)
-            .iter()
-            .any(type_contains_vec)
-}
-
 /// If `ty` is `Cow<'_, [E]>` with scalar `E`, return `E`.
 fn cow_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
     let syn::Type::Path(tp) = ty else {
