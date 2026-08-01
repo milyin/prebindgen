@@ -667,6 +667,14 @@ impl Flat {
     /// item; it is an intermediate in some binding's crossing graph, and it belongs
     /// in the table that tracks crossings.
     ///
+    /// **The scan's entry point, and nowhere else's.** A caller holding an element
+    /// already has the reading — `Function::ret`, `Param::ty`, `Field::ty` are
+    /// `TypeRef`s computed at parse time — and re-deriving one from
+    /// `origin.syntax` is reasoning from the spelling, which is what `origin` is
+    /// not for. This exists for the one case with no element behind it: a type a
+    /// build script declared, or one expansion composed. `ensure_entry` is its
+    /// only caller, and `classify_has_exactly_one_caller` keeps it that way.
+    ///
     /// Whoever asks is expected to keep the answer. The registry does: a reading is
     /// taken once when a type-table cell is born, and lives in that cell.
     ///

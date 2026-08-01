@@ -140,6 +140,16 @@ impl TypeRef {
         }
     }
 
+    /// This type's identity as a table key.
+    ///
+    /// The canonical spelling is what a key *is* (#113), and reading it is
+    /// legitimate — but it should be the model's answer rather than every caller
+    /// reaching into [`origin`](Self::origin) for it, since a caller that reaches
+    /// into `origin` to *reason* is the thing this model exists to stop.
+    pub fn key(&self) -> crate::api::core::registry::TypeKey {
+        crate::api::core::registry::TypeKey::from_type(&self.origin.syntax)
+    }
+
     /// The `Ok` and `Err` sides when this is a `Result`, else `None`.
     pub fn fallible_parts(&self) -> Option<(&TypeRef, &TypeRef)> {
         match &self.kind {
