@@ -644,73 +644,107 @@ pub(crate) enum WrapperShape {
     Optional,
 }
 
-/// How many `Box` layers stand between a **spelling** and the canonical shape
-/// its `kind` names — `None` when the spelling cannot be bridged **by value**
-/// at all.
+/// What generated Rust can do with one wrapper the model
+/// [erases](crate::api::core::flat::TRANSPARENT_WRAPPERS).
 ///
-/// The model erases more than one wrapper (`Box<T>` *is* `T`, and so is
-/// `Cow<'_, T>`), and a converter that moves the payload has to undo exactly
-/// the wrapper the source wrote. There is no trait for that: `Box<T> → T` is
-/// `*b`, `Cow<'_, T> → T::Owned` is `into_owned()` — different operations with
-/// no shared name — and `Cow` cannot be moved through at all (`E0507`).
+/// Erasure and reconstruction are different questions, and only the first is the
+/// model's. `Box<T>` *is* `T` to every destination language — but undoing it in
+/// Rust is `*b`, undoing a `Cow` is `into_owned()`, and undoing an `Rc` is not
+/// possible at all. There is no trait spanning those, so the operations live
+/// here, one row per wrapper, instead of as a special case per converter.
 ///
-/// So the bridge is built only where it can be, and the layers are counted
-/// rather than assumed: `Box<Box<Option<T>>>` is `Optional` too, and one
-/// dereference leaves `Box<Option<T>>`.
-///
-/// A **spelling** question, in the same family as [`decoded_vec_satisfies`] and
-/// `is_unsized_spelling`: what the type *means* is `kind`'s and is settled
-/// before this is called; this asks only what generated Rust is able to write.
-///
-/// `None` makes the crossing **unresolved**, naming the type — the failure that
-/// says "this representation is not supported here". Emitting a bridge that
-/// cannot compile would be worse: resolution would succeed and the consumer's
-/// build would break instead (#270 review).
-fn box_layers_to(spelling: &syn::Type, canonical: &syn::Type) -> Option<usize> {
-    if spelling.to_token_stream().to_string() == canonical.to_token_stream().to_string() {
-        return Some(0);
-    }
-    let syn::Type::Path(tp) = spelling else {
-        return None;
-    };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Box" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return None;
-    };
-    let syn::GenericArgument::Type(inner) = ab.args.first()? else {
-        return None;
-    };
-    box_layers_to(inner, canonical).map(|d| d + 1)
+/// **Adding a wrapper is adding a row.** Put its name in
+/// `TRANSPARENT_WRAPPERS` (the model decides what it erases) and a row here
+/// (the adapter decides what it can rebuild); `every_erased_wrapper_has_ops`
+/// fails if the two disagree, so a wrapper cannot become transparent without
+/// this file having an answer for it.
+struct WrapperOps {
+    /// Its last path segment, as `TRANSPARENT_WRAPPERS` spells it.
+    name: &'static str,
+    /// Move the inner value **out**. `None` when the representation does not
+    /// permit it — a `Cow` payload cannot be moved through `Deref` (`E0507`),
+    /// and neither can an `Rc`'s.
+    read: Option<fn(TokenStream) -> TokenStream>,
+    /// Build it **from** the inner value. `None` when not supported.
+    build: Option<fn(TokenStream) -> TokenStream>,
 }
 
-/// Read the converter's `v` as the canonical shape — one dereference per
-/// [`box_layers_to`] layer, and none at all when the source already wrote the
-/// canonical form.
+/// The operations table. One row per wrapper the model erases.
+const WRAPPER_OPS: &[WrapperOps] = &[
+    WrapperOps {
+        name: "Box",
+        // `*b` moves out of a box, and `Box::new` puts it back.
+        read: Some(|e| quote!((*#e))),
+        build: Some(|e| quote!(::std::boxed::Box::new(#e))),
+    },
+    WrapperOps {
+        name: "Cow",
+        // Reading would be `into_owned()`, which needs `B: ToOwned` — not
+        // implied by anything the model knows about the payload. Refused until
+        // something needs it; that is one row, not a redesign.
+        read: None,
+        build: None,
+    },
+];
+
+fn wrapper_ops(name: &str) -> Option<&'static WrapperOps> {
+    WRAPPER_OPS.iter().find(|w| w.name == name)
+}
+
+/// The chain of wrappers standing between a **spelling** and the canonical
+/// shape its `kind` names, outermost first — empty when the source already
+/// wrote the canonical form.
+///
+/// `None` means the spelling is not a wrapping of the canonical one at all, so
+/// no converter should claim it.
+fn bridge_layers(spelling: &syn::Type, canonical: &syn::Type) -> Option<Vec<&'static WrapperOps>> {
+    if spelling.to_token_stream().to_string() == canonical.to_token_stream().to_string() {
+        return Some(Vec::new());
+    }
+    let (name, inner) = crate::api::core::flat::peel_transparent(spelling)?;
+    let ops = wrapper_ops(name)?;
+    let mut rest = bridge_layers(&inner, canonical)?;
+    rest.insert(0, ops);
+    Some(rest)
+}
+
+/// Read the converter's `v` as the canonical shape, undoing each layer
+/// outside-in. `None` when any layer cannot be read through — the crossing then
+/// stays **unresolved**, naming the type, rather than resolving and emitting
+/// Rust the consumer cannot build (#270 review).
 fn read_as_canonical(produced: &syn::Type, canonical: &syn::Type) -> Option<TokenStream> {
-    let depth = box_layers_to(produced, canonical)?;
+    let layers = bridge_layers(produced, canonical)?;
     let mut e = quote!(v);
-    for _ in 0..depth {
-        e = quote!((*#e));
+    for w in layers {
+        e = (w.read?)(e);
     }
     Some(e)
 }
 
-/// Build the spelling from a canonical value — the input-side peer, wrapping
-/// once per [`box_layers_to`] layer.
+/// Build the spelling from a canonical value — the input-side peer, applying
+/// each layer inside-out.
 fn build_from_canonical(
     produced: &syn::Type,
     canonical: &syn::Type,
     value: TokenStream,
 ) -> Option<TokenStream> {
-    let depth = box_layers_to(produced, canonical)?;
+    let layers = bridge_layers(produced, canonical)?;
     let mut e = value;
-    for _ in 0..depth {
-        e = quote!(::std::boxed::Box::new(#e));
+    for w in layers.into_iter().rev() {
+        e = (w.build?)(e);
     }
     Some(e)
+}
+
+/// Whether the source wrote the canonical spelling itself — no wrapper to undo.
+///
+/// Required by the converters that do **not** produce the spelled type by
+/// construction: the borrow shapes hand back the inner type's own converter (or
+/// an `OwnedObject`) and let the call site add `&` / `.as_deref()`. There is no
+/// value in hand to wrap or unwrap, so a wrapped spelling cannot be served
+/// here at all and must not resolve.
+fn is_canonical_spelling(produced: &syn::Type, canonical: &syn::Type) -> bool {
+    bridge_layers(produced, canonical).is_some_and(|l| l.is_empty())
 }
 
 /// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
@@ -738,7 +772,20 @@ impl Declarations {
         t1: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        if !matches!(shape, WrapperShape::Borrow { .. }) {
+        let WrapperShape::Borrow { mutable } = shape else {
+            return None;
+        };
+        // This converter does NOT produce the spelled type: it hands back the
+        // inner type's own entry, and the call site adds the `&`. So there is no
+        // value in hand to unwrap a representation from, and a wrapped spelling
+        // — `Box<&T>` — must not resolve here (it would pass an owned `T` where
+        // `Box<&T>` is expected).
+        let canonical: syn::Type = if mutable {
+            syn::parse_quote!(&mut #t1)
+        } else {
+            syn::parse_quote!(&#t1)
+        };
+        if !is_canonical_spelling(produced, &canonical) {
             return None;
         }
         let inner = registry.input_entry(t1)?;
@@ -781,7 +828,18 @@ impl Declarations {
         t1: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        if !matches!(shape, WrapperShape::OptionRef { .. }) {
+        let WrapperShape::OptionRef { mutable } = shape else {
+            return None;
+        };
+        // Produces `Option<OwnedObject<T>>`, which the call site adapts with
+        // `.as_deref()` — again not the spelled type, so a wrapped spelling has
+        // nothing to bridge and must not resolve. See `input_borrow`.
+        let canonical: syn::Type = if mutable {
+            syn::parse_quote!(Option<&mut #t1>)
+        } else {
+            syn::parse_quote!(Option<&#t1>)
+        };
+        if !is_canonical_spelling(produced, &canonical) {
             return None;
         }
         let inner = registry.input_entry(t1)?;
@@ -2508,5 +2566,53 @@ impl Declarations {
                     .map(|(k, _)| k.clone()),
             )
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod wrapper_ops_tests {
+    use super::*;
+
+    /// Every wrapper the model erases has a row here.
+    ///
+    /// The two lists answer different questions — the model's is "what do I
+    /// erase", this file's is "what can I rebuild" — and they are allowed to
+    /// disagree about *capability* (`Cow` is erased and cannot be read through).
+    /// They are not allowed to disagree about *membership*: a wrapper that
+    /// becomes transparent without a row here would be silently unbridgeable
+    /// everywhere, which looks exactly like a type the binding got wrong.
+    ///
+    /// So adding `Rc` is: one entry in `TRANSPARENT_WRAPPERS`, one row in
+    /// `WRAPPER_OPS` (`read: None` — an `Rc`'s payload cannot be moved out —
+    /// and `build: Some(Rc::new)`). This test is what says so out loud instead
+    /// of leaving the second step to be discovered.
+    #[test]
+    fn every_erased_wrapper_has_ops() {
+        let missing: Vec<&str> = crate::api::core::flat::TRANSPARENT_WRAPPERS
+            .iter()
+            .copied()
+            .filter(|w| wrapper_ops(w).is_none())
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "the model erases {missing:?}, and this adapter has no `WrapperOps` row for them — \
+             add one (`read`/`build` may be `None` when the representation does not allow it, \
+             which refuses the shape instead of mis-generating it)"
+        );
+    }
+
+    /// …and nothing here claims a wrapper the model does not erase, which would
+    /// be an operation that can never run.
+    #[test]
+    fn no_ops_for_a_wrapper_the_model_keeps() {
+        let stray: Vec<&str> = WRAPPER_OPS
+            .iter()
+            .map(|w| w.name)
+            .filter(|n| !crate::api::core::flat::TRANSPARENT_WRAPPERS.contains(n))
+            .collect();
+        assert!(
+            stray.is_empty(),
+            "`WRAPPER_OPS` rows for non-erased {stray:?}"
+        );
     }
 }

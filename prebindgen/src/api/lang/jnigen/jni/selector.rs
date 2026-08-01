@@ -83,6 +83,21 @@ impl Declarations {
                     return Some(c);
                 }
             }
+            // An optional BORROW is the deep handler's alone. It declined —
+            // either the inner is not a handle (then the shallow handler below
+            // is right, and only for the canonical spelling) or the spelling
+            // carries a wrapper it cannot bridge. The shallow handler cannot
+            // tell those apart and would decode the jlong as a `*mut &T`, so a
+            // wrapped optional borrow stops here rather than resolving wrong.
+            if inner.borrow_target().is_some() {
+                let canonical: syn::Type = {
+                    let b = &inner.origin.syntax;
+                    syn::parse_quote!(Option<#b>)
+                };
+                if syntax.to_token_stream().to_string() != canonical.to_token_stream().to_string() {
+                    return None;
+                }
+            }
             let inner_ty = inner.origin.syntax.clone();
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Optional, syntax, &inner_ty, registry)

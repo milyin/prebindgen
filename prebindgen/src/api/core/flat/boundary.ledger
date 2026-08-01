@@ -67,8 +67,8 @@
 3	api/lang/jnigen/jni/prim_array.rs
 8	api/lang/jnigen/jni/render.rs
 3	api/lang/jnigen/jni/selector.rs
-12	api/lang/jnigen/jni/trait_impl.rs
+11	api/lang/jnigen/jni/trait_impl.rs
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 131
+# total: 130

@@ -2578,3 +2578,83 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
         "the refusal names the unsupported representation: {cow}"
     );
 }
+
+/// A wrapper cannot be bridged where the converter does not produce the spelled
+/// type at all — the **borrow** shapes — so those refuse rather than resolve.
+///
+/// `&T` and `Option<&T>` are served by handing back the inner type's own
+/// converter (or an `OwnedObject`) and letting the call site add `&` /
+/// `.as_deref()`. There is no value in hand to unwrap a representation from, so
+/// `Box<&T>` would pass an owned `T` where `Box<&T>` is expected, and
+/// `Box<Option<&T>>` would decode the handle as `*mut &T`. Both used to resolve
+/// (#272 review).
+///
+/// The canonical spellings are asserted alongside, because a guard that also
+/// refused those would be worse than no guard.
+#[test]
+fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
+    let loc = myflat_loc();
+    let build = |param_ty: syn::Type| -> Result<String, String> {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZThing {
+                        pub v: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_take(t: #param_ty) -> i64 {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZThing))
+                    .fun(crate::fun!(z_take)),
+            );
+        let dir = unique_test_dir("jnigen_wrapped_borrow");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    };
+
+    // The canonical borrows still resolve, and still adapt at the call site.
+    let borrowed = build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    assert!(
+        borrowed.contains("myflat::z_take(&t)"),
+        "the call site adds the borrow:\n{borrowed}"
+    );
+    let opt = build(syn::parse_quote!(Option<&ZThing>)).expect("an optional borrow resolves");
+    assert!(
+        opt.contains("myflat::z_take(t.as_deref())"),
+        "the call site derefs the OwnedObject:\n{opt}"
+    );
+
+    // Wrapped, they have nothing to bridge and must not resolve.
+    for spelling in [
+        syn::parse_quote!(Box<&ZThing>),
+        syn::parse_quote!(Box<Option<&ZThing>>),
+    ] {
+        let err = build(spelling).expect_err("a wrapped borrow must not resolve");
+        assert!(
+            err.contains("could not be resolved"),
+            "the refusal names the type: {err}"
+        );
+    }
+}

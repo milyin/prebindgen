@@ -181,7 +181,10 @@ pub use self::{
     },
     origin::Origin,
     spelling::{canonical_spelling, canonical_type, type_from_ident},
-    ty::{RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
+    ty::{
+        peel_transparent, RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType,
+        UnsupportedTypeReason, TRANSPARENT_WRAPPERS,
+    },
 };
 use crate::SourceLocation;
 
