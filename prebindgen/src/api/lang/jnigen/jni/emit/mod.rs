@@ -49,12 +49,27 @@ mod destructure_ledger {
     //! coercion site, deref coercion is transitive and a no-op when the types
     //! already match, so one shape serves every representation.
     //!
-    //! ## What this counts, and what it cannot
+    //! ## Why this walks tokens
     //!
-    //! Only **patterns** — `Option::Some(..) =>` — never constructions. Building
-    //! an `Option` the emitter itself owns says nothing about the source's
-    //! representation and is always safe, which is why `flat_input.rs` and
-    //! `wrapper.rs` sit at zero here despite emitting `Option::Some` freely.
+    //! The first version of this check matched the text `option::Option::Some(`
+    //! and was wrong in the way that matters: `struct_out.rs` emitted a second
+    //! destructure spelled bare `Some(#cbind) =>`, and the census could not see
+    //! it. That site was a real unfixed instance of the very bug — an
+    //! unqualified match on a source place — so the guard's blind spot was
+    //! exactly the bug's hiding place. A guard that can be evaded by choosing a
+    //! different spelling of the same pattern is not a guard.
+    //!
+    //! So the scan parses each file's tokens, descends only into `quote!`
+    //! bodies — which is what "emitted Rust" means, and keeps the emitter's own
+    //! `if let Some(x)` out of the count — and recognizes a `Some ( … ) =>`
+    //! pattern whatever path prefix it carries.
+    //!
+    //! ## What it counts, and what it cannot
+    //!
+    //! Only **patterns**, never constructions. Building an `Option` the emitter
+    //! itself owns says nothing about the source's representation and is always
+    //! safe, which is why `flat_input.rs` and `wrapper.rs` sit at zero despite
+    //! emitting `Option::Some` freely.
     //!
     //! It cannot tell a *coerced* destructure from a raw one, so a count that
     //! does not move is not proof of correctness. Its job is to make a NEW
@@ -75,17 +90,63 @@ mod destructure_ledger {
     //! To change it deliberately: update the table below in the same commit,
     //! and say in review which category the new site is.
 
+    use proc_macro2::{Delimiter, TokenStream, TokenTree};
+
     /// `(file, destructuring-pattern count)`.
     const LEDGER: &[(&str, usize)] = &[
         // 2 fn-return matches (owned), 2 leaf reaches (one coerced, one owned
         // accessor return), 1 owned identity move, 1 emitter-bound local.
         ("delivery.rs", 6),
-        // The `Option<sum>` present-flag split — coerced.
-        ("struct_out.rs", 1),
+        // Both coerced: the `Option<sum>` present-flag split, and the nested
+        // plan's present-flag split.
+        ("struct_out.rs", 2),
         // Constructions only.
         ("flat_input.rs", 0),
         ("wrapper.rs", 0),
     ];
+
+    /// Count `Some ( … ) =>` patterns inside `quote!` bodies.
+    ///
+    /// `in_quote` is what keeps the emitter's own `if let Some(..)` out of the
+    /// count: only tokens below a `quote!` are emitted Rust.
+    fn count(ts: TokenStream, in_quote: bool, n: &mut usize) {
+        let toks: Vec<TokenTree> = ts.into_iter().collect();
+        let mut i = 0;
+        while i < toks.len() {
+            // `quote! { … }` / `quote!( … )` — descend, now emitting.
+            if let TokenTree::Ident(id) = &toks[i] {
+                let bang =
+                    matches!(toks.get(i + 1), Some(TokenTree::Punct(p)) if p.as_char() == '!');
+                if (id == "quote" || id == "parse_quote") && bang {
+                    if let Some(TokenTree::Group(g)) = toks.get(i + 2) {
+                        count(g.stream(), true, n);
+                        i += 3;
+                        continue;
+                    }
+                }
+                // A `Some( … ) =>` arm. The path in front is not inspected, so
+                // `Some`, `Option::Some` and `::core::option::Option::Some` all
+                // land here — the spelling is what the first version of this
+                // check wrongly keyed on.
+                if in_quote && id == "Some" {
+                    let parens = matches!(
+                        toks.get(i + 1),
+                        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis
+                    );
+                    // `=>` is two Puncts: '=' joint, then '>'.
+                    let fat_arrow = matches!(toks.get(i + 2), Some(TokenTree::Punct(p)) if p.as_char() == '=')
+                        && matches!(toks.get(i + 3), Some(TokenTree::Punct(p)) if p.as_char() == '>');
+                    if parens && fat_arrow {
+                        *n += 1;
+                    }
+                }
+            }
+            if let TokenTree::Group(g) = &toks[i] {
+                count(g.stream(), in_quote, n);
+            }
+            i += 1;
+        }
+    }
 
     #[test]
     fn option_destructuring_sites_are_accounted_for() {
@@ -94,18 +155,11 @@ mod destructure_ledger {
         for (file, expected) in LEDGER {
             let src = std::fs::read_to_string(std::path::Path::new(dir).join(file))
                 .unwrap_or_else(|e| panic!("read {file}: {e}"));
-            // A pattern arm is `Option::Some(<binding>) =>`; a construction has
-            // no `=>` after its closing paren. Whitespace is stripped so line
-            // wrapping cannot hide a site.
-            let bare: String = src.chars().filter(|c| !c.is_whitespace()).collect();
-            let found = bare
-                .match_indices("option::Option::Some(")
-                .filter(|(i, _)| {
-                    bare[*i..]
-                        .find(')')
-                        .is_some_and(|j| bare[*i + j..].starts_with(")=>"))
-                })
-                .count();
+            let ts: TokenStream = src
+                .parse()
+                .unwrap_or_else(|e| panic!("tokenize {file}: {e}"));
+            let mut found = 0usize;
+            count(ts, false, &mut found);
             if found != *expected {
                 drift.push(format!("  {file}: {expected} -> {found}"));
             }
@@ -120,5 +174,38 @@ mod destructure_ledger {
              table and say which in review.",
             drift.join("\n"),
         );
+    }
+
+    /// The guard catches a destructure **however it is spelled** — the failure
+    /// the first version had, and the reason this one walks tokens.
+    ///
+    /// A ledger that has never been seen to fail is not evidence of anything,
+    /// so this proves it on both spellings rather than asserting it in prose.
+    #[test]
+    fn the_census_is_spelling_independent() {
+        let one = |body: &str| {
+            let src = format!("fn f() {{ quote! {{ match x {{ {body} }} }}; }}");
+            let mut n = 0usize;
+            count(src.parse().expect("tokenize"), false, &mut n);
+            n
+        };
+        for spelling in [
+            "Some(v) => {}",
+            "Option::Some(v) => {}",
+            "::core::option::Option::Some(v) => {}",
+        ] {
+            assert_eq!(one(spelling), 1, "not counted: {spelling}");
+        }
+        // A construction is not a destructure, and the emitter's own control
+        // flow is not emitted Rust.
+        let mut n = 0usize;
+        count(
+            "fn f() { if let Some(x) = y { quote! { Some(#x) }; } }"
+                .parse()
+                .expect("tokenize"),
+            false,
+            &mut n,
+        );
+        assert_eq!(n, 0, "constructions and host-code matches must not count");
     }
 }

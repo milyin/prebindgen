@@ -418,8 +418,9 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
         let ___alternate_o2: jni::sys::jdouble;
         let ___alternate_o3: jni::sys::jboolean;
         let ___alternate_o4: jni::objects::JObject;
-        match &v.alternate {
-            Some(__c0) => {
+        let __on0: &::core::option::Option<_> = &v.alternate;
+        match __on0 {
+            ::core::option::Option::Some(__c0) => {
                 let ___alternate_id: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
                     env,
                     __c0.id.clone(),
@@ -448,7 +449,7 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
                 ___alternate_o3 = ___alternate_flag;
                 ___alternate_o4 = ___alternate_label;
             }
-            None => {
+            ::core::option::Option::None => {
                 ___alternate_present = 0u8;
                 ___alternate_o0 = 0i64;
                 ___alternate_o1 = 0i32;
