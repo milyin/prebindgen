@@ -997,12 +997,21 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         let ty = key.to_type();
+        // The reading the scan already took for this crossing. Rebuilding a
+        // spelling from the key and classifying *that* is the round trip #263
+        // removed from `api/core`; this is the same door, one layer out.
+        let reading = built.reading(&ty)?;
         match dir {
-            Direction::Input => self.select_input_type(&ty, built).or_else(|| {
+            Direction::Input => self.select_input_type(&reading, built).or_else(|| {
                 // `impl Fn(args)` that nothing else claimed. Callback args cross
                 // in the OPPOSITE direction, which is why their required-ness
                 // rides `immediate_edges` rather than this converter's `subs`.
-                let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
+                // The arguments are `TypeRef`s on the classification, so nothing
+                // is re-extracted from the signature's syntax.
+                let crate::api::core::flat::TypeKind::Callback { args } = &reading.kind else {
+                    return None;
+                };
+                let args: Vec<syn::Type> = args.iter().map(|a| a.origin.syntax.clone()).collect();
                 self.dispatch_fn_input(&args, built)
             }),
             Direction::Output => self.select_output_type(&ty, built),

@@ -33,46 +33,80 @@ fn ref_wildcard(r: &syn::TypeReference) -> syn::Type {
     syn::Type::Reference(pr)
 }
 
+/// Whether a decoded `Vec<T>` local can be borrowed where `referent` is expected.
+///
+/// A **spelling** question, deliberately: it decides what the generated Rust must
+/// be able to say, and Rust distinguishes forms the boundary classification does
+/// not. `[T]` is reached by deref coercion from `&Vec<T>` and `Vec<T>` is the
+/// thing itself; a transparent wrapper such as `Box<Vec<T>>` or `Cow<'_, [T]>`
+/// classifies identically and cannot be reconstructed from the decoded local.
+fn decoded_vec_satisfies(referent: &syn::Type) -> bool {
+    match referent {
+        syn::Type::Slice(_) => true,
+        syn::Type::Path(tp) => tp
+            .path
+            .segments
+            .last()
+            .is_some_and(|s| s.ident == "Vec" && tp.path.segments.len() == 1),
+        _ => false,
+    }
+}
+
 impl Declarations {
     /// Select the input converter for `ty`: terminals, user wrappers, then
     /// built-in structural wrappers.
     pub(crate) fn select_input_type(
         &self,
-        ty: &syn::Type,
+        ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
+        use crate::api::core::flat::RefMode;
+
+        // The spelling, for the wildcard patterns this selector builds. Those are
+        // the adapter's own — `Option<_>`, `&_` — so composing them from tokens is
+        // spelling, not reasoning. What the type *is* comes from `ty` below.
+        let syntax = &ty.origin.syntax;
+
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
-        if let Some(c) = self.input_terminal(ty, registry) {
+        if let Some(c) = self.input_terminal(syntax, registry) {
             return Some(c);
         }
-        // 3. Built-in wrapper shapes. `Option<&T>` tries the DEEP `Option<&_>`
-        //    (borrowed-handle → `Option<OwnedObject<T>>`) before the shallow
-        //    `Option<_>`; the shape that resolves correctly wins.
-        if let Some(inner) = option_inner_type(ty) {
-            if let syn::Type::Reference(r) = &inner {
-                let pat = with_first_arg(ty, ref_wildcard(r));
-                let t1 = (*r.elem).clone();
-                if let Some(mut c) = self.input_wrapper_shape(&pat, &t1, registry) {
-                    c.subs = vec![t1];
-                    return Some(c);
+        // 3. Built-in wrapper shapes, read one layer at a time rather than as a
+        //    whole stack: each arm handles exactly one, and hands the rest back
+        //    through `subs` to be selected on its own. Peeling further here would
+        //    claim a shape this selector does not emit.
+        if let Some(inner) = ty.optional_inner() {
+            // `Option<&T>` tries the DEEP `Option<&_>` (borrowed-handle →
+            // `Option<OwnedObject<T>>`) before the shallow `Option<_>`; the shape
+            // that resolves correctly wins.
+            if let Some(target) = inner.borrow_target() {
+                if let syn::Type::Reference(r) = &inner.origin.syntax {
+                    let pat = with_first_arg(syntax, ref_wildcard(r));
+                    let t1 = target.origin.syntax.clone();
+                    if let Some(mut c) = self.input_wrapper_shape(&pat, &t1, registry) {
+                        c.subs = vec![t1];
+                        return Some(c);
+                    }
                 }
             }
-            let pat = with_first_arg(ty, syn::parse_quote!(_));
-            if let Some(mut c) = self.input_wrapper_shape(&pat, &inner, registry) {
-                c.subs = vec![inner];
+            let pat = with_first_arg(syntax, syn::parse_quote!(_));
+            let inner_ty = inner.origin.syntax.clone();
+            if let Some(mut c) = self.input_wrapper_shape(&pat, &inner_ty, registry) {
+                c.subs = vec![inner_ty];
                 return Some(c);
             }
             return None;
         }
-        if let Some(elem) = vec_inner_type(ty) {
-            let pat = with_first_arg(ty, syn::parse_quote!(_));
-            if let Some(mut c) = self.input_wrapper_shape(&pat, &elem, registry) {
-                c.subs = vec![elem];
+        if let Some(elem) = ty.sequence_elem() {
+            let pat = with_first_arg(syntax, syn::parse_quote!(_));
+            let elem_ty = elem.origin.syntax.clone();
+            if let Some(mut c) = self.input_wrapper_shape(&pat, &elem_ty, registry) {
+                c.subs = vec![elem_ty];
                 return Some(c);
             }
             return None;
         }
-        if let syn::Type::Reference(r) = ty {
+        if let crate::api::core::flat::TypeKind::Ref { mode, inner } = &ty.kind {
             // `&[T]` shared slice borrow: there is no owned `[T]` to decode, so
             // reuse the `Vec<_>` shape — decode the Java `List<T>` into an owned
             // `Vec<T>`; the call site borrows it (`&Vec<T>` deref-coerces to
@@ -80,22 +114,37 @@ impl Declarations {
             // `Vec<T>` input (the writer dedupes the shared converter fn by ident,
             // so the two can coexist). `&mut [T]` is intentionally not supported
             // (no write-back of the decoded Vec).
-            if r.mutability.is_none() {
-                if let syn::Type::Slice(s) = &*r.elem {
-                    let elem = (*s.elem).clone();
+            // Two questions, and only the first is `kind`'s. That it is a run of
+            // values makes this arm a *candidate*; whether the decoded `Vec<T>`
+            // can be handed to the Rust function is a question about the
+            // **spelling**, because the generated glue is the one consumer that
+            // can tell `&Vec<T>` from `&Box<Vec<T>>` — the exact thing
+            // `TypeRef::origin` exists to carry.
+            //
+            // `&[T]` deref-coerces from `&Vec<T>` and `&Vec<T>` is already it, so
+            // both are satisfied by the decoded local. A transparent wrapper —
+            // `Box<Vec<T>>`, `Cow<'_, [T]>` — is `Sequence` all the same and is
+            // NOT: passing `&Vec<T>` there does not compile. Those fall through to
+            // the plain borrow arm below, which hands the whole spelling on as the
+            // sub, exactly as the old syntactic slice check did.
+            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(&inner.origin.syntax) {
+                if let Some(elem) = inner.sequence_elem() {
+                    let elem_ty = elem.origin.syntax.clone();
                     let pat: syn::Type = syn::parse_quote!(Vec<_>);
-                    if let Some(mut c) = self.input_wrapper_shape(&pat, &elem, registry) {
-                        c.subs = vec![elem];
+                    if let Some(mut c) = self.input_wrapper_shape(&pat, &elem_ty, registry) {
+                        c.subs = vec![elem_ty];
                         return Some(c);
                     }
                     return None;
                 }
             }
-            let pat = ref_wildcard(r);
-            let t1 = (*r.elem).clone();
-            if let Some(mut c) = self.input_wrapper_shape(&pat, &t1, registry) {
-                c.subs = vec![t1];
-                return Some(c);
+            if let syn::Type::Reference(r) = syntax {
+                let pat = ref_wildcard(r);
+                let t1 = inner.origin.syntax.clone();
+                if let Some(mut c) = self.input_wrapper_shape(&pat, &t1, registry) {
+                    c.subs = vec![t1];
+                    return Some(c);
+                }
             }
         }
         None
