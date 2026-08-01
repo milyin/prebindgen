@@ -894,6 +894,8 @@ internal object CovNative {
         errorSink: Any,
     ): Any?
 
+    external fun boxedNoteEcho(note: String?, errorSink: Any): String?
+
     external fun cacheConfigWeight(
         cachePresent: Boolean,
         cacheRepliesPriority: Int,
@@ -994,6 +996,8 @@ internal object CovNative {
     external fun percentOptional(p: Int?, errorSink: Any): Int?
 
     external fun percentScale(p: Int, factor: Int, errorSink: Any): Int
+
+    external fun plainNoteEcho(note: String?, errorSink: Any): String?
 
     external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int
 

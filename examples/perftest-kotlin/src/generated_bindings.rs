@@ -669,7 +669,7 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
             )?;
             __out.push(__elem);
         }
-        __out.into()
+        __out
     })
 }
 #[allow(
@@ -1178,7 +1178,7 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
                 Some(JString_to_Box_String_027f6250(env, v)?)
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(

@@ -1577,6 +1577,45 @@ public fun ledgerEach(n: Long, sink: LedgerCallback, onError: JniErrorHandler<Un
 }
 
 /**
+ * A **transparent wrapper**, and its unwrapped control.
+ *
+ * The model erases `Box`, so `Box<Box<Option<String>>>` classifies `Optional`
+ * exactly as a bare `Option<String>` does — one thing to every destination
+ * language, two spellings to Rust. That gap is the whole of #270: the adapter
+ * used to decide what a type *was* by rebuilding a pattern from its spelling,
+ * so a wrapped `Option` reconstructed as `Box<_>`, matched nothing, and got no
+ * converter at all.
+ *
+ * Declared here rather than only in a unit test because this crate's generated
+ * binding is `include!`d and **compiled**: a converter that named
+ * `Option<String>` for a `Box<Box<Option<String>>>` value, or bridged it with
+ * the wrong number of dereferences, fails to build. Nested deliberately — one
+ * dereference leaves a `Box<Option<String>>`, which still compiles as a
+ * *type* and would only fail here.
+ *
+ * A `Cow` payload is the other half and cannot appear in a compiled fixture:
+ * it must be REFUSED, which only
+ * `a_transparent_wrapper_is_bridged_only_where_it_can_be` can assert.
+ */
+public fun boxedNoteEcho(note: String?, onError: JniErrorHandler<String?>): String? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.boxedNoteEcho(note, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * The same crossing with nothing wrapped — the control the wrapped form must
+ * match, since the model says the two returns are the same type.
+ */
+public fun plainNoteEcho(note: String?, onError: JniErrorHandler<String?>): String? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.plainNoteEcho(note, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * Build a [`Ledger`]; `n` selects which of the two slots are filled (bit 0 =
  * `filed`, bit 1 = `archived`), so a caller can drive every arm of the
  * conditional decomposition, both-present through both-absent.

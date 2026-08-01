@@ -2483,3 +2483,98 @@ fn an_owned_string_crosses_the_same_however_rust_spells_it() {
         );
     }
 }
+
+/// A transparent wrapper is bridged only where generated Rust **can** bridge
+/// it, and an unsupported representation is refused at selection rather than
+/// emitted as code that will not compile.
+///
+/// The model erases more than `Box`: `Cow<'_, T>` *is* `T` too. But a converter
+/// that MOVES its payload has to undo the exact wrapper the source wrote, and
+/// there is no trait for that — `Box<T> → T` is `*b`, `Cow<'_, T> → T::Owned`
+/// is `into_owned()`, and a `Cow` cannot be moved through at all (`E0507`).
+/// Layers are counted, too: `Box<Box<Option<T>>>` is `Optional`, and one
+/// dereference leaves `Box<Option<T>>`.
+///
+/// Both shapes used to RESOLVE and emit `let v: Option<String> = (*v);` — the
+/// worst outcome available, because resolution succeeding is what tells the
+/// binding its type is supported. Failing to resolve names the type; emitting
+/// unbuildable Rust names nothing (#270 review).
+#[test]
+fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| -> Result<String, String> {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZSampleStruct {
+                        pub f: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_to_struct(s: &ZSample) -> ZSampleStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZSample))
+                    .fun(crate::fun!(z_sample_sub)),
+            )
+            .expand(crate::expand_return!(ZSample).fields(crate::fields!(z_sample_to_struct)));
+        let dir = unique_test_dir("jnigen_vf_bridge");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    };
+
+    // One box: bridged with one dereference.
+    let one = build(syn::parse_quote!(Box<Option<String>>)).expect("a single box is bridgeable");
+    let oc: String = one.split_whitespace().collect();
+    assert!(
+        oc.contains("letv:Option<String>=(*v);"),
+        "one layer, one dereference:\n{one}"
+    );
+
+    // Two boxes: bridged with TWO. This is the case a single deref got wrong,
+    // silently — `(*v)` on `Box<Box<_>>` is still a `Box<_>`.
+    let two =
+        build(syn::parse_quote!(Box<Box<Option<String>>>)).expect("nested boxes are bridgeable");
+    let tc: String = two.split_whitespace().collect();
+    assert!(
+        tc.contains("letv:Option<String>=(*(*v));"),
+        "two layers, two dereferences:\n{two}"
+    );
+
+    // `Cow` is erased by the model and CANNOT be moved through, so the crossing
+    // must not resolve. The diagnosis names the type.
+    let cow = build(syn::parse_quote!(Cow<'static, Option<String>>))
+        .expect_err("a Cow payload cannot be moved out, so it must not resolve");
+    assert!(
+        cow.contains("could not be resolved") && cow.contains("Cow"),
+        "the refusal names the unsupported representation: {cow}"
+    );
+}

@@ -657,6 +657,33 @@ pub(crate) unsafe fn BlobValue_to_JObject_89b5dab7<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Box_Box_Option_String_to_JString_299999e0<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<Box<Option<String>>>,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        let v: Option<String> = (*(*v));
+        {
+            match v {
+                Some(value) => String_to_JString_c7f3ca43(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Box_String_to_JString_027f6250<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<String>,
@@ -2328,7 +2355,7 @@ pub(crate) unsafe fn JObject_to_Option_CacheConfig_a6be794d<'env, 'v>(
                 Some(JObject_to_CacheConfig_db89a97c(env, v)?)
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2352,7 +2379,7 @@ pub(crate) unsafe fn JObject_to_Option_Hold_230d7f9b<'env, 'v>(
         let __v: ::core::option::Option<perftest_flat::Hold> = {
             if v.is_null() { None } else { Some(JObject_to_Hold_5f85caaf(env, v)?) }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2376,7 +2403,7 @@ pub(crate) unsafe fn JObject_to_Option_Payload_97036642<'env, 'v>(
         let __v: ::core::option::Option<perftest_flat::Payload> = {
             if v.is_null() { None } else { Some(JObject_to_Payload_98f64326(env, v)?) }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2418,7 +2445,7 @@ pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
                 None
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2453,7 +2480,7 @@ pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
                 None
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2477,7 +2504,7 @@ pub(crate) unsafe fn JObject_to_Option_Reading_80df84a9<'env, 'v>(
         let __v: ::core::option::Option<perftest_flat::Reading> = {
             if v.is_null() { None } else { Some(JObject_to_Reading_2261050f(env, v)?) }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2512,7 +2539,7 @@ pub(crate) unsafe fn JObject_to_Option_f64_b3f3e9a9<'env, 'v>(
                 None
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2547,7 +2574,7 @@ pub(crate) unsafe fn JObject_to_Option_i64_2ba9a5ed<'env, 'v>(
                 None
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -2582,7 +2609,7 @@ pub(crate) unsafe fn JObject_to_Option_u64_32be16a2<'env, 'v>(
                 None
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -3045,7 +3072,7 @@ pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'v>(
             };
             __out.push(__elem);
         }
-        __out.into()
+        __out
     })
 }
 #[allow(
@@ -3089,7 +3116,7 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
             )?;
             __out.push(__elem);
         }
-        __out.into()
+        __out
     })
 }
 #[allow(
@@ -3130,7 +3157,7 @@ pub(crate) unsafe fn JObject_to_Vec_Vec_u8_43404875<'env, 'v>(
             let __elem: Vec<u8> = JByteArray_to_Vec_u8_7936d5de(env, &__elem_wire)?;
             __out.push(__elem);
         }
-        __out.into()
+        __out
     })
 }
 #[allow(
@@ -5246,7 +5273,31 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
                 Some(JString_to_Box_String_027f6250(env, v)?)
             }
         };
-        __v.into()
+        __v
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JString_to_Option_String_56d5e304<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JString<'v>,
+) -> ::core::result::Result<Option<String>, __JniErr> {
+    Ok({
+        let __v: ::core::option::Option<String> = {
+            if v.is_null() { None } else { Some(JString_to_String_c7f3ca43(env, v)?) }
+        };
+        __v
     })
 }
 #[allow(
@@ -7996,6 +8047,33 @@ pub(crate) unsafe fn Option_Stamp_to_JObject_6375b503<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Option_String_to_JString_56d5e304<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<String>,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        let v: Option<String> = v;
+        {
+            match v {
+                Some(value) => String_to_JString_c7f3ca43(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<&perftest_flat::Summary>,
@@ -9463,7 +9541,7 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
                 })
             }
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -9495,7 +9573,7 @@ pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
         } else {
             Some(*std::boxed::Box::from_raw(*v as *mut perftest_flat::Summary))
         };
-        __v.into()
+        __v
     })
 }
 #[allow(
@@ -12606,6 +12684,48 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueNew<'a>
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedNoteEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    note: jni::objects::JString<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JString<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let note = match JString_to_Option_String_56d5e304(&mut env, &note) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::boxed_note_echo(note);
+    match Box_Box_Option_String_to_JString_299999e0(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_cacheConfigWeight<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -15539,6 +15659,48 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
                 &__e.to_string(),
             );
             0 as jni::sys::jint
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_plainNoteEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    note: jni::objects::JString<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JString<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let note = match JString_to_Option_String_56d5e304(&mut env, &note) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::plain_note_echo(note);
+    match Option_String_to_JString_56d5e304(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

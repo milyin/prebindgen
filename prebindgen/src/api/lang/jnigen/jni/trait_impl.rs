@@ -644,33 +644,73 @@ pub(crate) enum WrapperShape {
     Optional,
 }
 
-/// Read the converter's `v` as the **canonical** shape when the source spelled
-/// it some other way — the output-side peer of the input `.into()`.
+/// How many `Box` layers stand between a **spelling** and the canonical shape
+/// its `kind` names — `None` when the spelling cannot be bridged **by value**
+/// at all.
 ///
-/// The two directions are not symmetric, and pretending otherwise would
-/// generate code that does not compile. **Input** builds a value and then
-/// constructs the spelling, and `Into` states that requirement for every
-/// representation at once. **Output** is handed the spelling and must get the
-/// canonical value *out*, by value — the bodies move the payload — and std has
-/// no trait for that: `Box<T> → T` is `*b` and `Cow → T` is `into_owned()` —
-/// different operations with no shared name.
+/// The model erases more than one wrapper (`Box<T>` *is* `T`, and so is
+/// `Cow<'_, T>`), and a converter that moves the payload has to undo exactly
+/// the wrapper the source wrote. There is no trait for that: `Box<T> → T` is
+/// `*b`, `Cow<'_, T> → T::Owned` is `into_owned()` — different operations with
+/// no shared name — and `Cow` cannot be moved through at all (`E0507`).
 ///
-/// So this asks a **spelling** question — is what the source wrote already the
-/// canonical form? — and derefs once when it is not. That is a legitimate
-/// question about generated Rust, the same one `decoded_vec_satisfies` asks;
-/// what the type *means* still comes from `kind` and is already settled by the
-/// time this is called.
+/// So the bridge is built only where it can be, and the layers are counted
+/// rather than assumed: `Box<Box<Option<T>>>` is `Optional` too, and one
+/// dereference leaves `Box<Option<T>>`.
 ///
-/// A representation that is not deref-movable fails to compile, naming the
-/// type. That is the same contract as the input side: the adapter states what
-/// it needs of a representation and rustc enforces it, rather than the adapter
-/// guessing which wrappers exist.
-fn read_as_canonical(produced: &syn::Type, canonical: &syn::Type) -> TokenStream {
-    if produced.to_token_stream().to_string() == canonical.to_token_stream().to_string() {
-        quote!(v)
-    } else {
-        quote!((*v))
+/// A **spelling** question, in the same family as [`decoded_vec_satisfies`] and
+/// `is_unsized_spelling`: what the type *means* is `kind`'s and is settled
+/// before this is called; this asks only what generated Rust is able to write.
+///
+/// `None` makes the crossing **unresolved**, naming the type — the failure that
+/// says "this representation is not supported here". Emitting a bridge that
+/// cannot compile would be worse: resolution would succeed and the consumer's
+/// build would break instead (#270 review).
+fn box_layers_to(spelling: &syn::Type, canonical: &syn::Type) -> Option<usize> {
+    if spelling.to_token_stream().to_string() == canonical.to_token_stream().to_string() {
+        return Some(0);
     }
+    let syn::Type::Path(tp) = spelling else {
+        return None;
+    };
+    let seg = tp.path.segments.last()?;
+    if seg.ident != "Box" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    let syn::GenericArgument::Type(inner) = ab.args.first()? else {
+        return None;
+    };
+    box_layers_to(inner, canonical).map(|d| d + 1)
+}
+
+/// Read the converter's `v` as the canonical shape — one dereference per
+/// [`box_layers_to`] layer, and none at all when the source already wrote the
+/// canonical form.
+fn read_as_canonical(produced: &syn::Type, canonical: &syn::Type) -> Option<TokenStream> {
+    let depth = box_layers_to(produced, canonical)?;
+    let mut e = quote!(v);
+    for _ in 0..depth {
+        e = quote!((*#e));
+    }
+    Some(e)
+}
+
+/// Build the spelling from a canonical value — the input-side peer, wrapping
+/// once per [`box_layers_to`] layer.
+fn build_from_canonical(
+    produced: &syn::Type,
+    canonical: &syn::Type,
+    value: TokenStream,
+) -> Option<TokenStream> {
+    let depth = box_layers_to(produced, canonical)?;
+    let mut e = value;
+    for _ in 0..depth {
+        e = quote!(::std::boxed::Box::new(#e));
+    }
+    Some(e)
 }
 
 /// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
@@ -815,6 +855,9 @@ impl Declarations {
             quote::quote!(&__elem_wire),
         );
         let outer_ty = produced.clone();
+        let canonical: syn::Type = syn::parse_quote!(Vec<#t1>);
+        // Bridgeable first — see `box_layers_to`.
+        let build = build_from_canonical(produced, &canonical, quote::quote!(__out))?;
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let body: syn::Expr = syn::parse_quote!({
             let __list = jni::objects::JList::from_env(env, v)
@@ -829,10 +872,7 @@ impl Declarations {
                 let __elem: #t1 = #inner_conv;
                 __out.push(__elem);
             }
-            // The canonical value, then the spelling. `From<T> for T` is
-            // reflexive, so a plain `Vec<T>` is a no-op and a wrapped spelling
-            // (`Box<Vec<T>>`) is constructed — see `WrapperShape`.
-            __out.into()
+            #build
         });
         let inner_kotlin = inner.metadata.kotlin_name.clone()?;
         let kotlin_name = self.override_kotlin_name(
@@ -871,6 +911,8 @@ impl Declarations {
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
                 let outer_ty = produced.clone();
+                let canonical: syn::Type = syn::parse_quote!(Option<#t1>);
+                let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
                 let name = input_name(&outer_ty, &inner_wire);
                 let gen_allow = generated_converter_attr();
                 let function: syn::ItemFn = syn::parse_quote!(
@@ -894,8 +936,7 @@ impl Declarations {
                             } else {
                                 Some(*std::boxed::Box::from_raw(*v as *mut #t1))
                             };
-                            // Canonical value first, then the spelling.
-                            __v.into()
+                            #build
                         })
                     }
                 );
@@ -925,12 +966,14 @@ impl Declarations {
         }
         if shape == WrapperShape::Optional {
             let outer_ty = produced.clone();
+            let canonical: syn::Type = syn::parse_quote!(Option<#t1>);
+            let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
             let (wire, inner_body, niches) = option_input(t1, registry)?;
             // `option_input` yields the canonical `Option<T>`; the converter
-            // yields the spelling. Reflexive when they are the same.
+            // yields the spelling.
             let body: syn::Expr = syn::parse_quote!({
                 let __v: ::core::option::Option<#t1> = #inner_body;
-                __v.into()
+                #build
             });
             // Inherit the inner's name; user pins on `Option<T>` win.
             // The nullability marker (`?`) is added by the use site.
@@ -2108,11 +2151,10 @@ impl Declarations {
         if shape == WrapperShape::Optional {
             let outer_ty = produced.clone();
             let canonical: syn::Type = syn::parse_quote!(Option<#t1>);
+            // Bridgeable first: an unsupported representation must not resolve
+            // and then emit code the consumer cannot compile.
+            let read = read_as_canonical(produced, &canonical)?;
             let (wire, inner_body, niches) = option_output(t1, registry)?;
-            // `option_output` reads `v` as the canonical `Option<T>`; bind that
-            // first so a wrapped spelling is deref'd once. See
-            // [`read_as_canonical`].
-            let read = read_as_canonical(produced, &canonical);
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
                 #inner_body
@@ -2177,7 +2219,7 @@ impl Declarations {
             );
             let outer_ty = produced.clone();
             let canonical: syn::Type = syn::parse_quote!(Vec<#t1>);
-            let read = read_as_canonical(produced, &canonical);
+            let read = read_as_canonical(produced, &canonical)?;
             let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
