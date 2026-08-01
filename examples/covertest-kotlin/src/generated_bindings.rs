@@ -380,7 +380,9 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -499,7 +501,9 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -516,7 +520,9 @@ pub(crate) unsafe fn Archive_to_jlong_cd73502c<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -589,7 +595,9 @@ pub(crate) unsafe fn Arrays_to_JObject_71120c08<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -641,7 +649,62 @@ pub(crate) unsafe fn BlobValue_to_JObject_89b5dab7<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Box_Box_Option_String_to_JString_299999e0<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<Box<Option<String>>>,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        let v: Option<String> = (*(*v));
+        {
+            match v {
+                Some(value) => String_to_JString_c7f3ca43(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Box_String_to_JString_027f6250<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<String>,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        env.new_string(v.as_str())
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("encode_str: {}", e))
+            })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -684,7 +747,9 @@ pub(crate) unsafe fn CacheConfig_to_JObject_db89a97c<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -701,7 +766,9 @@ pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -745,7 +812,9 @@ pub(crate) unsafe fn DurationBoundary_to_JObject_9c5bf9bc<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -787,7 +856,9 @@ pub(crate) unsafe fn Duration_to_u64_e3980876<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -804,7 +875,9 @@ pub(crate) unsafe fn EscapeProbe_to_jlong_416aab42<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -893,7 +966,9 @@ pub(crate) unsafe fn HoldPolicy_to_JObject_d2a5bcc4<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -940,7 +1015,9 @@ pub(crate) unsafe fn JBooleanArray_to_bool_3_3f960c58<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -964,7 +1041,9 @@ pub(crate) unsafe fn JByteArray_to_Vec_u8_7936d5de<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1001,7 +1080,9 @@ pub(crate) unsafe fn JByteArray_to_u8_2_9ca14e44<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1038,7 +1119,9 @@ pub(crate) unsafe fn JByteArray_to_u8_4_39abedfa<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1085,7 +1168,9 @@ pub(crate) unsafe fn JDoubleArray_to_f64_2_dc30d1f9<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1132,7 +1217,9 @@ pub(crate) unsafe fn JIntArray_to_i32_3_60e5e35a<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1179,7 +1266,9 @@ pub(crate) unsafe fn JLongArray_to_i64_2_73596912<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1226,7 +1315,9 @@ pub(crate) unsafe fn JLongArray_to_u64_2_60bcc6a5<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1290,7 +1381,9 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1373,7 +1466,9 @@ pub(crate) unsafe fn JObject_to_Arrays_71120c08<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1418,7 +1513,9 @@ pub(crate) unsafe fn JObject_to_BlobValue_89b5dab7<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1454,7 +1551,9 @@ pub(crate) unsafe fn JObject_to_CacheConfig_db89a97c<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1507,7 +1606,9 @@ pub(crate) unsafe fn JObject_to_DurationBoundary_9c5bf9bc<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1543,7 +1644,9 @@ pub(crate) unsafe fn JObject_to_HoldPolicy_d2a5bcc4<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1616,7 +1719,9 @@ pub(crate) unsafe fn JObject_to_Hold_5f85caaf<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1727,7 +1832,9 @@ pub(crate) unsafe fn JObject_to_Lookup_94ada15e<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1807,7 +1914,9 @@ pub(crate) unsafe fn JObject_to_Marker_3dc81334<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1843,7 +1952,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary16_e9d41606<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1879,7 +1990,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary2_a8f288cc<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1915,7 +2028,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary32_ed80fac3<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -1951,7 +2066,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary4_ea3fd497<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2019,7 +2136,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary63_29aa82ff<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2055,7 +2174,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary64_b2751ca5<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2091,7 +2212,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary8_55b82b02<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2119,7 +2242,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundaryLeaf_93531764<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2155,7 +2280,9 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary_dc5ac22b<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2208,7 +2335,9 @@ pub(crate) unsafe fn JObject_to_Observation_435b0724<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2219,7 +2348,14 @@ pub(crate) unsafe fn JObject_to_Option_CacheConfig_a6be794d<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::CacheConfig>, __JniErr> {
     Ok({
-        if v.is_null() { None } else { Some(JObject_to_CacheConfig_db89a97c(env, v)?) }
+        let __v: ::core::option::Option<perftest_flat::CacheConfig> = {
+            if v.is_null() {
+                None
+            } else {
+                Some(JObject_to_CacheConfig_db89a97c(env, v)?)
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -2227,7 +2363,9 @@ pub(crate) unsafe fn JObject_to_Option_CacheConfig_a6be794d<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2237,14 +2375,21 @@ pub(crate) unsafe fn JObject_to_Option_Hold_230d7f9b<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Hold>, __JniErr> {
-    Ok({ if v.is_null() { None } else { Some(JObject_to_Hold_5f85caaf(env, v)?) } })
+    Ok({
+        let __v: ::core::option::Option<perftest_flat::Hold> = {
+            if v.is_null() { None } else { Some(JObject_to_Hold_5f85caaf(env, v)?) }
+        };
+        __v
+    })
 }
 #[allow(
     non_snake_case,
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2254,14 +2399,21 @@ pub(crate) unsafe fn JObject_to_Option_Payload_97036642<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Payload>, __JniErr> {
-    Ok({ if v.is_null() { None } else { Some(JObject_to_Payload_98f64326(env, v)?) } })
+    Ok({
+        let __v: ::core::option::Option<perftest_flat::Payload> = {
+            if v.is_null() { None } else { Some(JObject_to_Payload_98f64326(env, v)?) }
+        };
+        __v
+    })
 }
 #[allow(
     non_snake_case,
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2272,25 +2424,28 @@ pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Percent>, __JniErr> {
     Ok({
-        if !v.is_null() {
-            let __unboxed: jni::sys::jint = env
-                .call_method(&v, "intValue", "()I", &[])
-                .and_then(|val| val.i())
-                .map(|__x| __x as jni::sys::jint)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Option unbox: {}", e)))?;
-            Some({
-                let __inner_s0 = jint_to_i32_a3e3b6ef(env, &__unboxed)?;
-                let __inner_s1 = i32_to_Percent_db3641cc(env, __inner_s0)
-                    .map_err(|__e| <__JniErr as ::core::convert::From<
+        let __v: ::core::option::Option<perftest_flat::Percent> = {
+            if !v.is_null() {
+                let __unboxed: jni::sys::jint = env
+                    .call_method(&v, "intValue", "()I", &[])
+                    .and_then(|val| val.i())
+                    .map(|__x| __x as jni::sys::jint)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
-                    >>::from(__e.to_string()))?;
-                __inner_s1
-            })
-        } else {
-            None
-        }
+                    >>::from(format!("Option unbox: {}", e)))?;
+                Some({
+                    let __inner_s0 = jint_to_i32_a3e3b6ef(env, &__unboxed)?;
+                    let __inner_s1 = i32_to_Percent_db3641cc(env, __inner_s0)
+                        .map_err(|__e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(__e.to_string()))?;
+                    __inner_s1
+                })
+            } else {
+                None
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -2298,7 +2453,9 @@ pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2309,18 +2466,21 @@ pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Priority>, __JniErr> {
     Ok({
-        if !v.is_null() {
-            let __unboxed: jni::sys::jint = env
-                .call_method(&v, "intValue", "()I", &[])
-                .and_then(|val| val.i())
-                .map(|__x| __x as jni::sys::jint)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Option unbox: {}", e)))?;
-            Some(jint_to_Priority_447102d2(env, &__unboxed)?)
-        } else {
-            None
-        }
+        let __v: ::core::option::Option<perftest_flat::Priority> = {
+            if !v.is_null() {
+                let __unboxed: jni::sys::jint = env
+                    .call_method(&v, "intValue", "()I", &[])
+                    .and_then(|val| val.i())
+                    .map(|__x| __x as jni::sys::jint)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option unbox: {}", e)))?;
+                Some(jint_to_Priority_447102d2(env, &__unboxed)?)
+            } else {
+                None
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -2328,7 +2488,9 @@ pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2338,14 +2500,21 @@ pub(crate) unsafe fn JObject_to_Option_Reading_80df84a9<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Reading>, __JniErr> {
-    Ok({ if v.is_null() { None } else { Some(JObject_to_Reading_2261050f(env, v)?) } })
+    Ok({
+        let __v: ::core::option::Option<perftest_flat::Reading> = {
+            if v.is_null() { None } else { Some(JObject_to_Reading_2261050f(env, v)?) }
+        };
+        __v
+    })
 }
 #[allow(
     non_snake_case,
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2356,18 +2525,21 @@ pub(crate) unsafe fn JObject_to_Option_f64_b3f3e9a9<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<f64>, __JniErr> {
     Ok({
-        if !v.is_null() {
-            let __unboxed: jni::sys::jdouble = env
-                .call_method(&v, "doubleValue", "()D", &[])
-                .and_then(|val| val.d())
-                .map(|__x| __x as jni::sys::jdouble)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Option unbox: {}", e)))?;
-            Some(jdouble_to_f64_9e4a8f70(env, &__unboxed)?)
-        } else {
-            None
-        }
+        let __v: ::core::option::Option<f64> = {
+            if !v.is_null() {
+                let __unboxed: jni::sys::jdouble = env
+                    .call_method(&v, "doubleValue", "()D", &[])
+                    .and_then(|val| val.d())
+                    .map(|__x| __x as jni::sys::jdouble)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option unbox: {}", e)))?;
+                Some(jdouble_to_f64_9e4a8f70(env, &__unboxed)?)
+            } else {
+                None
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -2375,7 +2547,9 @@ pub(crate) unsafe fn JObject_to_Option_f64_b3f3e9a9<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2386,18 +2560,21 @@ pub(crate) unsafe fn JObject_to_Option_i64_2ba9a5ed<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<i64>, __JniErr> {
     Ok({
-        if !v.is_null() {
-            let __unboxed: jni::sys::jlong = env
-                .call_method(&v, "longValue", "()J", &[])
-                .and_then(|val| val.j())
-                .map(|__x| __x as jni::sys::jlong)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Option unbox: {}", e)))?;
-            Some(jlong_to_i64_fbf9a9bc(env, &__unboxed)?)
-        } else {
-            None
-        }
+        let __v: ::core::option::Option<i64> = {
+            if !v.is_null() {
+                let __unboxed: jni::sys::jlong = env
+                    .call_method(&v, "longValue", "()J", &[])
+                    .and_then(|val| val.j())
+                    .map(|__x| __x as jni::sys::jlong)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option unbox: {}", e)))?;
+                Some(jlong_to_i64_fbf9a9bc(env, &__unboxed)?)
+            } else {
+                None
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -2405,7 +2582,9 @@ pub(crate) unsafe fn JObject_to_Option_i64_2ba9a5ed<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2416,18 +2595,21 @@ pub(crate) unsafe fn JObject_to_Option_u64_32be16a2<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<u64>, __JniErr> {
     Ok({
-        if !v.is_null() {
-            let __unboxed: jni::sys::jlong = env
-                .call_method(&v, "longValue", "()J", &[])
-                .and_then(|val| val.j())
-                .map(|__x| __x as jni::sys::jlong)
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("Option unbox: {}", e)))?;
-            Some(jlong_to_u64_4384a5d6(env, &__unboxed)?)
-        } else {
-            None
-        }
+        let __v: ::core::option::Option<u64> = {
+            if !v.is_null() {
+                let __unboxed: jni::sys::jlong = env
+                    .call_method(&v, "longValue", "()J", &[])
+                    .and_then(|val| val.j())
+                    .map(|__x| __x as jni::sys::jlong)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option unbox: {}", e)))?;
+                Some(jlong_to_u64_4384a5d6(env, &__unboxed)?)
+            } else {
+                None
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -2435,7 +2617,9 @@ pub(crate) unsafe fn JObject_to_Option_u64_32be16a2<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2496,7 +2680,9 @@ pub(crate) unsafe fn JObject_to_Payload_98f64326<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2654,7 +2840,9 @@ pub(crate) unsafe fn JObject_to_Reading_2261050f<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2696,7 +2884,9 @@ pub(crate) unsafe fn JObject_to_RepliesConfig_eb8e9079<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2732,7 +2922,9 @@ pub(crate) unsafe fn JObject_to_Stamp_f6b1e942<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2768,7 +2960,9 @@ pub(crate) unsafe fn JObject_to_Tagged_641b984c<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2838,7 +3032,9 @@ pub(crate) unsafe fn JObject_to_Unsigned_7e3cc618<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2884,7 +3080,9 @@ pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2926,7 +3124,9 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -2965,7 +3165,9 @@ pub(crate) unsafe fn JObject_to_Vec_Vec_u8_43404875<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -3058,7 +3260,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Duration_Send_Sync_static_98c9f460<'env,
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -3721,7 +3925,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Ledger_Send_Sync_static_c76008cc<'env, '
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -3859,7 +4065,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Lookup_Send_Sync_static_4a65bc23<'env, '
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -4134,7 +4342,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -4308,7 +4518,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906<'env, 
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -4544,7 +4756,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Reading_Send_Sync_static_5964f1fc<'env, 
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -4793,7 +5007,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Report_Send_Sync_static_eb5ca515<'env, '
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -4878,7 +5094,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Storage_Send_Sync_static_2f26edcf<'env, 
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -4958,7 +5176,9 @@ pub(crate) unsafe fn JObject_to_impl_Fn_u64_Send_Sync_static_c7830b57<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5005,7 +5225,37 @@ pub(crate) unsafe fn JShortArray_to_i16_2_098f4ad5<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JString_to_Box_String_027f6250<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JString<'v>,
+) -> ::core::result::Result<Box<String>, __JniErr> {
+    Ok({
+        let s = env
+            .get_string(v)
+            .map_err(|e| {
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("decode_string: {}", e))
+            })?;
+        ::std::string::String::from(s).into()
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5016,11 +5266,14 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
     v: &jni::objects::JString<'v>,
 ) -> ::core::result::Result<Option<Box<String>>, __JniErr> {
     Ok({
-        if v.is_null() {
-            None
-        } else {
-            Some(JString_to_std_boxed_Box_std_string_String_cfbab680(env, v)?)
-        }
+        let __v: ::core::option::Option<Box<String>> = {
+            if v.is_null() {
+                None
+            } else {
+                Some(JString_to_Box_String_027f6250(env, v)?)
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -5028,7 +5281,33 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JString_to_Option_String_56d5e304<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JString<'v>,
+) -> ::core::result::Result<Option<String>, __JniErr> {
+    Ok({
+        let __v: ::core::option::Option<String> = {
+            if v.is_null() { None } else { Some(JString_to_String_c7f3ca43(env, v)?) }
+        };
+        __v
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5054,33 +5333,9 @@ pub(crate) unsafe fn JString_to_String_c7f3ca43<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn JString_to_std_boxed_Box_std_string_String_cfbab680<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JString<'v>,
-) -> ::core::result::Result<::std::boxed::Box<::std::string::String>, __JniErr> {
-    Ok({
-        let s = env
-            .get_string(v)
-            .map_err(|e| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("decode_string: {}", e))
-            })?;
-        ::std::boxed::Box::new(::std::string::String::from(s))
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5097,7 +5352,9 @@ pub(crate) unsafe fn Label_to_String_63dec766<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5114,7 +5371,9 @@ pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5225,7 +5484,9 @@ pub(crate) unsafe fn ObjectBoundary16_to_JObject_e9d41606<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5266,7 +5527,9 @@ pub(crate) unsafe fn ObjectBoundary2_to_JObject_a8f288cc<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5457,7 +5720,9 @@ pub(crate) unsafe fn ObjectBoundary32_to_JObject_ed80fac3<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5508,7 +5773,9 @@ pub(crate) unsafe fn ObjectBoundary4_to_JObject_ea3fd497<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -5920,7 +6187,9 @@ pub(crate) unsafe fn ObjectBoundary63_to_JObject_29aa82ff<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -6355,7 +6624,9 @@ pub(crate) unsafe fn ObjectBoundary64_to_JObject_b2751ca5<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -6426,7 +6697,9 @@ pub(crate) unsafe fn ObjectBoundary8_to_JObject_55b82b02<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -6457,7 +6730,9 @@ pub(crate) unsafe fn ObjectBoundaryLeaf_to_JObject_93531764<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7347,7 +7622,9 @@ pub(crate) unsafe fn ObjectBoundary_to_JObject_dc5ac22b<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7576,7 +7853,9 @@ pub(crate) unsafe fn Observation_to_JObject_435b0724<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7587,11 +7866,12 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     v: Option<Box<String>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => {
-                std_boxed_Box_std_string_String_to_JString_cfbab680(env, value)?
+        let v: Option<Box<String>> = v;
+        {
+            match v {
+                Some(value) => Box_String_to_JString_027f6250(env, value)?,
+                None => jni::objects::JObject::null().into(),
             }
-            None => jni::objects::JObject::null().into(),
         }
     })
 }
@@ -7600,7 +7880,9 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7611,15 +7893,18 @@ pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
     v: Option<perftest_flat::Duration>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok({
-        match v {
-            Some(value) => {
-                let __inner_s0 = Duration_to_u64_e3980876(env, value)
-                    .map_err(|__e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(__e.to_string()))?;
-                u64_to_jlong_4384a5d6(env, __inner_s0)?
+        let v: Option<perftest_flat::Duration> = v;
+        {
+            match v {
+                Some(value) => {
+                    let __inner_s0 = Duration_to_u64_e3980876(env, value)
+                        .map_err(|__e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(__e.to_string()))?;
+                    u64_to_jlong_4384a5d6(env, __inner_s0)?
+                }
+                None => -1i64,
             }
-            None => -1i64,
         }
     })
 }
@@ -7628,7 +7913,9 @@ pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7639,9 +7926,12 @@ pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
     v: Option<perftest_flat::Payload>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => Payload_to_JObject_98f64326(env, value)?,
-            None => jni::objects::JObject::null().into(),
+        let v: Option<perftest_flat::Payload> = v;
+        {
+            match v {
+                Some(value) => Payload_to_JObject_98f64326(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
         }
     })
 }
@@ -7650,7 +7940,9 @@ pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7661,21 +7953,24 @@ pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
     v: Option<perftest_flat::Percent>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => {
-                let __raw: jni::sys::jint = {
-                    let __inner_s0 = Percent_to_i32_01484801(env, value)
-                        .map_err(|__e| <__JniErr as ::core::convert::From<
+        let v: Option<perftest_flat::Percent> = v;
+        {
+            match v {
+                Some(value) => {
+                    let __raw: jni::sys::jint = {
+                        let __inner_s0 = Percent_to_i32_01484801(env, value)
+                            .map_err(|__e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(__e.to_string()))?;
+                        i32_to_jint_a3e3b6ef(env, __inner_s0)?
+                    };
+                    ::prebindgen::lang::box_jint(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<
                             String,
-                        >>::from(__e.to_string()))?;
-                    i32_to_jint_a3e3b6ef(env, __inner_s0)?
-                };
-                ::prebindgen::lang::box_jint(env, __raw)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option box: {}", e)))?
+                        >>::from(format!("Option box: {}", e)))?
+                }
+                None => jni::objects::JObject::null(),
             }
-            None => jni::objects::JObject::null(),
         }
     })
 }
@@ -7684,7 +7979,9 @@ pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7695,15 +7992,18 @@ pub(crate) unsafe fn Option_Priority_to_JObject_ad5cbb32<'a>(
     v: Option<perftest_flat::Priority>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => {
-                let __raw: jni::sys::jint = Priority_to_jint_447102d2(env, value)?;
-                ::prebindgen::lang::box_jint(env, __raw)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option box: {}", e)))?
+        let v: Option<perftest_flat::Priority> = v;
+        {
+            match v {
+                Some(value) => {
+                    let __raw: jni::sys::jint = Priority_to_jint_447102d2(env, value)?;
+                    ::prebindgen::lang::box_jint(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option box: {}", e)))?
+                }
+                None => jni::objects::JObject::null(),
             }
-            None => jni::objects::JObject::null(),
         }
     })
 }
@@ -7712,7 +8012,9 @@ pub(crate) unsafe fn Option_Priority_to_JObject_ad5cbb32<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7723,9 +8025,12 @@ pub(crate) unsafe fn Option_Stamp_to_JObject_6375b503<'a>(
     v: Option<perftest_flat::Stamp>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => Stamp_to_JObject_f6b1e942(env, value)?,
-            None => jni::objects::JObject::null().into(),
+        let v: Option<perftest_flat::Stamp> = v;
+        {
+            match v {
+                Some(value) => Stamp_to_JObject_f6b1e942(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
         }
     })
 }
@@ -7734,7 +8039,36 @@ pub(crate) unsafe fn Option_Stamp_to_JObject_6375b503<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Option_String_to_JString_56d5e304<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<String>,
+) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
+    Ok({
+        let v: Option<String> = v;
+        {
+            match v {
+                Some(value) => String_to_JString_c7f3ca43(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7745,9 +8079,12 @@ pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     v: Option<&perftest_flat::Summary>,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok({
-        match v {
-            Some(value) => Summary_to_jlong_ccacdeac(env, value)?,
-            None => 0i64,
+        let v: Option<&perftest_flat::Summary> = v;
+        {
+            match v {
+                Some(value) => Summary_to_jlong_ccacdeac(env, value)?,
+                None => 0i64,
+            }
         }
     })
 }
@@ -7756,7 +8093,9 @@ pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7767,9 +8106,12 @@ pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
     v: Option<Vec<perftest_flat::Payload>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => Vec_Payload_to_JObject_8b7084d2(env, value)?,
-            None => jni::objects::JObject::null().into(),
+        let v: Option<Vec<perftest_flat::Payload>> = v;
+        {
+            match v {
+                Some(value) => Vec_Payload_to_JObject_8b7084d2(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
         }
     })
 }
@@ -7778,7 +8120,9 @@ pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7789,15 +8133,18 @@ pub(crate) unsafe fn Option_f64_to_JObject_b3f3e9a9<'a>(
     v: Option<f64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => {
-                let __raw: jni::sys::jdouble = f64_to_jdouble_9e4a8f70(env, value)?;
-                ::prebindgen::lang::box_jdouble(env, __raw)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option box: {}", e)))?
+        let v: Option<f64> = v;
+        {
+            match v {
+                Some(value) => {
+                    let __raw: jni::sys::jdouble = f64_to_jdouble_9e4a8f70(env, value)?;
+                    ::prebindgen::lang::box_jdouble(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option box: {}", e)))?
+                }
+                None => jni::objects::JObject::null(),
             }
-            None => jni::objects::JObject::null(),
         }
     })
 }
@@ -7806,7 +8153,9 @@ pub(crate) unsafe fn Option_f64_to_JObject_b3f3e9a9<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7817,15 +8166,18 @@ pub(crate) unsafe fn Option_i64_to_JObject_2ba9a5ed<'a>(
     v: Option<i64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => {
-                let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, value)?;
-                ::prebindgen::lang::box_jlong(env, __raw)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option box: {}", e)))?
+        let v: Option<i64> = v;
+        {
+            match v {
+                Some(value) => {
+                    let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, value)?;
+                    ::prebindgen::lang::box_jlong(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option box: {}", e)))?
+                }
+                None => jni::objects::JObject::null(),
             }
-            None => jni::objects::JObject::null(),
         }
     })
 }
@@ -7834,7 +8186,9 @@ pub(crate) unsafe fn Option_i64_to_JObject_2ba9a5ed<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7845,15 +8199,18 @@ pub(crate) unsafe fn Option_u64_to_JObject_32be16a2<'a>(
     v: Option<u64>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
-        match v {
-            Some(value) => {
-                let __raw: jni::sys::jlong = u64_to_jlong_4384a5d6(env, value)?;
-                ::prebindgen::lang::box_jlong(env, __raw)
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Option box: {}", e)))?
+        let v: Option<u64> = v;
+        {
+            match v {
+                Some(value) => {
+                    let __raw: jni::sys::jlong = u64_to_jlong_4384a5d6(env, value)?;
+                    ::prebindgen::lang::box_jlong(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option box: {}", e)))?
+                }
+                None => jni::objects::JObject::null(),
             }
-            None => jni::objects::JObject::null(),
         }
     })
 }
@@ -7862,7 +8219,9 @@ pub(crate) unsafe fn Option_u64_to_JObject_32be16a2<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7879,7 +8238,9 @@ pub(crate) unsafe fn PayloadHandler_to_jlong_d61fd890<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7896,7 +8257,9 @@ pub(crate) unsafe fn PayloadVecHandler_to_jlong_b32d2812<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7936,7 +8299,9 @@ pub(crate) unsafe fn Payload_to_JObject_25cd94ea<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -7984,7 +8349,9 @@ pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8001,7 +8368,9 @@ pub(crate) unsafe fn Percent_to_i32_01484801<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8018,7 +8387,9 @@ pub(crate) unsafe fn Priority_to_jint_447102d2<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8059,7 +8430,9 @@ pub(crate) unsafe fn RepliesConfig_to_JObject_eb8e9079<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8076,7 +8449,9 @@ pub(crate) unsafe fn Report_to_jlong_eaed4ba1<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8093,7 +8468,9 @@ pub(crate) unsafe fn Result_Storage_StorageError_to_Storage_7ccce404<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8110,7 +8487,9 @@ pub(crate) unsafe fn Result_Summary_String_to_Summary_dfdf7f9e<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8145,7 +8524,9 @@ pub(crate) unsafe fn Stamp_to_JObject_f6b1e942<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8162,7 +8543,9 @@ pub(crate) unsafe fn StorageError_to_jlong_26b2d298<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8179,7 +8562,9 @@ pub(crate) unsafe fn StorageHandler_to_jlong_3b4d3ed3<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8196,7 +8581,9 @@ pub(crate) unsafe fn Storage_to_jlong_1b233abd<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8211,7 +8598,7 @@ pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
             .map_err(|e| {
                 <__JniErr as ::core::convert::From<
                     String,
-                >>::from(format!("encode_string: {}", e))
+                >>::from(format!("encode_str: {}", e))
             })?
     })
 }
@@ -8220,7 +8607,9 @@ pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8237,7 +8626,9 @@ pub(crate) unsafe fn String_to_Label_c1a79668<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8254,7 +8645,9 @@ pub(crate) unsafe fn Summary_to_jlong_3cb103b9<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8271,7 +8664,9 @@ pub(crate) unsafe fn Summary_to_jlong_ccacdeac<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8322,7 +8717,9 @@ pub(crate) unsafe fn Tagged_to_JObject_641b984c<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8366,7 +8763,9 @@ pub(crate) unsafe fn Unsigned_to_JObject_7e3cc618<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8377,6 +8776,7 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
     v: Vec<perftest_flat::Label>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
+        let v: Vec<perftest_flat::Label> = v;
         let __list_obj = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -8409,7 +8809,9 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8420,6 +8822,7 @@ pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
     v: Vec<perftest_flat::Payload>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
+        let v: Vec<perftest_flat::Payload> = v;
         let __list_obj = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -8446,7 +8849,9 @@ pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8457,6 +8862,7 @@ pub(crate) unsafe fn Vec_Stamp_to_JObject_8954d9be<'a>(
     v: Vec<perftest_flat::Stamp>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
+        let v: Vec<perftest_flat::Stamp> = v;
         let __list_obj = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -8483,7 +8889,9 @@ pub(crate) unsafe fn Vec_Stamp_to_JObject_8954d9be<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8494,6 +8902,7 @@ pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
     v: Vec<String>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
+        let v: Vec<String> = v;
         let __list_obj = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -8520,7 +8929,9 @@ pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8531,6 +8942,7 @@ pub(crate) unsafe fn Vec_Vec_u8_to_JObject_43404875<'a>(
     v: Vec<Vec<u8>>,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
+        let v: Vec<Vec<u8>> = v;
         let __list_obj = env
             .new_object("java/util/ArrayList", "()V", &[])
             .map_err(|e| <__JniErr as ::core::convert::From<
@@ -8557,7 +8969,9 @@ pub(crate) unsafe fn Vec_Vec_u8_to_JObject_43404875<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8581,7 +8995,9 @@ pub(crate) unsafe fn Vec_u8_to_JByteArray_7936d5de<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8617,7 +9033,9 @@ pub(crate) unsafe fn bool_3_to_JBooleanArray_3f960c58<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8634,7 +9052,9 @@ pub(crate) unsafe fn bool_to_jboolean_31306d98<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8670,7 +9090,9 @@ pub(crate) unsafe fn f64_2_to_JDoubleArray_dc30d1f9<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8687,7 +9109,9 @@ pub(crate) unsafe fn f64_to_jdouble_9e4a8f70<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8723,7 +9147,9 @@ pub(crate) unsafe fn i16_2_to_JShortArray_098f4ad5<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8759,7 +9185,9 @@ pub(crate) unsafe fn i32_3_to_JIntArray_60e5e35a<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8776,7 +9204,9 @@ pub(crate) unsafe fn i32_to_Celsius_8c363100<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8796,7 +9226,9 @@ pub(crate) unsafe fn i32_to_Percent_db3641cc<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8813,7 +9245,9 @@ pub(crate) unsafe fn i32_to_jint_a3e3b6ef<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8849,7 +9283,9 @@ pub(crate) unsafe fn i64_2_to_JLongArray_73596912<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8866,7 +9302,9 @@ pub(crate) unsafe fn i64_to_Millis_bb88777a<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8883,7 +9321,9 @@ pub(crate) unsafe fn i64_to_jlong_fbf9a9bc<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8900,7 +9340,9 @@ pub(crate) unsafe fn jboolean_to_bool_31306d98<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8917,7 +9359,9 @@ pub(crate) unsafe fn jdouble_to_f64_9e4a8f70<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8947,7 +9391,9 @@ pub(crate) unsafe fn jint_to_Priority_447102d2<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8964,7 +9410,9 @@ pub(crate) unsafe fn jint_to_i32_a3e3b6ef<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -8988,7 +9436,9 @@ pub(crate) unsafe fn jint_to_u16_28edf527<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9012,7 +9462,9 @@ pub(crate) unsafe fn jint_to_u8_553cf6ec<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9036,7 +9488,9 @@ pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9060,7 +9514,9 @@ pub(crate) unsafe fn jlong_to_EscapeProbe_416aab42<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9071,18 +9527,21 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<Option<perftest_flat::Duration>, __JniErr> {
     Ok({
-        if *v == -1i64 {
-            None
-        } else {
-            Some({
-                let __inner_s0 = jlong_to_u64_4384a5d6(env, v)?;
-                let __inner_s1 = u64_to_Duration_7c0845f9(env, __inner_s0)
-                    .map_err(|__e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(__e.to_string()))?;
-                __inner_s1
-            })
-        }
+        let __v: ::core::option::Option<perftest_flat::Duration> = {
+            if *v == -1i64 {
+                None
+            } else {
+                Some({
+                    let __inner_s0 = jlong_to_u64_4384a5d6(env, v)?;
+                    let __inner_s1 = u64_to_Duration_7c0845f9(env, __inner_s0)
+                        .map_err(|__e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(__e.to_string()))?;
+                    __inner_s1
+                })
+            }
+        };
+        __v
     })
 }
 #[allow(
@@ -9090,7 +9549,9 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9101,7 +9562,7 @@ pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<Option<perftest_flat::Summary>, __JniErr> {
     Ok({
-        if *v == 0 {
+        let __v: ::core::option::Option<perftest_flat::Summary> = if *v == 0 {
             None
         } else if (*v & 1) == 1 {
             return ::core::result::Result::Err(
@@ -9111,7 +9572,8 @@ pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
             );
         } else {
             Some(*std::boxed::Box::from_raw(*v as *mut perftest_flat::Summary))
-        }
+        };
+        __v
     })
 }
 #[allow(
@@ -9119,7 +9581,9 @@ pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9136,7 +9600,9 @@ pub(crate) unsafe fn jlong_to_Option_Summary_828826f3<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9160,7 +9626,9 @@ pub(crate) unsafe fn jlong_to_PayloadHandler_d61fd890<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9184,7 +9652,9 @@ pub(crate) unsafe fn jlong_to_PayloadVecHandler_b32d2812<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9208,7 +9678,9 @@ pub(crate) unsafe fn jlong_to_Report_eaed4ba1<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9232,7 +9704,9 @@ pub(crate) unsafe fn jlong_to_StorageError_26b2d298<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9256,7 +9730,9 @@ pub(crate) unsafe fn jlong_to_StorageHandler_3b4d3ed3<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9280,7 +9756,9 @@ pub(crate) unsafe fn jlong_to_Storage_1b233abd<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9304,7 +9782,9 @@ pub(crate) unsafe fn jlong_to_Summary_3cb103b9<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9321,7 +9801,9 @@ pub(crate) unsafe fn jlong_to_i64_fbf9a9bc<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9345,7 +9827,9 @@ pub(crate) unsafe fn jlong_to_u32_9594a230<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9362,31 +9846,9 @@ pub(crate) unsafe fn jlong_to_u64_4384a5d6<'env, 'v>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn std_boxed_Box_std_string_String_to_JString_cfbab680<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: ::std::boxed::Box<::std::string::String>,
-) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
-    Ok({
-        env.new_string(v.as_str())
-            .map_err(|e| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("encode_str: {}", e))
-            })?
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9410,7 +9872,9 @@ pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9427,7 +9891,9 @@ pub(crate) unsafe fn u16_to_jint_28edf527<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9444,7 +9910,9 @@ pub(crate) unsafe fn u32_to_jlong_9594a230<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9480,7 +9948,9 @@ pub(crate) unsafe fn u64_2_to_JLongArray_60bcc6a5<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9511,7 +9981,9 @@ pub(crate) unsafe fn u64_to_Duration_7c0845f9<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9528,7 +10000,9 @@ pub(crate) unsafe fn u64_to_jlong_4384a5d6<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9552,7 +10026,9 @@ pub(crate) unsafe fn u8_4_to_JByteArray_39abedfa<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -9569,7 +10045,9 @@ pub(crate) unsafe fn u8_to_jint_553cf6ec<'a>(
     unused_mut,
     unused_variables,
     unused_braces,
+    unused_parens,
     dead_code,
+    clippy::useless_conversion,
     clippy::needless_question_mark,
     clippy::let_and_return,
     clippy::nonminimal_bool,
@@ -12199,6 +12677,48 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueNew<'a>
                 __SINK_FQN,
                 __SINK_DESCR,
                 &__e2.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedNoteEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    note: jni::objects::JString<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JString<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let note = match JString_to_Option_String_56d5e304(&mut env, &note) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::boxed_note_echo(note);
+    match Box_Box_Option_String_to_JString_299999e0(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -15139,6 +15659,48 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
                 &__e.to_string(),
             );
             0 as jni::sys::jint
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_plainNoteEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    note: jni::objects::JString<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JString<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let note = match JString_to_Option_String_56d5e304(&mut env, &note) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::plain_note_echo(note);
+    match Option_String_to_JString_56d5e304(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

@@ -2308,3 +2308,353 @@ fn the_declarator_and_the_accessor_s_receiver_must_agree() {
         "`.fields` on a by-value accessor must be refused, naming it: {msg:?}"
     );
 }
+
+/// A field's optional-ness is `kind`'s; how Rust spells it is the source's,
+/// and a **whole-value crossing** must not care either — the half #268 could
+/// not reach.
+///
+/// #268 fixed the *access path* for a decomposed child. A field with no
+/// deconstructor needs its own converter, and converter selection dispatched by
+/// rebuilding a pattern from the spelling: `with_first_arg(Box<Option<T>>)`
+/// yielded `Box<_>`, which matched no handler, so the crossing got no converter
+/// at all and failed resolution by name (#270).
+///
+/// Both spellings now resolve, and the converter takes the type the source
+/// actually wrote — declaring `Option<T>` for a `Box<Option<T>>` value would
+/// mismatch its own call site.
+#[test]
+fn a_whole_value_crossing_ignores_how_rust_spells_it() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| -> String {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZStamp {
+                        pub secs: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZSampleStruct {
+                        pub stamp: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_to_struct(s: &ZSample) -> ZSampleStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZSample))
+                    .class(crate::data_class!(ZStamp))
+                    .fun(crate::fun!(z_sample_sub)),
+            )
+            .expand(crate::expand_return!(ZSample).fields(crate::fields!(z_sample_to_struct)));
+        let dir = unique_test_dir("jnigen_vf_whole_boxed");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Resolving at all is half the assertion: this is what #270 reported as
+        // `Unresolved { key: "Box < Option < ZStamp > >" }`.
+        let gen = jni.build_with(registry).expect("resolve");
+        std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+            .expect("read rust")
+    };
+
+    let plain = build(syn::parse_quote!(Option<ZStamp>));
+    let boxed = build(syn::parse_quote!(Box<Option<ZStamp>>));
+
+    let bc: String = boxed.split_whitespace().collect();
+    // The converter takes what the source wrote...
+    assert!(
+        bc.contains("v:Box<Option<myflat::ZStamp>>"),
+        "the converter takes the spelled type:\n{boxed}"
+    );
+    // ...and reads the canonical shape out of it before destructuring.
+    assert!(
+        bc.contains("letv:Option<myflat::ZStamp>="),
+        "the spelling is read as the canonical shape:\n{boxed}"
+    );
+    // The Kotlin surface is the wrapper's business only in Rust: both
+    // spellings deliver the same nullable data class.
+    for (label, rust) in [("Option<T>", &plain), ("Box<Option<T>>", &boxed)] {
+        assert!(
+            rust.contains("ZStamp_to_JObject"),
+            "{label}: the field still crosses as its own converter:\n{rust}"
+        );
+    }
+}
+
+/// An owned string crosses the same however Rust spells it, with no
+/// per-spelling arm behind it.
+///
+/// `Box<String>` used to work only because two `TypeKey == "Box < String >"`
+/// matches were written by hand — one per direction. That is what a
+/// spelling-keyed converter table costs: a hardcoded case for every
+/// representation someone happens to write. Both are deleted; `kind == Str`
+/// dispatches, the signature comes from the spelling, and `.into()` constructs
+/// it.
+#[test]
+fn an_owned_string_crosses_the_same_however_rust_spells_it() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| -> String {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZSampleStruct {
+                        pub label: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_to_struct(s: &ZSample) -> ZSampleStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZSample))
+                    .fun(crate::fun!(z_sample_sub)),
+            )
+            .expand(crate::expand_return!(ZSample).fields(crate::fields!(z_sample_to_struct)));
+        let dir = unique_test_dir("jnigen_vf_boxed_string");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = jni.build_with(registry).expect("resolve");
+        let (rust, kotlin) = (
+            std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+                .expect("read rust"),
+            gen.write_kotlin(&dir.join("kotlin"))
+                .expect("write_kotlin")
+                .iter()
+                .map(|p| std::fs::read_to_string(p).unwrap())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        format!("{rust}\n// ---KOTLIN---\n{kotlin}")
+    };
+
+    for spelling in [
+        syn::parse_quote!(String),
+        syn::parse_quote!(Box<String>),
+        syn::parse_quote!(Cow<'static, str>),
+    ] {
+        let out = build(spelling);
+        assert!(
+            out.contains("String"),
+            "every owned-string spelling crosses as a Kotlin String:\n{out}"
+        );
+    }
+}
+
+/// A transparent wrapper is bridged only where generated Rust **can** bridge
+/// it, and an unsupported representation is refused at selection rather than
+/// emitted as code that will not compile.
+///
+/// The model erases more than `Box`: `Cow<'_, T>` *is* `T` too. But a converter
+/// that MOVES its payload has to undo the exact wrapper the source wrote, and
+/// there is no trait for that — `Box<T> → T` is `*b`, `Cow<'_, T> → T::Owned`
+/// is `into_owned()`, and a `Cow` cannot be moved through at all (`E0507`).
+/// Layers are counted, too: `Box<Box<Option<T>>>` is `Optional`, and one
+/// dereference leaves `Box<Option<T>>`.
+///
+/// Both shapes used to RESOLVE and emit `let v: Option<String> = (*v);` — the
+/// worst outcome available, because resolution succeeding is what tells the
+/// binding its type is supported. Failing to resolve names the type; emitting
+/// unbuildable Rust names nothing (#270 review).
+#[test]
+fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| -> Result<String, String> {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZSampleStruct {
+                        pub f: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_to_struct(s: &ZSample) -> ZSampleStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sample_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZSample))
+                    .fun(crate::fun!(z_sample_sub)),
+            )
+            .expand(crate::expand_return!(ZSample).fields(crate::fields!(z_sample_to_struct)));
+        let dir = unique_test_dir("jnigen_vf_bridge");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    };
+
+    // One box: bridged with one dereference.
+    let one = build(syn::parse_quote!(Box<Option<String>>)).expect("a single box is bridgeable");
+    let oc: String = one.split_whitespace().collect();
+    assert!(
+        oc.contains("letv:Option<String>=(*v);"),
+        "one layer, one dereference:\n{one}"
+    );
+
+    // Two boxes: bridged with TWO. This is the case a single deref got wrong,
+    // silently — `(*v)` on `Box<Box<_>>` is still a `Box<_>`.
+    let two =
+        build(syn::parse_quote!(Box<Box<Option<String>>>)).expect("nested boxes are bridgeable");
+    let tc: String = two.split_whitespace().collect();
+    assert!(
+        tc.contains("letv:Option<String>=(*(*v));"),
+        "two layers, two dereferences:\n{two}"
+    );
+
+    // `Cow` is erased by the model and CANNOT be moved through, so the crossing
+    // must not resolve. The diagnosis names the type.
+    let cow = build(syn::parse_quote!(Cow<'static, Option<String>>))
+        .expect_err("a Cow payload cannot be moved out, so it must not resolve");
+    assert!(
+        cow.contains("could not be resolved") && cow.contains("Cow"),
+        "the refusal names the unsupported representation: {cow}"
+    );
+}
+
+/// A wrapper cannot be bridged where the converter does not produce the spelled
+/// type at all — the **borrow** shapes — so those refuse rather than resolve.
+///
+/// `&T` and `Option<&T>` are served by handing back the inner type's own
+/// converter (or an `OwnedObject`) and letting the call site add `&` /
+/// `.as_deref()`. There is no value in hand to unwrap a representation from, so
+/// `Box<&T>` would pass an owned `T` where `Box<&T>` is expected, and
+/// `Box<Option<&T>>` would decode the handle as `*mut &T`. Both used to resolve
+/// (#272 review).
+///
+/// The canonical spellings are asserted alongside, because a guard that also
+/// refused those would be worse than no guard.
+#[test]
+fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
+    let loc = myflat_loc();
+    let build = |param_ty: syn::Type| -> Result<String, String> {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZThing {
+                        pub v: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_take(t: #param_ty) -> i64 {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZThing))
+                    .fun(crate::fun!(z_take)),
+            );
+        let dir = unique_test_dir("jnigen_wrapped_borrow");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    };
+
+    // The canonical borrows still resolve, and still adapt at the call site.
+    let borrowed = build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    assert!(
+        borrowed.contains("myflat::z_take(&t)"),
+        "the call site adds the borrow:\n{borrowed}"
+    );
+    let opt = build(syn::parse_quote!(Option<&ZThing>)).expect("an optional borrow resolves");
+    assert!(
+        opt.contains("myflat::z_take(t.as_deref())"),
+        "the call site derefs the OwnedObject:\n{opt}"
+    );
+
+    // Wrapped, they have nothing to bridge and must not resolve.
+    for spelling in [
+        syn::parse_quote!(Box<&ZThing>),
+        syn::parse_quote!(Box<Option<&ZThing>>),
+    ] {
+        let err = build(spelling).expect_err("a wrapped borrow must not resolve");
+        assert!(
+            err.contains("could not be resolved"),
+            "the refusal names the type: {err}"
+        );
+    }
+}

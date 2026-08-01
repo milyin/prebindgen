@@ -63,6 +63,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
 - `blob_value_new` — `fun blobValueNew(secs: Long, id: ByteArray, chunks: List<ByteArray>, onError: JniErrorHandler<BlobValue>): BlobValue`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
+- `boxed_note_echo` — `fun boxedNoteEcho(note: String?, onError: JniErrorHandler<String?>): String?`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`
@@ -90,6 +91,7 @@ Base package: `io.prebindgen.covertest`
 - `percent_invalid_output` — `fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int?`
 - `percent_optional` — `fun percentOptional(p: Int?, onError: JniErrorHandler<Int?>): Int?`
 - `percent_scale` — `fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int`
+- `plain_note_echo` — `fun plainNoteEcho(note: String?, onError: JniErrorHandler<String?>): String?`
 - `priority_or` — `fun priorityOr(p: Priority?, fallback: Priority, onError: JniErrorHandler<Priority>): Priority`
 - `priority_weight` — `fun priorityWeight(p: Priority, onError: JniErrorHandler<Int>): Int`
 - `reading_each` — `fun readingEach(n: Int, sink: ReadingCallback, onError: JniErrorHandler<Unit>)`

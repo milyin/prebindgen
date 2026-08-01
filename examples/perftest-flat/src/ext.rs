@@ -1579,6 +1579,37 @@ pub fn ledger_archived(l: &Ledger) -> Option<Report> {
     l.archived.map(ledger_report)
 }
 
+/// A **transparent wrapper**, and its unwrapped control.
+///
+/// The model erases `Box`, so `Box<Box<Option<String>>>` classifies `Optional`
+/// exactly as a bare `Option<String>` does — one thing to every destination
+/// language, two spellings to Rust. That gap is the whole of #270: the adapter
+/// used to decide what a type *was* by rebuilding a pattern from its spelling,
+/// so a wrapped `Option` reconstructed as `Box<_>`, matched nothing, and got no
+/// converter at all.
+///
+/// Declared here rather than only in a unit test because this crate's generated
+/// binding is `include!`d and **compiled**: a converter that named
+/// `Option<String>` for a `Box<Box<Option<String>>>` value, or bridged it with
+/// the wrong number of dereferences, fails to build. Nested deliberately — one
+/// dereference leaves a `Box<Option<String>>`, which still compiles as a
+/// *type* and would only fail here.
+///
+/// A `Cow` payload is the other half and cannot appear in a compiled fixture:
+/// it must be REFUSED, which only
+/// `a_transparent_wrapper_is_bridged_only_where_it_can_be` can assert.
+#[prebindgen]
+pub fn boxed_note_echo(note: Option<String>) -> Box<Box<Option<String>>> {
+    Box::new(Box::new(note))
+}
+
+/// The same crossing with nothing wrapped — the control the wrapped form must
+/// match, since the model says the two returns are the same type.
+#[prebindgen]
+pub fn plain_note_echo(note: Option<String>) -> Option<String> {
+    note
+}
+
 /// Deliver a [`Ledger`] to a callback, so both conditional decompositions cross
 /// in ONE call — including the sum (`Report::outcome`) each one carries, whose
 /// `match` belongs inside the arm that binds the report.

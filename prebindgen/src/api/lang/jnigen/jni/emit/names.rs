@@ -236,9 +236,12 @@ pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn:
 // Helpers
 // ──────────────────────────────────────────────────────────────────────
 
-pub(crate) fn pat_match(ty: &syn::Type, pat: &str) -> bool {
-    ty.to_token_stream().to_string() == pat
-}
+// `pat_match` lived here — `ty.to_token_stream().to_string() == pat` — and was
+// how the converter selector decided what a type WAS: rebuild a wildcard
+// pattern from the spelling, render it to a string, compare. That made the
+// answer depend on how Rust happened to spell the type, so `Box<Option<T>>`
+// reconstructed as `Box<_>`, matched nothing, and got no converter at all
+// (#270). Dispatch reads `TypeKind` now; nothing needs it.
 
 /// `true` if `ty` is a path whose final segment is `name` (e.g. `Vec<_>` for
 /// `name = "Vec"`, `Option<&T>` for `name = "Option"`). Ignores generic args.

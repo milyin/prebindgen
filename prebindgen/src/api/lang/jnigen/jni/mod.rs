@@ -635,7 +635,7 @@ mod prim_array;
 mod selector;
 #[cfg(test)]
 mod tests;
-mod trait_impl;
+pub(crate) mod trait_impl;
 
 mod fn_plan;
 mod fold;

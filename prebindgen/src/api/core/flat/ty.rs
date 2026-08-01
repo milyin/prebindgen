@@ -548,6 +548,38 @@ impl std::error::Error for UnsupportedType {}
 /// `at` is the origin of the item this type was written in — the location every
 /// node lowered from that item shares, and the crate an array extent's const
 /// must come from.
+/// The wrappers this language **erases**: `W<T>` classifies as whatever `T`
+/// classifies as, because no destination language can tell them apart.
+///
+/// The single source of truth for that set. [`lower_type`] erases exactly these,
+/// and an adapter that has to *undo* one in generated Rust reads the same list —
+/// so the question "which wrappers are transparent?" has one answer instead of a
+/// copy per consumer that can drift out of step.
+///
+/// Adding one is adding a row here. What it means for a given destination is
+/// that adapter's business: erasing a wrapper says nothing about whether Rust
+/// can move a value out of it, which is why `Cow` is on this list and is still
+/// refused where a converter would have to move its payload.
+pub const TRANSPARENT_WRAPPERS: &[&str] = &["Box", "Cow"];
+
+/// Strip one [transparent wrapper](TRANSPARENT_WRAPPERS) from a **spelling**,
+/// naming the one removed — `Box<Option<T>>` → `("Box", Option<T>)`.
+///
+/// Spelling in, spelling out: this is the inverse of the erasure, for a consumer
+/// that must reconstruct in Rust what the classification dropped.
+pub fn peel_transparent(ty: &syn::Type) -> Option<(&'static str, syn::Type)> {
+    let syn::Type::Path(tp) = ty else { return None };
+    let seg = tp.path.segments.last()?;
+    let name = TRANSPARENT_WRAPPERS.iter().find(|w| seg.ident == **w)?;
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    ab.args.iter().find_map(|a| match a {
+        syn::GenericArgument::Type(inner) => Some((*name, inner.clone())),
+        _ => None,
+    })
+}
+
 pub(crate) fn lower_type(
     ty: &syn::Type,
     consts: &ConstIndex,
@@ -715,23 +747,10 @@ fn lower_path(
                 // `Box` survives in `TypeRef::origin`, which is what generated
                 // Rust spells. (A shared-ownership handle would classify as a
                 // `Ref` for the same reason, when the language accepts one.)
-                "Box" => {
-                    arity(1)?;
-                    return Ok(args.remove(0).kind);
-                }
-                // `Cow<'_, T>` **is** `T`, for the same reason `Box<T>` is: borrowed
-                // or owned, and no destination language can tell. Both adapters
-                // already say exactly that — cbindgen lowers it "just like `Vec<T>`
-                // outputs", and jnigen's converter body is
-                // `byte_array_from_slice(&v)`, which works by deref and is identical
-                // to the `Vec<u8>` one. So this classification *predicts* their
-                // behaviour instead of leaving it a special case.
-                //
-                // The `Cow` survives in `TypeRef::origin`, which is where an adapter
-                // reads the param type its generated fn must spell — and it must,
-                // since `Cow<'_, [u8]>` is not interchangeable with `Vec<u8>` in a
-                // Rust signature.
-                "Cow" => {
+                // `Box` and `Cow` are erased — see `TRANSPARENT_WRAPPERS`,
+                // which is the list this arm consults so the set cannot drift
+                // from the one adapters undo.
+                w if TRANSPARENT_WRAPPERS.contains(&w) => {
                     arity(1)?;
                     return Ok(args.remove(0).kind);
                 }

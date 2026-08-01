@@ -515,6 +515,13 @@ fn main() {
                 // crossing covers the borrowed payload, the owned one, and the
                 // sum each report carries.
                 .fun(fun!(ledger_each))
+                // A transparent wrapper (`Box<Option<String>>`) in and out. The
+                // model erases the `Box`, so this must cross exactly as a
+                // `String?` — and because this crate compiles its generated
+                // binding, a converter that named the wrong type or bridged it
+                // with the wrong number of dereferences fails the build (#270).
+                .fun(fun!(boxed_note_echo))
+                .fun(fun!(plain_note_echo))
                 .fun(fun!(ledger_new))
                 .fun(fun!(archive_set_reading))
                 .fun(fun!(archive_reading))
