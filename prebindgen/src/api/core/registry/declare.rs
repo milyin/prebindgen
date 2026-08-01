@@ -427,6 +427,9 @@ impl<M> RegistryBuilder<M> {
 ///
 /// [`conversion`]: Conversions::conversion
 impl<M> Conversions<M> for RegistryBuilder<M> {
+    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
+        self.registry.reading(ty)
+    }
     fn flat(&self) -> &crate::api::core::flat::Flat {
         &self.registry.flat
     }

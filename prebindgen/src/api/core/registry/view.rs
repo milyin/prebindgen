@@ -24,6 +24,19 @@ pub trait Conversions<M> {
     /// The model.
     fn flat(&self) -> &crate::api::core::flat::Flat;
 
+    /// The reading for `ty` — what the frontend made of it.
+    ///
+    /// On the trait because it is needed on **both** sides of the fill: a
+    /// converter is chosen for a type while the registry is still being built, and
+    /// an emitter asks about the same type afterwards. Both views answer from the
+    /// cell the scan filled, so the answer does not change across that line.
+    ///
+    /// This is what lets a generator take a crossing and reason about it without
+    /// rebuilding a spelling from the key and classifying that — the round trip
+    /// `api/core` removed from itself in #263, which is the same defect one layer
+    /// out.
+    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef>;
+
     /// The conversion for `ty` in `dir`, if there is one.
     fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>>;
 
@@ -80,6 +93,9 @@ impl<M> Conversions<M> for Building<'_, M> {
     fn flat(&self) -> &crate::api::core::flat::Flat {
         &self.registry.flat
     }
+    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
+        self.registry.reading(ty)
+    }
     fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         self.built.get(&(dir, TypeKey::from_type(ty)))
     }
@@ -112,6 +128,9 @@ impl<M> Conversions<M> for Building<'_, M> {
 impl<M> Conversions<M> for Registry<M> {
     fn flat(&self) -> &crate::api::core::flat::Flat {
         &self.flat
+    }
+    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
+        Registry::reading(self, ty)
     }
     fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         self.type_table(dir)
