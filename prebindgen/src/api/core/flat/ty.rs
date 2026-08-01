@@ -115,6 +115,35 @@ impl TypeRef {
         }
     }
 
+    /// What an `Option<T>` wraps, else `None`.
+    ///
+    /// One layer, named. [`layers`](Self::layers) peels the whole boundary shape;
+    /// these three peel exactly what a caller asks for, which matters when the
+    /// caller cannot *represent* the layers it does not peel — see
+    /// [`layers`](Self::layers) on why an unpeeled layer stays on the core.
+    pub fn optional_inner(&self) -> Option<&TypeRef> {
+        match &self.kind {
+            TypeKind::Optional(inner) => Some(inner),
+            _ => None,
+        }
+    }
+
+    /// The element of a run of values (`Vec<T>`, `[T]`), else `None`.
+    pub fn sequence_elem(&self) -> Option<&TypeRef> {
+        match &self.kind {
+            TypeKind::Sequence(elem) => Some(elem),
+            _ => None,
+        }
+    }
+
+    /// What a borrow points at, else `None`.
+    pub fn borrow_target(&self) -> Option<&TypeRef> {
+        match &self.kind {
+            TypeKind::Ref { inner, .. } => Some(inner),
+            _ => None,
+        }
+    }
+
     /// The `Ok` and `Err` sides when this is a `Result`, else `None`.
     pub fn fallible_parts(&self) -> Option<(&TypeRef, &TypeRef)> {
         match &self.kind {

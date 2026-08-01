@@ -197,7 +197,7 @@ pub fn apply<M>(
                 .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
             let param_ty = find_param_type(&item_fn, &ed.param)
                 .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
-            let bare = crossing_core(registry.flat(), &param_ty);
+            let bare = constructed_value(registry.flat(), &param_ty);
             if TypeKey::from_type(&bare) != TypeKey::from_type(declared) {
                 return Err(ExpandError::ParamTypeMismatch {
                     func: ed.func.clone(),
@@ -245,7 +245,7 @@ pub fn apply<M>(
             let receiver_key = method_receivers.get(func);
             let mut receiver_skipped = false;
             for (pname, pty) in fn_params(&item_fn) {
-                let bare = crossing_core(registry.flat(), &pty);
+                let bare = constructed_value(registry.flat(), &pty);
                 let bare_key = TypeKey::from_type(&bare);
                 if !receiver_skipped && receiver_key == Some(&bare_key) {
                     receiver_skipped = true;
@@ -306,14 +306,7 @@ fn process_expand<M>(
 
     // The boundary layers: `Option<&T>` → optional + by_ref, `Option<T>` →
     // optional, `&T` → by_ref, and `target` is what is left under them.
-    let reading = registry.flat().classify(&param_ty).ok();
-    let layers = reading.as_ref().map(|r| r.layers());
-    let optional = layers.as_ref().is_some_and(|l| l.optional);
-    let by_ref = layers.as_ref().is_some_and(|l| l.by_ref);
-    let target = layers
-        .as_ref()
-        .map(|l| l.core.origin.syntax.clone())
-        .unwrap_or_else(|| param_ty.clone());
+    let (optional, by_ref, target) = constructed_value_layers(registry.flat(), &param_ty);
     let target_key = TypeKey::from_type(&target);
 
     let variants = resolve_constructor(exp, registry, &target_key, ed)?;
@@ -663,14 +656,7 @@ fn build_arg<M>(
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldArg, ExpandError> {
     // The boundary layers down to the parameter's core type.
-    let preading = registry.flat().classify(pty).ok();
-    let players = preading.as_ref().map(|r| r.layers());
-    let popt = players.as_ref().is_some_and(|l| l.optional);
-    let pby_ref = players.as_ref().is_some_and(|l| l.by_ref);
-    let bare = players
-        .as_ref()
-        .map(|l| l.core.origin.syntax.clone())
-        .unwrap_or_else(|| pty.clone());
+    let (popt, pby_ref, bare) = constructed_value_layers(registry.flat(), pty);
     let key = TypeKey::from_type(&bare);
     // A default constructor for the parameter's type ⇒ recursive nested build.
     let canon = exp
@@ -1081,22 +1067,51 @@ fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: 
 // Small helpers
 // ──────────────────────────────────────────────────────────────────────
 
-/// The type a value finally crosses as: the boundary layers off, read off the
-/// model's classification instead of by taking the spelling apart.
+/// The value a constructor builds: `Option` off, then the borrow, and **nothing
+/// else** — read off the model's classification rather than by taking the
+/// spelling apart.
 ///
-/// `Option<&T>` and `&T` and `T` all answer `T`, which is what every caller here
-/// wants — they are matching a declared target, and a declaration names the type,
+/// `Option<&T>`, `&T` and `T` all answer `T`, which is what every caller here
+/// wants: they are matching a declared target, and a declaration names the type,
 /// not the way a particular parameter happens to wrap it.
 ///
-/// A type the grammar cannot express answers itself. That is the identity, not a
-/// fallback classifier: a type with no reading has no layers to peel, and nothing
-/// that reaches here can have one — every signature in play was accepted by the
-/// frontend before the scan registered it.
-fn crossing_core(flat: &crate::api::core::flat::Flat, ty: &syn::Type) -> syn::Type {
-    match flat.classify(ty) {
-        Ok(reading) => reading.layers().core.origin.syntax.clone(),
-        Err(_) => ty.clone(),
-    }
+/// **`Vec<T>` answers `Vec<T>`, deliberately.** Expansion builds one value —
+/// `FoldPlan`'s shape is `Base` or `Optional(Base)`, with no iterable arm — so
+/// peeling a `Sequence` here would let a `Vec<T>` parameter match a `T`
+/// constructor and emit a wrapper that reconstructs a single `T` and hands it to
+/// a parameter expecting the collection. Leaving the `Sequence` on the core is
+/// what makes that a non-match instead of a miscompile, and it is the reason this
+/// is not [`TypeRef::layers`], which peels all three.
+///
+/// A type the grammar cannot express answers itself — the identity, not a
+/// fallback classifier. Nothing reaching here can be one: every signature in play
+/// was accepted by the frontend before the scan registered it.
+fn constructed_value(flat: &crate::api::core::flat::Flat, ty: &syn::Type) -> syn::Type {
+    let Ok(reading) = flat.classify(ty) else {
+        return ty.clone();
+    };
+    let after_opt = reading.optional_inner().unwrap_or(&reading);
+    after_opt
+        .borrow_target()
+        .unwrap_or(after_opt)
+        .origin
+        .syntax
+        .clone()
+}
+
+/// [`constructed_value`], plus which of the two layers were there.
+fn constructed_value_layers(
+    flat: &crate::api::core::flat::Flat,
+    ty: &syn::Type,
+) -> (bool, bool, syn::Type) {
+    let Ok(reading) = flat.classify(ty) else {
+        return (false, false, ty.clone());
+    };
+    let optional = reading.optional_inner().is_some();
+    let after_opt = reading.optional_inner().unwrap_or(&reading);
+    let by_ref = after_opt.borrow_target().is_some();
+    let core = after_opt.borrow_target().unwrap_or(after_opt);
+    (optional, by_ref, core.origin.syntax.clone())
 }
 
 fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Type> {
