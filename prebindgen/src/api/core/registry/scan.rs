@@ -251,16 +251,17 @@ impl<M> Registry<M> {
     /// the binding asked for it directly.
     ///
     /// The one place a cell is born, and therefore the one place a type **enters
-    /// the pipeline** — so it is where a type the source never wrote is admitted to
-    /// the model. Expansion composes such spellings (an `Option<T>` around a `T` it
-    /// found) and hands them straight here via `require_input` / `require_output`.
+    /// the pipeline** — including a spelling the source never wrote, since expansion
+    /// composes those (an `Option<T>` around a `T` it found) and hands them straight
+    /// here via `require_input` / `require_output`.
     ///
-    /// Admitting rather than classifying on the fly is the rule
-    /// [`Flat::add_local_function`](crate::api::core::flat::Flat::add_local_function)
-    /// already set for a binding-local `sig!(..)`: lower through the one grammar,
-    /// then record it, so the model keeps owning the only index of what a type
-    /// means. Every later lookup — this scan, the resolver, an adapter — then gets
-    /// the same answer from the same place.
+    /// The reading is taken **here, once**, and lives in the cell. The model is
+    /// consulted for it — [`Flat::classify`](crate::api::core::flat::Flat::classify)
+    /// is the grammar's one answer — but the model is not extended: a composed
+    /// spelling is an intermediate in *this binding's* crossing graph, not something
+    /// the source API mentions, and the table that tracks crossings is where it
+    /// belongs. So `Flat` stays what the source said, and every type the pipeline
+    /// works with has its reading in the table by the time the builder is finished.
     ///
     /// A spelling the grammar refuses is reported by name, rather than becoming a
     /// cell that quietly means less than its neighbours. Only an *entry point* can
@@ -273,9 +274,15 @@ impl<M> Registry<M> {
         root: bool,
     ) -> Result<(), ScanError> {
         let key = TypeKey::from_type(ty);
-        let reading = self
+        // Classify only when the cell is actually new: the reading of a given key
+        // cannot change, so an existing cell already holds it.
+        if let Some(cell) = self.type_table_mut(dir).get_mut(&key) {
+            cell.root |= root;
+            return Ok(());
+        }
+        let subject = self
             .flat
-            .admit_type(ty)
+            .classify(ty)
             .map_err(|source| ScanError::NotExpressible {
                 entries: vec![NotExpressibleEntry {
                     name: None,
@@ -283,16 +290,14 @@ impl<M> Registry<M> {
                     location: SourceLocation::default(),
                 }],
             })?;
-        let subject = Box::new(reading.clone());
-        let cell = self
-            .type_table_mut(dir)
-            .entry(key)
-            .or_insert_with(|| TypeCell {
-                subject,
-                root: false,
+        self.type_table_mut(dir).insert(
+            key,
+            TypeCell {
+                subject: Box::new(subject),
+                root,
                 entry: None,
-            });
-        cell.root |= root;
+            },
+        );
         Ok(())
     }
 
@@ -313,10 +318,11 @@ impl<M> Registry<M> {
     /// Each edge is still *spelled* from the child's own `origin.syntax`, which is
     /// what the caller keys the table by.
     ///
-    /// A plain index read: `ensure_entry` admitted this type to the model before
-    /// the walk reached it, so the reading is already there — including for a
-    /// spelling the binding composed. No reading means the grammar refused the
-    /// type, and a refused type has no structure to walk.
+    /// The reading comes from **this registry's own table**, where `ensure_entry`
+    /// put it before the walk reached this type — so a spelling the binding composed
+    /// is answered exactly like one the source wrote, without asking the model about
+    /// a type it never saw. No cell means the type was never registered, and an
+    /// unregistered type is not part of any crossing to walk.
     pub(crate) fn immediate_edges(
         &self,
         dir: Direction,
@@ -325,7 +331,11 @@ impl<M> Registry<M> {
         use crate::api::core::flat::TypeKind;
 
         let mut out: Vec<(Direction, syn::Type)> = Vec::new();
-        if let Some(reading) = self.flat.type_ref(ty) {
+        if let Some(reading) = self
+            .type_table(dir)
+            .get(&TypeKey::from_type(ty))
+            .map(|c| &c.subject)
+        {
             let (children, child_dir): (Vec<&crate::api::core::flat::TypeRef>, Direction) =
                 match &reading.kind {
                     TypeKind::Optional(t)
@@ -358,10 +368,14 @@ impl<M> Registry<M> {
         // `Named { id: Node }` — `Box<T>` **is** `T` in this language — so it
         // reaches `Node`'s fields, where asking the syntax for a bare ident would
         // have answered `None` and dead-ended the walk.
-        if let Some(name) = self.flat.type_ref(ty).and_then(|r| match &r.kind {
-            TypeKind::Named { id } => Some(id.name.clone()),
-            _ => None,
-        }) {
+        if let Some(name) = self
+            .type_table(dir)
+            .get(&TypeKey::from_type(ty))
+            .and_then(|c| match &c.subject.kind {
+                TypeKind::Named { id } => Some(id.name.clone()),
+                _ => None,
+            })
+        {
             use crate::api::core::flat::{Field, Type};
             let fields: Vec<&Field> = match self.flat.declared_type(name.as_str()) {
                 Some(Type::Struct(s)) => s.fields.iter().collect(),
@@ -377,6 +391,30 @@ impl<M> Registry<M> {
             }
         }
         out
+    }
+
+    /// Put a crossing in the table with its conversion already decided — the
+    /// fixture form of "this type crosses, and here is how".
+    ///
+    /// Goes through [`Self::ensure_entry`] rather than building a cell beside it,
+    /// so a fixture table is reached the same way a real one is and a hand-written
+    /// key is held to the same grammar. A test that wants the whole scan builds its
+    /// registry from items instead; this is for the ones that need a specific table
+    /// shape and nothing else.
+    #[cfg(test)]
+    pub(crate) fn insert_crossing(
+        &mut self,
+        dir: Direction,
+        key: &TypeKey,
+        root: bool,
+        entry: Option<TypeEntry<M>>,
+    ) {
+        self.ensure_entry(dir, &key.to_type(), root)
+            .unwrap_or_else(|e| panic!("fixture key `{key}` is not expressible: {e}"));
+        self.type_table_mut(dir)
+            .get_mut(key)
+            .expect("just registered")
+            .entry = entry;
     }
 
     /// Register `ty` (and its nested positions) as a required **input** so

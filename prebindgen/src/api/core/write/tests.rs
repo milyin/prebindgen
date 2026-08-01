@@ -5,7 +5,7 @@ use quote::ToTokens;
 
 use super::*;
 use crate::{
-    api::{core::registry::RegistryBuilder, test_util::cell},
+    api::core::registry::{Direction, RegistryBuilder},
     SourceLocation,
 };
 
@@ -47,43 +47,39 @@ fn dedup_and_sort() {
     let wire: syn::Type = syn::parse_quote!(i64);
     let wire2: syn::Type = syn::parse_quote!(*const u8);
 
-    reg.input_types.insert(
-        key_a.clone(),
-        cell(
-            &key_a,
-            true,
-            Some(TypeEntry {
-                destination: wire.clone(),
-                function: syn::parse_quote!(
-                    fn handle_to_u64_aaaa(v: i64) -> u64 {
-                        v as u64
-                    }
-                ),
-                pre_stages: vec![],
-                subs: vec![],
-                niches: crate::api::core::niches::Niches::empty(),
-                metadata: (),
-            }),
-        ),
+    reg.insert_crossing(
+        Direction::Input,
+        &key_a,
+        true,
+        Some(TypeEntry {
+            destination: wire.clone(),
+            function: syn::parse_quote!(
+                fn handle_to_u64_aaaa(v: i64) -> u64 {
+                    v as u64
+                }
+            ),
+            pre_stages: vec![],
+            subs: vec![],
+            niches: crate::api::core::niches::Niches::empty(),
+            metadata: (),
+        }),
     );
-    reg.input_types.insert(
-        key_b.clone(),
-        cell(
-            &key_b,
-            true,
-            Some(TypeEntry {
-                destination: wire2.clone(),
-                function: syn::parse_quote!(
-                    fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample {
-                        decode_sample(v)
-                    }
-                ),
-                pre_stages: vec![],
-                subs: vec![],
-                niches: crate::api::core::niches::Niches::empty(),
-                metadata: (),
-            }),
-        ),
+    reg.insert_crossing(
+        Direction::Input,
+        &key_b,
+        true,
+        Some(TypeEntry {
+            destination: wire2.clone(),
+            function: syn::parse_quote!(
+                fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample {
+                    decode_sample(v)
+                }
+            ),
+            pre_stages: vec![],
+            subs: vec![],
+            niches: crate::api::core::niches::Niches::empty(),
+            metadata: (),
+        }),
     );
 
     let items = collect_converter_items(&reg);

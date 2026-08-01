@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::{core::registry::TypeEntry, test_util::cell};
+use crate::api::core::registry::TypeEntry;
 
 /// Regression: when a required type is itself unresolved AND has fields
 /// that are also unresolved, the diagnostic must list both. Previously
@@ -59,29 +59,25 @@ fn final_invariant_stops_at_resolved_nodes() {
     let inner_key = TypeKey::parse("Inner").expect("test type");
     let unrelated_key = TypeKey::parse("Unrelated").expect("test type");
 
-    reg.input_types
-        .insert(outer_key.clone(), cell(&outer_key, true, None));
+    reg.insert_crossing(Direction::Input, &outer_key, true, None);
 
-    reg.input_types.insert(
-        inner_key.clone(),
-        cell(
-            &inner_key,
-            false,
-            Some(TypeEntry {
-                destination: syn::parse_quote!(i64),
-                function: syn::parse_quote!(
-                    fn __dummy() {}
-                ),
-                pre_stages: vec![],
-                subs: vec![],
-                niches: crate::api::core::niches::Niches::empty(),
-                metadata: (),
-            }),
-        ),
+    reg.insert_crossing(
+        Direction::Input,
+        &inner_key,
+        false,
+        Some(TypeEntry {
+            destination: syn::parse_quote!(i64),
+            function: syn::parse_quote!(
+                fn __dummy() {}
+            ),
+            pre_stages: vec![],
+            subs: vec![],
+            niches: crate::api::core::niches::Niches::empty(),
+            metadata: (),
+        }),
     );
 
-    reg.input_types
-        .insert(unrelated_key.clone(), cell(&unrelated_key, false, None));
+    reg.insert_crossing(Direction::Input, &unrelated_key, false, None);
 
     let err = check_complete(&reg).expect_err("must surface Outer");
     let ResolveError::Unresolved { entries } = err;
@@ -107,10 +103,7 @@ fn final_invariant_stops_at_resolved_nodes() {
 /// `subs` makes it something a converter must exist for.
 #[test]
 fn a_type_reachable_only_through_subs_must_still_resolve() {
-    use crate::api::{
-        core::registry::{Registry, TypeKey},
-        test_util::cell,
-    };
+    use crate::api::core::registry::{Registry, TypeKey};
 
     let mut reg: Registry<()> = Registry::empty();
     let outer = TypeKey::parse("Outer").expect("test type");
@@ -118,25 +111,23 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
 
     // `Outer` is a root AND resolved — so it is not itself reportable — but its
     // converter delegates to `Mid`.
-    reg.input_types.insert(
-        outer.clone(),
-        cell(
-            &outer,
-            true,
-            Some(TypeEntry {
-                destination: syn::parse_quote!(i64),
-                function: syn::parse_quote!(
-                    fn __outer() {}
-                ),
-                pre_stages: vec![],
-                subs: vec![mid.clone()],
-                niches: crate::api::core::niches::Niches::empty(),
-                metadata: (),
-            }),
-        ),
+    reg.insert_crossing(
+        Direction::Input,
+        &outer,
+        true,
+        Some(TypeEntry {
+            destination: syn::parse_quote!(i64),
+            function: syn::parse_quote!(
+                fn __outer() {}
+            ),
+            pre_stages: vec![],
+            subs: vec![mid.clone()],
+            niches: crate::api::core::niches::Niches::empty(),
+            metadata: (),
+        }),
     );
     // `Mid` is present, unresolved, and NOT a root.
-    reg.input_types.insert(mid.clone(), cell(&mid, false, None));
+    reg.insert_crossing(Direction::Input, &mid, false, None);
 
     let err = check_complete(&reg).expect_err("Mid must be reported");
     let ResolveError::Unresolved { entries } = err;

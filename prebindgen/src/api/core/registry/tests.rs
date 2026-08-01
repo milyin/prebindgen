@@ -808,9 +808,10 @@ fn a_source_type_cell_carries_the_models_typeref() {
 /// throwing away an answer the grammar has. What is genuinely absent is a file
 /// and line, and only that.
 ///
-/// So the cell gets its reading from `ensure_entry`, which admits a composed or
-/// declared type to the model on the way in, the same way `add_local_function`
-/// admits a binding-local `sig!(..)`.
+/// So the cell gets its reading from `ensure_entry`, which asks the grammar once
+/// when the cell is born. The model is consulted, not extended: a declared type the
+/// source never mentioned is this binding's business, not a new fact about the
+/// source API.
 #[test]
 fn an_adapter_authored_type_cell_is_classified_but_placeless() {
     use crate::api::core::flat::TypeKind;

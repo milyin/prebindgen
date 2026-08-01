@@ -12,10 +12,11 @@ pub(crate) struct TypeCell<M = ()> {
     /// the binding authored", on the assumption that a declared wire type or an
     /// [`unfold`](crate::api::core::unfold) leaf had no reading to give. It did:
     /// those are ordinary types in this language, they were simply absent from an
-    /// index of what the *source* wrote. Since `ensure_entry` admits a type to the
-    /// model on the way in, the reading is always there, and a spelling the grammar
-    /// genuinely refuses is now a [`ScanError::NotExpressible`] naming it rather
-    /// than a cell that quietly means less than its neighbours.
+    /// index of what the *source* wrote. `ensure_entry` takes the reading from the
+    /// grammar when the cell is born and stores it right here, so it is always
+    /// present, and a spelling the grammar genuinely refuses is a
+    /// [`ScanError::NotExpressible`] naming it rather than a cell that quietly means
+    /// less than its neighbours.
     pub subject: Box<crate::api::core::flat::TypeRef>,
     /// The binding asks for this cell **directly** — a declared fn's signature, a
     /// declared type, an `unfold` leaf — as opposed to reaching it through some
