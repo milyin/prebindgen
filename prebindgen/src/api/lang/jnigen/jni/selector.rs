@@ -33,6 +33,25 @@ fn ref_wildcard(r: &syn::TypeReference) -> syn::Type {
     syn::Type::Reference(pr)
 }
 
+/// Whether a decoded `Vec<T>` local can be borrowed where `referent` is expected.
+///
+/// A **spelling** question, deliberately: it decides what the generated Rust must
+/// be able to say, and Rust distinguishes forms the boundary classification does
+/// not. `[T]` is reached by deref coercion from `&Vec<T>` and `Vec<T>` is the
+/// thing itself; a transparent wrapper such as `Box<Vec<T>>` or `Cow<'_, [T]>`
+/// classifies identically and cannot be reconstructed from the decoded local.
+fn decoded_vec_satisfies(referent: &syn::Type) -> bool {
+    match referent {
+        syn::Type::Slice(_) => true,
+        syn::Type::Path(tp) => tp
+            .path
+            .segments
+            .last()
+            .is_some_and(|s| s.ident == "Vec" && tp.path.segments.len() == 1),
+        _ => false,
+    }
+}
+
 impl Declarations {
     /// Select the input converter for `ty`: terminals, user wrappers, then
     /// built-in structural wrappers.
@@ -95,7 +114,20 @@ impl Declarations {
             // `Vec<T>` input (the writer dedupes the shared converter fn by ident,
             // so the two can coexist). `&mut [T]` is intentionally not supported
             // (no write-back of the decoded Vec).
-            if matches!(mode, RefMode::Shared) {
+            // Two questions, and only the first is `kind`'s. That it is a run of
+            // values makes this arm a *candidate*; whether the decoded `Vec<T>`
+            // can be handed to the Rust function is a question about the
+            // **spelling**, because the generated glue is the one consumer that
+            // can tell `&Vec<T>` from `&Box<Vec<T>>` — the exact thing
+            // `TypeRef::origin` exists to carry.
+            //
+            // `&[T]` deref-coerces from `&Vec<T>` and `&Vec<T>` is already it, so
+            // both are satisfied by the decoded local. A transparent wrapper —
+            // `Box<Vec<T>>`, `Cow<'_, [T]>` — is `Sequence` all the same and is
+            // NOT: passing `&Vec<T>` there does not compile. Those fall through to
+            // the plain borrow arm below, which hands the whole spelling on as the
+            // sub, exactly as the old syntactic slice check did.
+            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(&inner.origin.syntax) {
                 if let Some(elem) = inner.sequence_elem() {
                     let elem_ty = elem.origin.syntax.clone();
                     let pat: syn::Type = syn::parse_quote!(Vec<_>);

@@ -1561,3 +1561,52 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     assert!(!rc.contains(&format!("{module}::env,")), "{rust}");
     assert!(!rc.contains(&format!("&mut{module}::env")), "{rust}");
 }
+
+/// A borrowed **transparent wrapper** around a sequence is refused, not decoded as
+/// a bare `Vec`.
+///
+/// `Box<Vec<T>>` and `Cow<'_, [T]>` classify as `TypeKind::Sequence` — correctly:
+/// no destination language can tell them from `Vec<T>`, which is exactly why the
+/// model folds them together. But the generated glue **is** a destination
+/// artifact, and it is the one consumer that can tell: `&Vec<i32>` is not
+/// `&Box<Vec<i32>>`, and `TypeRef::origin` exists to carry precisely that.
+///
+/// So the selector asks two questions, and only the first is `kind`'s: that this
+/// is a run of values makes the `Vec` shortcut a *candidate*, and the **spelling**
+/// says whether a decoded `Vec<T>` could actually be handed to the function.
+/// `&[T]` deref-coerces and `&Vec<T>` is the thing itself; a wrapper is neither.
+///
+/// **What this pins is the refusal.** A miscompile is not reachable today even
+/// without the spelling guard, because the scan requires every nested position and
+/// nothing converts `Box<Vec<i32>>` either — so the binding is rejected before
+/// anything is emitted, which is the right failure. The guard keeps the selector's
+/// reasoning honest for the day that over-approximation is relaxed; this test
+/// pins the behaviour a user sees now, and it is deliberately an assertion about
+/// *refusing*, not about generated text that no longer exists.
+#[test]
+fn a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec() {
+    let loc = crate::SourceLocation::default();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_take_boxed(v: &Box<Vec<i32>>) -> i64 {
+                v.len() as i64
+            }
+        )),
+        loc.clone(),
+    )];
+    let decls = crate::package!("ops").fun(crate::lang::FunctionDecl::new(
+        syn::parse_str("z_take_boxed").unwrap(),
+    ));
+    let registry = crate::api::test_util::reg_from_items(items).expect("index");
+    let err = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(decls)
+        .build_with(registry)
+        .expect_err("a borrowed transparent sequence wrapper has no conversion");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Box < Vec < i32 > >"),
+        "the refusal must name the wrapper spelling the binding cannot convert:\n{msg}"
+    );
+}
