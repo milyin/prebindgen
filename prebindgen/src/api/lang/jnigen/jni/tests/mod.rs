@@ -67,7 +67,8 @@ fn install_input(
     e: TypeEntry<KotlinMeta>,
 ) {
     let key = TypeKey::parse(ty_str).expect("test type");
-    reg.input_types.insert(key.clone(), cell(true, Some(e)));
+    reg.input_types
+        .insert(key.clone(), cell(&key, true, Some(e)));
 }
 
 fn install_output(
@@ -77,5 +78,6 @@ fn install_output(
     e: TypeEntry<KotlinMeta>,
 ) {
     let key = TypeKey::parse(ty_str).expect("test type");
-    reg.output_types.insert(key.clone(), cell(true, Some(e)));
+    reg.output_types
+        .insert(key.clone(), cell(&key, true, Some(e)));
 }

@@ -169,7 +169,7 @@ use crate::{
 };
 
 mod cell;
-pub(crate) use self::cell::{TypeCell, TypeSubject};
+pub(crate) use self::cell::TypeCell;
 mod declare;
 mod error;
 mod key;

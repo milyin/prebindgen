@@ -144,7 +144,7 @@ impl Type {
 ///   thereafter the only way to spell that type inside the flat API, and the
 ///   qualified path stays refused. This declares a name; it is not an equivalence
 ///   between spellings — see
-///   [`normalize_type`](crate::api::core::types_util::normalize_type)'s rule 4 for
+///   [`normalize_type`](crate::api::core::flat::spelling::normalize_type)'s rule 4 for
 ///   why treating it as one is a category error.
 /// * `#[prebindgen] pub struct X(..);` — a tuple struct, whose fields no adapter
 ///   has ever crossed.

@@ -166,6 +166,7 @@ mod boundary;
 mod element;
 mod origin;
 pub mod spell;
+pub(crate) mod spelling;
 mod ty;
 
 #[cfg(test)]
@@ -179,6 +180,7 @@ pub use self::{
         Struct, Type, Unsupported, Variant,
     },
     origin::Origin,
+    spelling::{canonical_spelling, canonical_type, type_from_ident},
     ty::{RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType, UnsupportedTypeReason},
 };
 use crate::SourceLocation;
@@ -329,9 +331,9 @@ impl FlatBuilder {
         // The consequence is deliberate and stated on `Origin`: a slice
         // is the spelling generation must EMIT, which is the normalized one —
         // the flat namespace is what the generated crate can actually name.
-        let normalization = crate::api::core::types_util::Normalization::from_items(&items);
+        let normalization = crate::api::core::flat::spelling::Normalization::from_items(&items);
         for (item, _) in &mut items {
-            crate::api::core::types_util::normalize_item_types(item, &normalization);
+            crate::api::core::flat::spelling::normalize_item_types(item, &normalization);
         }
 
         // Pass 1: the consts an array length may name. Unnamed items are
@@ -647,7 +649,7 @@ impl Flat {
     /// captured one does.
     pub fn type_ref(&self, ty: &syn::Type) -> Option<&TypeRef> {
         self.by_type
-            .get(&crate::api::core::types_util::canonical_spelling(ty))
+            .get(&crate::api::core::flat::canonical_spelling(ty))
     }
 
     /// Admit `ty` to the model: lower it through the grammar, index the reading,
@@ -673,7 +675,7 @@ impl Flat {
     /// `Err` means the composed spelling is outside the accepted grammar. That is a
     /// real diagnosis about a type the *binding* built, not a cache miss.
     pub(crate) fn admit_type(&mut self, ty: &syn::Type) -> Result<&TypeRef, UnsupportedType> {
-        let key = crate::api::core::types_util::canonical_spelling(ty);
+        let key = crate::api::core::flat::canonical_spelling(ty);
         if !self.by_type.contains_key(&key) {
             // Rebuilt rather than kept, for the reason `lower_signature` gives: a
             // stored index would be a second copy of what `constants()` says.
@@ -703,7 +705,7 @@ impl Flat {
             .collect();
         for ty in refs {
             self.by_type
-                .entry(crate::api::core::types_util::canonical_spelling(
+                .entry(crate::api::core::flat::canonical_spelling(
                     &ty.origin.syntax,
                 ))
                 .or_insert(ty);

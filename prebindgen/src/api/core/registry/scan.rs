@@ -102,7 +102,7 @@ impl<M> Registry<M> {
         // the type is required in the output direction only.
         for ident in declared.consts.iter().flatten() {
             if let Some(item_const) = self.flat.constant(&ident).map(|c| c.origin.syntax.clone()) {
-                self.ensure_entry(Direction::Output, &item_const.ty, true);
+                self.ensure_entry(Direction::Output, &item_const.ty, true)?;
             } else {
                 missing.push(("constant", ident.to_string()));
             }
@@ -116,7 +116,7 @@ impl<M> Registry<M> {
         // Declared crossings with no element behind them (a foreign class type,
         // a synthesized constant's value type), each in its own direction.
         for (dir, ty) in &declared.crossings {
-            self.ensure_entry(*dir, ty, true);
+            self.ensure_entry(*dir, ty, true)?;
         }
 
         // Scan declared types.
@@ -130,13 +130,13 @@ impl<M> Registry<M> {
                     .map(|s| s.origin.syntax.clone())
                 {
                     self.scan_struct(&s)?;
-                    self.ensure_entry(Direction::Input, &ty, true);
-                    self.ensure_entry(Direction::Output, &ty, true);
+                    self.ensure_entry(Direction::Input, &ty, true)?;
+                    self.ensure_entry(Direction::Output, &ty, true)?;
                     matched = true;
                 } else if let Some(e) = self.flat.enum_item(&ident).cloned() {
                     self.scan_enum(&e)?;
-                    self.ensure_entry(Direction::Input, &ty, true);
-                    self.ensure_entry(Direction::Output, &ty, true);
+                    self.ensure_entry(Direction::Input, &ty, true)?;
+                    self.ensure_entry(Direction::Output, &ty, true)?;
                     matched = true;
                 }
             }
@@ -145,8 +145,8 @@ impl<M> Registry<M> {
                 // `ptr_class(ZKeyExpr<'static>)` on a re-exported
                 // foreign type). Still mark required so the resolver
                 // tries to produce a converter for it.
-                self.ensure_entry(Direction::Input, &ty, true);
-                self.ensure_entry(Direction::Output, &ty, true);
+                self.ensure_entry(Direction::Input, &ty, true)?;
+                self.ensure_entry(Direction::Output, &ty, true)?;
             }
         }
 
@@ -182,9 +182,9 @@ impl<M> Registry<M> {
 
     pub(super) fn scan_struct(&mut self, s: &syn::ItemStruct) -> Result<(), ScanError> {
         // The struct itself can appear in either direction.
-        let ty: syn::Type = crate::api::core::types_util::type_from_ident(&s.ident);
-        self.ensure_entry(Direction::Input, &ty, false);
-        self.ensure_entry(Direction::Output, &ty, false);
+        let ty: syn::Type = crate::api::core::flat::type_from_ident(&s.ident);
+        self.ensure_entry(Direction::Input, &ty, false)?;
+        self.ensure_entry(Direction::Output, &ty, false)?;
 
         if let syn::Fields::Named(named) = &s.fields {
             for field in &named.named {
@@ -196,9 +196,9 @@ impl<M> Registry<M> {
     }
 
     pub(super) fn scan_enum(&mut self, e: &syn::ItemEnum) -> Result<(), ScanError> {
-        let ty: syn::Type = crate::api::core::types_util::type_from_ident(&e.ident);
-        self.ensure_entry(Direction::Input, &ty, false);
-        self.ensure_entry(Direction::Output, &ty, false);
+        let ty: syn::Type = crate::api::core::flat::type_from_ident(&e.ident);
+        self.ensure_entry(Direction::Input, &ty, false)?;
+        self.ensure_entry(Direction::Output, &ty, false)?;
 
         for variant in &e.variants {
             for field in &variant.fields {
@@ -239,7 +239,7 @@ impl<M> Registry<M> {
             return Ok(()); // cycle guard
         }
 
-        self.ensure_entry(dir, ty, is_top);
+        self.ensure_entry(dir, ty, is_top)?;
 
         for (child_dir, sub) in self.immediate_edges(dir, ty) {
             self.register_type_inner(child_dir, &sub, false, visited)?;
@@ -262,15 +262,28 @@ impl<M> Registry<M> {
     /// means. Every later lookup — this scan, the resolver, an adapter — then gets
     /// the same answer from the same place.
     ///
-    /// A spelling the grammar refuses leaves the cell subject-less. Nothing in tree
-    /// reaches that (measured: every composed type lowers), and #229's L2e is where
-    /// it is re-measured and the variant deleted.
-    pub(super) fn ensure_entry(&mut self, dir: Direction, ty: &syn::Type, root: bool) {
+    /// A spelling the grammar refuses is reported by name, rather than becoming a
+    /// cell that quietly means less than its neighbours. Only an *entry point* can
+    /// reach that: a type the walk found came from an existing reading's
+    /// `origin.syntax`, so it lowered once already.
+    pub(super) fn ensure_entry(
+        &mut self,
+        dir: Direction,
+        ty: &syn::Type,
+        root: bool,
+    ) -> Result<(), ScanError> {
         let key = TypeKey::from_type(ty);
-        let subject = match self.flat.admit_type(ty) {
-            Ok(t) => TypeSubject::Source(Box::new(t.clone())),
-            Err(_) => TypeSubject::Adapter,
-        };
+        let reading = self
+            .flat
+            .admit_type(ty)
+            .map_err(|source| ScanError::NotExpressible {
+                entries: vec![NotExpressibleEntry {
+                    name: None,
+                    reason: source.to_string(),
+                    location: SourceLocation::default(),
+                }],
+            })?;
+        let subject = Box::new(reading.clone());
         let cell = self
             .type_table_mut(dir)
             .entry(key)
@@ -280,6 +293,7 @@ impl<M> Registry<M> {
                 entry: None,
             });
         cell.root |= root;
+        Ok(())
     }
 
     /// Enumerate the immediate type-graph edges out of `(dir, ty)`: the model's

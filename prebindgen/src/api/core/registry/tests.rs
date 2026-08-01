@@ -785,16 +785,16 @@ fn a_source_type_cell_carries_the_models_typeref() {
     let cell = &reg.input_types[&key];
     assert!(cell.root, "a top-level parameter is a root");
     assert!(
-        matches!(cell.subject.kind(), Some(TypeKind::Optional(_))),
+        matches!(cell.subject.kind, TypeKind::Optional(_)),
         "the frontend classified it, so the cell has that classification"
     );
     // One location per cell, and it is the model's — not a copy the scan made.
-    assert_eq!(cell.subject.location(), Some(&loc));
+    assert_eq!(&*cell.subject.origin.location, &loc);
 
     // The nested position is in the model too, and is not a root.
     let inner = &reg.input_types[&TypeKey::parse("u64").expect("test type")];
     assert!(!inner.root);
-    assert!(matches!(inner.subject.kind(), Some(TypeKind::Scalar(_))));
+    assert!(matches!(inner.subject.kind, TypeKind::Scalar(_)));
 }
 
 /// A type only the binding authored is **classified but placeless**: it has a
@@ -830,12 +830,11 @@ fn an_adapter_authored_type_cell_is_classified_but_placeless() {
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
     assert!(
-        matches!(cell.subject.kind(), Some(TypeKind::Named { id }) if id.name == "Foreign"),
+        matches!(&cell.subject.kind, TypeKind::Named { id } if id.name == "Foreign"),
         "a declared name is a name, and the grammar can say so"
     );
-    assert_eq!(
-        cell.subject.location(),
-        None,
+    assert!(
+        !cell.subject.origin.location.has_position(),
         "nothing wrote it, so there is no position to report"
     );
 }
@@ -1354,30 +1353,24 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         .expect("a local fn's parameter type is in the model");
     assert!(matches!(read.kind, TypeKind::Optional(_)));
 
-    // … and the cell scanned from that parameter carries it, rather than
-    // claiming the type is one the binding invented.
+    // … and the cell scanned from that parameter carries that same reading,
+    // rather than a second one made at the table.
     let cell = &reg.input_types[&TypeKey::parse("Option<u64>").expect("test type")];
-    assert!(
-        matches!(cell.subject, TypeSubject::Source(_)),
-        "the frontend read this type; the cell must not call it adapter-authored"
-    );
-    assert!(matches!(cell.subject.kind(), Some(TypeKind::Optional(_))));
+    assert!(matches!(cell.subject.kind, TypeKind::Optional(_)));
 }
 
 /// A type with no source position must not get an invented one.
 ///
-/// Three facts have to stay apart: a type can have a **frontend reading**
-/// (`TypeSubject::Source`), a **reportable position**, or neither. A
-/// binding-local fn's parameter types have the first and not the second —
-/// `lower_signature` lowers them against `SourceLocation::default()`, since
-/// `Origin` needs a location and a `sig!(..)` has no file.
+/// A **reading** and a **reportable position** are two facts, and every cell now
+/// has the first: a binding-local fn's parameter types are lowered against
+/// `SourceLocation::default()`, because `Origin` needs a location and a `sig!(..)`
+/// has no file. So the reading exists and the position does not.
 ///
-/// Indexing those types (this PR) flipped their cells from `Adapter` to
-/// `Source`, and `location()` returned the default unconditionally, so the
-/// diagnostic read `:0:0: error:` — a position that looks real. The same fault
-/// already showed for any hand-built stream, whose captured items also carry
-/// default locations; both are fixed by asking whether the location has a
-/// position at all.
+/// When indexing those types first gave their cells readings, the location was
+/// returned unconditionally and the diagnostic read `:0:0: error:` — a position
+/// that looks real. The same fault already showed for any hand-built stream, whose
+/// captured items also carry default locations. Both are fixed by asking whether
+/// the location has a position at all, which is the only thing that now gates it.
 #[test]
 fn an_unresolved_type_without_a_position_reports_none() {
     let reg: RegistryBuilder<()> =

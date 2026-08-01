@@ -120,7 +120,7 @@ fn a_box_classifies_as_what_it_wraps() {
 /// slipped through and worked only when the source happened to `use` it.
 #[test]
 fn the_prelude_reaches_every_builtin_by_either_spelling() {
-    use crate::api::core::types_util::Normalization;
+    use crate::api::core::flat::spelling::Normalization;
 
     // Each entry, bare against fully qualified. `MaybeUninit` needs a `&mut` to
     // mean anything, so it is checked separately below.

@@ -6,18 +6,26 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::api::core::registry::{Registry, RegistryBuilder, TypeCell, TypeEntry, TypeSubject};
+use crate::api::core::registry::{Registry, RegistryBuilder, TypeCell, TypeEntry, TypeKey};
 
-/// A type-table cell for a fixture.
+/// A type-table cell for a fixture, keyed the way a real one is.
 ///
-/// The subject is always [`TypeSubject::Adapter`]: a hand-built table has no
-/// `Flat` behind it, so no key in one has a source reading. A test that cares
-/// about the `Source` side builds its registry from items instead.
-///
-/// Takes no key: `Adapter` carries nothing, since nothing ever read it back.
-pub(crate) fn cell<M>(root: bool, entry: Option<TypeEntry<M>>) -> TypeCell<M> {
+/// Takes the key because every cell carries the frontend's reading of its type —
+/// there is no second kind that carries nothing. A hand-built table has no `Flat`
+/// behind it, so the reading is lowered here through the same grammar, which is
+/// also what keeps a fixture honest: a key the language cannot express cannot be
+/// stuffed into a fixture table either.
+pub(crate) fn cell<M>(key: &TypeKey, root: bool, entry: Option<TypeEntry<M>>) -> TypeCell<M> {
+    let ty = key.to_type();
+    let mut flat = crate::api::core::flat::Flat::builder()
+        .build()
+        .expect("an empty model always builds");
+    let reading = flat
+        .admit_type(&ty)
+        .unwrap_or_else(|e| panic!("fixture key `{key}` is not expressible: {e}"))
+        .clone();
     TypeCell {
-        subject: TypeSubject::Adapter,
+        subject: Box::new(reading),
         root,
         entry,
     }

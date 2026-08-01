@@ -50,6 +50,7 @@ fn dedup_and_sort() {
     reg.input_types.insert(
         key_a.clone(),
         cell(
+            &key_a,
             true,
             Some(TypeEntry {
                 destination: wire.clone(),
@@ -68,6 +69,7 @@ fn dedup_and_sort() {
     reg.input_types.insert(
         key_b.clone(),
         cell(
+            &key_b,
             true,
             Some(TypeEntry {
                 destination: wire2.clone(),
