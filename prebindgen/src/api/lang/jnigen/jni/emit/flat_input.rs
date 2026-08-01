@@ -10,7 +10,7 @@ pub(crate) fn struct_input_body(
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.ident.to_string();
-    let struct_module = struct_module_path(ext, registry, s);
+    let struct_module = struct_module_path(ext, registry, &s.ident);
     let struct_ident = &s.ident;
 
     let syn::Fields::Named(named) = &s.fields else {
@@ -1507,7 +1507,7 @@ fn build_flat_struct_node(
     }
     stack.pop();
     Ok(FlatStructNode {
-        struct_module: struct_module_path(ext, registry, st),
+        struct_module: struct_module_path(ext, registry, &st.ident),
         struct_ident: st.ident.clone(),
         binding: format_ident!("__flat_{native_prefix}"),
         optional,

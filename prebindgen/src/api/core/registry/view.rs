@@ -37,6 +37,54 @@ pub trait Conversions<M> {
     /// out.
     fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef>;
 
+    /// Whether `ty` crosses as **optional** — the model's answer, not the
+    /// spelling's.
+    ///
+    /// The question every consumer actually means, and the one they could not
+    /// ask: they reached for `is_option_type`, which is `path_tail_is(ty,
+    /// "Option")`. But the model **erases** transparent wrappers — `Box<T>` *is*
+    /// `T`, and so is `Cow<'_, T>` — so `Box<Option<String>>` is `Optional` and
+    /// that check answers `false`. Kotlin then lost the `?`, which is not a
+    /// cosmetic slip: a non-null parameter for an optional value makes the
+    /// absent case unexpressible (#273).
+    ///
+    /// Here rather than at each consumer so the rule has **one** home. A new
+    /// transparent wrapper — an `Rc`, say — is then a change to
+    /// [`TRANSPARENT_WRAPPERS`](crate::api::core::flat::TRANSPARENT_WRAPPERS)
+    /// and nothing else; every site asking this question follows automatically.
+    fn is_optional(&self, ty: &syn::Type) -> bool {
+        self.reading(ty)
+            .is_some_and(|r| r.optional_inner().is_some())
+    }
+
+    /// What an optional wraps, **spelled as generated Rust must spell it**.
+    ///
+    /// Classify off `kind`, spell off `syntax`: the decision that this *is* an
+    /// optional comes from the model, and what comes back is the inner's own
+    /// spelling — which is what a converter signature or a `quote!` needs.
+    fn optional_inner(&self, ty: &syn::Type) -> Option<syn::Type> {
+        self.reading(ty)
+            .and_then(|r| r.optional_inner().map(|i| i.origin.syntax.clone()))
+    }
+
+    /// The element of a run of values (`Vec<T>`, `[T]`, `Cow<'_, [T]>`), spelled
+    /// as generated Rust must spell it. The sequence peer of
+    /// [`Self::optional_inner`].
+    fn sequence_elem(&self, ty: &syn::Type) -> Option<syn::Type> {
+        self.reading(ty)
+            .and_then(|r| r.sequence_elem().map(|e| e.origin.syntax.clone()))
+    }
+
+    /// Whether `ty` is a borrow of an optional (`Option<&T>`) — the shape a
+    /// handle parameter locks differently. Reads both layers off the model, so
+    /// a wrapped spelling answers the same as the bare one.
+    fn is_optional_borrow(&self, ty: &syn::Type) -> bool {
+        self.reading(ty).is_some_and(|r| {
+            r.optional_inner()
+                .is_some_and(|i| i.borrow_target().is_some())
+        })
+    }
+
     /// The conversion for `ty` in `dir`, if there is one.
     fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>>;
 

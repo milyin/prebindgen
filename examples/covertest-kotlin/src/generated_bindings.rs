@@ -5233,6 +5233,30 @@ pub(crate) unsafe fn JShortArray_to_i16_2_098f4ad5<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JString_to_Box_Option_String_caeff346<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JString<'v>,
+) -> ::core::result::Result<Box<Option<String>>, __JniErr> {
+    Ok({
+        let __v: ::core::option::Option<String> = {
+            if v.is_null() { None } else { Some(JString_to_String_c7f3ca43(env, v)?) }
+        };
+        ::std::boxed::Box::new(__v)
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JString_to_Box_String_027f6250<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
@@ -12694,7 +12718,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedNoteEcho<'a
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let note = match JString_to_Option_String_56d5e304(&mut env, &note) {
+    let note = match JString_to_Box_Option_String_caeff346(&mut env, &note) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(

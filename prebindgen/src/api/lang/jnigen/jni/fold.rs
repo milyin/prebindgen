@@ -171,7 +171,7 @@ pub(crate) fn is_kotlin_primitive_ty(t: &kt::KtType) -> bool {
 pub(crate) fn flatten_struct_factory(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    s: &syn::ItemStruct,
+    s: &crate::api::core::flat::Struct,
     prefix: &str,
     class_name: &str,
     imports: &mut BTreeSet<String>,

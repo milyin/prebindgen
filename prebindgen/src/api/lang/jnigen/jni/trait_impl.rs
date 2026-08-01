@@ -1277,7 +1277,7 @@ impl Declarations {
     ) -> Vec<crate::api::core::unfold::ValueDecon> {
         let mut out = Vec::new();
         for (ident, item_struct) in registry.flat().types().filter_map(|t| match t {
-            crate::api::core::flat::Type::Struct(s) => Some((&s.name, &s.origin.syntax)),
+            crate::api::core::flat::Type::Struct(s) => Some((&s.name, s)),
             _ => None,
         }) {
             let source: syn::Type = syn::parse_quote!(#ident);
@@ -1931,12 +1931,8 @@ impl Declarations {
                     });
                 }
             }
-            if let Some(s) = registry
-                .flat()
-                .struct_type(&name)
-                .map(|st| &st.origin.syntax)
-            {
-                let (wire, body) = struct_input_body(self, s, registry)?;
+            if let Some(s) = registry.flat().struct_type(&name) {
+                let (wire, body) = struct_input_body(self, &s.origin.syntax, registry)?;
                 let niches = default_niches_for_wire(&wire);
                 // Auto-generated struct: the value-context Kotlin name is
                 // whatever the user pinned via `data_class`. If
@@ -2125,11 +2121,7 @@ impl Declarations {
             });
         }
         if let Some(name) = bare_path_ident(ty) {
-            if let Some(s) = registry
-                .flat()
-                .struct_type(&name)
-                .map(|st| &st.origin.syntax)
-            {
+            if let Some(s) = registry.flat().struct_type(&name) {
                 let (wire, body) = struct_output_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
                 let kotlin_name = self

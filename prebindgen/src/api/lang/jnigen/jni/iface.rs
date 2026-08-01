@@ -1219,7 +1219,7 @@ pub(crate) fn callback_iface_spec(
             leaf_tys.push(LeafDesc::Whole {
                 name: whole_value_name(t, i),
                 ty: t.clone(),
-                nullable: is_option_type(t),
+                nullable: registry.is_optional(t),
                 owned_handle,
             });
             groups.push(GroupDesc {

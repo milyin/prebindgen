@@ -80,8 +80,14 @@ pub(crate) struct PlanLeaf {
     /// `JNINative` extern declares for pass-through leaves (for projections
     /// this is the erased wire name, not the typed surface).
     pub kt_meta: Option<kt::KtType>,
-    /// Raw `is_option_type(ty)` — each site applies its own nullability rule
-    /// (handles stay non-null `Long` on the extern but `T?` on the surface).
+    /// Whether the leaf crosses as optional, **per the model** — so a wrapped
+    /// spelling (`Box<Option<T>>`) answers exactly as the bare one does. Each
+    /// site applies its own nullability rule on top (handles stay non-null
+    /// `Long` on the extern but `T?` on the surface).
+    ///
+    /// This used to be `is_option_type(ty)`, which asks the *spelling* whether
+    /// its last path segment reads `Option` — and the model erases `Box` and
+    /// `Cow`, so an optional behind one lost its `?` (#273).
     pub optional: bool,
     /// `true` when the (probed-through `&`/`Option`) type is an
     /// `enum_class` enum: surface keeps the typed enum, the extern declares
@@ -523,7 +529,7 @@ fn classify_leaf(
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    let optional = is_option_type(ty);
+    let optional = registry.is_optional(ty);
     let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(ty));
     let kt_name = kt_param_name(&ident.to_string());
 
@@ -576,7 +582,8 @@ fn classify_leaf(
             },
             Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
                 niche: entry.metadata.projection.as_ref().and_then(|p| {
-                    is_option_type(ty)
+                    registry
+                        .is_optional(ty)
                         .then(|| p.niche_sentinels.first().cloned())
                         .flatten()
                 }),

@@ -113,10 +113,10 @@ pub fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
     })
 }
 
-/// True when `ty` is `Option<&T>` / `Option<&mut T>`.
-pub fn is_option_ref(ty: &syn::Type) -> bool {
-    option_inner_type(ty).is_some_and(|inner| matches!(inner, syn::Type::Reference(_)))
-}
+// `is_option_ref` lived here — `option_inner_type(ty)` then a `Type::Reference`
+// match — and decided how a handle parameter locks. Both halves read the
+// spelling, so an optional borrow behind an erased wrapper answered `false`.
+// `Conversions::is_optional_borrow` asks the model instead (#273).
 
 /// The bare ident of a plain path type (`ZThing` → `ZThing`); `None` for
 /// references, generics, or multi-shape types.

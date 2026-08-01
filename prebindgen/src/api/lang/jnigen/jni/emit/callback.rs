@@ -263,7 +263,7 @@ pub(crate) fn callback_input(
             .projection
             .as_ref()
             .is_none_or(|p| p.kind == ProjectionKind::Unsigned64)
-            && !is_option_type(arg_ty)
+            && !registry.is_optional(arg_ty)
             && matches!(jni_field_access(&arg_wire), Some((_, _, false)));
         if arg_is_prim {
             let letter = jni_field_access(&arg_wire).unwrap().1;
