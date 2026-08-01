@@ -1654,3 +1654,65 @@ fn a_built_registry_exposes_no_mutation() {
         "a built `Registry` must be read-only; found public mutation: {offenders:#?}"
     );
 }
+
+/// `Flat::classify` has no caller outside the registry.
+///
+/// The registry is the authority on what a type means, because it is the thing
+/// that **stores** readings: `ensure_entry` asks the grammar once when a cell is
+/// born, and `Registry::reading` hands that answer back. `classify` is its private
+/// tool.
+///
+/// Everything else is enforced by signatures rather than by this test — `peel`,
+/// `peel_borrow` and their siblings take a `&TypeRef`, so a consumer cannot hand
+/// them a spelling it re-derived. What a signature cannot say is "and do not add a
+/// second way in", which is what this pins.
+///
+/// The failure it exists for is specific and was live: a consumer holding an
+/// element — whose `ret` / `ty` is already a `TypeRef` — reaching into
+/// `origin.syntax`, digging the type back out, and re-classifying it. The boundary
+/// ledger cannot see that at all: the syn matching happens inside `core::flat`,
+/// which the ledger excludes by design, so the count falls while the round trip
+/// stays. `origin` is for reconstructing Rust, not for reasoning about it.
+#[test]
+fn classify_has_no_caller_outside_the_registry() {
+    let mut offenders: Vec<String> = Vec::new();
+
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/src/api");
+    let mut dirs = vec![std::path::PathBuf::from(root)];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).expect("api dir") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                dirs.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let rel = path
+                .strip_prefix(root)
+                .expect("under api")
+                .to_string_lossy()
+                .to_string();
+            // The registry owns readings; `flat` is where the grammar lives and
+            // may name its own function. Tests may exercise it directly.
+            if rel.starts_with("core/registry/")
+                || rel.starts_with("core/flat/")
+                || rel.contains("tests")
+            {
+                continue;
+            }
+            let src = std::fs::read_to_string(&path).expect("read source");
+            let bare: String = src.chars().filter(|c| !c.is_whitespace()).collect();
+            if bare.contains(".classify(") {
+                offenders.push(rel);
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "`Flat::classify` is the registry's; a consumer holding an element must read \
+         the element, not re-derive it from `origin.syntax`. Found in: {offenders:#?}"
+    );
+}
