@@ -1724,17 +1724,33 @@ impl Prebindgen for CbindgenBuilder {
 
     // ── Item emission ──────────────────────────────────────────────────
 
-    fn on_function(&self, f: &syn::ItemFn, registry: &Registry<()>) -> TokenStream {
-        self.emit_function_wrapper(f, registry)
+    fn on_function(
+        &self,
+        f: &crate::api::core::flat::Function,
+        registry: &Registry<()>,
+    ) -> TokenStream {
+        self.emit_function_wrapper(&f.origin.syntax, registry)
     }
 
-    fn on_struct(&self, _s: &syn::ItemStruct, _registry: &Registry<()>) -> TokenStream {
+    fn on_struct(
+        &self,
+        _s: &crate::api::core::flat::Struct,
+        _registry: &Registry<()>,
+    ) -> TokenStream {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
         // on_output_type; the original (non-FFI-safe) struct is dropped.
         TokenStream::new()
     }
 
-    fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<()>) -> TokenStream {
+    fn on_variant(
+        &self,
+        _v: &crate::api::core::flat::Variant,
+        _registry: &Registry<()>,
+    ) -> TokenStream {
+        TokenStream::new()
+    }
+
+    fn on_enum(&self, _e: &crate::api::core::flat::Enum, _registry: &Registry<()>) -> TokenStream {
         TokenStream::new()
     }
 }

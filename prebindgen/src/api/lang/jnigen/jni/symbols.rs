@@ -172,11 +172,7 @@ pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMet
             // surface signature (base + `.split_on_param` shells) comes from
             // the SAME `build_wrapper_surface` emission uses — a body-less
             // prototype, so the validator doesn't pay for body codegen.
-            if let Some(item_fn) = registry
-                .flat()
-                .function(&entry.rust_ident)
-                .map(|func| &func.origin.syntax)
-            {
+            if let Some(item_fn) = registry.flat().function(&entry.rust_ident) {
                 if let Some(s) = build_wrapper_surface(ext, item_fn, registry, Some(&name), None) {
                     for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
                         add_overload(&fn_scope, &ov, &origin, &mut errors);
@@ -217,11 +213,7 @@ pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMet
         for m in &ext.class_members[key] {
             let name = ext.effective_method_name(key, m);
             check_ident(&name, &format!("method `{}`", m.rust_ident), &mut errors);
-            let Some(item_fn) = registry
-                .flat()
-                .function(&m.rust_ident)
-                .map(|func| &func.origin.syntax)
-            else {
+            let Some(item_fn) = registry.flat().function(&m.rust_ident) else {
                 continue;
             };
             let (scope, receiver) = match m.kind {

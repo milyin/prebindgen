@@ -94,13 +94,28 @@ impl StubExt {
 impl Prebindgen for StubExt {
     type Metadata = ();
 
-    fn on_function(&self, _f: &syn::ItemFn, _registry: &Registry<()>) -> TokenStream {
+    fn on_function(
+        &self,
+        _f: &crate::api::core::flat::Function,
+        _registry: &Registry<()>,
+    ) -> TokenStream {
         TokenStream::new()
     }
-    fn on_struct(&self, _s: &syn::ItemStruct, _registry: &Registry<()>) -> TokenStream {
+    fn on_struct(
+        &self,
+        _s: &crate::api::core::flat::Struct,
+        _registry: &Registry<()>,
+    ) -> TokenStream {
         TokenStream::new()
     }
-    fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<()>) -> TokenStream {
+    fn on_variant(
+        &self,
+        _v: &crate::api::core::flat::Variant,
+        _registry: &Registry<()>,
+    ) -> TokenStream {
+        TokenStream::new()
+    }
+    fn on_enum(&self, _e: &crate::api::core::flat::Enum, _registry: &Registry<()>) -> TokenStream {
         TokenStream::new()
     }
 }
@@ -398,13 +413,20 @@ fn resolve_surfaces_adapter_invariant_errors() {
         fn validate(&self, _binding: &Building<'_, ()>) -> Result<(), String> {
             Err("member fun `f` has no receiver".to_string())
         }
-        fn on_function(&self, f: &syn::ItemFn, r: &Registry<()>) -> TokenStream {
+        fn on_function(
+            &self,
+            f: &crate::api::core::flat::Function,
+            r: &Registry<()>,
+        ) -> TokenStream {
             self.0.on_function(f, r)
         }
-        fn on_struct(&self, s: &syn::ItemStruct, r: &Registry<()>) -> TokenStream {
+        fn on_struct(&self, s: &crate::api::core::flat::Struct, r: &Registry<()>) -> TokenStream {
             self.0.on_struct(s, r)
         }
-        fn on_enum(&self, e: &syn::ItemEnum, r: &Registry<()>) -> TokenStream {
+        fn on_variant(&self, v: &crate::api::core::flat::Variant, r: &Registry<()>) -> TokenStream {
+            self.0.on_variant(v, r)
+        }
+        fn on_enum(&self, e: &crate::api::core::flat::Enum, r: &Registry<()>) -> TokenStream {
             self.0.on_enum(e, r)
         }
     }
@@ -1355,13 +1377,20 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
     }
     impl Prebindgen for AnyConverterExt {
         type Metadata = ();
-        fn on_function(&self, f: &syn::ItemFn, r: &Registry<()>) -> TokenStream {
+        fn on_function(
+            &self,
+            f: &crate::api::core::flat::Function,
+            r: &Registry<()>,
+        ) -> TokenStream {
             self.0.on_function(f, r)
         }
-        fn on_struct(&self, st: &syn::ItemStruct, r: &Registry<()>) -> TokenStream {
+        fn on_struct(&self, st: &crate::api::core::flat::Struct, r: &Registry<()>) -> TokenStream {
             self.0.on_struct(st, r)
         }
-        fn on_enum(&self, e: &syn::ItemEnum, r: &Registry<()>) -> TokenStream {
+        fn on_variant(&self, v: &crate::api::core::flat::Variant, r: &Registry<()>) -> TokenStream {
+            self.0.on_variant(v, r)
+        }
+        fn on_enum(&self, e: &crate::api::core::flat::Enum, r: &Registry<()>) -> TokenStream {
             self.0.on_enum(e, r)
         }
     }

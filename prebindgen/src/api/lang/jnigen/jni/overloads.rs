@@ -318,7 +318,7 @@ fn find_block(params: &[kt::KtParam], leaf_names: &[String]) -> Option<usize> {
 /// hard errors — the user explicitly asked to split it).
 fn resolve_split<'a>(
     registry: &'a Registry<KotlinMeta>,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     sel_fun: &kt::KtFun,
     param_name: &str,
     multi: bool,
@@ -326,25 +326,25 @@ fn resolve_split<'a>(
     let param = syn::Ident::new(param_name, Span::call_site());
     let plan = registry
         .expansion_plans()
-        .get(&(f.sig.ident.clone(), param.clone()))
+        .get(&(f.name.clone(), param.clone()))
         .unwrap_or_else(|| {
             panic!(
                 "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` is not an expandable \
                  parameter (it has no `expand_param!` variants)",
-                f.sig.ident
+                f.name
             )
         });
     assert!(
         plan.selector.is_some(),
         "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` has a single variant — there \
          is nothing to split (it already flattens to one signature)",
-        f.sig.ident
+        f.name
     );
     assert!(
         plan_in_scope(plan),
         "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` has a recursively-built arm — \
          it cannot be overloaded; keep the selector form",
-        f.sig.ident
+        f.name
     );
     let leaf_names: Vec<String> = plan
         .leaves
@@ -356,7 +356,7 @@ fn resolve_split<'a>(
         panic!(
             "fun!({}).split_on_param(\"{param_name}\"): could not locate the parameter's leaf \
              block in the generated wrapper",
-            f.sig.ident
+            f.name
         )
     });
     let block = &sel_fun.params[start..start + len];
@@ -376,7 +376,7 @@ fn resolve_split<'a>(
                     panic!(
                         "fun!({}).split_on_param(\"{param_name}\"): an arm has a non-flat input; \
                          it cannot be overloaded",
-                        f.sig.ident
+                        f.name
                     )
                 });
             (vi, typed)
@@ -387,7 +387,7 @@ fn resolve_split<'a>(
         "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` is an `Option<_>` parameter \
          and none of its arms is a single leaf — its overload has no clean nullable type; keep \
          the selector form",
-        f.sig.ident
+        f.name
     );
     Split {
         param,
@@ -406,7 +406,7 @@ fn resolve_split<'a>(
 /// error) if the product has two combinations with the same JVM signature.
 pub(crate) fn render_param_overloads(
     ext: &Declarations,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     sel_fun: &kt::KtFun,
 ) -> Vec<kt::KtFun> {
@@ -415,33 +415,25 @@ pub(crate) fn render_param_overloads(
         let want: std::collections::HashSet<&str> = ext
             .fn_split_params
             .iter()
-            .filter(|(func, _)| func == &f.sig.ident)
+            .filter(|(func, _)| func == &f.name)
             .map(|(_, p)| p.as_str())
             .collect();
         if want.is_empty() {
             return Vec::new();
         }
-        f.sig
-            .inputs
+        f.params
             .iter()
-            .filter_map(|a| match a {
-                syn::FnArg::Typed(pt) => match &*pt.pat {
-                    syn::Pat::Ident(pid) if want.contains(pid.ident.to_string().as_str()) => {
-                        Some(pid.ident.to_string())
-                    }
-                    _ => None,
-                },
-                _ => None,
-            })
+            .filter(|p| want.contains(p.name.to_string().as_str()))
+            .map(|p| p.name.to_string())
             .collect()
     };
     // Any requested name that didn't match a real parameter is a typo — surface
     // it rather than silently dropping.
     for (func, p) in &ext.fn_split_params {
-        if func == &f.sig.ident && !requested.iter().any(|r| r == p) {
+        if func == &f.name && !requested.iter().any(|r| r == p) {
             panic!(
                 "fun!({}).split_on_param(\"{p}\"): no parameter named `{p}` on this function",
-                f.sig.ident
+                f.name
             );
         }
     }
@@ -477,7 +469,7 @@ pub(crate) fn render_param_overloads(
                     "fun!({}): split_on_param product is ambiguous — combinations {} and {} both \
                      surface as `({})`; add .no_split() intent is not enough here, disambiguate \
                      the constructors or drop one .split_on_param",
-                    f.sig.ident,
+                    f.name,
                     combo_label(&splits, &combos[i]),
                     combo_label(&splits, &combos[j]),
                     sigs[i]
@@ -534,7 +526,7 @@ pub(crate) fn render_param_overloads(
                 seen.insert(p.name.clone()),
                 "fun!({}): split overload has a duplicate parameter name `{}` — rename the \
                  constructor parameter",
-                f.sig.ident,
+                f.name,
                 p.name
             );
         }

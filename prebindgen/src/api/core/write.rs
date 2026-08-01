@@ -85,7 +85,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     let flat = registry.flat();
     items.extend(parse_items_from_tokens(
         "on_function",
-        sorted_by_name(flat.functions().map(|f| (&f.name, &f.origin.syntax)))
+        sorted_by_name(flat.functions().map(|f| (&f.name, f)))
             .into_iter()
             .filter(|(ident, _)| declared_fns.contains(*ident))
             .map(|(_, item)| ext.on_function(item, registry)),
@@ -93,7 +93,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     items.extend(parse_items_from_tokens(
         "on_struct",
         sorted_by_name(flat.types().filter_map(|t| match t {
-            crate::api::core::flat::Type::Struct(s) => Some((&s.name, &s.origin.syntax)),
+            crate::api::core::flat::Type::Struct(s) => Some((&s.name, s)),
             _ => None,
         }))
         .into_iter()
@@ -101,18 +101,24 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
         .map(|(_, item)| ext.on_struct(item, registry)),
     )?);
     // Both enum shapes emit through `on_enum` and sort together: they were one
-    // map here before they were two elements, and an adapter re-emitting the
-    // item does not branch on the distinction.
+    // map here before they were two elements. They still SORT together — the
+    // emission order is one sequence — but they dispatch to their own methods
+    // now, because handing an adapter a `Type` it has to re-match is worse than
+    // handing it the element the model already decided on.
     items.extend(parse_items_from_tokens(
         "on_enum",
         sorted_by_name(flat.types().filter_map(|t| match t {
-            crate::api::core::flat::Type::Variant(v) => Some((&v.name, &v.origin.syntax)),
-            crate::api::core::flat::Type::Enum(e) => Some((&e.name, &e.origin.syntax)),
+            crate::api::core::flat::Type::Variant(v) => Some((&v.name, t)),
+            crate::api::core::flat::Type::Enum(e) => Some((&e.name, t)),
             _ => None,
         }))
         .into_iter()
         .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
-        .map(|(_, item)| ext.on_enum(item, registry)),
+        .map(|(_, t)| match t {
+            crate::api::core::flat::Type::Variant(v) => ext.on_variant(v, registry),
+            crate::api::core::flat::Type::Enum(e) => ext.on_enum(e, registry),
+            _ => unreachable!("filtered to the two enum shapes above"),
+        }),
     )?);
     // Consts: an adapter WITH a const declaration mechanism
     // (`declared_consts() == Some(set)`) emits declared consts only,
@@ -122,7 +128,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     let declared_consts = &declared.consts;
     items.extend(parse_items_from_tokens(
         "on_const",
-        sorted_by_name(flat.constants().map(|c| (&c.name, &c.origin.syntax)))
+        sorted_by_name(flat.constants().map(|c| (&c.name, c)))
             .into_iter()
             .filter(|(ident, _)| {
                 declared_consts

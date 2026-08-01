@@ -57,34 +57,6 @@ pub trait Conversions<M> {
             .is_some_and(|r| r.optional_inner().is_some())
     }
 
-    /// What an optional wraps, **spelled as generated Rust must spell it**.
-    ///
-    /// Classify off `kind`, spell off `syntax`: the decision that this *is* an
-    /// optional comes from the model, and what comes back is the inner's own
-    /// spelling — which is what a converter signature or a `quote!` needs.
-    fn optional_inner(&self, ty: &syn::Type) -> Option<syn::Type> {
-        self.reading(ty)
-            .and_then(|r| r.optional_inner().map(|i| i.origin.syntax.clone()))
-    }
-
-    /// The element of a run of values (`Vec<T>`, `[T]`, `Cow<'_, [T]>`), spelled
-    /// as generated Rust must spell it. The sequence peer of
-    /// [`Self::optional_inner`].
-    fn sequence_elem(&self, ty: &syn::Type) -> Option<syn::Type> {
-        self.reading(ty)
-            .and_then(|r| r.sequence_elem().map(|e| e.origin.syntax.clone()))
-    }
-
-    /// Whether `ty` is a borrow of an optional (`Option<&T>`) — the shape a
-    /// handle parameter locks differently. Reads both layers off the model, so
-    /// a wrapped spelling answers the same as the bare one.
-    fn is_optional_borrow(&self, ty: &syn::Type) -> bool {
-        self.reading(ty).is_some_and(|r| {
-            r.optional_inner()
-                .is_some_and(|i| i.borrow_target().is_some())
-        })
-    }
-
     /// The conversion for `ty` in `dir`, if there is one.
     fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>>;
 

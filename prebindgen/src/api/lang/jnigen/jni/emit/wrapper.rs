@@ -6,7 +6,7 @@ use crate::api::core::{registry::Conversions, types_util::result_ok_type};
 
 pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> TokenStream {
     emit_jni_function_wrapper_with_callee(ext, f, registry, None)
@@ -18,14 +18,12 @@ pub(crate) fn emit_jni_function_wrapper(
 /// [`emit_jni_function_wrapper_with_callee`]) and the Kotlin `val`
 /// initializer (`render_const_val`) — derive the extern symbol from this one
 /// ident, so they stay in sync by construction. The body is never used.
-pub(crate) fn const_getter_fn(c: &syn::ItemConst) -> syn::ItemFn {
-    let ident = format_ident!("const_get_{}", c.ident.to_string().to_lowercase());
-    let ty = &c.ty;
-    syn::parse_quote! {
-        pub fn #ident() -> #ty {
-            unimplemented!()
-        }
-    }
+pub(crate) fn const_getter_fn(
+    c: &crate::api::core::flat::Constant,
+) -> crate::api::core::flat::Function {
+    let ident = format_ident!("const_get_{}", c.name.to_string().to_lowercase());
+    // No lookup: a constant element carries its own `TypeRef`.
+    synthetic_getter(ident, c.ty.clone())
 }
 
 /// A const whose (peeled) type is a declared opaque handle is rejected: a
@@ -103,12 +101,53 @@ pub(crate) fn validate_constant_fn(ext: &Declarations, f: &syn::ItemFn) {
 /// `pub fn const_get_<val_name_lower>() -> <ty>` — the same convention as
 /// const-backed getters, so both sides derive the extern symbol from the one
 /// val name. The body is never used.
-pub(crate) fn const_expr_getter_fn(kotlin_name: &str, ty: &syn::Type) -> syn::ItemFn {
+pub(crate) fn const_expr_getter_fn(
+    kotlin_name: &str,
+    ty: &syn::Type,
+    registry: &impl Conversions<KotlinMeta>,
+) -> crate::api::core::flat::Function {
     let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
-    syn::parse_quote! {
-        pub fn #ident() -> #ty {
+    // The one lookup this path needs: the type is named by a build script, so
+    // no element carries it. A miss means the declared type never entered the
+    // pipeline, which is a binding error worth naming rather than a `None` to
+    // absorb.
+    let ret = registry.reading(ty).unwrap_or_else(|| {
+        panic!(
+            "constant_expr `{kotlin_name}`: type `{}` is not a type this binding crosses — \
+             declare it, or name one that is",
+            quote::ToTokens::to_token_stream(ty),
+        )
+    });
+    synthetic_getter(ident, ret)
+}
+/// A nullary getter as the MODEL would hold it — the one function no source
+/// wrote.
+///
+/// A declared constant crosses as a getter extern, and that getter goes through
+/// exactly the same emitter a real function does. So it needs a
+/// [`flat::Function`](crate::api::core::flat::Function), not a `syn::ItemFn`:
+/// the emitter classifies off `kind` now, and a synthesized item would have no
+/// reading to classify from.
+///
+/// `ret` is supplied by the caller because the two callers get it from
+/// different places — a declared const carries its own `TypeRef`, an
+/// expression constant names a type in the build script — and only the second
+/// has to look one up.
+pub(crate) fn synthetic_getter(
+    ident: syn::Ident,
+    ret: crate::api::core::flat::TypeRef,
+) -> crate::api::core::flat::Function {
+    let ret_syntax = &ret.origin.syntax;
+    let item: syn::ItemFn = syn::parse_quote! {
+        pub fn #ident() -> #ret_syntax {
             unimplemented!()
         }
+    };
+    crate::api::core::flat::Function {
+        name: ident,
+        params: Vec::new(),
+        origin: ret.origin.with(item),
+        ret,
     }
 }
 
@@ -132,11 +171,11 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
 /// `<origin module>::<CONST_IDENT>` — a path, not a call.
 pub(crate) fn emit_jni_function_wrapper_with_callee(
     ext: &Declarations,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     callee: Option<syn::Expr>,
 ) -> TokenStream {
-    let original_ident = &f.sig.ident;
+    let original_ident = &f.name;
 
     let mut wire_params: Vec<TokenStream> = Vec::new();
     // Each entry is a per-input decode statement. Fallible decodes are

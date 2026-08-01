@@ -925,11 +925,7 @@ impl Declarations {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
             for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-                if let Some(item_fn) = registry
-                    .flat()
-                    .function(&m.rust_ident)
-                    .map(|func| &func.origin.syntax)
-                {
+                if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
                         item_fn,
@@ -959,11 +955,7 @@ impl Declarations {
                     .map(|c| *c)
                     .unwrap_or_else(|| KtClass::companion_object().vis(Vis::Public));
                 for m in ctors {
-                    if let Some(item_fn) = registry
-                        .flat()
-                        .function(&m.rust_ident)
-                        .map(|func| &func.origin.syntax)
-                    {
+                    if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
                         if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                             self,
                             item_fn,
@@ -1604,7 +1596,6 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            let item_fn = &item_fn.origin.syntax;
             let kotlin_name = self.effective_function_name(subpackage, entry);
             if let Some(f) = render_wrapper_fn(self, item_fn, registry, Some(&kotlin_name), None) {
                 // #52: idiomatic typed overloads for `.split_on_param`
@@ -1621,7 +1612,6 @@ impl Declarations {
             let item_const = registry
                 .flat()
                 .constant(&entry.rust_ident)
-                .map(|konst| &konst.origin.syntax)
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: const `{}` registered via .constant(...) is \
@@ -1630,7 +1620,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            reject_handle_const(self, item_const);
+            reject_handle_const(self, &item_const.origin.syntax);
             if let Some((helper, prop)) = render_const_val(
                 self,
                 &package,
@@ -1658,8 +1648,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            let item_fn = &item_fn.origin.syntax;
-            validate_constant_fn(self, item_fn);
+            validate_constant_fn(self, &item_fn.origin.syntax);
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
                 &package,
@@ -1717,7 +1706,7 @@ impl Declarations {
             if !declared.contains(&f.name) {
                 continue;
             }
-            if let Some(fun) = render_extern_decl(self, &f.origin.syntax, registry) {
+            if let Some(fun) = render_extern_decl(self, f, registry) {
                 externs.push(fun);
             }
         }
@@ -1733,11 +1722,7 @@ impl Declarations {
             .collect();
         const_idents.sort_by_key(|i| i.to_string());
         for ident in const_idents {
-            let Some(item_const) = registry
-                .flat()
-                .constant(&ident)
-                .map(|konst| &konst.origin.syntax)
-            else {
+            let Some(item_const) = registry.flat().constant(&ident) else {
                 continue; // missing decl already warned by the scan
             };
             let getter = crate::api::lang::jnigen::jni::const_getter_fn(item_const);
@@ -1755,7 +1740,7 @@ impl Declarations {
             .collect();
         expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
         for decl in expr_decls {
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
             if let Some(fun) = render_extern_decl(self, &getter, registry) {
                 externs.push(fun);
             }
