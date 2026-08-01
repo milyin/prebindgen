@@ -797,6 +797,45 @@ fn a_source_type_cell_carries_the_models_typeref() {
     assert!(matches!(inner.subject.kind, TypeKind::Scalar(_)));
 }
 
+/// `Registry::reading` is a **lookup**. A type with no cell answers `None`, even
+/// when the grammar would classify it happily.
+///
+/// It used to fall back to `Flat::classify`, and the failure that hid is the one
+/// this pins: `i64` is not an exotic spelling, it is a scalar every binding
+/// registers. A miss on one could only mean the caller asked *before*
+/// registration — which is exactly what the value-form walk was doing, for every
+/// leaf its caller registered one loop later (#266). Because `classify` returned
+/// the right answer, the ordering bug produced correct output and no signal at
+/// all.
+///
+/// This cannot be caught by `classify_has_no_caller_outside_the_registry`: that
+/// scan excludes `core/registry/` by design, since the registry is where
+/// `classify` legitimately lives. The second door was inside the room.
+#[test]
+fn reading_is_a_lookup_not_a_classification() {
+    let items = vec![fn_item("fn f(x: u64) -> u64 { x }")];
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("f").unwrap());
+    let reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .unwrap();
+
+    // Registered by the declared fn — the lookup hits.
+    assert!(
+        reg.reading(&syn::parse_quote!(u64)).is_some(),
+        "a type the scan registered has its reading in a cell"
+    );
+    // Never registered, and perfectly expressible. The grammar's answer is not
+    // this method's to give.
+    assert!(
+        reg.reading(&syn::parse_quote!(i64)).is_none(),
+        "`reading` answers from the type table; it must not classify on a miss"
+    );
+}
+
 /// A type only the binding authored is **classified but placeless**: it has a
 /// reading, because it is a type in this language, and no location, because no
 /// source wrote it. Declaring a type the source never mentions is the ordinary

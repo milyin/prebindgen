@@ -300,7 +300,7 @@ pub(crate) fn classify_field(
             let child_fqn = cfg
                 .and_then(|c| c.name_spec.as_ref())
                 .map(|s| ext.fqn_of(s));
-            let plan = build_struct_plan(ext, registry, &st.clone(), depth + 1)?;
+            let plan = build_struct_plan(ext, registry, &st.origin.syntax, depth + 1)?;
             return Some(PlanFieldKind::Nested {
                 optional: option_inner_type(&effective_ty).is_some(),
                 child_fqn,

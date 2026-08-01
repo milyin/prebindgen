@@ -1287,7 +1287,7 @@ fn build_flat_struct_node(
                 let node = build_flat_struct_node(
                     ext,
                     registry,
-                    child,
+                    &child.origin.syntax,
                     child_optional,
                     &child_native,
                     &field_ref,
