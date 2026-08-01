@@ -628,30 +628,23 @@ fn wire_fixed_returns<M>(
         // element/inner borrow-ness sets `by_ref` (the reach clones either
         // way).
         let layers = peel(registry, &ret);
-        let (optional, iterable, by_ref) = (layers.optional, layers.iterable, layers.by_ref);
-        let inner_shape = if iterable {
-            UnfoldShape::Iterable(Box::new(UnfoldShape::Base))
-        } else {
-            UnfoldShape::Base
-        };
-        let shape = if optional {
-            UnfoldShape::Optional((), Box::new(inner_shape))
-        } else {
-            inner_shape
-        };
+        let by_ref = layers.by_ref;
+        // The model's layer stack is the plan's shape — `UnfoldShape` is `Shape`
+        // — so there is nothing to rebuild here.
+        let shape = layers.shape.clone();
         if no_converter {
             // The plan delivers the return leaf-by-leaf, so no converter is
             // needed for the declared return — and for a sum none can exist.
             // Drop the scan-time registrations of every layer (the boundary-only
             // pass only reaches the bare type), so the missing converters are not
             // flagged as unresolved-required.
-            // All THREE peeled layers, the `Vec` element included. The shape
-            // fold peels here, so the matching unrequire belongs here; leaving
-            // the element out made the invariant depend on the adapter's
-            // `boundary_only_types` covering it — true for JniGenBuilder today, and
-            // the only reason a `Vec<sum>`-only declaration resolves.
-            for wrapper in &layers.wrappers {
-                registry.unrequire_output(wrapper);
+            // EVERY layer, the `Vec` element included. The shape fold peels here,
+            // so the matching unrequire belongs here; leaving the element out made
+            // the invariant depend on the adapter's `boundary_only_types` covering
+            // it — true for JniGenBuilder today, and the only reason a
+            // `Vec<sum>`-only declaration resolves.
+            for layer in &layers.layer_types {
+                registry.unrequire_output(layer);
             }
         }
         for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
@@ -913,49 +906,50 @@ fn check_records(
     Ok(())
 }
 
-/// The boundary layers of `ty`, as owned spellings.
+/// The arity layers over `ty`, the types they wrap, and the value underneath.
 ///
-/// [`TypeRef::layers`](crate::api::core::flat::TypeRef::layers) with the borrows
+/// [`TypeRef::layer_stack`](crate::api::core::flat::TypeRef::layer_stack) and
+/// [`layer_types`](crate::api::core::flat::TypeRef::layer_types) with the borrows
 /// resolved to clones, because these feed plan fields and registry calls that own
 /// their types. The classification is the model's; only the copying is local.
 ///
-/// A type the grammar cannot express answers "no layers, core is itself" — the
-/// identity, not a fallback classifier. Nothing reaching here can be one: every
+/// The stack **is** the plan's shape — `UnfoldShape` is `Shape` — so a caller
+/// stores it rather than rebuilding one from flags.
+///
+/// A type the grammar cannot express answers `Base` over itself: the identity,
+/// not a fallback classifier. Nothing reaching here can be one, since every
 /// signature in play was accepted by the frontend before the scan saw it.
-struct Peeled {
-    optional: bool,
-    iterable: bool,
-    by_ref: bool,
-    /// The whole type, after the optional peel, after the sequence peel — the
-    /// three spellings a fold registers.
-    wrappers: [syn::Type; 3],
-    /// Past the borrow as well: what actually crosses.
+struct Layered {
+    /// The arity layers, outermost first.
+    shape: UnfoldShape,
+    /// Every type on the way down, outermost first — what a registration walks.
+    layer_types: Vec<syn::Type>,
+    /// Past the borrow too: what actually crosses.
     core: syn::Type,
+    /// Whether the core is reached through a borrow.
+    by_ref: bool,
 }
 
-fn peel<M>(registry: &Registry<M>, ty: &syn::Type) -> Peeled {
-    match registry.flat().classify(ty) {
-        Ok(reading) => {
-            let l = reading.layers();
-            Peeled {
-                optional: l.optional,
-                iterable: l.iterable,
-                by_ref: l.by_ref,
-                wrappers: [
-                    l.wrappers[0].origin.syntax.clone(),
-                    l.wrappers[1].origin.syntax.clone(),
-                    l.wrappers[2].origin.syntax.clone(),
-                ],
-                core: l.core.origin.syntax.clone(),
-            }
-        }
-        Err(_) => Peeled {
-            optional: false,
-            iterable: false,
-            by_ref: false,
-            wrappers: [ty.clone(), ty.clone(), ty.clone()],
+fn peel<M>(registry: &Registry<M>, ty: &syn::Type) -> Layered {
+    let Ok(reading) = registry.flat().classify(ty) else {
+        return Layered {
+            shape: UnfoldShape::Base,
+            layer_types: vec![ty.clone()],
             core: ty.clone(),
-        },
+            by_ref: false,
+        };
+    };
+    let (shape, layered) = reading.layer_stack();
+    let borrowed = layered.borrow_target();
+    Layered {
+        shape,
+        layer_types: reading
+            .layer_types()
+            .iter()
+            .map(|t| t.origin.syntax.clone())
+            .collect(),
+        core: borrowed.unwrap_or(layered).origin.syntax.clone(),
+        by_ref: borrowed.is_some(),
     }
 }
 
@@ -1652,14 +1646,13 @@ fn flatten<M>(
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
-                let ret_layers = peel(registry, &ret);
-                let opt = ret_layers.optional;
-                // `wrappers[1]` is what is left after the optional peel: the
-                // borrowed form when there is one, which is what the `by_value`
-                // flags below ask about.
-                let core = ret_layers.wrappers[1].clone();
-                let core_by_ref = peel_borrow(registry, &core).0;
-                let child_ty = ret_layers.core.clone();
+                // This site peels an `Option` only — an accessor returning a run
+                // of values is not spliced — so it asks the model for that one
+                // layer rather than the whole stack.
+                let after_opt = optional_inner(registry, &ret);
+                let opt = after_opt.is_some();
+                let core = after_opt.unwrap_or_else(|| ret.clone());
+                let (core_by_ref, child_ty) = peel_borrow(registry, &core);
                 let child_key = TypeKey::from_type(&child_ty);
                 // A child already on the nesting chain: for a `#[prebindgen]`
                 // accessor that is an authoring cycle (hard error); a

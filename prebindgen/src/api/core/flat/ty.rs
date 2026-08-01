@@ -41,86 +41,63 @@ pub struct TypeRef {
     pub origin: Origin<syn::Type>,
 }
 
-/// The boundary layers a type wraps its payload in, and what is underneath.
-///
-/// See [`TypeRef::layers`].
-#[derive(Clone, Copy, Debug)]
-pub struct Layers<'a> {
-    /// An [`Optional`](TypeKind::Optional) was outermost.
-    pub optional: bool,
-    /// A [`Sequence`](TypeKind::Sequence) came next — a run of the core type.
-    pub iterable: bool,
-    /// The core is reached through a borrow.
-    pub by_ref: bool,
-    /// This type, then what is left after the optional peel, then after the
-    /// sequence peel. A layer that is absent repeats the one before it, so the
-    /// three are always present and always in that order.
-    ///
-    /// These are the spellings a boundary fold **registers** — the whole type,
-    /// the collection, the element — which is a different question from what
-    /// finally crosses. A layer delivered leaf-by-leaf needs each of them
-    /// un-required, and there is no converter for any of them.
-    pub wrappers: [&'a TypeRef; 3],
-    /// Past the borrow as well: the type that actually crosses.
-    pub core: &'a TypeRef,
-}
-
 impl TypeRef {
-    /// Peel the boundary layers: an optional, of a run of, borrowed `T`.
+    /// The **arity layers** over this type, and what they wrap.
     ///
-    /// The shape nearly every crossing is some subset of, and the question a
-    /// dozen sites used to ask by taking the spelling apart — `option_inner_type`,
-    /// then `vec_inner_type`, then a `syn::Type::Reference` match, each rebuilding
-    /// the peeled type as it went.
+    /// `Option<Vec<T>>` is `Optional(Iterable(Base))` over `T`. The stack is the
+    /// same [`Shape`](crate::core::shape::Shape) the expansion and decomposition plans are built from — so a
+    /// consumer that needs a plan shape has it, rather than rebuilding one from
+    /// flags that were derived from this type moments earlier.
     ///
-    /// **The order is fixed and each layer is peeled at most once**: `Optional`,
-    /// then `Sequence`, then `Ref`. That is not a convention, it is the shape of a
-    /// boundary — *an optional list of borrowed things* — and reading layers in
-    /// whatever order they appear would call `Vec<Option<T>>` an optional list,
-    /// which is a different type. A layer out of that position stays on the core,
-    /// where a caller that cares matches [`kind`](Self::kind) directly: `&[T]`
-    /// reports `by_ref` with a `Sequence` core, because the borrow is outside the
-    /// run.
+    /// **A borrow is not a layer.** `Optional` and `Iterable` change arity — none
+    /// or one, none or many — while `&T` is the same single value held
+    /// differently. That is ownership, and it stays on the returned core, where
+    /// [`borrow_target`](Self::borrow_target) reads it.
     ///
-    /// Every answer is a fact about the **classification**, so a spelling the
-    /// language does not distinguish cannot change it: `Box<Vec<T>>` reads the
-    /// same as `Vec<T>`, and `Cow<'_, [T]>` the same as either.
-    pub fn layers(&self) -> Layers<'_> {
-        let whole = self;
-        let mut core = self;
-
-        let optional = matches!(core.kind, TypeKind::Optional(_));
-        if let TypeKind::Optional(inner) = &core.kind {
-            core = inner;
+    /// A layer out of position is not a layer: `Vec<Option<T>>` is
+    /// `Iterable(Base)` over `Option<T>`, because the optional is inside the run.
+    /// The stack is what wraps the payload, in order, and nothing is reordered to
+    /// make it fit a shape a caller hoped for.
+    ///
+    /// Returning the stack rather than a set of flags is what lets a caller
+    /// **decline**: a consumer that can only build `Base` and `Optional(Base)`
+    /// matches those and falls through on anything else, instead of silently
+    /// consuming a layer it cannot honour.
+    pub fn layer_stack(&self) -> (crate::api::core::shape::Shape, &TypeRef) {
+        match &self.kind {
+            TypeKind::Optional(inner) => {
+                let (rest, core) = inner.layer_stack();
+                (crate::api::core::shape::Shape::optional((), rest), core)
+            }
+            TypeKind::Sequence(inner) => {
+                let (rest, core) = inner.layer_stack();
+                (crate::api::core::shape::Shape::iterable(rest), core)
+            }
+            _ => (crate::api::core::shape::Shape::Base, self),
         }
-        let after_opt = core;
+    }
 
-        let iterable = matches!(core.kind, TypeKind::Sequence(_));
-        if let TypeKind::Sequence(inner) = &core.kind {
-            core = inner;
+    /// Every type on the way down through the arity layers, outermost first and
+    /// ending at the core [`layer_stack`](Self::layer_stack) returns.
+    ///
+    /// What a **registration** walks, which is a different question from what
+    /// crosses: a value delivered layer-by-layer needs each of these un-required,
+    /// and none of them has a converter of its own.
+    pub fn layer_types(&self) -> Vec<&TypeRef> {
+        let mut out = vec![self];
+        let mut cur = self;
+        while let TypeKind::Optional(inner) | TypeKind::Sequence(inner) = &cur.kind {
+            out.push(inner);
+            cur = inner;
         }
-        let after_seq = core;
-
-        let by_ref = matches!(core.kind, TypeKind::Ref { .. });
-        if let TypeKind::Ref { inner, .. } = &core.kind {
-            core = inner;
-        }
-
-        Layers {
-            optional,
-            iterable,
-            by_ref,
-            wrappers: [whole, after_opt, after_seq],
-            core,
-        }
+        out
     }
 
     /// What an `Option<T>` wraps, else `None`.
     ///
-    /// One layer, named. [`layers`](Self::layers) peels the whole boundary shape;
-    /// these three peel exactly what a caller asks for, which matters when the
-    /// caller cannot *represent* the layers it does not peel — see
-    /// [`layers`](Self::layers) on why an unpeeled layer stays on the core.
+    /// One layer, named. [`layer_stack`](Self::layer_stack) reads the whole
+    /// arity stack; these three read exactly the layer a caller asks for, which
+    /// is what a consumer wants when it can only *represent* some of them.
     pub fn optional_inner(&self) -> Option<&TypeRef> {
         match &self.kind {
             TypeKind::Optional(inner) => Some(inner),
