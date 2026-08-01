@@ -442,9 +442,9 @@ pub struct Declarations {
     /// Single source of truth for the JVM/Kotlin namespace this binding
     /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
     /// Every derived form — slash-separated for `FindClass`
-    /// (`JniGenBuilder::java_class_prefix()`), `_`-mangled for JNI extern idents
-    /// (`JniGenBuilder::jni_class_path()`), dot-separated for Kotlin `package`
-    /// declarations — is computed from this at the point of use.
+    /// ([`Declarations::java_class_prefix`]), `_`-mangled for JNI extern idents,
+    /// dot-separated for Kotlin `package` declarations — is computed from this at
+    /// the point of use.
     /// `pub(crate)`: consumers go through [`JniGenBuilder::set_package_prefix`],
     /// whose trimming a direct field write would bypass.
     pub(crate) package: String,

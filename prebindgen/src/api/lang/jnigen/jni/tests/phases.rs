@@ -19,15 +19,22 @@
 /// styling: `Registry::supply` survived two commits claiming it was gone because
 /// the check for it was a single-line grep and its signature spanned lines.
 ///
-/// `builder.rs` and `config.rs` are skipped, exactly as the registry test skips
-/// `declare.rs` — `JniGenBuilder` is *meant* to be mutable, and that is the whole
-/// point of it being a different type.
+/// **No file is skipped**, and the exemption is per `impl` block rather than per
+/// file. `builder.rs` and `config.rs` are where the mutators live, but they also
+/// hold six `impl Declarations` blocks between them — most of the read API — so
+/// skipping those files wholesale, as the first version of this test did, left
+/// the larger half of what it claims to guard unguarded.
+///
+/// The self type is read off the `impl` header and matched by **suffix**, so a
+/// qualified path is not a way around it: `impl super::JniGen` occurs in
+/// `kotlin_emit.rs` and `report.rs`, and an unqualified-prefix match missed both.
 #[test]
 fn a_built_jnigen_exposes_no_mutation() {
     let mut offenders: Vec<String> = Vec::new();
 
     let root = concat!(env!("CARGO_MANIFEST_DIR"), "/src/api/lang/jnigen/jni");
     let mut dirs = vec![std::path::PathBuf::from(root)];
+    let mut sealed_blocks = 0usize;
     while let Some(dir) = dirs.pop() {
         for entry in std::fs::read_dir(&dir).expect("jnigen module dir") {
             let path = entry.expect("dir entry").path();
@@ -47,27 +54,27 @@ fn a_built_jnigen_exposes_no_mutation() {
                 .expect("file name")
                 .to_string_lossy()
                 .to_string();
-            if name == "builder.rs" || name == "config.rs" {
-                continue;
-            }
             let src = std::fs::read_to_string(&path).expect("read source");
             let bare: String = src.chars().filter(|c| !c.is_whitespace()).collect();
 
-            // Walk the `impl` blocks, and only complain inside the two types a
-            // built binding keeps. An `impl JniGenBuilder` in one of these files
-            // is the describing half and is allowed to mutate.
             let mut rest = bare.as_str();
             while let Some(at) = rest.find("impl") {
                 rest = &rest[at + "impl".len()..];
-                let sealed = rest.starts_with("Declarations{")
-                    || rest.starts_with("JniGen{")
-                    || rest.starts_with("PrebindgenforDeclarations{");
-                // The block's own text, up to the next `impl` — good enough,
-                // because a nested `impl` would start its own scan anyway.
+                let Some(brace) = rest.find('{') else { break };
+                let header = &rest[..brace];
+                // A trait impl's self type is what follows `for`; an inherent
+                // impl's is the whole header.
+                let self_ty = header.rsplit("for").next().unwrap_or(header);
+                // Suffix, so `super::JniGen` and `crate::…::Declarations` count.
+                // `JniGenBuilder` does not end with either name, which is what
+                // exempts the describing half without naming a file.
+                let sealed = self_ty.ends_with("Declarations") || self_ty.ends_with("JniGen");
+
+                // The block's own text, up to the next `impl`.
                 let end = rest.find("impl").unwrap_or(rest.len());
                 if sealed {
-                    let block = &rest[..end];
-                    let mut scan = block;
+                    sealed_blocks += 1;
+                    let mut scan = &rest[..end];
                     while let Some(f) = scan.find("fn") {
                         scan = &scan[f + "fn".len()..];
                         let Some(open) = scan.find('(') else { break };
@@ -84,6 +91,14 @@ fn a_built_jnigen_exposes_no_mutation() {
     assert!(
         offenders.is_empty(),
         "a built `JniGen` and its `Declarations` must be read-only; found mutation: {offenders:#?}"
+    );
+    // A scanner that silently matches nothing passes forever. This is the count
+    // at the time of writing; it may drift upward freely, and a *drop* means the
+    // header matching stopped recognising blocks it used to.
+    assert!(
+        sealed_blocks >= 22,
+        "expected to scan at least 22 sealed impl blocks, saw {sealed_blocks} — \
+         the header matching is no longer finding them"
     );
 }
 
