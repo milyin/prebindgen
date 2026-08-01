@@ -1748,16 +1748,20 @@ impl Declarations {
             .crossing_keys(direction)
             .iter()
             .map(|candidate| {
-                let mut ty = candidate.to_type();
+                // How many `Option` layers this crossing puts over `key` — the
+                // model's count, so a wrapped spelling contributes the same
+                // demand a bare one does. Walking the reading also drops the
+                // re-lookup the old loop did: it peeled a spelling and re-keyed
+                // each result, where the layers are already right here (#273).
+                let Some(mut reading) = registry.reading(&candidate.to_type()) else {
+                    return 0;
+                };
                 let mut depth = 0;
-                while crate::api::core::types_util::is_option_type(&ty) {
-                    let Some(inner) = option_inner_type(&ty) else {
-                        return 0;
-                    };
-                    ty = inner;
+                while let Some(inner) = reading.optional_inner().cloned() {
+                    reading = inner;
                     depth += 1;
                 }
-                if TypeKey::from_type(&ty) == *key {
+                if reading.key() == *key {
                     depth
                 } else {
                     0

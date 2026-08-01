@@ -1598,13 +1598,21 @@ pub fn ledger_archived(l: &Ledger) -> Option<Report> {
 /// A `Cow` payload is the other half and cannot appear in a compiled fixture:
 /// it must be REFUSED, which only
 /// `a_transparent_wrapper_is_bridged_only_where_it_can_be` can assert.
+///
+/// The **parameter** is wrapped too, and that half is #273: nullability was
+/// decided by asking the spelling whether its last path segment read `Option`,
+/// so this rendered `note: String` while `plain_note_echo` rendered
+/// `note: String?`. A non-null Kotlin parameter for an optional value is a
+/// wrong contract rather than a cosmetic one — Kotlin rejects `null` at the
+/// call site, so the absent case becomes unexpressible. The two externs must
+/// come out **identical**.
 #[prebindgen]
-pub fn boxed_note_echo(note: Option<String>) -> Box<Box<Option<String>>> {
-    Box::new(Box::new(note))
+pub fn boxed_note_echo(note: Box<Option<String>>) -> Box<Box<Option<String>>> {
+    Box::new(note)
 }
 
 /// The same crossing with nothing wrapped — the control the wrapped form must
-/// match, since the model says the two returns are the same type.
+/// match, since the model says the two signatures are the same type.
 #[prebindgen]
 pub fn plain_note_echo(note: Option<String>) -> Option<String> {
     note

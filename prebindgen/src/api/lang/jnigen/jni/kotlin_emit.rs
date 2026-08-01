@@ -860,7 +860,7 @@ impl Declarations {
         // field — the Kotlin type must match that slot. Read from the same
         // entry the type came from.
         let primitive_wire = crate::api::lang::jnigen::jni::is_jni_primitive(&out.destination);
-        if is_option_type(&field.ty) && !primitive_wire {
+        if registry.is_optional(&field.ty) && !primitive_wire {
             ty.nullable()
         } else {
             ty
@@ -1517,7 +1517,7 @@ impl Declarations {
         name: &str,
         imports: &mut BTreeSet<String>,
     ) -> String {
-        let optional = is_option_type(&leaf.out_ty);
+        let optional = registry.is_optional(&leaf.out_ty);
         let arg = if param.raw.is_nullable() && !optional {
             format!("{name}!!")
         } else {

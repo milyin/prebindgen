@@ -233,27 +233,29 @@ pub(crate) fn classify_field(
     // answers about a bare ident, so it reports `Vec<Reading>` as `Other` and
     // a rejection guarded on the unpeeled type could never fire. Peeling first
     // is what makes the `Vec<sum>` error reachable at all.
-    let bare = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-    let core = vec_inner_type(&bare).unwrap_or_else(|| bare.clone());
+    // Every layer question below is the MODEL's, asked once: a field spelled
+    // `Box<Option<T>>` is `Optional` and must classify, nest and render exactly
+    // as `Option<T>` does. Peeling by path segment answered "not optional" for
+    // it, and the seven peels in this function would then disagree with each
+    // other about the same field (#273).
+    let optional_inner = registry.optional_inner(&effective_ty);
+    let bare = optional_inner
+        .clone()
+        .unwrap_or_else(|| effective_ty.clone());
+    let seq_elem = registry.sequence_elem(&bare);
+    let core = seq_elem.clone().unwrap_or_else(|| bare.clone());
     if matches!(ext.type_kind(registry, &core), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
         // construction.
-        if vec_inner_type(&bare).is_some() {
+        if seq_elem.is_some() {
             panic!(
                 "fromParts bridge: `Vec<{}>` sealed-class field (`{owner}`) is not supported \
                  (variable arity)",
                 core.to_token_stream(),
             );
         }
-        return sum_plan_kind(
-            ext,
-            registry,
-            &bare,
-            owner,
-            option_inner_type(&effective_ty).is_some(),
-            depth,
-        );
+        return sum_plan_kind(ext, registry, &bare, owner, optional_inner.is_some(), depth);
     }
 
     let field_entry = registry.output_entry(&effective_ty)?;
@@ -277,7 +279,7 @@ pub(crate) fn classify_field(
             return Some(PlanFieldKind::Enum { conv, kotlin });
         }
         // `Option<enum>` leaf.
-        if let Some(inner) = option_inner_type(&effective_ty) {
+        if let Some(inner) = optional_inner.clone() {
             if ext.is_kotlin_enum(&inner) {
                 let kotlin = registry
                     .output_entry(&inner)?
@@ -302,7 +304,7 @@ pub(crate) fn classify_field(
                 .map(|s| ext.fqn_of(s));
             let plan = build_struct_plan(ext, registry, &st.origin.syntax, depth + 1)?;
             return Some(PlanFieldKind::Nested {
-                optional: option_inner_type(&effective_ty).is_some(),
+                optional: optional_inner.is_some(),
                 child_fqn,
                 plan,
             });
@@ -317,8 +319,9 @@ pub(crate) fn classify_field(
             None => {
                 // Object-shaped wire with no fixed descriptor; the JVM slot
                 // must be the field's actual declared type (Option-stripped).
-                let slot_ty =
-                    option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
+                let slot_ty = optional_inner
+                    .clone()
+                    .unwrap_or_else(|| effective_ty.clone());
                 let descriptor = registry
                     .output_entry(&slot_ty)
                     .and_then(|e| jni_field_access(&e.destination))
@@ -353,7 +356,7 @@ pub(crate) fn classify_field(
                 (LeafForm::Object, descriptor)
             }
         };
-        let nullable = is_option_type(&effective_ty) && !is_jni_primitive(&wire);
+        let nullable = optional_inner.is_some() && !is_jni_primitive(&wire);
         Some(PlanFieldKind::Leaf {
             conv,
             wire: Box::new(wire),

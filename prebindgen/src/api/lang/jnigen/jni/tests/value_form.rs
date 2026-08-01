@@ -2658,3 +2658,77 @@ fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
         );
     }
 }
+
+/// Nullability is the **model's** answer, so an optional behind an erased
+/// wrapper renders exactly as the bare one does — everywhere, not only in the
+/// positions a compiled fixture reaches.
+///
+/// `is_option_type` asked the spelling whether its last path segment read
+/// `Option`. The model erases `Box` and `Cow`, so `Box<Option<T>>` answered
+/// "not optional" and Kotlin lost its `?`. That is a wrong contract rather than
+/// a cosmetic slip: a non-null parameter for an optional value makes the absent
+/// case unexpressible (#273).
+///
+/// covertest's `boxed_note_echo` covers the parameter and return positions and
+/// compiles them; this covers the **data-class field** and **callback** ones,
+/// which it does not reach.
+#[test]
+fn nullability_ignores_how_rust_spells_the_optional() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| -> String {
+        let items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZRec {
+                        pub note: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_rec_emit(cb: impl Fn(ZRec) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::data_class!(ZRec))
+                    .fun(crate::fun!(z_rec_emit)),
+            );
+        let dir = unique_test_dir("jnigen_nullability");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = jni.build_with(registry).expect("resolve");
+        let _ = gen.write_rust(dir.join("g.rs")).expect("write_rust");
+        gen.write_kotlin(&dir.join("kotlin"))
+            .expect("write_kotlin")
+            .iter()
+            .map(|p| std::fs::read_to_string(p).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    let plain = build(syn::parse_quote!(Option<String>));
+    let boxed = build(syn::parse_quote!(Box<Option<String>>));
+
+    for (label, kotlin) in [("Option<T>", &plain), ("Box<Option<T>>", &boxed)] {
+        assert!(
+            kotlin.contains("note: String?"),
+            "{label}: an optional field is nullable in Kotlin:\n{kotlin}"
+        );
+    }
+    // The wrapper is a Rust spelling and nothing else: the Kotlin surface of
+    // the two is identical, character for character.
+    assert_eq!(
+        plain, boxed,
+        "a transparent wrapper must not change the Kotlin surface"
+    );
+}

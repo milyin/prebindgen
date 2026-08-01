@@ -1210,9 +1210,9 @@ fn classify_params(
                 // Handle → Borrow/Consume by Rust syntactic shape (locked);
                 // `Option<&T>` / by-value `Option<T>` mark the param nullable
                 // and the wrapper body branches on null before lock selection.
-                if is_option_ref(arg_ty) {
+                if registry.is_optional_borrow(arg_ty) {
                     ParamMode::BorrowNullable
-                } else if is_option_type(arg_ty) {
+                } else if registry.is_optional(arg_ty) {
                     // by-value `Option<T>` opaque → nullable consume
                     ParamMode::ConsumeNullable
                 } else if matches!(arg_ty, syn::Type::Reference(_)) {
@@ -2116,7 +2116,7 @@ pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
 /// Fall-back Kotlin type derived directly from the JNI wire type.
 /// Returns the **non-nullable** Kotlin base name — the use site adds
 /// a `?` suffix when the entry's Rust type is `Option<…>` (via
-/// [`is_option_type`]), so this helper must not double up.
+/// the model), so this helper must not double up.
 pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
     if let Some(p) = JniPrim::from_wire(wire) {
         return Some(kt::KtType::cls(p.kotlin_type()));

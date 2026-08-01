@@ -53,9 +53,7 @@ pub(crate) use crate::api::{
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen, Stage},
         registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
-        types_util::{
-            bare_path_ident, is_option_ref, is_option_type, option_inner_type, vec_inner_type,
-        },
+        types_util::{bare_path_ident, option_inner_type, vec_inner_type},
     },
     gen::kotlin::WriteKotlinError,
     lang::jnigen::{
