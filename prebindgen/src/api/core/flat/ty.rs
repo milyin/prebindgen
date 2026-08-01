@@ -42,6 +42,112 @@ pub struct TypeRef {
 }
 
 impl TypeRef {
+    /// The **arity layers** over this type, and what they wrap.
+    ///
+    /// `Option<Vec<T>>` is `Optional(Iterable(Base))` over `T`. The stack is the
+    /// same [`Shape`](crate::core::shape::Shape) the expansion and decomposition plans are built from — so a
+    /// consumer that needs a plan shape has it, rather than rebuilding one from
+    /// flags that were derived from this type moments earlier.
+    ///
+    /// **A borrow is not a layer.** `Optional` and `Iterable` change arity — none
+    /// or one, none or many — while `&T` is the same single value held
+    /// differently. That is ownership, and it stays on the returned core, where
+    /// [`borrow_target`](Self::borrow_target) reads it.
+    ///
+    /// A layer out of position is not a layer: `Vec<Option<T>>` is
+    /// `Iterable(Base)` over `Option<T>`, because the optional is inside the run.
+    /// The stack is what wraps the payload, in order, and nothing is reordered to
+    /// make it fit a shape a caller hoped for.
+    ///
+    /// Returning the stack rather than a set of flags is what lets a caller
+    /// **decline**: a consumer that can only build `Base` and `Optional(Base)`
+    /// matches those and falls through on anything else, instead of silently
+    /// consuming a layer it cannot honour.
+    pub fn layer_stack(&self) -> (crate::api::core::shape::Shape, &TypeRef) {
+        use crate::api::core::shape::Shape;
+        // Bounded on purpose, and not a recursion: the accepted crossing is
+        // `Option<Vec<T>>` — at most one optional, then at most one run, in that
+        // order. Recursing would accept `Vec<Option<T>>` as `Iterable(Optional)`,
+        // which reads the inner optional as a boundary layer when it is part of
+        // the element, and `Option<Option<T>>` as two nullable layers when the
+        // boundary has one way to say absent.
+        let mut core = self;
+        let optional = matches!(core.kind, TypeKind::Optional(_));
+        if let TypeKind::Optional(inner) = &core.kind {
+            core = inner;
+        }
+        let iterable = matches!(core.kind, TypeKind::Sequence(_));
+        if let TypeKind::Sequence(inner) = &core.kind {
+            core = inner;
+        }
+
+        let mut shape = Shape::Base;
+        if iterable {
+            shape = Shape::iterable(shape);
+        }
+        if optional {
+            shape = Shape::optional((), shape);
+        }
+        (shape, core)
+    }
+
+    /// Every type on the way down through the arity layers, outermost first and
+    /// ending at the core [`layer_stack`](Self::layer_stack) returns.
+    ///
+    /// What a **registration** walks, which is a different question from what
+    /// crosses: a value delivered layer-by-layer needs each of these un-required,
+    /// and none of them has a converter of its own.
+    pub fn layer_types(&self) -> Vec<&TypeRef> {
+        // Stops exactly where `layer_stack` stops, or the registration view would
+        // un-require types the shape says are part of the element.
+        let mut out = vec![self];
+        let mut cur = self;
+        if let TypeKind::Optional(inner) = &cur.kind {
+            out.push(inner);
+            cur = inner;
+        }
+        if let TypeKind::Sequence(inner) = &cur.kind {
+            out.push(inner);
+        }
+        out
+    }
+
+    /// What an `Option<T>` wraps, else `None`.
+    ///
+    /// One layer, named. [`layer_stack`](Self::layer_stack) reads the whole
+    /// arity stack; these three read exactly the layer a caller asks for, which
+    /// is what a consumer wants when it can only *represent* some of them.
+    pub fn optional_inner(&self) -> Option<&TypeRef> {
+        match &self.kind {
+            TypeKind::Optional(inner) => Some(inner),
+            _ => None,
+        }
+    }
+
+    /// The element of a run of values (`Vec<T>`, `[T]`), else `None`.
+    pub fn sequence_elem(&self) -> Option<&TypeRef> {
+        match &self.kind {
+            TypeKind::Sequence(elem) => Some(elem),
+            _ => None,
+        }
+    }
+
+    /// What a borrow points at, else `None`.
+    pub fn borrow_target(&self) -> Option<&TypeRef> {
+        match &self.kind {
+            TypeKind::Ref { inner, .. } => Some(inner),
+            _ => None,
+        }
+    }
+
+    /// The `Ok` and `Err` sides when this is a `Result`, else `None`.
+    pub fn fallible_parts(&self) -> Option<(&TypeRef, &TypeRef)> {
+        match &self.kind {
+            TypeKind::Fallible { ok, err } => Some((ok, err)),
+            _ => None,
+        }
+    }
+
     /// The extent of this type when it is an array, else `None`.
     pub fn array_extent(&self) -> Option<&ArrayExtent> {
         match &self.kind {

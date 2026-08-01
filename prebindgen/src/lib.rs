@@ -309,6 +309,11 @@ pub mod core {
     /// [`flat::Element`]s that make up one flat namespace, and the model itself.
     /// Not to be confused with [`crate::lang`], the *destination* adapters.
     pub use crate::api::core::flat;
+    /// The layer algebra a boundary value is shaped by — a leaf under an ordered
+    /// stack of `Optional` / `Iterable` layers. Public because the model now
+    /// *produces* it ([`flat::TypeRef::layer_stack`]) and the plan engines and
+    /// adapters consume it, so it is part of what a generator has to speak.
+    pub use crate::api::core::shape;
     /// [`Flat`] and [`Element`] sit here too, next to [`Registry`]: they are what
     /// a build script names, and the rest of the model stays in [`mod@flat`]
     /// where an adapter reaches for it.

@@ -756,3 +756,48 @@ fn invalid_declarations_collected() {
         "{text}"
     );
 }
+
+/// A `Vec<T>` parameter is **not** a `T` parameter, even when `T` has a
+/// constructor.
+///
+/// Expansion builds one value: `FoldPlan`'s shape is `Base` or `Optional(Base)`,
+/// with no iterable arm. So the layer peel here stops at the borrow — if it also
+/// peeled the `Sequence`, a `Vec<T>` parameter would match a `T` constructor and
+/// the wrapper would reconstruct a single `T` and hand it to a parameter
+/// expecting the collection. Not a rejected plan: a wrong one, in generated code.
+///
+/// Missed once, and by everything: the whole suite passed either way, and
+/// regen-check was byte-identical, because no example declares a `Vec<T>`
+/// parameter whose element is constructible. That is what this fixture is.
+#[test]
+fn a_vec_param_does_not_match_its_elements_constructor() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_join_all(parts: Vec<ZKeyExpr>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    // The type-level default: every `ZKeyExpr` parameter may be built from a
+    // `String`. `parts` is a `Vec<ZKeyExpr>`, so it is not one of them.
+    exp.constructors.push(ConstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
+        default: true,
+    });
+
+    apply(
+        &mut reg,
+        &exp,
+        &[ident("z_keyexpr_join_all")].into_iter().collect(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+
+    assert!(
+        !reg.expansion_plans
+            .contains_key(&(ident("z_keyexpr_join_all"), ident("parts"))),
+        "a Vec<ZKeyExpr> parameter must not be expanded as one ZKeyExpr; \
+         plans: {:?}",
+        reg.expansion_plans.keys().collect::<Vec<_>>()
+    );
+}

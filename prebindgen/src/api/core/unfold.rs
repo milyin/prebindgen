@@ -27,10 +27,7 @@
 
 use std::collections::HashSet;
 
-use crate::api::core::{
-    registry::{Registry, TypeKey},
-    types_util::{option_inner_type, result_err_type, vec_inner_type},
-};
+use crate::api::core::registry::{Registry, TypeKey};
 
 mod error;
 mod plan;
@@ -302,7 +299,7 @@ pub fn apply<M>(
                 .map(|f| f.origin.syntax.clone())
                 .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
             let ret = fn_return(&item_fn);
-            if !returns_type(&ret, &TypeKey::from_type(declared)) {
+            if !returns_type(registry, &ret, &TypeKey::from_type(declared)) {
                 return Err(UnfoldError::ReturnTypeMismatch {
                     func: ed.func.clone(),
                     declared: TypeKey::from_type(declared).as_str().to_string(),
@@ -349,7 +346,7 @@ pub fn apply<M>(
             };
             let ret = fn_return(&item_fn);
             // Error position: fn returns `Result<_, E>` and `E == d.target`.
-            if let Some(err_ty) = result_err_type(&ret) {
+            if let Some(err_ty) = fallible_err(registry, &ret) {
                 if TypeKey::from_type(&err_ty) == dkey
                     && done.insert((func.clone(), DeconTarget::Error))
                 {
@@ -368,7 +365,7 @@ pub fn apply<M>(
             }
             // Output position: fn returns `T` / `&T` / `Option<T|&T>` / `Vec<T>`
             // with `T == d.target` (Result returns keep a handle — factories).
-            if returns_type(&ret, &dkey)
+            if returns_type(registry, &ret, &dkey)
                 && !acc.skip_output.contains(func)
                 && done.insert((func.clone(), DeconTarget::Output))
             {
@@ -418,13 +415,15 @@ pub fn apply<M>(
                 // (cloned) through the reference instead of by move. The plan is
                 // keyed under the ACTUAL arg type (`&T`) — that is what
                 // `callback_input`/`callback_iface_spec` look up.
-                let (by_ref, core_ty) = match &arg_ty {
-                    syn::Type::Reference(r) => (true, (*r.elem).clone()),
-                    other => (false, other.clone()),
-                };
-                // Only a bare path core type can match a deconstructor target
-                // (`Option<T>` / `Vec<T>` / tuple args are delivered whole).
-                if !matches!(&core_ty, syn::Type::Path(_)) {
+                let (by_ref, core_ty) = peel_borrow(registry, &arg_ty);
+                // Only a NAMED core can match a deconstructor target: an
+                // `Option<T>` / `Vec<T>` / tuple arg is delivered whole. The model
+                // says which, so a wrapper the language sees through — `Box<T>` —
+                // no longer reads as un-nameable.
+                if !matches!(
+                    registry.flat().classify(&core_ty).map(|r| r.kind.clone()),
+                    Ok(crate::api::core::flat::TypeKind::Named { .. })
+                ) {
                     continue;
                 }
                 let key = TypeKey::from_type(&arg_ty);
@@ -617,7 +616,7 @@ fn wire_fixed_returns<M>(
             continue;
         };
         let ret = fn_return(&item_fn);
-        if !returns_type(&ret, &vd.key) || registry.unfold_plans.contains_key(func) {
+        if !returns_type(registry, &ret, &vd.key) || registry.unfold_plans.contains_key(func) {
             continue;
         }
         // Shape over the leaf decomposition: peel an outer `Option`, then a
@@ -628,39 +627,25 @@ fn wire_fixed_returns<M>(
         // null result). `element: None` keeps the decomposed-leaf path. The
         // element/inner borrow-ness sets `by_ref` (the reach clones either
         // way).
-        let (optional, after_opt) = match option_inner_type(&ret) {
-            Some(inner) => (true, inner),
-            None => (false, ret.clone()),
-        };
-        let (iterable, core) = match vec_inner_type(&after_opt) {
-            Some(inner) => (true, inner),
-            None => (false, after_opt.clone()),
-        };
-        let by_ref = matches!(&core, syn::Type::Reference(_));
-        let inner_shape = if iterable {
-            UnfoldShape::Iterable(Box::new(UnfoldShape::Base))
-        } else {
-            UnfoldShape::Base
-        };
-        let shape = if optional {
-            UnfoldShape::Optional((), Box::new(inner_shape))
-        } else {
-            inner_shape
-        };
+        let layers = peel(registry, &ret);
+        let by_ref = layers.by_ref;
+        // The model's layer stack is the plan's shape — `UnfoldShape` is `Shape`
+        // — so there is nothing to rebuild here.
+        let shape = layers.shape.clone();
         if no_converter {
             // The plan delivers the return leaf-by-leaf, so no converter is
             // needed for the declared return — and for a sum none can exist.
             // Drop the scan-time registrations of every layer (the boundary-only
             // pass only reaches the bare type), so the missing converters are not
             // flagged as unresolved-required.
-            // All THREE peeled layers, the `Vec` element included. The shape
-            // fold peels here, so the matching unrequire belongs here; leaving
-            // the element out made the invariant depend on the adapter's
-            // `boundary_only_types` covering it — true for JniGenBuilder today, and
-            // the only reason a `Vec<sum>`-only declaration resolves.
-            registry.unrequire_output(&ret);
-            registry.unrequire_output(&after_opt);
-            registry.unrequire_output(&core);
+            // EVERY layer, the `Vec` element included. The shape fold peels here,
+            // so the matching unrequire belongs here; leaving the element out made
+            // the invariant depend on the adapter's `boundary_only_types` covering
+            // it — true for JniGenBuilder today, and the only reason a
+            // `Vec<sum>`-only declaration resolves.
+            for layer in &layers.layer_types {
+                registry.unrequire_output(layer);
+            }
         }
         for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
             registry.require_output(&leaf.out_ty);
@@ -715,16 +700,16 @@ fn wire_fixed_callbacks<M>(
                 // value via `fromParts`); an `impl Fn(&[T])` / `impl Fn([T])` arg
                 // becomes an `Iterable` fixed FOLDER (the trampoline folds each
                 // element's leaves into a foreign list — see the callback emitter).
-                let (by_ref, after_ref) = match &arg_ty {
-                    syn::Type::Reference(r) => (true, (*r.elem).clone()),
-                    other => (false, other.clone()),
-                };
-                let (shape, matches_key) = match &after_ref {
-                    syn::Type::Slice(s) => (
+                let (by_ref, after_ref) = peel_borrow(registry, &arg_ty);
+                // A run of `T` is an Iterable fold over the element; anything else
+                // is a Base fold over the value itself. `Sequence` is the one
+                // question, and it covers `[T]` and `Vec<T>` alike.
+                let (shape, matches_key) = match sequence_elem(registry, &after_ref) {
+                    Some(elem) => (
                         UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
-                        TypeKey::from_type(&s.elem) == vd.key,
+                        TypeKey::from_type(&elem) == vd.key,
                     ),
-                    other => (UnfoldShape::Base, TypeKey::from_type(other) == vd.key),
+                    None => (UnfoldShape::Base, TypeKey::from_type(&after_ref) == vd.key),
                 };
                 if !matches_key {
                     continue;
@@ -792,11 +777,11 @@ pub fn apply_leaf_vec_folds<M>(
         // already exists (declared deconstructor / value-struct fold).
         if !registry.unfold_plans.contains_key(func) {
             let ret = fn_return(&item_fn);
-            let (optional, after_opt) = match option_inner_type(&ret) {
+            let (optional, after_opt) = match optional_inner(registry, &ret) {
                 Some(inner) => (true, inner),
                 None => (false, ret.clone()),
             };
-            if let Some(vec_elem) = vec_inner_type(&after_opt) {
+            if let Some(vec_elem) = sequence_elem(registry, &after_opt) {
                 let bare = peel_ref(&vec_elem);
                 if is_nominated(&bare) {
                     let inner_shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
@@ -814,9 +799,10 @@ pub fn apply_leaf_vec_folds<M>(
                     // JObject-shaped), and de-requiring keeps that `None` from
                     // being flagged as an unresolved-required error.
                     registry.unrequire_output(&ret);
-                    registry
-                        .unfold_plans
-                        .insert(func.clone(), whole_leaf_fold_plan(&vec_elem, shape));
+                    registry.unfold_plans.insert(
+                        func.clone(),
+                        whole_leaf_fold_plan(registry, &vec_elem, shape),
+                    );
                 }
             }
         }
@@ -829,12 +815,11 @@ pub fn apply_leaf_vec_folds<M>(
                 continue;
             };
             for arg_ty in args {
-                let after_ref = peel_ref(&arg_ty);
-                let syn::Type::Slice(s) = &after_ref else {
+                let (_, after_ref) = peel_borrow(registry, &arg_ty);
+                let Some(elem) = sequence_elem(registry, &after_ref) else {
                     continue;
                 };
-                let elem = (*s.elem).clone();
-                if !is_nominated(&peel_ref(&elem)) {
+                if !is_nominated(&peel_borrow(registry, &elem).1) {
                     continue;
                 }
                 let key = TypeKey::from_type(&arg_ty);
@@ -842,8 +827,11 @@ pub fn apply_leaf_vec_folds<M>(
                     continue;
                 }
                 registry.require_output(&elem);
-                let plan =
-                    whole_leaf_fold_plan(&elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
+                let plan = whole_leaf_fold_plan(
+                    registry,
+                    &elem,
+                    UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
+                );
                 registry.callback_arg_plans.insert(key, plan);
             }
         }
@@ -854,11 +842,15 @@ pub fn apply_leaf_vec_folds<M>(
 /// Build a fixed-builder whole-element fold [`UnfoldPlan`] for a single-leaf
 /// element `vec_elem` (the `Vec`/slice element as written, keeping any leading
 /// `&` so `into_iter()`'s yield matches the element's own output converter).
-fn whole_leaf_fold_plan(vec_elem: &syn::Type, shape: UnfoldShape) -> UnfoldPlan {
+fn whole_leaf_fold_plan<M>(
+    registry: &Registry<M>,
+    vec_elem: &syn::Type,
+    shape: UnfoldShape,
+) -> UnfoldPlan {
     UnfoldPlan {
         source: vec_elem.clone(),
         decon: None,
-        by_ref: matches!(vec_elem, syn::Type::Reference(_)),
+        by_ref: peel_borrow(registry, vec_elem).0,
         shape,
         leaves: vec![],
         element: Some(vec_elem.clone()),
@@ -914,6 +906,104 @@ fn check_records(
     Ok(())
 }
 
+/// The arity layers over `ty`, the types they wrap, and the value underneath.
+///
+/// [`TypeRef::layer_stack`](crate::api::core::flat::TypeRef::layer_stack) and
+/// [`layer_types`](crate::api::core::flat::TypeRef::layer_types) with the borrows
+/// resolved to clones, because these feed plan fields and registry calls that own
+/// their types. The classification is the model's; only the copying is local.
+///
+/// The stack **is** the plan's shape — `UnfoldShape` is `Shape` — so a caller
+/// stores it rather than rebuilding one from flags.
+///
+/// A type the grammar cannot express answers `Base` over itself: the identity,
+/// not a fallback classifier. Nothing reaching here can be one, since every
+/// signature in play was accepted by the frontend before the scan saw it.
+struct Layered {
+    /// The arity layers, outermost first.
+    shape: UnfoldShape,
+    /// Every type on the way down, outermost first — what a registration walks.
+    layer_types: Vec<syn::Type>,
+    /// Past the borrow too: what actually crosses.
+    core: syn::Type,
+    /// Whether the core is reached through a borrow.
+    by_ref: bool,
+}
+
+fn peel<M>(registry: &Registry<M>, ty: &syn::Type) -> Layered {
+    let Ok(reading) = registry.flat().classify(ty) else {
+        return Layered {
+            shape: UnfoldShape::Base,
+            layer_types: vec![ty.clone()],
+            core: ty.clone(),
+            by_ref: false,
+        };
+    };
+    let (shape, layered) = reading.layer_stack();
+    let borrowed = layered.borrow_target();
+    Layered {
+        shape,
+        layer_types: reading
+            .layer_types()
+            .iter()
+            .map(|t| t.origin.syntax.clone())
+            .collect(),
+        core: borrowed.unwrap_or(layered).origin.syntax.clone(),
+        by_ref: borrowed.is_some(),
+    }
+}
+
+/// What `Option<T>` wraps, if `ty` is one.
+fn optional_inner<M>(registry: &Registry<M>, ty: &syn::Type) -> Option<syn::Type> {
+    use crate::api::core::flat::TypeKind;
+    match registry.flat().classify(ty).ok()?.kind {
+        TypeKind::Optional(inner) => Some(inner.origin.syntax.clone()),
+        _ => None,
+    }
+}
+
+/// The error side of a `Result`, if `ty` is one.
+fn fallible_err<M>(registry: &Registry<M>, ty: &syn::Type) -> Option<syn::Type> {
+    Some(
+        registry
+            .flat()
+            .classify(ty)
+            .ok()?
+            .fallible_parts()?
+            .1
+            .origin
+            .syntax
+            .clone(),
+    )
+}
+
+/// The element of a run of values (`Vec<T>`, `[T]`), if `ty` is one.
+fn sequence_elem<M>(registry: &Registry<M>, ty: &syn::Type) -> Option<syn::Type> {
+    use crate::api::core::flat::TypeKind;
+    match registry.flat().classify(ty).ok()?.kind {
+        TypeKind::Sequence(elem) => Some(elem.origin.syntax.clone()),
+        _ => None,
+    }
+}
+
+/// Just the borrow: whether `ty` is one, and what it borrows.
+///
+/// The model-driven `peel_ref`, and deliberately **not** [`peel`]: a site that
+/// peels only the borrow means it, because the layer underneath is the thing it
+/// is about to classify. `Vec<T>` answers `(false, Vec<T>)` here and
+/// `(iterable, T)` there, and confusing the two turns "this arg is a collection"
+/// into "this arg is a T".
+fn peel_borrow<M>(registry: &Registry<M>, ty: &syn::Type) -> (bool, syn::Type) {
+    use crate::api::core::flat::TypeKind;
+    match registry.flat().classify(ty) {
+        Ok(reading) => match &reading.kind {
+            TypeKind::Ref { inner, .. } => (true, inner.origin.syntax.clone()),
+            _ => (false, ty.clone()),
+        },
+        Err(_) => (false, ty.clone()),
+    }
+}
+
 /// Strip a single leading `&` (one level) from a type.
 pub(crate) fn peel_ref(ty: &syn::Type) -> syn::Type {
     match ty {
@@ -934,21 +1024,8 @@ fn fn_return(item_fn: &syn::ItemFn) -> syn::Type {
 /// `T == key` — the default-output match. `Result<_, _>` is NOT peeled, so a
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
-fn returns_type(ret: &syn::Type, key: &TypeKey) -> bool {
-    // Peel an outer `Option`, then a `Vec` (so `Option<Vec<T>>` matches too),
-    // then a leading `&`.
-    let mut core = ret.clone();
-    if let Some(inner) = option_inner_type(&core) {
-        core = inner;
-    }
-    if let Some(inner) = vec_inner_type(&core) {
-        core = inner;
-    }
-    let bare = match &core {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    TypeKey::from_type(&bare) == *key
+fn returns_type<M>(registry: &Registry<M>, ret: &syn::Type, key: &TypeKey) -> bool {
+    TypeKey::from_type(&peel(registry, ret).core) == *key
 }
 
 /// Build one output/error plan for `ed` and store it in the right registry map.
@@ -969,9 +1046,11 @@ fn process_decl<M>(
         let ret_ty: syn::Type = match ed.target {
             DeconTarget::Output => fn_return(&item_fn),
             DeconTarget::Error => {
-                result_err_type(&fn_return(&item_fn)).ok_or_else(|| UnfoldError::Unsupported {
-                    func: ed.func.clone(),
-                    reason: "convert_error/deconstruct_error on a non-Result return",
+                fallible_err(registry, &fn_return(&item_fn)).ok_or_else(|| {
+                    UnfoldError::Unsupported {
+                        func: ed.func.clone(),
+                        reason: "convert_error/deconstruct_error on a non-Result return",
+                    }
                 })?
             }
         };
@@ -983,7 +1062,7 @@ fn process_decl<M>(
         // the historical probe order (the `Vec` probe runs on `E` itself), so
         // an `Option<Vec<E>>` error stays whole.
         let (optional, after_opt) = match ed.target {
-            DeconTarget::Output => match option_inner_type(&ret_ty) {
+            DeconTarget::Output => match optional_inner(registry, &ret_ty) {
                 Some(inner) => (true, inner),
                 None => (false, ret_ty.clone()),
             },
@@ -997,8 +1076,8 @@ fn process_decl<M>(
         //     via its own output converter + projection, fold `(acc, T) -> acc`.
         // The other shapes (`Option`/scalar) decompose via an accessor
         // (M1–M3). `Vec<Option<…>>` is not supported.
-        let plan = if let Some(inner) = vec_inner_type(&after_opt) {
-            if option_inner_type(&inner).is_some() {
+        let plan = if let Some(inner) = sequence_elem(registry, &after_opt) {
+            if optional_inner(registry, &inner).is_some() {
                 return Err(UnfoldError::Unsupported {
                     func: ed.func.clone(),
                     reason: "Vec<Option<…>> returns",
@@ -1024,10 +1103,7 @@ fn process_decl<M>(
                 }
             }
             // Element type peeled of a leading `&` (accessors take `&Element`).
-            let (by_ref, element) = match &inner {
-                syn::Type::Reference(r) => (true, (*r.elem).clone()),
-                other => (false, other.clone()),
-            };
+            let (by_ref, element) = peel_borrow(registry, &inner);
             let ekey = TypeKey::from_type(&element);
             if let Some(d) = find_deconstructor_by_type(acc, &ekey) {
                 // Decomposed: reuse the shared flatten (M3 nesting composes).
@@ -1044,7 +1120,7 @@ fn process_decl<M>(
                 // element's own output converter matches `into_iter()`'s yield.
                 // No declaration is involved (`decon: None`) — the element
                 // crosses whole through its own converter.
-                let by_ref = matches!(&inner, syn::Type::Reference(_));
+                let by_ref = peel_borrow(registry, &inner).0;
                 registry.require_output(&inner);
                 UnfoldPlan {
                     source: inner.clone(),
@@ -1066,15 +1142,12 @@ fn process_decl<M>(
             // `Option`); for `Error` it happens here, unchanged.
             let (optional, core_ty) = match ed.target {
                 DeconTarget::Output => (optional, after_opt.clone()),
-                DeconTarget::Error => match option_inner_type(&after_opt) {
+                DeconTarget::Error => match optional_inner(registry, &after_opt) {
                     Some(inner) => (true, inner),
                     None => (false, after_opt.clone()),
                 },
             };
-            let (by_ref, source) = match &core_ty {
-                syn::Type::Reference(r) => (true, (*r.elem).clone()),
-                other => (false, other.clone()),
-            };
+            let (by_ref, source) = peel_borrow(registry, &core_ty);
             let source_key = TypeKey::from_type(&source);
             let shape = if optional {
                 UnfoldShape::Optional((), Box::new(UnfoldShape::Base))
@@ -1462,7 +1535,7 @@ fn flatten<M>(
                 for fr in fields {
                     // A field's own `Option` makes everything under it nullable,
                     // exactly as an `Option`-returning accessor step does.
-                    let (opt, core) = match option_inner_type(&fr.ty) {
+                    let (opt, core) = match optional_inner(registry, &fr.ty) {
                         Some(inner) => (true, inner),
                         None => (false, fr.ty.clone()),
                     };
@@ -1573,14 +1646,13 @@ fn flatten<M>(
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
-                let (opt, core) = match option_inner_type(&ret) {
-                    Some(inner) => (true, inner),
-                    None => (false, ret.clone()),
-                };
-                let child_ty = match &core {
-                    syn::Type::Reference(r) => (*r.elem).clone(),
-                    other => other.clone(),
-                };
+                // This site peels an `Option` only — an accessor returning a run
+                // of values is not spliced — so it asks the model for that one
+                // layer rather than the whole stack.
+                let after_opt = optional_inner(registry, &ret);
+                let opt = after_opt.is_some();
+                let core = after_opt.unwrap_or_else(|| ret.clone());
+                let (core_by_ref, child_ty) = peel_borrow(registry, &core);
                 let child_key = TypeKey::from_type(&child_ty);
                 // A child already on the nesting chain: for a `#[prebindgen]`
                 // accessor that is an authoring cycle (hard error); a
@@ -1601,11 +1673,7 @@ fn flatten<M>(
                     visited.insert(child_key.clone());
                     let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
-                    child_path.push(PathStep::call(
-                        func.clone(),
-                        opt,
-                        !matches!(core, syn::Type::Reference(_)),
-                    ));
+                    child_path.push(PathStep::call(func.clone(), opt, !core_by_ref));
                     flatten(
                         acc,
                         registry,
@@ -1635,7 +1703,7 @@ fn flatten<M>(
                     // one-identity-per-deconstructor budget with
                     // `.field_self()` — two handle deliveries of one value
                     // make no sense.
-                    let cond_handle = local && opt && matches!(core, syn::Type::Reference(_));
+                    let cond_handle = local && opt && core_by_ref;
                     if cond_handle {
                         if seen_identity {
                             return Err(UnfoldError::MultipleIdentity {
@@ -1650,11 +1718,7 @@ fn flatten<M>(
                         (ret, nullable, false)
                     };
                     let mut path = path_prefix.to_vec();
-                    path.push(PathStep::call(
-                        func.clone(),
-                        opt,
-                        !matches!(core, syn::Type::Reference(_)),
-                    ));
+                    path.push(PathStep::call(func.clone(), opt, !core_by_ref));
                     leaves.push(UnfoldLeaf {
                         name: seg_name(name).join("__"),
                         path,

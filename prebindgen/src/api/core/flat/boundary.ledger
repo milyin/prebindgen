@@ -44,10 +44,9 @@
 # A check that silently under-reports is worse than no check, which is why the
 # gaps are listed here rather than implied away.
 
-4	api/core/expand.rs
 2	api/core/registry/scan.rs
 10	api/core/types_util.rs
-16	api/core/unfold.rs
+1	api/core/unfold.rs
 8	api/lang/cbindgen/builder.rs
 1	api/lang/cbindgen/convert.rs
 5	api/lang/cbindgen/emit.rs
@@ -73,4 +72,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 154
+# total: 135

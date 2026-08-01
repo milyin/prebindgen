@@ -1697,3 +1697,76 @@ fn an_unsupported_item_still_holds_its_name() {
     ])
     .is_err());
 }
+
+/// The layer stack accepts one shape — `Option<Vec<T>>` — and stops at the first
+/// layer that is out of that order or repeats.
+///
+/// A recursion would happily return `Iterable(Optional(Base))` for
+/// `Vec<Option<T>>`, and that is wrong in a way the shape alone does not show:
+/// the optional there belongs to the **element**, not to the boundary. The
+/// difference is behavioural — `returns_type` compares the core, so an unbounded
+/// peel makes a `Vec<Option<T>>` return match a decomposition target `T` and
+/// installs a nested optional fold, while the explicit path next to it still
+/// refuses `Vec<Option<…>>` as unsupported. One of the two has to be wrong, and
+/// it is not the refusal.
+///
+/// `layer_types` has to stop at the same place, or the registration view
+/// un-requires types the shape says are part of the element.
+#[test]
+fn the_layer_stack_stops_at_an_out_of_order_layer() {
+    use crate::api::core::shape::Shape;
+
+    let shape_of = |ty: proc_macro2::TokenStream| {
+        let reading = lower(ty).expect("lowers");
+        let (shape, core) = reading.layer_stack();
+        let rendered = match &shape {
+            Shape::Base => "Base".to_string(),
+            Shape::Optional(_, i) => match &**i {
+                Shape::Base => "Optional(Base)".to_string(),
+                Shape::Iterable(_) => "Optional(Iterable(Base))".to_string(),
+                Shape::Optional(..) => "Optional(Optional(..))".to_string(),
+            },
+            Shape::Iterable(i) => match &**i {
+                Shape::Base => "Iterable(Base)".to_string(),
+                other => format!("Iterable({other:?})"),
+            },
+        };
+        (
+            rendered,
+            quote::ToTokens::to_token_stream(&core.origin.syntax).to_string(),
+            reading.layer_types().len(),
+        )
+    };
+
+    // In order: both layers are the boundary's.
+    assert_eq!(
+        shape_of(quote::quote!(Option<Vec<Sample>>)),
+        ("Optional(Iterable(Base))".into(), "Sample".into(), 3)
+    );
+    assert_eq!(
+        shape_of(quote::quote!(Option<Sample>)),
+        ("Optional(Base)".into(), "Sample".into(), 2)
+    );
+    assert_eq!(
+        shape_of(quote::quote!(Vec<Sample>)),
+        ("Iterable(Base)".into(), "Sample".into(), 2)
+    );
+
+    // Out of order: the optional is the element's, so the stack stops.
+    assert_eq!(
+        shape_of(quote::quote!(Vec<Option<Sample>>)),
+        ("Iterable(Base)".into(), "Option < Sample >".into(), 2)
+    );
+
+    // Repeated: the boundary has one way to say absent.
+    assert_eq!(
+        shape_of(quote::quote!(Option<Option<Sample>>)),
+        ("Optional(Base)".into(), "Option < Sample >".into(), 2)
+    );
+
+    // A borrow is not a layer at all — it is ownership, and stays on the core.
+    assert_eq!(
+        shape_of(quote::quote!(Option<Vec<&Sample>>)),
+        ("Optional(Iterable(Base))".into(), "& Sample".into(), 3)
+    );
+}
