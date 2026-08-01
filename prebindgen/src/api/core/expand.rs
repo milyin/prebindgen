@@ -190,14 +190,8 @@ pub fn apply<M>(
         // (`Option`/`&`) type must equal the decl's declared type — the
         // typo guard for both coordinates of `.expand_param(name, decl)`.
         if let Some(declared) = &ed.declared_target {
-            let item_fn = registry
-                .flat()
-                .function(&ed.func)
-                .map(|f| f.origin.syntax.clone())
-                .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
-            let param_ty = find_param_type(&item_fn, &ed.param)
-                .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
-            let bare = constructed_value(registry.flat(), &param_ty);
+            let param_ty = param_reading(registry, &ed.func, &ed.param)?;
+            let bare = constructed_value(&param_ty);
             if TypeKey::from_type(&bare) != TypeKey::from_type(declared) {
                 return Err(ExpandError::ParamTypeMismatch {
                     func: ed.func.clone(),
@@ -233,19 +227,15 @@ pub fn apply<M>(
             if accessor_fns.contains(func) {
                 continue;
             }
-            let Some(item_fn) = registry
-                .flat()
-                .function(&func)
-                .map(|f| f.origin.syntax.clone())
-            else {
+            let Some(params) = registry.flat().function(&func).map(|f| f.params.clone()) else {
                 continue;
             };
             // A method's receiver (first param of its class type) binds to `this`
             // and is never input-flattened; skip exactly that one param.
             let receiver_key = method_receivers.get(func);
             let mut receiver_skipped = false;
-            for (pname, pty) in fn_params(&item_fn) {
-                let bare = constructed_value(registry.flat(), &pty);
+            for (pname, pty) in params.iter().map(|p| (p.name.clone(), p.ty.clone())) {
+                let bare = constructed_value(&pty);
                 let bare_key = TypeKey::from_type(&bare);
                 if !receiver_skipped && receiver_key == Some(&bare_key) {
                     receiver_skipped = true;
@@ -274,19 +264,26 @@ pub fn apply<M>(
 }
 
 /// `(name, type)` of each typed parameter.
-fn fn_params(item_fn: &syn::ItemFn) -> Vec<(syn::Ident, syn::Type)> {
-    item_fn
-        .sig
-        .inputs
+/// The **reading** of a declared function's parameter.
+///
+/// `Param::ty` is a `TypeRef` computed at parse time. Reaching into the item's
+/// `origin.syntax` and digging the parameter out of `sig.inputs` — what these
+/// three sites used to do — re-derives a fact the model was already handing over,
+/// which is `origin` used for reasoning rather than for emission.
+fn param_reading<M>(
+    registry: &Registry<M>,
+    func: &syn::Ident,
+    param: &syn::Ident,
+) -> Result<crate::api::core::flat::TypeRef, ExpandError> {
+    registry
+        .flat()
+        .function(&func)
+        .ok_or_else(|| ExpandError::UnknownFunction(func.clone()))?
+        .params
         .iter()
-        .filter_map(|input| match input {
-            syn::FnArg::Typed(pt) => match &*pt.pat {
-                syn::Pat::Ident(pi) => Some((pi.ident.clone(), (*pt.ty).clone())),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect()
+        .find(|p| &p.name == param)
+        .map(|p| p.ty.clone())
+        .ok_or_else(|| ExpandError::UnknownParam(func.clone(), param.clone()))
 }
 
 /// Build + store the fold plan for one `.construct` declaration.
@@ -295,18 +292,11 @@ fn process_expand<M>(
     exp: &Expansions,
     ed: &ExpandDecl,
 ) -> Result<(), ExpandError> {
-    let item_fn = registry
-        .flat()
-        .function(&ed.func)
-        .map(|f| f.origin.syntax.clone())
-        .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
-
-    let param_ty = find_param_type(&item_fn, &ed.param)
-        .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
+    let param_ty = param_reading(registry, &ed.func, &ed.param)?;
 
     // The boundary layers: `Option<&T>` → optional + by_ref, `Option<T>` →
     // optional, `&T` → by_ref, and `target` is what is left under them.
-    let (optional, by_ref, target) = constructed_value_layers(registry.flat(), &param_ty);
+    let (optional, by_ref, target) = constructed_value_layers(&param_ty);
     let target_key = TypeKey::from_type(&target);
 
     let variants = resolve_constructor(exp, registry, &target_key, ed)?;
@@ -367,10 +357,10 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
         .function(&func)
         .ok_or_else(|| ExpandError::UnknownConstructor(func.clone()))?;
 
-    let params: Vec<(syn::Ident, syn::Type)> = f
+    let params: Vec<(syn::Ident, crate::api::core::flat::TypeRef)> = f
         .params
         .iter()
-        .map(|p| (p.name.clone(), p.ty.origin.syntax.clone()))
+        .map(|p| (p.name.clone(), p.ty.clone()))
         .collect();
     // The model already read this return; `fallible_parts` is that reading, not a
     // second look at the spelling.
@@ -386,7 +376,9 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
 }
 
 struct CtorSig {
-    params: Vec<(syn::Ident, syn::Type)>,
+    /// Readings, not spellings: they come off `Function::params`, and a consumer
+    /// that needs the spelling takes it at the point it stores one.
+    params: Vec<(syn::Ident, crate::api::core::flat::TypeRef)>,
     target: syn::Type,
     fallible: bool,
 }
@@ -452,7 +444,7 @@ fn build_plan<M>(
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
                 name: param.clone(),
-                ty: opt(pty),
+                ty: opt(&pty.origin.syntax),
             });
             return Ok(FoldPlan {
                 target: target.clone(),
@@ -649,14 +641,14 @@ fn build_arg<M>(
     exp: &Expansions,
     registry: &Registry<M>,
     ed: &ExpandDecl,
-    pty: &syn::Type,
+    pty: &crate::api::core::flat::TypeRef,
     name: syn::Ident,
     dispatched: bool,
     leaves: &mut Vec<FoldLeaf>,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldArg, ExpandError> {
     // The boundary layers down to the parameter's core type.
-    let (popt, pby_ref, bare) = constructed_value_layers(registry.flat(), pty);
+    let (popt, pby_ref, bare) = constructed_value_layers(pty);
     let key = TypeKey::from_type(&bare);
     // A default constructor for the parameter's type ⇒ recursive nested build.
     let canon = exp
@@ -711,9 +703,9 @@ fn build_arg<M>(
         leaves.push(FoldLeaf {
             name,
             ty: if dispatched && !passthrough {
-                opt(pty)
+                opt(&pty.origin.syntax)
             } else {
-                pty.clone()
+                pty.origin.syntax.clone()
             },
         });
         Ok(FoldArg::Leaf(idx, passthrough))
@@ -1086,11 +1078,8 @@ fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: 
 /// A type the grammar cannot express answers itself — the identity, not a
 /// fallback classifier. Nothing reaching here can be one: every signature in play
 /// was accepted by the frontend before the scan registered it.
-fn constructed_value(flat: &crate::api::core::flat::Flat, ty: &syn::Type) -> syn::Type {
-    let Ok(reading) = flat.classify(ty) else {
-        return ty.clone();
-    };
-    let after_opt = reading.optional_inner().unwrap_or(&reading);
+fn constructed_value(reading: &crate::api::core::flat::TypeRef) -> syn::Type {
+    let after_opt = reading.optional_inner().unwrap_or(reading);
     after_opt
         .borrow_target()
         .unwrap_or(after_opt)
@@ -1100,31 +1089,12 @@ fn constructed_value(flat: &crate::api::core::flat::Flat, ty: &syn::Type) -> syn
 }
 
 /// [`constructed_value`], plus which of the two layers were there.
-fn constructed_value_layers(
-    flat: &crate::api::core::flat::Flat,
-    ty: &syn::Type,
-) -> (bool, bool, syn::Type) {
-    let Ok(reading) = flat.classify(ty) else {
-        return (false, false, ty.clone());
-    };
+fn constructed_value_layers(reading: &crate::api::core::flat::TypeRef) -> (bool, bool, syn::Type) {
     let optional = reading.optional_inner().is_some();
-    let after_opt = reading.optional_inner().unwrap_or(&reading);
+    let after_opt = reading.optional_inner().unwrap_or(reading);
     let by_ref = after_opt.borrow_target().is_some();
     let core = after_opt.borrow_target().unwrap_or(after_opt);
     (optional, by_ref, core.origin.syntax.clone())
-}
-
-fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Type> {
-    for input in &item_fn.sig.inputs {
-        if let syn::FnArg::Typed(pt) = input {
-            if let syn::Pat::Ident(pi) = &*pt.pat {
-                if &pi.ident == param {
-                    return Some((*pt.ty).clone());
-                }
-            }
-        }
-    }
-    None
 }
 
 fn opt(ty: &syn::Type) -> syn::Type {

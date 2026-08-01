@@ -417,6 +417,33 @@ impl<M> Registry<M> {
             .entry = entry;
     }
 
+    /// The reading for `ty` — stored if the scan took one, lowered if it did not.
+    ///
+    /// **The registry is the authority on what a type means**, because it is the
+    /// thing that stores readings: `ensure_entry` asks the grammar once when a cell
+    /// is born, and this hands that answer back. `Flat::classify` is its private
+    /// tool, and the two calls in this module are its only callers.
+    ///
+    /// The fallback is not the round trip this design forbids. That one is a
+    /// consumer holding an **element** — whose `ret` / `ty` is already a `TypeRef`
+    /// — reaching into `origin.syntax` and re-deriving what it was handed; the
+    /// signatures in `unfold` and `expand` now make it impossible. This is a type
+    /// the *binding* composed, with no element behind it and no cell yet: a value
+    /// form's field record naming a combination the scan never registered whole.
+    /// There is nothing to look up, so the grammar is asked — once, here, rather
+    /// than by each consumer.
+    pub(crate) fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
+        let key = TypeKey::from_type(ty);
+        if let Some(cell) = self
+            .input_types
+            .get(&key)
+            .or_else(|| self.output_types.get(&key))
+        {
+            return Some((*cell.subject).clone());
+        }
+        self.flat.classify(ty).ok()
+    }
+
     /// Register `ty` (and its nested positions) as a required **input** so
     /// the resolver produces a converter for it. Used by
     /// [`crate::api::core::expand`] to pull in the leaf types a fold needs.
