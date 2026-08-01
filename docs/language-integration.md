@@ -120,7 +120,7 @@ moves it.
 | L1.75 | The registry becomes describable | **done** — #249–#253, squashed into #248's commit |
 | L2 | `api/core` stops classifying source syntax | **done** — #248, #257, #258, #261, #263 |
 | L3 | `Cbindgen` consumes elements | not started |
-| L4 | `JniGen` consumes elements *(the long pole)* | not started |
+| L4 | `JniGen` consumes elements *(the long pole)* | **in progress** — #264 |
 | L5 | Close the seam: the public contract stops being `syn` | not started |
 
 ### L0 — the parser — **done** (#227)
@@ -435,18 +435,49 @@ land in the *"legitimately the adapter's business"* category this document predi
       from `Variant::discriminant`
 - [ ] Generated C artifacts byte-identical
 
-### L4 — `JniGen` consumes elements
+### L4 — `JniGen` consumes elements — **in progress**
 
-The long pole — 97 sites, down from 106 because #248 took `jni/builder` from 13 to
-4 with the rank tables. Split by area, each PR independently green.
+The long pole, and the counted 97 is the smaller half of it. Measured before
+starting: **34** `origin.syntax` reads and **~118** calls to `types_util`'s
+classifying helpers, neither visible to the ledger. `option_inner_type` alone is
+called 40 times from jnigen, `bare_path_ident` 22, `is_unit` 14. Those are the ten
+helpers L2 could not delete, and L4 is what frees them.
 
-- [ ] `emit/names` (17), `jni/trait_impl` (11), `emit/wrapper` (11),
-      `emit/flat_input` (10), `render` (8), `selector` (7), `iface` (5),
-      `jni/builder` (4), and the rest
-- [ ] `classify.rs` — a whole classifier with **zero** watched sites, so the
-      ledger cannot see it: it must be migrated on its own merit
-- [ ] `prim_array_of` reads `ArrayExtent` instead of re-matching `Type::Array`
+- [x] **The crossing hands over the reading**
+      ([#264](https://github.com/milyin/prebindgen/pull/264)): `convert_crossing`
+      rebuilt a spelling with `key.to_type()` and re-classified it, while the
+      registry held the reading in the cell — jnigen's currency was `TypeKey`, so
+      the whole dispatch ran on spellings. `Conversions` gains `reading`, which
+      both the partial and total views answer from the same cell, and the selector
+      takes a `&TypeRef`. Fixing the door is what stops a file-by-file migration
+      from producing new instances underneath itself
+- [ ] The layer questions: `emit/flat_input` (10), `emit/wrapper` (11),
+      `emit/delivery`, `fold`. This is what retires `option_inner_type` and
+      `peel_ref_option_vec`
+- [ ] Names and identity: `emit/names` (17), `render` (8), `overloads`. `TypeId`
+      **is** the name; `bare_path_ident` takes a path apart to re-derive it
+- [ ] The enum shape: `emit/convert` (4), plus `enum_shape`,
+      `enum_discriminant_values`, `first_payload_variant` — L2c, which turned out
+      to be entirely L4's
+- [ ] `classify.rs` — **mostly legitimate**, and the ledger cannot see it at all.
+      It answers *"how is this type declared to me"* (`Handle` / `Enum` / `Sum`
+      from `DeclaredKind`), which is the adapter's own business. Its one leak is
+      `DataStruct { st: &syn::ItemStruct }`, where `flat::Struct` exists
+- [ ] `reject_unsupported_array_length` re-checks a grammar `flat::array_len` owns
+      — #210's drift one layer down. Delete it, with the subset check as evidence
 - [ ] Generated Rust and Kotlin byte-identical
+
+**What stays, and it finally has members.** `QualifyEmittedTypes` walks *generated*
+items to qualify paths, and the wire-shape matching in `prim` / `prim_array` /
+`wire_access` inspects JNI types the adapter synthesized. Both are the exemption
+this document predicted, and each PR that touches them records it rather than
+leaving it implicit.
+
+**#264 is also the clearest case yet that the count is the wrong axis.** It removed
+the re-parse at the dispatch door — the single most load-bearing round trip in the
+adapter — and the ledger went **up**, 135 → 136, because the spelling guard it
+added is two honest `syn` matches. A stage that reported only its delta would have
+scored that as a regression.
 
 ### L5 — close the seam
 
