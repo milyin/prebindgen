@@ -1790,7 +1790,7 @@ impl Declarations {
     pub(crate) fn framework_meta(&self, kotlin_name: Option<kt::KtType>) -> KotlinMeta {
         KotlinMeta {
             kotlin_name,
-            value_rust_key: None,
+            value_rust_type: None,
             projection: None,
         }
     }
@@ -1931,7 +1931,7 @@ impl Declarations {
                     niches,
                     metadata: KotlinMeta {
                         kotlin_name,
-                        value_rust_key: None,
+                        value_rust_type: None,
                         // Terminal: body produces the wire directly, no inner
                         // converter composed, so no handle to carry.
                         projection: None,
@@ -1954,7 +1954,7 @@ impl Declarations {
                 let mut pre_stages = vec![stage];
                 pre_stages.extend(inner.pre_stages.iter().cloned());
                 let kotlin_name = inner.metadata.kotlin_name.clone();
-                let value_rust_key = None;
+                let value_rust_type = None;
                 let (niches, sentinels) = self.conversion_domain_niches(
                     &key,
                     registry,
@@ -1963,7 +1963,7 @@ impl Declarations {
                 );
                 let mut metadata = KotlinMeta {
                     kotlin_name,
-                    value_rust_key,
+                    value_rust_type,
                     projection: inner.metadata.projection.clone(),
                 };
                 Self::attach_domain_sentinels(&mut metadata, sentinels);
@@ -2054,11 +2054,16 @@ impl Declarations {
         match inner {
             None if is_self || is_wire_type(&ty) => {
                 // Terminal: `ty` is the wire; the body produces it from `outer`.
-                let (kotlin_name, value_rust_key) = if let Some(a0) = arg0 {
+                let (kotlin_name, value_rust_type) = if let Some(a0) = arg0 {
                     registry
                         .reading_of(a0)
                         .and_then(|tr| registry.output_entry(&tr))
-                        .map(|e| (e.metadata.kotlin_name.clone(), Some(TypeKey::from_type(a0))))
+                        .map(|e| {
+                            (
+                                e.metadata.kotlin_name.clone(),
+                                Some(crate::api::core::flat::canonical_type(a0)),
+                            )
+                        })
                         .unwrap_or((None, None))
                 } else {
                     let kn = self
@@ -2081,7 +2086,7 @@ impl Declarations {
                     niches,
                     metadata: KotlinMeta {
                         kotlin_name,
-                        value_rust_key,
+                        value_rust_type,
                         // Terminal: body produces the wire directly, no inner
                         // converter composed, so no handle to carry.
                         projection: None,
@@ -2099,7 +2104,7 @@ impl Declarations {
                 let mut pre_stages = vec![stage];
                 pre_stages.extend(inner.pre_stages.iter().cloned());
                 let kotlin_name = inner.metadata.kotlin_name.clone();
-                let value_rust_key = arg0.map(TypeKey::from_type);
+                let value_rust_type = arg0.map(crate::api::core::flat::canonical_type);
                 let (niches, sentinels) = match arg0 {
                     None => self.conversion_domain_niches(
                         &key,
@@ -2111,7 +2116,7 @@ impl Declarations {
                 };
                 let mut metadata = KotlinMeta {
                     kotlin_name,
-                    value_rust_key,
+                    value_rust_type,
                     projection: inner.metadata.projection.clone(),
                 };
                 Self::attach_domain_sentinels(&mut metadata, sentinels);

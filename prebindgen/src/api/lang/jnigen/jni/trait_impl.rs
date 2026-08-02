@@ -929,7 +929,7 @@ impl Declarations {
             niches: inner.niches.clone(),
             metadata: KotlinMeta {
                 kotlin_name,
-                value_rust_key: None,
+                value_rust_type: None,
                 projection,
             },
         })
@@ -1001,7 +1001,7 @@ impl Declarations {
             niches: Niches::empty(),
             metadata: KotlinMeta {
                 kotlin_name,
-                value_rust_key: None,
+                value_rust_type: None,
                 projection,
             },
         })
@@ -1070,7 +1070,7 @@ impl Declarations {
             niches: Niches::empty(),
             metadata: KotlinMeta {
                 kotlin_name,
-                value_rust_key: None,
+                value_rust_type: None,
                 projection: None,
             },
         })
@@ -1142,7 +1142,7 @@ impl Declarations {
                     niches: Niches::empty(),
                     metadata: KotlinMeta {
                         kotlin_name,
-                        value_rust_key: None,
+                        value_rust_type: None,
                         projection,
                     },
                 });
@@ -2543,7 +2543,7 @@ impl Declarations {
                 niches,
                 metadata: KotlinMeta {
                     kotlin_name,
-                    value_rust_key: None,
+                    value_rust_type: None,
                     projection,
                 },
             });
@@ -2610,7 +2610,7 @@ impl Declarations {
             niches,
             metadata: KotlinMeta {
                 kotlin_name,
-                value_rust_key: None,
+                value_rust_type: None,
                 projection,
             },
         })

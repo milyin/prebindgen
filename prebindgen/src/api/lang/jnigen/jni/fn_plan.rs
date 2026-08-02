@@ -185,10 +185,10 @@ pub(crate) struct ValueOutputPlan {
     pub wire_ty: syn::Type,
     /// Kotlin surface classification over the **declared** return
     /// (`convert_out_ty` for a convert, else `f.sig.output` — not
-    /// `target_ty`: the Kotlin error peel rides `value_rust_key`).
+    /// `target_ty`: the Kotlin error peel rides `value_rust_type`).
     pub surface: ReturnSurface,
     /// `enum_class` / `Option<enum>` probes over the canonical
-    /// (`value_rust_key`-peeled) declared return. The extern decl uses them
+    /// (`value_rust_type`-peeled) declared return. The extern decl uses them
     /// raw; the wrapper surface masks them with `!is_convert` (the historical
     /// `unfold.is_none()` gate).
     pub is_enum: bool,
@@ -781,7 +781,7 @@ fn build_output(
 
     // The Kotlin surface classifies the DECLARED return — `convert_out_ty`
     // for a convert, else the signature's own output. (Not `target_ty`: the
-    // Kotlin error peel rides the entry's `value_rust_key`, so the full
+    // Kotlin error peel rides the entry's `value_rust_type`, so the full
     // `Result<T, E>` type is looked up as written.)
     let ret_decl: syn::ReturnType = if is_convert {
         syn::parse_quote!(-> #target_ty)
@@ -807,7 +807,7 @@ fn build_output(
 
 impl ReturnSurface {
     /// Classify a declared return type. Returns the surface plus the
-    /// canonical (`value_rust_key`-peeled) type the enum probes run over —
+    /// canonical (`value_rust_type`-peeled) type the enum probes run over —
     /// the single peel that subsumed both `classify_return`'s inline peel
     /// and the former `canonical_return_ty`.
     pub fn classify(
@@ -824,13 +824,13 @@ impl ReturnSurface {
             .and_then(|tr| registry.output_entry(&tr))
             .map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
-        // `value_rust_key`) declare no Kotlin return type. The peeled type
+        // `value_rust_type`) declare no Kotlin return type. The peeled type
         // comes straight off the stored key — no reparse, no silent
         // fallback.
         let canonical: syn::Type = outer_meta
             .as_ref()
-            .and_then(|m| m.value_rust_key.as_ref())
-            .map(TypeKey::to_type)
+            .and_then(|m| m.value_rust_type.as_ref())
+            .cloned()
             .unwrap_or_else(|| ty.clone());
         if crate::api::lang::jnigen::util::is_unit(&canonical) {
             return (Self::Unit, canonical);

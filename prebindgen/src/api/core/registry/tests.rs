@@ -479,9 +479,11 @@ fn typekey_equivalence_rules() {
     assert_ne!(k("std::ffi::CString"), k("CString"));
     assert_ne!(k("&Foo"), k("&'a Foo"));
     assert_ne!(k("Foo<'static>"), k("Foo"));
-    // Idempotence: re-keying a key's own type or string is the identity.
+    // Idempotence: re-keying a key's own string is the identity. The key IS the
+    // canonical string now, so that is the whole claim — there used to be a
+    // second assertion re-keying `to_type()`, which was really about the parsed
+    // form a key kept beside the string, and a key keeps no such thing (#291).
     let once = k("std::vec::Vec<crate::m::Foo>");
-    assert_eq!(once, TypeKey::from_type(&once.to_type()));
     assert_eq!(once, k(once.as_str()));
     assert_eq!(once.as_str(), "Vec < Foo >");
 }
