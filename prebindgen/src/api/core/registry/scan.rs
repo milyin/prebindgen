@@ -502,11 +502,10 @@ impl<M> Registry<M> {
     ///
     /// `None` therefore means the type never entered the pipeline — a caller
     /// asking out of order, not a cache miss to paper over.
-    pub(crate) fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
-        let key = TypeKey::from_type(ty);
+    pub(crate) fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef> {
         self.input_types
-            .get(&key)
-            .or_else(|| self.output_types.get(&key))
+            .get(key)
+            .or_else(|| self.output_types.get(key))
             .map(|cell| (*cell.subject).clone())
     }
 
@@ -573,18 +572,31 @@ impl<M> Registry<M> {
         }
     }
 
-    /// Look up the resolved input entry for `ty`, returning `None` if it
+    /// Look up the resolved input entry for `reading`, returning `None` if it
     /// was never registered or is still unresolved. The returned entry's
     /// `function.sig.ident` is the converter's call name; `destination` is
     /// its wire form.
-    pub fn input_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
-        let key = TypeKey::from_type(ty);
-        self.type_table(Direction::Input).get(&key)?.entry.as_ref()
+    ///
+    /// Takes a `TypeRef` for the reason the trait methods do (#284) — and this
+    /// pair matters more than they do, because an **inherent** method wins over
+    /// a trait method on a concrete `Registry`. While these took a spelling they
+    /// were a second door into the table that the trait's signature could not
+    /// close, and every caller with a `Registry` in hand silently used it. The
+    /// same "second door inside the room" that hid `classify` behind
+    /// `Registry::reading` until #267.
+    pub fn input_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+        self.type_table(Direction::Input)
+            .get(&reading.key())?
+            .entry
+            .as_ref()
     }
 
-    /// Look up the resolved output entry for `ty`. See [`Self::input_entry`].
-    pub fn output_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
-        let key = TypeKey::from_type(ty);
-        self.type_table(Direction::Output).get(&key)?.entry.as_ref()
+    /// Look up the resolved output entry for `reading`. See
+    /// [`Self::input_entry`].
+    pub fn output_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+        self.type_table(Direction::Output)
+            .get(&reading.key())?
+            .entry
+            .as_ref()
     }
 }

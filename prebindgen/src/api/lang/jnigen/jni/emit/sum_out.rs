@@ -129,7 +129,7 @@ pub(crate) fn leaf_slot(
         ("I", format_ident!("i"))
     } else {
         let wire = registry
-            .output_entry(leaf.out_ty.syntax())
+            .output_entry(&leaf.out_ty)
             .expect("leaf_is_prim implies a resolved output entry")
             .destination
             .clone();
@@ -345,15 +345,13 @@ fn encode_group_leaf(
     bind: &syn::Ident,
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> TokenStream {
-    let out_entry = registry
-        .output_entry(leaf.out_ty.syntax())
-        .unwrap_or_else(|| {
-            panic!(
-                "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
-                leaf.name,
-                TypeKey::from_type(leaf.out_ty.syntax())
-            )
-        });
+    let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+        panic!(
+            "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
+            leaf.name,
+            TypeKey::from_type(leaf.out_ty.syntax())
+        )
+    });
     let wire = out_entry.destination.clone();
     let conv_fail = fail(quote!(__e.to_string()));
     let enc = format_ident!("__enc_{}", obj_ident);

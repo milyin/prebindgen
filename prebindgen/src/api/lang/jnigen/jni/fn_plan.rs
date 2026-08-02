@@ -495,7 +495,7 @@ impl JniFunctionPlan {
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
                 InputKind::Unsigned64 { .. } | InputKind::Plain => registry
-                    .input_entry(leaf.reading.syntax())
+                    .input_entry(&leaf.reading)
                     .and_then(|entry| JniPrim::from_wire(&entry.destination))
                     .map_or(1, |prim| match prim {
                         JniPrim::Long | JniPrim::Double => 2,
@@ -551,7 +551,8 @@ fn classify_leaf(
             kt_name,
             kt_public: None,
             kt_meta: registry
-                .input_entry(ty)
+                .reading_of(ty)
+                .and_then(|tr| registry.input_entry(&tr))
                 .and_then(|e| e.metadata.kotlin_name.clone()),
             optional,
             as_enum_value,
@@ -561,7 +562,10 @@ fn classify_leaf(
 
     // Every non-callback leaf requires a resolved input entry — the same
     // hard boundary the Rust emitter has always enforced.
-    let Some(entry) = registry.input_entry(ty) else {
+    let Some(entry) = registry
+        .reading_of(ty)
+        .and_then(|tr| registry.input_entry(&tr))
+    else {
         let key = TypeKey::from_type(ty);
         return Err(if expanded {
             PlanError::UnresolvedLeaf {
@@ -690,7 +694,10 @@ fn build_output(
             .expect("Return delivery carries convert_out_ty"),
         None => ok_ty.unwrap_or(return_ty),
     };
-    let Some(entry) = registry.output_entry(&target_ty) else {
+    let Some(entry) = registry
+        .reading_of(&target_ty)
+        .and_then(|tr| registry.output_entry(&tr))
+    else {
         return Err(PlanError::UnresolvedOutput {
             ty: TypeKey::from_type(&target_ty),
         });
@@ -737,7 +744,10 @@ impl ReturnSurface {
             syn::ReturnType::Default => return (Self::Unit, syn::parse_quote!(())),
             syn::ReturnType::Type(_, t) => &**t,
         };
-        let outer_meta = registry.output_entry(ty).map(|e| e.metadata.clone());
+        let outer_meta = registry
+            .reading_of(ty)
+            .and_then(|tr| registry.output_entry(&tr))
+            .map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
         // `value_rust_key`) declare no Kotlin return type. The peeled type
         // comes straight off the stored key — no reparse, no silent

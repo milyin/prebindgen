@@ -1756,7 +1756,7 @@ impl Declarations {
                 // demand a bare one does. Walking the reading also drops the
                 // re-lookup the old loop did: it peeled a spelling and re-keyed
                 // each result, where the layers are already right here (#273).
-                let Some(mut reading) = registry.reading(&candidate.to_type()) else {
+                let Some(mut reading) = registry.reading(candidate) else {
                     return 0;
                 };
                 let mut depth = 0;
@@ -1840,7 +1840,9 @@ impl Declarations {
         let inner = if is_self {
             None
         } else {
-            registry.input_entry(&ty)
+            registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.input_entry(&tr))
         };
         match inner {
             None if is_self || is_wire_type(&ty) => {
@@ -1976,14 +1978,17 @@ impl Declarations {
         let inner = if is_self {
             None
         } else {
-            registry.output_entry(&ty)
+            registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.output_entry(&tr))
         };
         match inner {
             None if is_self || is_wire_type(&ty) => {
                 // Terminal: `ty` is the wire; the body produces it from `outer`.
                 let (kotlin_name, value_rust_key) = if let Some(a0) = arg0 {
                     registry
-                        .output_entry(a0)
+                        .reading_of(a0)
+                        .and_then(|tr| registry.output_entry(&tr))
                         .map(|e| (e.metadata.kotlin_name.clone(), Some(TypeKey::from_type(a0))))
                         .unwrap_or((None, None))
                 } else {

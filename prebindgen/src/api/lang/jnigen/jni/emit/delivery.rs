@@ -142,12 +142,15 @@ pub(crate) fn emit_unfold_delivery(
             // a raw typed jvalue for a primitive-wire element, a JObject
             // otherwise (mirrors `leaf_is_prim`; the folder interface
             // declares the matching typed param).
-            let out_entry = registry.output_entry(element).unwrap_or_else(|| {
-                panic!(
-                    "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                    TypeKey::from_type(element)
-                )
-            });
+            let out_entry = registry
+                .reading_of(element)
+                .and_then(|tr| registry.output_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "emit_unfold_delivery: Vec element `{}` has no registered output converter",
+                        TypeKey::from_type(element)
+                    )
+                });
             // The element's COMPLETE Rust -> wire chain. No `convert!` type is
             // known to reach THIS path today (a fold element is single-leaf and
             // whole, and the collection converters claim the shapes a converted
@@ -979,14 +982,12 @@ pub(crate) fn encode_plan_leaves(
         };
         let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
-        let out_entry = registry
-            .output_entry(leaf.out_ty.syntax())
-            .unwrap_or_else(|| {
-                panic!(
-                    "jnigen unfold: leaf `{}` has no registered output converter",
-                    TypeKey::from_type(leaf.out_ty.syntax())
-                )
-            });
+        let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+            panic!(
+                "jnigen unfold: leaf `{}` has no registered output converter",
+                TypeKey::from_type(leaf.out_ty.syntax())
+            )
+        });
         let conv_fail = fail(quote!(__e.to_string()));
         // The leaf's COMPLETE Rust -> wire chain: the rust-side stages a custom
         // `convert!` declaration inserts (`Duration -> u64`), then the
@@ -1384,7 +1385,10 @@ pub(crate) fn leaf_is_prim(
 /// about a leaf whose own `nullable` flag it is in the middle of computing (an
 /// inert sum group slot).
 pub(crate) fn leaf_ty_is_prim(registry: &impl Conversions<KotlinMeta>, out_ty: &syn::Type) -> bool {
-    let Some(entry) = registry.output_entry(out_ty) else {
+    let Some(entry) = registry
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
+    else {
         return false;
     };
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose

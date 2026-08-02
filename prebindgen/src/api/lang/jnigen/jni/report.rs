@@ -132,7 +132,8 @@ impl super::JniGen {
                 .kotlin_fqn(key)
                 .unwrap_or_else(|| key.as_str().to_string());
             let wire = registry
-                .output_entry(&key.to_type())
+                .reading(key)
+                .and_then(|tr| registry.output_entry(&tr))
                 .map(|e| e.wire_type().to_token_stream().to_string())
                 .unwrap_or_else(|| "?".to_string());
             out.push_str(&format!(
