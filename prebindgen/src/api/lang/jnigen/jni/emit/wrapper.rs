@@ -754,7 +754,7 @@ pub(crate) fn emit_expanded_param(
 
     debug_assert_eq!(plan.leaves.len(), leaves.len());
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
-        let leaf_ty = &leaf.ty.syntax();
+        let leaf_ty = leaf.ty.syntax();
         let lookup_entry = || {
             registry.input_entry(leaf_ty).unwrap_or_else(|| {
                 panic!(

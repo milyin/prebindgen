@@ -405,7 +405,7 @@ pub fn apply<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let crate::api::core::flat::TypeKind::Callback { args } = &param.ty.kind() else {
+            let crate::api::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -681,7 +681,7 @@ fn wire_fixed_callbacks<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let crate::api::core::flat::TypeKind::Callback { args } = &param.ty.kind() else {
+            let crate::api::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -799,7 +799,7 @@ pub fn apply_leaf_vec_folds<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let crate::api::core::flat::TypeKind::Callback { args } = &param.ty.kind() else {
+            let crate::api::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -1726,7 +1726,7 @@ fn accessor_signature<M>(
         .params
         .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
-    let takes = match &first.ty.kind() {
+    let takes = match first.ty.kind() {
         crate::api::core::flat::TypeKind::Ref { inner, .. } => inner.syntax().clone(),
         _ => first.ty.syntax().clone(),
     };

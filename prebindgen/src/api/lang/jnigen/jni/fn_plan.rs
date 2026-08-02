@@ -704,7 +704,7 @@ fn build_output(
     let ret_decl: syn::ReturnType = if is_convert {
         syn::parse_quote!(-> #target_ty)
     } else {
-        let ret = &f.ret.syntax();
+        let ret = f.ret.syntax();
         syn::parse_quote!(-> #ret)
     };
     let (surface, canonical) = ReturnSurface::classify(ext, registry, &ret_decl);

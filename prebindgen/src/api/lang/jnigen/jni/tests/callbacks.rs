@@ -621,7 +621,7 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
     let cb = f
         .params
         .iter()
-        .find_map(|p| match &p.ty.kind() {
+        .find_map(|p| match p.ty.kind() {
             crate::api::core::flat::TypeKind::Callback { args } => Some((p, args)),
             _ => None,
         })

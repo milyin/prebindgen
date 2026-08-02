@@ -791,7 +791,7 @@ impl Declarations {
         // The field's own reading: the nullability question below is answered
         // from `kind`, so a wrapped spelling answers as the bare one does and
         // nothing is looked up (#275).
-        let field_ty = &field.ty.syntax();
+        let field_ty = field.ty.syntax();
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
         let out = registry.output_entry(field_ty).unwrap_or_else(|| {
             panic!(

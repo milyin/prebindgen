@@ -371,7 +371,7 @@ impl<M> Registry<M> {
         if let Some(name) = self
             .type_table(dir)
             .get(&TypeKey::from_type(ty))
-            .and_then(|c| match &c.subject.kind() {
+            .and_then(|c| match c.subject.kind() {
                 TypeKind::Named { id } => Some(id.name.clone()),
                 _ => None,
             })

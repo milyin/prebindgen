@@ -187,7 +187,7 @@ pub(crate) fn encode_sum_group(
         .expect("a sum segment carries its selector leaf");
     // The name off the reading — `TypeId` IS the name, so nothing takes a path
     // apart to re-derive one.
-    let crate::api::core::flat::TypeKind::Named { id } = &tag_leaf.out_ty.kind() else {
+    let crate::api::core::flat::TypeKind::Named { id } = tag_leaf.out_ty.kind() else {
         panic!(
             "jnigen sum unfold: selector type `{}` is not a named type",
             tag_leaf.out_ty.key()

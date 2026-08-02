@@ -1069,7 +1069,7 @@ fn classify_params(
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
         let mut name = leaf.kt_name.clone();
-        let arg_ty = &leaf.reading.syntax();
+        let arg_ty = leaf.reading.syntax();
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
