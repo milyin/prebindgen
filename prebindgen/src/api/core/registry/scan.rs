@@ -316,6 +316,22 @@ impl<M> Registry<M> {
         ty: &syn::Type,
         root: bool,
     ) -> Result<crate::api::core::flat::TypeRef, ScanError> {
+        // The registry's own answer first, in EITHER direction — a reading is
+        // direction-free, and a cell that exists already holds the authoritative
+        // one. Classifying anyway would derive a second reading for a key that
+        // has one, which `ensure_entry` would then discard: the same
+        // two-answers-that-never-meet shape this PR removes, surviving as
+        // redundant work rather than as a replaced cell.
+        let key = TypeKey::from_type(ty);
+        if let Some(known) = self
+            .input_types
+            .get(&key)
+            .or_else(|| self.output_types.get(&key))
+            .map(|c| (*c.subject).clone())
+        {
+            self.ensure_entry(dir, &known, root);
+            return Ok(known);
+        }
         let reading = self
             .flat
             .classify(ty)
@@ -523,25 +539,20 @@ impl<M> Registry<M> {
     /// the whole-collection converter is genuinely not needed — and for a
     /// `Vec<opaque-handle>` it cannot resolve at all (a `jlong` wire is not
     /// JObject-shaped), so requiring it would wrongly fail resolution.
-    pub(crate) fn unrequire_output(&mut self, ty: &syn::Type) {
-        self.clear_root(Direction::Output, ty);
+    pub(crate) fn unrequire_output(&mut self, reading: &crate::api::core::flat::TypeRef) {
+        self.clear_root(Direction::Output, &reading.key());
     }
 
-    /// Drop `ty` from the required-input scan set — the input-side peer of
-    /// [`Self::unrequire_output`]. Used by [`Self::apply_adapter_plans`] for
-    /// the adapter's boundary-only types: a fold plan replaces every direct
-    /// crossing of the type with its ingredients, so the type's own input
-    /// converter is genuinely not needed (and for an undeclared type cannot
-    /// resolve at all).
-    pub(crate) fn unrequire_input(&mut self, ty: &syn::Type) {
-        self.clear_root(Direction::Input, ty);
-    }
-
-    /// Stop treating `ty` as a root. The cell stays, so the resolver still fills
-    /// it if it can — only the demand that it *must* resolve is dropped.
-    pub(super) fn clear_root(&mut self, dir: Direction, ty: &syn::Type) {
-        let key = TypeKey::from_type(ty);
-        if let Some(cell) = self.type_table_mut(dir).get_mut(&key) {
+    /// Stop treating `key` as a root. The cell stays, so the resolver still
+    /// fills it if it can — only the demand that it *must* resolve is dropped.
+    ///
+    /// Keyed, because that is genuinely all this needs: un-requiring creates no
+    /// cell and classifies nothing, so it is the one registration-adjacent
+    /// operation with no reading to carry. `unrequire_*` take a `TypeRef` anyway
+    /// — they pair with `require_*`, and a caller holding one should not have to
+    /// know which of the two wants a key.
+    pub(super) fn clear_root(&mut self, dir: Direction, key: &TypeKey) {
+        if let Some(cell) = self.type_table_mut(dir).get_mut(key) {
             cell.root = false;
         }
     }

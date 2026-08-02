@@ -787,7 +787,7 @@ pub fn apply_leaf_vec_folds<M>(
                     // opaque-handle element it cannot resolve (`jlong` wire isn't
                     // JObject-shaped), and de-requiring keeps that `None` from
                     // being flagged as an unresolved-required error.
-                    registry.unrequire_output(ret.syntax());
+                    registry.unrequire_output(&ret);
                     registry
                         .unfold_plans
                         .insert(func.clone(), whole_leaf_fold_plan(vec_elem, shape));
@@ -905,7 +905,7 @@ struct Layered {
     /// The arity layers, outermost first.
     shape: UnfoldShape,
     /// Every type on the way down, outermost first — what a registration walks.
-    layer_types: Vec<syn::Type>,
+    layer_types: Vec<crate::api::core::flat::TypeRef>,
     /// Past the borrow too: what actually crosses.
     core: syn::Type,
     /// Whether the core is reached through a borrow.
@@ -924,11 +924,7 @@ fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
     let borrowed = layered.borrow_target();
     Layered {
         shape,
-        layer_types: ty
-            .layer_types()
-            .iter()
-            .map(|t| t.syntax().clone())
-            .collect(),
+        layer_types: ty.layer_types().into_iter().cloned().collect(),
         core: borrowed.unwrap_or(layered).syntax().clone(),
         by_ref: borrowed.is_some(),
     }
@@ -1024,9 +1020,9 @@ fn process_decl<M>(
             // recursive registration also required) — same reasoning as
             // [`apply_leaf_vec_folds`] for the fixed folds.
             if ed.target == DeconTarget::Output {
-                registry.unrequire_output(ret_ty.syntax());
+                registry.unrequire_output(&ret_ty);
                 if optional {
-                    registry.unrequire_output(after_opt.syntax());
+                    registry.unrequire_output(after_opt);
                 }
             }
             // Element type peeled of a leading `&` (accessors take `&Element`).

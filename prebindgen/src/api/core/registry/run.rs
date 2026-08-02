@@ -59,9 +59,10 @@ impl<M> Registry<M> {
         // Drop it both ways; the cell stays, so a converter is still produced
         // if one happens to resolve.
         for key in &declared.decompositions.replaces {
-            let ty = key.to_type();
-            self.unrequire_input(&ty);
-            self.unrequire_output(&ty);
+            // The key is what a root flag is stored under, so it goes straight
+            // in — no `to_type()` round trip to be re-keyed on the far side.
+            self.clear_root(Direction::Input, key);
+            self.clear_root(Direction::Output, key);
         }
         Ok(())
     }
