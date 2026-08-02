@@ -77,6 +77,46 @@ classification stays small and genuinely neutral:
 > `Origin`'s syntax into `quote!` is spelling, and spelling the source is exactly
 > what generated Rust must do.
 
+#### What the split does *not* say: who decides the destination type
+
+"Classify off `kind`, spell off `syntax`" tells an adapter where to get each
+fact. It is silent on the question adapters actually face, which is what the
+**destination language** ends up seeing. The companion rule:
+
+> **Same `kind` ⇒ same destination-language type.** The *wire* is the
+> generator's to choose, and may differ per spelling.
+
+The weaker-sounding half is the important one. It is tempting to write "same
+`kind` ⇒ same wire", and that is **false** — prebindgen violates it deliberately:
+
+| Rust | `kind` | Kotlin type | wire |
+|---|---|---|---|
+| `&[Payload]` | `Sequence` | `List<Payload>` | `Long` — a jlong handle to a Rust-side `Vec` |
+| `Vec<Box<Payload>>` | `Sequence` | `List<Payload>` | `List<Payload>` — a `JObject` |
+
+Two wires, one surface. Choosing a wire is exactly the generator's job, and the
+destination-language wrapper absorbs the difference; a caller cannot tell. What
+a caller *can* tell — and what the model's erasure promises will not happen — is
+the **type** changing because the source spelled a `Box`.
+
+The rule scopes to **converted** positions, which is where a converter stands
+between the Rust value and the destination and is free to bridge. It cannot apply
+to a **layout mirror**: `Cbindgen`'s `repr_c_struct` crosses a struct zero-copy,
+so the C struct is reinterpreted from the source struct's bytes and its field
+types are a *layout* fact. There `Box<T>` (a pointer) genuinely is a different C
+type from `T` (inline), the spelling is load-bearing by construction, and no
+erasure can apply. A mirror reads `syntax` for the destination type on purpose —
+the one place the usual split inverts, and it inverts because the contract is
+layout rather than surface.
+
+Reusing a mirror's spelling test in a converted position is how the rule gets
+broken. A tagged-union payload is converted, and it used to take its
+opaque-pointer arm from the `Box` in the spelling: `Option<Box<Handle>>` crossed
+as `handle_t *` while `Option<Handle>` — the same optional handle to every
+destination — was **refused outright**. An erased wrapper decided whether the
+shape was expressible. It asks the declaration now, and the two spellings share
+one C type with different converter bodies.
+
 This is mechanically measured, and needed no new mechanism:
 `core::flat::boundary` (ported from
 [#224](https://github.com/milyin/prebindgen/pull/224)) counts *variant mentions*

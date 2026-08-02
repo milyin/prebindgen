@@ -1324,6 +1324,36 @@ impl CbindgenBuilder {
             let conv = Self::in_name(fty);
             return quote!(#conv(#b)?);
         }
+        // The same opaque-pointer arm the wire took, for a spelling with no
+        // `Box` in it: the C caller still hands over a `*mut handle_t` it gave
+        // up ownership of, so the pointer is reclaimed the same way — the value
+        // is just moved out of the box instead of kept in one. Conversion
+        // follows the SYNTAX; the C type followed `kind` + the declaration.
+        if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
+            let src_inner = self.src_ty(&inner);
+            let owned = quote!(*::std::boxed::Box::from_raw(#b as *mut #src_inner));
+            let null_msg = format!(
+                "null payload for `{}` (a non-optional handle payload cannot be NULL — the \
+                 union may already have been dropped)",
+                type_short(&inner)
+            );
+            return if is_option(fty) {
+                quote!(if #b.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(#owned)
+                })
+            } else {
+                quote!({
+                    if #b.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_msg),
+                        );
+                    }
+                    #owned
+                })
+            };
+        }
         if let Some(inner) = opaque_ptr_payload_inner(fty) {
             let src_inner = self.src_ty(&inner);
             let boxed = quote!(::std::boxed::Box::from_raw(#b as *mut #src_inner));
@@ -1397,6 +1427,21 @@ impl CbindgenBuilder {
         if self.enums.contains_key(&TypeKey::from_type(fty)) {
             let conv = Self::out_name(fty);
             return quote!(::core::mem::MaybeUninit::new(#conv(#b)));
+        }
+        // The peer of the input arm above: an owned value the C side must later
+        // release, so it is boxed HERE rather than having arrived boxed.
+        if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
+            let c = self.c_type_ident(&inner);
+            return if is_option(fty) {
+                quote!(match #b {
+                    ::core::option::Option::Some(__v) => {
+                        ::std::boxed::Box::into_raw(::std::boxed::Box::new(__v)) as *mut #c
+                    }
+                    ::core::option::Option::None => ::core::ptr::null_mut(),
+                })
+            } else {
+                quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#b)) as *mut #c)
+            };
         }
         if let Some(inner) = opaque_ptr_payload_inner(fty) {
             let c = self.c_type_ident(&inner);
