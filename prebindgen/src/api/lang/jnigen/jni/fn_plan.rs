@@ -430,7 +430,7 @@ impl JniFunctionPlan {
         // fail to yield a type.
         for param in &f.params {
             let ident = param.name.clone();
-            let ty = param.ty.origin.syntax.clone();
+            let ty = param.ty.syntax().clone();
 
             let form = if let Some(plan) = registry
                 .expansion_plans()
@@ -495,7 +495,7 @@ impl JniFunctionPlan {
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
                 InputKind::Unsigned64 { .. } | InputKind::Plain => registry
-                    .input_entry(&leaf.reading.origin.syntax)
+                    .input_entry(leaf.reading.syntax())
                     .and_then(|entry| JniPrim::from_wire(&entry.destination))
                     .map_or(1, |prim| match prim {
                         JniPrim::Long | JniPrim::Double => 2,
@@ -537,7 +537,7 @@ fn classify_leaf(
 ) -> Result<PlanLeaf, PlanError> {
     // The reading, so the layer questions cannot miss. What generated Rust must
     // spell is `origin.syntax`, unchanged.
-    let ty = &reading.origin.syntax;
+    let ty = reading.syntax();
     let optional = reading.optional_inner().is_some();
     let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(ty));
     let kt_name = kt_param_name(&ident.to_string());
@@ -680,7 +680,7 @@ fn build_output(
     let is_convert = unfold_plan.is_some();
     // The element normalizes an elided return and a written `-> ()` to one
     // `Unit` reading, so there is no `ReturnType` match here.
-    let return_ty: syn::Type = f.ret.origin.syntax.clone();
+    let return_ty: syn::Type = f.ret.syntax().clone();
     let error_plan = registry.error_plans().get(ident);
     let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
     let target_ty = match unfold_plan {
@@ -704,7 +704,7 @@ fn build_output(
     let ret_decl: syn::ReturnType = if is_convert {
         syn::parse_quote!(-> #target_ty)
     } else {
-        let ret = &f.ret.origin.syntax;
+        let ret = &f.ret.syntax();
         syn::parse_quote!(-> #ret)
     };
     let (surface, canonical) = ReturnSurface::classify(ext, registry, &ret_decl);

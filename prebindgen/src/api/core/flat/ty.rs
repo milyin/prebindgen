@@ -26,10 +26,32 @@ use crate::SourceLocation;
 /// lossless: a lifetime, an elided argument, a `Box` that changes nothing
 /// outside Rust all survive there at zero modelling cost, so `kind` can stay
 /// language-neutral and small.
+///
+/// # The invariant
+///
+/// > **Every `TypeRef` was classified by the model.** [`Flat`](super::Flat)
+/// > classified it from source syntax, or the registry composed it by layering
+/// > over something already classified. Nothing above the model can mint one.
+///
+/// That is what the private fields buy, and public fields would not: a public
+/// field **is** a constructor, so leaving them public while restricting the
+/// composers would block nothing. Read through [`kind`](Self::kind),
+/// [`syntax`](Self::syntax) and [`location`](Self::location).
+///
+/// The invariant is unconditional — no phase, no lifetime, no direction — so it
+/// holds for a **stored** value. That is the point: a `TypeRef` lives in
+/// `UnfoldLeaf::out_ty` and `FoldLeaf::ty`, inside plans the registry itself
+/// stores, so a
+/// borrow-carrying token would make the registry self-referential.
+///
+/// It deliberately does **not** claim the type's converters exist. That is
+/// false by design for stored readings — `unrequire_output` leaves a cell whose
+/// converter genuinely cannot resolve, and a `SumTag` leaf never has one — so
+/// converter existence stays a lookup that answers `Option`.
 #[derive(Clone, Debug)]
 pub struct TypeRef {
     /// What the type means — the closed, destination-neutral classification.
-    pub kind: TypeKind,
+    pub(super) kind: TypeKind,
     /// The type as generated Rust must spell it — the source's own tokens,
     /// normalized to the flat namespace the generated crate can name (see
     /// [`Flat::parse`](super::Flat::parse)) — plus the source they came
@@ -38,7 +60,55 @@ pub struct TypeRef {
     /// The syntax can say strictly more than `kind` does — `Box<String>` is a
     /// `Str` here — which is the point: what Rust needs and no destination
     /// language can see lives in the tokens, not in the classification.
-    pub origin: Origin<syn::Type>,
+    pub(super) origin: Origin<syn::Type>,
+}
+
+impl TypeRef {
+    /// What the type means. **Classify off this**, never off the spelling.
+    ///
+    /// The seal, as a compiled assertion — an out-of-crate adapter cannot
+    /// assemble a reading, because the fields it would have to name are
+    /// private:
+    ///
+    /// ```compile_fail
+    /// # use prebindgen::core::flat::{TypeKind, TypeRef};
+    /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
+    /// ```
+    ///
+    /// The composers are `pub(crate)` for the same reason, so this is the whole
+    /// surface: a `TypeRef` can only be obtained from the model that classified
+    /// it.
+    ///
+    /// ```compile_fail
+    /// # use prebindgen::core::flat::{ScalarKind, TypeRef};
+    /// let forged = TypeRef::scalar(ScalarKind::Bool);
+    /// ```
+    pub fn kind(&self) -> &TypeKind {
+        &self.kind
+    }
+
+    /// The tokens generated Rust must spell. **Spell off this**, never off
+    /// `kind` — the syntax says strictly more, and re-deriving it from the
+    /// classification is how `Box<Option<T>>` becomes an `E0308`.
+    pub fn syntax(&self) -> &syn::Type {
+        &self.origin.syntax
+    }
+
+    /// Where the type was written, for diagnostics. A composed type is
+    /// **placeless** — [`SourceLocation::has_position`] gates what is printed.
+    pub fn location(&self) -> &SourceLocation {
+        &self.origin.location
+    }
+
+    /// An [`Origin`] for a node that exists **because of** this type, sharing
+    /// its location — a synthesized getter built from a return type, say.
+    ///
+    /// Deliberately narrower than handing out the origin: it lends provenance
+    /// without lending the field, so a `TypeRef`'s own `Origin` still cannot be
+    /// obtained from outside the model.
+    pub(crate) fn origin_with<S>(&self, syntax: S) -> Origin<S> {
+        self.origin.with(syntax)
+    }
 }
 
 impl TypeRef {
@@ -160,7 +230,7 @@ impl TypeRef {
     ///
     /// Keeps this type's location: the borrow exists *because of* this value,
     /// so a diagnostic about it should point where the value came from.
-    pub fn borrowed(&self) -> TypeRef {
+    pub(crate) fn borrowed(&self) -> TypeRef {
         let inner = &self.origin.syntax;
         TypeRef {
             kind: TypeKind::Ref {
@@ -173,7 +243,7 @@ impl TypeRef {
 
     /// An optional of this type — `Option<T>` from `T`. Location as
     /// [`Self::borrowed`].
-    pub fn optional(&self) -> TypeRef {
+    pub(crate) fn optional(&self) -> TypeRef {
         let inner = &self.origin.syntax;
         TypeRef {
             kind: TypeKind::Optional(Box::new(self.clone())),
@@ -188,7 +258,7 @@ impl TypeRef {
     /// [`Flat::classify`](super::Flat::classify) does exactly this for a
     /// composed spelling, and `ensure_entry` gives adapter-authored cells the
     /// same treatment — `has_position` already gates what a diagnostic prints.
-    pub fn scalar(kind: ScalarKind) -> TypeRef {
+    pub(crate) fn scalar(kind: ScalarKind) -> TypeRef {
         // The spelling comes from the kind, so the two cannot drift.
         let ident = syn::Ident::new(kind.as_str(), proc_macro2::Span::call_site());
         TypeRef {
@@ -203,7 +273,7 @@ impl TypeRef {
     /// A nominal reference to a declared type, by name. Placeless for the same
     /// reason as [`Self::scalar`] — this is the binding naming a type, not a
     /// source mentioning one.
-    pub fn named(ident: &syn::Ident) -> TypeRef {
+    pub(crate) fn named(ident: &syn::Ident) -> TypeRef {
         TypeRef {
             kind: TypeKind::Named {
                 id: TypeId {
@@ -221,7 +291,7 @@ impl TypeRef {
     ///
     /// The canonical spelling is what a key *is* (#113), and reading it is
     /// legitimate — but it should be the model's answer rather than every caller
-    /// reaching into [`origin`](Self::origin) for it, since a caller that reaches
+    /// reaching into [`syntax`](Self::syntax) for it, since a caller that reaches
     /// into `origin` to *reason* is the thing this model exists to stop.
     pub fn key(&self) -> crate::api::core::registry::TypeKey {
         crate::api::core::registry::TypeKey::from_type(&self.origin.syntax)
@@ -285,7 +355,7 @@ impl TypeRef {
     ///
     /// A [`Named`](TypeKind::Named)'s generic arguments are **not** among them:
     /// [`TypeId`] keeps a name and nothing else, so `MyBox<Foo>` reaches no `Foo`
-    /// here. The full spelling is in [`Self::origin`] for whoever needs it.
+    /// here. The full spelling is in [`Self::syntax`] for whoever needs it.
     pub fn walk(&self) -> Vec<&TypeRef> {
         let mut out = Vec::new();
         self.collect_refs(&mut out);
@@ -333,7 +403,7 @@ impl TypeRef {
 /// One Rust spelling per concept is **not** the rule here — several are. A
 /// concept earns a variant when a destination language would act on it; a
 /// spelling that changes nothing outside Rust folds into the concept it carries
-/// and survives in [`TypeRef::origin`]:
+/// and survives in [`TypeRef::syntax`]:
 ///
 /// | Spelling | Kind | Why |
 /// |---|---|---|
@@ -369,7 +439,7 @@ pub enum TypeKind {
     /// this module has to take a path apart to learn what a type is. The last
     /// segment's generic arguments live in `args`, and only the *type*
     /// arguments: a lifetime argument says nothing a destination language can
-    /// act on. The full spelling is in [`TypeRef::origin`] for whoever re-emits it.
+    /// act on. The full spelling is in [`TypeRef::syntax`] for whoever re-emits it.
     Named { id: TypeId },
     /// `[T; N]` — a run of `T` whose length is known at compile time.
     ///
@@ -385,7 +455,7 @@ pub enum TypeKind {
         extent: Box<ArrayExtent>,
     },
     /// A borrow — `&T`, `&mut T`, or `&mut MaybeUninit<T>`. The lifetime is
-    /// spelling, so it lives in [`TypeRef::origin`] rather than here.
+    /// spelling, so it lives in [`TypeRef::syntax`] rather than here.
     ///
     /// This is the ownership layer for every concept underneath it: `&str` is
     /// `Ref(Str)`, `&[T]` is `Ref(Sequence)`. A shared-ownership handle

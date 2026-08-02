@@ -129,7 +129,7 @@ pub(crate) fn leaf_slot(
         ("I", format_ident!("i"))
     } else {
         let wire = registry
-            .output_entry(&leaf.out_ty.origin.syntax)
+            .output_entry(leaf.out_ty.syntax())
             .expect("leaf_is_prim implies a resolved output entry")
             .destination
             .clone();
@@ -187,7 +187,7 @@ pub(crate) fn encode_sum_group(
         .expect("a sum segment carries its selector leaf");
     // The name off the reading — `TypeId` IS the name, so nothing takes a path
     // apart to re-derive one.
-    let crate::api::core::flat::TypeKind::Named { id } = &tag_leaf.out_ty.kind else {
+    let crate::api::core::flat::TypeKind::Named { id } = &tag_leaf.out_ty.kind() else {
         panic!(
             "jnigen sum unfold: selector type `{}` is not a named type",
             tag_leaf.out_ty.key()
@@ -346,12 +346,12 @@ fn encode_group_leaf(
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> TokenStream {
     let out_entry = registry
-        .output_entry(&leaf.out_ty.origin.syntax)
+        .output_entry(leaf.out_ty.syntax())
         .unwrap_or_else(|| {
             panic!(
                 "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
                 leaf.name,
-                TypeKey::from_type(&leaf.out_ty.origin.syntax)
+                TypeKey::from_type(leaf.out_ty.syntax())
             )
         });
     let wire = out_entry.destination.clone();

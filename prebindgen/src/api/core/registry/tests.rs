@@ -807,16 +807,16 @@ fn a_source_type_cell_carries_the_models_typeref() {
     let cell = &reg.input_types[&key];
     assert!(cell.root, "a top-level parameter is a root");
     assert!(
-        matches!(cell.subject.kind, TypeKind::Optional(_)),
+        matches!(cell.subject.kind(), TypeKind::Optional(_)),
         "the frontend classified it, so the cell has that classification"
     );
     // One location per cell, and it is the model's — not a copy the scan made.
-    assert_eq!(&*cell.subject.origin.location, &loc);
+    assert_eq!(cell.subject.location(), &loc);
 
     // The nested position is in the model too, and is not a root.
     let inner = &reg.input_types[&TypeKey::parse("u64").expect("test type")];
     assert!(!inner.root);
-    assert!(matches!(inner.subject.kind, TypeKind::Scalar(_)));
+    assert!(matches!(inner.subject.kind(), TypeKind::Scalar(_)));
 }
 
 /// `Registry::reading` is a **lookup**. A type with no cell answers `None`, even
@@ -892,11 +892,11 @@ fn an_adapter_authored_type_cell_is_classified_but_placeless() {
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
     assert!(
-        matches!(&cell.subject.kind, TypeKind::Named { id } if id.name == "Foreign"),
+        matches!(&cell.subject.kind(), TypeKind::Named { id } if id.name == "Foreign"),
         "a declared name is a name, and the grammar can say so"
     );
     assert!(
-        !cell.subject.origin.location.has_position(),
+        !cell.subject.location().has_position(),
         "nothing wrote it, so there is no position to report"
     );
 }
@@ -1425,12 +1425,12 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         .flat()
         .type_ref(&syn::parse_quote!(Option<u64>))
         .expect("a local fn's parameter type is in the model");
-    assert!(matches!(read.kind, TypeKind::Optional(_)));
+    assert!(matches!(read.kind(), TypeKind::Optional(_)));
 
     // … and the cell scanned from that parameter carries that same reading,
     // rather than a second one made at the table.
     let cell = &reg.input_types[&TypeKey::parse("Option<u64>").expect("test type")];
-    assert!(matches!(cell.subject.kind, TypeKind::Optional(_)));
+    assert!(matches!(cell.subject.kind(), TypeKind::Optional(_)));
 }
 
 /// A type with no source position must not get an invented one.

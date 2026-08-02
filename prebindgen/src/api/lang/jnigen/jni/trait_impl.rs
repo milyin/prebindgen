@@ -1188,7 +1188,7 @@ impl Declarations {
                 // rides `immediate_edges` rather than this converter's `subs`.
                 // The arguments are `TypeRef`s on the classification, so nothing
                 // is re-extracted from the signature's syntax.
-                let crate::api::core::flat::TypeKind::Callback { args } = &reading.kind else {
+                let crate::api::core::flat::TypeKind::Callback { args } = reading.kind() else {
                     return None;
                 };
                 self.dispatch_fn_input(args, built)
@@ -1361,7 +1361,7 @@ impl Declarations {
             // `Vec<T>` / `Option<Vec<T>>` return. The model's `ret` already
             // normalizes an elided return to `()`, so there is no arm for it.
             {
-                let ret = &f.ret.origin.syntax;
+                let ret = f.ret.syntax();
                 let after_opt =
                     crate::api::core::types_util::option_inner_type(ret).unwrap_or(ret.clone());
                 if let Some(elem) = crate::api::core::types_util::vec_inner_type(&after_opt) {
@@ -1393,7 +1393,7 @@ impl Declarations {
         args: &[crate::api::core::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let spellings: Vec<syn::Type> = args.iter().map(|a| a.origin.syntax.clone()).collect();
+        let spellings: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
         let outer_ty = build_fn_type(&spellings);
         let (wire, body) = callback_input(self, args, registry)?;
         let niches = default_niches_for_wire(&wire);
@@ -1800,7 +1800,7 @@ impl Declarations {
         // Classify off `kind`, spell off `syntax`: the arms below that ask what
         // a type IS use `reading`, and everything that has to name it in
         // generated Rust uses this.
-        let ty = &reading.origin.syntax;
+        let ty = reading.syntax();
         // Structured-config overrides first (opaque handles, then user-
         // registered rank-0 wrappers, then built-ins).
         let key = TypeKey::from_type(ty);
@@ -1893,7 +1893,7 @@ impl Declarations {
         // `str` is handled above, separately and deliberately: it is unsized,
         // so its converter yields an owned `String` the call site borrows —
         // a different contract, not a different spelling.
-        if matches!(reading.kind, crate::api::core::flat::TypeKind::Str) {
+        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Str) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
                 let s = env.get_string(v).map_err(|e| {
@@ -2021,7 +2021,7 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell off `syntax` — see `input_terminal`.
-        let ty = &reading.origin.syntax;
+        let ty = reading.syntax();
         // Structured-config overrides first (opaque handles, then built-ins).
         let key = TypeKey::from_type(ty);
         if let Some(cfg) = self.types.get(&key) {
@@ -2091,7 +2091,7 @@ impl Declarations {
         // Plain `String` keeps its own earlier arm in `primitive_output`, whose
         // body this matches exactly; this one is reached for the wrapped
         // spellings that arm's key cannot name.
-        if matches!(reading.kind, crate::api::core::flat::TypeKind::Str) {
+        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Str) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
                 env.new_string(v.as_str()).map_err(|e| {
@@ -2123,7 +2123,7 @@ impl Declarations {
         // Wire is `()`. Body just returns `v`. No Kotlin name — Unit
         // returns are dropped from emitted signatures, so metadata stays
         // empty.
-        if matches!(reading.kind, crate::api::core::flat::TypeKind::Unit) {
+        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Unit) {
             let wire: syn::Type = syn::parse_quote!(());
             let body: syn::Expr = syn::parse_quote!(v);
             return Some(ConverterImpl {

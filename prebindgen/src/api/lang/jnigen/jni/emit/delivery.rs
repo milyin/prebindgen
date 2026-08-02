@@ -478,7 +478,7 @@ pub(crate) fn reach_leaf_flat(
     // `single_return` in `core/unfold.rs`. `is_plain_field` is what that rules
     // out, and it stays as the local statement of the same fact.
     let reached_is_ours = if leaf.identity {
-        !matches!(leaf.out_ty.origin.syntax, syn::Type::Reference(_))
+        !matches!(leaf.out_ty.syntax(), syn::Type::Reference(_))
     } else {
         consuming
     };
@@ -980,11 +980,11 @@ pub(crate) fn encode_plan_leaves(
         let (value, by_ref, path, consuming) = rebase(leaf);
         let value = &value;
         let out_entry = registry
-            .output_entry(&leaf.out_ty.origin.syntax)
+            .output_entry(leaf.out_ty.syntax())
             .unwrap_or_else(|| {
                 panic!(
                     "jnigen unfold: leaf `{}` has no registered output converter",
-                    TypeKey::from_type(&leaf.out_ty.origin.syntax)
+                    TypeKey::from_type(leaf.out_ty.syntax())
                 )
             });
         let conv_fail = fail(quote!(__e.to_string()));
@@ -1047,7 +1047,7 @@ pub(crate) fn encode_plan_leaves(
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
                      `.accessor_record_id()` requires a ptr_class type",
-                    TypeKey::from_type(&leaf.out_ty.origin.syntax)
+                    TypeKey::from_type(leaf.out_ty.syntax())
                 )
             });
             // The place this handle lives, when it is OURS to give away — the
@@ -1063,7 +1063,7 @@ pub(crate) fn encode_plan_leaves(
             // `Option` through the nullable branch's `match`, which moves the
             // whole `Option` in rather than borrowing it.
             let owned_place: Option<TokenStream> =
-                if !matches!(leaf.out_ty.origin.syntax, syn::Type::Reference(_))
+                if !matches!(leaf.out_ty.syntax(), syn::Type::Reference(_))
                     && steps_are_movable(&path)
                 {
                     let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
@@ -1376,7 +1376,7 @@ pub(crate) fn leaf_is_prim(
     if leaf.nullable {
         return false;
     }
-    leaf_ty_is_prim(registry, &leaf.out_ty.origin.syntax)
+    leaf_ty_is_prim(registry, leaf.out_ty.syntax())
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw

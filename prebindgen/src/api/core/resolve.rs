@@ -150,7 +150,7 @@ fn collect_unresolved_descendants<M>(
                 out.push(UnresolvedEntry {
                     key: key.clone(),
                     direction: dir,
-                    location: Some(&*cell.subject.origin.location)
+                    location: Some(cell.subject.location())
                         .filter(|l| l.has_position())
                         .cloned(),
                 });
@@ -191,7 +191,7 @@ pub(crate) fn check_complete<M>(registry: &Registry<M>) -> Result<(), ResolveErr
             entries.push(UnresolvedEntry {
                 key: key.clone(),
                 direction: dir,
-                location: Some(&*cell.subject.origin.location)
+                location: Some(cell.subject.location())
                     .filter(|l| l.has_position())
                     .cloned(),
             });
