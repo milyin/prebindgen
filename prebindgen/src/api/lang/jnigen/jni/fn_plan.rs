@@ -222,11 +222,32 @@ pub(crate) enum ReturnSurface {
 #[derive(Debug)]
 pub(crate) enum PlanError {
     /// `registry.input_entry` has no converter for a source param type.
-    Unresolved { ty: TypeKey },
+    ///
+    /// The **reading**, not a key: the registry knew the type well enough to
+    /// classify it — what it lacks is a converter — so the reading is in hand,
+    /// and it carries the source position [`Self::message`] points at.
+    ///
+    /// **Boxed**, and it has to be. A `TypeRef` holds a `syn::Type` inline and
+    /// runs to ~264 bytes; a `Result` is sized by its largest variant, so an
+    /// unboxed reading here would widen every `Result<_, PlanError>` on this
+    /// path — the *success* return included, which is the one that always
+    /// happens (`clippy::result_large_err`). An error is rare enough to afford
+    /// the allocation; the plans it returns beside are not.
+    Unresolved { ty: Box<TypeRef> },
     /// No converter for a constructor-expansion leaf type.
-    UnresolvedLeaf { ty: TypeKey, param: syn::Ident },
-    /// `registry.output_entry` has no converter for the output target type.
-    UnresolvedOutput { ty: TypeKey },
+    UnresolvedLeaf { ty: Box<TypeRef>, param: syn::Ident },
+    /// The output target type is known but `registry.output_entry` has no
+    /// converter for it — the failure `output_wrapper` fixes.
+    UnresolvedOutput { ty: Box<TypeRef> },
+    /// The output target type is not in the registry **at all**, so there is no
+    /// reading to hold and `output_wrapper` is not the answer.
+    ///
+    /// Split from [`Self::UnresolvedOutput`] because the two want opposite
+    /// advice: one type needs a converter written for it, the other needs to
+    /// reach the registry first. Collapsed together, the `output_wrapper`
+    /// message sent the reader to write a converter for a type the resolver
+    /// would still never ask about.
+    UnknownOutputType { ty: TypeKey },
     /// An unmarked declared data class could not produce a complete recursive
     /// input plan. Silent `JObject` fallback is forbidden.
     UnflattenableDataClass(FlatInputError),
@@ -236,25 +257,63 @@ pub(crate) enum PlanError {
 }
 
 impl PlanError {
+    /// Where the offending type was written, when a file wrote it — the
+    /// suffix [`Self::message`] appends.
+    ///
+    /// `has_position` gates it exactly as `resolve.rs` gates
+    /// `UnresolvedEntry::location`: a composed type and a test's hand-built
+    /// stream are lowered against `SourceLocation::default`, and printing
+    /// `:0:0` for them would make a fabricated position look like a real one.
+    fn location_suffix(&self) -> String {
+        let reading = match self {
+            PlanError::Unresolved { ty }
+            | PlanError::UnresolvedLeaf { ty, .. }
+            | PlanError::UnresolvedOutput { ty } => ty,
+            PlanError::UnknownOutputType { .. }
+            | PlanError::UnflattenableDataClass(_)
+            | PlanError::JvmParameterLimit { .. } => return String::new(),
+        };
+        let loc = reading.location();
+        if loc.has_position() {
+            format!(" (declared at {loc})")
+        } else {
+            String::new()
+        }
+    }
+
     /// The historical emission-panic message for this failure, shared by the
     /// validation boundary and the Rust emitter's backstop panics so the
     /// wording cannot drift.
+    ///
+    /// The base wording is unchanged; a source position is appended when the
+    /// reading has one, so a backstop that reaches the same failure without a
+    /// reading still prints a prefix of this.
     pub fn message(&self, fn_ident: &syn::Ident) -> String {
+        let at = self.location_suffix();
         match self {
             PlanError::Unresolved { ty } => format!(
-                "JniGen::on_function: input type `{}` for `{}` is unresolved",
-                ty, fn_ident,
+                "JniGen::on_function: input type `{}` for `{}` is unresolved{at}",
+                ty.key(),
+                fn_ident,
             ),
             PlanError::UnresolvedLeaf { ty, param } => format!(
-                "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-                ty, param,
+                "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved{at}",
+                ty.key(),
+                param,
             ),
             PlanError::UnresolvedOutput { ty } => format!(
                 "JniGen::on_function: return type `{}` of `{}` has no registered output \
                  converter — register one via `Declarations::output_wrapper(pat, |…| Some((ty, exc, body)))` \
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
-                  to bind a domain exception)",
-                ty, fn_ident,
+                  to bind a domain exception){at}",
+                ty.key(),
+                fn_ident,
+            ),
+            PlanError::UnknownOutputType { ty } => format!(
+                "JniGen::on_function: return type `{}` of `{}` is not registered — the \
+                 resolver never saw this type, so no converter can be selected for it. \
+                 Declare the type (or the function that produces it) before binding `{}`",
+                ty, fn_ident, fn_ident,
             ),
             PlanError::UnflattenableDataClass(error) => {
                 format!("JniGen::on_function `{fn_ident}`: {}", error.message())
@@ -570,14 +629,18 @@ fn classify_leaf(
     // Every non-callback leaf requires a resolved input entry — the same
     // hard boundary the Rust emitter has always enforced.
     let Some(entry) = registry.input_entry(reading) else {
-        let key = reading.key();
+        // The reading itself, so the diagnostic can say where the type was
+        // written. Reaching here means the type IS classified and merely has no
+        // converter, which is why there is something to carry.
         return Err(if expanded {
             PlanError::UnresolvedLeaf {
-                ty: key,
+                ty: Box::new(reading.clone()),
                 param: source_param.clone(),
             }
         } else {
-            PlanError::Unresolved { ty: key }
+            PlanError::Unresolved {
+                ty: Box::new(reading.clone()),
+            }
         });
     };
 
@@ -698,12 +761,19 @@ fn build_output(
             .expect("Return delivery carries convert_out_ty"),
         None => ok_ty.unwrap_or(return_ty),
     };
-    let Some(entry) = registry
-        .reading_of(&target_ty)
-        .and_then(|tr| registry.output_entry(&tr))
-    else {
-        return Err(PlanError::UnresolvedOutput {
+    // Two failures, told apart. `target_ty` is composed here (`convert_out_ty`,
+    // or the `Result` peeled to its `Ok`), so unlike the input side there may
+    // genuinely be no reading — and "not registered" wants different advice
+    // from "registered, no converter". Collapsed into one `and_then`, both got
+    // the `output_wrapper` message and the first one got it wrong.
+    let Some(target) = registry.reading_of(&target_ty) else {
+        return Err(PlanError::UnknownOutputType {
             ty: TypeKey::from_type(&target_ty),
+        });
+    };
+    let Some(entry) = registry.output_entry(&target) else {
+        return Err(PlanError::UnresolvedOutput {
+            ty: Box::new(target),
         });
     };
     let wire_ty = entry.destination.clone();

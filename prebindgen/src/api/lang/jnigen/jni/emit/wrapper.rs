@@ -610,16 +610,20 @@ fn emit_input_param(
         | InputKind::Handle { .. }
         | InputKind::Unsigned64 { .. }
         | InputKind::Plain => {
-            let entry = registry
-                .reading_of(arg_ty)
-                .and_then(|tr| registry.input_entry(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "JniGen::on_function: input type `{}` for `{}` is unresolved",
-                        TypeKey::from_type(arg_ty),
-                        original_ident,
-                    )
-                });
+            // The leaf's reading — for `ParamForm::Single` it is the very
+            // reading `param.ty` was spelled from, so this is the same lookup
+            // without the round trip. The panic now CALLS the shared message
+            // instead of restating it, which is what `PlanError::message`'s doc
+            // has always claimed and hand-duplication did not deliver.
+            let entry = registry.input_entry(&leaf.reading).unwrap_or_else(|| {
+                panic!(
+                    "{}",
+                    PlanError::Unresolved {
+                        ty: Box::new(leaf.reading.clone())
+                    }
+                    .message(original_ident)
+                )
+            });
             emit_plain_decode(entry, arg_ident, arg_ty, on_err)
         }
     }
@@ -764,10 +768,14 @@ pub(crate) fn emit_expanded_param(
             // The leaf's own reading goes straight to the entry: spelling it and
             // looking the same reading back up is the round trip #286 removed.
             registry.input_entry(&leaf.ty).unwrap_or_else(|| {
+                // Shared wording, not restated — see the sibling backstop above.
                 panic!(
-                    "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-                    leaf.ty.key(),
-                    orig_param,
+                    "{}",
+                    PlanError::UnresolvedLeaf {
+                        ty: Box::new(leaf.ty.clone()),
+                        param: orig_param.clone(),
+                    }
+                    .message(orig_param)
                 )
             })
         };
