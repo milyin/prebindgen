@@ -1828,16 +1828,17 @@ pub(crate) fn build_option_scalar_input_plan(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
-    arg_ty: &syn::Type,
+    arg: &TypeRef,
 ) -> Option<OptionScalarInputPlan> {
-    let inner = option_inner_type(arg_ty)?;
+    // The optional layer off the model, so a wrapped spelling (`Box<Option<T>>`)
+    // peels exactly as the bare one does.
+    let inner = arg.optional_inner()?;
     // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
-    if matches!(inner, syn::Type::Reference(_)) {
+    if inner.borrow_target().is_some() {
         return None;
     }
-    let inner_entry = registry
-        .reading_of(&inner)
-        .and_then(|tr| registry.input_entry(&tr))?;
+    // The layer's own reading straight to its entry — no spell-and-look-back.
+    let inner_entry = registry.input_entry(inner)?;
     let value_wire = inner_entry.destination.clone();
     // Only the boxed-primitive fallback shape: primitive wire, no niche,
     // no projection, no composed pre-stages.
@@ -1851,7 +1852,13 @@ pub(crate) fn build_option_scalar_input_plan(
     if !inner_entry.pre_stages.is_empty() {
         return None;
     }
-    let is_enum = ext.is_kotlin_enum(&inner);
+    // The reading-taking probe: `Option<Box<Priority>>` now answers TRUE, where
+    // keying on the spelling asked about `Box < Priority >` and found nothing —
+    // the #270/#272 family again. The probe also peels an optional, which cannot
+    // matter here: a nested `Option<Option<enum>>` has a BOXED wire, and
+    // `JniPrim::from_wire` above accepts only the eight `j*` primitives, so it
+    // has already returned by this line.
+    let is_enum = ext.is_kotlin_enum_reading(inner);
     Some(OptionScalarInputPlan {
         present_ident: format_ident!("{}_present", param_name),
         value_ident: format_ident!("{}_value", param_name),

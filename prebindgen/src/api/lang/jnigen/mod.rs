@@ -117,12 +117,14 @@ mod spelling_census {
         // The L4 "layer questions" remainder — #229. Not migrated here because
         // it is a separate consumer and bundling it would make one review of
         // both impossible.
-        ("jni/emit/flat_input.rs", 19),
+        ("jni/emit/flat_input.rs", 18),
         ("jni/emit/struct_out.rs", 2),
         ("jni/emit/wrapper.rs", 2),
-        // vec_build.rs is off the census, and off the boundary ledger too: its
-        // element peel reads `sequence_elem`/`borrow_target` off the model now.
-        // The one left is inside `enum_probe_type`, the spelling twin of
+        //
+        // vec_build.rs is absent, and off the boundary ledger too: its element
+        // peel reads `sequence_elem`/`borrow_target` off the model now.
+        //
+        // fold.rs's one call is inside `enum_probe_type`, the spelling twin of
         // `enum_probe` kept for `unfold_leaf_kt`'s `syn::Type` callers.
         ("jni/fold.rs", 1),
         ("jni/iface.rs", 2),

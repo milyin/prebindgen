@@ -596,9 +596,8 @@ fn classify_leaf(
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    // The reading, so the layer questions cannot miss. What generated Rust must
-    // spell is `origin.syntax`, unchanged.
-    let ty = reading.syntax();
+    // Every question below is the model's now — the local spelling this function
+    // opened with has no users left.
     let optional = reading.optional_inner().is_some();
     // The enum probe off the reading — the layers it peels are the model's own
     // (`&`, `Option`), so there is nothing to re-spell and nothing to look up.
@@ -653,7 +652,7 @@ fn classify_leaf(
         .flatten()
     {
         InputKind::VecBuild { elem, by_ref }
-    } else if let Some(sp) = build_option_scalar_input_plan(ext, registry, ident, ty) {
+    } else if let Some(sp) = build_option_scalar_input_plan(ext, registry, ident, reading) {
         InputKind::OptionScalar(sp)
     } else if let Some(plan) = flat_plan {
         InputKind::FlattenStruct(plan)
