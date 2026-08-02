@@ -313,7 +313,7 @@ fn process_expand<M>(
     )?;
 
     for leaf in &plan.leaves {
-        registry.require_input(leaf.ty.syntax());
+        registry.require_input(&leaf.ty);
     }
     registry
         .expansion_plans

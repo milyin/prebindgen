@@ -64,15 +64,21 @@ impl<M> Registry<M> {
         let mut edges: Vec<Crossing> = self
             .immediate_edges(dir, &ty)
             .into_iter()
-            .chain(self.plan_edges(dir, &ty))
+            // The structural edges arrive as readings, so the key is the
+            // model's own answer rather than one re-derived from a spelling.
+            .map(|(d, t)| (d, t.key()))
+            .chain(
+                self.plan_edges(dir, &ty)
+                    .into_iter()
+                    .map(|(d, t)| (d, TypeKey::from_type(&t))),
+            )
             .chain(
                 self.declared
                     .edges
                     .iter()
                     .filter(|(from, _)| *from == node)
-                    .map(|(_, on)| (on.0, on.1.to_type())),
+                    .map(|(_, on)| (on.0, on.1.clone())),
             )
-            .map(|(d, t)| (d, TypeKey::from_type(&t)))
             // Only crossings the scan actually registered: a structural edge to
             // a type nothing asked for is not a crossing.
             .filter(|c| self.type_table(c.0).contains_key(&c.1))

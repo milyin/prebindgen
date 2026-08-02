@@ -132,7 +132,7 @@ fn collect_unresolved_descendants<M>(
          seen: &mut std::collections::HashSet<(Direction, TypeKey)>| {
             let ty = key.to_type();
             for (child_dir, sub) in registry.immediate_edges(dir, &ty) {
-                let dep = (child_dir, TypeKey::from_type(&sub));
+                let dep = (child_dir, sub.key());
                 if seen.insert(dep.clone()) {
                     queue.push_back(dep);
                 }

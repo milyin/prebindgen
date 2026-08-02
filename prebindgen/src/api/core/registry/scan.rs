@@ -102,7 +102,7 @@ impl<M> Registry<M> {
         // the type is required in the output direction only.
         for ident in declared.consts.iter().flatten() {
             if let Some(item_const) = self.flat.constant(&ident).map(|c| c.origin.syntax.clone()) {
-                self.ensure_entry(Direction::Output, &item_const.ty, true)?;
+                self.intern(Direction::Output, &item_const.ty, true)?;
             } else {
                 missing.push(("constant", ident.to_string()));
             }
@@ -116,7 +116,7 @@ impl<M> Registry<M> {
         // Declared crossings with no element behind them (a foreign class type,
         // a synthesized constant's value type), each in its own direction.
         for (dir, ty) in &declared.crossings {
-            self.ensure_entry(*dir, ty, true)?;
+            self.intern(*dir, ty, true)?;
         }
 
         // Scan declared types.
@@ -130,13 +130,13 @@ impl<M> Registry<M> {
                     .map(|s| s.origin.syntax.clone())
                 {
                     self.scan_struct(&s)?;
-                    self.ensure_entry(Direction::Input, &ty, true)?;
-                    self.ensure_entry(Direction::Output, &ty, true)?;
+                    self.intern(Direction::Input, &ty, true)?;
+                    self.intern(Direction::Output, &ty, true)?;
                     matched = true;
                 } else if let Some(e) = self.flat.enum_item(&ident).cloned() {
                     self.scan_enum(&e)?;
-                    self.ensure_entry(Direction::Input, &ty, true)?;
-                    self.ensure_entry(Direction::Output, &ty, true)?;
+                    self.intern(Direction::Input, &ty, true)?;
+                    self.intern(Direction::Output, &ty, true)?;
                     matched = true;
                 }
             }
@@ -145,8 +145,8 @@ impl<M> Registry<M> {
                 // `ptr_class(ZKeyExpr<'static>)` on a re-exported
                 // foreign type). Still mark required so the resolver
                 // tries to produce a converter for it.
-                self.ensure_entry(Direction::Input, &ty, true)?;
-                self.ensure_entry(Direction::Output, &ty, true)?;
+                self.intern(Direction::Input, &ty, true)?;
+                self.intern(Direction::Output, &ty, true)?;
             }
         }
 
@@ -168,7 +168,7 @@ impl<M> Registry<M> {
             match input {
                 syn::FnArg::Receiver(_) => continue,
                 syn::FnArg::Typed(pt) => {
-                    self.register_type_recursive(Direction::Input, &pt.ty, true)?;
+                    self.intern_recursive(Direction::Input, &pt.ty, true)?;
                 }
             }
         }
@@ -176,20 +176,20 @@ impl<M> Registry<M> {
             syn::ReturnType::Default => syn::parse_quote!(()),
             syn::ReturnType::Type(_, ty) => (**ty).clone(),
         };
-        self.register_type_recursive(Direction::Output, &ret_ty, true)?;
+        self.intern_recursive(Direction::Output, &ret_ty, true)?;
         Ok(())
     }
 
     pub(super) fn scan_struct(&mut self, s: &syn::ItemStruct) -> Result<(), ScanError> {
         // The struct itself can appear in either direction.
         let ty: syn::Type = crate::api::core::flat::type_from_ident(&s.ident);
-        self.ensure_entry(Direction::Input, &ty, false)?;
-        self.ensure_entry(Direction::Output, &ty, false)?;
+        self.intern(Direction::Input, &ty, false)?;
+        self.intern(Direction::Output, &ty, false)?;
 
         if let syn::Fields::Named(named) = &s.fields {
             for field in &named.named {
-                self.register_type_recursive(Direction::Input, &field.ty, false)?;
-                self.register_type_recursive(Direction::Output, &field.ty, false)?;
+                self.intern_recursive(Direction::Input, &field.ty, false)?;
+                self.intern_recursive(Direction::Output, &field.ty, false)?;
             }
         }
         Ok(())
@@ -197,13 +197,13 @@ impl<M> Registry<M> {
 
     pub(super) fn scan_enum(&mut self, e: &syn::ItemEnum) -> Result<(), ScanError> {
         let ty: syn::Type = crate::api::core::flat::type_from_ident(&e.ident);
-        self.ensure_entry(Direction::Input, &ty, false)?;
-        self.ensure_entry(Direction::Output, &ty, false)?;
+        self.intern(Direction::Input, &ty, false)?;
+        self.intern(Direction::Output, &ty, false)?;
 
         for variant in &e.variants {
             for field in &variant.fields {
-                self.register_type_recursive(Direction::Input, &field.ty, false)?;
-                self.register_type_recursive(Direction::Output, &field.ty, false)?;
+                self.intern_recursive(Direction::Input, &field.ty, false)?;
+                self.intern_recursive(Direction::Output, &field.ty, false)?;
             }
         }
         Ok(())
@@ -215,72 +215,100 @@ impl<M> Registry<M> {
     pub(super) fn register_type_recursive(
         &mut self,
         dir: Direction,
-        ty: &syn::Type,
+        reading: &crate::api::core::flat::TypeRef,
         root: bool,
-    ) -> Result<(), ScanError> {
+    ) {
         let mut visited: HashSet<TypeKey> = HashSet::new();
-        self.register_type_inner(dir, ty, root, &mut visited)
+        self.register_type_inner(dir, reading, root, &mut visited)
     }
 
+    /// Infallible, and structurally so: every type reached here is a reading —
+    /// the caller's, or one the model already holds for a child — so there is
+    /// nothing left to classify and nothing left to refuse.
     pub(super) fn register_type_inner(
         &mut self,
         dir: Direction,
-        ty: &syn::Type,
+        reading: &crate::api::core::flat::TypeRef,
         is_top: bool,
         visited: &mut HashSet<TypeKey>,
-    ) -> Result<(), ScanError> {
-        // A disallowed `impl Trait` cannot reach here: every fn whose signature
-        // reaches this point passed the frontend's grammar — captured items at
-        // ingestion, binding-local ones at synthesis — and it names the
-        // parameter the bad type sits on.
-
-        let key = TypeKey::from_type(ty);
-        if !visited.insert(key.clone()) {
-            return Ok(()); // cycle guard
+    ) {
+        let key = reading.key();
+        if !visited.insert(key) {
+            return; // cycle guard
         }
 
-        self.ensure_entry(dir, ty, is_top)?;
+        self.ensure_entry(dir, reading, is_top);
 
-        for (child_dir, sub) in self.immediate_edges(dir, ty) {
-            self.register_type_inner(child_dir, &sub, false, visited)?;
+        for (child_dir, sub) in self.immediate_edges(dir, reading.syntax()) {
+            self.register_type_inner(child_dir, &sub, false, visited);
         }
-        Ok(())
     }
 
-    /// Create the cell for `ty` in `dir` if it has none, and mark it a root when
-    /// the binding asked for it directly.
+    /// Create the cell for `reading` in `dir` if it has none, and mark it a root
+    /// when the binding asked for it directly.
     ///
     /// The one place a cell is born, and therefore the one place a type **enters
-    /// the pipeline** — including a spelling the source never wrote, since expansion
-    /// composes those (an `Option<T>` around a `T` it found) and hands them straight
-    /// here via `require_input` / `require_output`.
+    /// the pipeline** — including a spelling the source never wrote, since
+    /// expansion composes those (an `Option<T>` around a `T` it found) and hands
+    /// them straight here via `require_input` / `require_output`.
     ///
-    /// The reading is taken **here, once**, and lives in the cell. The model is
-    /// consulted for it — [`Flat::classify`](crate::api::core::flat::Flat::classify)
-    /// is the grammar's one answer — but the model is not extended: a composed
-    /// spelling is an intermediate in *this binding's* crossing graph, not something
-    /// the source API mentions, and the table that tracks crossings is where it
-    /// belongs. So `Flat` stays what the source said, and every type the pipeline
-    /// works with has its reading in the table by the time the builder is finished.
+    /// **The caller's reading is what gets stored.** It is not re-derived from
+    /// the spelling, and that is the point (#281): the reading a caller holds and
+    /// the one `classify` would produce for its spelling are two answers from two
+    /// paths, and nothing was comparing them. Now there is only one answer,
+    /// because there is only one classification.
     ///
-    /// A spelling the grammar refuses is reported by name, rather than becoming a
-    /// cell that quietly means less than its neighbours. Only an *entry point* can
-    /// reach that: a type the walk found came from an existing reading's
-    /// `origin.syntax`, so it lowered once already.
+    /// Which is also why this is **infallible**. It was fallible for exactly one
+    /// reason — `classify` refusing a spelling — and a reading has already been
+    /// through that. Only [`intern`](Self::intern), the door for a spelling
+    /// nobody has classified yet, can still fail.
+    ///
+    /// The model is consulted, never extended: a composed spelling is an
+    /// intermediate in *this binding's* crossing graph, not something the source
+    /// API mentions, so `Flat` stays what the source said while every type the
+    /// pipeline works with has its reading in the table.
     pub(super) fn ensure_entry(
+        &mut self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+        root: bool,
+    ) {
+        let key = reading.key();
+        // The reading of a given key cannot change, so an existing cell already
+        // holds an equal one — only the root flag can still move.
+        if let Some(cell) = self.type_table_mut(dir).get_mut(&key) {
+            cell.root |= root;
+            return;
+        }
+        self.type_table_mut(dir).insert(
+            key,
+            TypeCell {
+                subject: Box::new(reading.clone()),
+                root,
+                entry: None,
+            },
+        );
+    }
+
+    /// Classify a **spelling** and register it — the one door for a type that
+    /// has no reading yet, and the only fallible way into the table.
+    ///
+    /// Everything the pipeline composes or walks already holds a
+    /// [`TypeRef`](crate::api::core::flat::TypeRef) and goes through
+    /// [`ensure_entry`](Self::ensure_entry) instead. What genuinely arrives as
+    /// tokens is a spelling *authored outside the model*: a build script's
+    /// declared crossing, a constant's declared type, a `syn` type the plan
+    /// engines assemble for their own wire shape.
+    ///
+    /// A spelling the grammar refuses is reported by name here, rather than
+    /// becoming a cell that quietly means less than its neighbours.
+    pub(crate) fn intern(
         &mut self,
         dir: Direction,
         ty: &syn::Type,
         root: bool,
-    ) -> Result<(), ScanError> {
-        let key = TypeKey::from_type(ty);
-        // Classify only when the cell is actually new: the reading of a given key
-        // cannot change, so an existing cell already holds it.
-        if let Some(cell) = self.type_table_mut(dir).get_mut(&key) {
-            cell.root |= root;
-            return Ok(());
-        }
-        let subject = self
+    ) -> Result<crate::api::core::flat::TypeRef, ScanError> {
+        let reading = self
             .flat
             .classify(ty)
             .map_err(|source| ScanError::NotExpressible {
@@ -290,14 +318,24 @@ impl<M> Registry<M> {
                     location: SourceLocation::default(),
                 }],
             })?;
-        self.type_table_mut(dir).insert(
-            key,
-            TypeCell {
-                subject: Box::new(subject),
-                root,
-                entry: None,
-            },
-        );
+        self.ensure_entry(dir, &reading, root);
+        Ok(reading)
+    }
+
+    /// [`intern`](Self::intern), then register every nested position — the
+    /// recursive door, for a spelling whose children must become crossings too
+    /// (a parameter, a return, a declared field).
+    ///
+    /// Only the top type is classified: the walk below it takes each child's
+    /// reading off the parent's, so nothing under here is re-derived.
+    pub(super) fn intern_recursive(
+        &mut self,
+        dir: Direction,
+        ty: &syn::Type,
+        root: bool,
+    ) -> Result<(), ScanError> {
+        let reading = self.intern(dir, ty, root)?;
+        self.register_type_recursive(dir, &reading, root);
         Ok(())
     }
 
@@ -327,10 +365,10 @@ impl<M> Registry<M> {
         &self,
         dir: Direction,
         ty: &syn::Type,
-    ) -> Vec<(Direction, syn::Type)> {
+    ) -> Vec<(Direction, crate::api::core::flat::TypeRef)> {
         use crate::api::core::flat::TypeKind;
 
-        let mut out: Vec<(Direction, syn::Type)> = Vec::new();
+        let mut out: Vec<(Direction, crate::api::core::flat::TypeRef)> = Vec::new();
         if let Some(reading) = self
             .type_table(dir)
             .get(&TypeKey::from_type(ty))
@@ -353,8 +391,12 @@ impl<M> Registry<M> {
                     | TypeKind::Str
                     | TypeKind::Unit => (Vec::new(), dir),
                 };
+            // The child reading itself, not its spelling: it has already been
+            // classified — by the model, or by whoever composed the parent — so
+            // handing back tokens for the caller to re-classify is the discard
+            // this walk exists to avoid (#281).
             for child in children {
-                out.push((child_dir, child.syntax().clone()));
+                out.push((child_dir, child.clone()));
             }
         }
         // A declared type's own fields, read off the element rather than off its
@@ -387,7 +429,7 @@ impl<M> Registry<M> {
                 Some(Type::Enum(_) | Type::Extern(_)) | None => Vec::new(),
             };
             for field in fields {
-                out.push((dir, field.ty.syntax().clone()));
+                out.push((dir, field.ty.clone()));
             }
         }
         out
@@ -409,7 +451,7 @@ impl<M> Registry<M> {
         root: bool,
         entry: Option<TypeEntry<M>>,
     ) {
-        self.ensure_entry(dir, &key.to_type(), root)
+        self.intern(dir, &key.to_type(), root)
             .unwrap_or_else(|e| panic!("fixture key `{key}` is not expressible: {e}"));
         self.type_table_mut(dir)
             .get_mut(key)
@@ -444,21 +486,24 @@ impl<M> Registry<M> {
             .map(|cell| (*cell.subject).clone())
     }
 
-    /// Register `ty` (and its nested positions) as a required **input** so
+    /// Register `reading` (and its nested positions) as a required **input** so
     /// the resolver produces a converter for it. Used by
     /// [`crate::api::core::expand`] to pull in the leaf types a fold needs.
-    pub(crate) fn require_input(&mut self, ty: &syn::Type) {
-        // Leaf/expansion types are concrete (no disallowed `impl Trait`), so
-        // the recursive registration cannot fail here.
-        let _ = self.register_type_recursive(Direction::Input, ty, true);
+    ///
+    /// Takes the **reading**, not its spelling. Every caller already holds one —
+    /// a plan leaf's `ty` — and used to call `.syntax()` on it here, which is the
+    /// discard #281 is about: the registry would then re-classify the tokens and
+    /// store its own answer beside the caller's.
+    pub(crate) fn require_input(&mut self, reading: &crate::api::core::flat::TypeRef) {
+        self.register_type_recursive(Direction::Input, reading, true);
     }
 
     /// Register `ty` (and its nested positions) as a required **output** so the
     /// resolver produces a converter for it. The output-side peer of
     /// [`Self::require_input`]; used by [`crate::api::core::unfold`] to pull in
     /// the leaf types a decomposition delivers.
-    pub(crate) fn require_output(&mut self, ty: &syn::Type) {
-        let _ = self.register_type_recursive(Direction::Output, ty, true);
+    pub(crate) fn require_output(&mut self, reading: &crate::api::core::flat::TypeRef) {
+        self.register_type_recursive(Direction::Output, reading, true);
     }
 
     /// Drop `ty` from the required-output scan set. The type's table entry is
