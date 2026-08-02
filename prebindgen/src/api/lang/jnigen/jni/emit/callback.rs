@@ -202,8 +202,27 @@ pub(crate) fn callback_input(
         let (cb_val, arg_entry) = match registry.output_entry(&arg_ty.origin.syntax) {
             Some(e) => (quote!(#cb_arg), e),
             // A borrow: the callback hands out a reference, and the value is
-            // cloned for the JVM. Off the reading — `borrow_target` is the
-            // model's answer, not a syn match.
+            // cloned for the JVM.
+            //
+            // That this is a borrow is the model's answer (`borrow_target`) —
+            // no spelling is inspected here, which is the point of #229.
+            //
+            // `(#cb_arg).clone()` is nonetheless only well-typed for a
+            // DIRECTLY-spelled `&T`: `#cb_arg` carries the source's spelling,
+            // so a transparent wrapper — `Box<&T>`, `Ref` all the same —
+            // would clone to `Box<&T>`, which the `T` converter rejects. That
+            // case is refused before it reaches here: a callback arg's
+            // whole-value output converter is a *required* type, and
+            // `output_wrapper_shape`'s borrowed-opaque arm matches
+            // `syn::Type::Reference` on `produced` structurally, so `Box<&T>`
+            // (a `Type::Path`) never gets one.
+            //
+            // MEASURED, not assumed — `a_wrapped_borrow_callback_arg_declines`
+            // fails, on exactly this clone, if that arm is made
+            // spelling-blind. A local re-check here was tried (#279 review)
+            // and dropped: it changed no output on `Box<&String>` or
+            // `Box<&ZThing>`, and cost a `boundary.ledger` entry for a
+            // classification that never fires.
             None => {
                 let core = arg_ty.borrow_target()?;
                 (

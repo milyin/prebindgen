@@ -647,3 +647,87 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
          interfaces for one callback"
     );
 }
+
+/// A callback argument spelled as a **wrapped** borrow — `Box<&T>` — is refused,
+/// rather than generating a trampoline the consumer cannot compile.
+///
+/// `Box` is transparent, so `Box<&T>`'s kind is `Ref` exactly as `&T`'s is: the
+/// model answers "borrow" for both, and that answer is correct. What differs is
+/// the *spelling*, and the generated trampoline is written in the spelling. Neutralise
+/// the guard — pass the canonical `&T` as `produced` at `selector.rs`'s borrow arm
+/// instead of the crossing's own `syntax` — and this test fails on emitted code that
+/// hands a `Box<&ZThing>` to a `ZThing_to_jlong(v: &myflat::ZThing)`:
+///
+/// ```ignore
+/// Box::new(move |__cb_arg0: Box<&myflat::ZThing>| {
+///     let __cb0_enc = ZThing_to_jlong_11822692(&mut env, __cb_arg0)?;
+/// ```
+///
+/// The guard that holds is [`Declarations::output_wrapper_shape`]'s borrowed-opaque
+/// arm, which matches `syn::Type::Reference` on `produced` structurally: `Box<&T>`
+/// is a `Type::Path`, so it gets no whole-value output converter, and a callback
+/// arg's is a required type. Same `kind`-classifies / spelling-decides split as
+/// #272's `decoded_vec_satisfies` and `is_unsized_spelling`.
+///
+/// A local re-check inside `emit/callback.rs` was tried and dropped (#279 review):
+/// it changed no output, and cost a `boundary.ledger` entry for a spelling
+/// classification that never fires. This test is the protection instead.
+#[test]
+fn a_wrapped_borrow_callback_arg_declines() {
+    use crate::SourceLocation;
+    let loc = myflat_loc();
+    let build = |argty: syn::Type| -> Result<String, String> {
+        let items: Vec<(syn::Item, SourceLocation)> = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZThing {
+                        pub v: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sub(cb: impl Fn(#argty) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZThing))
+                    .fun(crate::fun!(z_sub)),
+            );
+        let dir = unique_test_dir("jnigen_wrapped_cb");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    };
+
+    // The canonical borrow still resolves and still clones through the core.
+    let plain = build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    assert!(
+        plain.contains("__cb_arg0: &myflat::ZThing"),
+        "the trampoline takes the borrow as written:\n{plain}"
+    );
+
+    // Wrapped, the clone is inexpressible, so nothing claims it.
+    let err = build(syn::parse_quote!(Box<&ZThing>))
+        .expect_err("a wrapped borrow callback arg must not resolve");
+    assert!(
+        err.contains("could not be resolved"),
+        "the refusal names the type: {err}"
+    );
+}
