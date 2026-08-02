@@ -1710,3 +1710,108 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
     );
     assert!(ext.is_kotlin_enum(field("plain").syntax()));
 }
+
+/// A **transparently-wrapped** parameter spelling does not take a specialized
+/// lowering that would rebuild the unwrapped type.
+///
+/// The model erases `Box`/`Cow` ([`TRANSPARENT_WRAPPERS`]), so
+/// `Box<Option<Mode>>` classifies as `Optional` exactly as `Option<Mode>` does —
+/// and reading the layers off the model is what the reading-based probes were
+/// changed to do. But `build_option_scalar_input_plan` does not *decode* the
+/// parameter, it **rebuilds** it: the emitter writes a literal
+/// `Option::Some(v)` / `Option::None` and hands that to the source function.
+/// Handing a bare `Option<Mode>` to a parameter spelled `Box<Option<Mode>>` is
+/// an `E0308` in the generated crate.
+///
+/// So the selection asks the spelling too ([`rebuilt_value_satisfies`]) and
+/// declines, exactly as `decoded_vec_satisfies` makes the general converter path
+/// decline `&Box<Vec<T>>` (see
+/// `a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec`).
+///
+/// **What this pins is the refusal**, and it is asserted on the *pair* so it
+/// cannot pass vacuously: the bare twin must still take the decoupled
+/// `(present, value)` wire, and the wrapped one must not. The generated Rust is
+/// never compiled by this suite (#269), so the `E0308` itself is out of reach —
+/// the reachable property is that the emitter is never asked to write it.
+#[test]
+fn a_transparently_wrapped_option_does_not_take_the_present_value_pair() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Mode {
+                    A,
+                    B,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_bare(mode: Option<Mode>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_boxed(mode: Box<Option<Mode>>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Mode)))
+        .package(
+            crate::package!("cfg")
+                .fun(crate::fun!(z_bare))
+                .fun(crate::fun!(z_boxed)),
+        );
+
+    let dir = unique_test_dir("jnigen_wrapped_optscalar");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // The wrapped spelling may legitimately fail to resolve a converter of its
+    // own — that is a refusal too, and equally not an `E0308`. Only a build that
+    // SUCCEEDS can be asked what it emitted.
+    let Ok(gen) = jni.build_with(registry) else {
+        return;
+    };
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The control: the bare twin still takes the decoupled pair, so a refusal
+    // below is about the wrapper and not about the fixture failing to reach the
+    // specialized path at all.
+    assert!(
+        kc.contains("zBare(modePresent:Boolean,modeValue:Int"),
+        "the bare `Option<Mode>` must still cross as (present, value) — \
+         otherwise this test proves nothing about the wrapped one:\n{kotlin}"
+    );
+
+    // The finding: `Box<Option<Mode>>` must NOT, because the emitter would
+    // rebuild a bare `Option<Mode>` for a parameter that is not one.
+    assert!(
+        !kc.contains("zBoxed(modePresent"),
+        "`Box<Option<Mode>>` took the present/value lowering, which rebuilds a \
+         bare `Option<Mode>` and hands it to a fn expecting `Box<Option<Mode>>` \
+         — an E0308 in the generated crate:\n{kotlin}"
+    );
+    // What it takes instead: the ordinary boxed-`Int?` optional wire, whose
+    // converter is selected by `selector.rs` — the path that carries its own
+    // spelling guards.
+    assert!(kc.contains("zBoxed(mode:Int?"), "{kotlin}");
+}

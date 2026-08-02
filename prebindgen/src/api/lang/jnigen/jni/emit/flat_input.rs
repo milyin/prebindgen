@@ -744,6 +744,46 @@ pub(crate) struct FlatSumVariant {
     pub fields: Vec<(syn::Member, usize)>,
 }
 
+/// Peel `&` then `Option<…>` off the model to reach the value a specialized
+/// lowering would **rebuild**, refusing at any layer whose spelling adds a
+/// wrapper the classification erased.
+///
+/// One function because it is one rule. `kind` decides what the destination
+/// sees; the **conversion** follows the syntax, and these lowerings do not
+/// decode their parameter — they emit a literal `S { .. }`, wrap it in
+/// `Option::Some`, and hand it to the source function. Rebuilding from the
+/// classification alone produces the stripped type, so a parameter spelled
+/// `Box<Option<S>>` receives an `Option<S>`: `E0308` in the generated crate.
+///
+/// Refusing rather than rebuilding is a **gap, not a requirement**:
+/// `Box::new(v)` is exactly what the syntax asks for and is trivially
+/// emittable. It is left out here because doing it properly means teaching the
+/// converters to rebuild each wrapper, and `Cow` cannot be rebuilt from an
+/// owned payload at all. A wrapped spelling therefore keeps the general
+/// converter path, which is correct if less direct.
+///
+/// The wrapper question goes to [`TypeRef::erased_wrapper`] — the model holds
+/// both halves, so it is the only thing that can answer it, and no spelling is
+/// taken apart here.
+fn rebuildable_target(arg: &TypeRef) -> Option<(bool, bool, &TypeRef)> {
+    if arg.erased_wrapper().is_some() {
+        return None;
+    }
+    let by_ref = arg.borrow_target().is_some();
+    let t1 = arg.borrow_target().unwrap_or(arg);
+    if t1.erased_wrapper().is_some() {
+        return None;
+    }
+    let optional = t1.optional_inner().is_some();
+    let inner = t1.optional_inner().unwrap_or(t1);
+    // The struct is rebuilt BY NAME (`S { .. }`), so its own spelling must name
+    // it — a `Box<S>` target would need the `Box::new` this emitter never writes.
+    if inner.erased_wrapper().is_some() {
+        return None;
+    }
+    Some((by_ref, optional, inner))
+}
+
 /// A flattened plan for one struct input parameter. Built once by
 /// [`build_flat_input_plan`] and consumed by all three codegen sites.
 pub(crate) struct FlatInputPlan {
@@ -1132,13 +1172,11 @@ pub(crate) fn build_flat_input_plan(
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {
-    // 1. Resolve the struct target through `&` and `Option<…>` — both off the
-    //    MODEL, so a transparently-wrapped spelling (`Box<Option<S>>`) peels
-    //    exactly as the bare one does instead of defeating a path-segment probe.
-    let by_ref = arg.borrow_target().is_some();
-    let t1 = arg.borrow_target().unwrap_or(arg);
-    let optional = t1.optional_inner().is_some();
-    let inner = t1.optional_inner().unwrap_or(t1);
+    // 1. Resolve the struct target through `&` and `Option<…>` — off the model,
+    //    and refusing any layer whose spelling the rebuild could not satisfy.
+    let Some((by_ref, optional, inner)) = rebuildable_target(arg) else {
+        return Ok(None);
+    };
     // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
     // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
     // parameter spelled that way never becomes a reading and never reaches this
@@ -1830,8 +1868,13 @@ pub(crate) fn build_option_scalar_input_plan(
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Option<OptionScalarInputPlan> {
-    // The optional layer off the model, so a wrapped spelling (`Box<Option<T>>`)
-    // peels exactly as the bare one does.
+    // The optional layer off the model — but the emitter rebuilds a bare
+    // `Option::Some(v)` and hands it to the source fn, so a spelling the model
+    // erased a wrapper from could not receive it. Conversion follows the syntax;
+    // see [`rebuildable_target`], which applies the same rule to the struct path.
+    if arg.erased_wrapper().is_some() {
+        return None;
+    }
     let inner = arg.optional_inner()?;
     // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
     if inner.borrow_target().is_some() {

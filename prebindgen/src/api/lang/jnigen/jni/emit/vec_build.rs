@@ -33,12 +33,27 @@ pub(crate) fn vec_build_elem(
     // The run and its element off the MODEL. `&mut [T]` is still refused —
     // mutate-back semantics keep the `input_vec` path — and that is the one
     // fact the layer accessors do not carry, so `RefMode` is read directly.
-    let (elem, by_ref) = match arg.kind() {
-        flat::TypeKind::Ref { mode, inner } if *mode == RefMode::Shared => {
-            (inner.sequence_elem()?, true)
-        }
-        _ => (arg.sequence_elem()?, false),
+    //
+    // The conversion follows the SYNTAX, and must: this path builds a Rust-side
+    // `Vec<T>` and hands the source fn a borrow of it (or `mem::take`s it), so
+    // the referent has to be a form that built value satisfies. `&[T]`
+    // deref-coerces and `Vec<T>` is the thing itself; `Box<Vec<T>>` and
+    // `Cow<'_, [T]>` classify identically and cannot be rebuilt from the local.
+    // `decoded_vec_satisfies` in `selector.rs` is the same rule guarding the
+    // general converter path — asked here of the model, which holds both halves.
+    let (run, by_ref) = match arg.kind() {
+        flat::TypeKind::Ref { mode, inner } if *mode == RefMode::Shared => (&**inner, true),
+        _ => (arg, false),
     };
+    if run.erased_wrapper().is_some() {
+        return None;
+    }
+    let elem = run.sequence_elem()?;
+    // The element is spelled into `Vec<#elem>` and rebuilt per push, so a
+    // wrapped element spelling is unbuildable for the same reason.
+    if elem.erased_wrapper().is_some() {
+        return None;
+    }
     // The element must flatten; the probe ident is irrelevant here.
     let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
         .ok()

@@ -312,6 +312,40 @@ impl TypeRef {
         crate::api::core::registry::TypeKey::from_type(&self.origin.syntax)
     }
 
+    /// The [transparent wrapper](TRANSPARENT_WRAPPERS) this type's **spelling**
+    /// adds over its classification, if any — `Box<Option<T>>` → `Some("Box")`,
+    /// `Option<T>` → `None`.
+    ///
+    /// This exists because [`kind`](Self::kind) and [`syntax`](Self::syntax)
+    /// answer different questions, and only one of them is about the
+    /// destination:
+    ///
+    /// * `kind` decides what the **destination** sees — the surface type and the
+    ///   wire. `Box<Option<String>>` and `Option<String>` are one optional
+    ///   string to every destination language, which is why the wrapper is
+    ///   erased.
+    /// * `syntax` decides how the value is **converted** — and Rust does tell
+    ///   them apart. A converter that rebuilds a value must produce the type
+    ///   the source actually spelled.
+    ///
+    /// So a consumer that *classifies* should never consult this; a consumer
+    /// that **reconstructs a Rust value** must, because rebuilding from the
+    /// classification alone yields the stripped type and handing that to a
+    /// parameter spelled `Box<..>` is an `E0308` in the generated crate.
+    ///
+    /// Only the outermost wrapper is named. That is enough to decide *whether*
+    /// a spelling was erased — which is the question a reconstruction asks —
+    /// but a consumer that wants to rebuild a nested `Box<Cow<'_, T>>` needs to
+    /// peel repeatedly with [`peel_transparent`], the same list this reads.
+    ///
+    /// Erased says nothing about **rebuildable**: `Box` reconstructs as
+    /// `Box::new(v)`, while `Cow`'s `Owned`/`Borrowed` choice is not determined
+    /// by any fact the model holds. Which wrappers an emitter can rebuild is
+    /// that emitter's policy; this only stops the wrapper from being invisible.
+    pub fn erased_wrapper(&self) -> Option<&'static str> {
+        peel_transparent(&self.origin.syntax).map(|(name, _)| name)
+    }
+
     /// The `Ok` and `Err` sides when this is a `Result`, else `None`.
     pub fn fallible_parts(&self) -> Option<(&TypeRef, &TypeRef)> {
         match &self.kind {
