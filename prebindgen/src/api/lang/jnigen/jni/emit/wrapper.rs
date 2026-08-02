@@ -761,16 +761,15 @@ pub(crate) fn emit_expanded_param(
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
         let leaf_ty = leaf.ty.syntax();
         let lookup_entry = || {
-            registry
-                .reading_of(leaf_ty)
-                .and_then(|tr| registry.input_entry(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-                        TypeKey::from_type(leaf_ty),
-                        orig_param,
-                    )
-                })
+            // The leaf's own reading goes straight to the entry: spelling it and
+            // looking the same reading back up is the round trip #286 removed.
+            registry.input_entry(&leaf.ty).unwrap_or_else(|| {
+                panic!(
+                    "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
+                    leaf.ty.key(),
+                    orig_param,
+                )
+            })
         };
         let local = format_ident!("__exp_{}", leaf.name);
 

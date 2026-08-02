@@ -569,11 +569,8 @@ fn classify_leaf(
 
     // Every non-callback leaf requires a resolved input entry — the same
     // hard boundary the Rust emitter has always enforced.
-    let Some(entry) = registry
-        .reading_of(ty)
-        .and_then(|tr| registry.input_entry(&tr))
-    else {
-        let key = TypeKey::from_type(ty);
+    let Some(entry) = registry.input_entry(reading) else {
+        let key = reading.key();
         return Err(if expanded {
             PlanError::UnresolvedLeaf {
                 ty: key,
