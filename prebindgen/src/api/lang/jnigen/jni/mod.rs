@@ -52,7 +52,7 @@ pub(crate) use crate::api::{
         domain::ScalarValue,
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen, Stage},
-        registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
+        registry::{Direction, Registry, TypeKey},
         types_util::{bare_path_ident, option_inner_type, vec_inner_type},
     },
     gen::kotlin::WriteKotlinError,

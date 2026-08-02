@@ -117,13 +117,19 @@ mod spelling_census {
         // The L4 "layer questions" remainder — #229. Not migrated here because
         // it is a separate consumer and bundling it would make one review of
         // both impossible.
-        ("jni/emit/flat_input.rs", 20),
+        ("jni/emit/flat_input.rs", 18),
         ("jni/emit/struct_out.rs", 2),
-        ("jni/emit/vec_build.rs", 1),
         ("jni/emit/wrapper.rs", 2),
+        //
+        // vec_build.rs is absent, and off the boundary ledger too: its element
+        // peel reads `sequence_elem`/`borrow_target` off the model now.
+        //
+        // fold.rs's one call is inside `enum_probe_type`, the spelling twin of
+        // `enum_probe` kept for `unfold_leaf_kt`'s `syn::Type` callers.
         ("jni/fold.rs", 1),
         ("jni/iface.rs", 2),
-        ("jni/kotlin_emit.rs", 1),
+        // kotlin_emit.rs is off the census: `sum_ctor_arg`'s enum payload peels
+        // its `Option` off the leaf's own reading.
         ("jni/trait_impl.rs", 4),
         // Down from 2: the nullability decisions now ask the model. The one
         // left probes for an enum through its layers.

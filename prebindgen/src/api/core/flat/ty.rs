@@ -312,10 +312,69 @@ impl TypeRef {
         crate::api::core::registry::TypeKey::from_type(&self.origin.syntax)
     }
 
+    /// The [transparent wrapper](TRANSPARENT_WRAPPERS) this type's **spelling**
+    /// adds over its classification, if any — `Box<Option<T>>` → `Some("Box")`,
+    /// `Option<T>` → `None`.
+    ///
+    /// This exists because [`kind`](Self::kind) and [`syntax`](Self::syntax)
+    /// answer different questions, and only one of them is about the
+    /// destination:
+    ///
+    /// * `kind` decides what the **destination** sees — the surface type and the
+    ///   wire. `Box<Option<String>>` and `Option<String>` are one optional
+    ///   string to every destination language, which is why the wrapper is
+    ///   erased.
+    /// * `syntax` decides how the value is **converted** — and Rust does tell
+    ///   them apart. A converter that rebuilds a value must produce the type
+    ///   the source actually spelled.
+    ///
+    /// So a consumer that *classifies* should never consult this; a consumer
+    /// that **reconstructs a Rust value** must, because rebuilding from the
+    /// classification alone yields the stripped type and handing that to a
+    /// parameter spelled `Box<..>` is an `E0308` in the generated crate.
+    ///
+    /// Only the outermost wrapper is named. That is enough to decide *whether*
+    /// a spelling was erased — which is the question a reconstruction asks —
+    /// but a consumer that wants to rebuild a nested `Box<Cow<'_, T>>` needs to
+    /// peel repeatedly with [`peel_transparent`], the same list this reads.
+    ///
+    /// Erased says nothing about **rebuildable**: `Box` reconstructs as
+    /// `Box::new(v)`, while `Cow`'s `Owned`/`Borrowed` choice is not determined
+    /// by any fact the model holds. Which wrappers an emitter can rebuild is
+    /// that emitter's policy; this only stops the wrapper from being invisible.
+    pub fn erased_wrapper(&self) -> Option<&'static str> {
+        peel_transparent(&self.origin.syntax).map(|(name, _)| name)
+    }
+
     /// The `Ok` and `Err` sides when this is a `Result`, else `None`.
     pub fn fallible_parts(&self) -> Option<(&TypeRef, &TypeRef)> {
         match &self.kind {
             TypeKind::Fallible { ok, err } => Some((ok, err)),
+            _ => None,
+        }
+    }
+
+    /// The argument types when this is a callback, else `None` — the reading
+    /// counterpart of
+    /// [`extract_fn_trait_args`](super::extract_fn_trait_args).
+    ///
+    /// The two are the same question asked of different things, and that is the
+    /// whole difference. `extract_fn_trait_args` takes an
+    /// `impl Fn(..) + Send + Sync + 'static` **apart**: it walks the bounds,
+    /// checks the three markers, and refuses a written return type — it is a
+    /// classifier, and the one the model itself runs to build
+    /// [`TypeKind::Callback`]. This reads the result of that classification,
+    /// already made. A consumer holding a reading has no reason to redo the
+    /// walk, and every reason not to: a `Vec<syn::Type>` of *arguments* has lost
+    /// which of them the model accepted and how, while each `TypeRef` here
+    /// carries its own classification and its own spelling.
+    ///
+    /// Consequently this answers `None` for a type that merely *looks* like a
+    /// callback but was refused (a missing `Send`, an `impl Fn() -> u8`): the
+    /// acceptance already happened, and asking again is how the two drift.
+    pub fn callback_args(&self) -> Option<&[TypeRef]> {
+        match &self.kind {
+            TypeKind::Callback { args } => Some(args),
             _ => None,
         }
     }

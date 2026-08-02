@@ -1610,3 +1610,313 @@ fn a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec() {
         "the refusal must name the wrapper spelling the binding cannot convert:\n{msg}"
     );
 }
+
+/// The enum probe answers about the **type**, not about the wrapper around it.
+///
+/// `is_kotlin_enum_reading` peels with [`enum_probe`], which walks the model's
+/// own layers, and then keys on `TypeKind::Named` — so every spelling of "a
+/// `Priority`, held some way" reaches the `enum_class!(Priority)` declaration.
+/// The spelling-keyed `is_kotlin_enum` cannot: `Box<Priority>` canonicalizes to
+/// `Box < Priority >`, which no declaration ever registered, and the answer is
+/// `false` about a type that IS a Kotlin enum. Both are asserted here, because
+/// the difference between them is the reason the reading-taking one exists.
+///
+/// A **run is not peeled**, and that is the half a `layer_stack`-based probe
+/// would get wrong: `Vec<Priority>` is a `List<Priority>` on the Kotlin side, so
+/// treating it as an enum would wire a list to a `.value` discriminant.
+///
+/// `Probe` is deliberately undeclared — jnigen is opt-in, so it emits nothing,
+/// and it exists only to give the model a field per spelling to classify.
+#[test]
+fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
+    use crate::api::core::flat;
+
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 1,
+                    High = 2,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    pub plain: Priority,
+                    pub borrowed: Box<Priority>,
+                    pub optional: Option<Priority>,
+                    pub boxed_optional: Box<Option<Priority>>,
+                    pub optional_borrow: Option<Box<Priority>>,
+                    pub run: Vec<Priority>,
+                    pub unrelated: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Priority)))
+        .build_with(registry)
+        .expect("resolve");
+    let (ext, registry) = (gen.declarations(), gen.registry());
+
+    let flat::Type::Struct(probe) = registry.flat().declared_type("Probe").expect("indexed") else {
+        panic!("Probe is a struct");
+    };
+    let field = |name: &str| {
+        &probe
+            .fields
+            .iter()
+            .find(|f| f.name.as_ref().is_some_and(|n| n == name))
+            .unwrap_or_else(|| panic!("field `{name}`"))
+            .ty
+    };
+
+    for name in [
+        "plain",
+        "borrowed",
+        "optional",
+        "boxed_optional",
+        "optional_borrow",
+    ] {
+        let reading = field(name);
+        assert!(
+            ext.is_kotlin_enum_reading(reading),
+            "`{name}` holds a declared Kotlin enum, however it is wrapped — the \
+             probe peels the model's layers, so it must say so"
+        );
+    }
+
+    for name in ["run", "unrelated"] {
+        assert!(
+            !ext.is_kotlin_enum_reading(field(name)),
+            "`{name}` is not an enum value: a run of enums is a `List`, and the \
+             probe must not peel the sequence layer to reach the element"
+        );
+    }
+
+    // The difference from the spelling-keyed probe, pinned: a transparent
+    // wrapper is invisible to the model and decisive for a canonical key.
+    assert!(
+        !ext.is_kotlin_enum(field("borrowed").syntax()),
+        "if the spelling key ever started seeing through `Box`, this test would \
+         stop distinguishing the two probes"
+    );
+    assert!(ext.is_kotlin_enum(field("plain").syntax()));
+}
+
+/// A **transparently-wrapped** parameter spelling does not take a specialized
+/// lowering that would rebuild the unwrapped type.
+///
+/// The model erases `Box`/`Cow` ([`TRANSPARENT_WRAPPERS`]), so
+/// `Box<Option<Mode>>` classifies as `Optional` exactly as `Option<Mode>` does —
+/// and reading the layers off the model is what the reading-based probes were
+/// changed to do. But `build_option_scalar_input_plan` does not *decode* the
+/// parameter, it **rebuilds** it: the emitter writes a literal
+/// `Option::Some(v)` / `Option::None` and hands that to the source function.
+/// Handing a bare `Option<Mode>` to a parameter spelled `Box<Option<Mode>>` is
+/// an `E0308` in the generated crate.
+///
+/// So the selection asks the spelling too ([`rebuilt_value_satisfies`]) and
+/// declines, exactly as `decoded_vec_satisfies` makes the general converter path
+/// decline `&Box<Vec<T>>` (see
+/// `a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec`).
+///
+/// **What this pins is the refusal**, and it is asserted on the *pair* so it
+/// cannot pass vacuously: the bare twin must still take the decoupled
+/// `(present, value)` wire, and the wrapped one must not. The generated Rust is
+/// never compiled by this suite (#269), so the `E0308` itself is out of reach —
+/// the reachable property is that the emitter is never asked to write it.
+#[test]
+fn a_transparently_wrapped_option_does_not_take_the_present_value_pair() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Mode {
+                    A,
+                    B,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_bare(mode: Option<Mode>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_boxed(mode: Box<Option<Mode>>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Mode)))
+        .package(
+            crate::package!("cfg")
+                .fun(crate::fun!(z_bare))
+                .fun(crate::fun!(z_boxed)),
+        );
+
+    let dir = unique_test_dir("jnigen_wrapped_optscalar");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // The wrapped spelling may legitimately fail to resolve a converter of its
+    // own — that is a refusal too, and equally not an `E0308`. Only a build that
+    // SUCCEEDS can be asked what it emitted.
+    let Ok(gen) = jni.build_with(registry) else {
+        return;
+    };
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The control: the bare twin still takes the decoupled pair, so a refusal
+    // below is about the wrapper and not about the fixture failing to reach the
+    // specialized path at all.
+    assert!(
+        kc.contains("zBare(modePresent:Boolean,modeValue:Int"),
+        "the bare `Option<Mode>` must still cross as (present, value) — \
+         otherwise this test proves nothing about the wrapped one:\n{kotlin}"
+    );
+
+    // The finding: `Box<Option<Mode>>` must NOT, because the emitter would
+    // rebuild a bare `Option<Mode>` for a parameter that is not one.
+    assert!(
+        !kc.contains("zBoxed(modePresent"),
+        "`Box<Option<Mode>>` took the present/value lowering, which rebuilds a \
+         bare `Option<Mode>` and hands it to a fn expecting `Box<Option<Mode>>` \
+         — an E0308 in the generated crate:\n{kotlin}"
+    );
+    // What it takes instead: the ordinary boxed-`Int?` optional wire, whose
+    // converter is selected by `selector.rs` — the path that carries its own
+    // spelling guards.
+    assert!(kc.contains("zBoxed(mode:Int?"), "{kotlin}");
+}
+
+/// The transparent-wrapper guard runs **before** the model's layers are
+/// interpreted, not after.
+///
+/// An erasure sits *outside* the layer it wraps, so `Box<&Vec<Foo>>` classifies
+/// as `TypeKind::Ref` — the `Box` is gone from `kind` and survives only in the
+/// spelling. A guard that reads `kind` first replaces the argument with the
+/// inner sequence reading, whose own spelling is a clean `Vec<Foo>`, and the
+/// outer wrapper is never seen: the Vec-build plan is selected, its emitter
+/// hands the source fn a `&[Foo]` built from the transient Rust-side `Vec`, and
+/// the parameter still spells `Box<&Vec<Foo>>`. That is the same `E0308` class
+/// [`a_transparently_wrapped_option_does_not_take_the_present_value_pair`]
+/// covers, reached by peeling in the wrong order.
+///
+/// So this pins the **ordering**, which the shape-by-shape tests cannot: every
+/// layer is checked on the way down, and the outermost is checked first.
+#[test]
+fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_bare(v: &[Foo]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_wrapped(v: Box<&Vec<Foo>>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(crate::fun!(put_bare))
+                .fun(crate::fun!(put_wrapped)),
+        );
+
+    let dir = unique_test_dir("jnigen_outer_wrapper_ref");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // The wrapped spelling may legitimately resolve no converter of its own —
+    // that is a refusal too, and equally not an `E0308`.
+    let Ok(gen) = jni.build_with(registry) else {
+        return;
+    };
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The control: the bare `&[Foo]` twin still takes the Vec-build handle path,
+    // so a refusal below is about the wrapper and not about the fixture failing
+    // to reach the specialized path at all.
+    assert!(
+        kc.contains("fooVecNew"),
+        "the bare `&[Foo]` must still take the Vec-build path — otherwise this \
+         test proves nothing about the wrapped one:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("val__vec_v=JNINative.fooVecNew(v.size)"),
+        "{kotlin}"
+    );
+
+    // The finding: `Box<&Vec<Foo>>` must not reach the Vec-build call site. Its
+    // wrapper is invisible to `kind` (which says `Ref`), so only a check made
+    // before the layers are read can catch it.
+    // Split on the WRAPPER, not on `externalfunputWrapped(` in `JNINative` —
+    // the extern block is followed by the shared `fooVecNew` declarations, so a
+    // looser split would read them as this function's body and pass falsely.
+    let wrapped_body = kc
+        .split("publicfunputWrapped(")
+        .nth(1)
+        .map(|s| s.split("publicfun").next().unwrap_or(s).to_string())
+        .unwrap_or_default();
+    assert!(
+        !wrapped_body.contains("fooVecNew"),
+        "`Box<&Vec<Foo>>` took the Vec-build path, which hands the source fn a \
+         `&[Foo]` built from a transient Vec while the parameter spells \
+         `Box<&Vec<Foo>>` — an E0308 in the generated crate:\n{kotlin}"
+    );
+}

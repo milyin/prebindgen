@@ -793,18 +793,15 @@ impl Declarations {
         // nothing is looked up (#275).
         let field_ty = field.ty.syntax();
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
-        let out = registry
-            .reading_of(field_ty)
-            .and_then(|tr| registry.output_entry(&tr))
-            .unwrap_or_else(|| {
-                panic!(
-                    "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
+        let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
+            panic!(
+                "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
                  cannot be derived — register converters for the payload type before \
                  declaring the sealed class",
-                    where_(),
-                    field_ty.to_token_stream(),
-                )
-            });
+                where_(),
+                field_ty.to_token_stream(),
+            )
+        });
 
         if let Some(h) = out.metadata.projection.clone() {
             let leaf = projection_leaf_kt(self, &h).unwrap_or_else(|| {
@@ -836,10 +833,7 @@ impl Declarations {
         // boxed value, a present flag, a niche) rather than in the type name.
         // Comparing the rendered types would reject that legitimate shape —
         // which is what an `Option<enum>` payload does.
-        if let Some(inp) = registry
-            .reading_of(field_ty)
-            .and_then(|tr| registry.input_entry(&tr))
-        {
+        if let Some(inp) = registry.input_entry(&field.ty) {
             if let (Some(in_ty), (Some(a), Some(b))) = (
                 inp.metadata.kotlin_name.clone(),
                 (
@@ -1079,19 +1073,17 @@ impl Declarations {
             .collect();
         for ident in &declared_idents {
             {
-                let Some(item_fn) = registry
-                    .flat()
-                    .function(&ident)
-                    .map(|func| &func.origin.syntax)
-                else {
+                // The ELEMENT, so the callback params come off the model's own
+                // classification rather than a second walk of the bounds.
+                let Some(func) = registry.flat().function(&ident) else {
                     continue;
                 };
-                for input in &item_fn.sig.inputs {
-                    let syn::FnArg::Typed(pt) = input else {
-                        continue;
-                    };
-                    if let Some(cb_args) = extract_fn_trait_args(&pt.ty) {
-                        uses.insert(SpecKey::callback(&cb_args));
+                let item_fn = &func.origin.syntax;
+                for p in &func.params {
+                    if let Some(cb_args) = p.ty.callback_args() {
+                        let arg_tys: Vec<syn::Type> =
+                            cb_args.iter().map(|a| a.syntax().clone()).collect();
+                        uses.insert(SpecKey::callback(&arg_tys));
                     }
                 }
                 if let Some(plan) = registry
@@ -1525,12 +1517,12 @@ impl Declarations {
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        if self.is_kotlin_enum(&enum_probe_type(leaf.out_ty.syntax())) {
-            let inner = option_inner_type(leaf.out_ty.syntax())
-                .unwrap_or_else(|| leaf.out_ty.syntax().clone());
+        if self.is_kotlin_enum_reading(&leaf.out_ty) {
+            // The `Option` layer peeled off the model, so the entry lookup takes
+            // the layer's own reading instead of a spelling to look back up.
+            let inner = leaf.out_ty.optional_inner().unwrap_or(&leaf.out_ty);
             let name = registry
-                .reading_of(&inner)
-                .and_then(|tr| registry.output_entry(&tr))
+                .output_entry(inner)
                 .and_then(|e| e.metadata.kotlin_name.clone())
                 .and_then(|t| t.leaf_name().map(str::to_string))
                 .unwrap_or_else(|| {

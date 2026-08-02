@@ -5,12 +5,41 @@
 //! via `use super::*`.
 
 use super::*;
+use crate::api::core::flat::TypeRef;
 
-/// Peel a leading `&`/`&mut` and an `Option<…>` layer to expose the inner type
-/// used for enum detection. So `&Priority`, `Priority`, and `Option<Priority>`
-/// all probe as `Priority` — letting nullable enum params (`Option<enum>`) wire
-/// as `Int?` + `?.value` just like a non-null enum wires as `Int` + `.value`,
-/// instead of leaking the enum object to the (boxed-int-expecting) Rust converter.
+/// Peel the layers that never change whether a value's core is a Kotlin enum,
+/// **off the model**: a borrow and an optional, in any nesting. So `&Priority`,
+/// `Priority`, `Option<Priority>` and `Option<&Priority>` all probe as
+/// `Priority` — letting nullable enum params (`Option<enum>`) wire as `Int?` +
+/// `?.value` just like a non-null enum wires as `Int` + `.value`, instead of
+/// leaking the enum object to the (boxed-int-expecting) Rust converter.
+///
+/// A **run is not peeled**. `Vec<Priority>` is a `List<Priority>`, not an enum,
+/// so this is deliberately not [`TypeRef::layer_stack`], which strips the
+/// sequence layer too.
+///
+/// Borrowing rather than composing is not a shortcut: every layer of a reading
+/// already holds the next as a `TypeRef` of its own, so there is nothing to
+/// mint — which is also why this needs no registry. What it returns spells
+/// itself (`origin.syntax`) and classifies itself (`kind`), and the two cannot
+/// disagree.
+pub(crate) fn enum_probe(reading: &TypeRef) -> &TypeRef {
+    let mut cur = reading;
+    while let Some(inner) = cur.borrow_target().or_else(|| cur.optional_inner()) {
+        cur = inner;
+    }
+    cur
+}
+
+/// [`enum_probe`] over a bare spelling, for the one caller that does not have a
+/// reading to peel: [`unfold_leaf_kt`](super::render::unfold_leaf_kt), whose
+/// `out_ty` arrives as `syn::Type` through `leaf_iface_param` from
+/// `UnfoldPlan::element` and `LeafDesc::Whole`. Both must become `TypeRef`s
+/// before this can go — an element-walking change, not a helper swap.
+///
+/// It answers about the WRAPPER where the model answers about the type:
+/// `Box<Priority>` probes as `Box<Priority>` here and as `Priority` there.
+/// Prefer [`enum_probe`] wherever a reading is in hand.
 pub(crate) fn enum_probe_type(ty: &syn::Type) -> syn::Type {
     let stripped = match ty {
         syn::Type::Reference(r) => (*r.elem).clone(),

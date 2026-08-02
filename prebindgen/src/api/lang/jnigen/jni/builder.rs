@@ -7,7 +7,15 @@
 //! JNI module; shares the `jni` namespace via `use super::*`.
 
 use super::*;
-use crate::api::core::registry::Conversions;
+// `flat` as a module, not `flat::TypeKind` directly: the bare `TypeKind` in this
+// file is jnigen's OWN classifier (`classify.rs`, reached through `use super::*`
+// above), and an explicit import beats a glob — importing the model's would
+// silently retarget the `TypeKind::Sum` / `TypeKind::DataStruct` matches below.
+// One qualifier keeps both names short and says which of the two it is.
+use crate::api::core::{
+    flat::{self, TypeRef},
+    registry::Conversions,
+};
 
 impl DeclaredKind {
     /// The declaring macro's name, for the conflict message.
@@ -97,9 +105,34 @@ impl Declarations {
     /// Kotlin wrapper generator to decide if a parameter needs a `.value`
     /// projection between the typed enum (Kotlin signature) and the `Int`
     /// wire (JNI `external fun`).
+    ///
+    /// Keyed on the canonical **spelling**, so it answers about the wrapper for
+    /// a transparently-wrapped type: `Box<Priority>` is `false` here.
+    /// [`is_kotlin_enum_reading`](Self::is_kotlin_enum_reading) is the same
+    /// question asked of the model, and is what a caller holding a reading
+    /// should use.
     pub(crate) fn is_kotlin_enum(&self, ty: &syn::Type) -> bool {
         let key = TypeKey::from_type(ty);
         self.types.get(&key).is_some_and(|c| c.is_enum_class())
+    }
+
+    /// Whether this value's core is a type registered via an `EnumClassDecl`,
+    /// asked of the **reading**: [`enum_probe`] peels the borrow/optional
+    /// layers off the model, and the name comes off the classification.
+    ///
+    /// The name off `TypeKind::Named` rather than the spelling is the whole
+    /// difference from [`is_kotlin_enum`](Self::is_kotlin_enum). A declaration
+    /// names a type (`enum_class!(Priority)` keys `Priority`), and the model
+    /// erases the wrappers no destination language can see — so
+    /// `Box<Option<&Priority>>` reaches the same declaration `Priority` does,
+    /// where taking the spelling apart finds `Box` and answers about it.
+    pub(crate) fn is_kotlin_enum_reading(&self, reading: &TypeRef) -> bool {
+        let flat::TypeKind::Named { id } = enum_probe(reading).kind() else {
+            return false;
+        };
+        id.ident()
+            .and_then(|i| self.types.get(&TypeKey::from_ident(&i)))
+            .is_some_and(|c| c.is_enum_class())
     }
 }
 
@@ -852,7 +885,7 @@ impl Declarations {
         // model already normalized them.
         let ret = accessor.ret.borrow_target().unwrap_or(&accessor.ret);
         assert!(
-            !matches!(ret.kind(), crate::api::core::flat::TypeKind::Unit),
+            !matches!(ret.kind(), flat::TypeKind::Unit),
             "expand_return!({}).fields(fields!({func})): `{func}` returns nothing — a \
              value form returns the struct holding this type's fields",
             key.as_str(),
@@ -914,7 +947,7 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         decl: &FieldsDecl,
-        st: &crate::api::core::flat::Struct,
+        st: &flat::Struct,
         members: &[syn::Ident],
         name_prefix: &str,
         depth: usize,
@@ -1053,10 +1086,10 @@ impl Declarations {
                     );
                     // The name is the reading's, not a path taken apart to
                     // re-derive one.
-                    let crate::api::core::flat::TypeKind::Named { id } = probe.kind() else {
+                    let flat::TypeKind::Named { id } = probe.kind() else {
                         panic!("a sum type is a named type")
                     };
-                    let crate::api::core::flat::Type::Variant(sum) = registry
+                    let flat::Type::Variant(sum) = registry
                         .flat()
                         .declared_type(&id.name)
                         .expect("TypeKind::Sum implies an indexed enum")

@@ -2,7 +2,12 @@
 //! expressions, and the Rust-side reconstruct.
 
 use super::*;
-use crate::api::core::registry::Conversions;
+// `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
+// classifier (via `use super::*`), and an explicit import would shadow it.
+use crate::api::core::{
+    flat::{self, TypeRef},
+    registry::Conversions,
+};
 
 pub(crate) fn struct_input_body(
     ext: &Declarations,
@@ -739,6 +744,46 @@ pub(crate) struct FlatSumVariant {
     pub fields: Vec<(syn::Member, usize)>,
 }
 
+/// Peel `&` then `Option<…>` off the model to reach the value a specialized
+/// lowering would **rebuild**, refusing at any layer whose spelling adds a
+/// wrapper the classification erased.
+///
+/// One function because it is one rule. `kind` decides what the destination
+/// sees; the **conversion** follows the syntax, and these lowerings do not
+/// decode their parameter — they emit a literal `S { .. }`, wrap it in
+/// `Option::Some`, and hand it to the source function. Rebuilding from the
+/// classification alone produces the stripped type, so a parameter spelled
+/// `Box<Option<S>>` receives an `Option<S>`: `E0308` in the generated crate.
+///
+/// Refusing rather than rebuilding is a **gap, not a requirement**:
+/// `Box::new(v)` is exactly what the syntax asks for and is trivially
+/// emittable. It is left out here because doing it properly means teaching the
+/// converters to rebuild each wrapper, and `Cow` cannot be rebuilt from an
+/// owned payload at all. A wrapped spelling therefore keeps the general
+/// converter path, which is correct if less direct.
+///
+/// The wrapper question goes to [`TypeRef::erased_wrapper`] — the model holds
+/// both halves, so it is the only thing that can answer it, and no spelling is
+/// taken apart here.
+fn rebuildable_target(arg: &TypeRef) -> Option<(bool, bool, &TypeRef)> {
+    if arg.erased_wrapper().is_some() {
+        return None;
+    }
+    let by_ref = arg.borrow_target().is_some();
+    let t1 = arg.borrow_target().unwrap_or(arg);
+    if t1.erased_wrapper().is_some() {
+        return None;
+    }
+    let optional = t1.optional_inner().is_some();
+    let inner = t1.optional_inner().unwrap_or(t1);
+    // The struct is rebuilt BY NAME (`S { .. }`), so its own spelling must name
+    // it — a `Box<S>` target would need the `Box::new` this emitter never writes.
+    if inner.erased_wrapper().is_some() {
+        return None;
+    }
+    Some((by_ref, optional, inner))
+}
+
 /// A flattened plan for one struct input parameter. Built once by
 /// [`build_flat_input_plan`] and consumed by all three codegen sites.
 pub(crate) struct FlatInputPlan {
@@ -751,26 +796,15 @@ pub(crate) struct FlatInputPlan {
     pub contains_nested: bool,
 }
 
-/// Extract `S` from an `impl Into<S> + …` parameter type.
-pub(crate) fn impl_into_target(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::ImplTrait(it) = ty else {
-        return None;
-    };
-    for b in &it.bounds {
-        if let syn::TypeParamBound::Trait(tb) = b {
-            if let Some(seg) = tb.path.segments.last() {
-                if seg.ident == "Into" {
-                    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
-                        if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
-                            return Some(t.clone());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    None
-}
+// `impl_into_target` lived here: it extracted `S` from an `impl Into<S> + …`
+// spelling for `build_flat_input_plan`'s struct-target peel. It is gone because
+// that peel now takes a reading, and the model REFUSES `impl Trait` that is not
+// the callback form (`UnsupportedTypeReason::DisallowedImplTrait`) — so a
+// parameter spelled `impl Into<S>` never becomes a `TypeRef` and never reached
+// the call. `cargo check` confirmed it dead rather than the reasoning alone.
+// jnigen's actual `impl Into<…>` support is elsewhere: plugin wrapper exts build
+// a `ConverterImpl::function` by hand via `Declarations::input_converter_name`,
+// which never consults this.
 
 /// Peel a leading `&`/`&mut` then an `Option<…>` to expose the inner type used
 /// for enum/struct detection (`&Priority`, `Option<Priority>` → `Priority`).
@@ -1136,19 +1170,24 @@ pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
-    arg_ty: &syn::Type,
+    arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {
-    // 1. Resolve the struct target through `&`, `Option<…>`, and `impl Into<S>`.
-    let (by_ref, t1) = match arg_ty {
-        syn::Type::Reference(r) => (true, (*r.elem).clone()),
-        other => (false, other.clone()),
+    // 1. Resolve the struct target through `&` and `Option<…>` — off the model,
+    //    and refusing any layer whose spelling the rebuild could not satisfy.
+    let Some((by_ref, optional, inner)) = rebuildable_target(arg) else {
+        return Ok(None);
     };
-    let (optional, inner) = match option_inner_type(&t1) {
-        Some(i) => (true, i),
-        None => (false, t1.clone()),
+    // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
+    // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
+    // parameter spelled that way never becomes a reading and never reaches this
+    // function. The former `impl_into_target` call was already unreachable from
+    // every caller — see the sibling helper's doc.
+    // The name off the classification, not off the last path segment: `Box<S>`
+    // IS `S` here, and taking the spelling apart would answer about the wrapper.
+    let flat::TypeKind::Named { id } = inner.kind() else {
+        return Ok(None);
     };
-    let struct_ty = impl_into_target(&inner).unwrap_or_else(|| inner.clone());
-    let Some(name) = bare_path_ident(&struct_ty) else {
+    let Some(name) = id.ident() else {
         return Ok(None);
     };
     let Some(st) = registry
@@ -1158,7 +1197,7 @@ pub(crate) fn build_flat_input_plan(
     else {
         return Ok(None);
     };
-    let key = TypeKey::from_type(&struct_ty);
+    let key = inner.key();
     let Some(cfg) = ext.types.get(&key) else {
         return Ok(None);
     };
@@ -1171,10 +1210,8 @@ pub(crate) fn build_flat_input_plan(
     // surfaces as `"Any"` Dispatch or a foreign source type). The resolved
     // param's Kotlin type (compared by short name, since metadata carries the
     // FQN) must equal the struct's data-class name.
-    let Some(entry) = registry
-        .reading_of(arg_ty)
-        .and_then(|tr| registry.input_entry(&tr))
-    else {
+    // The parameter's own reading straight to its entry — no spell-and-look-back.
+    let Some(entry) = registry.input_entry(arg) else {
         return Ok(None);
     };
     if entry.metadata.projection.is_some() {
@@ -1829,16 +1866,22 @@ pub(crate) fn build_option_scalar_input_plan(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
-    arg_ty: &syn::Type,
+    arg: &TypeRef,
 ) -> Option<OptionScalarInputPlan> {
-    let inner = option_inner_type(arg_ty)?;
-    // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
-    if matches!(inner, syn::Type::Reference(_)) {
+    // The optional layer off the model — but the emitter rebuilds a bare
+    // `Option::Some(v)` and hands it to the source fn, so a spelling the model
+    // erased a wrapper from could not receive it. Conversion follows the syntax;
+    // see [`rebuildable_target`], which applies the same rule to the struct path.
+    if arg.erased_wrapper().is_some() {
         return None;
     }
-    let inner_entry = registry
-        .reading_of(&inner)
-        .and_then(|tr| registry.input_entry(&tr))?;
+    let inner = arg.optional_inner()?;
+    // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
+    if inner.borrow_target().is_some() {
+        return None;
+    }
+    // The layer's own reading straight to its entry — no spell-and-look-back.
+    let inner_entry = registry.input_entry(inner)?;
     let value_wire = inner_entry.destination.clone();
     // Only the boxed-primitive fallback shape: primitive wire, no niche,
     // no projection, no composed pre-stages.
@@ -1852,7 +1895,13 @@ pub(crate) fn build_option_scalar_input_plan(
     if !inner_entry.pre_stages.is_empty() {
         return None;
     }
-    let is_enum = ext.is_kotlin_enum(&inner);
+    // The reading-taking probe: `Option<Box<Priority>>` now answers TRUE, where
+    // keying on the spelling asked about `Box < Priority >` and found nothing —
+    // the #270/#272 family again. The probe also peels an optional, which cannot
+    // matter here: a nested `Option<Option<enum>>` has a BOXED wire, and
+    // `JniPrim::from_wire` above accepts only the eight `j*` primitives, so it
+    // has already returned by this line.
+    let is_enum = ext.is_kotlin_enum_reading(inner);
     Some(OptionScalarInputPlan {
         present_ident: format_ident!("{}_present", param_name),
         value_ident: format_ident!("{}_value", param_name),
