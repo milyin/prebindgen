@@ -302,7 +302,15 @@ impl<M> Registry<M> {
     ///
     /// A spelling the grammar refuses is reported by name here, rather than
     /// becoming a cell that quietly means less than its neighbours.
-    pub(crate) fn intern(
+    ///
+    /// **`pub(in crate::api::core)` deliberately**, matching
+    /// `Flat::classify` and the `TypeRef` composers. Classifying a spelling
+    /// *mints a reading*, and #280 sealed that to `api::core`: an adapter under
+    /// `api::lang` must not be able to hand the registry tokens of its own and
+    /// receive a `TypeRef` back. A one-door design that widened the door would
+    /// have re-opened exactly the capability #280 closed — so this must stay no
+    /// wider than the composers it replaces as an entry point.
+    pub(in crate::api::core) fn intern(
         &mut self,
         dir: Direction,
         ty: &syn::Type,
