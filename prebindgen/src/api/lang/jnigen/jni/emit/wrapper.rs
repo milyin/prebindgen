@@ -2,7 +2,10 @@
 //! params, and the expanded-param path.
 
 use super::*;
-use crate::api::core::{registry::Conversions, types_util::result_ok_type};
+use crate::api::{
+    core::{registry::Conversions, types_util::result_ok_type},
+    lang::jnigen::jni::trait_impl::read_through_erased_wrappers,
+};
 
 pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
@@ -352,6 +355,34 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // Decompose/Optional: a single `__builder` callback.
         let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
         builder_param = Some(unfold_builder_param(u.iterable_fold));
+        // The delivery **binds** the returned value and matches it against the
+        // canonical shape its `kind` names (`Option`, then a run). Conversion
+        // follows the SYNTAX, and this position takes no converter — nothing
+        // between the source call and the match re-spells anything — so the
+        // wrappers the classification erased have to come off here, at the
+        // emitter's own binding, or the match is an `E0308` on a spelling the
+        // model deliberately reads as optional (#292).
+        //
+        // The value delivered is the `Ok` side when the error plan applied the
+        // `?`, and the return itself otherwise — the wrappers questioned are
+        // those over whatever `call_expr` actually yields.
+        let delivered = match error_plan {
+            Some(_) => f.ret.fallible_parts().map_or(&f.ret, |(ok, _)| ok),
+            None => &f.ret,
+        };
+        let call_expr =
+            read_through_erased_wrappers(delivered, call_expr.clone()).unwrap_or_else(|| {
+                panic!(
+                    "`{original_ident}` returns `{}`, whose leaves are delivered to a builder: \
+                     the value has to be moved out of `{}` to be decomposed, and that wrapper \
+                     does not permit it (a `Cow` payload cannot be moved through `Deref`). \
+                     Reserved rather than refused for good: rebuilding through every \
+                     transparent wrapper is #292 item 3 — until then, spell the return \
+                     without it.",
+                    delivered.syntax().to_token_stream(),
+                    delivered.erased_wrappers().join("<"),
+                )
+            });
         emit_unfold_delivery(
             ext,
             registry,

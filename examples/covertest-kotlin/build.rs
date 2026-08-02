@@ -522,6 +522,12 @@ fn main() {
                 // with the wrong number of dereferences fails the build (#270).
                 .fun(fun!(boxed_note_echo))
                 .fun(fun!(plain_note_echo))
+                // The same wrapper over a DECOMPOSED return (#292). `Summary`
+                // has an output expansion, so this return takes no converter to
+                // name the spelling for it — the extern binds the value and
+                // matches it, and a `Box` match ergonomics cannot see through
+                // is an `E0308` that only compiling this crate catches.
+                .fun(fun!(boxed_latest))
                 .fun(fun!(ledger_new))
                 .fun(fun!(archive_set_reading))
                 .fun(fun!(archive_reading))

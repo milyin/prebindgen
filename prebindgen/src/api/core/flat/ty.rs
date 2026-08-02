@@ -334,16 +334,80 @@ impl TypeRef {
     /// parameter spelled `Box<..>` is an `E0308` in the generated crate.
     ///
     /// Only the outermost wrapper is named. That is enough to decide *whether*
-    /// a spelling was erased — which is the question a reconstruction asks —
-    /// but a consumer that wants to rebuild a nested `Box<Cow<'_, T>>` needs to
-    /// peel repeatedly with [`peel_transparent`], the same list this reads.
+    /// a spelling was erased — which is the question a **refusal** asks — but a
+    /// consumer that rebuilds a nested `Box<Cow<'_, T>>` needs every layer, and
+    /// asks [`erased_wrappers`](Self::erased_wrappers) for the whole list plus
+    /// [`stripped_syntax`](Self::stripped_syntax) for what sits under it.
     ///
     /// Erased says nothing about **rebuildable**: `Box` reconstructs as
     /// `Box::new(v)`, while `Cow`'s `Owned`/`Borrowed` choice is not determined
     /// by any fact the model holds. Which wrappers an emitter can rebuild is
     /// that emitter's policy; this only stops the wrapper from being invisible.
     pub fn erased_wrapper(&self) -> Option<&'static str> {
-        peel_transparent(&self.origin.syntax).map(|(name, _)| name)
+        self.erased_wrappers().into_iter().next()
+    }
+
+    /// Every [transparent wrapper](TRANSPARENT_WRAPPERS) this type's **spelling**
+    /// adds over its classification, outermost first — `Box<Box<T>>` →
+    /// `["Box", "Box"]`, `Box<Cow<'_, T>>` → `["Box", "Cow"]`, an unwrapped
+    /// spelling → `[]`.
+    ///
+    /// The list [`erased_wrapper`](Self::erased_wrapper) names the head of. A
+    /// consumer deciding *whether* to refuse needs only that head; one that
+    /// **rebuilds** needs all of them, because it has to apply an operation per
+    /// layer — and `Box<Cow<'_, T>>` is two different operations, not one
+    /// repeated.
+    ///
+    /// # This answers for one layer's spelling
+    ///
+    /// **An erasure sits outside the layer it wraps**, so this is a question
+    /// that has to be asked on the way *down*, at every layer, and never once at
+    /// the top:
+    ///
+    /// | Spelling | here | on [`borrow_target`](Self::borrow_target) |
+    /// |---|---|---|
+    /// | `Box<&Vec<T>>` | `["Box"]` | `[]` — `kind` is `Ref`, and peeling it first drops the `Box` |
+    /// | `&Box<Vec<T>>` | `[]` — a `syn::Type::Reference` cannot be peeled | `["Box"]` |
+    ///
+    /// A rebuild therefore collects wrappers **as it descends**: by the time it
+    /// reaches the leaf they are gone from `kind`, which is precisely the thing
+    /// they are missing from.
+    pub fn erased_wrappers(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        let mut ty = std::borrow::Cow::Borrowed(&self.origin.syntax);
+        while let Some((name, inner)) = peel_transparent(&ty) {
+            names.push(name);
+            ty = std::borrow::Cow::Owned(inner);
+        }
+        names
+    }
+
+    /// This type's spelling with every [transparent
+    /// wrapper](TRANSPARENT_WRAPPERS) removed — `Box<Box<Option<T>>>` →
+    /// `Option<T>`, an unwrapped spelling → itself.
+    ///
+    /// The spelling a reconstruction builds *before* it puts the wrappers back:
+    /// rebuilding from [`kind`](Self::kind) alone yields this, so an emitter
+    /// that hands it to a parameter spelled `Box<..>` writes an `E0308`. Paired
+    /// with [`erased_wrappers`](Self::erased_wrappers), which says exactly what
+    /// has to go back on.
+    ///
+    /// **The invariant, which is what defines this rather than the loop that
+    /// computes it**: it is the spelling whose own lowering yields exactly this
+    /// type's `kind`. So the peel runs to a **fixed point** — `Box<Box<T>>`
+    /// classifies as `T`, and stripping one layer leaves a `Box<T>` that does
+    /// not match.
+    ///
+    /// Per-layer, for the reason [`erased_wrappers`](Self::erased_wrappers)
+    /// tabulates: this strips what stands over *this* node's classification, and
+    /// a wrapper under a borrow or inside an `Option` belongs to that inner
+    /// node's own spelling.
+    pub fn stripped_syntax(&self) -> syn::Type {
+        let mut ty = self.origin.syntax.clone();
+        while let Some((_, inner)) = peel_transparent(&ty) {
+            ty = inner;
+        }
+        ty
     }
 
     /// The `Ok` and `Err` sides when this is a `Result`, else `None`.

@@ -65,6 +65,7 @@ classification stays small and genuinely neutral:
 | `Foo<'a, T>` | `TypeRef::origin.syntax` | generated Rust only |
 | "it is a `Foo`" | `TypeKind::Named` | every adapter |
 | `[u8; TAG_LEN]` — spelling / number / const identity | `TypeRef::origin.syntax` / `ArrayExtent::value` / `ExtentSource::Const` | C header / Kotlin / both |
+| the `Box` in `Box<Option<T>>`, and the `Option<T>` under it | `TypeRef::erased_wrappers()` / `stripped_syntax()` — derived from the syntax, not stored | an emitter that **rebuilds or destructures** a Rust value |
 | where an item came from | `Origin::location` — **absent for a synthesized one** | diagnostics |
 
 ### The rule
@@ -451,6 +452,48 @@ The long pole — 97 sites, down from 106 because #248 took `jni/builder` from 1
 - [ ] `prim_array_of` reads `ArrayExtent` instead of re-matching `Type::Array`
 - [ ] Generated Rust and Kotlin byte-identical
 
+#### What L4 taught: an erasure sits outside the layer it wraps
+
+The model erases `Box` and `Cow`, and that erasure is right — `Box<Option<T>>`
+is one optional to every destination. But **conversion follows the syntax**, and
+the two facts a rebuild needs were not on the model: what was taken off, and what
+is left under it. #292 added them as derived readings, `TypeRef::erased_wrappers()`
+and `stripped_syntax()`, defined by an invariant rather than by a loop — the
+stripped spelling is *the one whose own lowering yields exactly this `kind`*, so
+the peel runs to a fixed point (`Box<Box<T>>` classifies as `T`, and one strip
+leaves a `Box<T>` that does not match).
+
+The rule, which outlives the stage:
+
+> **`kind` is precisely the thing the wrapper is missing from, so interpreting
+> `kind` before checking for a wrapper always discards one.**
+
+`Box<&Vec<T>>` classifies as `Ref`; peel that first and the wrapper is gone from
+everywhere a consumer will look. `&Box<Vec<T>>` hides it on the referent, where a
+question asked of the outer `syn::Type::Reference` cannot see it. Neither check
+subsumes the other, so a walk must ask at **every layer, on the way down** —
+which is also why the wrapper is a *list*, gathered as the walk descends.
+
+The audit that came with it found the population is two, and only one has to ask:
+a site that **classifies** must never consult the wrapper — that is the erasure
+working, and every cbindgen site and all but one jnigen site are of that kind. A
+site that **binds a source value and destructures or rebuilds it** must. There
+was exactly one unguarded instance, and it was a live miscompilation: builder
+delivery bound the returned value and matched it against `Option`'s patterns,
+which match ergonomics does not see through a `Box`. Fixed at the single point
+the value enters the delivery, not at each of the four matches downstream.
+
+Two things it taught about evidence:
+
+* **#290's guards were hand-maintained and wrong twice in one PR.** "Are all the
+  peel sites guarded?" is answered by inspection until the model carries the
+  facts and one shared helper consumes them.
+* **The suite could not see the defect.** 737 `contains(..)` assertions pass on
+  Rust that does not compile (#269). The fixture that proves this one is in
+  `perftest-flat`, whose generated binding covertest `include!`s and **builds** —
+  the only place in the tree where an `E0308` is a test failure. It was verified
+  by disabling the fix and watching the build break.
+
 ### L5 — close the seam
 
 The public contract stops being `syn`, which is what stops the population from
@@ -467,6 +510,12 @@ growing back.
       `on_enum` split into `on_variant` + `on_enum` along the model's own
       distinction. Done as #275's first half rather than waiting for this stage,
       because it was the last thing keeping the spelling accessors alive
+- [x] **What a spelling adds over its classification is the model's answer, not
+      a peel each adapter writes** (#292): `erased_wrappers()` / `stripped_syntax()`.
+      Belongs here because the alternative was every rebuilding emitter taking a
+      `syn::Type` apart for itself, which is the population growing back — the
+      completion criterion below already forbids reconstructing a spelling from a
+      classification, and this is the fact that makes obeying it possible
 - [ ] `Prebindgen::post_process_item(&mut syn::Item)` — the hook that let
       qualification live in an adapter in the first place
 - [ ] `ConverterImpl::function` / `TypeEntry::function` as `syn::ItemFn`;

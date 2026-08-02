@@ -12,6 +12,7 @@ import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
+import io.prebindgen.covertest.analytics.SummaryBuilder
 import io.prebindgen.covertest.analytics.SummaryVault
 import io.prebindgen.covertest.asRaw
 import io.prebindgen.covertest.u64Callback
@@ -1621,6 +1622,39 @@ public fun plainNoteEcho(note: String?, onError: JniErrorHandler<String?>): Stri
     val __ret = CovNative.plainNoteEcho(note, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
+}
+
+/**
+ * A transparent wrapper over a **decomposed** return — the shape `boxed_note_echo`
+ * does not reach.
+ *
+ * `boxed_note_echo`'s return takes an output *converter*, which is selected for
+ * the spelling and therefore names `Box<Option<String>>` itself. This one has
+ * no converter at all: `Summary` carries a declared output expansion, so the
+ * extern **binds the returned value and matches it** to deliver the leaves to a
+ * builder. Match ergonomics does not see through a `Box`, so the emitter has to
+ * move the value out of the wrappers the classification erased before it can
+ * destructure — the defect #292's audit found, and one this crate compiles.
+ *
+ * The unwrapped twin is [`archive_latest`], which crosses as the same
+ * `Summary?`.
+ *
+ * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <R> boxedLatest(
+    a: SummaryVault,
+    onError: JniErrorHandler<R?>,
+    build: SummaryBuilder<R>,
+): R? {
+    if (a.isClosed()) return onError.run("Operation on a closed native handle.")
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(a) {
+        val a_ptr = a.ptr
+        CovNative.boxedLatest(a_ptr, build, __bcap)
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as R?
 }
 
 /**

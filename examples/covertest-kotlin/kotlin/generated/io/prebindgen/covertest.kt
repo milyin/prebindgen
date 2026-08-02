@@ -894,6 +894,8 @@ internal object CovNative {
         errorSink: Any,
     ): Any?
 
+    external fun boxedLatest(a: Long, build: Any, errorSink: Any): Any?
+
     external fun boxedNoteEcho(note: String?, errorSink: Any): String?
 
     external fun cacheConfigWeight(
