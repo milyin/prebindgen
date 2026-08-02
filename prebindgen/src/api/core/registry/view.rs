@@ -3,9 +3,11 @@
 
 use std::collections::HashMap;
 
-use crate::api::core::{flat::{Flat, TypeRef}, unfold::{DeconId, DeconSpec, UnfoldPlan}};
-
 use super::*;
+use crate::api::core::{
+    flat::{Flat, TypeRef},
+    unfold::{DeconId, DeconSpec, UnfoldPlan},
+};
 
 /// One `(direction, type)` pair that crosses the boundary.
 ///
@@ -51,11 +53,7 @@ pub trait Conversions<M> {
     /// tokens instead let a spelling nobody classified reach the table, and cost
     /// a `TypeKey::from_type` on every call for an identity the reading already
     /// carries.
-    fn conversion(
-        &self,
-        dir: Direction,
-        reading: &TypeRef,
-    ) -> Option<&TypeEntry<M>>;
+    fn conversion(&self, dir: Direction, reading: &TypeRef) -> Option<&TypeEntry<M>>;
 
     /// The reading for a **spelling** — identify, then look up.
     ///
@@ -100,9 +98,7 @@ pub trait Conversions<M> {
     fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan>;
 
     /// The declaration-default decomposition behind each deconstructor.
-    fn decon_plans(
-        &self,
-    ) -> &HashMap<DeconId, DeconSpec>;
+    fn decon_plans(&self) -> &HashMap<DeconId, DeconSpec>;
 
     /// Every type key that crosses in `dir`.
     ///
@@ -128,11 +124,7 @@ impl<M> Conversions<M> for Building<'_, M> {
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         self.registry.reading(key)
     }
-    fn conversion(
-        &self,
-        dir: Direction,
-        reading: &TypeRef,
-    ) -> Option<&TypeEntry<M>> {
+    fn conversion(&self, dir: Direction, reading: &TypeRef) -> Option<&TypeEntry<M>> {
         self.built.get(&(dir, reading.key()))
     }
     fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
@@ -147,9 +139,7 @@ impl<M> Conversions<M> for Building<'_, M> {
     fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
         &self.registry.error_plans
     }
-    fn decon_plans(
-        &self,
-    ) -> &HashMap<DeconId, DeconSpec> {
+    fn decon_plans(&self) -> &HashMap<DeconId, DeconSpec> {
         &self.registry.decon_plans
     }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
@@ -168,11 +158,7 @@ impl<M> Conversions<M> for Registry<M> {
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         Registry::reading(self, key)
     }
-    fn conversion(
-        &self,
-        dir: Direction,
-        reading: &TypeRef,
-    ) -> Option<&TypeEntry<M>> {
+    fn conversion(&self, dir: Direction, reading: &TypeRef) -> Option<&TypeEntry<M>> {
         self.type_table(dir).get(&reading.key())?.entry.as_ref()
     }
     fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
@@ -187,9 +173,7 @@ impl<M> Conversions<M> for Registry<M> {
     fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
         &self.error_plans
     }
-    fn decon_plans(
-        &self,
-    ) -> &HashMap<DeconId, DeconSpec> {
+    fn decon_plans(&self) -> &HashMap<DeconId, DeconSpec> {
         &self.decon_plans
     }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
@@ -234,10 +218,7 @@ impl<'a, M> Building<'a, M> {
 
 /// Shared by [`Registry::origin_module`] and [`Building::origin_module`], so the
 /// two cannot answer differently.
-pub(super) fn origin_module_of(
-    flat: &Flat,
-    ident: &syn::Ident,
-) -> Option<syn::Path> {
+pub(super) fn origin_module_of(flat: &Flat, ident: &syn::Ident) -> Option<syn::Path> {
     let crate_name = flat.element(ident)?.location().crate_name.as_ref()?;
     syn::parse_str(&crate_name.replace('-', "_")).ok()
 }
