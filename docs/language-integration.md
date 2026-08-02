@@ -443,8 +443,11 @@ The long pole — 97 sites, down from 106 because #248 took `jni/builder` from 1
 - [ ] `emit/names` (17), `jni/trait_impl` (11), `emit/wrapper` (11),
       `emit/flat_input` (10), `render` (8), `selector` (7), `iface` (5),
       `jni/builder` (4), and the rest
-- [ ] `classify.rs` — a whole classifier with **zero** watched sites, so the
-      ledger cannot see it: it must be migrated on its own merit
+- [x] `classify.rs` — a whole classifier with **zero** watched sites, so the
+      ledger cannot see it: it must be migrated on its own merit. Its one leak
+      (`DataStruct { st: &syn::ItemStruct }`) closed with #267, which needed it:
+      a field record cannot carry its own reading while the walk is handed a
+      `syn::ItemStruct`
 - [ ] `prim_array_of` reads `ArrayExtent` instead of re-matching `Type::Array`
 - [ ] Generated Rust and Kotlin byte-identical
 
@@ -456,6 +459,14 @@ growing back.
 - [x] `Registry`'s public item maps stop being the adapter-facing contract —
       done early by L1.5, which deleted them outright; relates to
       [#92](https://github.com/milyin/prebindgen/issues/92)
+- [x] `Prebindgen::on_function` / `on_struct` / `on_enum` / `on_const` take
+      **elements**, not `syn` items — the item methods were the widest part of
+      the public `syn` surface, and the one that decided what adapters could
+      know. An adapter handed a `flat::Function` cannot ask what a parameter
+      means and be told "no reading"; a `&syn::ItemFn` gave no such guarantee.
+      `on_enum` split into `on_variant` + `on_enum` along the model's own
+      distinction. Done as #275's first half rather than waiting for this stage,
+      because it was the last thing keeping the spelling accessors alive
 - [ ] `Prebindgen::post_process_item(&mut syn::Item)` — the hook that let
       qualification live in an adapter in the first place
 - [ ] `ConverterImpl::function` / `TypeEntry::function` as `syn::ItemFn`;
