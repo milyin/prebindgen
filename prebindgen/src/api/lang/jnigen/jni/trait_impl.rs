@@ -775,9 +775,12 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &syn::Type,
-        t1: &syn::Type,
+        t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
+        // `t1`'s spelling, for the parts that ask spelling questions; the
+        // READING stays in `t1` for the lookups (#284).
+        let t1_ty = t1.syntax();
         let WrapperShape::Borrow { mutable } = shape else {
             return None;
         };
@@ -787,14 +790,14 @@ impl Declarations {
         // — `Box<&T>` — must not resolve here (it would pass an owned `T` where
         // `Box<&T>` is expected).
         let canonical: syn::Type = if mutable {
-            syn::parse_quote!(&mut #t1)
+            syn::parse_quote!(&mut #t1_ty)
         } else {
-            syn::parse_quote!(&#t1)
+            syn::parse_quote!(&#t1_ty)
         };
         if !is_canonical_spelling(produced, &canonical) {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = registry.input_entry(t1_ty)?;
         let outer_ty = produced.clone();
         // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
         // type's name, unless the user pinned an explicit override
@@ -831,9 +834,12 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &syn::Type,
-        t1: &syn::Type,
+        t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
+        // `t1`'s spelling, for the parts that ask spelling questions; the
+        // READING stays in `t1` for the lookups (#284).
+        let t1_ty = t1.syntax();
         let WrapperShape::OptionRef { mutable } = shape else {
             return None;
         };
@@ -841,14 +847,14 @@ impl Declarations {
         // `.as_deref()` — again not the spelled type, so a wrapped spelling has
         // nothing to bridge and must not resolve. See `input_borrow`.
         let canonical: syn::Type = if mutable {
-            syn::parse_quote!(Option<&mut #t1>)
+            syn::parse_quote!(Option<&mut #t1_ty>)
         } else {
-            syn::parse_quote!(Option<&#t1>)
+            syn::parse_quote!(Option<&#t1_ty>)
         };
         if !is_canonical_spelling(produced, &canonical) {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
+        let inner = registry.input_entry(t1_ty)?;
         if !inner.metadata.is_direct_handle() {
             // Non-opaque: let the general `Option<_>` handler take it.
             return None;
@@ -863,7 +869,7 @@ impl Declarations {
             pub(crate) unsafe fn #name<'env, 'v>(
                 env: &mut jni::JNIEnv<'env>,
                 v: &#inner_wire,
-            ) -> ::core::result::Result<Option<OwnedObject<#t1>>, __JniErr> {
+            ) -> ::core::result::Result<Option<OwnedObject<#t1_ty>>, __JniErr> {
                 Ok({
                     if *v == 0 { None } else { Some(#inner_conv(env, v)?) }
                 })
@@ -899,14 +905,17 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &syn::Type,
-        t1: &syn::Type,
+        t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
+        // `t1`'s spelling, for the parts that ask spelling questions; the
+        // READING stays in `t1` for the lookups (#284).
+        let t1_ty = t1.syntax();
         if shape != WrapperShape::Sequence {
             return None;
         }
-        let inner = registry.input_entry(t1)?;
-        reject_vec_of_handle(&inner.metadata.projection, t1);
+        let inner = registry.input_entry(t1_ty)?;
+        reject_vec_of_handle(&inner.metadata.projection, t1_ty);
         let inner_wire = inner.destination.clone();
         if !is_jobject_shaped_wire(&inner_wire) {
             return None;
@@ -919,7 +928,7 @@ impl Declarations {
             quote::quote!(&__elem_wire),
         );
         let outer_ty = produced.clone();
-        let canonical: syn::Type = syn::parse_quote!(Vec<#t1>);
+        let canonical: syn::Type = syn::parse_quote!(Vec<#t1_ty>);
         // Bridgeable first — see `box_layers_to`.
         let build = build_from_canonical(produced, &canonical, quote::quote!(__out))?;
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
@@ -928,12 +937,12 @@ impl Declarations {
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-from-env: {}", e)))?;
             let mut __it = __list.iter(env)
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-iter: {}", e)))?;
-            let mut __out: Vec<#t1> = Vec::new();
+            let mut __out: Vec<#t1_ty> = Vec::new();
             while let Some(__obj) = __it.next(env)
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-next: {}", e)))?
             {
                 let __elem_wire: #inner_wire = __obj.into();
-                let __elem: #t1 = #inner_conv;
+                let __elem: #t1_ty = #inner_conv;
                 __out.push(__elem);
             }
             #build
@@ -967,15 +976,18 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &syn::Type,
-        t1: &syn::Type,
+        t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
+        // `t1`'s spelling, for the parts that ask spelling questions; the
+        // READING stays in `t1` for the lookups (#284).
+        let t1_ty = t1.syntax();
         if shape == WrapperShape::Optional {
-            let inner = registry.input_entry(t1)?;
+            let inner = registry.input_entry(t1_ty)?;
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
                 let outer_ty = produced.clone();
-                let canonical: syn::Type = syn::parse_quote!(Option<#t1>);
+                let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
                 let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
                 let name = input_name(&outer_ty, &inner_wire);
                 let gen_allow = generated_converter_attr();
@@ -986,7 +998,7 @@ impl Declarations {
                         v: &#inner_wire,
                     ) -> ::core::result::Result<#outer_ty, __JniErr> {
                         Ok({
-                            let __v: ::core::option::Option<#t1> = if *v == 0 {
+                            let __v: ::core::option::Option<#t1_ty> = if *v == 0 {
                                 None
                             } else if (*v & 1) == 1 {
                                 // Tagged (closed) handle raced past the Kotlin
@@ -998,7 +1010,7 @@ impl Declarations {
                                     ),
                                 );
                             } else {
-                                Some(*std::boxed::Box::from_raw(*v as *mut #t1))
+                                Some(*std::boxed::Box::from_raw(*v as *mut #t1_ty))
                             };
                             #build
                         })
@@ -1030,19 +1042,19 @@ impl Declarations {
         }
         if shape == WrapperShape::Optional {
             let outer_ty = produced.clone();
-            let canonical: syn::Type = syn::parse_quote!(Option<#t1>);
+            let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
             let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1, registry)?;
+            let (wire, inner_body, niches) = option_input(t1_ty, registry)?;
             // `option_input` yields the canonical `Option<T>`; the converter
             // yields the spelling.
             let body: syn::Expr = syn::parse_quote!({
-                let __v: ::core::option::Option<#t1> = #inner_body;
+                let __v: ::core::option::Option<#t1_ty> = #inner_body;
                 #build
             });
             // Inherit the inner's name; user pins on `Option<T>` win.
             // The nullability marker (`?`) is added by the use site.
             let inherited = registry
-                .input_entry(t1)
+                .input_entry(t1_ty)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -1050,9 +1062,9 @@ impl Declarations {
             // an inner niche, the wire stays identical to the inner's
             // destination and `None` is the niche slot sentinel; the boxed
             // fallback widens the wire to `JObject`.
-            let nullable_kind = nullable_kind_for(&wire, t1, registry);
+            let nullable_kind = nullable_kind_for(&wire, t1_ty, registry);
             let projection = registry
-                .input_entry(t1)
+                .input_entry(t1_ty)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -1998,7 +2010,7 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &syn::Type,
-        t1: &syn::Type,
+        t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
@@ -2181,9 +2193,12 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &syn::Type,
-        t1: &syn::Type,
+        t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
+        // `t1`'s spelling, for the parts that ask spelling questions; the
+        // READING stays in `t1` for the lookups (#284).
+        let t1_ty = t1.syntax();
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
         // return *borrowed* handles for the C tier's zero-copy borrows, but
@@ -2197,11 +2212,11 @@ impl Declarations {
             if r.mutability.is_none()
                 && self
                     .types
-                    .get(&TypeKey::from_type(t1))
+                    .get(&TypeKey::from_type(t1_ty))
                     .is_some_and(|c| c.is_opaque())
             {
                 let mut ref_ty = r.clone();
-                *ref_ty.elem = t1.clone();
+                *ref_ty.elem = t1_ty.clone();
                 let outer_ty = syn::Type::Reference(ref_ty);
                 let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
                 let body: syn::Expr = syn::parse_quote!(std::boxed::Box::into_raw(
@@ -2213,7 +2228,7 @@ impl Declarations {
                     destination: wire,
                     pre_stages: vec![],
                     niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-                    metadata: self.opaque_leaf_meta(t1),
+                    metadata: self.opaque_leaf_meta(t1_ty),
                 });
             }
         }
@@ -2223,7 +2238,7 @@ impl Declarations {
         // intermediate owned `String`). The unsized `str` sub resolves via the
         // rank-0 arm to the same fn (see [`Self::str_ref_output`]).
         if let syn::Type::Reference(r) = produced {
-            if r.mutability.is_none() && TypeKey::from_type(t1).as_str() == "str" {
+            if r.mutability.is_none() && TypeKey::from_type(t1_ty).as_str() == "str" {
                 return Some(self.str_ref_output());
             }
         }
@@ -2232,17 +2247,17 @@ impl Declarations {
         // `.throwable()`.
         if shape == WrapperShape::Optional {
             let outer_ty = produced.clone();
-            let canonical: syn::Type = syn::parse_quote!(Option<#t1>);
+            let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
             // Bridgeable first: an unsupported representation must not resolve
             // and then emit code the consumer cannot compile.
             let read = read_as_canonical(produced, &canonical)?;
-            let (wire, inner_body, niches) = option_output(t1, registry)?;
+            let (wire, inner_body, niches) = option_output(t1_ty, registry)?;
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
                 #inner_body
             });
             let inherited = registry
-                .output_entry(t1)
+                .output_entry(t1_ty)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -2250,9 +2265,9 @@ impl Declarations {
             // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
             // and treats the slot value as `None`; boxed widens to `JObject`
             // and uses JVM null.
-            let nullable_kind = nullable_kind_for_output(&wire, t1, registry);
+            let nullable_kind = nullable_kind_for_output(&wire, t1_ty, registry);
             let projection = registry
-                .output_entry(t1)
+                .output_entry(t1_ty)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -2284,7 +2299,7 @@ impl Declarations {
         // Symmetric to the input handler. `Vec<u8>` is special-cased at
         // rank-0 (primitive_output → JByteArray) so rank-1 never sees it.
         if shape == WrapperShape::Sequence {
-            let inner = registry.output_entry(t1)?;
+            let inner = registry.output_entry(t1_ty)?;
             // `Vec<opaque-handle>` output is delivered by the Kotlin-side leaf
             // fold (`apply_leaf_vec_folds` → typed-handle wrap), so this
             // whole-`ArrayList` converter is bypassed for it. A handle's `jlong`
@@ -2300,7 +2315,7 @@ impl Declarations {
                 quote::quote!(__elem),
             );
             let outer_ty = produced.clone();
-            let canonical: syn::Type = syn::parse_quote!(Vec<#t1>);
+            let canonical: syn::Type = syn::parse_quote!(Vec<#t1_ty>);
             let read = read_as_canonical(produced, &canonical)?;
             let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
             let body: syn::Expr = syn::parse_quote!({
