@@ -6,6 +6,22 @@ use crate::api::{
     test_util::scanned_with as reg_with,
 };
 
+/// A reading for a fixture type, lowered by the model.
+///
+/// Plan leaves carry `TypeRef`s, and these fixtures assert on plan STRUCTURE —
+/// so they need a reading for a type they name inline. Lowering it through an
+/// empty `Flat` gives the same classification the pipeline would, without
+/// standing up a source crate for it. Legitimate here and nowhere else: the
+/// `classify` guard exempts tests precisely because a fixture composing its own
+/// input is not a consumer reasoning from `origin`.
+fn tref(ty: syn::Type) -> crate::api::core::flat::TypeRef {
+    crate::api::core::flat::Flat::builder()
+        .build()
+        .expect("an empty model")
+        .classify(&ty)
+        .expect("a fixture type the language accepts")
+}
+
 /// A generous `.fun_accessor` set covering every function used as a
 /// deconstructor record across these tests (a superset is fine — `apply`
 /// only checks records are members). The `nested_record_*` tests that
@@ -95,7 +111,15 @@ fn accessor_optional_primitive() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_timestamp_ntp64"
     );
-    assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "i64");
+    assert_eq!(
+        plan.leaves[0]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
+        "i64"
+    );
     assert!(
         reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
         "the leaf type must be a root"
@@ -151,7 +175,12 @@ fn accessor_plan_byref() {
     assert!(plan.leaves[0].identity);
     assert!(plan.leaves[0].path.is_empty());
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "& ZKeyExpr"
     );
     // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
@@ -161,7 +190,15 @@ fn accessor_plan_byref() {
         plan.leaves[1].path[0].ident().to_string(),
         "z_keyexpr_as_str"
     );
-    assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "& str");
+    assert_eq!(
+        plan.leaves[1]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
+        "& str"
+    );
 
     // Leaf out_tys registered as required outputs so the resolver builds
     // their converters.
@@ -505,7 +542,12 @@ fn nested_accessor_flatten() {
     assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
     assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
     assert_eq!(
-        plan.leaves[3].out_ty.to_token_stream().to_string(),
+        plan.leaves[3]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "SampleKind"
     );
     assert_eq!(
@@ -643,7 +685,12 @@ fn reply_product_double_option_flatten() {
     // Acc leaf keeping its full `Option<…>` return — not a nesting step.
     assert_eq!(path(&plan.leaves[0]), "z_reply_replier_zid");
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "Option < ZZenohId >"
     );
     assert!(!plan.leaves[0].nullable && !plan.leaves[0].identity);
@@ -809,7 +856,12 @@ fn iterable_decomposed_plan() {
         "z_zenoh_id_to_string"
     );
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "String"
     );
     // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
@@ -817,7 +869,12 @@ fn iterable_decomposed_plan() {
     assert!(plan.leaves[1].identity);
     assert!(plan.leaves[1].path.is_empty());
     assert_eq!(
-        plan.leaves[1].out_ty.to_token_stream().to_string(),
+        plan.leaves[1]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "ZZenohId"
     );
 }
@@ -1076,7 +1133,7 @@ fn value_struct_vec_is_fixed_iterable_fold() {
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
         path: vec![PathStep::field(ident(name), false)],
-        out_ty: ty,
+        out_ty: tref(ty),
         identity: false,
         nullable: false,
         source: LeafSource::Field,
@@ -1129,7 +1186,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
         path: vec![PathStep::field(ident(name), false)],
-        out_ty: ty,
+        out_ty: tref(ty),
         identity: false,
         nullable: false,
         source: LeafSource::Field,
@@ -1221,7 +1278,12 @@ fn convert_error_decomposes_result_e() {
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "String"
     );
     assert_eq!(plan.source.to_token_stream().to_string(), "ZError");
@@ -1341,7 +1403,12 @@ fn callback_arg_plan_derived() {
         "z_sample_key_expr"
     );
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "& ZKeyExpr"
     );
     assert_eq!(
@@ -1349,7 +1416,12 @@ fn callback_arg_plan_derived() {
         "z_keyexpr_as_str"
     );
     assert_eq!(
-        plan.leaves[2].out_ty.to_token_stream().to_string(),
+        plan.leaves[2]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "SampleKind"
     );
     // Leaf out_tys registered so the resolver builds their converters.
@@ -1424,7 +1496,12 @@ fn callback_arg_borrowed_decomposed() {
         "z_sample_key_expr"
     );
     assert_eq!(
-        plan.leaves[2].out_ty.to_token_stream().to_string(),
+        plan.leaves[2]
+            .out_ty
+            .origin
+            .syntax
+            .to_token_stream()
+            .to_string(),
         "SampleKind"
     );
 }
@@ -1671,7 +1748,7 @@ fn reading_sum_decon() -> SumDecon {
     let tag = UnfoldLeaf {
         name: "tag".to_string(),
         path: vec![],
-        out_ty: syn::parse_quote!(i32),
+        out_ty: tref(syn::parse_quote!(i32)),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
@@ -1680,7 +1757,7 @@ fn reading_sum_decon() -> SumDecon {
     let field = |name: &str, variant: &str, idx: u32, ty: syn::Type, group: i32| UnfoldLeaf {
         name: name.to_string(),
         path: vec![],
-        out_ty: ty,
+        out_ty: tref(ty),
         identity: false,
         nullable: false,
         source: LeafSource::VariantField {
@@ -1854,7 +1931,7 @@ fn a_vec_of_optionals_installs_no_fixed_fold() {
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
         path: vec![PathStep::field(ident(name), false)],
-        out_ty: ty,
+        out_ty: tref(ty),
         identity: false,
         nullable: false,
         source: LeafSource::Field,

@@ -297,7 +297,7 @@ fn process_expand<M>(
     // The boundary layers: `Option<&T>` → optional + by_ref, `Option<T>` →
     // optional, `&T` → by_ref, and `target` is what is left under them.
     let (optional, by_ref, target) = constructed_value_layers(&param_ty);
-    let target_key = TypeKey::from_type(&target);
+    let target_key = target.key();
 
     let variants = resolve_constructor(exp, registry, &target_key, ed)?;
     let mut visited: HashSet<TypeKey> = HashSet::new();
@@ -313,7 +313,7 @@ fn process_expand<M>(
     )?;
 
     for leaf in &plan.leaves {
-        registry.require_input(&leaf.ty);
+        registry.require_input(&leaf.ty.origin.syntax);
     }
     registry
         .expansion_plans
@@ -394,7 +394,7 @@ fn build_plan<M>(
     ed: &ExpandDecl,
     optional: bool,
     by_ref: bool,
-    target: &syn::Type,
+    target: &crate::api::core::flat::TypeRef,
     variants: &[Variant],
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldPlan, ExpandError> {
@@ -414,7 +414,7 @@ fn build_plan<M>(
     if optional {
         let [Variant::Ctor(func)] = variants else {
             // Combined-selector dispatch under `Optional`.
-            visited.insert(TypeKey::from_type(target));
+            visited.insert(target.key());
             let prefix = param.to_string();
             let (selector, fold_variants) = build_core(
                 exp,
@@ -427,9 +427,9 @@ fn build_plan<M>(
                 &mut leaves,
                 visited,
             )?;
-            visited.remove(&TypeKey::from_type(target));
+            visited.remove(&target.key());
             return Ok(FoldPlan {
-                target: target.clone(),
+                target: target.origin.syntax.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -439,15 +439,15 @@ fn build_plan<M>(
             });
         };
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target)?;
+        check_target(func, &sig.target, &target.origin.syntax)?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
                 name: param.clone(),
-                ty: opt(&pty.origin.syntax),
+                ty: pty.optional(),
             });
             return Ok(FoldPlan {
-                target: target.clone(),
+                target: target.origin.syntax.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -464,7 +464,8 @@ fn build_plan<M>(
         // Multi-arg: presence flag (leaf 0) + one flat leaf per ctor arg.
         leaves.push(FoldLeaf {
             name: ident(&format!("{}_present", param)),
-            ty: syn::parse_quote!(bool),
+            // A presence flag no source wrote — placeless by construction.
+            ty: crate::api::core::flat::TypeRef::scalar(crate::api::core::flat::ScalarKind::Bool),
         });
         let prefix = param.to_string();
         let mut inputs = Vec::new();
@@ -490,7 +491,7 @@ fn build_plan<M>(
             inputs.push(arg);
         }
         return Ok(FoldPlan {
-            target: target.clone(),
+            target: target.origin.syntax.clone(),
             by_ref,
             shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
             leaves,
@@ -507,7 +508,7 @@ fn build_plan<M>(
 
     // Non-optional: build the (possibly recursive) construct core. The target is
     // on the cycle chain so a constructor parameter of the same type is rejected.
-    visited.insert(TypeKey::from_type(target));
+    visited.insert(target.key());
     let prefix = param.to_string();
     let (selector, fold_variants) = build_core(
         exp,
@@ -520,9 +521,9 @@ fn build_plan<M>(
         &mut leaves,
         visited,
     )?;
-    visited.remove(&TypeKey::from_type(target));
+    visited.remove(&target.key());
     Ok(FoldPlan {
-        target: target.clone(),
+        target: target.origin.syntax.clone(),
         by_ref,
         shape: FoldShape::Base,
         leaves,
@@ -542,7 +543,7 @@ fn build_core<M>(
     exp: &Expansions,
     registry: &Registry<M>,
     ed: &ExpandDecl,
-    target: &syn::Type,
+    target: &crate::api::core::flat::TypeRef,
     variants: &[Variant],
     by_ref: bool,
     prefix: &str,
@@ -552,7 +553,7 @@ fn build_core<M>(
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target)?;
+        check_target(func, &sig.target, &target.origin.syntax)?;
         let np = sig.params.len();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
@@ -579,14 +580,15 @@ fn build_core<M>(
         let sel_idx = leaves.len();
         leaves.push(FoldLeaf {
             name: ident(&format!("{}_sel", prefix)),
-            ty: syn::parse_quote!(i32),
+            // The selector, likewise composed and placeless.
+            ty: crate::api::core::flat::TypeRef::scalar(crate::api::core::flat::ScalarKind::I32),
         });
         let mut fold_variants: Vec<FoldVariant> = Vec::new();
         for (vi, v) in variants.iter().enumerate() {
             match v {
                 Variant::Ctor(func) => {
                     let sig = ctor_signature(registry, func)?;
-                    check_target(func, &sig.target, target)?;
+                    check_target(func, &sig.target, &target.origin.syntax)?;
                     let np = sig.params.len();
                     let mut args = Vec::new();
                     for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
@@ -612,9 +614,9 @@ fn build_core<M>(
                 Variant::Identity => {
                     let idx = leaves.len();
                     let leaf_ty = if by_ref {
-                        opt(&syn::parse_quote!(&#target))
+                        target.borrowed().optional()
                     } else {
-                        opt(target)
+                        target.optional()
                     };
                     leaves.push(FoldLeaf {
                         name: ident(&format!("{}_{}", prefix, vi)),
@@ -649,7 +651,7 @@ fn build_arg<M>(
 ) -> Result<FoldArg, ExpandError> {
     // The boundary layers down to the parameter's core type.
     let (popt, pby_ref, bare) = constructed_value_layers(pty);
-    let key = TypeKey::from_type(&bare);
+    let key = bare.key();
     // A default constructor for the parameter's type ⇒ recursive nested build.
     let canon = exp
         .constructors
@@ -687,7 +689,7 @@ fn build_arg<M>(
         )?;
         visited.remove(&key);
         Ok(FoldArg::Build(Box::new(FoldBuild {
-            target: bare,
+            target: bare.origin.syntax.clone(),
             by_ref: pby_ref,
             selector,
             variants: vars,
@@ -703,9 +705,9 @@ fn build_arg<M>(
         leaves.push(FoldLeaf {
             name,
             ty: if dispatched && !passthrough {
-                opt(&pty.origin.syntax)
+                pty.optional()
             } else {
-                pty.origin.syntax.clone()
+                pty.clone()
             },
         });
         Ok(FoldArg::Leaf(idx, passthrough))
@@ -1089,17 +1091,22 @@ fn constructed_value(reading: &crate::api::core::flat::TypeRef) -> syn::Type {
 }
 
 /// [`constructed_value`], plus which of the two layers were there.
-fn constructed_value_layers(reading: &crate::api::core::flat::TypeRef) -> (bool, bool, syn::Type) {
+fn constructed_value_layers(
+    reading: &crate::api::core::flat::TypeRef,
+) -> (bool, bool, crate::api::core::flat::TypeRef) {
     let optional = reading.optional_inner().is_some();
     let after_opt = reading.optional_inner().unwrap_or(reading);
     let by_ref = after_opt.borrow_target().is_some();
     let core = after_opt.borrow_target().unwrap_or(after_opt);
-    (optional, by_ref, core.origin.syntax.clone())
+    // The core READING, not its spelling: the plan composes `Option<&T>` over
+    // it, and composing from a reading keeps the kind and the syntax paired.
+    (optional, by_ref, core.clone())
 }
 
-fn opt(ty: &syn::Type) -> syn::Type {
-    syn::parse_quote!(Option<#ty>)
-}
+// `opt` lived here — `parse_quote!(Option<#ty>)` — and built a spelling with no
+// classification beside it, so every consumer had to hand it back to the
+// registry to learn it was an optional. `TypeRef::optional` composes both at
+// once (#275).
 
 #[cfg(test)]
 mod tests;

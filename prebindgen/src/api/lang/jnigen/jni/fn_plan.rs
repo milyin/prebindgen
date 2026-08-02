@@ -438,27 +438,11 @@ impl JniFunctionPlan {
             {
                 let mut leaves = Vec::new();
                 for leaf in &plan.leaves {
-                    // The ONE lookup left on this path: `FoldLeaf::ty` is a
-                    // `syn::Type` in core, so the reading has to be fetched
-                    // rather than carried. #275's second half removes it by
-                    // making the plan leaves carry `TypeRef`; until then a miss
-                    // means the leaf's type never entered the pipeline, which
-                    // is worth naming rather than absorbing.
-                    let leaf_reading = registry.reading(&leaf.ty).unwrap_or_else(|| {
-                        panic!(
-                            "fold leaf `{}` of `{}`: type `{}` never entered the pipeline",
-                            leaf.name,
-                            f.name,
-                            quote::ToTokens::to_token_stream(&leaf.ty),
-                        )
-                    });
+                    // The lookup that stood here is gone: the fold leaf carries
+                    // its own reading now, so there is nothing to fetch and
+                    // nothing that can miss.
                     leaves.push(classify_leaf(
-                        ext,
-                        registry,
-                        &leaf.name,
-                        &leaf_reading,
-                        /*expanded=*/ true,
-                        &ident,
+                        ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
                     )?);
                 }
                 ParamForm::Expanded(leaves)

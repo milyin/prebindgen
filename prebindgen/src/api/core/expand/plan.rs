@@ -60,10 +60,18 @@ impl FoldPlan {
 pub struct FoldLeaf {
     /// Foreign-side parameter name.
     pub name: syn::Ident,
-    /// Rust type whose resolved **input** converter decodes this leaf. For a
-    /// single constructor these are the raw constructor parameter types; for a
-    /// combined one the selector (`i32`) and `Option`-wrapped variant inputs.
-    pub ty: syn::Type,
+    /// The **reading** of the type whose resolved input converter decodes this
+    /// leaf. For a single constructor these are the raw constructor parameter
+    /// types; for a combined one the selector (`i32`) and `Option`-wrapped
+    /// variant inputs. Spell it with `ty.origin.syntax`.
+    ///
+    /// A reading rather than a spelling for the reason [`UnfoldLeaf::out_ty`]
+    /// gives: a consumer asking what this leaf's type MEANS had to hand the
+    /// spelling back to the registry (#275). The leaves no source wrote — the
+    /// presence flag, the selector — are built by
+    /// [`TypeRef::scalar`](crate::api::core::flat::TypeRef::scalar), which
+    /// pairs the kind with its own spelling and is placeless by construction.
+    pub ty: crate::api::core::flat::TypeRef,
 }
 
 /// One dispatch arm of a [`FoldPlan`].

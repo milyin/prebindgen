@@ -459,7 +459,7 @@ pub fn apply<M>(
                     continue;
                 }
                 for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
+                    registry.require_output(&leaf.out_ty.origin.syntax);
                 }
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -640,7 +640,7 @@ fn wire_fixed_returns<M>(
             }
         }
         for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-            registry.require_output(&leaf.out_ty);
+            registry.require_output(&leaf.out_ty.origin.syntax);
         }
         let plan = UnfoldPlan {
             source: vd.source.clone(),
@@ -707,7 +707,7 @@ fn wire_fixed_callbacks<M>(
                     continue;
                 }
                 for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-                    registry.require_output(&leaf.out_ty);
+                    registry.require_output(&leaf.out_ty.origin.syntax);
                 }
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
@@ -1036,7 +1036,7 @@ fn process_decl<M>(
                 register_decon_spec(registry, acc, &decon, &records, element)?;
                 let plan = build_plan(acc, registry, ed, by_ref, element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
+                    registry.require_output(&leaf.out_ty.origin.syntax);
                 }
                 plan
             } else {
@@ -1082,7 +1082,7 @@ fn process_decl<M>(
             register_decon_spec(registry, acc, &decon, &records, source)?;
             let plan = build_plan(acc, registry, ed, by_ref, source, shape, &records, decon)?;
             for leaf in &plan.leaves {
-                registry.require_output(&leaf.out_ty);
+                registry.require_output(&leaf.out_ty.origin.syntax);
             }
             plan
         };
@@ -1110,7 +1110,7 @@ fn process_decl<M>(
             && plan.leaves.len() == 1
             && !plan.leaves[0].nullable;
         let plan = if single_return {
-            let leaf_ty = plan.leaves[0].out_ty.clone();
+            let leaf_ty = plan.leaves[0].out_ty.origin.syntax.clone();
             let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
                 syn::parse_quote!(Option<#leaf_ty>)
             } else {
@@ -1357,11 +1357,13 @@ fn flatten<M>(
                 // A plan field: the drop to spelling happens here, where the value
                 // is stored for emission, and the borrowed form is composed rather
                 // than looked up because no source wrote it.
-                let src = &source.origin.syntax;
-                let out_ty: syn::Type = if place_is_owned(hoists, path_prefix, by_ref) {
-                    src.clone()
+                // The borrowed form is COMPOSED — no source wrote it — and the
+                // composition pairs the kind with its own spelling, so nothing
+                // downstream has to look either up.
+                let out_ty = if place_is_owned(hoists, path_prefix, by_ref) {
+                    source.clone()
                 } else {
-                    syn::parse_quote!(&#src)
+                    source.borrowed()
                 };
                 leaves.push(UnfoldLeaf {
                     name: if path_prefix.is_empty() {
@@ -1554,7 +1556,7 @@ fn flatten<M>(
                         leaves.push(UnfoldLeaf {
                             name: seg_name(&fr.name).join("__"),
                             path: field_path,
-                            out_ty: fr.ty.origin.syntax.clone(),
+                            out_ty: fr.ty.clone(),
                             identity: false,
                             nullable,
                             source: LeafSource::Field,
@@ -1647,9 +1649,9 @@ fn flatten<M>(
                     // A plan field: the spelling is taken here, once, where the
                     // leaf is stored for emission.
                     let (out_ty, nullable, identity) = if cond_handle {
-                        (core.origin.syntax.clone(), true, true)
+                        (core.clone(), true, true)
                     } else {
-                        (ret.origin.syntax.clone(), nullable, false)
+                        (ret.clone(), nullable, false)
                     };
                     let mut path = path_prefix.to_vec();
                     path.push(PathStep::call(func.clone(), opt, !core_by_ref));

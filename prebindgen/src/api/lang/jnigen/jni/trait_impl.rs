@@ -1326,13 +1326,15 @@ impl Declarations {
             let Some(ident) = bare_path_ident(&source) else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&ident) else {
+            let Some(crate::api::core::flat::Type::Variant(sum)) =
+                registry.flat().declared_type(&ident)
+            else {
                 continue;
             };
             out.push(crate::api::core::unfold::SumDecon {
                 key: key.clone(),
                 source,
-                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, item_enum),
+                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, sum),
             });
         }
         out

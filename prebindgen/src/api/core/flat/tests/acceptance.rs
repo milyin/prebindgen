@@ -1770,3 +1770,66 @@ fn the_layer_stack_stops_at_an_out_of_order_layer() {
         ("Optional(Iterable(Base))".into(), "& Sample".into(), 3)
     );
 }
+
+/// A **composed** type keys exactly as the spelling it replaces, and classifies
+/// as what it was built from.
+///
+/// The decomposition plans compose types no source wrote — the borrow of a
+/// value, a presence flag, a selector — and those types are registered as
+/// crossings like any other. If a composed `&T` keyed differently from
+/// `parse_quote!(&#t)`, it would register a *different cell* and resolution
+/// would silently change. So the identity is pinned, not assumed.
+///
+/// The pairing is the point: `kind` and `origin.syntax` are built together in
+/// one place, so a consumer classifying off one and spelling off the other
+/// cannot be handed a disagreement.
+#[test]
+fn a_composed_type_keys_as_its_spelling() {
+    use crate::api::core::{
+        flat::{ScalarKind, TypeKind, TypeRef},
+        registry::TypeKey,
+    };
+
+    let t = lower(quote::quote!(u64)).expect("in the language");
+
+    let borrowed = t.borrowed();
+    assert_eq!(borrowed.key(), TypeKey::from_type(&syn::parse_quote!(&u64)));
+    assert!(matches!(borrowed.kind, TypeKind::Ref { .. }));
+    // The layer wraps the reading it was built from, so peeling gets it back.
+    assert_eq!(borrowed.borrow_target().expect("a borrow").key(), t.key());
+
+    let optional = t.optional();
+    assert_eq!(
+        optional.key(),
+        TypeKey::from_type(&syn::parse_quote!(Option<u64>))
+    );
+    assert_eq!(optional.optional_inner().expect("optional").key(), t.key());
+
+    // A scalar the binding invented: spelled from its own kind, so the two
+    // cannot drift.
+    assert_eq!(
+        TypeRef::scalar(ScalarKind::Bool).key(),
+        TypeKey::from_type(&syn::parse_quote!(bool))
+    );
+    assert_eq!(
+        TypeRef::scalar(ScalarKind::I32).key(),
+        TypeKey::from_type(&syn::parse_quote!(i32))
+    );
+    assert_eq!(
+        TypeRef::named(&syn::parse_quote!(ZEnum)).key(),
+        TypeKey::from_type(&syn::parse_quote!(ZEnum))
+    );
+
+    // Composed-from-nothing is PLACELESS: no file wrote it, and claiming a
+    // location would make a fabricated one indistinguishable from a real one.
+    assert!(
+        !TypeRef::scalar(ScalarKind::Bool)
+            .origin
+            .location
+            .has_position(),
+        "a scalar no source wrote carries no position"
+    );
+    // A layered one keeps the inner's location — the borrow exists because of
+    // that value.
+    assert_eq!(&*borrowed.origin.location, &*t.origin.location);
+}

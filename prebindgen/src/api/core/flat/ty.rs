@@ -140,6 +140,83 @@ impl TypeRef {
         }
     }
 
+    // ── Composition ───────────────────────────────────────────────
+    //
+    // Building a type the SOURCE did not write, as opposed to reading one it
+    // did. The decomposition plans need this: a leaf may be the borrow of a
+    // value, a presence flag, or a selector — none of which any source spelled,
+    // and all of which have to carry a reading like everything else.
+    //
+    // Here rather than at the callers, and not via
+    // [`Flat::classify`](super::Flat::classify), because the two acts are
+    // different. `classify` lowers *source syntax* — it is the frontend reading
+    // what a crate wrote, and `classify_has_no_caller_outside_the_registry`
+    // keeps it that way. These compose a type from parts already understood,
+    // which needs no lowering at all: each builds `kind` **and** the matching
+    // `origin.syntax` in one place, so the classification and the spelling
+    // cannot disagree — the invariant every consumer of a `TypeRef` relies on.
+
+    /// A borrow of this type — `&T` from `T`.
+    ///
+    /// Keeps this type's location: the borrow exists *because of* this value,
+    /// so a diagnostic about it should point where the value came from.
+    pub fn borrowed(&self) -> TypeRef {
+        let inner = &self.origin.syntax;
+        TypeRef {
+            kind: TypeKind::Ref {
+                mode: RefMode::Shared,
+                inner: Box::new(self.clone()),
+            },
+            origin: self.origin.with(syn::parse_quote!(&#inner)),
+        }
+    }
+
+    /// An optional of this type — `Option<T>` from `T`. Location as
+    /// [`Self::borrowed`].
+    pub fn optional(&self) -> TypeRef {
+        let inner = &self.origin.syntax;
+        TypeRef {
+            kind: TypeKind::Optional(Box::new(self.clone())),
+            origin: self.origin.with(syn::parse_quote!(Option<#inner>)),
+        }
+    }
+
+    /// A scalar the binding invented — a presence flag, a selector.
+    ///
+    /// **Placeless**, and deliberately: no file wrote it, so claiming a location
+    /// would make a fabricated one indistinguishable from a real one.
+    /// [`Flat::classify`](super::Flat::classify) does exactly this for a
+    /// composed spelling, and `ensure_entry` gives adapter-authored cells the
+    /// same treatment — `has_position` already gates what a diagnostic prints.
+    pub fn scalar(kind: ScalarKind) -> TypeRef {
+        // The spelling comes from the kind, so the two cannot drift.
+        let ident = syn::Ident::new(kind.as_str(), proc_macro2::Span::call_site());
+        TypeRef {
+            kind: TypeKind::Scalar(kind),
+            origin: Origin::new(
+                syn::parse_quote!(#ident),
+                std::rc::Rc::new(crate::SourceLocation::default()),
+            ),
+        }
+    }
+
+    /// A nominal reference to a declared type, by name. Placeless for the same
+    /// reason as [`Self::scalar`] — this is the binding naming a type, not a
+    /// source mentioning one.
+    pub fn named(ident: &syn::Ident) -> TypeRef {
+        TypeRef {
+            kind: TypeKind::Named {
+                id: TypeId {
+                    name: ident.to_string(),
+                },
+            },
+            origin: Origin::new(
+                syn::parse_quote!(#ident),
+                std::rc::Rc::new(crate::SourceLocation::default()),
+            ),
+        }
+    }
+
     /// This type's identity as a table key.
     ///
     /// The canonical spelling is what a key *is* (#113), and reading it is

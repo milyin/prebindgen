@@ -43,38 +43,45 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 pub(crate) fn synth_sum_leaves(
     ext: &Declarations,
     sum_cfg: &SumConfig,
-    item_enum: &syn::ItemEnum,
+    sum: &crate::api::core::flat::Variant,
 ) -> Vec<crate::api::core::unfold::UnfoldLeaf> {
     use crate::api::core::{
         types_util::SumSpec,
         unfold::{LeafSource, UnfoldLeaf},
     };
 
-    let spec = SumSpec::from_item_enum(item_enum);
+    // `SumSpec` still reads the item — it owns the leaf-NAMING convention, which
+    // is jnigen's own. The payload TYPES come from the element beside it, whose
+    // fields are already readings, so nothing here has to compose or look one up.
+    let spec = SumSpec::from_item_enum(&sum.origin.syntax);
     // The selector rides ahead of the groups it chooses between, and carries
     // **which sum** it selects over as its `out_ty` — that is how the emitter
     // finds the enum to `match` when the sum is a field rather than the whole
     // returned value. Nothing looks up a converter for it (`has_converter()` is
     // false for a `SumTag`): there is no value to convert, the emitter assigns
     // the tag literal per arm. Its wire is a `jint` by definition.
-    let enum_ident = &item_enum.ident;
+    let enum_ident = &sum.name;
     let mut leaves = vec![UnfoldLeaf {
         name: SUM_TAG_LEAF.to_string(),
         path: Vec::new(),
-        out_ty: syn::parse_quote!(#enum_ident),
+        // Composed: the tag names WHICH sum it selects over, and no source
+        // wrote that as a standalone type. Nothing resolves a converter for it
+        // (`has_converter()` is false), but the emitter reads it back to find
+        // the enum to `match`.
+        out_ty: crate::api::core::flat::TypeRef::named(enum_ident),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
         group: None,
     }];
-    for variant in &spec.variants {
+    for (variant, alt) in spec.variants.iter().zip(&sum.alternatives) {
         let kotlin_name = ext.sum_variant_class_name(sum_cfg, &variant.ident);
-        for field in &variant.fields {
+        for (field, alt_field) in variant.fields.iter().zip(&alt.fields) {
             let prop = sum_field_prop_name(field);
             leaves.push(UnfoldLeaf {
                 name: sum_slot_fragment(&kotlin_name, &prop),
                 path: Vec::new(),
-                out_ty: field.ty.clone(),
+                out_ty: alt_field.ty.clone(),
                 identity: false,
                 nullable: false,
                 source: LeafSource::VariantField {
@@ -122,7 +129,7 @@ pub(crate) fn leaf_slot(
         ("I", format_ident!("i"))
     } else {
         let wire = registry
-            .output_entry(&leaf.out_ty)
+            .output_entry(&leaf.out_ty.origin.syntax)
             .expect("leaf_is_prim implies a resolved output entry")
             .destination
             .clone();
@@ -178,12 +185,15 @@ pub(crate) fn encode_sum_group(
         .iter()
         .find(|l| l.source == LeafSource::SumTag)
         .expect("a sum segment carries its selector leaf");
-    let ident = bare_path_ident(&tag_leaf.out_ty).unwrap_or_else(|| {
+    // The name off the reading — `TypeId` IS the name, so nothing takes a path
+    // apart to re-derive one.
+    let crate::api::core::flat::TypeKind::Named { id } = &tag_leaf.out_ty.kind else {
         panic!(
-            "jnigen sum unfold: selector type `{}` is not a path type",
-            TypeKey::from_type(&tag_leaf.out_ty)
+            "jnigen sum unfold: selector type `{}` is not a named type",
+            tag_leaf.out_ty.key()
         )
-    });
+    };
+    let ident = syn::Ident::new(&id.name, proc_macro2::Span::call_site());
     let module = ext.fn_module(registry, &ident);
     let source: syn::Path = syn::parse_quote!(#module::#ident);
 
@@ -328,13 +338,15 @@ fn encode_group_leaf(
     bind: &syn::Ident,
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> TokenStream {
-    let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
-        panic!(
-            "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
-            leaf.name,
-            TypeKey::from_type(&leaf.out_ty)
-        )
-    });
+    let out_entry = registry
+        .output_entry(&leaf.out_ty.origin.syntax)
+        .unwrap_or_else(|| {
+            panic!(
+                "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
+                leaf.name,
+                TypeKey::from_type(&leaf.out_ty.origin.syntax)
+            )
+        });
     let wire = out_entry.destination.clone();
     let conv_fail = fail(quote!(__e.to_string()));
     let enc = format_ident!("__enc_{}", obj_ident);
