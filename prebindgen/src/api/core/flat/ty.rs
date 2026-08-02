@@ -30,19 +30,30 @@ use crate::SourceLocation;
 /// # The invariant
 ///
 /// > **Every `TypeRef` was classified by the model.** [`Flat`](super::Flat)
-/// > classified it from source syntax, or the registry composed it by layering
-/// > over something already classified. Nothing above the model can mint one.
+/// > classified it from source syntax, or `api::core` composed it by layering
+/// > over something already classified. Nothing above `api::core` can mint one.
 ///
-/// That is what the private fields buy, and public fields would not: a public
-/// field **is** a constructor, so leaving them public while restricting the
-/// composers would block nothing. Read through [`kind`](Self::kind),
-/// [`syntax`](Self::syntax) and [`location`](Self::location).
+/// **Scoped to what is enforced, not to what is intended.** The boundary is
+/// `api::core`, and it is drawn by visibility at four places, each checked by
+/// the compiler on every build:
+///
+/// | | |
+/// |---|---|
+/// | the `kind` and `origin` fields | `pub(super)` — a public field **is** a constructor, so restricting only the composers would block nothing |
+/// | `borrowed` / `optional` / `scalar` | `pub(in crate::api::core)` |
+/// | `named` | `pub(super)` — `flat` alone |
+/// | `Flat::classify` | `pub(in crate::api::core)` |
+///
+/// So a language adapter under `api::lang` cannot mint a reading at all — not
+/// by field, not by composer, not by classifying a spelling of its own. Where
+/// one needs a type the model already declares, the **declaration** answers:
+/// see [`Variant::type_ref`](super::Variant::type_ref), which is what the
+/// `SumTag` selector uses instead of composing a reading from an ident.
 ///
 /// The invariant is unconditional — no phase, no lifetime, no direction — so it
 /// holds for a **stored** value. That is the point: a `TypeRef` lives in
 /// `UnfoldLeaf::out_ty` and `FoldLeaf::ty`, inside plans the registry itself
-/// stores, so a
-/// borrow-carrying token would make the registry self-referential.
+/// stores, so a borrow-carrying token would make the registry self-referential.
 ///
 /// It deliberately does **not** claim the type's converters exist. That is
 /// false by design for stored readings — `unrequire_output` leaves a cell whose
@@ -66,23 +77,27 @@ pub struct TypeRef {
 impl TypeRef {
     /// What the type means. **Classify off this**, never off the spelling.
     ///
-    /// The seal, as a compiled assertion — an out-of-crate adapter cannot
-    /// assemble a reading, because the fields it would have to name are
-    /// private:
+    /// The seal, as a compiled assertion. An out-of-crate consumer cannot
+    /// assemble a reading, because the fields it would have to name are private
+    /// (`E0451`):
     ///
     /// ```compile_fail
     /// # use prebindgen::core::flat::{TypeKind, TypeRef};
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
-    /// The composers are `pub(crate)` for the same reason, so this is the whole
-    /// surface: a `TypeRef` can only be obtained from the model that classified
-    /// it.
+    /// …nor through a composer, which is not visible either (`E0624`):
     ///
     /// ```compile_fail
     /// # use prebindgen::core::flat::{ScalarKind, TypeRef};
     /// let forged = TypeRef::scalar(ScalarKind::Bool);
     /// ```
+    ///
+    /// These two prove only the **crate** boundary. The stronger claim — that
+    /// nothing above `api::core` can mint one either — is enforced by the
+    /// visibilities tabulated on [`TypeRef`], and a doctest cannot reach inside
+    /// the crate to test it. The compiler checks it on every build instead: an
+    /// `api::lang` adapter naming any of the four routes fails with `E0624`.
     pub fn kind(&self) -> &TypeKind {
         &self.kind
     }
@@ -230,7 +245,7 @@ impl TypeRef {
     ///
     /// Keeps this type's location: the borrow exists *because of* this value,
     /// so a diagnostic about it should point where the value came from.
-    pub(crate) fn borrowed(&self) -> TypeRef {
+    pub(in crate::api::core) fn borrowed(&self) -> TypeRef {
         let inner = &self.origin.syntax;
         TypeRef {
             kind: TypeKind::Ref {
@@ -243,7 +258,7 @@ impl TypeRef {
 
     /// An optional of this type — `Option<T>` from `T`. Location as
     /// [`Self::borrowed`].
-    pub(crate) fn optional(&self) -> TypeRef {
+    pub(in crate::api::core) fn optional(&self) -> TypeRef {
         let inner = &self.origin.syntax;
         TypeRef {
             kind: TypeKind::Optional(Box::new(self.clone())),
@@ -258,7 +273,7 @@ impl TypeRef {
     /// [`Flat::classify`](super::Flat::classify) does exactly this for a
     /// composed spelling, and `ensure_entry` gives adapter-authored cells the
     /// same treatment — `has_position` already gates what a diagnostic prints.
-    pub(crate) fn scalar(kind: ScalarKind) -> TypeRef {
+    pub(in crate::api::core) fn scalar(kind: ScalarKind) -> TypeRef {
         // The spelling comes from the kind, so the two cannot drift.
         let ident = syn::Ident::new(kind.as_str(), proc_macro2::Span::call_site());
         TypeRef {
@@ -273,7 +288,7 @@ impl TypeRef {
     /// A nominal reference to a declared type, by name. Placeless for the same
     /// reason as [`Self::scalar`] — this is the binding naming a type, not a
     /// source mentioning one.
-    pub(crate) fn named(ident: &syn::Ident) -> TypeRef {
+    pub(super) fn named(ident: &syn::Ident) -> TypeRef {
         TypeRef {
             kind: TypeKind::Named {
                 id: TypeId {

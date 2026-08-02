@@ -60,15 +60,15 @@ pub(crate) fn synth_sum_leaves(
     // returned value. Nothing looks up a converter for it (`has_converter()` is
     // false for a `SumTag`): there is no value to convert, the emitter assigns
     // the tag literal per arm. Its wire is a `jint` by definition.
-    let enum_ident = &sum.name;
     let mut leaves = vec![UnfoldLeaf {
         name: SUM_TAG_LEAF.to_string(),
         path: Vec::new(),
-        // Composed: the tag names WHICH sum it selects over, and no source
-        // wrote that as a standalone type. Nothing resolves a converter for it
-        // (`has_converter()` is false), but the emitter reads it back to find
-        // the enum to `match`.
-        out_ty: crate::api::core::flat::TypeRef::named(enum_ident),
+        // The tag names WHICH sum it selects over, and no source wrote that as
+        // a standalone type — so the DECLARATION answers, rather than this
+        // emitter minting a reading from the name. Nothing resolves a converter
+        // for it (`has_converter()` is false), but the emitter reads it back to
+        // find the enum to `match`.
+        out_ty: sum.type_ref(),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,

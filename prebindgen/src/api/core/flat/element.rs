@@ -230,6 +230,19 @@ pub struct Variant {
     pub origin: Origin<syn::ItemEnum>,
 }
 
+impl Variant {
+    /// A reference to this sum **as a type** — what a consumer needs when it
+    /// has to name the sum rather than walk it (jnigen's `SumTag` selector,
+    /// which carries *which* sum it chooses between).
+    ///
+    /// The declaration answers, so the composer stays inside the model: a
+    /// consumer holding the element does not have to mint a reading from the
+    /// name and hope it matches what the model would have said.
+    pub fn type_ref(&self) -> TypeRef {
+        TypeRef::named(&self.name)
+    }
+}
+
 /// One alternative of a [`Variant`].
 #[derive(Clone, Debug)]
 pub struct Alternative {
