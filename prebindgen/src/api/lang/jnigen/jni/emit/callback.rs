@@ -77,7 +77,7 @@ pub(crate) fn callback_input(
             // Every leaf converter must already be resolved (deferral safety).
             // A synthesized leaf (a sum's tag) has no converter to wait for.
             for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                registry.output_entry(&leaf.out_ty)?;
+                registry.output_entry(&leaf.out_ty.origin.syntax)?;
             }
             let spec = folder_iface_for_plan(ext, registry, plan)?;
             let holder_slash =
@@ -170,7 +170,7 @@ pub(crate) fn callback_input(
             // would make the trampoline wait forever on an `i32` crossing the
             // binding may not have.
             for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                let e = registry.output_entry(&leaf.out_ty)?;
+                let e = registry.output_entry(&leaf.out_ty.origin.syntax)?;
                 if leaf.identity && e.metadata.projection.is_none() {
                     return None;
                 }

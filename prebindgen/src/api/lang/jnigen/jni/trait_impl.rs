@@ -348,7 +348,13 @@ impl Declarations {
                 // `#[prebindgen]` item; else the default module (a declared
                 // type re-exported by the primary source, or a deliberately
                 // unmarked type like a convert!-only newtype).
-                let ident = syn::Ident::new(&short, Span::call_site());
+                // Parsed, not constructed: a short name is whatever the source
+                // wrote, and `Ident::new` PANICS on a raw one (`r#type`)
+                // rather than erroring. Pre-existing; found by the raw-name
+                // regression added for the sum encoder's twin of this bug.
+                let Ok(ident) = syn::parse_str::<syn::Ident>(&short) else {
+                    return;
+                };
                 let module = registry
                     .origin_module(&ident)
                     .unwrap_or_else(|| self.default_module(registry));
@@ -1326,13 +1332,15 @@ impl Declarations {
             let Some(ident) = bare_path_ident(&source) else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&ident) else {
+            let Some(crate::api::core::flat::Type::Variant(sum)) =
+                registry.flat().declared_type(&ident)
+            else {
                 continue;
             };
             out.push(crate::api::core::unfold::SumDecon {
                 key: key.clone(),
                 source,
-                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, item_enum),
+                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, sum),
             });
         }
         out

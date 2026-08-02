@@ -1056,10 +1056,13 @@ impl Declarations {
                     let crate::api::core::flat::TypeKind::Named { id } = &probe.kind else {
                         panic!("a sum type is a named type")
                     };
-                    let item_enum = registry
+                    let crate::api::core::flat::Type::Variant(sum) = registry
                         .flat()
-                        .enum_item(&id.name)
-                        .expect("TypeKind::Sum implies an indexed enum");
+                        .declared_type(&id.name)
+                        .expect("TypeKind::Sum implies an indexed enum")
+                    else {
+                        panic!("TypeKind::Sum implies a payload-carrying enum")
+                    };
                     let sum_cfg = self.types[&probe.key()]
                         .sum()
                         .expect("TypeKind::Sum implies a sealed-class config");
@@ -1068,7 +1071,7 @@ impl Declarations {
                         name,
                         ty: field.ty.clone(),
                         decon: FieldDecon::Leaves(crate::api::lang::jnigen::jni::synth_sum_leaves(
-                            self, sum_cfg, item_enum,
+                            self, sum_cfg, sum,
                         )),
                     });
                     continue;

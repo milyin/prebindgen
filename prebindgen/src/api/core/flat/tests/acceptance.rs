@@ -1770,3 +1770,97 @@ fn the_layer_stack_stops_at_an_out_of_order_layer() {
         ("Optional(Iterable(Base))".into(), "& Sample".into(), 3)
     );
 }
+
+/// A **composed** type keys exactly as the spelling it replaces, and classifies
+/// as what it was built from.
+///
+/// The decomposition plans compose types no source wrote — the borrow of a
+/// value, a presence flag, a selector — and those types are registered as
+/// crossings like any other. If a composed `&T` keyed differently from
+/// `parse_quote!(&#t)`, it would register a *different cell* and resolution
+/// would silently change. So the identity is pinned, not assumed.
+///
+/// The pairing is the point: `kind` and `origin.syntax` are built together in
+/// one place, so a consumer classifying off one and spelling off the other
+/// cannot be handed a disagreement.
+#[test]
+fn a_composed_type_keys_as_its_spelling() {
+    use crate::api::core::{
+        flat::{ScalarKind, TypeKind, TypeRef},
+        registry::TypeKey,
+    };
+
+    let t = lower(quote::quote!(u64)).expect("in the language");
+
+    let borrowed = t.borrowed();
+    assert_eq!(borrowed.key(), TypeKey::from_type(&syn::parse_quote!(&u64)));
+    assert!(matches!(borrowed.kind, TypeKind::Ref { .. }));
+    // The layer wraps the reading it was built from, so peeling gets it back.
+    assert_eq!(borrowed.borrow_target().expect("a borrow").key(), t.key());
+
+    let optional = t.optional();
+    assert_eq!(
+        optional.key(),
+        TypeKey::from_type(&syn::parse_quote!(Option<u64>))
+    );
+    assert_eq!(optional.optional_inner().expect("optional").key(), t.key());
+
+    // A scalar the binding invented: spelled from its own kind, so the two
+    // cannot drift.
+    assert_eq!(
+        TypeRef::scalar(ScalarKind::Bool).key(),
+        TypeKey::from_type(&syn::parse_quote!(bool))
+    );
+    assert_eq!(
+        TypeRef::scalar(ScalarKind::I32).key(),
+        TypeKey::from_type(&syn::parse_quote!(i32))
+    );
+    assert_eq!(
+        TypeRef::named(&syn::parse_quote!(ZEnum)).key(),
+        TypeKey::from_type(&syn::parse_quote!(ZEnum))
+    );
+
+    // Composed-from-nothing is PLACELESS: no file wrote it, and claiming a
+    // location would make a fabricated one indistinguishable from a real one.
+    assert!(
+        !TypeRef::scalar(ScalarKind::Bool)
+            .origin
+            .location
+            .has_position(),
+        "a scalar no source wrote carries no position"
+    );
+    // A layered one keeps the inner's location — the borrow exists because of
+    // that value.
+    assert_eq!(&*borrowed.origin.location, &*t.origin.location);
+}
+
+/// A **raw** identifier survives the round trip through `TypeId`.
+///
+/// `TypeId::name` is a `String`, so an enum legitimately named `r#type` is
+/// stored as `"r#type"` — and `Ident::new` *rejects* that spelling, panicking
+/// rather than returning an error. A consumer rebuilding an ident from the name
+/// therefore has to parse, and gets no warning until a source happens to use a
+/// keyword. `TypeId::ident` is where that recovery lives (#278 review).
+#[test]
+fn a_raw_identifier_survives_typeid() {
+    use crate::api::core::flat::{TypeKind, TypeRef};
+
+    let raw: syn::Ident = syn::parse_quote!(r#type);
+    assert_eq!(raw.to_string(), "r#type", "the hash is part of the name");
+
+    let t = TypeRef::named(&raw);
+    let TypeKind::Named { id } = &t.kind else {
+        panic!("named")
+    };
+    // Recovered, and it spells itself back the way it was written.
+    let back = id.ident().expect("a raw ident is still an ident");
+    assert_eq!(back, raw);
+    assert_eq!(tokens(&t.origin.syntax), "r#type");
+
+    // A path-qualified name is not a single identifier — the same answer the
+    // old `bare_path_ident` gave.
+    let qualified = crate::api::core::flat::TypeId {
+        name: "foreign::Option".to_string(),
+    };
+    assert!(qualified.ident().is_none());
+}

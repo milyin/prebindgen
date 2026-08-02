@@ -720,12 +720,13 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty);
+    let inert_nullable =
+        leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty.origin.syntax);
     leaf_iface_param(
         ext,
         registry,
         name,
-        &leaf.out_ty,
+        &leaf.out_ty.origin.syntax,
         leaf.nullable || inert_nullable,
         true,
     )
@@ -1166,11 +1167,12 @@ pub(crate) fn callback_iface_spec(
                     };
                     if leaf.source == LeafSource::SumTag {
                         any_fixed = true;
-                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(&leaf.out_ty))?;
+                        let fqn =
+                            ext.kotlin_fqn(&TypeKey::from_type(&leaf.out_ty.origin.syntax))?;
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
-                            &leaf.out_ty,
+                            &leaf.out_ty.origin.syntax,
                             &plan.leaves[k..seg],
                             &fqn,
                         );

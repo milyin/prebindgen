@@ -1505,7 +1505,9 @@ impl Declarations {
         name: &str,
         imports: &mut BTreeSet<String>,
     ) -> String {
-        let optional = registry.is_optional(&leaf.out_ty);
+        // Off the leaf's own reading — no lookup, and a wrapped spelling
+        // answers as the bare one does.
+        let optional = leaf.out_ty.optional_inner().is_some();
         let arg = if param.raw.is_nullable() && !optional {
             format!("{name}!!")
         } else {
@@ -1515,8 +1517,9 @@ impl Declarations {
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        if self.is_kotlin_enum(&enum_probe_type(&leaf.out_ty)) {
-            let inner = option_inner_type(&leaf.out_ty).unwrap_or_else(|| leaf.out_ty.clone());
+        if self.is_kotlin_enum(&enum_probe_type(&leaf.out_ty.origin.syntax)) {
+            let inner = option_inner_type(&leaf.out_ty.origin.syntax)
+                .unwrap_or_else(|| leaf.out_ty.origin.syntax.clone());
             let name = registry
                 .output_entry(&inner)
                 .and_then(|e| e.metadata.kotlin_name.clone())

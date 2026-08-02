@@ -1623,3 +1623,82 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
         "…and point at the two shapes that do work: {err}"
     );
 }
+
+/// A sum named with a **raw** identifier generates, rather than aborting — and
+/// specifically through the OUTPUT encoder, which is the site that broke.
+///
+/// `r#type` is a legal `#[prebindgen]` enum name, and `TypeId::name` stores it
+/// as the string `"r#type"`. The sum encoder rebuilds an ident from that name
+/// to spell the `match`'s path, and `Ident::new` *panics* on that spelling
+/// rather than erroring, so the whole generation aborted (#278 review).
+///
+/// The sum is a value-form FIELD here, not just a declared type: that is what
+/// puts it through `encode_sum_group`. A first version of this test declared
+/// the sum and a callback only — the raw name appeared in the generated file
+/// via the *input* converter, the assertion passed, and reverting the fix left
+/// it passing. A regression test that survives its own regression is worse than
+/// none, so this one asserts the output-side `match` path.
+#[test]
+fn a_raw_named_sum_generates() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum r#type {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThingStruct {
+                    pub reading: r#type,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_to_struct(t: &ZThing) -> ZThingStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_emit(cb: impl Fn(ZThing) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZThing))
+                .class(crate::sealed_class!(r#type))
+                .fun(crate::fun!(z_emit)),
+        )
+        .expand(crate::expand_return!(ZThing).fields(crate::fields!(z_thing_to_struct)));
+
+    let dir = unique_test_dir("jnigen_raw_sum");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    // The output-side match, spelled with the raw name — this is what
+    // `encode_sum_group` emits, and what `Ident::new` could not produce.
+    assert!(
+        rust.contains("myflat::r#type::Missing") && rust.contains("myflat::r#type::Exact"),
+        "the sum encoder matches the raw-named enum by its real path:\n{rust}"
+    );
+}

@@ -146,7 +146,7 @@ pub(crate) fn synth_value_struct_leaves(
         leaves.push(UnfoldLeaf {
             name: leaf_name,
             path,
-            out_ty: effective_ty,
+            out_ty: field.ty.clone(),
             identity: false,
             nullable: false,
             source: LeafSource::Field,

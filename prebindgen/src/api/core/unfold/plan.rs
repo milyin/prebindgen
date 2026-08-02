@@ -296,10 +296,19 @@ pub struct UnfoldLeaf {
     /// `[Call(f)]` = `f(&root)`; longer = nested records, M3). Steps of both
     /// kinds may mix — see [`PathStep`].
     pub path: Vec<PathStep>,
-    /// Type whose resolved **output** converter encodes this leaf — a
-    /// reference type for accessors (`&str`, `&F`), `&Source` for the identity
-    /// leaf (so the borrowed-opaque clone converter / projection is reused).
-    pub out_ty: syn::Type,
+    /// The **reading** of the type whose resolved output converter encodes this
+    /// leaf — a reference type for accessors (`&str`, `&F`), `&Source` for the
+    /// identity leaf (so the borrowed-opaque clone converter / projection is
+    /// reused). Spell it with `out_ty.origin.syntax`.
+    ///
+    /// A reading rather than a spelling because a consumer asking what this
+    /// leaf's type *means* had to hand the spelling back to the registry and
+    /// hope for a cell — the round trip #263 removed from `api/core`, surviving
+    /// in the plans, and answering "no layer" for a type it had never seen
+    /// (#275). The composed ones (`&Source`) are built by
+    /// [`TypeRef::borrowed`](crate::api::core::flat::TypeRef::borrowed), which
+    /// pairs the kind with its own spelling.
+    pub out_ty: crate::api::core::flat::TypeRef,
     /// `true` for the move/clone-the-value handle leaf, emitted **last** (after
     /// every reference leaf's JVM conversion has ended its borrow).
     pub identity: bool,

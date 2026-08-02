@@ -106,7 +106,7 @@ impl<M> Registry<M> {
         for arg in args {
             if let Some(plan) = self.callback_arg_plans.get(&TypeKey::from_type(&arg)) {
                 for leaf in &plan.leaves {
-                    out.push((Direction::Output, leaf.out_ty.clone()));
+                    out.push((Direction::Output, leaf.out_ty.origin.syntax.clone()));
                 }
             }
         }
