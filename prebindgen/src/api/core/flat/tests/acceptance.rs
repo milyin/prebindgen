@@ -110,6 +110,113 @@ fn a_box_classifies_as_what_it_wraps() {
     assert_eq!(tokens(&inner.origin.syntax), "Box < String >");
 }
 
+/// The erasure, stated as something the model can be **asked**: what was taken
+/// off, and what is left under it.
+///
+/// The invariant is not "the loop peels until it stops" — it is that
+/// [`TypeRef::stripped_syntax`] is *the spelling whose own lowering yields
+/// exactly this type's `kind`*. That is what makes it a safe base for a
+/// reconstruction, and it is why the peel must run to a **fixed point**:
+/// `Box<Box<T>>` classifies as `T`, so one strip leaves a `Box<T>` that does
+/// not match.
+#[test]
+fn the_stripped_spelling_is_the_one_that_lowers_to_this_kind() {
+    // The property, asserted as a property: strip, lower again, get the same
+    // classification. A one-layer implementation fails the nested rows.
+    for spelling in [
+        quote::quote!(Box<Option<Sample>>),
+        quote::quote!(Box<Box<String>>),
+        quote::quote!(Box<Box<Box<Vec<u8>>>>),
+        quote::quote!(Box<Cow<'_, [u8]>>),
+        quote::quote!(Cow<'_, str>),
+        // The control: nothing erased, so stripping is the identity and the
+        // comparison cannot pass by both sides being trivially equal elsewhere.
+        quote::quote!(Option<Sample>),
+    ] {
+        let ty = lower(spelling).expect("in the language");
+        let stripped = ty.stripped_syntax();
+        assert_eq!(
+            format!("{:?}", kind(quote::quote!(#stripped))),
+            format!("{:?}", ty.kind),
+            "`{}` strips to `{}`, which must classify identically",
+            tokens(&ty.origin.syntax),
+            tokens(&stripped),
+        );
+    }
+
+    // The wrappers themselves, outermost first — the list a rebuild applies in
+    // reverse. `Box<Cow<..>>` is two DIFFERENT operations, which is why one
+    // name and a count would not do.
+    let wrappers =
+        |t: proc_macro2::TokenStream| lower(t).expect("in the language").erased_wrappers();
+    assert_eq!(wrappers(quote::quote!(Box<Box<String>>)), ["Box", "Box"]);
+    assert_eq!(wrappers(quote::quote!(Box<Cow<'_, [u8]>>)), ["Box", "Cow"]);
+    assert_eq!(wrappers(quote::quote!(Option<Sample>)), [] as [&str; 0]);
+
+    // Unwrapped, the stripped spelling is the spelling — token-identical, not
+    // merely equivalent, since it is what generated Rust would emit.
+    let plain = lower(quote::quote!(Option<Sample>)).expect("in the language");
+    assert_eq!(
+        tokens(&plain.stripped_syntax()),
+        tokens(&plain.origin.syntax)
+    );
+    assert_eq!(
+        tokens(
+            &lower(quote::quote!(Box<Box<Option<Sample>>>))
+                .expect("in the language")
+                .stripped_syntax()
+        ),
+        "Option < Sample >"
+    );
+}
+
+/// **An erasure sits outside the layer it wraps**, so the question has to be
+/// asked on the way *down* — at every layer — and never once at the top.
+///
+/// This is the pair that pins it, and each row is invisible to the other's
+/// vantage point: `Box<&Vec<T>>` classifies as `Ref`, so a consumer that
+/// interprets `kind` first is left holding a clean `Vec<T>` with the `Box`
+/// unreachable; `&Box<Vec<T>>` puts the wrapper on the referent, where a
+/// question asked of a `syn::Type::Reference` cannot see it.
+#[test]
+fn a_wrapper_is_found_only_at_the_layer_that_spells_it() {
+    let outside = lower(quote::quote!(Box<&Vec<Sample>>)).expect("in the language");
+    assert_eq!(outside.erased_wrappers(), ["Box"]);
+    let referent = outside.borrow_target().expect("a borrow");
+    assert_eq!(
+        referent.erased_wrappers(),
+        [] as [&str; 0],
+        "peeling `kind` first reaches a clean `Vec<T>` — the `Box` is only \
+         visible before the peel"
+    );
+
+    let inside = lower(quote::quote!(&Box<Vec<Sample>>)).expect("in the language");
+    assert_eq!(
+        inside.erased_wrappers(),
+        [] as [&str; 0],
+        "a reference cannot be peeled as a transparent wrapper"
+    );
+    assert_eq!(
+        inside.borrow_target().expect("a borrow").erased_wrappers(),
+        ["Box"],
+        "the wrapper is on the referent, after the peel"
+    );
+
+    // Both classify the same shape, which is the whole reason neither check
+    // alone is enough: the difference between them lives in a spelling, and the
+    // classification is exactly the thing it is missing from.
+    for ty in [&outside, &inside] {
+        let TypeKind::Ref { mode, inner } = &ty.kind else {
+            panic!("a borrow");
+        };
+        assert_eq!(*mode, RefMode::Shared);
+        let TypeKind::Sequence(elem) = &inner.kind else {
+            panic!("a run");
+        };
+        assert!(matches!(elem.kind, TypeKind::Named { .. }));
+    }
+}
+
 /// A builtin must be spelled BARE **after normalization**: the real std path
 /// reduces and classifies, while a path-qualified lookalike is a foreign type
 /// that merely shares the name, and collapsing it would silently retype the

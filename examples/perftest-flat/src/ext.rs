@@ -1618,6 +1618,24 @@ pub fn plain_note_echo(note: Option<String>) -> Option<String> {
     note
 }
 
+/// A transparent wrapper over a **decomposed** return — the shape `boxed_note_echo`
+/// does not reach.
+///
+/// `boxed_note_echo`'s return takes an output *converter*, which is selected for
+/// the spelling and therefore names `Box<Option<String>>` itself. This one has
+/// no converter at all: `Summary` carries a declared output expansion, so the
+/// extern **binds the returned value and matches it** to deliver the leaves to a
+/// builder. Match ergonomics does not see through a `Box`, so the emitter has to
+/// move the value out of the wrappers the classification erased before it can
+/// destructure — the defect #292's audit found, and one this crate compiles.
+///
+/// The unwrapped twin is [`archive_latest`], which crosses as the same
+/// `Summary?`.
+#[prebindgen]
+pub fn boxed_latest(a: &Archive) -> Box<Option<Summary>> {
+    Box::new(a.latest.clone())
+}
+
 /// Deliver a [`Ledger`] to a callback, so both conditional decompositions cross
 /// in ONE call — including the sum (`Report::outcome`) each one carries, whose
 /// `match` belongs inside the arm that binds the report.

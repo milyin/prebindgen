@@ -44,6 +44,9 @@ import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
 import io.prebindgen.covertest.model.blobValueEcho
+import io.prebindgen.covertest.model.boxedLatest
+import io.prebindgen.covertest.model.boxedNoteEcho
+import io.prebindgen.covertest.model.plainNoteEcho
 import io.prebindgen.covertest.model.blobValueNew
 import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
@@ -1422,6 +1425,29 @@ fun main() {
         val fourth = archiveLatest(a, boom)!!
         check(fourth.count(boom) == 3L && fourth.total(boom) == 60.0)
         fourth.close()
+        a.close()
+    }
+
+    // ── transparent wrappers: the spelling changes, the crossing must not ───
+    // The model erases `Box`/`Cow`, so a wrapped spelling and its unwrapped
+    // twin are ONE type to Kotlin. Compiling this crate already proves the
+    // generated Rust is well-typed; these assert the surfaces are the same and
+    // the values actually make the round trip.
+    section("transparent wrapper crossings") {
+        // Converted return: the converter is selected for the spelling, so it
+        // names `Box<Option<String>>` itself.
+        for (note in listOf("wrapped", null)) {
+            check(boxedNoteEcho(note, boom) == note)
+            check(plainNoteEcho(note, boom) == note)
+        }
+
+        // DECOMPOSED return: no converter names the spelling — the extern binds
+        // the value and matches it, so the `Box` has to come off first (#292).
+        // Same delivery as `archiveLatest`, one wrapper apart.
+        val a: SummaryVault = archiveNew(boom)
+        check(boxedLatest(a, boom) { count, total -> count to total } == null)
+        archiveStore(a, 0, 5L, 100.0, null, boom)
+        check(boxedLatest(a, boom) { count, total -> count to total } == 5L to 100.0)
         a.close()
     }
 

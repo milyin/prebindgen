@@ -678,6 +678,12 @@ struct WrapperOps {
     /// Move the inner value **out**. `None` when the representation does not
     /// permit it — a `Cow` payload cannot be moved through `Deref` (`E0507`),
     /// and neither can an `Rc`'s.
+    ///
+    /// Emitted **unparenthesized**: every consumer splices the result into a
+    /// `let` initializer, where a wrapping paren is `unused_parens` — and
+    /// generated code runs through the consumer's own lints, where that is a
+    /// denial. A consumer that splices into a tighter position (a method
+    /// receiver, a field base) parenthesizes at its own site.
     read: Option<fn(TokenStream) -> TokenStream>,
     /// Build it **from** the inner value. `None` when not supported.
     build: Option<fn(TokenStream) -> TokenStream>,
@@ -688,7 +694,7 @@ const WRAPPER_OPS: &[WrapperOps] = &[
     WrapperOps {
         name: "Box",
         // `*b` moves out of a box, and `Box::new` puts it back.
-        read: Some(|e| quote!((*#e))),
+        read: Some(|e| quote!(*#e)),
         build: Some(|e| quote!(::std::boxed::Box::new(#e))),
     },
     WrapperOps {
@@ -748,6 +754,37 @@ fn build_from_canonical(
         e = (w.build?)(e);
     }
     Some(e)
+}
+
+/// Move a value the **source** produced out of the transparent wrappers its
+/// spelling adds over its classification, so an emitter that binds it holds the
+/// canonical shape — `Box<Option<T>>` → `(*e)`, an unwrapped spelling → `e`
+/// unchanged.
+///
+/// The counterpart of [`bind_as_option`](super::emit::bind_as_option) for an
+/// **owned** position. A type-ascribed `let` is a coercion site and serves any
+/// representation, but coercion applies to *references*: a value whose payload
+/// downstream moves has to be moved out of the wrapper instead, which is what
+/// [`WrapperOps::read`] does and what only some wrappers permit.
+///
+/// `None` when a layer cannot be read through (`Cow`, whose payload cannot be
+/// moved out by `Deref`) — the caller then has an unrepresentable crossing to
+/// report, and must not emit the match anyway.
+///
+/// **This answers for one layer's spelling.** It undoes the wrappers standing
+/// over `ty`'s own classification; a wrapper *inside* — the `Box` of
+/// `Option<Box<Vec<T>>>` — belongs to the inner reading and is that layer's
+/// question, per [`TypeRef::erased_wrappers`](crate::api::core::flat::TypeRef::erased_wrappers).
+pub(crate) fn read_through_erased_wrappers(
+    ty: &crate::api::core::flat::TypeRef,
+    e: TokenStream,
+) -> Option<TokenStream> {
+    let mut out = e;
+    // Outermost first, which is the order they have to come off in.
+    for name in ty.erased_wrappers() {
+        out = (wrapper_ops(name)?.read?)(out);
+    }
+    Some(out)
 }
 
 /// Whether the source wrote the canonical spelling itself — no wrapper to undo.

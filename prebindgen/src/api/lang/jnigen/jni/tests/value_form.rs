@@ -2500,7 +2500,7 @@ fn an_owned_string_crosses_the_same_however_rust_spells_it() {
 /// Layers are counted, too: `Box<Box<Option<T>>>` is `Optional`, and one
 /// dereference leaves `Box<Option<T>>`.
 ///
-/// Both shapes used to RESOLVE and emit `let v: Option<String> = (*v);` — the
+/// Both shapes used to RESOLVE and emit `let v: Option<String> = *v;` — the
 /// worst outcome available, because resolution succeeding is what tells the
 /// binding its type is supported. Failing to resolve names the type; emitting
 /// unbuildable Rust names nothing (#270 review).
@@ -2556,21 +2556,23 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
         }
     };
 
-    // One box: bridged with one dereference.
+    // One box: bridged with one dereference. Unparenthesized — the bind is a
+    // `let` initializer, where a wrapping paren is `unused_parens`, and
+    // generated code runs through the consumer's own lints (#292).
     let one = build(syn::parse_quote!(Box<Option<String>>)).expect("a single box is bridgeable");
     let oc: String = one.split_whitespace().collect();
     assert!(
-        oc.contains("letv:Option<String>=(*v);"),
+        oc.contains("letv:Option<String>=*v;"),
         "one layer, one dereference:\n{one}"
     );
 
     // Two boxes: bridged with TWO. This is the case a single deref got wrong,
-    // silently — `(*v)` on `Box<Box<_>>` is still a `Box<_>`.
+    // silently — one `*` on `Box<Box<_>>` still leaves a `Box<_>`.
     let two =
         build(syn::parse_quote!(Box<Box<Option<String>>>)).expect("nested boxes are bridgeable");
     let tc: String = two.split_whitespace().collect();
     assert!(
-        tc.contains("letv:Option<String>=(*(*v));"),
+        tc.contains("letv:Option<String>=**v;"),
         "two layers, two dereferences:\n{two}"
     );
 

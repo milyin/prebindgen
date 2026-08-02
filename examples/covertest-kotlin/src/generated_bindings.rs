@@ -662,11 +662,38 @@ pub(crate) unsafe fn Box_Box_Option_String_to_JString_299999e0<'a>(
     v: Box<Box<Option<String>>>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
-        let v: Option<String> = (*(*v));
+        let v: Option<String> = **v;
         {
             match v {
                 Some(value) => String_to_JString_c7f3ca43(env, value)?,
                 None => jni::objects::JObject::null().into(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Box_Option_Summary_to_jlong_75560ba9<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<Option<perftest_flat::Summary>>,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    Ok({
+        let v: Option<perftest_flat::Summary> = *v;
+        {
+            match v {
+                Some(value) => Summary_to_jlong_3cb103b9(env, value)?,
+                None => 0i64,
             }
         }
     })
@@ -12704,6 +12731,111 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueNew<'a>
             );
             jni::objects::JObject::null().into()
         }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedLatest<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    a: jni::sys::jlong,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let a = match jlong_to_Archive_cd73502c(&mut env, &a) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/analytics/SummaryBuilder";
+    const __CB_DESCR: &str = "(JD)Ljava/lang/Object;";
+    let __out = *perftest_flat::boxed_latest(&a);
+    match __out {
+        ::core::option::Option::Some(__inner) => {
+            let __obj0: jni::sys::jvalue = {
+                let __enc0 = match i64_to_jlong_fbf9a9bc(
+                    &mut env,
+                    perftest_flat::summary_count(&__inner),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                jni::sys::jvalue { j: __enc0 }
+            };
+            let __obj1: jni::sys::jvalue = {
+                let __enc1 = match f64_to_jdouble_9e4a8f70(
+                    &mut env,
+                    perftest_flat::summary_total(&__inner),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                jni::sys::jvalue { d: __enc1 }
+            };
+            match __CB_MID
+                .call_object(
+                    &mut env,
+                    __CB_FQN,
+                    "run",
+                    __CB_DESCR,
+                    &__builder,
+                    &[__obj0, __obj1],
+                )
+            {
+                ::core::result::Result::Ok(__o) => __o,
+                ::core::result::Result::Err(__e) => {
+                    let _ = env.exception_describe();
+                    let __e2 = <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(__e.to_string());
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e2.to_string(),
+                    );
+                    jni::objects::JObject::null().into()
+                }
+            }
+        }
+        ::core::option::Option::None => jni::objects::JObject::null().into(),
     }
 }
 #[no_mangle]
