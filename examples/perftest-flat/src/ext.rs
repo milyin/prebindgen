@@ -1636,6 +1636,34 @@ pub fn boxed_latest(a: &Archive) -> Box<Option<Summary>> {
     Box::new(a.latest.clone())
 }
 
+/// An `Option<data class>` whose data class has a **required handle** field.
+///
+/// The shape that proves an optional node's field decodes stay **inside** its
+/// presence gate. When the Kotlin object is null every leaf carries an inert
+/// placeholder, and a handle leaf's placeholder is pointer `0` — which the
+/// direct-handle decode reads as a closed handle, signals a binding error for,
+/// and returns from. Hoisting the decodes out of the gate therefore turns
+/// `null` into an error instead of `None`, and no fixture whose fields all
+/// decode successfully can tell the difference.
+///
+/// `Summary` is consumed by value here, as a handle field is: the `Some` case
+/// hands over ownership, and the `None` case must never touch the slot.
+#[prebindgen]
+pub struct Holder {
+    pub tag: i64,
+    pub summary: Summary,
+}
+
+/// `tag` when the holder is present, `fallback` when it is absent — so the
+/// absent arm is observable as a **value** rather than as an error.
+#[prebindgen]
+pub fn holder_tag_or(h: Option<Holder>, fallback: i64) -> i64 {
+    match h {
+        Some(h) => h.tag + h.summary.count,
+        None => fallback,
+    }
+}
+
 /// A data class whose **fields** carry transparent wrappers.
 ///
 /// This is what #289 changes and why it could not land alone. The field walk

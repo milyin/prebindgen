@@ -1960,18 +1960,28 @@ fn render_flat_struct_node(
     };
     if node.optional {
         let present = node.present_ident.as_ref().expect("optional node has gate");
+        // `#decodes` belongs **inside** the true arm, and that is a correctness
+        // requirement rather than a tidiness one: when the Kotlin object is null
+        // its leaves carry inert placeholders, and decoding them is not
+        // side-effect-free. A required handle field arrives as pointer `0`, so
+        // an unconditional direct-handle decode calls `signal_binding_error` and
+        // returns instead of delivering `None`; an enum with no discriminant `0`
+        // and a fallible custom converter fail on their placeholders the same
+        // way.
+        //
+        // The wrapper goes around the whole conditional, which is what the
+        // `Option` layer wraps — so `outer` applies to the `if`, never between
+        // it and the decodes.
         let gate = outer(quote! {
             if #present != 0u8 {
+                #decodes
                 ::core::option::Option::Some(#built)
             } else {
                 ::core::option::Option::None
             }
         });
         quote! {
-            let #binding = {
-                #decodes
-                #gate
-            };
+            let #binding = #gate;
         }
     } else {
         let value = outer(built);

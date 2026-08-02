@@ -206,6 +206,11 @@ fn main() {
                     .method(fun!(payload_label_len)),
             ),
         )
+        // `Option<Holder>` where `Holder` has a REQUIRED handle field: the
+        // absent case passes pointer 0 for it, so the field decodes must stay
+        // inside the presence gate or `null` becomes a binding error instead of
+        // `None` (PR#294 review).
+        .package(package!().class(data_class!(Holder)))
         // A data class whose FIELDS carry transparent wrappers (#289 + #292):
         // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
         // does — the decoupled `(present, value)` pair — with the `Box` put back
@@ -537,6 +542,7 @@ fn main() {
                 // check: a missing `Box::new` is an `E0308`, invisible to any
                 // text assertion.
                 .fun(fun!(wrapped_fields_sum))
+                .fun(fun!(holder_tag_or))
                 .fun(fun!(boxed_payload_id))
                 .fun(fun!(boxed_opt_payload_id))
                 .fun(fun!(boxed_opt_priority_weight))

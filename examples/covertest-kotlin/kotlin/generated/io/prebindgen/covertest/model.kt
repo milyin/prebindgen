@@ -3,6 +3,7 @@ package io.prebindgen.covertest.model
 
 import io.prebindgen.covertest.CovNative
 import io.prebindgen.covertest.DurationCallback
+import io.prebindgen.covertest.Holder
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.LedgerBuilder
@@ -1636,6 +1637,29 @@ public fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): L
         w.plain ?: 0L,
         __bcap,
     )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * `tag` when the holder is present, `fallback` when it is absent — so the
+ * absent arm is observable as a **value** rather than as an error.
+ */
+public fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long {
+    if (h?.summary?.isClosed() == true) return onError.run("Operation on a closed native handle.")
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        h?.summary?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val hSummary_ptr = h?.summary?.ptr ?: 0L
+            try {
+                CovNative.holderTagOr(h != null, h?.tag ?: 0L, hSummary_ptr, fallback, __bcap)
+            } finally {
+                h?.summary?.markConsumed()
+            }
+        }
+    }
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

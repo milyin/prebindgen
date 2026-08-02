@@ -44,6 +44,7 @@ import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
 import io.prebindgen.covertest.model.blobValueEcho
+import io.prebindgen.covertest.Holder
 import io.prebindgen.covertest.WrappedFields
 import io.prebindgen.covertest.model.boxedElemIdSum
 import io.prebindgen.covertest.model.boxedLatest
@@ -51,6 +52,7 @@ import io.prebindgen.covertest.model.boxedOptPayloadId
 import io.prebindgen.covertest.model.boxedOptPriorityWeight
 import io.prebindgen.covertest.model.boxedPayloadId
 import io.prebindgen.covertest.model.boxedRunIdSum
+import io.prebindgen.covertest.model.holderTagOr
 import io.prebindgen.covertest.model.wrappedFieldsSum
 import io.prebindgen.covertest.model.boxedNoteEcho
 import io.prebindgen.covertest.model.plainNoteEcho
@@ -1479,6 +1481,16 @@ fun main() {
         check(wrappedFieldsSum(WrappedFields(1L, null, 4L), boom) == 5L)
         check(wrappedFieldsSum(WrappedFields(1L, 2L, null), boom) == 3L)
         check(wrappedFieldsSum(WrappedFields(1L, null, null), boom) == 1L)
+
+        // An absent `Option<data class>` must deliver `None`, not an error. Its
+        // leaves are inert placeholders when the object is null, and a required
+        // HANDLE field's placeholder is pointer 0 — which the direct-handle
+        // decode reads as a closed handle. So this is the shape that proves the
+        // field decodes stay inside the presence gate; a fixture whose fields
+        // all decode successfully cannot tell the two orders apart.
+        check(holderTagOr(null, -9L, boom) == -9L)
+        val held = Summary.of(4L, 8.0, boom)
+        check(holderTagOr(Holder(3L, held), -9L, boom) == 7L)  // 3 + count(4)
     }
 
     // ── Vec<String> fold + Option<data-class> input + plain String return ────
