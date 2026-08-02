@@ -983,7 +983,23 @@ fn derive_iface_spec(
 ) -> Option<IfaceSpec> {
     match key {
         SpecKey::Callback(arg_keys) => {
-            let args: Vec<syn::Type> = arg_keys.iter().map(TypeKey::to_type).collect();
+            // The one deliberate round trip in this file, and the memo forces
+            // it: `SpecKey` needs `Ord`, so it holds `TypeKey`s — a `TypeRef`
+            // could not go in one (its `Origin` carries a `SourceLocation`, so
+            // two identical readings from different files would compare
+            // unequal), and `derive_iface_spec` is contractually a pure
+            // function of the key.
+            //
+            // A LOOKUP, not a classification: `Registry::reading` has answered
+            // only from the type table since #267. `None` means the arg has
+            // not entered the pipeline yet, which is the same "not yet
+            // derivable" state `iface_spec` already documents and retries —
+            // so it defers rather than answering "not optional", which is what
+            // the accessor used to do here.
+            let args: Vec<crate::api::core::flat::TypeRef> = arg_keys
+                .iter()
+                .map(|k| registry.reading(&k.to_type()))
+                .collect::<Option<_>>()?;
             callback_iface_spec(ext, registry, &args)
         }
         SpecKey::Builder(d) => builder_iface_spec(ext, registry, d),
@@ -1073,7 +1089,7 @@ fn fixed_reassembly(
 pub(crate) fn callback_iface_spec(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    cb_args: &[syn::Type],
+    cb_args: &[crate::api::core::flat::TypeRef],
 ) -> Option<IfaceSpec> {
     // Per-arg grouping over the flat raw leaves. A **fixed-builder** (by-value
     // `data_class`) arg crosses the wire as decoupled leaves but the user
@@ -1124,7 +1140,7 @@ pub(crate) fn callback_iface_spec(
         // arg into the callback's `run` params here.
         let plan = registry
             .callback_arg_plans()
-            .get(&TypeKey::from_type(t))
+            .get(&t.key())
             .filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
             let leaf_names = plan_leaf_names(&plan.leaves);
@@ -1133,15 +1149,14 @@ pub(crate) fn callback_iface_spec(
             }
             if plan.fixed_builder {
                 any_fixed = true;
-                let core = match t {
-                    syn::Type::Reference(r) => (*r.elem).clone(),
-                    other => other.clone(),
-                };
+                // Peeled off the reading — `borrow_target` is the model's
+                // answer to "is this a borrow", not a syn match.
+                let core = t.borrow_target().unwrap_or(t).origin.syntax.clone();
                 let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
                 let (reassemble, imports) =
                     fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
                 groups.push(GroupDesc {
-                    name: whole_value_name(t, i),
+                    name: whole_value_name(&t.origin.syntax, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
@@ -1214,18 +1229,18 @@ pub(crate) fn callback_iface_spec(
             // A plan-less opaque-handle arg is delivered as a raw `jlong` and
             // wrapped + closed Kotlin-side (Phase 3 — no Rust `new_object`).
             let owned_handle = registry
-                .output_entry(t)
+                .output_entry(&t.origin.syntax)
                 .and_then(|e| e.metadata.projection.as_ref())
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
-                name: whole_value_name(t, i),
-                ty: t.clone(),
-                nullable: registry.is_optional(t),
+                name: whole_value_name(&t.origin.syntax, i),
+                ty: t.origin.syntax.clone(),
+                nullable: t.optional_inner().is_some(),
                 owned_handle,
             });
             groups.push(GroupDesc {
-                name: whole_value_name(t, i),
+                name: whole_value_name(&t.origin.syntax, i),
                 typed: None,
                 reassemble: None,
                 imports: Vec::new(),
@@ -1282,14 +1297,14 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(subject_short)
+                .map(|t| subject_short(&t.origin.syntax))
                 .collect::<Vec<_>>()
                 .join("")
         )
     };
     let package = cb_args
         .first()
-        .map(|t| subject_package(ext, t))
+        .map(|t| subject_package(ext, &t.origin.syntax))
         .unwrap_or_else(|| ext.package.clone());
     Some(IfaceSpec {
         typed_groups,

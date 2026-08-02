@@ -534,7 +534,7 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
     ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
-        use crate::api::core::types_util::{enum_shape, EnumShape, SumSpec};
+        use crate::api::core::types_util::SumSpec;
 
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
@@ -552,11 +552,17 @@ impl Declarations {
             let Some(ident) = bare_path_ident(&ty) else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&ident) else {
-                continue;
-            };
+            // The sum as the MODEL holds it: its alternatives' payloads are
+            // `TypeRef`s, so the Kotlin type of one asks nothing and cannot be
+            // asked about a type the model never saw.
+            //
+            // A FIELDLESS enum is `Type::Enum`, not `Type::Variant` — the model
+            // already draws the distinction this arm used to re-derive with
+            // `enum_shape`. It is a declaration error rather than a skip, so it
+            // keeps its diagnosis; only the source of the answer changed.
+            let declared = registry.flat().declared_type(&ident);
             assert!(
-                enum_shape(item_enum) == EnumShape::Sum,
+                matches!(declared, Some(crate::api::core::flat::Type::Variant(_))),
                 "`{}` has no payload variants: declare it with `enum_class!({})`, not \
                  `sealed_class!({})` — a fieldless enum crosses as a bare discriminant and \
                  needs no sealed hierarchy",
@@ -564,8 +570,11 @@ impl Declarations {
                 ident,
                 ident
             );
+            let Some(crate::api::core::flat::Type::Variant(sum)) = declared else {
+                unreachable!("asserted just above")
+            };
 
-            let spec = SumSpec::from_item_enum(item_enum);
+            let spec = SumSpec::from_item_enum(&sum.origin.syntax);
             // Every declared `.variant(...)` must name a real variant —
             // a typo would otherwise silently do nothing.
             for declared in sum_cfg.variant_names.keys() {
@@ -580,8 +589,7 @@ impl Declarations {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            let mut class =
-                self.build_sealed_class(registry, &class_name, item_enum, &spec, sum_cfg);
+            let mut class = self.build_sealed_class(registry, &class_name, sum, &spec, sum_cfg);
             let mut file = kt::KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
@@ -602,10 +610,14 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
         class_name: &str,
-        item_enum: &syn::ItemEnum,
+        sum: &crate::api::core::flat::Variant,
         spec: &crate::api::core::types_util::SumSpec,
         sum_cfg: &SumConfig,
     ) -> KtClass {
+        // `SumSpec` owns the leaf-NAMING convention, which is jnigen's own; the
+        // payload TYPES come from the element beside it. Same split #278 drew
+        // in `synth_sum_leaves`.
+        let item_enum = &sum.origin.syntax;
         let framework_line = format!(
             "JVM-side surface for the native Rust `{}` sum: exactly one alternative is live.",
             item_enum.ident
@@ -619,7 +631,7 @@ impl Declarations {
             .kdoc(kdoc);
 
         // Nested variant classes, in declaration (tag) order.
-        for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
+        for (variant, alt) in spec.variants.iter().zip(&sum.alternatives) {
             let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
             let mut vclass = if variant.is_unit() {
                 KtClass::new(ClassKind::DataObject, &vname)
@@ -628,19 +640,15 @@ impl Declarations {
             }
             .vis(Vis::Public)
             .supertype(KtType::cls(class_name), None);
-            if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_variant.attrs) {
+            if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&alt.origin.syntax.attrs)
+            {
                 vclass = vclass.kdoc(doc);
             }
             let mut vprops: Vec<(String, KtType)> = Vec::new();
-            for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
+            for (field, alt_field) in variant.fields.iter().zip(alt.fields.iter()) {
                 let prop = sum_field_property_name(field);
-                let ty = self.sum_payload_kt_type(
-                    registry,
-                    item_enum,
-                    &variant.ident,
-                    &prop,
-                    item_field,
-                );
+                let ty =
+                    self.sum_payload_kt_type(registry, &sum.name, &variant.ident, &prop, alt_field);
                 vprops.push((prop.clone(), ty.clone()));
                 vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
             }
@@ -663,17 +671,12 @@ impl Declarations {
             .annotation("JvmStatic")
             .param(KtParam::new("tag", KtType::int()))
             .returns(KtType::cls(class_name));
-        for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
+        for (variant, alt) in spec.variants.iter().zip(&sum.alternatives) {
             let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
-            for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
+            for (field, alt_field) in variant.fields.iter().zip(alt.fields.iter()) {
                 let prop = sum_field_property_name(field);
-                let ty = self.sum_payload_kt_type(
-                    registry,
-                    item_enum,
-                    &variant.ident,
-                    &prop,
-                    item_field,
-                );
+                let ty =
+                    self.sum_payload_kt_type(registry, &sum.name, &variant.ident, &prop, alt_field);
                 factory = factory.param(KtParam::new(sum_slot_name(&vname, &prop), ty));
             }
         }
@@ -780,24 +783,23 @@ impl Declarations {
     fn sum_payload_kt_type(
         &self,
         registry: &Registry<KotlinMeta>,
-        item_enum: &syn::ItemEnum,
+        sum_name: &syn::Ident,
         variant: &syn::Ident,
         prop: &str,
-        field: &syn::Field,
+        field: &crate::api::core::flat::Field,
     ) -> KtType {
-        let where_ = || {
-            format!(
-                "sealed_class!({}) payload `{variant}.{prop}`",
-                item_enum.ident
-            )
-        };
-        let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
+        // The field's own reading: the nullability question below is answered
+        // from `kind`, so a wrapped spelling answers as the bare one does and
+        // nothing is looked up (#275).
+        let field_ty = &field.ty.origin.syntax;
+        let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
+        let out = registry.output_entry(field_ty).unwrap_or_else(|| {
             panic!(
                 "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
                  cannot be derived — register converters for the payload type before \
                  declaring the sealed class",
                 where_(),
-                field.ty.to_token_stream(),
+                field_ty.to_token_stream(),
             )
         });
 
@@ -816,7 +818,7 @@ impl Declarations {
             panic!(
                 "{}: `{}` has no Kotlin type mapping on its output converter",
                 where_(),
-                field.ty.to_token_stream(),
+                field_ty.to_token_stream(),
             )
         });
         // The input side must agree on WHICH TYPE the property is — Kotlin
@@ -831,7 +833,7 @@ impl Declarations {
         // boxed value, a present flag, a niche) rather than in the type name.
         // Comparing the rendered types would reject that legitimate shape —
         // which is what an `Option<enum>` payload does.
-        if let Some(inp) = registry.input_entry(&field.ty) {
+        if let Some(inp) = registry.input_entry(field_ty) {
             if let (Some(in_ty), (Some(a), Some(b))) = (
                 inp.metadata.kotlin_name.clone(),
                 (
@@ -849,7 +851,7 @@ impl Declarations {
                      type (`{}` in, `{}` out) — a sealed class's properties are read by both \
                      directions, so they must map to one type",
                     where_(),
-                    field.ty.to_token_stream(),
+                    field_ty.to_token_stream(),
                     in_ty,
                     ty,
                 );
@@ -860,7 +862,7 @@ impl Declarations {
         // field — the Kotlin type must match that slot. Read from the same
         // entry the type came from.
         let primitive_wire = crate::api::lang::jnigen::jni::is_jni_primitive(&out.destination);
-        if registry.is_optional(&field.ty) && !primitive_wire {
+        if field.ty.optional_inner().is_some() && !primitive_wire {
             ty.nullable()
         } else {
             ty

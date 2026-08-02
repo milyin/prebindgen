@@ -68,9 +68,13 @@ mod spelling_census {
     //! `Box<Option<String>>` **parameter** rendered non-null while the
     //! identical-meaning `Option<String>` rendered `String?` — and a non-null
     //! parameter for an optional value makes the absent case unexpressible.
-    //! `Conversions::{is_optional, optional_inner, sequence_elem,
-    //! is_optional_borrow}` ask the model, and every site with a registry in
-    //! scope should use those.
+    //! The fix is to **carry the reading** rather than the spelling: a
+    //! `TypeRef` answers `optional_inner()` / `sequence_elem()` /
+    //! `borrow_target()` itself, infallibly, because holding one is proof the
+    //! model classified the type. `Conversions` briefly grew accessors that
+    //! took a spelling and looked the reading up; they are gone (#275), because
+    //! a type with no cell answered "no layer" instead of saying it had never
+    //! entered the pipeline.
     //!
     //! ## What this is for
     //!
@@ -293,9 +297,9 @@ mod spelling_census {
              These helpers read a type's layers off its SPELLING, which the model \
              erases wrappers from — see this module's docs. A count going DOWN is \
              the goal: drop the row (or lower it) in the same commit. A count going \
-             UP needs a reason in review: prefer `Conversions::{{is_optional, \
-             optional_inner, sequence_elem, is_optional_borrow}}`, which ask the \
-             model, wherever a registry is in scope.",
+             UP needs a reason in review: take the `TypeRef` instead and ask it \
+             directly (`optional_inner`, `sequence_elem`, `borrow_target`), which \
+             cannot miss.",
             drift.join("\n"),
         );
     }

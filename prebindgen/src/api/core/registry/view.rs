@@ -37,26 +37,6 @@ pub trait Conversions<M> {
     /// out.
     fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef>;
 
-    /// Whether `ty` crosses as **optional** — the model's answer, not the
-    /// spelling's.
-    ///
-    /// The question every consumer actually means, and the one they could not
-    /// ask: they reached for `is_option_type`, which is `path_tail_is(ty,
-    /// "Option")`. But the model **erases** transparent wrappers — `Box<T>` *is*
-    /// `T`, and so is `Cow<'_, T>` — so `Box<Option<String>>` is `Optional` and
-    /// that check answers `false`. Kotlin then lost the `?`, which is not a
-    /// cosmetic slip: a non-null parameter for an optional value makes the
-    /// absent case unexpressible (#273).
-    ///
-    /// Here rather than at each consumer so the rule has **one** home. A new
-    /// transparent wrapper — an `Rc`, say — is then a change to
-    /// [`TRANSPARENT_WRAPPERS`](crate::api::core::flat::TRANSPARENT_WRAPPERS)
-    /// and nothing else; every site asking this question follows automatically.
-    fn is_optional(&self, ty: &syn::Type) -> bool {
-        self.reading(ty)
-            .is_some_and(|r| r.optional_inner().is_some())
-    }
-
     /// The conversion for `ty` in `dir`, if there is one.
     fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>>;
 

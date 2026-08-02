@@ -578,3 +578,156 @@ fn fn_plan_memo_shares_one_derivation() {
     assert_eq!(a.native_symbol, fresh.native_symbol);
     assert_eq!(a.jni_method, fresh.jni_method);
 }
+
+/// A callback identity is the same whether its args come from the **reading**
+/// or from the signature's syntax.
+///
+/// `SpecKey::Callback` is a memo key, so it holds `TypeKey`s — a `TypeRef`
+/// could not go in it (`Ord` is required, and an `Origin` carries a
+/// `SourceLocation`, so two identical readings from different files would
+/// compare unequal). That means the args reach `SpecKey::callback` as
+/// spellings, and #275's last part changes *which* spelling: from
+/// `extract_fn_trait_args(&pt.ty)` to each arg `TypeRef`'s `origin.syntax`.
+///
+/// If those two disagreed, the memo would split one interface identity into
+/// two — an extra generated `fun interface` and a descriptor mismatch. Nothing
+/// else would fail: not a panic, not an unresolved type, just a duplicate. So
+/// it is pinned here rather than trusted.
+#[test]
+fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
+    use crate::SourceLocation;
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_sub(cb: impl Fn(ZThing) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZThing))
+                .fun(crate::fun!(z_sub)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    let registry = gen.registry();
+
+    let f = registry.flat().function("z_sub").expect("the declared fn");
+    let cb = f
+        .params
+        .iter()
+        .find_map(|p| match &p.ty.kind {
+            crate::api::core::flat::TypeKind::Callback { args } => Some((p, args)),
+            _ => None,
+        })
+        .expect("z_sub takes a callback");
+    let (param, arg_readings) = cb;
+
+    // The two routes to the same identity.
+    let from_reading = SpecKey::callback(
+        &arg_readings
+            .iter()
+            .map(|a| a.origin.syntax.clone())
+            .collect::<Vec<_>>(),
+    );
+    let from_syntax = SpecKey::callback(
+        &crate::api::core::registry::extract_fn_trait_args(&param.ty.origin.syntax)
+            .expect("the param is an impl Fn"),
+    );
+
+    assert_eq!(
+        from_reading, from_syntax,
+        "a callback keyed off its readings must be the SAME memo identity as one \
+         keyed off the signature's syntax — otherwise the memo silently emits two \
+         interfaces for one callback"
+    );
+}
+
+/// A callback argument spelled as a **wrapped** borrow — `Box<&T>` — is refused,
+/// rather than generating a trampoline the consumer cannot compile.
+///
+/// `Box` is transparent, so `Box<&T>`'s kind is `Ref` exactly as `&T`'s is: the
+/// model answers "borrow" for both, and that answer is correct. What differs is
+/// the *spelling*, and the generated trampoline is written in the spelling. Neutralise
+/// the guard — pass the canonical `&T` as `produced` at `selector.rs`'s borrow arm
+/// instead of the crossing's own `syntax` — and this test fails on emitted code that
+/// hands a `Box<&ZThing>` to a `ZThing_to_jlong(v: &myflat::ZThing)`:
+///
+/// ```ignore
+/// Box::new(move |__cb_arg0: Box<&myflat::ZThing>| {
+///     let __cb0_enc = ZThing_to_jlong_11822692(&mut env, __cb_arg0)?;
+/// ```
+///
+/// The guard that holds is [`Declarations::output_wrapper_shape`]'s borrowed-opaque
+/// arm, which matches `syn::Type::Reference` on `produced` structurally: `Box<&T>`
+/// is a `Type::Path`, so it gets no whole-value output converter, and a callback
+/// arg's is a required type. Same `kind`-classifies / spelling-decides split as
+/// #272's `decoded_vec_satisfies` and `is_unsized_spelling`.
+///
+/// A local re-check inside `emit/callback.rs` was tried and dropped (#279 review):
+/// it changed no output, and cost a `boundary.ledger` entry for a spelling
+/// classification that never fires. This test is the protection instead.
+#[test]
+fn a_wrapped_borrow_callback_arg_declines() {
+    use crate::SourceLocation;
+    let loc = myflat_loc();
+    let build = |argty: syn::Type| -> Result<String, String> {
+        let items: Vec<(syn::Item, SourceLocation)> = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZThing {
+                        pub v: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_sub(cb: impl Fn(#argty) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZThing))
+                    .fun(crate::fun!(z_sub)),
+            );
+        let dir = unique_test_dir("jnigen_wrapped_cb");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    };
+
+    // The canonical borrow still resolves and still clones through the core.
+    let plain = build(syn::parse_quote!(&ZThing)).expect("a plain borrow resolves");
+    assert!(
+        plain.contains("__cb_arg0: &myflat::ZThing"),
+        "the trampoline takes the borrow as written:\n{plain}"
+    );
+
+    // Wrapped, the clone is inexpressible, so nothing claims it.
+    let err = build(syn::parse_quote!(Box<&ZThing>))
+        .expect_err("a wrapped borrow callback arg must not resolve");
+    assert!(
+        err.contains("could not be resolved"),
+        "the refusal names the type: {err}"
+    );
+}
