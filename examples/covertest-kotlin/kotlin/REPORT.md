@@ -122,6 +122,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Unsigned` decomposed → [byte, short, int, long, maybeLong] (Callback delivery)
 - `unsigned_series` — `fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong>`
   - shaped by: return `u64` decomposed → [] (Callback delivery)
+- `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`
 
 ## package `io.prebindgen.covertest.storage`
 
@@ -223,6 +224,7 @@ Base package: `io.prebindgen.covertest`
 - `Summary`: ptr_class → `io.prebindgen.covertest.analytics.Summary` (wire `jni :: sys :: jlong`)
 - `Tagged`: data_class → `io.prebindgen.covertest.model.Tagged` (wire `jni :: objects :: JObject`)
 - `Unsigned`: data_class → `io.prebindgen.covertest.model.Unsigned` (wire `jni :: objects :: JObject`)
+- `WrappedFields`: data_class → `io.prebindgen.covertest.WrappedFields` (wire `jni :: objects :: JObject`)
 
 ## conversions
 

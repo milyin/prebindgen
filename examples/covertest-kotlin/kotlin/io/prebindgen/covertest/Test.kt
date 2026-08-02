@@ -44,12 +44,14 @@ import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
 import io.prebindgen.covertest.model.blobValueEcho
+import io.prebindgen.covertest.WrappedFields
 import io.prebindgen.covertest.model.boxedElemIdSum
 import io.prebindgen.covertest.model.boxedLatest
 import io.prebindgen.covertest.model.boxedOptPayloadId
 import io.prebindgen.covertest.model.boxedOptPriorityWeight
 import io.prebindgen.covertest.model.boxedPayloadId
 import io.prebindgen.covertest.model.boxedRunIdSum
+import io.prebindgen.covertest.model.wrappedFieldsSum
 import io.prebindgen.covertest.model.boxedNoteEcho
 import io.prebindgen.covertest.model.plainNoteEcho
 import io.prebindgen.covertest.model.blobValueNew
@@ -1468,6 +1470,15 @@ fun main() {
         val many = listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null))
         check(boxedElemIdSum(many, boom) == 3L)           // wrapped element
         check(boxedRunIdSum(many, boom) == 3L)            // wrapped run, by value
+
+        // FIELDS (#289). `boxed: Box<Option<Long>>` and `plain: Option<Long>`
+        // are one type to the model, so both cross as `Long?` on the decoupled
+        // `(present, value)` pair — the boxed one used to be read by path
+        // segment as "not optional" and crossed as one boxed object.
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, 4L), boom) == 7L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, 4L), boom) == 5L)
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, null), boom) == 3L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, null), boom) == 1L)
     }
 
     // ── Vec<String> fold + Option<data-class> input + plain String return ────

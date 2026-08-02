@@ -1636,6 +1636,31 @@ pub fn boxed_latest(a: &Archive) -> Box<Option<Summary>> {
     Box::new(a.latest.clone())
 }
 
+/// A data class whose **fields** carry transparent wrappers.
+///
+/// This is what #289 changes and why it could not land alone. The field walk
+/// used to peel with `option_inner_type`, which reads the last path segment: a
+/// field spelled `Box<Option<i64>>` answered "not optional" and crossed as one
+/// boxed `java.lang.Long`. The model says `Optional`, so it now takes the
+/// decoupled `(present, value)` pair its bare twin does — and the emitter has to
+/// put the `Box` back when it rebuilds, or the migration turns a working boxed
+/// crossing into an `E0308`.
+///
+/// `plain` is the control: the two fields must produce the same wire, since the
+/// model says they are the same type.
+#[prebindgen]
+pub struct WrappedFields {
+    pub id: i64,
+    pub boxed: Box<Option<i64>>,
+    pub plain: Option<i64>,
+}
+
+/// Round-trip a [`WrappedFields`] so both field spellings cross in one call.
+#[prebindgen]
+pub fn wrapped_fields_sum(w: WrappedFields) -> i64 {
+    w.id + w.boxed.unwrap_or(0) + w.plain.unwrap_or(0)
+}
+
 /// Transparent wrappers on the **input** side, one per specialized lowering.
 ///
 /// These lowerings do not *decode* their parameter, they **rebuild** it — a

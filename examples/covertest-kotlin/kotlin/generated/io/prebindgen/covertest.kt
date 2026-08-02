@@ -209,6 +209,27 @@ public data class Payload(override val id: Long, override val seq: Int, override
     }
 }
 
+/**
+ * A data class whose **fields** carry transparent wrappers.
+ *
+ * This is what #289 changes and why it could not land alone. The field walk
+ * used to peel with `option_inner_type`, which reads the last path segment: a
+ * field spelled `Box<Option<i64>>` answered "not optional" and crossed as one
+ * boxed `java.lang.Long`. The model says `Optional`, so it now takes the
+ * decoupled `(present, value)` pair its bare twin does — and the emitter has to
+ * put the `Box` back when it rebuilds, or the migration turns a working boxed
+ * crossing into an `E0308`.
+ *
+ * `plain` is the control: the two fields must produce the same wire, since the
+ * model says they are the same type.
+ */
+public data class WrappedFields(val id: Long, val boxed: Long?, val plain: Long?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(id: Long, boxed: Long?, plain: Long?): WrappedFields = WrappedFields(id, boxed, plain)
+    }
+}
+
 /** Typed handle for a native Zenoh `PayloadHandler`. */
 public class PayloadHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -1273,6 +1294,15 @@ internal object CovNative {
     ): Any?
 
     external fun unsignedSeries(acc: Any?, fold: Any, errorSink: Any): Any?
+
+    external fun wrappedFieldsSum(
+        wId: Long,
+        wBoxedPresent: Boolean,
+        wBoxedValue: Long,
+        wPlainPresent: Boolean,
+        wPlainValue: Long,
+        errorSink: Any,
+    ): Long
 
     external fun constGetCoverMagic(errorSink: Any): Long
 

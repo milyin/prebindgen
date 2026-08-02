@@ -10,6 +10,7 @@ import io.prebindgen.covertest.LedgerCallback
 import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
+import io.prebindgen.covertest.WrappedFields
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryBuilder
@@ -1620,6 +1621,21 @@ public fun boxedNoteEcho(note: String?, onError: JniErrorHandler<String?>): Stri
 public fun plainNoteEcho(note: String?, onError: JniErrorHandler<String?>): String? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.plainNoteEcho(note, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Round-trip a [`WrappedFields`] so both field spellings cross in one call. */
+public fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.wrappedFieldsSum(
+        w.id,
+        w.boxed != null,
+        w.boxed ?: 0L,
+        w.plain != null,
+        w.plain ?: 0L,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

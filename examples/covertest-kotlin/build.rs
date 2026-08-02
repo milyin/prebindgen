@@ -206,6 +206,12 @@ fn main() {
                     .method(fun!(payload_label_len)),
             ),
         )
+        // A data class whose FIELDS carry transparent wrappers (#289 + #292):
+        // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
+        // does — the decoupled `(present, value)` pair — with the `Box` put back
+        // on the Rust side. Peeling the field by path segment answered "not
+        // optional" and boxed it instead.
+        .package(package!().class(data_class!(WrappedFields)))
         // ── Subpackage `model`: enum + value class + nested data class ──────
         .package(
             package!("model")
@@ -530,6 +536,7 @@ fn main() {
                 // one shape cannot cover them all. Compiling this crate is the
                 // check: a missing `Box::new` is an `E0308`, invisible to any
                 // text assertion.
+                .fun(fun!(wrapped_fields_sum))
                 .fun(fun!(boxed_payload_id))
                 .fun(fun!(boxed_opt_payload_id))
                 .fun(fun!(boxed_opt_priority_weight))

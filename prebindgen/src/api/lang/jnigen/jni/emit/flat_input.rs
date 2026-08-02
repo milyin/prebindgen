@@ -715,6 +715,11 @@ pub(crate) enum FlatFieldNode {
         direct_handle: bool,
         optional_handle: bool,
         rust_ty: Box<syn::Type>,
+        /// The transparent wrappers this field's spelling adds over its
+        /// classification, outermost first — put back wherever the decode
+        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
+        /// running the field's own converter, which already yields the spelling.
+        wrappers: Vec<&'static str>,
     },
     Nested {
         field: syn::Ident,
@@ -736,6 +741,11 @@ pub(crate) enum FlatFieldNode {
         /// Variants in declaration order; index == tag.
         variants: Vec<FlatSumVariant>,
         rust_ty: Box<syn::Type>,
+        /// The transparent wrappers this field's spelling adds over its
+        /// classification, outermost first — put back wherever the decode
+        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
+        /// running the field's own converter, which already yields the spelling.
+        wrappers: Vec<&'static str>,
     },
 }
 
@@ -886,16 +896,11 @@ pub(crate) struct FlatInputPlan {
 // jnigen's actual `impl Into<…>` support is elsewhere: plugin wrapper exts build
 // a `ConverterImpl::function` by hand via `Declarations::input_converter_name`,
 // which never consults this.
-
-/// Peel a leading `&`/`&mut` then an `Option<…>` to expose the inner type used
-/// for enum/struct detection (`&Priority`, `Option<Priority>` → `Priority`).
-pub(crate) fn flat_probe_inner(ty: &syn::Type) -> syn::Type {
-    let stripped = match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    option_inner_type(&stripped).unwrap_or(stripped)
-}
+// `flat_probe_inner` lived here: it peeled `&` then `Option` off a SPELLING to
+// reach the type an enum probe should ask about. Its last caller now asks
+// `is_kotlin_enum_reading`, whose `enum_probe` peels the same two layers off the
+// model — so `Box<Priority>` probes as `Priority` where this answered about the
+// wrapper (#289).
 
 /// Kotlin literal that fills a leaf slot when its `Option<struct>` parent is
 /// absent (the `present` flag tells Rust to ignore it). `None` for nullable
@@ -1007,9 +1012,10 @@ fn build_flat_sum_field(
     native_prefix: &str,
     field_ref: &str,
     nullable_access: bool,
-    rust_ty: &syn::Type,
+    field_reading: &TypeRef,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Option<FlatFieldNode> {
+    let rust_ty = field_reading.syntax();
     use crate::api::core::types_util::SumSpec;
 
     let ident = bare_path_ident(sum_ty)?;
@@ -1154,6 +1160,7 @@ fn build_flat_sum_field(
 
     let module = ext.fn_module(registry, &ident);
     Some(FlatFieldNode::Sum {
+        wrappers: field_reading.erased_wrappers(),
         field,
         tag_leaf,
         present_leaf,
@@ -1272,11 +1279,9 @@ pub(crate) fn build_flat_input_plan(
     let Some(name) = id.ident() else {
         return Ok(None);
     };
-    let Some(st) = registry
-        .flat()
-        .struct_type(&name)
-        .map(|st| &st.origin.syntax)
-    else {
+    // The ELEMENT, not the item it was parsed from: its fields already carry
+    // readings, which is the whole of #289.
+    let Some(st) = registry.flat().struct_type(&name) else {
         return Ok(None);
     };
     // The DECLARATION is keyed by the type, not by the spelling: a
@@ -1347,10 +1352,21 @@ pub(crate) fn build_flat_input_plan(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
+/// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
+/// answer rather than a last-path-segment test on tokens that had a reading one
+/// level up.
+///
+/// That matters here and not only on principle. `option_inner_type` reads the
+/// last path segment, so a field spelled `Box<Option<T>>` answered "not
+/// optional" and crossed as one boxed object; the model says `Optional` and it
+/// takes the decoupled `(present, value)` pair like its bare twin. The emitter
+/// then has to put the `Box` back — which is why this migration could not land
+/// before the rebuild did.
 fn build_flat_struct_node(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    st: &syn::ItemStruct,
+    st: &flat::Struct,
     optional: bool,
     native_prefix: &str,
     access_prefix: &str,
@@ -1359,7 +1375,7 @@ fn build_flat_struct_node(
     stack: &mut Vec<TypeKey>,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Result<FlatStructNode, FlatInputError> {
-    let node_key = TypeKey::from_ident(&st.ident);
+    let node_key = TypeKey::from_ident(&st.name);
     if stack.contains(&node_key) {
         return Err(flat_error(
             root,
@@ -1374,13 +1390,6 @@ fn build_flat_struct_node(
             "recursive flattening exceeds depth 16",
         ));
     }
-    let syn::Fields::Named(named) = &st.fields else {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "only named-field structs can flatten",
-        ));
-    };
     stack.push(node_key);
     let present_ident = if optional {
         let native = format!("{native_prefix}_present");
@@ -1390,9 +1399,17 @@ fn build_flat_struct_node(
         None
     };
     let mut fields = Vec::new();
-    for field in &named.named {
-        let Some(fident) = field.ident.clone() else {
-            return Err(flat_error(root, native_prefix, "unnamed field"));
+    for field in &st.fields {
+        // A positional field has no name to derive a Kotlin property from, which
+        // is what "only named-field structs can flatten" used to say one level
+        // up. Said per field now, because the element models a field list rather
+        // than a `syn::Fields` shape.
+        let Some(fident) = field.name.clone() else {
+            return Err(flat_error(
+                root,
+                native_prefix,
+                "only named-field structs can flatten",
+            ));
         };
         let fcamel = mangle_kotlin_ident(&snake_to_camel(&fident.to_string()));
         let child_native = format!("{native_prefix}_{}", fident);
@@ -1401,12 +1418,17 @@ fn build_flat_struct_node(
         } else {
             format!("{access_prefix}.{fcamel}")
         };
-        let nested_ty = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+        // The optional layer off the MODEL, asked once and reused: every site
+        // below that wants "is this field optional" reads this, so they cannot
+        // disagree with each other the way seven independent path-segment tests
+        // could (#273).
+        let field_optional = field.ty.optional_inner().is_some();
+        let nested = field.ty.optional_inner().unwrap_or(&field.ty);
+        let nested_ty = nested.syntax().clone();
         // A data-carrying enum flattens into a tag plus one group per variant.
         // `None` means some payload is not leaf-shaped — fall through and let
         // it cross as one object through its own converter.
         if matches!(ext.type_kind(registry, &nested_ty), TypeKind::Sum) {
-            let field_optional = option_inner_type(&field.ty).is_some();
             if let Some(node) = build_flat_sum_field(
                 ext,
                 registry,
@@ -1429,11 +1451,11 @@ fn build_flat_struct_node(
         } = ext.type_kind(registry, &nested_ty)
         {
             if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
-                let child_optional = option_inner_type(&field.ty).is_some();
+                let child_optional = field_optional;
                 let node = build_flat_struct_node(
                     ext,
                     registry,
-                    &child.origin.syntax,
+                    child,
                     child_optional,
                     &child_native,
                     &field_ref,
@@ -1451,28 +1473,22 @@ fn build_flat_struct_node(
         }
 
         let path = child_native.clone();
-        let Some(fentry) = registry
-            .reading_of(&field.ty)
-            .and_then(|tr| registry.input_entry(&tr))
-        else {
+        // The field's own reading straight to its entry — the `reading_of` hop
+        // only ever recovered what the field already carried.
+        let Some(fentry) = registry.input_entry(&field.ty) else {
             return Err(flat_error(
                 root,
                 &path,
-                format!(
-                    "field type `{}` has no input converter",
-                    TypeKey::from_type(&field.ty)
-                ),
+                format!("field type `{}` has no input converter", field.ty.key()),
             ));
         };
 
         // Nullable primitive/enum with no niche: keep the allocation-free
         // `(present, value)` representation at every recursion depth.
-        if let Some(inner_ty) = option_inner_type(&field.ty) {
-            if !matches!(inner_ty, syn::Type::Reference(_)) {
-                if let Some(inner) = registry
-                    .reading_of(&inner_ty)
-                    .and_then(|tr| registry.input_entry(&tr))
-                {
+        if let Some(inner_reading) = field.ty.optional_inner() {
+            let inner_ty = inner_reading.syntax().clone();
+            if inner_reading.borrow_target().is_none() {
+                if let Some(inner) = registry.input_entry(inner_reading) {
                     if let Some(prim) = JniPrim::from_wire(&inner.destination) {
                         if inner.niches.clone().carve().is_none()
                             && inner.metadata.projection.is_none()
@@ -1503,7 +1519,8 @@ fn build_flat_struct_node(
                                 present_leaf: Some(present_index),
                                 direct_handle: false,
                                 optional_handle: false,
-                                rust_ty: Box::new(field.ty.clone()),
+                                rust_ty: Box::new(field.ty.syntax().clone()),
+                                wrappers: field.ty.erased_wrappers(),
                             });
                             continue;
                         }
@@ -1520,7 +1537,7 @@ fn build_flat_struct_node(
             // provides a niche already have a primitive destination and stay
             // a single leaf below.
             if proj.kind == ProjectionKind::Unsigned64 {
-                if let Some(inner_ty) = option_inner_type(&field.ty) {
+                if let Some(inner_ty) = field.ty.optional_inner().map(|t| t.syntax().clone()) {
                     if JniPrim::from_wire(&fentry.destination).is_none() {
                         let inner = registry
                             .reading_of(&inner_ty)
@@ -1555,7 +1572,8 @@ fn build_flat_struct_node(
                             present_leaf: Some(present_index),
                             direct_handle: false,
                             optional_handle: false,
-                            rust_ty: Box::new(field.ty.clone()),
+                            rust_ty: Box::new(field.ty.syntax().clone()),
+                            wrappers: field.ty.erased_wrappers(),
                         });
                         continue;
                     }
@@ -1570,7 +1588,7 @@ fn build_flat_struct_node(
                             "collections of handles retain their collection boundary",
                         ));
                     }
-                    let optional_handle = option_inner_type(&field.ty).is_some();
+                    let optional_handle = field_optional;
                     let value_index = push_handle_leaf(
                         leaves,
                         &child_native,
@@ -1584,12 +1602,13 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: true,
                         optional_handle,
-                        rust_ty: Box::new(field.ty.clone()),
+                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
                 }
                 ProjectionKind::Unsigned64 => {
-                    let is_opt = option_inner_type(&field.ty).is_some();
+                    let is_opt = field_optional;
                     let access = if is_opt || nullable_context {
                         let sentinel = proj
                             .niche_sentinels
@@ -1614,19 +1633,23 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: false,
                         optional_handle: false,
-                        rust_ty: Box::new(field.ty.clone()),
+                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
                 }
             }
         }
 
-        let field_is_option = option_inner_type(&field.ty).is_some();
+        let field_is_option = field_optional;
         // The enum branch is self-contained: when it coalesces (`?.value ?: 0`)
         // it already yields a non-null `Int`, so block (B) below must not append
         // a second default (which produced the dead `?: 0 ?: 0`, issue #144).
         let mut enum_coalesced = false;
-        let mut access = if ext.is_kotlin_enum(&flat_probe_inner(&field.ty)) {
+        // The enum probe off the MODEL (`enum_probe` peels the same `&`/`Option`
+        // layers `flat_probe_inner` peeled off tokens), so a `Box<Priority>`
+        // field answers as a `Priority` does.
+        let mut access = if ext.is_kotlin_enum_reading(&field.ty) {
             if field_is_option || nullable_context {
                 enum_coalesced = true;
                 format!("{field_ref}?.value ?: 0")
@@ -1657,13 +1680,14 @@ fn build_flat_struct_node(
             present_leaf: None,
             direct_handle: false,
             optional_handle: false,
-            rust_ty: Box::new(field.ty.clone()),
+            rust_ty: Box::new(field.ty.syntax().clone()),
+            wrappers: field.ty.erased_wrappers(),
         });
     }
     stack.pop();
     Ok(FlatStructNode {
-        struct_module: struct_module_path(ext, registry, &st.ident),
-        struct_ident: st.ident.clone(),
+        struct_module: struct_module_path(ext, registry, &st.name),
+        struct_ident: st.name.clone(),
         binding: format_ident!("__flat_{native_prefix}"),
         optional,
         present_ident,
@@ -1768,6 +1792,7 @@ fn render_flat_struct_node(
             // variant. ONLY that arm's leaves are converted — the inert
             // groups carry wire defaults nobody reads.
             FlatFieldNode::Sum {
+                wrappers,
                 field,
                 tag_leaf,
                 present_leaf,
@@ -1821,21 +1846,33 @@ fn render_flat_struct_node(
                         }
                     }
                 };
+                // The rebuilt value, then the wrappers this FIELD's spelling
+                // adds — the slot is ascribed `#rust_ty`, so a `Box<Option<T>>`
+                // field needs its `Box` back. Only the rebuilding arms wrap: the
+                // fall-through below runs the field's own converter, which
+                // already yields the spelling.
+                let wrap = |e: TokenStream| {
+                    build_through_wrappers(wrappers, e)
+                        .expect("a field spelling the plan accepted is buildable")
+                };
                 if let Some(p) = present_leaf {
                     let present = &plan.leaves[*p].native_ident;
-                    decodes.extend(quote! {
-                        let #tmp: #rust_ty = if #present != 0u8 {
+                    let gated = wrap(quote! {
+                        if #present != 0u8 {
                             ::core::option::Option::Some(#build)
                         } else {
                             ::core::option::Option::None
-                        };
+                        }
                     });
+                    decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
                 } else {
-                    decodes.extend(quote! { let #tmp: #rust_ty = #build; });
+                    let built = wrap(build);
+                    decodes.extend(quote! { let #tmp: #rust_ty = #built; });
                 }
                 inits.push(quote!(#field: #tmp));
             }
             FlatFieldNode::Value {
+                wrappers,
                 field,
                 value_leaf,
                 present_leaf,
@@ -1846,11 +1883,15 @@ fn render_flat_struct_node(
                 let leaf = &plan.leaves[*value_leaf];
                 let wire = &leaf.native_ident;
                 let tmp = format_ident!("{}_{}", node.binding, field);
+                let wrap = |e: TokenStream| {
+                    build_through_wrappers(wrappers, e)
+                        .expect("a field spelling the plan accepted is buildable")
+                };
                 if *direct_handle {
                     let target = option_inner_type(rust_ty).unwrap_or_else(|| (**rust_ty).clone());
                     if *optional_handle {
-                        decodes.extend(quote! {
-                            let #tmp: #rust_ty = if #wire == 0 {
+                        let gated = wrap(quote! {
+                            if #wire == 0 {
                                 ::core::option::Option::None
                             } else {
                                 if (#wire & 1) == 1 {
@@ -1860,8 +1901,9 @@ fn render_flat_struct_node(
                                 ::core::option::Option::Some(unsafe {
                                     *::std::boxed::Box::from_raw(#wire as *mut #target)
                                 })
-                            };
+                            }
                         });
+                        decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
                     } else {
                         decodes.extend(quote! {
                             if #wire == 0 || (#wire & 1) == 1 {
@@ -1882,14 +1924,15 @@ fn render_flat_struct_node(
                         let present = &plan.leaves[*present_index].native_ident;
                         let inner_tmp = format_ident!("{}_value", tmp);
                         let decode = render_entry_decode(entry, wire, &inner_tmp, on_err);
-                        decodes.extend(quote! {
-                            let #tmp = if #present != 0u8 {
+                        let gated = wrap(quote! {
+                            if #present != 0u8 {
                                 #decode
                                 ::core::option::Option::Some(#inner_tmp)
                             } else {
                                 ::core::option::Option::None
-                            };
+                            }
                         });
+                        decodes.extend(quote! { let #tmp = #gated; });
                     } else {
                         decodes.extend(render_entry_decode(entry, wire, &tmp, on_err));
                     }

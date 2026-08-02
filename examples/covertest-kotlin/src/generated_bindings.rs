@@ -711,6 +711,39 @@ pub(crate) unsafe fn Box_Option_Summary_to_jlong_75560ba9<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Box_Option_i64_to_JObject_cf5a3724<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<Option<i64>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let v: Option<i64> = *v;
+        {
+            match v {
+                Some(value) => {
+                    let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, value)?;
+                    ::prebindgen::lang::box_jlong(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option box: {}", e)))?
+                }
+                None => jni::objects::JObject::null(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Box_String_to_JString_027f6250<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<String>,
@@ -1587,6 +1620,41 @@ pub(crate) unsafe fn JObject_to_Box_Option_Priority_cb1cb2b5<'env, 'v>(
                         String,
                     >>::from(format!("Option unbox: {}", e)))?;
                 Some(jint_to_Priority_447102d2(env, &__unboxed)?)
+            } else {
+                None
+            }
+        };
+        ::std::boxed::Box::new(__v)
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_Box_Option_i64_cf5a3724<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<Box<Option<i64>>, __JniErr> {
+    Ok({
+        let __v: ::core::option::Option<i64> = {
+            if !v.is_null() {
+                let __unboxed: jni::sys::jlong = env
+                    .call_method(&v, "longValue", "()J", &[])
+                    .and_then(|val| val.j())
+                    .map(|__x| __x as jni::sys::jlong)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option unbox: {}", e)))?;
+                Some(jlong_to_i64_fbf9a9bc(env, &__unboxed)?)
             } else {
                 None
             }
@@ -3354,6 +3422,52 @@ pub(crate) unsafe fn JObject_to_Vec_Vec_u8_43404875<'env, 'v>(
             __out.push(__elem);
         }
         __out
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_WrappedFields_f14f08c1<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::WrappedFields, __JniErr> {
+    Ok({
+        let __id_raw: jni::sys::jlong = env
+            .get_field(v, "id", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("WrappedFields.id: {}", e)))? as _;
+        let id = jlong_to_i64_fbf9a9bc(env, &__id_raw)?;
+        let __boxed_raw: jni::objects::JObject = env
+            .get_field(v, "boxed", "Ljava/lang/Object;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("WrappedFields.boxed: {}", e)))?;
+        let boxed = JObject_to_Box_Option_i64_cf5a3724(env, &__boxed_raw)?;
+        let __plain_raw: jni::objects::JObject = env
+            .get_field(v, "plain", "Ljava/lang/Long;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("WrappedFields.plain: {}", e)))?;
+        let plain = JObject_to_Option_i64_2ba9a5ed(env, &__plain_raw)?;
+        perftest_flat::WrappedFields {
+            id,
+            boxed,
+            plain,
+        }
     })
 }
 #[allow(
@@ -9208,6 +9322,51 @@ pub(crate) unsafe fn Vec_u8_to_JByteArray_7936d5de<'a>(
                     String,
                 >>::from(format!("encode_byte_array: {}", e))
             })?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn WrappedFields_to_JObject_f14f08c1<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::WrappedFields,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___id: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.id.clone())?;
+        let ___boxed: jni::objects::JObject = Box_Option_i64_to_JObject_cf5a3724(
+            env,
+            v.boxed.clone(),
+        )?;
+        let ___plain: jni::objects::JObject = Option_i64_to_JObject_2ba9a5ed(
+            env,
+            v.plain.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/WrappedFields",
+                "fromParts",
+                "(JLjava/lang/Long;Ljava/lang/Long;)Lio/prebindgen/covertest/WrappedFields;",
+                &[
+                    jni::objects::JValue::from(___id),
+                    jni::objects::JValue::Object(&___boxed),
+                    jni::objects::JValue::Object(&___plain),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
     })
 }
 #[allow(
@@ -22460,6 +22619,104 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_unsignedSeries<'
         };
     }
     __acc
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_wrappedFieldsSum<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    w_id: jni::sys::jlong,
+    w_boxed_present: jni::sys::jboolean,
+    w_boxed_value: jni::sys::jlong,
+    w_plain_present: jni::sys::jboolean,
+    w_plain_value: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __flat_w_id = match jlong_to_i64_fbf9a9bc(&mut env, &w_id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __flat_w_boxed = ::std::boxed::Box::new(
+        if w_boxed_present != 0u8 {
+            let __flat_w_boxed_value = match jlong_to_i64_fbf9a9bc(
+                &mut env,
+                &w_boxed_value,
+            ) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return 0 as jni::sys::jlong;
+                }
+            };
+            ::core::option::Option::Some(__flat_w_boxed_value)
+        } else {
+            ::core::option::Option::None
+        },
+    );
+    let __flat_w_plain = if w_plain_present != 0u8 {
+        let __flat_w_plain_value = match jlong_to_i64_fbf9a9bc(
+            &mut env,
+            &w_plain_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0 as jni::sys::jlong;
+            }
+        };
+        ::core::option::Option::Some(__flat_w_plain_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_w = perftest_flat::WrappedFields {
+        id: __flat_w_id,
+        boxed: __flat_w_boxed,
+        plain: __flat_w_plain,
+    };
+    let w = __flat_w;
+    let __out = perftest_flat::wrapped_fields_sum(w);
+    match i64_to_jlong_fbf9a9bc(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
 }
 /// The storage capacity limit advertised to bindings (a primitive const).
 pub const COVER_MAGIC: i64 = perftest_flat::COVER_MAGIC;
