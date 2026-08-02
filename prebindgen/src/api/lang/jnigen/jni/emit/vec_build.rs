@@ -84,11 +84,18 @@ pub(crate) fn vec_build_elem(
     // **Kotlin class** (`Payload` → `payloadVec`), which the two share, so both
     // would emit `payloadVecNew`/`Push`/`Free` and collide.
     //
-    // Definitive as long as the name comes from the Kotlin class: the
-    // alternative is spelling a Rust wrapper into a JNI symbol, which is the
-    // representation leak this whole layer exists to prevent. The general
-    // converter serves the shape correctly (see `input_transparent_bridge`),
-    // just without the per-element push loop.
+    // **Reserved, not definitive** (#296). The collision is real; the choice it
+    // seems to force is not. Keying the trio on the CANONICAL element gives one
+    // trio per Kotlin class — storage `Vec<Payload>` — with the element's
+    // wrapper applied where the Vec is consumed
+    // (`.into_iter().map(Box::new).collect()`), so no Rust wrapper reaches a JNI
+    // symbol and nothing collides.
+    //
+    // The cost of not doing it is not correctness: the general converter serves
+    // the shape (see `input_transparent_bridge`). It is that a `Box` the model
+    // erases silently downgrades the crossing from raw scalar leaves to a
+    // per-element `JObject` plus a field read per field — which is exactly what
+    // this path exists to remove.
     if !elem.erased_wrappers().is_empty() {
         return None;
     }
