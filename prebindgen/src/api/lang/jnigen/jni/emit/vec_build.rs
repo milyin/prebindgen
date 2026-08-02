@@ -2,22 +2,18 @@
 //! (`New`/`Push`/`Free` helper trio).
 
 use super::*;
+// `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
+// classifier (reached through `use super::*`), and an explicit import would win
+// over the glob and silently retarget it.
+use crate::api::core::flat::{self, RefMode, TypeRef};
 
-/// Classify a slice/`Vec` **input** param for the "build the Rust-side Vec
-/// incrementally" path: an immutable slice `&[T]` (`by_ref = true`, the target
-/// borrows the boxed Vec) or a by-value `Vec<T>` (`by_ref = false`, the target
-/// moves it out via `mem::take`). `&mut [T]` (mutate-back semantics) and every
-/// other shape return `None`, keeping the existing `input_vec` `List<JObject>`
-/// path. (Element flattenability is checked separately by [`vec_build_elem`].)
-pub(crate) fn slice_or_vec_elem(arg_ty: &syn::Type) -> Option<(syn::Type, bool)> {
-    match arg_ty {
-        syn::Type::Reference(r) if r.mutability.is_none() => match &*r.elem {
-            syn::Type::Slice(s) => Some(((*s.elem).clone(), true)),
-            _ => None,
-        },
-        _ => vec_inner_type(arg_ty).map(|t| (t, false)),
-    }
-}
+// `slice_or_vec_elem` lived here: it matched `&[T]` / `Vec<T>` off the SPELLING
+// and returned the element. `vec_build_elem` was its only caller and now reads
+// the same two facts off the model (`sequence_elem`, through `borrow_target`),
+// where a `Box<Vec<T>>` answers as `Vec<T>` does instead of failing a
+// last-path-segment test. Its one non-structural rule — `&mut [T]` is refused,
+// because mutate-back semantics keep the `input_vec` path — survives as the
+// `RefMode::Shared` guard on that match.
 
 /// `Some((element_type, by_ref))` when `arg_ty` is a slice/`Vec` input whose
 /// element is a **flattenable `data_class`** — i.e. it decomposes into the
@@ -32,11 +28,19 @@ pub(crate) fn slice_or_vec_elem(arg_ty: &syn::Type) -> Option<(syn::Type, bool)>
 pub(crate) fn vec_build_elem(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    arg_ty: &syn::Type,
-) -> Option<(syn::Type, bool)> {
-    let (elem, by_ref) = slice_or_vec_elem(arg_ty)?;
+    arg: &TypeRef,
+) -> Option<(TypeRef, bool)> {
+    // The run and its element off the MODEL. `&mut [T]` is still refused —
+    // mutate-back semantics keep the `input_vec` path — and that is the one
+    // fact the layer accessors do not carry, so `RefMode` is read directly.
+    let (elem, by_ref) = match arg.kind() {
+        flat::TypeKind::Ref { mode, inner } if *mode == RefMode::Shared => {
+            (inner.sequence_elem()?, true)
+        }
+        _ => (arg.sequence_elem()?, false),
+    };
     // The element must flatten; the probe ident is irrelevant here.
-    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), &elem)
+    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
         .ok()
         .flatten()?;
     // Recursive/optional element decomposition is intentionally outside this
@@ -51,7 +55,7 @@ pub(crate) fn vec_build_elem(
     {
         return None;
     }
-    Some((elem, by_ref))
+    Some((elem.clone(), by_ref))
 }
 
 /// Every distinct flattenable element type `T` that a scanned, declared function
@@ -62,22 +66,18 @@ pub(crate) fn vec_build_elem(
 pub(crate) fn collect_vec_build_elem_types(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-) -> Vec<syn::Type> {
+) -> Vec<TypeRef> {
     let declared = ext.declared_functions();
-    let mut seen: std::collections::BTreeMap<String, syn::Type> = std::collections::BTreeMap::new();
-    for (ident, item_fn) in registry
-        .flat()
-        .functions()
-        .map(|f| (&f.name, &f.origin.syntax))
-    {
-        if !declared.contains(ident) {
+    let mut seen: std::collections::BTreeMap<String, TypeRef> = std::collections::BTreeMap::new();
+    // Over the model's params, which already carry a reading each — the
+    // `sig.inputs` walk had to re-derive one per argument.
+    for f in registry.flat().functions() {
+        if !declared.contains(&f.name) {
             continue;
         }
-        for input in &item_fn.sig.inputs {
-            if let syn::FnArg::Typed(pt) = input {
-                if let Some((elem, _)) = vec_build_elem(ext, registry, &pt.ty) {
-                    seen.insert(TypeKey::from_type(&elem).as_str().to_string(), elem);
-                }
+        for p in &f.params {
+            if let Some((elem, _)) = vec_build_elem(ext, registry, &p.ty) {
+                seen.insert(elem.key().as_str().to_string(), elem);
             }
         }
     }
@@ -101,7 +101,7 @@ pub(crate) struct VecBuildHelpers {
 pub(crate) fn vec_build_helpers(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    elem: &syn::Type,
+    elem: &TypeRef,
 ) -> Option<VecBuildHelpers> {
     let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
         .ok()
@@ -115,7 +115,7 @@ pub(crate) fn vec_build_helpers(
     {
         return None;
     }
-    let key = TypeKey::from_type(elem);
+    let key = elem.key();
     let kt_fqn = ext
         .types
         .get(&key)
@@ -168,8 +168,11 @@ pub(crate) fn build_vec_build_helper_items(
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
-    for elem in collect_vec_build_elem_types(ext, registry) {
-        let Some(h) = vec_build_helpers(ext, registry, &elem) else {
+    for elem_reading in collect_vec_build_elem_types(ext, registry) {
+        // Generated Rust spells `origin.syntax`; the reading is what the plan
+        // and the key are taken from.
+        let elem = elem_reading.syntax();
+        let Some(h) = vec_build_helpers(ext, registry, &elem_reading) else {
             continue;
         };
         let new_sym = vec_helper_symbol(ext, &h.base, "New");

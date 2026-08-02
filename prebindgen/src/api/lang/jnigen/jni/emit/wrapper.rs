@@ -553,6 +553,8 @@ fn emit_input_param(
         // Vec the Kotlin `finally` frees). Decode is infallible, like the
         // by-value-handle consume below.
         InputKind::VecBuild { elem, by_ref } => {
+            // Generated Rust spells the reading's own tokens.
+            let elem = elem.syntax();
             let handle_ident = format_ident!("{}_handle", arg_ident);
             wire_params.push(quote!(#handle_ident: jni::sys::jlong));
             if *by_ref {

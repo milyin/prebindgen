@@ -110,7 +110,9 @@ pub(crate) enum InputKind {
     Callback { iface: Option<Arc<IfaceSpec>> },
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
-    VecBuild { elem: syn::Type, by_ref: bool },
+    /// The element as a **reading**: the vec-helper plan and the element key
+    /// are both taken from it, and generated Rust spells `elem.syntax()`.
+    VecBuild { elem: TypeRef, by_ref: bool },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
     OptionScalar(OptionScalarInputPlan),
@@ -644,10 +646,10 @@ fn classify_leaf(
         });
     };
 
-    let flat_plan = build_flat_input_plan(ext, registry, ident, ty)
+    let flat_plan = build_flat_input_plan(ext, registry, ident, reading)
         .map_err(PlanError::UnflattenableDataClass)?;
     let kind = if let Some((elem, by_ref)) = (!expanded)
-        .then(|| vec_build_elem(ext, registry, ty))
+        .then(|| vec_build_elem(ext, registry, reading))
         .flatten()
     {
         InputKind::VecBuild { elem, by_ref }

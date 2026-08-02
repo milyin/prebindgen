@@ -2,7 +2,12 @@
 //! expressions, and the Rust-side reconstruct.
 
 use super::*;
-use crate::api::core::registry::Conversions;
+// `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
+// classifier (via `use super::*`), and an explicit import would shadow it.
+use crate::api::core::{
+    flat::{self, TypeRef},
+    registry::Conversions,
+};
 
 pub(crate) fn struct_input_body(
     ext: &Declarations,
@@ -751,26 +756,15 @@ pub(crate) struct FlatInputPlan {
     pub contains_nested: bool,
 }
 
-/// Extract `S` from an `impl Into<S> + …` parameter type.
-pub(crate) fn impl_into_target(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::ImplTrait(it) = ty else {
-        return None;
-    };
-    for b in &it.bounds {
-        if let syn::TypeParamBound::Trait(tb) = b {
-            if let Some(seg) = tb.path.segments.last() {
-                if seg.ident == "Into" {
-                    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
-                        if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
-                            return Some(t.clone());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    None
-}
+// `impl_into_target` lived here: it extracted `S` from an `impl Into<S> + …`
+// spelling for `build_flat_input_plan`'s struct-target peel. It is gone because
+// that peel now takes a reading, and the model REFUSES `impl Trait` that is not
+// the callback form (`UnsupportedTypeReason::DisallowedImplTrait`) — so a
+// parameter spelled `impl Into<S>` never becomes a `TypeRef` and never reached
+// the call. `cargo check` confirmed it dead rather than the reasoning alone.
+// jnigen's actual `impl Into<…>` support is elsewhere: plugin wrapper exts build
+// a `ConverterImpl::function` by hand via `Declarations::input_converter_name`,
+// which never consults this.
 
 /// Peel a leading `&`/`&mut` then an `Option<…>` to expose the inner type used
 /// for enum/struct detection (`&Priority`, `Option<Priority>` → `Priority`).
@@ -1136,19 +1130,26 @@ pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
-    arg_ty: &syn::Type,
+    arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {
-    // 1. Resolve the struct target through `&`, `Option<…>`, and `impl Into<S>`.
-    let (by_ref, t1) = match arg_ty {
-        syn::Type::Reference(r) => (true, (*r.elem).clone()),
-        other => (false, other.clone()),
+    // 1. Resolve the struct target through `&` and `Option<…>` — both off the
+    //    MODEL, so a transparently-wrapped spelling (`Box<Option<S>>`) peels
+    //    exactly as the bare one does instead of defeating a path-segment probe.
+    let by_ref = arg.borrow_target().is_some();
+    let t1 = arg.borrow_target().unwrap_or(arg);
+    let optional = t1.optional_inner().is_some();
+    let inner = t1.optional_inner().unwrap_or(t1);
+    // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
+    // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
+    // parameter spelled that way never becomes a reading and never reaches this
+    // function. The former `impl_into_target` call was already unreachable from
+    // every caller — see the sibling helper's doc.
+    // The name off the classification, not off the last path segment: `Box<S>`
+    // IS `S` here, and taking the spelling apart would answer about the wrapper.
+    let flat::TypeKind::Named { id } = inner.kind() else {
+        return Ok(None);
     };
-    let (optional, inner) = match option_inner_type(&t1) {
-        Some(i) => (true, i),
-        None => (false, t1.clone()),
-    };
-    let struct_ty = impl_into_target(&inner).unwrap_or_else(|| inner.clone());
-    let Some(name) = bare_path_ident(&struct_ty) else {
+    let Some(name) = id.ident() else {
         return Ok(None);
     };
     let Some(st) = registry
@@ -1158,7 +1159,7 @@ pub(crate) fn build_flat_input_plan(
     else {
         return Ok(None);
     };
-    let key = TypeKey::from_type(&struct_ty);
+    let key = inner.key();
     let Some(cfg) = ext.types.get(&key) else {
         return Ok(None);
     };
@@ -1171,10 +1172,8 @@ pub(crate) fn build_flat_input_plan(
     // surfaces as `"Any"` Dispatch or a foreign source type). The resolved
     // param's Kotlin type (compared by short name, since metadata carries the
     // FQN) must equal the struct's data-class name.
-    let Some(entry) = registry
-        .reading_of(arg_ty)
-        .and_then(|tr| registry.input_entry(&tr))
-    else {
+    // The parameter's own reading straight to its entry — no spell-and-look-back.
+    let Some(entry) = registry.input_entry(arg) else {
         return Ok(None);
     };
     if entry.metadata.projection.is_some() {
