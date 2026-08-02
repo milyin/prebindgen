@@ -50,6 +50,7 @@ pub(crate) use crate::api::gen::kotlin as kt;
 pub(crate) use crate::api::{
     core::{
         domain::ScalarValue,
+        flat::Origin,
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen, Stage},
         registry::{Direction, Registry, TypeKey},
@@ -186,6 +187,14 @@ pub(crate) struct TypeConfig {
     /// unlike a wrapper registration, which is required per **usage**
     /// direction.
     pub kind: DeclaredKind,
+    /// The type this declaration was **written with**, e.g. the `Foo` in
+    /// `ptr_class!(Foo)`.
+    ///
+    /// A class declarator receives a real `syn::Type` and used to keep only the
+    /// key derived from it, so every later site that needed the tokens back had
+    /// to ask the key for them. That is the wrong direction: the declaration is
+    /// where the type came from, and this is where it stays (#291).
+    pub rust_type: Origin<syn::Type>,
     /// Raw naming spec of the type as declared — verbatim Kotlin type or
     /// settings-derived class name. Required for any type emitted in
     /// Kotlin; the concrete FQN (`Sample` → `"io.zenoh.jni.Sample"`,
@@ -215,9 +224,14 @@ impl TypeConfig {
     /// A freshly declared type: the declarator's kind and naming spec, every
     /// cross-kind option unset. Reopening the same declarator goes through
     /// [`DeclaredKind::merge`] instead.
-    pub(crate) fn new(kind: DeclaredKind, name_spec: NameSpec) -> Self {
+    pub(crate) fn new(
+        kind: DeclaredKind,
+        name_spec: NameSpec,
+        rust_type: Origin<syn::Type>,
+    ) -> Self {
         Self {
             kind,
+            rust_type,
             name_spec: Some(name_spec),
             jobject_input: false,
             interface_enabled: false,

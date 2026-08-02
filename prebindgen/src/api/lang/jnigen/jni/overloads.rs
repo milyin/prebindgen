@@ -62,7 +62,7 @@ impl Declarations {
             if decl.no_split || decl.variants.len() < 2 {
                 continue;
             }
-            let target = decl.key.to_type();
+            let target = decl.rust_type.syntax.clone();
             let sigs: Vec<(String, Vec<ErasedJvmType>)> = decl
                 .variants
                 .iter()

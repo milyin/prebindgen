@@ -17,7 +17,9 @@ impl IdentityExt {
             reg = reg.export(&f);
         }
         for t in ["AEnum", "AStruct", "BEnum", "BStruct"] {
-            reg = reg.export_type(TypeKey::parse(t).expect("test type"));
+            reg = reg.export_type(crate::api::test_util::declared_origin(
+                syn::parse_str(t).expect("test type"),
+            ));
         }
         reg
     }
@@ -62,8 +64,8 @@ impl Prebindgen for IdentityExt {
 #[test]
 fn dedup_and_sort() {
     let mut reg: Registry<()> = Registry::empty();
-    let key_a = TypeKey::parse("u64").expect("test type");
-    let key_b = TypeKey::parse("Sample").expect("test type");
+    let key_a: syn::Type = syn::parse_quote!(u64);
+    let key_b: syn::Type = syn::parse_quote!(Sample);
     let wire: syn::Type = syn::parse_quote!(i64);
     let wire2: syn::Type = syn::parse_quote!(*const u8);
 

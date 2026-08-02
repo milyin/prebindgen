@@ -1469,13 +1469,14 @@ impl CbindgenBuilder {
     /// context. Deterministic order by emitted name.
     fn prereq_callback_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
-        let mut cb_keys: Vec<&CallbackKey> = self.callbacks.keys().collect();
-        cb_keys.sort_by_key(|k| {
-            let args: Vec<syn::Type> = k.iter().map(|t| t.to_type()).collect();
-            self.callback_c_name(&args)
-        });
-        for key in cb_keys {
-            let args: Vec<syn::Type> = key.iter().map(|t| t.to_type()).collect();
+        // The declaration's own argument types. `CallbackKey` is a list of
+        // identities — what the map is keyed by — and the arguments it was
+        // declared with are beside it, so neither is rebuilt from the other
+        // (#291).
+        let mut cb_keys: Vec<(&CallbackKey, &CbCfg)> = self.callbacks.iter().collect();
+        cb_keys.sort_by_key(|(_, cfg)| self.callback_c_name(&cfg.args));
+        for (key, cfg) in cb_keys {
+            let args: Vec<syn::Type> = cfg.args.clone();
             // Emit only if the callback is required (its input resolved); skip a
             // declared-but-unused signature.
             if registry
@@ -1631,8 +1632,8 @@ impl CbindgenBuilder {
         for ident in self.helper_functions() {
             registry = registry.reference(&ident);
         }
-        for key in self.declared_types() {
-            registry = registry.export_type(key);
+        for ty in self.declared_types().into_values() {
+            registry = registry.export_type(ty);
         }
         Ok(registry)
     }
@@ -1768,7 +1769,10 @@ impl Prebindgen for CbindgenBuilder {
             binding.flat(),
             &crate::core::Claimed {
                 functions,
-                types: self.declared_types(),
+                // The report asks what was *claimed*, which is a set of
+                // identities — the declarations' spellings are the scan's
+                // business, not this one's.
+                types: self.declared_types().into_keys().collect(),
                 consts: None,
                 ignored_functions: self.ignored_functions(),
                 ignored_types: self.ignored_types(),
@@ -2539,14 +2543,21 @@ impl CbindgenBuilder {
             .filter(|ident| !self.functions.contains_key(ident))
             .collect()
     }
-    pub(crate) fn declared_types(&self) -> HashSet<TypeKey> {
+    /// Each with the spelling its declarator was written with — the scan needs
+    /// real tokens to intern a type that is in no table yet (#291).
+    pub(crate) fn declared_types(&self) -> HashMap<TypeKey, Origin<syn::Type>> {
         self.opaque
-            .keys()
-            .chain(self.data.keys())
-            .chain(self.value_opaque.keys())
-            .chain(self.enums.keys())
-            .chain(self.tagged_unions.keys())
-            .cloned()
+            .iter()
+            .chain(self.data.iter())
+            .map(|(k, c)| (k, &c.rust_type))
+            .chain(self.value_opaque.iter().map(|(k, c)| (k, &c.cfg.rust_type)))
+            .chain(
+                self.enums
+                    .iter()
+                    .chain(self.tagged_unions.iter())
+                    .map(|(k, c)| (k, &c.rust_type)),
+            )
+            .map(|(k, t)| (k.clone(), t.clone()))
             .collect()
     }
     pub(crate) fn ignored_types(&self) -> HashSet<TypeKey> {

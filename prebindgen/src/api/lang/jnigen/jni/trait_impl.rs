@@ -367,7 +367,7 @@ impl Declarations {
         // Rust-side-only boundary types are absent from the type table but
         // still appear in emitted signatures (e.g. the `E` of a peeled
         // `Result<T, E>`), so they need the same qualification.
-        for key in self.rust_side_only_types().collect::<Vec<_>>() {
+        for (key, _) in self.rust_side_only_types().collect::<Vec<_>>() {
             add(&key);
         }
         // `convert!`-declared types likewise have no type-table entry but
@@ -1341,8 +1341,8 @@ impl Declarations {
         for ident in self.declared_consts().into_iter().flatten() {
             registry = registry.export_const(&ident);
         }
-        for key in self.declared_types() {
-            registry = registry.export_type(key);
+        for ty in self.declared_types().into_values() {
+            registry = registry.export_type(ty);
         }
         for ident in self.accessor_functions() {
             registry = registry.accessor(&ident);
@@ -1449,7 +1449,11 @@ impl Declarations {
             let Some(sum_cfg) = self.types[key].sum() else {
                 continue;
             };
-            let source = key.to_type();
+            // The `sealed_class!` declaration's own spelling. This runs during
+            // the declare phase, where a `reading()` would legitimately answer
+            // `None` for a type nothing has interned yet — the declaration is
+            // the only thing that can say (#291).
+            let source = self.types[key].rust_type.syntax.clone();
             let Some(ident) = bare_path_ident(&source) else {
                 continue;
             };
@@ -2737,8 +2741,14 @@ impl Declarations {
     /// registrations live in their own tables and are deliberately excluded: a
     /// wrapper type is required per **usage** direction, so an output-only
     /// wrapper needs no input twin.
-    pub(crate) fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.types.keys().cloned().collect()
+    ///
+    /// Each with the spelling its declarator was written with — the scan needs
+    /// real tokens to intern a type that is in no table yet (#291).
+    pub(crate) fn declared_types(&self) -> std::collections::HashMap<TypeKey, Origin<syn::Type>> {
+        self.types
+            .iter()
+            .map(|(k, c)| (k.clone(), c.rust_type.clone()))
+            .collect()
     }
     /// Types acknowledged-but-undeclared via [`JniGenBuilder::ignore`].
     pub(crate) fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
@@ -2751,8 +2761,11 @@ impl Declarations {
     pub(crate) fn claimed(&self) -> crate::core::Claimed {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
-        let mut types = self.declared_types();
-        types.extend(self.boundary_only_types());
+        // The report asks what was *claimed*, which is a set of identities —
+        // the declarations' spellings are the scan's business, not this one's.
+        let mut types: std::collections::HashSet<TypeKey> =
+            self.declared_types().into_keys().collect();
+        types.extend(self.boundary_only_types().into_keys());
         crate::core::Claimed {
             functions,
             types,
@@ -2769,7 +2782,9 @@ impl Declarations {
     /// (unfold / error channel) cross the boundary — so the registry
     /// acknowledges them and drops their direct converter requirements once
     /// the plans are in place.
-    pub(crate) fn boundary_only_types(&self) -> std::collections::HashSet<TypeKey> {
+    pub(crate) fn boundary_only_types(
+        &self,
+    ) -> std::collections::HashMap<TypeKey, Origin<syn::Type>> {
         // A `sealed_class!`-declared sum has no single wire: it crosses as a
         // tag plus one leaf group per variant, so a direct converter for the
         // value itself is genuinely not needed. Declaring it boundary-only
@@ -2781,7 +2796,7 @@ impl Declarations {
                 self.types
                     .iter()
                     .filter(|(_, c)| c.sum().is_some())
-                    .map(|(k, _)| k.clone()),
+                    .map(|(k, c)| (k.clone(), c.rust_type.clone())),
             )
             .collect()
     }

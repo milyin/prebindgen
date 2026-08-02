@@ -139,8 +139,18 @@ impl<M> RegistryBuilder<M> {
 
     /// A type this binding **exports**: it crosses in both directions, and its
     /// body — a struct's fields, an enum's payloads — is scanned too.
-    pub fn export_type(mut self, key: TypeKey) -> Self {
-        self.registry.declared.types.insert(key);
+    ///
+    /// Takes the **type the declaration was written with**, like its sibling
+    /// [`Self::cross`], and derives the key here. It used to take the key alone,
+    /// which meant the scan had to recover tokens *from* the key to intern the
+    /// type and to diagnose its spelling — reasoning backwards from an identity
+    /// to a thing that already existed. A build script wrote `ptr_class!(Foo)`;
+    /// this is that `Foo` (#291).
+    pub fn export_type(mut self, ty: Origin<syn::Type>) -> Self {
+        self.registry
+            .declared
+            .types
+            .insert(TypeKey::from_type(&ty.syntax), ty);
         self
     }
 

@@ -108,6 +108,7 @@ pub(crate) use crate::api::core::types_util::{
 };
 use crate::api::{
     core::{
+        flat::Origin,
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
         registry::{extract_fn_trait_args, Conversions, Direction, Registry, TypeKey},
@@ -115,19 +116,44 @@ use crate::api::{
     lang::jnigen::{ConvertDecl, ConvertSpec},
 };
 
+/// The origin of a type a **build script** wrote: real tokens, and deliberately
+/// no source position — `SourceLocation::default()` is the sanctioned placeless
+/// location for a type that was never in a captured file.
+fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
+    Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
+}
+
 /// Identity of a declared callback signature: its argument-type list (the
 /// dedup key, since two `impl Fn` params with the same args share one closure
 /// struct). The return is always unit for the supported callbacks.
 type CallbackKey = Vec<TypeKey>;
 
 /// Per-opaque-handle / per-data-struct / per-enum configuration.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct TypeCfg {
+    /// The type this declaration was **written with** — the `ty` handed to
+    /// `opaque_ptr` / `data_struct` / `enum_type` / `tagged_union`.
+    ///
+    /// A declarator receives a real `syn::Type` and used to keep only the key
+    /// derived from it, so later sites had to ask the key for the tokens back.
+    /// The declaration is where the type came from, and this is where it stays
+    /// (#291).
+    rust_type: Origin<syn::Type>,
     /// Per-declaration **base** token override, fed to the name manglers
     /// (`mangle_type_name` / `mangle_destructor` / `mangle_take`) in place of the
     /// `mangle_rust_type`-derived base. Set by [`CbindgenBuilder::base_name`]. `None` ⇒
     /// the base comes from `mangle_rust_type(short)` (or the short name).
     base: Option<String>,
+}
+
+impl TypeCfg {
+    /// A freshly declared type, no naming override yet.
+    fn new(rust_type: syn::Type) -> Self {
+        Self {
+            rust_type: declared_origin(rust_type),
+            base: None,
+        }
+    }
 }
 
 /// What an inline-opaque by-value type holds, which decides whether its consume
@@ -176,8 +202,14 @@ struct ValueOpaqueCfg {
 }
 
 /// Per-declared-callback configuration.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct CbCfg {
+    /// The argument types this callback was declared with, in order.
+    ///
+    /// `CallbackKey` is a `Vec<TypeKey>` — a list of identities, which is what
+    /// the map is keyed by. Emission needs the argument *types*, and these are
+    /// the ones `extract_fn_trait_args` produced at declaration time (#291).
+    args: Vec<syn::Type>,
     /// Per-declaration **base** token override fed to `mangle_callback` (as the
     /// sole base, replacing the args' derived bases). Set by
     /// [`CbindgenBuilder::base_name`]. `None` ⇒ bases come from the arguments.
@@ -189,6 +221,17 @@ struct CbCfg {
     /// [`CbindgenBuilder::takeable_param`]; each such arg type must be an inline-opaque
     /// type ([`CbindgenBuilder::opaque_owned_struct`] / [`CbindgenBuilder::opaque_data_struct`]).
     takeable: std::collections::BTreeSet<usize>,
+}
+
+impl CbCfg {
+    /// A freshly declared callback signature, no naming or takeable overrides yet.
+    fn new(args: Vec<syn::Type>) -> Self {
+        Self {
+            args,
+            base: None,
+            takeable: std::collections::BTreeSet::new(),
+        }
+    }
 }
 
 /// Per-declared-function configuration.

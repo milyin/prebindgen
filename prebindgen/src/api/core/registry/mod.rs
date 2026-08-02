@@ -161,6 +161,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     api::core::{
+        flat::Origin,
         niches::Niches,
         prebindgen::{Prebindgen, Stage},
         types_util::bare_path_ident,
@@ -306,7 +307,16 @@ pub(crate) struct Declared {
     pub(crate) helper_functions: HashSet<syn::Ident>,
     pub(crate) accessors: HashSet<syn::Ident>,
     pub(crate) method_receivers: HashMap<syn::Ident, TypeKey>,
-    pub(crate) types: HashSet<TypeKey>,
+    /// Exported types, each **with the spelling its declaration was written
+    /// with**.
+    ///
+    /// Keyed by identity, because that is what a declaration is looked up by —
+    /// and carrying the `syn::Type` anyway, because the scan needs real tokens
+    /// for these: to `intern` a type that is not yet in any table, and to say
+    /// whether the build script path-qualified it. Recovering those *from the
+    /// key* was the wrong direction — a build script wrote a `syn::Type`, and
+    /// the declaration simply discarded it (#291).
+    pub(crate) types: HashMap<TypeKey, Origin<syn::Type>>,
     /// Consts to scan and emit, or `None` when the adapter has no const
     /// declaration mechanism — then every captured const is re-emitted
     /// verbatim (see the const gate in [`crate::api::core::write`]).
@@ -358,7 +368,11 @@ pub struct Decompositions {
     /// crosses only in pieces *because* something decomposes it, and once the
     /// plans are applied its own direct converter is genuinely not needed — for
     /// a type with no destination representation, not even resolvable.
-    pub replaces: HashSet<TypeKey>,
+    ///
+    /// Carries each declaration's own spelling for the same reason
+    /// [`Declared::types`] does — these are build-script-authored types the scan
+    /// diagnoses before anything has classified them.
+    pub replaces: HashMap<TypeKey, Origin<syn::Type>>,
 }
 
 #[cfg(test)]

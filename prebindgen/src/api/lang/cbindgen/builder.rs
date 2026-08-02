@@ -203,7 +203,7 @@ impl CbindgenBuilder {
             "Cbindgen::opaque_ptr cannot declare `{}` because it is already ignored",
             key
         );
-        self.opaque.insert(key.clone(), TypeCfg::default());
+        self.opaque.insert(key.clone(), TypeCfg::new(ty));
         self.current = Some(CurrentDecl::Ptr(key));
         self
     }
@@ -216,7 +216,7 @@ impl CbindgenBuilder {
             "Cbindgen::data_struct cannot declare `{}` because it is already ignored",
             key
         );
-        self.data.insert(key.clone(), TypeCfg::default());
+        self.data.insert(key.clone(), TypeCfg::new(ty));
         self.current = Some(CurrentDecl::Data(key));
         self
     }
@@ -271,7 +271,7 @@ impl CbindgenBuilder {
                 kind,
                 generate_mirror: false,
                 assume_c_field_validity: false,
-                cfg: TypeCfg::default(),
+                cfg: TypeCfg::new(rust_ty),
             },
         );
         self.current = Some(CurrentDecl::ValueOpaque(key));
@@ -318,7 +318,7 @@ impl CbindgenBuilder {
                 kind: OpaqueKind::Data,
                 generate_mirror: true,
                 assume_c_field_validity: false,
-                cfg: TypeCfg::default(),
+                cfg: TypeCfg::new(ty),
             },
         );
         self.current = Some(CurrentDecl::ValueOpaque(key));
@@ -485,7 +485,7 @@ impl CbindgenBuilder {
             "Cbindgen::enum_type cannot declare `{}` because it is already ignored",
             key
         );
-        self.enums.insert(key.clone(), TypeCfg::default());
+        self.enums.insert(key.clone(), TypeCfg::new(ty));
         self.current = Some(CurrentDecl::Enum(key));
         self
     }
@@ -522,7 +522,7 @@ impl CbindgenBuilder {
             "Cbindgen::tagged_union cannot declare `{}` because it is already ignored",
             key
         );
-        self.tagged_unions.insert(key.clone(), TypeCfg::default());
+        self.tagged_unions.insert(key.clone(), TypeCfg::new(ty));
         self.current = Some(CurrentDecl::TaggedUnion(key));
         self
     }
@@ -541,7 +541,7 @@ impl CbindgenBuilder {
             )
         });
         let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
-        self.callbacks.insert(key.clone(), CbCfg::default());
+        self.callbacks.insert(key.clone(), CbCfg::new(args));
         self.current = Some(CurrentDecl::Callback(key));
         self
     }

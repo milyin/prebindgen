@@ -60,7 +60,9 @@ struct StubExt {
     functions: HashSet<syn::Ident>,
     helper_functions: HashSet<syn::Ident>,
     consts: Option<HashSet<syn::Ident>>,
-    types: HashSet<TypeKey>,
+    /// Declared with the spelling a build script would write, which is what
+    /// `export_type` takes (#291).
+    types: Vec<syn::Type>,
     local_fns: Vec<(syn::ItemFn, String)>,
 }
 
@@ -86,8 +88,8 @@ impl StubExt {
                 reg = reg.export_const(i);
             }
         }
-        for k in &self.types {
-            reg = reg.export_type(k.clone());
+        for t in &self.types {
+            reg = reg.export_type(crate::api::test_util::declared_origin(t.clone()));
         }
         Ok(reg)
     }
@@ -507,8 +509,7 @@ fn qualified_signature_matches_bare_declaration() {
     let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("get").unwrap());
-    ext.types
-        .insert(TypeKey::parse("Thing").expect("test type"));
+    ext.types.push(syn::parse_str("Thing").expect("test type"));
     let reg = ext
         .declare_into_any(reg)
         .expect("declare")
@@ -541,10 +542,8 @@ fn multi_source_rename_cross_reference_normalizes() {
     let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("use_a").unwrap());
-    ext.types
-        .insert(TypeKey::parse("TypeA").expect("test type"));
-    ext.types
-        .insert(TypeKey::parse("TypeB").expect("test type"));
+    ext.types.push(syn::parse_str("TypeA").expect("test type"));
+    ext.types.push(syn::parse_str("TypeB").expect("test type"));
     let reg = ext
         .declare_into_any(reg)
         .expect("declare")
@@ -564,7 +563,7 @@ fn qualified_declared_type_is_hard_error() {
     let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.types
-        .insert(TypeKey::parse("myflat::Thing").expect("test type"));
+        .push(syn::parse_str("myflat::Thing").expect("test type"));
     match ext.declare_into_any(reg).expect("declare").scanned() {
         Err(ScanError::QualifiedDeclaredTypes { entries }) => {
             assert_eq!(entries.len(), 1);
@@ -586,8 +585,9 @@ fn foreign_qualified_declared_type_stays_supported() {
     let items = vec![fn_item("fn touch(x: u64) -> u64 { x }")];
     let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
-    let foreign = TypeKey::parse("zenoh::KeyExpr<'static>").expect("test type");
-    ext.types.insert(foreign.clone());
+    let foreign_ty: syn::Type = syn::parse_str("zenoh::KeyExpr<'static>").expect("test type");
+    let foreign = TypeKey::from_type(&foreign_ty);
+    ext.types.push(foreign_ty);
     let reg = ext
         .declare_into_any(reg)
         .expect("declare")
@@ -865,7 +865,7 @@ fn a_composed_reading_reaches_the_cell_unchanged() {
     let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("f").unwrap());
-    ext.types.insert(TypeKey::parse("Thing").unwrap());
+    ext.types.push(syn::parse_str("Thing").unwrap());
     let mut reg = ext
         .declare_into_any(reg)
         .expect("declare")
@@ -959,7 +959,7 @@ fn an_adapter_authored_type_cell_is_classified_but_placeless() {
 
     let mut ext = StubExt::default();
     ext.types
-        .insert(TypeKey::parse("Foreign").expect("test type"));
+        .push(syn::parse_str("Foreign").expect("test type"));
     let reg = ext
         .declare_into_any(reg)
         .expect("declare")
@@ -1408,7 +1408,7 @@ fn a_qualified_alias_warns_rather_than_failing() {
     let mut ext = StubExt::default();
     // Head is NOT a source module, so this is the warn branch.
     ext.types
-        .insert(TypeKey::parse("foreign::Handle").expect("test type"));
+        .push(syn::parse_str("foreign::Handle").expect("test type"));
     ext.declare_into_any(reg)
         .expect("declare")
         .scanned()
@@ -1596,7 +1596,7 @@ fn a_declared_crossing_the_grammar_refuses_is_not_called_a_prebindgen_item() {
 
     let mut ext = StubExt::default();
     ext.types
-        .insert(TypeKey::parse("*const u8").expect("a key can hold it; the language cannot"));
+        .push(syn::parse_str("*const u8").expect("a key can hold it; the language cannot"));
 
     let err = ext
         .declare_into_any(reg)
@@ -1686,7 +1686,7 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
     ]);
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("walk").unwrap());
-    ext.types.insert(TypeKey::parse("Node").expect("test type"));
+    ext.types.push(syn::parse_str("Node").expect("test type"));
     let reg = ext
         .declare_into_any(reg)
         .expect("declare")

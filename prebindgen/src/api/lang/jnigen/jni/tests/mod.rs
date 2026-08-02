@@ -67,8 +67,8 @@ fn install_input(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    let key = TypeKey::parse(ty_str).expect("test type");
-    reg.insert_crossing(Direction::Input, &key, true, Some(e));
+    let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
+    reg.insert_crossing(Direction::Input, &ty, true, Some(e));
 }
 
 fn install_output(
@@ -77,6 +77,6 @@ fn install_output(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    let key = TypeKey::parse(ty_str).expect("test type");
-    reg.insert_crossing(Direction::Output, &key, true, Some(e));
+    let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
+    reg.insert_crossing(Direction::Output, &ty, true, Some(e));
 }

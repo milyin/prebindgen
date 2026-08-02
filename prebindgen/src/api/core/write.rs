@@ -97,7 +97,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
             _ => None,
         }))
         .into_iter()
-        .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
+        .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
         .map(|(_, item)| ext.on_struct(item, registry)),
     )?);
     // Both enum shapes emit through `on_enum` and sort together: they were one
@@ -113,7 +113,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
             _ => None,
         }))
         .into_iter()
-        .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
+        .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
         .map(|(_, t)| match t {
             crate::api::core::flat::Type::Variant(v) => ext.on_variant(v, registry),
             crate::api::core::flat::Type::Enum(e) => ext.on_enum(e, registry),
