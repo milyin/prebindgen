@@ -1833,3 +1833,34 @@ fn a_composed_type_keys_as_its_spelling() {
     // that value.
     assert_eq!(&*borrowed.origin.location, &*t.origin.location);
 }
+
+/// A **raw** identifier survives the round trip through `TypeId`.
+///
+/// `TypeId::name` is a `String`, so an enum legitimately named `r#type` is
+/// stored as `"r#type"` — and `Ident::new` *rejects* that spelling, panicking
+/// rather than returning an error. A consumer rebuilding an ident from the name
+/// therefore has to parse, and gets no warning until a source happens to use a
+/// keyword. `TypeId::ident` is where that recovery lives (#278 review).
+#[test]
+fn a_raw_identifier_survives_typeid() {
+    use crate::api::core::flat::{TypeKind, TypeRef};
+
+    let raw: syn::Ident = syn::parse_quote!(r#type);
+    assert_eq!(raw.to_string(), "r#type", "the hash is part of the name");
+
+    let t = TypeRef::named(&raw);
+    let TypeKind::Named { id } = &t.kind else {
+        panic!("named")
+    };
+    // Recovered, and it spells itself back the way it was written.
+    let back = id.ident().expect("a raw ident is still an ident");
+    assert_eq!(back, raw);
+    assert_eq!(tokens(&t.origin.syntax), "r#type");
+
+    // A path-qualified name is not a single identifier — the same answer the
+    // old `bare_path_ident` gave.
+    let qualified = crate::api::core::flat::TypeId {
+        name: "foreign::Option".to_string(),
+    };
+    assert!(qualified.ident().is_none());
+}

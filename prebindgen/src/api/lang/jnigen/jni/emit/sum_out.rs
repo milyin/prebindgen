@@ -193,7 +193,14 @@ pub(crate) fn encode_sum_group(
             tag_leaf.out_ty.key()
         )
     };
-    let ident = syn::Ident::new(&id.name, proc_macro2::Span::call_site());
+    // Raw-aware: a sum may legitimately be named `r#type`, and `Ident::new`
+    // rejects that spelling.
+    let ident = id.ident().unwrap_or_else(|| {
+        panic!(
+            "jnigen sum unfold: selector type `{}` is not a single identifier",
+            id.name
+        )
+    });
     let module = ext.fn_module(registry, &ident);
     let source: syn::Path = syn::parse_quote!(#module::#ident);
 

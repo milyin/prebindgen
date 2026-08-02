@@ -1623,3 +1623,66 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
         "…and point at the two shapes that do work: {err}"
     );
 }
+
+/// A sum named with a **raw** identifier generates, rather than aborting.
+///
+/// `r#type` is a legal `#[prebindgen]` enum name, and `TypeId::name` stores it
+/// as the string `"r#type"`. The sum encoder rebuilds an ident from that name
+/// to spell the `match`'s path — and `Ident::new` *panics* on that spelling
+/// rather than erroring, so the whole generation aborted (#278 review). The
+/// unit-level guarantee is `a_raw_identifier_survives_typeid`; this is the path
+/// that would actually have blown up.
+#[test]
+fn a_raw_named_sum_generates() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum r#type {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_read(v: &ZThing) -> r#type {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_emit(cb: impl Fn(ZThing) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZThing))
+                .class(crate::sealed_class!(r#type))
+                .fun(crate::fun!(z_emit)),
+        );
+    let dir = unique_test_dir("jnigen_raw_sum");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Resolving AND writing the Rust is the point: the encoder is where the
+    // ident was rebuilt.
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+    assert!(
+        rust.contains("r#type"),
+        "the raw name is spelled back as written:\n{rust}"
+    );
+}

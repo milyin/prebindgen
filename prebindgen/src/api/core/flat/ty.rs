@@ -441,7 +441,28 @@ pub struct TypeId {
     /// The path as written, minus any generic arguments — `Foo`,
     /// `foreign::Option`. Normalized, so a reducible std or source-module path
     /// has already collapsed to its final segment.
+    ///
+    /// A `String`, so a **raw** identifier is stored the way `Ident` prints
+    /// it — `r#type`, hashes and all. Recover it with [`Self::ident`] rather
+    /// than `Ident::new`, which rejects that spelling.
     pub name: String,
+}
+
+impl TypeId {
+    /// This name as an identifier, **raw forms included**.
+    ///
+    /// `Ident::new("r#type", …)` *panics* — it takes a bare name, not a
+    /// spelling — so a consumer rebuilding an ident from [`Self::name`] has to
+    /// parse rather than construct. Here so that recovery is written once: the
+    /// caller that gets it wrong does not fail until a source happens to use a
+    /// keyword, which is exactly the kind of bug that ships.
+    ///
+    /// `None` for a name that is not a single identifier at all (a
+    /// path-qualified `foreign::Option`), which is the same answer
+    /// `bare_path_ident` gave for one.
+    pub fn ident(&self) -> Option<syn::Ident> {
+        syn::parse_str::<syn::Ident>(&self.name).ok()
+    }
 }
 
 /// The primitives the source language accepts. Mirrors the set every adapter
