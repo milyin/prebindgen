@@ -1378,7 +1378,6 @@ impl Declarations {
             }
         };
         for f in registry.flat().functions() {
-            let item_fn = &f.origin.syntax;
             // `Vec<T>` / `Option<Vec<T>>` return. The model's `ret` already
             // normalizes an elided return to `()`, so there is no arm for it.
             {
@@ -1389,16 +1388,15 @@ impl Declarations {
                     consider(peel_leading_ref(&elem));
                 }
             }
-            // `impl Fn(&[T])` / `impl Fn([T])` callback arg.
-            for input in &item_fn.sig.inputs {
-                let syn::FnArg::Typed(pt) = input else {
-                    continue;
-                };
-                let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
+            // `impl Fn(&[T])` / `impl Fn([T])` callback arg. Over the model's
+            // params, whose readings already say which ones ARE callbacks —
+            // walking `sig.inputs` re-extracted that from the bounds.
+            for p in &f.params {
+                let Some(args) = p.ty.callback_args() else {
                     continue;
                 };
                 for arg in args {
-                    if let syn::Type::Slice(s) = &peel_leading_ref(&arg) {
+                    if let syn::Type::Slice(s) = &peel_leading_ref(arg.syntax()) {
                         consider(peel_leading_ref(&s.elem));
                     }
                 }
@@ -1533,13 +1531,12 @@ impl Prebindgen for Declarations {
         // something that must not exist. Reject them here, where the message
         // can say what is actually unsupported and what to write instead.
         for ident in self.declared_functions() {
-            let Some(item_fn) = binding
-                .flat()
-                .function(&ident)
-                .map(|func| &func.origin.syntax)
-            else {
+            // The ELEMENT, not just its syntax: check (3) below asks its params
+            // which are callbacks, which is the model's answer, not the tokens'.
+            let Some(func) = binding.flat().function(&ident) else {
                 continue;
             };
+            let item_fn = &func.origin.syntax;
             // (1) A sum in the `Ok` position of a fallible return. A sum is
             // delivered DECOMPOSED through a builder callback, and the
             // `Result` lane has no builder: a `Result` return deliberately
@@ -1617,15 +1614,12 @@ impl Prebindgen for Declarations {
             // (`impl Fn(&[E])`): the element fold would need the sum's
             // folder-appender singleton, which is emitted per `Vec<E>` RETURN
             // position, so the shape resolves to nothing.
-            for input in &item_fn.sig.inputs {
-                let syn::FnArg::Typed(pt) = input else {
-                    continue;
-                };
-                let Some(args) = extract_fn_trait_args(&pt.ty) else {
+            for p in &func.params {
+                let Some(args) = p.ty.callback_args() else {
                     continue;
                 };
                 for arg in args {
-                    let after_ref = match &arg {
+                    let after_ref = match arg.syntax() {
                         syn::Type::Reference(r) => (*r.elem).clone(),
                         other => other.clone(),
                     };

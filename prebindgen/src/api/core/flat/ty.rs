@@ -320,6 +320,31 @@ impl TypeRef {
         }
     }
 
+    /// The argument types when this is a callback, else `None` — the reading
+    /// counterpart of
+    /// [`extract_fn_trait_args`](super::extract_fn_trait_args).
+    ///
+    /// The two are the same question asked of different things, and that is the
+    /// whole difference. `extract_fn_trait_args` takes an
+    /// `impl Fn(..) + Send + Sync + 'static` **apart**: it walks the bounds,
+    /// checks the three markers, and refuses a written return type — it is a
+    /// classifier, and the one the model itself runs to build
+    /// [`TypeKind::Callback`]. This reads the result of that classification,
+    /// already made. A consumer holding a reading has no reason to redo the
+    /// walk, and every reason not to: a `Vec<syn::Type>` of *arguments* has lost
+    /// which of them the model accepted and how, while each `TypeRef` here
+    /// carries its own classification and its own spelling.
+    ///
+    /// Consequently this answers `None` for a type that merely *looks* like a
+    /// callback but was refused (a missing `Send`, an `impl Fn() -> u8`): the
+    /// acceptance already happened, and asking again is how the two drift.
+    pub fn callback_args(&self) -> Option<&[TypeRef]> {
+        match &self.kind {
+            TypeKind::Callback { args } => Some(args),
+            _ => None,
+        }
+    }
+
     /// The extent of this type when it is an array, else `None`.
     pub fn array_extent(&self) -> Option<&ArrayExtent> {
         match &self.kind {

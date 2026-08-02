@@ -1079,19 +1079,17 @@ impl Declarations {
             .collect();
         for ident in &declared_idents {
             {
-                let Some(item_fn) = registry
-                    .flat()
-                    .function(&ident)
-                    .map(|func| &func.origin.syntax)
-                else {
+                // The ELEMENT, so the callback params come off the model's own
+                // classification rather than a second walk of the bounds.
+                let Some(func) = registry.flat().function(&ident) else {
                     continue;
                 };
-                for input in &item_fn.sig.inputs {
-                    let syn::FnArg::Typed(pt) = input else {
-                        continue;
-                    };
-                    if let Some(cb_args) = extract_fn_trait_args(&pt.ty) {
-                        uses.insert(SpecKey::callback(&cb_args));
+                let item_fn = &func.origin.syntax;
+                for p in &func.params {
+                    if let Some(cb_args) = p.ty.callback_args() {
+                        let arg_tys: Vec<syn::Type> =
+                            cb_args.iter().map(|a| a.syntax().clone()).collect();
+                        uses.insert(SpecKey::callback(&arg_tys));
                     }
                 }
                 if let Some(plan) = registry

@@ -546,15 +546,20 @@ fn classify_leaf(
 
     // `impl Fn(args)` first: typed entirely from the interface spec — the
     // erased entry exists but its metadata carries no surface type.
-    if let Some(args) = extract_fn_trait_args(ty) {
-        let iface = ext.iface_spec(registry, &SpecKey::callback(&args));
+    if let Some(args) = reading.callback_args() {
+        // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
+        // spellings either way — but as each arg reading's OWN spelling now,
+        // rather than one re-extracted from the parameter's bounds.
+        // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax`
+        // pins that the two routes are one memo identity.
+        let arg_tys: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
+        let iface = ext.iface_spec(registry, &SpecKey::callback(&arg_tys));
         return Ok(PlanLeaf {
             reading: reading.clone(),
             kt_name,
             kt_public: None,
             kt_meta: registry
-                .reading_of(ty)
-                .and_then(|tr| registry.input_entry(&tr))
+                .input_entry(reading)
                 .and_then(|e| e.metadata.kotlin_name.clone()),
             optional,
             as_enum_value,
