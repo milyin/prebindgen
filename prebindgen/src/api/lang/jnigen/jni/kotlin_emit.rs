@@ -1525,12 +1525,12 @@ impl Declarations {
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        if self.is_kotlin_enum(&enum_probe_type(leaf.out_ty.syntax())) {
-            let inner = option_inner_type(leaf.out_ty.syntax())
-                .unwrap_or_else(|| leaf.out_ty.syntax().clone());
+        if self.is_kotlin_enum_reading(&leaf.out_ty) {
+            // The `Option` layer peeled off the model, so the entry lookup takes
+            // the layer's own reading instead of a spelling to look back up.
+            let inner = leaf.out_ty.optional_inner().unwrap_or(&leaf.out_ty);
             let name = registry
-                .reading_of(&inner)
-                .and_then(|tr| registry.output_entry(&tr))
+                .output_entry(inner)
                 .and_then(|e| e.metadata.kotlin_name.clone())
                 .and_then(|t| t.leaf_name().map(str::to_string))
                 .unwrap_or_else(|| {

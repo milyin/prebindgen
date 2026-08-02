@@ -121,9 +121,12 @@ mod spelling_census {
         ("jni/emit/struct_out.rs", 2),
         ("jni/emit/vec_build.rs", 1),
         ("jni/emit/wrapper.rs", 2),
+        // The one left is inside `enum_probe_type`, the spelling twin of
+        // `enum_probe` kept for `unfold_leaf_kt`'s `syn::Type` callers.
         ("jni/fold.rs", 1),
         ("jni/iface.rs", 2),
-        ("jni/kotlin_emit.rs", 1),
+        // kotlin_emit.rs is off the census: `sum_ctor_arg`'s enum payload peels
+        // its `Option` off the leaf's own reading.
         ("jni/trait_impl.rs", 4),
         // Down from 2: the nullability decisions now ask the model. The one
         // left probes for an enum through its layers.

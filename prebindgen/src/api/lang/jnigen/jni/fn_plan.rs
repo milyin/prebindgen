@@ -11,7 +11,7 @@
 //! plan to function granularity; the output side follows in a later stage.
 
 use super::*;
-use crate::api::core::registry::Conversions;
+use crate::api::core::{flat::TypeRef, registry::Conversions};
 
 /// The lowered plan for one bound function: one [`PlanParam`] per source
 /// `syn::Signature` parameter (non-`Typed`/non-`Ident` args — `self`,
@@ -68,7 +68,7 @@ pub(crate) struct PlanLeaf {
     /// The leaf's **reading** — classification and spelling in one value, so
     /// the two cannot disagree and no consumer has to look the type up. Spell
     /// with `reading.origin.syntax`.
-    pub reading: crate::api::core::flat::TypeRef,
+    pub reading: TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
     /// `external fun` declaration.
@@ -531,7 +531,7 @@ fn classify_leaf(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     ident: &syn::Ident,
-    reading: &crate::api::core::flat::TypeRef,
+    reading: &TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
@@ -539,7 +539,9 @@ fn classify_leaf(
     // spell is `origin.syntax`, unchanged.
     let ty = reading.syntax();
     let optional = reading.optional_inner().is_some();
-    let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(ty));
+    // The enum probe off the reading — the layers it peels are the model's own
+    // (`&`, `Option`), so there is nothing to re-spell and nothing to look up.
+    let as_enum_value = ext.is_kotlin_enum_reading(reading);
     let kt_name = kt_param_name(&ident.to_string());
 
     // `impl Fn(args)` first: typed entirely from the interface spec — the

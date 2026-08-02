@@ -1610,3 +1610,103 @@ fn a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec() {
         "the refusal must name the wrapper spelling the binding cannot convert:\n{msg}"
     );
 }
+
+/// The enum probe answers about the **type**, not about the wrapper around it.
+///
+/// `is_kotlin_enum_reading` peels with [`enum_probe`], which walks the model's
+/// own layers, and then keys on `TypeKind::Named` — so every spelling of "a
+/// `Priority`, held some way" reaches the `enum_class!(Priority)` declaration.
+/// The spelling-keyed `is_kotlin_enum` cannot: `Box<Priority>` canonicalizes to
+/// `Box < Priority >`, which no declaration ever registered, and the answer is
+/// `false` about a type that IS a Kotlin enum. Both are asserted here, because
+/// the difference between them is the reason the reading-taking one exists.
+///
+/// A **run is not peeled**, and that is the half a `layer_stack`-based probe
+/// would get wrong: `Vec<Priority>` is a `List<Priority>` on the Kotlin side, so
+/// treating it as an enum would wire a list to a `.value` discriminant.
+///
+/// `Probe` is deliberately undeclared — jnigen is opt-in, so it emits nothing,
+/// and it exists only to give the model a field per spelling to classify.
+#[test]
+fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 1,
+                    High = 2,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    pub plain: Priority,
+                    pub borrowed: Box<Priority>,
+                    pub optional: Option<Priority>,
+                    pub boxed_optional: Box<Option<Priority>>,
+                    pub optional_borrow: Option<Box<Priority>>,
+                    pub run: Vec<Priority>,
+                    pub unrelated: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Priority)))
+        .build_with(registry)
+        .expect("resolve");
+    let (ext, registry) = (gen.declarations(), gen.registry());
+
+    let crate::api::core::flat::Type::Struct(probe) =
+        registry.flat().declared_type("Probe").expect("indexed")
+    else {
+        panic!("Probe is a struct");
+    };
+    let field = |name: &str| {
+        &probe
+            .fields
+            .iter()
+            .find(|f| f.name.as_ref().is_some_and(|n| n == name))
+            .unwrap_or_else(|| panic!("field `{name}`"))
+            .ty
+    };
+
+    for name in [
+        "plain",
+        "borrowed",
+        "optional",
+        "boxed_optional",
+        "optional_borrow",
+    ] {
+        let reading = field(name);
+        assert!(
+            ext.is_kotlin_enum_reading(reading),
+            "`{name}` holds a declared Kotlin enum, however it is wrapped — the \
+             probe peels the model's layers, so it must say so"
+        );
+    }
+
+    for name in ["run", "unrelated"] {
+        assert!(
+            !ext.is_kotlin_enum_reading(field(name)),
+            "`{name}` is not an enum value: a run of enums is a `List`, and the \
+             probe must not peel the sequence layer to reach the element"
+        );
+    }
+
+    // The difference from the spelling-keyed probe, pinned: a transparent
+    // wrapper is invisible to the model and decisive for a canonical key.
+    assert!(
+        !ext.is_kotlin_enum(field("borrowed").syntax()),
+        "if the spelling key ever started seeing through `Box`, this test would \
+         stop distinguishing the two probes"
+    );
+    assert!(ext.is_kotlin_enum(field("plain").syntax()));
+}
