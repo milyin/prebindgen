@@ -3,6 +3,8 @@
 
 use std::collections::HashMap;
 
+use crate::api::core::{flat::{Flat, TypeRef}, unfold::{DeconId, DeconSpec, UnfoldPlan}};
+
 use super::*;
 
 /// One `(direction, type)` pair that crosses the boundary.
@@ -22,7 +24,7 @@ pub type Crossing = (Direction, TypeKey);
 /// `&impl Conversions<M>` and works either side of the boundary.
 pub trait Conversions<M> {
     /// The model.
-    fn flat(&self) -> &crate::api::core::flat::Flat;
+    fn flat(&self) -> &Flat;
 
     /// The reading for `ty` — what the frontend made of it.
     ///
@@ -40,7 +42,7 @@ pub trait Conversions<M> {
     /// reading. This is the door FROM identity TO the model's answer, and the
     /// only lookup on this trait that does not already take a `TypeRef` — the
     /// rest take one precisely because this exists to hand them one (#284).
-    fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef>;
+    fn reading(&self, key: &TypeKey) -> Option<TypeRef>;
 
     /// The conversion for `reading` in `dir`, if there is one.
     ///
@@ -52,7 +54,7 @@ pub trait Conversions<M> {
     fn conversion(
         &self,
         dir: Direction,
-        reading: &crate::api::core::flat::TypeRef,
+        reading: &TypeRef,
     ) -> Option<&TypeEntry<M>>;
 
     /// The reading for a **spelling** — identify, then look up.
@@ -66,17 +68,17 @@ pub trait Conversions<M> {
     /// so they cannot be called about a type the registry does not know — which
     /// is the guarantee, and it survives only while getting a reading from
     /// tokens is a visible step with a `None` to handle.
-    fn reading_of(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
+    fn reading_of(&self, ty: &syn::Type) -> Option<TypeRef> {
         self.reading(&TypeKey::from_type(ty))
     }
 
     /// Wire → rust.
-    fn input_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+    fn input_entry(&self, reading: &TypeRef) -> Option<&TypeEntry<M>> {
         self.conversion(Direction::Input, reading)
     }
 
     /// Rust → wire.
-    fn output_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+    fn output_entry(&self, reading: &TypeRef) -> Option<&TypeEntry<M>> {
         self.conversion(Direction::Output, reading)
     }
 
@@ -85,22 +87,22 @@ pub trait Conversions<M> {
     /// On the trait because a callback converter needs it while being built,
     /// and the emitter needs it again afterwards. Plans are applied by
     /// `prepare`, so they are complete either side of that line.
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan>;
+    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan>;
 
     /// Every callback-argument decomposition, for the emitters that enumerate
     /// them rather than look one up.
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan>;
+    fn callback_arg_plans(&self) -> &HashMap<TypeKey, UnfoldPlan>;
 
     /// The return decomposition of a function, if it has one.
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>;
+    fn unfold_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan>;
 
     /// The error-position decomposition of a fallible function.
-    fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>;
+    fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan>;
 
     /// The declaration-default decomposition behind each deconstructor.
     fn decon_plans(
         &self,
-    ) -> &HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec>;
+    ) -> &HashMap<DeconId, DeconSpec>;
 
     /// Every type key that crosses in `dir`.
     ///
@@ -120,34 +122,34 @@ pub trait Conversions<M> {
 }
 
 impl<M> Conversions<M> for Building<'_, M> {
-    fn flat(&self) -> &crate::api::core::flat::Flat {
+    fn flat(&self) -> &Flat {
         &self.registry.flat
     }
-    fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef> {
+    fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         self.registry.reading(key)
     }
     fn conversion(
         &self,
         dir: Direction,
-        reading: &crate::api::core::flat::TypeRef,
+        reading: &TypeRef,
     ) -> Option<&TypeEntry<M>> {
         self.built.get(&(dir, reading.key()))
     }
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan> {
+    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
         self.registry.callback_arg_plans.get(key)
     }
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan> {
+    fn callback_arg_plans(&self) -> &HashMap<TypeKey, UnfoldPlan> {
         &self.registry.callback_arg_plans
     }
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+    fn unfold_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
         &self.registry.unfold_plans
     }
-    fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+    fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
         &self.registry.error_plans
     }
     fn decon_plans(
         &self,
-    ) -> &HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec> {
+    ) -> &HashMap<DeconId, DeconSpec> {
         &self.registry.decon_plans
     }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
@@ -160,34 +162,34 @@ impl<M> Conversions<M> for Building<'_, M> {
 }
 
 impl<M> Conversions<M> for Registry<M> {
-    fn flat(&self) -> &crate::api::core::flat::Flat {
+    fn flat(&self) -> &Flat {
         &self.flat
     }
-    fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef> {
+    fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         Registry::reading(self, key)
     }
     fn conversion(
         &self,
         dir: Direction,
-        reading: &crate::api::core::flat::TypeRef,
+        reading: &TypeRef,
     ) -> Option<&TypeEntry<M>> {
         self.type_table(dir).get(&reading.key())?.entry.as_ref()
     }
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan> {
+    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&UnfoldPlan> {
         self.callback_arg_plans.get(key)
     }
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan> {
+    fn callback_arg_plans(&self) -> &HashMap<TypeKey, UnfoldPlan> {
         &self.callback_arg_plans
     }
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+    fn unfold_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
         &self.unfold_plans
     }
-    fn error_plans(&self) -> &HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan> {
+    fn error_plans(&self) -> &HashMap<syn::Ident, UnfoldPlan> {
         &self.error_plans
     }
     fn decon_plans(
         &self,
-    ) -> &HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec> {
+    ) -> &HashMap<DeconId, DeconSpec> {
         &self.decon_plans
     }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
@@ -233,14 +235,14 @@ impl<'a, M> Building<'a, M> {
 /// Shared by [`Registry::origin_module`] and [`Building::origin_module`], so the
 /// two cannot answer differently.
 pub(super) fn origin_module_of(
-    flat: &crate::api::core::flat::Flat,
+    flat: &Flat,
     ident: &syn::Ident,
 ) -> Option<syn::Path> {
     let crate_name = flat.element(ident)?.location().crate_name.as_ref()?;
     syn::parse_str(&crate_name.replace('-', "_")).ok()
 }
 
-pub(super) fn default_module_of(flat: &crate::api::core::flat::Flat) -> Option<syn::Path> {
+pub(super) fn default_module_of(flat: &Flat) -> Option<syn::Path> {
     flat.source_modules()
         .first()
         .and_then(|m| syn::parse_str(m).ok())
