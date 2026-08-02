@@ -462,7 +462,7 @@ pub fn apply<M>(
                     continue;
                 }
                 for leaf in &plan.leaves {
-                    registry.require_output(leaf.out_ty.syntax());
+                    registry.require_output(&leaf.out_ty);
                 }
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -643,7 +643,7 @@ fn wire_fixed_returns<M>(
             }
         }
         for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-            registry.require_output(leaf.out_ty.syntax());
+            registry.require_output(&leaf.out_ty);
         }
         let plan = UnfoldPlan {
             source: vd.source.clone(),
@@ -710,7 +710,7 @@ fn wire_fixed_callbacks<M>(
                     continue;
                 }
                 for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-                    registry.require_output(leaf.out_ty.syntax());
+                    registry.require_output(&leaf.out_ty);
                 }
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
@@ -779,7 +779,7 @@ pub fn apply_leaf_vec_folds<M>(
                     } else {
                         inner_shape
                     };
-                    registry.require_output(vec_elem.syntax());
+                    registry.require_output(vec_elem);
                     // The fold delivers the return element-by-element, so the
                     // whole `Vec<T>` / `Option<Vec<T>>` converter is not needed.
                     // De-require it: for String / scalar elements it still
@@ -787,7 +787,7 @@ pub fn apply_leaf_vec_folds<M>(
                     // opaque-handle element it cannot resolve (`jlong` wire isn't
                     // JObject-shaped), and de-requiring keeps that `None` from
                     // being flagged as an unresolved-required error.
-                    registry.unrequire_output(ret.syntax());
+                    registry.unrequire_output(&ret);
                     registry
                         .unfold_plans
                         .insert(func.clone(), whole_leaf_fold_plan(vec_elem, shape));
@@ -814,7 +814,7 @@ pub fn apply_leaf_vec_folds<M>(
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
-                registry.require_output(elem.syntax());
+                registry.require_output(elem);
                 let plan =
                     whole_leaf_fold_plan(elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
                 registry.callback_arg_plans.insert(key, plan);
@@ -905,7 +905,7 @@ struct Layered {
     /// The arity layers, outermost first.
     shape: UnfoldShape,
     /// Every type on the way down, outermost first — what a registration walks.
-    layer_types: Vec<syn::Type>,
+    layer_types: Vec<crate::api::core::flat::TypeRef>,
     /// Past the borrow too: what actually crosses.
     core: syn::Type,
     /// Whether the core is reached through a borrow.
@@ -924,11 +924,7 @@ fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
     let borrowed = layered.borrow_target();
     Layered {
         shape,
-        layer_types: ty
-            .layer_types()
-            .iter()
-            .map(|t| t.syntax().clone())
-            .collect(),
+        layer_types: ty.layer_types().into_iter().cloned().collect(),
         core: borrowed.unwrap_or(layered).syntax().clone(),
         by_ref: borrowed.is_some(),
     }
@@ -1024,9 +1020,9 @@ fn process_decl<M>(
             // recursive registration also required) — same reasoning as
             // [`apply_leaf_vec_folds`] for the fixed folds.
             if ed.target == DeconTarget::Output {
-                registry.unrequire_output(ret_ty.syntax());
+                registry.unrequire_output(&ret_ty);
                 if optional {
-                    registry.unrequire_output(after_opt.syntax());
+                    registry.unrequire_output(after_opt);
                 }
             }
             // Element type peeled of a leading `&` (accessors take `&Element`).
@@ -1039,7 +1035,7 @@ fn process_decl<M>(
                 register_decon_spec(registry, acc, &decon, &records, element)?;
                 let plan = build_plan(acc, registry, ed, by_ref, element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
-                    registry.require_output(leaf.out_ty.syntax());
+                    registry.require_output(&leaf.out_ty);
                 }
                 plan
             } else {
@@ -1048,7 +1044,7 @@ fn process_decl<M>(
                 // No declaration is involved (`decon: None`) — the element
                 // crosses whole through its own converter.
                 let by_ref = peel_borrow(inner).0;
-                registry.require_output(inner.syntax());
+                registry.require_output(inner);
                 UnfoldPlan {
                     source: inner.syntax().clone(),
                     decon: None,
@@ -1085,7 +1081,7 @@ fn process_decl<M>(
             register_decon_spec(registry, acc, &decon, &records, source)?;
             let plan = build_plan(acc, registry, ed, by_ref, source, shape, &records, decon)?;
             for leaf in &plan.leaves {
-                registry.require_output(leaf.out_ty.syntax());
+                registry.require_output(&leaf.out_ty);
             }
             plan
         };
@@ -1113,16 +1109,19 @@ fn process_decl<M>(
             && plan.leaves.len() == 1
             && !plan.leaves[0].nullable;
         let plan = if single_return {
-            let leaf_ty = plan.leaves[0].out_ty.syntax().clone();
-            let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
-                syn::parse_quote!(Option<#leaf_ty>)
+            // Composed with the model's own layering rather than by spelling
+            // `Option<#leaf_ty>` and handing the tokens over: `optional()` pairs
+            // the `kind` with its spelling in one place, so the reading that
+            // reaches the table is the one this plan carries (#281).
+            let cv = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
+                plan.leaves[0].out_ty.optional()
             } else {
-                leaf_ty
+                plan.leaves[0].out_ty.clone()
             };
-            registry.require_output(&cv_ty);
+            registry.require_output(&cv);
             UnfoldPlan {
                 delivery: Delivery::Return,
-                convert_out_ty: Some(cv_ty),
+                convert_out_ty: Some(cv.syntax().clone()),
                 ..plan
             }
         } else {

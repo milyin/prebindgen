@@ -1813,7 +1813,10 @@ fn sum_return_layers_ride_the_shape_fold() {
 fn a_vec_only_sum_return_drops_the_bare_requirement() {
     let mut reg: Registry<()> = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
     let bare: syn::Type = syn::parse_quote!(Reading);
-    reg.require_output(&bare);
+    let bare_reading = reg
+        .intern(crate::api::core::registry::Direction::Output, &bare, true)
+        .expect("fixture type");
+    reg.require_output(&bare_reading);
     assert!(
         reg.output_types[&TypeKey::from_type(&bare)].root,
         "fixture precondition: the bare element starts out required"

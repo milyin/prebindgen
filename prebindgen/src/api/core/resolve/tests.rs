@@ -17,7 +17,14 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     // under test is one the pipeline can actually produce.
     let mut reg: Registry<()> =
         crate::api::test_util::scanned_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
-    reg.require_input(&syn::parse_quote!(Outer));
+    let outer = reg
+        .intern(
+            crate::api::core::registry::Direction::Input,
+            &syn::parse_quote!(Outer),
+            true,
+        )
+        .expect("fixture type");
+    reg.require_input(&outer);
 
     let zke_key = TypeKey::parse("ZKeyExpr").expect("test type");
     assert!(!reg.input_types[&zke_key].root, "the field is not a root");

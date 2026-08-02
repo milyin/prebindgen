@@ -819,6 +819,81 @@ fn a_source_type_cell_carries_the_models_typeref() {
     assert!(matches!(inner.subject.kind(), TypeKind::Scalar(_)));
 }
 
+/// A **composed** reading reaches the cell intact, rather than being thrown away
+/// and re-derived from its spelling.
+///
+/// #281's acceptance test, and it needs a case where the two answers visibly
+/// differ or it would pass on a coincidence. `Option<Thing>` is a spelling the
+/// source never writes, so:
+///
+/// * composing it keeps the **source location** of the `Thing` it layers over —
+///   the composer pairs `kind` with spelling and inherits the place;
+/// * re-deriving it hands the tokens to `Flat::classify`, which finds nothing in
+///   the model index for that spelling and builds a **placeless** reading.
+///
+/// So the location is the discriminator, and it is not decorative: it is what a
+/// diagnostic about this crossing prints. Verified to fail with the fix
+/// reverted.
+///
+/// Nothing in the tree could have caught the old path: the composed reading
+/// lived in the plan leaf, the re-derived one lived in the cell, and the two
+/// were never compared. Byte-identical goldens say the answers agree for every
+/// type the examples exercise; this says the mechanism no longer permits them to
+/// differ.
+#[test]
+fn a_composed_reading_reaches_the_cell_unchanged() {
+    use crate::api::core::flat::TypeKind;
+
+    let loc = SourceLocation {
+        file: "src/lib.rs".into(),
+        line: 11,
+        column: 3,
+        crate_name: Some("myflat".into()),
+    };
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::parse_str("pub struct Thing { pub v: u64 }").unwrap(),
+            loc.clone(),
+        ),
+        (
+            syn::parse_str("pub fn f(t: Thing) -> u64 { t.v }").unwrap(),
+            loc.clone(),
+        ),
+    ];
+    let reg: RegistryBuilder<()> = crate::api::test_util::reg_from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("f").unwrap());
+    ext.types.insert(TypeKey::parse("Thing").unwrap());
+    let mut reg = ext
+        .declare_into_any(reg)
+        .expect("declare")
+        .scanned()
+        .unwrap();
+
+    // The source's own reading for `Thing`, which carries where it was written.
+    let thing = reg
+        .reading(&syn::parse_quote!(Thing))
+        .expect("the declared struct is registered");
+    assert_eq!(thing.location(), &loc, "fixture precondition");
+
+    // `Option<Thing>` — composed here, written nowhere.
+    let composed = thing.optional();
+    assert!(matches!(composed.kind(), TypeKind::Optional(_)));
+    assert_eq!(composed.location(), &loc, "the layer inherits the place");
+
+    reg.require_output(&composed);
+
+    let cell = &reg.output_types[&composed.key()];
+    assert!(matches!(cell.subject.kind(), TypeKind::Optional(_)));
+    assert_eq!(
+        cell.subject.location(),
+        &loc,
+        "the cell holds the reading that was handed to it. A re-derivation would \
+         classify the `Option<Thing>` tokens, find no such spelling in the model \
+         index, and store a PLACELESS reading instead"
+    );
+}
+
 /// `Registry::reading` is a **lookup**. A type with no cell answers `None`, even
 /// when the grammar would classify it happily.
 ///
@@ -1658,7 +1733,7 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
             next.extend(
                 reg.immediate_edges(Direction::Output, &t)
                     .into_iter()
-                    .map(|(_, sub)| sub),
+                    .map(|(_, sub)| sub.syntax().clone()),
             );
         }
         if revisited {
