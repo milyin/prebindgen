@@ -72,14 +72,13 @@ impl Declarations {
                         ..
                     }
                 );
-                let t1 = target.syntax().clone();
                 if let Some(mut c) = self.input_wrapper_shape(
                     WrapperShape::OptionRef { mutable },
                     syntax,
-                    &t1,
+                    target,
                     registry,
                 ) {
-                    c.subs = vec![t1];
+                    c.subs = vec![target.syntax().clone()];
                     return Some(c);
                 }
             }
@@ -98,21 +97,19 @@ impl Declarations {
                     return None;
                 }
             }
-            let inner_ty = inner.syntax().clone();
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Optional, syntax, &inner_ty, registry)
+                self.input_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
             {
-                c.subs = vec![inner_ty];
+                c.subs = vec![inner.syntax().clone()];
                 return Some(c);
             }
             return None;
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
-            let elem_ty = elem.syntax().clone();
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Sequence, syntax, &elem_ty, registry)
+                self.input_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
-                c.subs = vec![elem_ty];
+                c.subs = vec![elem.syntax().clone()];
                 return Some(c);
             }
             return None;
@@ -144,13 +141,19 @@ impl Declarations {
                     // The one place `produced` is NOT the crossing's spelling:
                     // there is no owned `[T]` to decode into, so the converter
                     // yields an owned `Vec<T>` and the call site borrows it.
+                    //
+                    // It is also why `produced` stays a spelling while `t1`
+                    // becomes a reading: this one is composed by the ADAPTER,
+                    // and #280 sealed minting to the model — there is no
+                    // `Vec<T>` reading for `api::lang` to make. Which is
+                    // consistent rather than awkward: `produced` is defined as
+                    // the tokens the converter yields, and every question asked
+                    // of it (`is_canonical_spelling`, the `Type::Reference`
+                    // bridgeability guards) is a spelling question.
                     let produced: syn::Type = syn::parse_quote!(Vec<#elem_ty>);
-                    if let Some(mut c) = self.input_wrapper_shape(
-                        WrapperShape::Sequence,
-                        &produced,
-                        &elem_ty,
-                        registry,
-                    ) {
+                    if let Some(mut c) =
+                        self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
+                    {
                         c.subs = vec![elem_ty];
                         return Some(c);
                     }
@@ -158,11 +161,10 @@ impl Declarations {
                 }
             }
             let mutable = matches!(mode, RefMode::Exclusive);
-            let t1 = inner.syntax().clone();
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, &t1, registry)
+                self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
-                c.subs = vec![t1];
+                c.subs = vec![inner.syntax().clone()];
                 return Some(c);
             }
         }
@@ -204,21 +206,19 @@ impl Declarations {
         //    whose inner converter is the `&Handle` borrow entry (no deep
         //    output handler).
         if let Some(inner) = ty.optional_inner() {
-            let inner_ty = inner.syntax().clone();
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Optional, syntax, &inner_ty, registry)
+                self.output_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
             {
-                c.subs = vec![inner_ty];
+                c.subs = vec![inner.syntax().clone()];
                 return Some(c);
             }
             return None;
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
-            let elem_ty = elem.syntax().clone();
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Sequence, syntax, &elem_ty, registry)
+                self.output_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
-                c.subs = vec![elem_ty];
+                c.subs = vec![elem.syntax().clone()];
                 return Some(c);
             }
             return None;
@@ -235,11 +235,10 @@ impl Declarations {
                 }
             }
             let mutable = matches!(mode, RefMode::Exclusive);
-            let t1 = inner.syntax().clone();
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, &t1, registry)
+                self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
-                c.subs = vec![t1];
+                c.subs = vec![inner.syntax().clone()];
                 return Some(c);
             }
         }
