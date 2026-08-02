@@ -41,10 +41,22 @@ pub(crate) fn vec_build_elem(
     // `Cow<'_, [T]>` classify identically and cannot be rebuilt from the local.
     // `decoded_vec_satisfies` in `selector.rs` is the same rule guarding the
     // general converter path — asked here of the model, which holds both halves.
+    //
+    // BEFORE the peel as well as after, and the order is the whole point: the
+    // erasure happens OUTSIDE the layer it wraps, so `Box<&Vec<T>>` classifies
+    // as `Ref` and interpreting `kind` first would replace `arg` with the inner
+    // sequence — whose spelling is a clean `Vec<T>` — and let the outer `Box`
+    // through unseen. Every layer is checked on the way down, the way
+    // `rebuildable_target` does it.
+    if arg.erased_wrapper().is_some() {
+        return None;
+    }
     let (run, by_ref) = match arg.kind() {
         flat::TypeKind::Ref { mode, inner } if *mode == RefMode::Shared => (&**inner, true),
         _ => (arg, false),
     };
+    // Still needed after the peel: `&Box<Vec<T>>` puts the wrapper on the
+    // referent, where the check above (a `syn::Type::Reference`) cannot see it.
     if run.erased_wrapper().is_some() {
         return None;
     }

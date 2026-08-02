@@ -1815,3 +1815,108 @@ fn a_transparently_wrapped_option_does_not_take_the_present_value_pair() {
     // spelling guards.
     assert!(kc.contains("zBoxed(mode:Int?"), "{kotlin}");
 }
+
+/// The transparent-wrapper guard runs **before** the model's layers are
+/// interpreted, not after.
+///
+/// An erasure sits *outside* the layer it wraps, so `Box<&Vec<Foo>>` classifies
+/// as `TypeKind::Ref` — the `Box` is gone from `kind` and survives only in the
+/// spelling. A guard that reads `kind` first replaces the argument with the
+/// inner sequence reading, whose own spelling is a clean `Vec<Foo>`, and the
+/// outer wrapper is never seen: the Vec-build plan is selected, its emitter
+/// hands the source fn a `&[Foo]` built from the transient Rust-side `Vec`, and
+/// the parameter still spells `Box<&Vec<Foo>>`. That is the same `E0308` class
+/// [`a_transparently_wrapped_option_does_not_take_the_present_value_pair`]
+/// covers, reached by peeling in the wrong order.
+///
+/// So this pins the **ordering**, which the shape-by-shape tests cannot: every
+/// layer is checked on the way down, and the outermost is checked first.
+#[test]
+fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_bare(v: &[Foo]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_wrapped(v: Box<&Vec<Foo>>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(crate::fun!(put_bare))
+                .fun(crate::fun!(put_wrapped)),
+        );
+
+    let dir = unique_test_dir("jnigen_outer_wrapper_ref");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // The wrapped spelling may legitimately resolve no converter of its own —
+    // that is a refusal too, and equally not an `E0308`.
+    let Ok(gen) = jni.build_with(registry) else {
+        return;
+    };
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The control: the bare `&[Foo]` twin still takes the Vec-build handle path,
+    // so a refusal below is about the wrapper and not about the fixture failing
+    // to reach the specialized path at all.
+    assert!(
+        kc.contains("fooVecNew"),
+        "the bare `&[Foo]` must still take the Vec-build path — otherwise this \
+         test proves nothing about the wrapped one:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("val__vec_v=JNINative.fooVecNew(v.size)"),
+        "{kotlin}"
+    );
+
+    // The finding: `Box<&Vec<Foo>>` must not reach the Vec-build call site. Its
+    // wrapper is invisible to `kind` (which says `Ref`), so only a check made
+    // before the layers are read can catch it.
+    // Split on the WRAPPER, not on `externalfunputWrapped(` in `JNINative` —
+    // the extern block is followed by the shared `fooVecNew` declarations, so a
+    // looser split would read them as this function's body and pass falsely.
+    let wrapped_body = kc
+        .split("publicfunputWrapped(")
+        .nth(1)
+        .map(|s| s.split("publicfun").next().unwrap_or(s).to_string())
+        .unwrap_or_default();
+    assert!(
+        !wrapped_body.contains("fooVecNew"),
+        "`Box<&Vec<Foo>>` took the Vec-build path, which hands the source fn a \
+         `&[Foo]` built from a transient Vec while the parameter spells \
+         `Box<&Vec<Foo>>` — an E0308 in the generated crate:\n{kotlin}"
+    );
+}
