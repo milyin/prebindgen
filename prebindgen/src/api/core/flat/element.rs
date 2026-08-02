@@ -228,6 +228,20 @@ pub struct Variant {
     /// Alternatives in declaration order; `alternatives[i].index == i`.
     pub alternatives: Vec<Alternative>,
     pub origin: Origin<syn::ItemEnum>,
+    /// This sum **as a type**, taken at parse time — see [`Self::type_ref`].
+    ///
+    /// **Stored, not computed**, and that is what makes the accessor safe: a
+    /// method composing `TypeRef::named(&self.name)` would answer for whatever
+    /// name a caller put in the struct, so a `Variant` named `String` would
+    /// yield `Named` over the spelling `String` — which the model reads as
+    /// `Str`. A stored reading cannot disagree with the model, because the
+    /// model is what put it there, and an assembler has no way to mint a
+    /// different one.
+    ///
+    /// `pub(super)` is the second line, not the first: it also stops a
+    /// `Variant` being assembled at all outside `flat` (`E0451`), so `name` and
+    /// `reading` cannot be paired inconsistently with *each other*.
+    pub(super) reading: TypeRef,
 }
 
 impl Variant {
@@ -235,11 +249,47 @@ impl Variant {
     /// has to name the sum rather than walk it (jnigen's `SumTag` selector,
     /// which carries *which* sum it chooses between).
     ///
-    /// The declaration answers, so the composer stays inside the model: a
-    /// consumer holding the element does not have to mint a reading from the
-    /// name and hope it matches what the model would have said.
-    pub fn type_ref(&self) -> TypeRef {
-        TypeRef::named(&self.name)
+    /// The **declaration** answers, so no consumer has to mint a reading from
+    /// the name and hope it matches what the model would have said.
+    ///
+    /// This returns state the parser took, **not** a fresh composition, and the
+    /// difference is the difference between sealing and appearing to.
+    ///
+    /// A version that composed `TypeRef::named(&self.name)` would hand a
+    /// `Variant` assembled with the name `String` a
+    /// [`Named`](super::TypeKind::Named) over the spelling `String` — which the
+    /// model reads as [`Str`](super::TypeKind::Str). That is the `kind`/`syntax`
+    /// disagreement [`TypeRef`]'s private fields exist to prevent, and it was
+    /// reachable from outside the crate while being invisible to every doctest
+    /// there, because assembling the *element* is not minting the *type*.
+    ///
+    /// Reading a stored value closes it: whatever a caller does with the other
+    /// fields, the reading here is the one the model made, and no caller can
+    /// mint a different one to put in its place.
+    ///
+    /// The `Variant` is sealed as well — its `reading` field is `pub(super)` —
+    /// so the two cannot even be paired inconsistently:
+    ///
+    /// ```compile_fail
+    /// # use prebindgen::core::flat::{Origin, Variant};
+    /// let assembled = Variant {
+    ///     name: syn::parse_str("String").unwrap(),
+    ///     alternatives: vec![],
+    ///     origin: Origin::new(
+    ///         syn::parse_str("enum String { A(u8) }").unwrap(),
+    ///         std::rc::Rc::new(Default::default()),
+    ///     ),
+    /// };
+    /// let mismatched = assembled.type_ref();
+    /// ```
+    ///
+    /// That doctest pins *"a consumer cannot assemble a `Variant`"* and nothing
+    /// finer: measured, it still fails with the field made `pub` — as `E0063`
+    /// (missing field) rather than `E0451` (private field), since a consumer
+    /// cannot produce a `TypeRef` to supply either way. The visibility itself
+    /// is the check the compiler runs on every build.
+    pub fn type_ref(&self) -> &TypeRef {
+        &self.reading
     }
 }
 

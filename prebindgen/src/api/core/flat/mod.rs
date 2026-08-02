@@ -1404,6 +1404,7 @@ fn lower_variant(
         });
     }
     Ok(Variant {
+        reading: TypeRef::named(&e.ident),
         name: e.ident.clone(),
         alternatives,
         origin: Origin::new(e.clone(), Rc::clone(at)),

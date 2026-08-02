@@ -68,7 +68,7 @@ pub(crate) fn synth_sum_leaves(
         // emitter minting a reading from the name. Nothing resolves a converter
         // for it (`has_converter()` is false), but the emitter reads it back to
         // find the enum to `match`.
-        out_ty: sum.type_ref(),
+        out_ty: sum.type_ref().clone(),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
