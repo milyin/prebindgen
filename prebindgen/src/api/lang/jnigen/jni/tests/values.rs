@@ -1629,6 +1629,8 @@ fn a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec() {
 /// and it exists only to give the model a field per spelling to classify.
 #[test]
 fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
+    use crate::api::core::flat;
+
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
@@ -1664,9 +1666,7 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
         .expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
 
-    let crate::api::core::flat::Type::Struct(probe) =
-        registry.flat().declared_type("Probe").expect("indexed")
-    else {
+    let flat::Type::Struct(probe) = registry.flat().declared_type("Probe").expect("indexed") else {
         panic!("Probe is a struct");
     };
     let field = |name: &str| {

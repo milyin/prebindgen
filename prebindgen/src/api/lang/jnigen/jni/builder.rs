@@ -7,7 +7,15 @@
 //! JNI module; shares the `jni` namespace via `use super::*`.
 
 use super::*;
-use crate::api::core::{flat::{TypeKind, TypeRef}, registry::Conversions};
+// `flat` as a module, not `flat::TypeKind` directly: the bare `TypeKind` in this
+// file is jnigen's OWN classifier (`classify.rs`, reached through `use super::*`
+// above), and an explicit import beats a glob — importing the model's would
+// silently retarget the `TypeKind::Sum` / `TypeKind::DataStruct` matches below.
+// One qualifier keeps both names short and says which of the two it is.
+use crate::api::core::{
+    flat::{self, TypeRef},
+    registry::Conversions,
+};
 
 impl DeclaredKind {
     /// The declaring macro's name, for the conflict message.
@@ -119,7 +127,7 @@ impl Declarations {
     /// `Box<Option<&Priority>>` reaches the same declaration `Priority` does,
     /// where taking the spelling apart finds `Box` and answers about it.
     pub(crate) fn is_kotlin_enum_reading(&self, reading: &TypeRef) -> bool {
-        let TypeKind::Named { id } = enum_probe(reading).kind() else {
+        let flat::TypeKind::Named { id } = enum_probe(reading).kind() else {
             return false;
         };
         id.ident()
@@ -877,7 +885,7 @@ impl Declarations {
         // model already normalized them.
         let ret = accessor.ret.borrow_target().unwrap_or(&accessor.ret);
         assert!(
-            !matches!(ret.kind(), crate::api::core::flat::TypeKind::Unit),
+            !matches!(ret.kind(), flat::TypeKind::Unit),
             "expand_return!({}).fields(fields!({func})): `{func}` returns nothing — a \
              value form returns the struct holding this type's fields",
             key.as_str(),
@@ -939,7 +947,7 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         decl: &FieldsDecl,
-        st: &crate::api::core::flat::Struct,
+        st: &flat::Struct,
         members: &[syn::Ident],
         name_prefix: &str,
         depth: usize,
@@ -1078,10 +1086,10 @@ impl Declarations {
                     );
                     // The name is the reading's, not a path taken apart to
                     // re-derive one.
-                    let TypeKind::Named { id } = probe.kind() else {
+                    let flat::TypeKind::Named { id } = probe.kind() else {
                         panic!("a sum type is a named type")
                     };
-                    let crate::api::core::flat::Type::Variant(sum) = registry
+                    let flat::Type::Variant(sum) = registry
                         .flat()
                         .declared_type(&id.name)
                         .expect("TypeKind::Sum implies an indexed enum")

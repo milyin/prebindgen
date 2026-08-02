@@ -5,8 +5,6 @@
 //! via `use super::*`.
 
 use super::*;
-// Not through the `jni` prelude: `TypeKind` there is jnigen's own classifier
-// (`classify.rs`), so the model's types are named on their own path.
 use crate::api::core::flat::TypeRef;
 
 /// Peel the layers that never change whether a value's core is a Kotlin enum,
