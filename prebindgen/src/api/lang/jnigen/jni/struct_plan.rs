@@ -261,7 +261,9 @@ pub(crate) fn classify_field(
         return sum_plan_kind(ext, registry, &bare, owner, optional_inner.is_some(), depth);
     }
 
-    let field_entry = registry.output_entry(&effective_ty)?;
+    let field_entry = registry
+        .reading_of(&effective_ty)
+        .and_then(|tr| registry.output_entry(&tr))?;
     let conv = ConvChain::of(field_entry);
 
     {
@@ -285,7 +287,8 @@ pub(crate) fn classify_field(
         if let Some(inner) = optional_inner.map(|i| i.syntax().clone()) {
             if ext.is_kotlin_enum(&inner) {
                 let kotlin = registry
-                    .output_entry(&inner)?
+                    .reading_of(&inner)
+                    .and_then(|tr| registry.output_entry(&tr))?
                     .metadata
                     .kotlin_name
                     .clone()?;
@@ -325,7 +328,8 @@ pub(crate) fn classify_field(
                 let slot_ty =
                     optional_inner.map_or_else(|| effective_ty.clone(), |i| i.syntax().clone());
                 let descriptor = registry
-                    .output_entry(&slot_ty)
+                    .reading_of(&slot_ty)
+                    .and_then(|tr| registry.output_entry(&tr))
                     .and_then(|e| jni_field_access(&e.destination))
                     .and_then(|(sig, _, is_obj)| {
                         if is_obj {

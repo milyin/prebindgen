@@ -111,7 +111,7 @@ pub(crate) fn const_expr_getter_fn(
     // no element carries it. A miss means the declared type never entered the
     // pipeline, which is a binding error worth naming rather than a `None` to
     // absorb.
-    let ret = registry.reading(ty).unwrap_or_else(|| {
+    let ret = registry.reading_of(ty).unwrap_or_else(|| {
         panic!(
             "constant_expr `{kotlin_name}`: type `{}` is not a type this binding crosses — \
              declare it, or name one that is",
@@ -221,7 +221,8 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let output_entry = match &plan.output {
         FnOutputPlan::Value(v) => Some(
             registry
-                .output_entry(&v.target_ty)
+                .reading_of(&v.target_ty)
+                .and_then(|tr| registry.output_entry(&tr))
                 .expect("output entry validated at plan build"),
         ),
         FnOutputPlan::Unfold(_) => None,
@@ -581,7 +582,8 @@ fn emit_input_param(
         // the pre-lock guard — is rejected before any dereference.
         InputKind::Handle { direct: true } if !matches!(arg_ty, syn::Type::Reference(_)) => {
             let entry = registry
-                .input_entry(arg_ty)
+                .reading_of(arg_ty)
+                .and_then(|tr| registry.input_entry(&tr))
                 .expect("plan classified Handle ⇒ entry present");
             let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
                 format_ident!("{}_ptr", arg_ident)
@@ -608,13 +610,16 @@ fn emit_input_param(
         | InputKind::Handle { .. }
         | InputKind::Unsigned64 { .. }
         | InputKind::Plain => {
-            let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
-                panic!(
-                    "JniGen::on_function: input type `{}` for `{}` is unresolved",
-                    TypeKey::from_type(arg_ty),
-                    original_ident,
-                )
-            });
+            let entry = registry
+                .reading_of(arg_ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "JniGen::on_function: input type `{}` for `{}` is unresolved",
+                        TypeKey::from_type(arg_ty),
+                        original_ident,
+                    )
+                });
             emit_plain_decode(entry, arg_ident, arg_ty, on_err)
         }
     }
@@ -756,13 +761,16 @@ pub(crate) fn emit_expanded_param(
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
         let leaf_ty = leaf.ty.syntax();
         let lookup_entry = || {
-            registry.input_entry(leaf_ty).unwrap_or_else(|| {
-                panic!(
-                    "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-                    TypeKey::from_type(leaf_ty),
-                    orig_param,
-                )
-            })
+            registry
+                .reading_of(leaf_ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
+                        TypeKey::from_type(leaf_ty),
+                        orig_param,
+                    )
+                })
         };
         let local = format_ident!("__exp_{}", leaf.name);
 

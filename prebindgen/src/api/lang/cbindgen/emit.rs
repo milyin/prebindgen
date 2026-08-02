@@ -9,24 +9,31 @@ impl CbindgenBuilder {
         let string_ty: syn::Type = syn::parse_quote!(String);
         // A `String` return hands out a `char*` — unless `String` is declared
         // `opaque_ptr` (then it crosses as `string_t *`, freed by `string_drop`).
-        if registry.output_entry(&string_ty).is_some()
+        if registry
+            .reading_of(&string_ty)
+            .and_then(|tr| registry.output_entry(&tr))
+            .is_some()
             && !self.opaque.contains_key(&TypeKey::from_type(&string_ty))
         {
             return true;
         }
         // Opaque error types are marshalled to a malloc'd `char*` message.
-        if self
-            .opaque_errors
-            .keys()
-            .any(|key| registry.output_entry(&key.to_type()).is_some())
-        {
+        if self.opaque_errors.keys().any(|key| {
+            registry
+                .reading(key)
+                .and_then(|tr| registry.output_entry(&tr))
+                .is_some()
+        }) {
             return true;
         }
         // A tagged union with a `String` payload hands out a `char*` per active
         // arm — allocated by its output converter, released by its typed drop.
         if self.tagged_unions.keys().any(|key| {
             let ty = key.to_type();
-            registry.output_entry(&ty).is_some()
+            registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.output_entry(&tr))
+                .is_some()
                 && self
                     .enum_variants(registry, &ty)
                     .map(|vs| {
@@ -40,7 +47,10 @@ impl CbindgenBuilder {
         }
         self.data.keys().any(|key| {
             let ty = key.to_type();
-            registry.output_entry(&ty).is_some()
+            registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.output_entry(&tr))
+                .is_some()
                 && self
                     .struct_fields(registry, &ty)
                     .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
@@ -132,7 +142,7 @@ impl CbindgenBuilder {
         // legitimately differ (a `String`'s const-ness above), which is why a
         // disagreement is `None` — a rejection naming the payload — rather
         // than a silent pick of one side.
-        let out_entry = registry.output_entry(fty).ok_or_else(|| {
+        let out_entry = registry.reading_of(fty).and_then(|tr| registry.output_entry(&tr)).ok_or_else(|| {
             "no resolved OUTPUT converter — a payload crosses as its converter's destination, so \
              it must be a scalar, a `String`, or a type this binding declares (`enum_type`, \
              `data_struct`, `opaque_ptr`, or a `convert!` conversion)"
@@ -149,7 +159,10 @@ impl CbindgenBuilder {
             );
         }
         let out = out_entry.destination.clone();
-        if let Some(inp) = registry.input_entry(fty) {
+        if let Some(inp) = registry
+            .reading_of(fty)
+            .and_then(|tr| registry.input_entry(&tr))
+        {
             if TypeKey::from_type(&inp.destination) != TypeKey::from_type(&out) {
                 return Err(format!(
                     "its input and output converters disagree on the wire (`{}` in, `{}` out) \
@@ -264,7 +277,10 @@ impl CbindgenBuilder {
     /// anything that is not a declared tagged union.
     pub(super) fn tagged_union_has_drop(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
         if !self.tagged_unions.contains_key(&TypeKey::from_type(fty))
-            || registry.output_entry(fty).is_none()
+            || registry
+                .reading_of(fty)
+                .and_then(|tr| registry.output_entry(&tr))
+                .is_none()
         {
             return false;
         }
@@ -447,7 +463,8 @@ impl CbindgenBuilder {
                 return false;
             };
             registry
-                .input_entry(&pt.ty)
+                .reading_of(&pt.ty)
+                .and_then(|tr| registry.input_entry(&tr))
                 .map(|e| returns_result(&e.function.sig.output))
                 .unwrap_or(false)
         });
@@ -470,13 +487,16 @@ impl CbindgenBuilder {
                 TypeKey::from_type(err_ty),
                 TypeKey::from_type(err_ty),
             );
-            let entry = registry.output_entry(err_ty).unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen::on_function: error type `{}` of `{}` has no output converter",
-                    TypeKey::from_type(err_ty),
-                    orig
-                )
-            });
+            let entry = registry
+                .reading_of(err_ty)
+                .and_then(|tr| registry.output_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen::on_function: error type `{}` of `{}` has no output converter",
+                        TypeKey::from_type(err_ty),
+                        orig
+                    )
+                });
             (
                 entry.destination.clone(),
                 entry.function.sig.ident.clone(),
@@ -665,12 +685,15 @@ impl CbindgenBuilder {
                  (scalar, data struct, String, or handle), not a composite",
                 TypeKey::from_type(&elem),
             );
-            let entry = registry.output_entry(&elem).unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen: `Vec` element `{}` has no output converter",
-                    TypeKey::from_type(&elem)
-                )
-            });
+            let entry = registry
+                .reading_of(&elem)
+                .and_then(|tr| registry.output_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen: `Vec` element `{}` has no output converter",
+                        TypeKey::from_type(&elem)
+                    )
+                });
             let elem_wire = entry.destination.clone();
             return ValueShape {
                 fields: vec![
@@ -689,12 +712,15 @@ impl CbindgenBuilder {
         // `Cow<'_, [T]>` → `T_wire* + size_t`. The C side receives an owned
         // malloc'd copy, just like `Vec<T>` outputs.
         if let Some(elem) = cow_slice_elem(ty) {
-            let entry = registry.output_entry(&elem).unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen: `Cow` slice element `{}` has no output converter",
-                    TypeKey::from_type(&elem)
-                )
-            });
+            let entry = registry
+                .reading_of(&elem)
+                .and_then(|tr| registry.output_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen: `Cow` slice element `{}` has no output converter",
+                        TypeKey::from_type(&elem)
+                    )
+                });
             let elem_wire = entry.destination.clone();
             return ValueShape {
                 fields: vec![
@@ -735,12 +761,15 @@ impl CbindgenBuilder {
         // Base value: one wire component from its rank-0/1 converter. Custom
         // conversions may declare scalar niches; otherwise a pointer wire
         // (String, opaque handle, `&'static`) carries a free NULL niche.
-        let entry = registry.output_entry(ty).unwrap_or_else(|| {
-            panic!(
-                "Cbindgen::on_function: type `{}` has no output converter",
-                TypeKey::from_type(ty)
-            )
-        });
+        let entry = registry
+            .reading_of(ty)
+            .and_then(|tr| registry.output_entry(&tr))
+            .unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen::on_function: type `{}` has no output converter",
+                    TypeKey::from_type(ty)
+                )
+            });
         let wire = entry.destination.clone();
         let niches = if entry.niches.is_empty() && matches!(wire, syn::Type::Ptr(_)) {
             let null = null_for(&wire);
@@ -769,7 +798,10 @@ impl CbindgenBuilder {
         }
         if is_vec(ty) {
             let elem = first_type_arg(ty).expect("Vec<T> has a type argument");
-            let entry = registry.output_entry(&elem).expect("Vec element converter");
+            let entry = registry
+                .reading_of(&elem)
+                .and_then(|tr| registry.output_entry(&tr))
+                .expect("Vec element converter");
             let elem_conv = entry.function.sig.ident.clone();
             let elem_wire = entry.destination.clone();
             let t_ptr = &targets[0];
@@ -797,7 +829,8 @@ impl CbindgenBuilder {
         }
         if let Some(elem) = cow_slice_elem(ty) {
             let entry = registry
-                .output_entry(&elem)
+                .reading_of(&elem)
+                .and_then(|tr| registry.output_entry(&tr))
                 .expect("Cow slice element converter");
             let elem_conv = entry.function.sig.ident.clone();
             let elem_wire = entry.destination.clone();
@@ -851,7 +884,10 @@ impl CbindgenBuilder {
             );
         }
         // Base value: run its output converter into the single target.
-        let entry = registry.output_entry(ty).expect("base value converter");
+        let entry = registry
+            .reading_of(ty)
+            .and_then(|tr| registry.output_entry(&tr))
+            .expect("base value converter");
         let conv = entry.function.sig.ident.clone();
         let t0 = &targets[0];
         if returns_result(&entry.function.sig.output) {
@@ -871,7 +907,8 @@ impl CbindgenBuilder {
             return Self::output_is_fallible(&inner, registry);
         }
         registry
-            .output_entry(ty)
+            .reading_of(ty)
+            .and_then(|tr| registry.output_entry(&tr))
             .is_some_and(|entry| returns_result(&entry.function.sig.output))
     }
 
@@ -1057,13 +1094,16 @@ impl CbindgenBuilder {
                 continue;
             }
 
-            let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen::on_function: input type `{}` of `{}` has no input converter",
-                    TypeKey::from_type(arg_ty),
-                    orig
-                )
-            });
+            let entry = registry
+                .reading_of(arg_ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen::on_function: input type `{}` of `{}` has no input converter",
+                        TypeKey::from_type(arg_ty),
+                        orig
+                    )
+                });
             let wire = &entry.destination;
             let conv = &entry.function.sig.ident;
 

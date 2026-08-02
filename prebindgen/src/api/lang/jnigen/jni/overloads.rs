@@ -156,7 +156,8 @@ fn rust_type_erased(
         }
     }
     if let Some(kt) = registry
-        .input_entry(peeled)
+        .reading_of(peeled)
+        .and_then(|tr| registry.input_entry(&tr))
         .and_then(|e| e.metadata.kotlin_name.clone())
     {
         return erase_kt_type(&[], &kt);
