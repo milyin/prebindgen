@@ -1636,6 +1636,138 @@ pub fn boxed_latest(a: &Archive) -> Box<Option<Summary>> {
     Box::new(a.latest.clone())
 }
 
+/// An `Option<data class>` whose data class has a **required handle** field.
+///
+/// The shape that proves an optional node's field decodes stay **inside** its
+/// presence gate. When the Kotlin object is null every leaf carries an inert
+/// placeholder, and a handle leaf's placeholder is pointer `0` — which the
+/// direct-handle decode reads as a closed handle, signals a binding error for,
+/// and returns from. Hoisting the decodes out of the gate therefore turns
+/// `null` into an error instead of `None`, and no fixture whose fields all
+/// decode successfully can tell the difference.
+///
+/// `Summary` is consumed by value here, as a handle field is: the `Some` case
+/// hands over ownership, and the `None` case must never touch the slot.
+#[prebindgen]
+pub struct Holder {
+    pub tag: i64,
+    pub summary: Summary,
+}
+
+/// `tag` when the holder is present, `fallback` when it is absent — so the
+/// absent arm is observable as a **value** rather than as an error.
+#[prebindgen]
+pub fn holder_tag_or(h: Option<Holder>, fallback: i64) -> i64 {
+    match h {
+        Some(h) => h.tag + h.summary.count,
+        None => fallback,
+    }
+}
+
+/// A data class whose **fields** carry transparent wrappers.
+///
+/// This is what #289 changes and why it could not land alone. The field walk
+/// used to peel with `option_inner_type`, which reads the last path segment: a
+/// field spelled `Box<Option<i64>>` answered "not optional" and crossed as one
+/// boxed `java.lang.Long`. The model says `Optional`, so it now takes the
+/// decoupled `(present, value)` pair its bare twin does — and the emitter has to
+/// put the `Box` back when it rebuilds, or the migration turns a working boxed
+/// crossing into an `E0308`.
+///
+/// `plain` is the control: the two fields must produce the same wire, since the
+/// model says they are the same type.
+#[prebindgen]
+pub struct WrappedFields {
+    pub id: i64,
+    pub boxed: Box<Option<i64>>,
+    pub plain: Option<i64>,
+}
+
+/// Round-trip a [`WrappedFields`] so both field spellings cross in one call.
+#[prebindgen]
+pub fn wrapped_fields_sum(w: WrappedFields) -> i64 {
+    w.id + w.boxed.unwrap_or(0) + w.plain.unwrap_or(0)
+}
+
+/// Transparent wrappers on the **input** side, one per specialized lowering.
+///
+/// These lowerings do not *decode* their parameter, they **rebuild** it — a
+/// literal `Payload { .. }`, an `Option::Some(v)`, a `Vec<T>` pushed element by
+/// element — so the wrappers the classification erased have to go back on before
+/// the value reaches the signature. Rebuilding from the classification alone
+/// hands an `Option<Payload>` to a parameter spelled `Box<Option<Payload>>`:
+/// `E0308` (#292 item 3, which replaced #290's refusals).
+///
+/// Declared here rather than only in unit tests for the reason
+/// [`boxed_note_echo`] is: this crate's generated binding is `include!`d and
+/// **compiled**, so a missing or misplaced `Box::new` fails the build. Each has
+/// an unwrapped twin already declared — the surfaces must come out identical,
+/// since the model says the two spellings are one type.
+///
+/// The layers are covered separately because each is applied at a different
+/// point in the construction, and only a shape that exercises one can show it:
+/// the core wrap goes inside the present gate, and the optional wrap around it.
+///
+/// **`Box<&Payload>` is deliberately absent.** The flatten lowering could build
+/// it — it owns a local and `Box::new(&local)` is well-typed — but a declared
+/// parameter also needs a general converter entry, and a converter *produces* an
+/// owned value: there is nothing for a `Box<&T>` to borrow from that outlives
+/// the call (`E0106` on the generated signature). So the shape is refused at
+/// resolution, by the converter's nature rather than the wrapper's.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_payload_id(p: Box<Payload>) -> i64 {
+    p.id
+}
+
+/// The optional layer over the same rebuild — the wrap goes **around** the
+/// present gate, where the core wrap goes inside it.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_opt_payload_id(p: Box<Option<Payload>>) -> i64 {
+    p.as_ref().as_ref().map(|p| p.id).unwrap_or(-1)
+}
+
+/// The option-scalar lowering (`(present, value)` raw pair) under a wrapper —
+/// the rebuilt `Option` is re-wrapped before it reaches the signature.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_opt_priority_weight(p: Box<Option<Priority>>) -> i64 {
+    match *p {
+        Some(v) => priority_weight(v) as i64,
+        None => -1,
+    }
+}
+
+/// A wrapped **element** in the Vec-build path: the storage is `Vec<Box<Payload>>`
+/// and each push wraps its own literal.
+#[prebindgen]
+pub fn boxed_elem_id_sum(ps: Vec<Box<Payload>>) -> i64 {
+    ps.iter().map(|p| p.id).sum()
+}
+
+/// A wrapped **run**, by value: `mem::take` yields the owned `Vec`, so the
+/// `Box` costs nothing. The borrowed twin (`&Box<Vec<Payload>>`) is deliberately
+/// **not** declared — interposing a `Box` between the caller's Vec and the
+/// callee would require copying it, so that shape keeps the ordinary path.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_run_id_sum(ps: Box<Vec<Payload>>) -> i64 {
+    ps.iter().map(|p| p.id).sum()
+}
+
 /// Deliver a [`Ledger`] to a callback, so both conditional decompositions cross
 /// in ONE call — including the sum (`Report::outcome`) each one carries, whose
 /// `match` belongs inside the arm that binds the report.

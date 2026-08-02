@@ -1711,30 +1711,27 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
     assert!(ext.is_kotlin_enum(field("plain").syntax()));
 }
 
-/// A **transparently-wrapped** parameter spelling does not take a specialized
-/// lowering that would rebuild the unwrapped type.
+/// A **transparently-wrapped** parameter takes the same specialized lowering as
+/// its bare twin, and the emitter puts the wrapper back.
 ///
 /// The model erases `Box`/`Cow` ([`TRANSPARENT_WRAPPERS`]), so
-/// `Box<Option<Mode>>` classifies as `Optional` exactly as `Option<Mode>` does —
-/// and reading the layers off the model is what the reading-based probes were
-/// changed to do. But `build_option_scalar_input_plan` does not *decode* the
-/// parameter, it **rebuilds** it: the emitter writes a literal
-/// `Option::Some(v)` / `Option::None` and hands that to the source function.
-/// Handing a bare `Option<Mode>` to a parameter spelled `Box<Option<Mode>>` is
-/// an `E0308` in the generated crate.
+/// `Box<Option<Mode>>` classifies as `Optional` exactly as `Option<Mode>` does.
+/// But `build_option_scalar_input_plan` does not *decode* the parameter, it
+/// **rebuilds** it: the emitter writes a literal `Option::Some(v)` /
+/// `Option::None` and hands that to the source function, and handing a bare
+/// `Option<Mode>` to a parameter spelled `Box<Option<Mode>>` is an `E0308`.
 ///
-/// So the selection asks the spelling too ([`rebuilt_value_satisfies`]) and
-/// declines, exactly as `decoded_vec_satisfies` makes the general converter path
-/// decline `&Box<Vec<T>>` (see
-/// `a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec`).
+/// #290 closed that by **declining** the wrapped spelling. #292 item 3 replaced
+/// the refusal with the rebuild — `Box::new(..)` is exactly what the syntax
+/// asks for — so what this pins flipped: the wrapped parameter must now reach
+/// the decoupled `(present, value)` wire, *and* the Rust side must re-wrap.
 ///
-/// **What this pins is the refusal**, and it is asserted on the *pair* so it
-/// cannot pass vacuously: the bare twin must still take the decoupled
-/// `(present, value)` wire, and the wrapped one must not. The generated Rust is
-/// never compiled by this suite (#269), so the `E0308` itself is out of reach —
-/// the reachable property is that the emitter is never asked to write it.
+/// Asserted on the **pair** in both artifacts so it cannot pass vacuously: the
+/// bare twin must take the same Kotlin surface (or the wrapped one proves
+/// nothing) and must **not** get a `Box::new` (or the wrap assertion would hold
+/// for an emitter that wrapped everything).
 #[test]
-fn a_transparently_wrapped_option_does_not_take_the_present_value_pair() {
+fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
@@ -1802,18 +1799,36 @@ fn a_transparently_wrapped_option_does_not_take_the_present_value_pair() {
          otherwise this test proves nothing about the wrapped one:\n{kotlin}"
     );
 
-    // The finding: `Box<Option<Mode>>` must NOT, because the emitter would
-    // rebuild a bare `Option<Mode>` for a parameter that is not one.
+    // …and so does the wrapped one. The two spellings are one type to Kotlin,
+    // so an identical surface is the whole claim — a wrapper must not cost a
+    // parameter its lowering.
     assert!(
-        !kc.contains("zBoxed(modePresent"),
-        "`Box<Option<Mode>>` took the present/value lowering, which rebuilds a \
-         bare `Option<Mode>` and hands it to a fn expecting `Box<Option<Mode>>` \
-         — an E0308 in the generated crate:\n{kotlin}"
+        kc.contains("zBoxed(modePresent:Boolean,modeValue:Int"),
+        "`Box<Option<Mode>>` must take the same present/value lowering as its \
+         bare twin — the model erases the `Box`, and the emitter puts it back \
+         rather than declining the shape:\n{kotlin}"
     );
-    // What it takes instead: the ordinary boxed-`Int?` optional wire, whose
-    // converter is selected by `selector.rs` — the path that carries its own
-    // spelling guards.
-    assert!(kc.contains("zBoxed(mode:Int?"), "{kotlin}");
+
+    // The Rust half, which is what makes taking that lowering legal: the
+    // rebuilt `Option` is wrapped back up before it reaches the source fn.
+    // Without this the extern hands an `Option<Mode>` to a parameter spelled
+    // `Box<Option<Mode>>` — `E0308`, and no Kotlin assertion could see it.
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("letmode=::std::boxed::Box::new(if"),
+        "the rebuilt `Option` must be re-wrapped for the spelling:\n{rust}"
+    );
+    // The control on the Rust side too: exactly ONE of the two externs wraps,
+    // so the assertion above is about the spelling and not an unconditional
+    // `Box` the emitter adds to everything.
+    assert_eq!(
+        rc.matches("::std::boxed::Box::new(if").count(),
+        1,
+        "only the wrapped spelling gets a `Box::new`; the bare twin builds the \
+         `Option` and passes it as is:\n{rust}"
+    );
 }
 
 /// The transparent-wrapper guard runs **before** the model's layers are
@@ -1826,7 +1841,7 @@ fn a_transparently_wrapped_option_does_not_take_the_present_value_pair() {
 /// outer wrapper is never seen: the Vec-build plan is selected, its emitter
 /// hands the source fn a `&[Foo]` built from the transient Rust-side `Vec`, and
 /// the parameter still spells `Box<&Vec<Foo>>`. That is the same `E0308` class
-/// [`a_transparently_wrapped_option_does_not_take_the_present_value_pair`]
+/// [`a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt`]
 /// covers, reached by peeling in the wrong order.
 ///
 /// So this pins the **ordering**, which the shape-by-shape tests cannot: every

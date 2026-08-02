@@ -157,6 +157,31 @@ internal inline fun <R> withSortedHandleLocks(
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
 }
 
+/**
+ * An `Option<data class>` whose data class has a **required handle** field.
+ *
+ * The shape that proves an optional node's field decodes stay **inside** its
+ * presence gate. When the Kotlin object is null every leaf carries an inert
+ * placeholder, and a handle leaf's placeholder is pointer `0` — which the
+ * direct-handle decode reads as a closed handle, signals a binding error for,
+ * and returns from. Hoisting the decodes out of the gate therefore turns
+ * `null` into an error instead of `None`, and no fixture whose fields all
+ * decode successfully can tell the difference.
+ *
+ * `Summary` is consumed by value here, as a handle field is: the `Some` case
+ * hands over ownership, and the `None` case must never touch the slot.
+ */
+public data class Holder(val tag: Long, val summary: Summary) : AutoCloseable {
+    override fun close() {
+        summary.close()
+    }
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Long, summary: Long): Holder = Holder(tag, Summary(summary))
+    }
+}
+
 public interface PayloadApi {
     val id: Long
 
@@ -206,6 +231,27 @@ public data class Payload(override val id: Long, override val seq: Int, override
             flag: Boolean,
             label: String?,
         ): Payload = Payload(id, seq, value, flag, label)
+    }
+}
+
+/**
+ * A data class whose **fields** carry transparent wrappers.
+ *
+ * This is what #289 changes and why it could not land alone. The field walk
+ * used to peel with `option_inner_type`, which reads the last path segment: a
+ * field spelled `Box<Option<i64>>` answered "not optional" and crossed as one
+ * boxed `java.lang.Long`. The model says `Optional`, so it now takes the
+ * decoupled `(present, value)` pair its bare twin does — and the emitter has to
+ * put the `Box` back when it rebuilds, or the migration turns a working boxed
+ * crossing into an `E0308`.
+ *
+ * `plain` is the control: the two fields must produce the same wire, since the
+ * model says they are the same type.
+ */
+public data class WrappedFields(val id: Long, val boxed: Long?, val plain: Long?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(id: Long, boxed: Long?, plain: Long?): WrappedFields = WrappedFields(id, boxed, plain)
     }
 }
 
@@ -894,9 +940,34 @@ internal object CovNative {
         errorSink: Any,
     ): Any?
 
+    external fun boxedElemIdSum(ps: List<Payload>, errorSink: Any): Long
+
     external fun boxedLatest(a: Long, build: Any, errorSink: Any): Any?
 
     external fun boxedNoteEcho(note: String?, errorSink: Any): String?
+
+    external fun boxedOptPayloadId(
+        pPresent: Boolean,
+        pId: Long,
+        pSeq: Int,
+        pValue: Double,
+        pFlag: Boolean,
+        pLabel: String?,
+        errorSink: Any,
+    ): Long
+
+    external fun boxedOptPriorityWeight(pPresent: Boolean, pValue: Int, errorSink: Any): Long
+
+    external fun boxedPayloadId(
+        pId: Long,
+        pSeq: Int,
+        pValue: Double,
+        pFlag: Boolean,
+        pLabel: String?,
+        errorSink: Any,
+    ): Long
+
+    external fun boxedRunIdSum(ps: Long, errorSink: Any): Long
 
     external fun cacheConfigWeight(
         cachePresent: Boolean,
@@ -929,6 +1000,14 @@ internal object CovNative {
         pGrace: io.prebindgen.covertest.model.Hold?,
         errorSink: Any,
     ): HoldPolicy
+
+    external fun holderTagOr(
+        hPresent: Boolean,
+        hTag: Long,
+        hSummary: Long,
+        fallback: Long,
+        errorSink: Any,
+    ): Long
 
     external fun labelReverse(l: String, errorSink: Any): String
 
@@ -1248,6 +1327,15 @@ internal object CovNative {
     ): Any?
 
     external fun unsignedSeries(acc: Any?, fold: Any, errorSink: Any): Any?
+
+    external fun wrappedFieldsSum(
+        wId: Long,
+        wBoxedPresent: Boolean,
+        wBoxedValue: Long,
+        wPlainPresent: Boolean,
+        wPlainValue: Long,
+        errorSink: Any,
+    ): Long
 
     external fun constGetCoverMagic(errorSink: Any): Long
 

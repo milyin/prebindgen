@@ -4,9 +4,12 @@
 use super::*;
 // `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
 // classifier (via `use super::*`), and an explicit import would shadow it.
-use crate::api::core::{
-    flat::{self, TypeRef},
-    registry::Conversions,
+use crate::api::{
+    core::{
+        flat::{self, TypeRef},
+        registry::Conversions,
+    },
+    lang::jnigen::jni::trait_impl::{build_through_erased_wrappers, build_through_wrappers},
 };
 
 pub(crate) fn struct_input_body(
@@ -712,6 +715,11 @@ pub(crate) enum FlatFieldNode {
         direct_handle: bool,
         optional_handle: bool,
         rust_ty: Box<syn::Type>,
+        /// The transparent wrappers this field's spelling adds over its
+        /// classification, outermost first — put back wherever the decode
+        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
+        /// running the field's own converter, which already yields the spelling.
+        wrappers: Vec<&'static str>,
     },
     Nested {
         field: syn::Ident,
@@ -733,6 +741,11 @@ pub(crate) enum FlatFieldNode {
         /// Variants in declaration order; index == tag.
         variants: Vec<FlatSumVariant>,
         rust_ty: Box<syn::Type>,
+        /// The transparent wrappers this field's spelling adds over its
+        /// classification, outermost first — put back wherever the decode
+        /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
+        /// running the field's own converter, which already yields the spelling.
+        wrappers: Vec<&'static str>,
     },
 }
 
@@ -744,44 +757,119 @@ pub(crate) struct FlatSumVariant {
     pub fields: Vec<(syn::Member, usize)>,
 }
 
-/// Peel `&` then `Option<…>` off the model to reach the value a specialized
-/// lowering would **rebuild**, refusing at any layer whose spelling adds a
-/// wrapper the classification erased.
+/// The three layers a specialized struct lowering descends through, each paired
+/// with the reading whose spelling it must satisfy.
 ///
-/// One function because it is one rule. `kind` decides what the destination
-/// sees; the **conversion** follows the syntax, and these lowerings do not
-/// decode their parameter — they emit a literal `S { .. }`, wrap it in
-/// `Option::Some`, and hand it to the source function. Rebuilding from the
-/// classification alone produces the stripped type, so a parameter spelled
-/// `Box<Option<S>>` receives an `Option<S>`: `E0308` in the generated crate.
+/// `kind` decides what the destination sees; the **conversion** follows the
+/// syntax, and this lowering does not decode its parameter — it emits a literal
+/// `S { .. }`, wraps it in `Option::Some`, and hands it to the source function.
+/// Rebuilding from the classification alone produces the *stripped* type, so a
+/// parameter spelled `Box<Option<S>>` would receive an `Option<S>`: `E0308` in
+/// the generated crate.
 ///
-/// Refusing rather than rebuilding is a **gap, not a requirement**:
-/// `Box::new(v)` is exactly what the syntax asks for and is trivially
-/// emittable. It is left out here because doing it properly means teaching the
-/// converters to rebuild each wrapper, and `Cow` cannot be rebuilt from an
-/// owned payload at all. A wrapped spelling therefore keeps the general
-/// converter path, which is correct if less direct.
-///
-/// The wrapper question goes to [`TypeRef::erased_wrapper`] — the model holds
-/// both halves, so it is the only thing that can answer it, and no spelling is
-/// taken apart here.
-fn rebuildable_target(arg: &TypeRef) -> Option<(bool, bool, &TypeRef)> {
-    if arg.erased_wrapper().is_some() {
-        return None;
+/// So each layer keeps its own reading, and the emitter puts that layer's
+/// wrappers back as it builds outward — see [`RebuildTarget::wrap_core`] and its
+/// siblings. Collected on the way **down** because an erasure sits *outside* the
+/// layer it wraps: `Box<&S>` classifies as `Ref`, and reading `kind` first would
+/// leave the `Box` unreachable.
+pub(crate) struct RebuildTarget {
+    /// Wrappers over the borrow, if there is one — the `Box` of `Box<&S>`.
+    arg: Vec<&'static str>,
+    /// Wrappers over the `Option` — the `Box` of `Box<Option<S>>`.
+    under_borrow: Vec<&'static str>,
+    /// Wrappers over the `S { .. }` literal — the `Box` of `Option<Box<S>>`.
+    core: Vec<&'static str>,
+    /// `true` when the source fn takes `&Struct`.
+    pub by_ref: bool,
+    /// `true` when the value is `Option`-wrapped.
+    pub optional: bool,
+}
+
+impl RebuildTarget {
+    /// Put back the wrappers standing over the `S { .. }` literal —
+    /// `Option<Box<S>>` wraps here, not at [`Self::wrap_optional`].
+    pub fn wrap_core(&self, e: TokenStream) -> TokenStream {
+        Self::wrap(&self.core, e)
     }
+
+    /// Put back the wrappers over the `Option<..>` — the `Box` of
+    /// `Box<Option<S>>`.
+    ///
+    /// A no-op when the parameter is not optional, for the same reason
+    /// [`Self::wrap_arg`] is one when it is not a borrow: with no `Option` to
+    /// peel, `under_borrow` and `core` are the *same reading*, and wrapping at
+    /// both would apply one layer twice.
+    ///
+    /// Stated once as the rule the three share: **a layer's wrappers are
+    /// applied only where that layer exists**, and the innermost always applies.
+    pub fn wrap_optional(&self, e: TokenStream) -> TokenStream {
+        if !self.optional {
+            return e;
+        }
+        Self::wrap(&self.under_borrow, e)
+    }
+
+    /// Put back the wrappers over the **borrow** — the `Box` of `Box<&S>`,
+    /// which goes on after the call site has added its `&`.
+    ///
+    /// A no-op when the parameter is not a borrow, and that is not an
+    /// optimisation: with no `&` to peel, `arg` and `under_borrow` are the *same
+    /// reading*, so wrapping at both would apply one layer twice —
+    /// `Box::new(Box::new(v))` for a `Box<Option<S>>` parameter.
+    pub fn wrap_arg(&self, e: TokenStream) -> TokenStream {
+        if !self.by_ref {
+            return e;
+        }
+        Self::wrap(&self.arg, e)
+    }
+
+    /// Every wrap goes through the one helper, and every layer was proved
+    /// buildable by [`rebuildable_target`] before a plan existed — so a `None`
+    /// here would mean the descent and the emission disagree about the same
+    /// reading, which is a bug in this file rather than an unsupported source.
+    fn wrap(names: &[&'static str], e: TokenStream) -> TokenStream {
+        build_through_wrappers(names, e)
+            .expect("every layer was checked buildable when the plan was built")
+    }
+}
+
+/// Descend `&` then `Option<…>` off the model to the struct a specialized
+/// lowering will **rebuild**, keeping each layer's reading so its spelling can
+/// be restored.
+///
+/// One function because it is one rule, and the layers are checked **on the way
+/// down**: an erasure sits outside the layer it wraps, so `Box<&S>` classifies
+/// as `Ref` and interpreting `kind` before asking would discard the `Box`.
+///
+/// The only refusal left is a wrapper the adapter cannot **build** — `Cow`, by
+/// policy rather than by impossibility (see its `WRAPPER_OPS` row). A wrapped
+/// spelling that declines here keeps the general converter path, which is
+/// correct if less direct.
+fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
+    // A probe per layer: "can this spelling be rebuilt at all", asked before the
+    // peel that would hide it. The token is irrelevant — only the `Option` is.
+    let buildable = |t: &TypeRef| build_through_erased_wrappers(t, quote!(__probe)).map(|_| ());
+    buildable(arg)?;
     let by_ref = arg.borrow_target().is_some();
     let t1 = arg.borrow_target().unwrap_or(arg);
-    if t1.erased_wrapper().is_some() {
-        return None;
-    }
+    buildable(t1)?;
     let optional = t1.optional_inner().is_some();
     let inner = t1.optional_inner().unwrap_or(t1);
-    // The struct is rebuilt BY NAME (`S { .. }`), so its own spelling must name
-    // it — a `Box<S>` target would need the `Box::new` this emitter never writes.
-    if inner.erased_wrapper().is_some() {
-        return None;
-    }
-    Some((by_ref, optional, inner))
+    // The struct is rebuilt BY NAME (`S { .. }`), and its own spelling may add a
+    // wrapper over that name — `Box<S>` gets its `Box::new` at `wrap_core`.
+    buildable(inner)?;
+    // Only the wrapper LISTS are kept: they are all a rebuild uses, and a
+    // `TypeRef` apiece would put ~800 bytes into every `InputKind`.
+    Some((
+        RebuildTarget {
+            arg: arg.erased_wrappers(),
+            under_borrow: t1.erased_wrappers(),
+            core: inner.erased_wrappers(),
+            by_ref,
+            optional,
+        },
+        inner,
+    ))
 }
 
 /// A flattened plan for one struct input parameter. Built once by
@@ -794,6 +882,9 @@ pub(crate) struct FlatInputPlan {
     /// Vec/slice element lowering deliberately retains its previous
     /// non-recursive ABI; callers use this bit to decline recursive plans.
     pub contains_nested: bool,
+    /// The layer readings the rebuild has to satisfy — carried rather than
+    /// re-derived at the emission sites, so the descent is stated once.
+    pub target: RebuildTarget,
 }
 
 // `impl_into_target` lived here: it extracted `S` from an `impl Into<S> + …`
@@ -805,16 +896,11 @@ pub(crate) struct FlatInputPlan {
 // jnigen's actual `impl Into<…>` support is elsewhere: plugin wrapper exts build
 // a `ConverterImpl::function` by hand via `Declarations::input_converter_name`,
 // which never consults this.
-
-/// Peel a leading `&`/`&mut` then an `Option<…>` to expose the inner type used
-/// for enum/struct detection (`&Priority`, `Option<Priority>` → `Priority`).
-pub(crate) fn flat_probe_inner(ty: &syn::Type) -> syn::Type {
-    let stripped = match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    option_inner_type(&stripped).unwrap_or(stripped)
-}
+// `flat_probe_inner` lived here: it peeled `&` then `Option` off a SPELLING to
+// reach the type an enum probe should ask about. Its last caller now asks
+// `is_kotlin_enum_reading`, whose `enum_probe` peels the same two layers off the
+// model — so `Box<Priority>` probes as `Priority` where this answered about the
+// wrapper (#289).
 
 /// Kotlin literal that fills a leaf slot when its `Option<struct>` parent is
 /// absent (the `present` flag tells Rust to ignore it). `None` for nullable
@@ -926,9 +1012,10 @@ fn build_flat_sum_field(
     native_prefix: &str,
     field_ref: &str,
     nullable_access: bool,
-    rust_ty: &syn::Type,
+    field_reading: &TypeRef,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Option<FlatFieldNode> {
+    let rust_ty = field_reading.syntax();
     use crate::api::core::types_util::SumSpec;
 
     let ident = bare_path_ident(sum_ty)?;
@@ -1073,6 +1160,7 @@ fn build_flat_sum_field(
 
     let module = ext.fn_module(registry, &ident);
     Some(FlatFieldNode::Sum {
+        wrappers: field_reading.erased_wrappers(),
         field,
         tag_leaf,
         present_leaf,
@@ -1173,10 +1261,11 @@ pub(crate) fn build_flat_input_plan(
     arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {
     // 1. Resolve the struct target through `&` and `Option<…>` — off the model,
-    //    and refusing any layer whose spelling the rebuild could not satisfy.
-    let Some((by_ref, optional, inner)) = rebuildable_target(arg) else {
+    //    keeping each layer's reading so the rebuild can restore its spelling.
+    let Some((target, inner)) = rebuildable_target(arg) else {
         return Ok(None);
     };
+    let (by_ref, optional) = (target.by_ref, target.optional);
     // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
     // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
     // parameter spelled that way never becomes a reading and never reaches this
@@ -1190,14 +1279,18 @@ pub(crate) fn build_flat_input_plan(
     let Some(name) = id.ident() else {
         return Ok(None);
     };
-    let Some(st) = registry
-        .flat()
-        .struct_type(&name)
-        .map(|st| &st.origin.syntax)
-    else {
+    // The ELEMENT, not the item it was parsed from: its fields already carry
+    // readings, which is the whole of #289.
+    let Some(st) = registry.flat().struct_type(&name) else {
         return Ok(None);
     };
-    let key = inner.key();
+    // The DECLARATION is keyed by the type, not by the spelling: a
+    // `Box<Payload>` parameter is a `Payload` to Kotlin and must find
+    // `Payload`'s data-class declaration. Keying by spelling looked up
+    // `Box < Payload >`, found nothing, and silently dropped the parameter to
+    // the general converter — the flatten lowering was unreachable for every
+    // wrapped core.
+    let key = inner.stripped_key();
     let Some(cfg) = ext.types.get(&key) else {
         return Ok(None);
     };
@@ -1254,14 +1347,26 @@ pub(crate) fn build_flat_input_plan(
         root,
         by_ref,
         contains_nested,
+        target,
     }))
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
+/// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
+/// answer rather than a last-path-segment test on tokens that had a reading one
+/// level up.
+///
+/// That matters here and not only on principle. `option_inner_type` reads the
+/// last path segment, so a field spelled `Box<Option<T>>` answered "not
+/// optional" and crossed as one boxed object; the model says `Optional` and it
+/// takes the decoupled `(present, value)` pair like its bare twin. The emitter
+/// then has to put the `Box` back — which is why this migration could not land
+/// before the rebuild did.
 fn build_flat_struct_node(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    st: &syn::ItemStruct,
+    st: &flat::Struct,
     optional: bool,
     native_prefix: &str,
     access_prefix: &str,
@@ -1270,7 +1375,7 @@ fn build_flat_struct_node(
     stack: &mut Vec<TypeKey>,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Result<FlatStructNode, FlatInputError> {
-    let node_key = TypeKey::from_ident(&st.ident);
+    let node_key = TypeKey::from_ident(&st.name);
     if stack.contains(&node_key) {
         return Err(flat_error(
             root,
@@ -1285,13 +1390,6 @@ fn build_flat_struct_node(
             "recursive flattening exceeds depth 16",
         ));
     }
-    let syn::Fields::Named(named) = &st.fields else {
-        return Err(flat_error(
-            root,
-            native_prefix,
-            "only named-field structs can flatten",
-        ));
-    };
     stack.push(node_key);
     let present_ident = if optional {
         let native = format!("{native_prefix}_present");
@@ -1301,9 +1399,17 @@ fn build_flat_struct_node(
         None
     };
     let mut fields = Vec::new();
-    for field in &named.named {
-        let Some(fident) = field.ident.clone() else {
-            return Err(flat_error(root, native_prefix, "unnamed field"));
+    for field in &st.fields {
+        // A positional field has no name to derive a Kotlin property from, which
+        // is what "only named-field structs can flatten" used to say one level
+        // up. Said per field now, because the element models a field list rather
+        // than a `syn::Fields` shape.
+        let Some(fident) = field.name.clone() else {
+            return Err(flat_error(
+                root,
+                native_prefix,
+                "only named-field structs can flatten",
+            ));
         };
         let fcamel = mangle_kotlin_ident(&snake_to_camel(&fident.to_string()));
         let child_native = format!("{native_prefix}_{}", fident);
@@ -1312,12 +1418,17 @@ fn build_flat_struct_node(
         } else {
             format!("{access_prefix}.{fcamel}")
         };
-        let nested_ty = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+        // The optional layer off the MODEL, asked once and reused: every site
+        // below that wants "is this field optional" reads this, so they cannot
+        // disagree with each other the way seven independent path-segment tests
+        // could (#273).
+        let field_optional = field.ty.optional_inner().is_some();
+        let nested = field.ty.optional_inner().unwrap_or(&field.ty);
+        let nested_ty = nested.syntax().clone();
         // A data-carrying enum flattens into a tag plus one group per variant.
         // `None` means some payload is not leaf-shaped — fall through and let
         // it cross as one object through its own converter.
         if matches!(ext.type_kind(registry, &nested_ty), TypeKind::Sum) {
-            let field_optional = option_inner_type(&field.ty).is_some();
             if let Some(node) = build_flat_sum_field(
                 ext,
                 registry,
@@ -1340,11 +1451,11 @@ fn build_flat_struct_node(
         } = ext.type_kind(registry, &nested_ty)
         {
             if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
-                let child_optional = option_inner_type(&field.ty).is_some();
+                let child_optional = field_optional;
                 let node = build_flat_struct_node(
                     ext,
                     registry,
-                    &child.origin.syntax,
+                    child,
                     child_optional,
                     &child_native,
                     &field_ref,
@@ -1362,28 +1473,22 @@ fn build_flat_struct_node(
         }
 
         let path = child_native.clone();
-        let Some(fentry) = registry
-            .reading_of(&field.ty)
-            .and_then(|tr| registry.input_entry(&tr))
-        else {
+        // The field's own reading straight to its entry — the `reading_of` hop
+        // only ever recovered what the field already carried.
+        let Some(fentry) = registry.input_entry(&field.ty) else {
             return Err(flat_error(
                 root,
                 &path,
-                format!(
-                    "field type `{}` has no input converter",
-                    TypeKey::from_type(&field.ty)
-                ),
+                format!("field type `{}` has no input converter", field.ty.key()),
             ));
         };
 
         // Nullable primitive/enum with no niche: keep the allocation-free
         // `(present, value)` representation at every recursion depth.
-        if let Some(inner_ty) = option_inner_type(&field.ty) {
-            if !matches!(inner_ty, syn::Type::Reference(_)) {
-                if let Some(inner) = registry
-                    .reading_of(&inner_ty)
-                    .and_then(|tr| registry.input_entry(&tr))
-                {
+        if let Some(inner_reading) = field.ty.optional_inner() {
+            let inner_ty = inner_reading.syntax().clone();
+            if inner_reading.borrow_target().is_none() {
+                if let Some(inner) = registry.input_entry(inner_reading) {
                     if let Some(prim) = JniPrim::from_wire(&inner.destination) {
                         if inner.niches.clone().carve().is_none()
                             && inner.metadata.projection.is_none()
@@ -1414,7 +1519,8 @@ fn build_flat_struct_node(
                                 present_leaf: Some(present_index),
                                 direct_handle: false,
                                 optional_handle: false,
-                                rust_ty: Box::new(field.ty.clone()),
+                                rust_ty: Box::new(field.ty.syntax().clone()),
+                                wrappers: field.ty.erased_wrappers(),
                             });
                             continue;
                         }
@@ -1431,7 +1537,7 @@ fn build_flat_struct_node(
             // provides a niche already have a primitive destination and stay
             // a single leaf below.
             if proj.kind == ProjectionKind::Unsigned64 {
-                if let Some(inner_ty) = option_inner_type(&field.ty) {
+                if let Some(inner_ty) = field.ty.optional_inner().map(|t| t.syntax().clone()) {
                     if JniPrim::from_wire(&fentry.destination).is_none() {
                         let inner = registry
                             .reading_of(&inner_ty)
@@ -1466,7 +1572,8 @@ fn build_flat_struct_node(
                             present_leaf: Some(present_index),
                             direct_handle: false,
                             optional_handle: false,
-                            rust_ty: Box::new(field.ty.clone()),
+                            rust_ty: Box::new(field.ty.syntax().clone()),
+                            wrappers: field.ty.erased_wrappers(),
                         });
                         continue;
                     }
@@ -1481,7 +1588,7 @@ fn build_flat_struct_node(
                             "collections of handles retain their collection boundary",
                         ));
                     }
-                    let optional_handle = option_inner_type(&field.ty).is_some();
+                    let optional_handle = field_optional;
                     let value_index = push_handle_leaf(
                         leaves,
                         &child_native,
@@ -1495,12 +1602,13 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: true,
                         optional_handle,
-                        rust_ty: Box::new(field.ty.clone()),
+                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
                 }
                 ProjectionKind::Unsigned64 => {
-                    let is_opt = option_inner_type(&field.ty).is_some();
+                    let is_opt = field_optional;
                     let access = if is_opt || nullable_context {
                         let sentinel = proj
                             .niche_sentinels
@@ -1525,19 +1633,23 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: false,
                         optional_handle: false,
-                        rust_ty: Box::new(field.ty.clone()),
+                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
                 }
             }
         }
 
-        let field_is_option = option_inner_type(&field.ty).is_some();
+        let field_is_option = field_optional;
         // The enum branch is self-contained: when it coalesces (`?.value ?: 0`)
         // it already yields a non-null `Int`, so block (B) below must not append
         // a second default (which produced the dead `?: 0 ?: 0`, issue #144).
         let mut enum_coalesced = false;
-        let mut access = if ext.is_kotlin_enum(&flat_probe_inner(&field.ty)) {
+        // The enum probe off the MODEL (`enum_probe` peels the same `&`/`Option`
+        // layers `flat_probe_inner` peeled off tokens), so a `Box<Priority>`
+        // field answers as a `Priority` does.
+        let mut access = if ext.is_kotlin_enum_reading(&field.ty) {
             if field_is_option || nullable_context {
                 enum_coalesced = true;
                 format!("{field_ref}?.value ?: 0")
@@ -1568,13 +1680,14 @@ fn build_flat_struct_node(
             present_leaf: None,
             direct_handle: false,
             optional_handle: false,
-            rust_ty: Box::new(field.ty.clone()),
+            rust_ty: Box::new(field.ty.syntax().clone()),
+            wrappers: field.ty.erased_wrappers(),
         });
     }
     stack.pop();
     Ok(FlatStructNode {
-        struct_module: struct_module_path(ext, registry, &st.ident),
-        struct_ident: st.ident.clone(),
+        struct_module: struct_module_path(ext, registry, &st.name),
+        struct_ident: st.name.clone(),
         binding: format_ident!("__flat_{native_prefix}"),
         optional,
         present_ident,
@@ -1593,18 +1706,21 @@ pub(crate) fn render_flat_input_decode(
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
 ) -> (TokenStream, TokenStream) {
-    let reconstruct = render_flat_struct_node(plan, &plan.root, on_err);
+    let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err);
     let root_binding = &plan.root.binding;
     let prelude = quote! {
         #reconstruct
         let #arg_ident = #root_binding;
     };
-    let call_arg = if plan.by_ref {
+    // The borrow, then the wrappers standing OVER it — `Box<&S>` is
+    // `Box::new(&arg)`, in that order, because the erasure sits outside the
+    // layer it wraps and the `&` is that layer.
+    let borrowed = if plan.by_ref {
         quote!(&#arg_ident)
     } else {
         quote!(#arg_ident)
     };
-    (prelude, call_arg)
+    (prelude, plan.target.wrap_arg(borrowed))
 }
 
 fn render_entry_decode(
@@ -1653,9 +1769,14 @@ fn render_entry_decode(
     body
 }
 
+/// `target` is `Some` for the parameter's ROOT node, whose spelling may add
+/// transparent wrappers the rebuild has to restore, and `None` for a nested one
+/// — a nested struct is reached through a field, and a field's own wrappers are
+/// applied where that field is decoded.
 fn render_flat_struct_node(
     plan: &FlatInputPlan,
     node: &FlatStructNode,
+    target: Option<&RebuildTarget>,
     on_err: &TokenStream,
 ) -> TokenStream {
     let mut decodes = TokenStream::new();
@@ -1663,7 +1784,7 @@ fn render_flat_struct_node(
     for field in &node.fields {
         match field {
             FlatFieldNode::Nested { field, node: child } => {
-                decodes.extend(render_flat_struct_node(plan, child, on_err));
+                decodes.extend(render_flat_struct_node(plan, child, None, on_err));
                 let child_binding = &child.binding;
                 inits.push(quote!(#field: #child_binding));
             }
@@ -1671,6 +1792,7 @@ fn render_flat_struct_node(
             // variant. ONLY that arm's leaves are converted — the inert
             // groups carry wire defaults nobody reads.
             FlatFieldNode::Sum {
+                wrappers,
                 field,
                 tag_leaf,
                 present_leaf,
@@ -1724,21 +1846,33 @@ fn render_flat_struct_node(
                         }
                     }
                 };
+                // The rebuilt value, then the wrappers this FIELD's spelling
+                // adds — the slot is ascribed `#rust_ty`, so a `Box<Option<T>>`
+                // field needs its `Box` back. Only the rebuilding arms wrap: the
+                // fall-through below runs the field's own converter, which
+                // already yields the spelling.
+                let wrap = |e: TokenStream| {
+                    build_through_wrappers(wrappers, e)
+                        .expect("a field spelling the plan accepted is buildable")
+                };
                 if let Some(p) = present_leaf {
                     let present = &plan.leaves[*p].native_ident;
-                    decodes.extend(quote! {
-                        let #tmp: #rust_ty = if #present != 0u8 {
+                    let gated = wrap(quote! {
+                        if #present != 0u8 {
                             ::core::option::Option::Some(#build)
                         } else {
                             ::core::option::Option::None
-                        };
+                        }
                     });
+                    decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
                 } else {
-                    decodes.extend(quote! { let #tmp: #rust_ty = #build; });
+                    let built = wrap(build);
+                    decodes.extend(quote! { let #tmp: #rust_ty = #built; });
                 }
                 inits.push(quote!(#field: #tmp));
             }
             FlatFieldNode::Value {
+                wrappers,
                 field,
                 value_leaf,
                 present_leaf,
@@ -1749,11 +1883,15 @@ fn render_flat_struct_node(
                 let leaf = &plan.leaves[*value_leaf];
                 let wire = &leaf.native_ident;
                 let tmp = format_ident!("{}_{}", node.binding, field);
+                let wrap = |e: TokenStream| {
+                    build_through_wrappers(wrappers, e)
+                        .expect("a field spelling the plan accepted is buildable")
+                };
                 if *direct_handle {
                     let target = option_inner_type(rust_ty).unwrap_or_else(|| (**rust_ty).clone());
                     if *optional_handle {
-                        decodes.extend(quote! {
-                            let #tmp: #rust_ty = if #wire == 0 {
+                        let gated = wrap(quote! {
+                            if #wire == 0 {
                                 ::core::option::Option::None
                             } else {
                                 if (#wire & 1) == 1 {
@@ -1763,8 +1901,9 @@ fn render_flat_struct_node(
                                 ::core::option::Option::Some(unsafe {
                                     *::std::boxed::Box::from_raw(#wire as *mut #target)
                                 })
-                            };
+                            }
                         });
+                        decodes.extend(quote! { let #tmp: #rust_ty = #gated; });
                     } else {
                         decodes.extend(quote! {
                             if #wire == 0 || (#wire & 1) == 1 {
@@ -1785,14 +1924,15 @@ fn render_flat_struct_node(
                         let present = &plan.leaves[*present_index].native_ident;
                         let inner_tmp = format_ident!("{}_value", tmp);
                         let decode = render_entry_decode(entry, wire, &inner_tmp, on_err);
-                        decodes.extend(quote! {
-                            let #tmp = if #present != 0u8 {
+                        let gated = wrap(quote! {
+                            if #present != 0u8 {
                                 #decode
                                 ::core::option::Option::Some(#inner_tmp)
                             } else {
                                 ::core::option::Option::None
-                            };
+                            }
                         });
+                        decodes.extend(quote! { let #tmp = #gated; });
                     } else {
                         decodes.extend(render_entry_decode(entry, wire, &tmp, on_err));
                     }
@@ -1804,21 +1944,50 @@ fn render_flat_struct_node(
     let module = &node.struct_module;
     let sid = &node.struct_ident;
     let binding = &node.binding;
-    let built = quote!(#module::#sid { #(#inits),* });
+    // The struct literal, then the wrappers the CORE spelling adds over it —
+    // `Option<Box<S>>` gets its `Box::new` here, inside the present gate, not
+    // around it. `None` for a nested node, whose own layers are its field's
+    // question rather than the parameter's.
+    let built = match target {
+        Some(t) => t.wrap_core(quote!(#module::#sid { #(#inits),* })),
+        None => quote!(#module::#sid { #(#inits),* }),
+    };
+    // …and the wrappers over the `Option` (or over the bare value) go around
+    // the whole gate — the `Box` of `Box<Option<S>>`.
+    let outer = |e: TokenStream| match target {
+        Some(t) => t.wrap_optional(e),
+        None => e,
+    };
     if node.optional {
         let present = node.present_ident.as_ref().expect("optional node has gate");
-        quote! {
-            let #binding = if #present != 0u8 {
+        // `#decodes` belongs **inside** the true arm, and that is a correctness
+        // requirement rather than a tidiness one: when the Kotlin object is null
+        // its leaves carry inert placeholders, and decoding them is not
+        // side-effect-free. A required handle field arrives as pointer `0`, so
+        // an unconditional direct-handle decode calls `signal_binding_error` and
+        // returns instead of delivering `None`; an enum with no discriminant `0`
+        // and a fallible custom converter fail on their placeholders the same
+        // way.
+        //
+        // The wrapper goes around the whole conditional, which is what the
+        // `Option` layer wraps — so `outer` applies to the `if`, never between
+        // it and the decodes.
+        let gate = outer(quote! {
+            if #present != 0u8 {
                 #decodes
                 ::core::option::Option::Some(#built)
             } else {
                 ::core::option::Option::None
-            };
+            }
+        });
+        quote! {
+            let #binding = #gate;
         }
     } else {
+        let value = outer(built);
         quote! {
             #decodes
-            let #binding = #built;
+            let #binding = #value;
         }
     }
 }
@@ -1852,6 +2021,17 @@ pub(crate) struct OptionScalarInputPlan {
     pub value_kt_type: String,
     /// Kotlin zero literal filling the value leaf when the option is absent.
     pub value_kt_zero: String,
+    /// The transparent wrappers the parameter's spelling adds over `Optional`,
+    /// outermost first — what the emitter puts back.
+    ///
+    /// This plan **rebuilds** its parameter — the emitter writes a literal
+    /// `Option::Some(v)` / `Option::None` and hands it to the source fn — so a
+    /// parameter spelled `Box<Option<T>>` must receive a `Box`, not the bare
+    /// `Option` the classification names. Carried rather than re-derived at the
+    /// two emission sites, which would be the same rule stated twice; the list
+    /// rather than the reading, because that is all a rebuild uses and this
+    /// plan sits in `InputKind`, whose size every variant pays.
+    pub arg_wrappers: Vec<&'static str>,
     /// `true` when the inner is an `enum_class` — the call site reads `?.value`.
     pub is_enum: bool,
 }
@@ -1868,13 +2048,13 @@ pub(crate) fn build_option_scalar_input_plan(
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Option<OptionScalarInputPlan> {
-    // The optional layer off the model — but the emitter rebuilds a bare
-    // `Option::Some(v)` and hands it to the source fn, so a spelling the model
-    // erased a wrapper from could not receive it. Conversion follows the syntax;
-    // see [`rebuildable_target`], which applies the same rule to the struct path.
-    if arg.erased_wrapper().is_some() {
-        return None;
-    }
+    // The wrappers this spelling adds over `Optional` have to be BUILDABLE, not
+    // absent: the emitter rebuilds a bare `Option::Some(v)` and hands it to the
+    // source fn, so a parameter spelled `Box<Option<T>>` receives a `Box`.
+    // Asked here, before the peel, because an erasure sits outside the layer it
+    // wraps — and asked as "can I build it" rather than "is there one", so the
+    // only refusal left is a wrapper `WRAPPER_OPS` declines (`Cow`).
+    build_through_erased_wrappers(arg, quote!(__probe))?;
     let inner = arg.optional_inner()?;
     // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
     if inner.borrow_target().is_some() {
@@ -1912,6 +2092,7 @@ pub(crate) fn build_option_scalar_input_plan(
         value_kt_type: prim.kotlin_type().to_string(),
         value_kt_zero: prim.kotlin_zero().to_string(),
         is_enum,
+        arg_wrappers: arg.erased_wrappers(),
     })
 }
 

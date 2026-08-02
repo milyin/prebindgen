@@ -63,9 +63,14 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
 - `blob_value_new` — `fun blobValueNew(secs: Long, id: ByteArray, chunks: List<ByteArray>, onError: JniErrorHandler<BlobValue>): BlobValue`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
+- `boxed_elem_id_sum` — `fun boxedElemIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `boxed_latest` — `fun <R> boxedLatest(a: SummaryVault, onError: JniErrorHandler<R?>, build: SummaryBuilder<R>): R?`
   - shaped by: return `Summary` decomposed → [count, total] (Callback delivery)
 - `boxed_note_echo` — `fun boxedNoteEcho(note: String?, onError: JniErrorHandler<String?>): String?`
+- `boxed_opt_payload_id` — `fun boxedOptPayloadId(p: Payload?, onError: JniErrorHandler<Long>): Long`
+- `boxed_opt_priority_weight` — `fun boxedOptPriorityWeight(p: Priority?, onError: JniErrorHandler<Long>): Long`
+- `boxed_payload_id` — `fun boxedPayloadId(p: Payload, onError: JniErrorHandler<Long>): Long`
+- `boxed_run_id_sum` — `fun boxedRunIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`
@@ -76,6 +81,7 @@ Base package: `io.prebindgen.covertest`
 - `hold_echo` — `fun holdEcho(h: Hold, onError: JniErrorHandler<Hold>): Hold`
   - shaped by: return `Hold` decomposed → [tag, for_v0] (Callback delivery)
 - `hold_policy_echo` — `fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy>): HoldPolicy`
+- `holder_tag_or` — `fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
 - `label_series_echo` — `fun labelSeriesEcho(labels: List<String>, onError: JniErrorHandler<List<String>>): List<String>`
 - `ledger_each` — `fun ledgerEach(n: Long, sink: LedgerCallback, onError: JniErrorHandler<Unit>)`
@@ -117,6 +123,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Unsigned` decomposed → [byte, short, int, long, maybeLong] (Callback delivery)
 - `unsigned_series` — `fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong>`
   - shaped by: return `u64` decomposed → [] (Callback delivery)
+- `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`
 
 ## package `io.prebindgen.covertest.storage`
 
@@ -192,6 +199,7 @@ Base package: `io.prebindgen.covertest`
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
 - `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
+- `Holder`: data_class → `io.prebindgen.covertest.Holder` (wire `jni :: objects :: JObject`)
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
@@ -218,6 +226,7 @@ Base package: `io.prebindgen.covertest`
 - `Summary`: ptr_class → `io.prebindgen.covertest.analytics.Summary` (wire `jni :: sys :: jlong`)
 - `Tagged`: data_class → `io.prebindgen.covertest.model.Tagged` (wire `jni :: objects :: JObject`)
 - `Unsigned`: data_class → `io.prebindgen.covertest.model.Unsigned` (wire `jni :: objects :: JObject`)
+- `WrappedFields`: data_class → `io.prebindgen.covertest.WrappedFields` (wire `jni :: objects :: JObject`)
 
 ## conversions
 

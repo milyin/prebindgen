@@ -4,7 +4,9 @@
 use super::*;
 use crate::api::{
     core::{registry::Conversions, types_util::result_ok_type},
-    lang::jnigen::jni::trait_impl::read_through_erased_wrappers,
+    lang::jnigen::jni::trait_impl::{
+        build_through_erased_wrappers, build_through_wrappers, read_through_erased_wrappers,
+    },
 };
 
 pub(crate) fn emit_jni_function_wrapper(
@@ -558,19 +560,30 @@ fn emit_input_param(
             wire_params.push(quote!(#vid: #vwire));
             let conv = &sp.inner_conv;
             let tmp = format_ident!("__{}_val", arg_ident);
+            // The rebuilt `Option`, then the wrappers the parameter's spelling
+            // adds over it — `Box<Option<T>>` gets its `Box` back here, because
+            // nothing between this and the source call re-spells the value.
+            // The plan only exists when the build resolves, so this cannot fail.
+            let built = build_through_wrappers(
+                &sp.arg_wrappers,
+                quote! {
+                    if #pid != 0u8 {
+                        let #tmp = match #conv(&mut env, &#vid) {
+                            ::core::result::Result::Ok(__v) => __v,
+                            ::core::result::Result::Err(__e) => {
+                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                                return #on_err;
+                            }
+                        };
+                        ::core::option::Option::Some(#tmp)
+                    } else {
+                        ::core::option::Option::None
+                    }
+                },
+            )
+            .expect("an option-scalar plan is built only for a buildable spelling");
             prelude.push(quote! {
-                let #arg_ident = if #pid != 0u8 {
-                    let #tmp = match #conv(&mut env, &#vid) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                            return #on_err;
-                        }
-                    };
-                    ::core::option::Option::Some(#tmp)
-                } else {
-                    ::core::option::Option::None
-                };
+                let #arg_ident = #built;
             });
             (wire_params, prelude, quote!(#arg_ident))
         }
@@ -589,15 +602,27 @@ fn emit_input_param(
             let handle_ident = format_ident!("{}_handle", arg_ident);
             wire_params.push(quote!(#handle_ident: jni::sys::jlong));
             if *by_ref {
+                // `vec_build_elem` refuses a wrapped run on this path, so the
+                // borrow is the parameter's own spelling and there is nothing
+                // to put back.
                 prelude.push(quote!(
                     let #arg_ident: &[#elem] =
                         unsafe { &*(#handle_ident as *const Vec<#elem>) };
                 ));
             } else {
-                prelude.push(quote!(
-                    let #arg_ident: Vec<#elem> =
-                        unsafe { ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>)) };
-                ));
+                // By value the local is owned, so the run's wrappers go back on
+                // for free — `Box<Vec<T>>` is `Box::new(mem::take(..))`. The
+                // ascription is dropped rather than restated: the wrapped
+                // spelling is what the expression now produces, and naming it
+                // here would be the same fact written twice.
+                let taken = build_through_erased_wrappers(
+                    &leaf.reading,
+                    quote!(unsafe {
+                        ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>))
+                    }),
+                )
+                .expect("vec_build_elem accepted this run spelling");
+                prelude.push(quote!(let #arg_ident = #taken;));
             }
             (wire_params, prelude, quote!(#arg_ident))
         }
@@ -843,19 +868,31 @@ pub(crate) fn emit_expanded_param(
             let inner_conv = &sp.inner_conv;
             wire_params.push(quote!(#present_ident: jni::sys::jboolean));
             wire_params.push(quote!(#value_ident: #value_wire));
+            // The local is ascribed the leaf's own SPELLING (`leaf_ty`), so the
+            // rebuilt `Option` has to be wrapped back up to match it — the same
+            // rule as the parameter path above, and the reason the ascription
+            // can stay as written rather than being weakened to the stripped
+            // type.
+            let built = build_through_wrappers(
+                &sp.arg_wrappers,
+                quote! {
+                    if #present_ident != 0u8 {
+                        let __v = match #inner_conv(&mut env, &#value_ident) {
+                            ::core::result::Result::Ok(__v) => __v,
+                            ::core::result::Result::Err(__e) => {
+                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                                return #on_err;
+                            }
+                        };
+                        ::core::option::Option::Some(__v)
+                    } else {
+                        ::core::option::Option::None
+                    }
+                },
+            )
+            .expect("an option-scalar plan is built only for a buildable spelling");
             prelude.push(quote!(
-                let #local: #leaf_ty = if #present_ident != 0u8 {
-                    let __v = match #inner_conv(&mut env, &#value_ident) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                            return #on_err;
-                        }
-                    };
-                    ::core::option::Option::Some(__v)
-                } else {
-                    ::core::option::Option::None
-                };
+                let #local: #leaf_ty = #built;
             ));
             leaf_locals.push(local);
             continue;

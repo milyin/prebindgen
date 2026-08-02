@@ -44,7 +44,16 @@ import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
 import io.prebindgen.covertest.model.blobValueEcho
+import io.prebindgen.covertest.Holder
+import io.prebindgen.covertest.WrappedFields
+import io.prebindgen.covertest.model.boxedElemIdSum
 import io.prebindgen.covertest.model.boxedLatest
+import io.prebindgen.covertest.model.boxedOptPayloadId
+import io.prebindgen.covertest.model.boxedOptPriorityWeight
+import io.prebindgen.covertest.model.boxedPayloadId
+import io.prebindgen.covertest.model.boxedRunIdSum
+import io.prebindgen.covertest.model.holderTagOr
+import io.prebindgen.covertest.model.wrappedFieldsSum
 import io.prebindgen.covertest.model.boxedNoteEcho
 import io.prebindgen.covertest.model.plainNoteEcho
 import io.prebindgen.covertest.model.blobValueNew
@@ -1449,6 +1458,39 @@ fun main() {
         archiveStore(a, 0, 5L, 100.0, null, boom)
         check(boxedLatest(a, boom) { count, total -> count to total } == 5L to 100.0)
         a.close()
+
+        // INPUT side (#292 item 3). These lowerings REBUILD their parameter, so
+        // the wrapper has to go back on before the value reaches the signature.
+        // Every surface below is the unwrapped one — a wrapper must not cost a
+        // parameter its lowering, and must not show up in Kotlin either.
+        val p = payload(7L, 1, 2.0, true, "w")
+        check(boxedPayloadId(p, boom) == 7L)              // core wrap
+        check(boxedOptPayloadId(p, boom) == 7L)           // core + optional wrap
+        check(boxedOptPayloadId(null, boom) == -1L)       // …and the absent arm
+        check(boxedOptPriorityWeight(Priority.HIGH, boom) == 10L)  // option-scalar
+        check(boxedOptPriorityWeight(null, boom) == -1L)
+        val many = listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null))
+        check(boxedElemIdSum(many, boom) == 3L)           // wrapped element
+        check(boxedRunIdSum(many, boom) == 3L)            // wrapped run, by value
+
+        // FIELDS (#289). `boxed: Box<Option<Long>>` and `plain: Option<Long>`
+        // are one type to the model, so both cross as `Long?` on the decoupled
+        // `(present, value)` pair — the boxed one used to be read by path
+        // segment as "not optional" and crossed as one boxed object.
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, 4L), boom) == 7L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, 4L), boom) == 5L)
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, null), boom) == 3L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, null), boom) == 1L)
+
+        // An absent `Option<data class>` must deliver `None`, not an error. Its
+        // leaves are inert placeholders when the object is null, and a required
+        // HANDLE field's placeholder is pointer 0 — which the direct-handle
+        // decode reads as a closed handle. So this is the shape that proves the
+        // field decodes stay inside the presence gate; a fixture whose fields
+        // all decode successfully cannot tell the two orders apart.
+        check(holderTagOr(null, -9L, boom) == -9L)
+        val held = Summary.of(4L, 8.0, boom)
+        check(holderTagOr(Holder(3L, held), -9L, boom) == 7L)  // 3 + count(4)
     }
 
     // ── Vec<String> fold + Option<data-class> input + plain String return ────

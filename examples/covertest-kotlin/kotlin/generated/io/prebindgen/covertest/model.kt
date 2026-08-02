@@ -3,6 +3,7 @@ package io.prebindgen.covertest.model
 
 import io.prebindgen.covertest.CovNative
 import io.prebindgen.covertest.DurationCallback
+import io.prebindgen.covertest.Holder
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.LedgerBuilder
@@ -10,6 +11,7 @@ import io.prebindgen.covertest.LedgerCallback
 import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
+import io.prebindgen.covertest.WrappedFields
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryBuilder
@@ -1620,6 +1622,140 @@ public fun boxedNoteEcho(note: String?, onError: JniErrorHandler<String?>): Stri
 public fun plainNoteEcho(note: String?, onError: JniErrorHandler<String?>): String? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.plainNoteEcho(note, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Round-trip a [`WrappedFields`] so both field spellings cross in one call. */
+public fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.wrappedFieldsSum(
+        w.id,
+        w.boxed != null,
+        w.boxed ?: 0L,
+        w.plain != null,
+        w.plain ?: 0L,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * `tag` when the holder is present, `fallback` when it is absent — so the
+ * absent arm is observable as a **value** rather than as an error.
+ */
+public fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long {
+    if (h?.summary?.isClosed() == true) return onError.run("Operation on a closed native handle.")
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        h?.summary?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val hSummary_ptr = h?.summary?.ptr ?: 0L
+            try {
+                CovNative.holderTagOr(h != null, h?.tag ?: 0L, hSummary_ptr, fallback, __bcap)
+            } finally {
+                h?.summary?.markConsumed()
+            }
+        }
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Transparent wrappers on the **input** side, one per specialized lowering.
+ *
+ * These lowerings do not *decode* their parameter, they **rebuild** it — a
+ * literal `Payload { .. }`, an `Option::Some(v)`, a `Vec<T>` pushed element by
+ * element — so the wrappers the classification erased have to go back on before
+ * the value reaches the signature. Rebuilding from the classification alone
+ * hands an `Option<Payload>` to a parameter spelled `Box<Option<Payload>>`:
+ * `E0308` (#292 item 3, which replaced #290's refusals).
+ *
+ * Declared here rather than only in unit tests for the reason
+ * [`boxed_note_echo`] is: this crate's generated binding is `include!`d and
+ * **compiled**, so a missing or misplaced `Box::new` fails the build. Each has
+ * an unwrapped twin already declared — the surfaces must come out identical,
+ * since the model says the two spellings are one type.
+ *
+ * The layers are covered separately because each is applied at a different
+ * point in the construction, and only a shape that exercises one can show it:
+ * the core wrap goes inside the present gate, and the optional wrap around it.
+ *
+ * **`Box<&Payload>` is deliberately absent.** The flatten lowering could build
+ * it — it owns a local and `Box::new(&local)` is well-typed — but a declared
+ * parameter also needs a general converter entry, and a converter *produces* an
+ * owned value: there is nothing for a `Box<&T>` to borrow from that outlives
+ * the call (`E0106` on the generated signature). So the shape is refused at
+ * resolution, by the converter's nature rather than the wrapper's.
+ */
+public fun boxedPayloadId(p: Payload, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.boxedPayloadId(p.id, p.seq, p.value, p.flag, p.label, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * The optional layer over the same rebuild — the wrap goes **around** the
+ * present gate, where the core wrap goes inside it.
+ */
+public fun boxedOptPayloadId(p: Payload?, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.boxedOptPayloadId(
+        p != null,
+        p?.id ?: 0L,
+        p?.seq ?: 0,
+        p?.value ?: 0.0,
+        p?.flag ?: false,
+        p?.label,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * The option-scalar lowering (`(present, value)` raw pair) under a wrapper —
+ * the rebuilt `Option` is re-wrapped before it reaches the signature.
+ */
+public fun boxedOptPriorityWeight(p: Priority?, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.boxedOptPriorityWeight(p != null, p?.value ?: 0, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * A wrapped **element** in the Vec-build path: the storage is `Vec<Box<Payload>>`
+ * and each push wraps its own literal.
+ */
+public fun boxedElemIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.boxedElemIdSum(ps, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * A wrapped **run**, by value: `mem::take` yields the owned `Vec`, so the
+ * `Box` costs nothing. The borrowed twin (`&Box<Vec<Payload>>`) is deliberately
+ * **not** declared — interposing a `Box` between the caller's Vec and the
+ * callee would require copying it, so that shape keeps the ordinary path.
+ */
+public fun boxedRunIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __vec_ps = CovNative.payloadVecNew(ps.size)
+    val __ret = try {
+        for (__e in ps) {
+            CovNative.payloadVecPush(__vec_ps, __e.id, __e.seq, __e.value, __e.flag, __e.label)
+        }
+        CovNative.boxedRunIdSum(__vec_ps, __bcap)
+    } finally {
+        CovNative.payloadVecFree(__vec_ps)
+    }
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
