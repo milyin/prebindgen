@@ -570,19 +570,16 @@ pub(crate) fn build_handle_destructor_items(
             continue;
         }
         // Skip handles the (feature-aware) scan never references — their
-        // type may not be in scope in the generated module.
-        let ty = key.to_type();
-        if registry
-            .reading_of(&ty)
-            .and_then(|tr| registry.input_entry(&tr))
-            .is_none()
-            && registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.output_entry(&tr))
-                .is_none()
-        {
+        // type may not be in scope in the generated module. Keyed directly:
+        // this used to spell the key into tokens purely so `reading_of` could
+        // re-key them, twice (#291).
+        let Some(reading) = registry.reading(key) else {
+            continue;
+        };
+        if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none() {
             continue;
         }
+        let ty = reading.syntax().clone();
         let class_fqn = cfg
             .name_spec
             .as_ref()

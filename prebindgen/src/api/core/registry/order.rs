@@ -60,15 +60,23 @@ impl<M> Registry<M> {
             return;
         }
         let (dir, key) = node.clone();
-        let ty = key.to_type();
+        // Every node this walk reaches has a cell: the roots are the table's own
+        // keys, and each edge below is filtered by `contains_key`. So the
+        // spelling `plan_edges` needs is the reading the registry already
+        // stored — not one re-derived from the key (#291).
+        let plan_edges = self
+            .type_table(dir)
+            .get(&key)
+            .map(|cell| self.plan_edges(dir, cell.subject.syntax()))
+            .unwrap_or_default();
         let mut edges: Vec<Crossing> = self
-            .immediate_edges(dir, &ty)
+            .immediate_edges(dir, &key)
             .into_iter()
             // The structural edges arrive as readings, so the key is the
             // model's own answer rather than one re-derived from a spelling.
             .map(|(d, t)| (d, t.key()))
             .chain(
-                self.plan_edges(dir, &ty)
+                plan_edges
                     .into_iter()
                     .map(|(d, t)| (d, TypeKey::from_type(&t))),
             )

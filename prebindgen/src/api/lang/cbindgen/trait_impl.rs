@@ -532,18 +532,16 @@ impl CbindgenBuilder {
     fn prereq_opaque_handles(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.opaque) {
-            let ty = key.to_type();
-            if registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.input_entry(&tr))
-                .is_none()
-                && registry
-                    .reading_of(&ty)
-                    .and_then(|tr| registry.output_entry(&tr))
-                    .is_none()
+            // Keyed directly: this used to spell the key into tokens purely so
+            // `reading_of` could re-key them, twice (#291).
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
             {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let c_struct = self.c_type_ident(&ty);
             // Opaque/incomplete C type: the handle is `#c_struct *`, which IS the
             // `Box::into_raw` pointer to the source value.
@@ -575,18 +573,14 @@ impl CbindgenBuilder {
     fn prereq_data_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.data) {
-            let ty = key.to_type();
-            if registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.input_entry(&tr))
-                .is_none()
-                && registry
-                    .reading_of(&ty)
-                    .and_then(|tr| registry.output_entry(&tr))
-                    .is_none()
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
             {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let Some(fields) = self.struct_fields(registry, &ty) else {
                 continue;
             };
@@ -625,18 +619,14 @@ impl CbindgenBuilder {
         let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
         vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
         for (key, cfg) in vo {
-            let ty = key.to_type();
-            if registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.input_entry(&tr))
-                .is_none()
-                && registry
-                    .reading_of(&ty)
-                    .and_then(|tr| registry.output_entry(&tr))
-                    .is_none()
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
             {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let src = self.src_ty(&ty);
             let opaque = &cfg.opaque;
             // `repr_c_struct`: the opaque counterpart is an auto-generated
@@ -830,18 +820,14 @@ impl CbindgenBuilder {
     fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
-            let ty = key.to_type();
-            if registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.input_entry(&tr))
-                .is_none()
-                && registry
-                    .reading_of(&ty)
-                    .and_then(|tr| registry.output_entry(&tr))
-                    .is_none()
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
             {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
@@ -880,18 +866,14 @@ impl CbindgenBuilder {
     fn prereq_tagged_unions(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
-            let ty = key.to_type();
-            if registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.input_entry(&tr))
-                .is_none()
-                && registry
-                    .reading_of(&ty)
-                    .and_then(|tr| registry.output_entry(&tr))
-                    .is_none()
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
             {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
@@ -1620,7 +1602,13 @@ impl CbindgenBuilder {
         built: &Building<'_, ()>,
     ) -> Option<ConverterImpl<()>> {
         let (dir, key) = crossing;
-        let ty = key.to_type();
+        // The reading the scan already took for this crossing, fetched by the
+        // key the crossing IS — the same migration the jnigen twin made in #284,
+        // in place of `key -> to_type() -> spelling` (#291). Every crossing
+        // `convert_with` hands out comes from a type table, so it has a cell.
+        // The selectors still take the spelling: moving cbindgen's selector
+        // chain onto readings is its own change.
+        let ty = built.reading(key)?.syntax().clone();
         match dir {
             Direction::Input => self.select_input_type(&ty, built).or_else(|| {
                 let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
