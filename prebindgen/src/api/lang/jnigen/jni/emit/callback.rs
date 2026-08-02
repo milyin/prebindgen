@@ -21,14 +21,14 @@ use crate::api::core::registry::Conversions;
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
     ext: &Declarations,
-    args: &[syn::Type],
+    args: &[crate::api::core::flat::TypeRef],
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
         "Fn({})",
         args.iter()
-            .map(|t| TypeKey::from_type(t).to_string())
+            .map(|t| t.key().to_string())
             .collect::<Vec<_>>()
             .join(", ")
     );
@@ -46,7 +46,13 @@ pub(crate) fn callback_input(
     let arg_names: Vec<syn::Ident> = (0..args.len())
         .map(|i| format_ident!("__cb_arg{}", i))
         .collect();
-    let arg_pat_ty: Vec<TokenStream> = args.iter().map(|t| quote!(#t)).collect();
+    let arg_pat_ty: Vec<TokenStream> = args
+        .iter()
+        .map(|t| {
+            let t = &t.origin.syntax;
+            quote!(#t)
+        })
+        .collect();
 
     // Per-arg encode preludes binding the typed `run`'s args in declared
     // order (a decomposed arg contributes one arg per leaf). Each entry of
@@ -71,7 +77,7 @@ pub(crate) fn callback_input(
         // user callback's `run(List<T>)`. Reuses the OUTPUT fold's folder
         // interface + appender singleton, driven from the trampoline.
         if let Some(plan) = registry
-            .callback_arg_plan(&TypeKey::from_type(arg_ty))
+            .callback_arg_plan(&arg_ty.key())
             .filter(|p| super::render::is_iterable_fold(&p.shape))
         {
             // Every leaf converter must already be resolved (deferral safety).
@@ -162,7 +168,7 @@ pub(crate) fn callback_input(
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
-        if let Some(plan) = registry.callback_arg_plan(&TypeKey::from_type(arg_ty)) {
+        if let Some(plan) = registry.callback_arg_plan(&arg_ty.key()) {
             // Deferral safety: every leaf converter (and identity-leaf
             // projection) must already be resolved — return None so the rank
             // resolver retries this converter later otherwise. A synthesized
@@ -193,15 +199,18 @@ pub(crate) fn callback_input(
         // converter and clone the borrow (the callback only borrows the value). The
         // `data_class` converter composes the whole object via `fromParts`, so the
         // Kotlin `run(t: T)` receives a ready-made `T`.
-        let (cb_val, arg_entry) = match registry.output_entry(arg_ty) {
+        let (cb_val, arg_entry) = match registry.output_entry(&arg_ty.origin.syntax) {
             Some(e) => (quote!(#cb_arg), e),
-            None => match arg_ty {
-                syn::Type::Reference(r) => {
-                    let core = (*r.elem).clone();
-                    (quote!((#cb_arg).clone()), registry.output_entry(&core)?)
-                }
-                _ => return None,
-            },
+            // A borrow: the callback hands out a reference, and the value is
+            // cloned for the JVM. Off the reading — `borrow_target` is the
+            // model's answer, not a syn match.
+            None => {
+                let core = arg_ty.borrow_target()?;
+                (
+                    quote!((#cb_arg).clone()),
+                    registry.output_entry(&core.origin.syntax)?,
+                )
+            }
         };
         let arg_wire = arg_entry.destination.clone();
         let enc_ident = format_ident!("__cb{}_enc", i);
@@ -263,7 +272,7 @@ pub(crate) fn callback_input(
             .projection
             .as_ref()
             .is_none_or(|p| p.kind == ProjectionKind::Unsigned64)
-            && !registry.is_optional(arg_ty)
+            && arg_ty.optional_inner().is_none()
             && matches!(jni_field_access(&arg_wire), Some((_, _, false)));
         if arg_is_prim {
             let letter = jni_field_access(&arg_wire).unwrap().1;
@@ -286,7 +295,12 @@ pub(crate) fn callback_input(
     // Typed `run` descriptor of the generated callback interface — the SAME
     // memoized spec (`SpecKey::Callback`) the wrapper surface and the
     // interface declaration read, so it cannot drift from the jvalues above.
-    let spec = ext.iface_spec(registry, &SpecKey::callback(args))?;
+    // The memo key is spellings — `SpecKey` needs `Ord`, which a `TypeRef`
+    // cannot give. Keyed off each arg's own `origin.syntax`, which
+    // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax` pins as
+    // the SAME identity the signature-derived key produces.
+    let arg_spellings: Vec<syn::Type> = args.iter().map(|a| a.origin.syntax.clone()).collect();
+    let spec = ext.iface_spec(registry, &SpecKey::callback(&arg_spellings))?;
     let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
     // Local-frame capacity: roughly an encoded wire + a wrapped object per
     // delivered leaf, plus call temporaries.

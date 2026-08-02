@@ -52,7 +52,6 @@
 5	api/lang/cbindgen/mod.rs
 6	api/lang/cbindgen/trait_impl.rs
 4	api/lang/jnigen/jni/builder.rs
-1	api/lang/jnigen/jni/emit/callback.rs
 4	api/lang/jnigen/jni/emit/convert.rs
 2	api/lang/jnigen/jni/emit/delivery.rs
 10	api/lang/jnigen/jni/emit/flat_input.rs
@@ -60,7 +59,7 @@
 2	api/lang/jnigen/jni/emit/vec_build.rs
 11	api/lang/jnigen/jni/emit/wrapper.rs
 3	api/lang/jnigen/jni/fold.rs
-5	api/lang/jnigen/jni/iface.rs
+4	api/lang/jnigen/jni/iface.rs
 2	api/lang/jnigen/jni/kotlin_emit.rs
 2	api/lang/jnigen/jni/overloads.rs
 1	api/lang/jnigen/jni/prim.rs
@@ -71,4 +70,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 129
+# total: 127

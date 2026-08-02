@@ -1191,8 +1191,7 @@ impl Declarations {
                 let crate::api::core::flat::TypeKind::Callback { args } = &reading.kind else {
                     return None;
                 };
-                let args: Vec<syn::Type> = args.iter().map(|a| a.origin.syntax.clone()).collect();
-                self.dispatch_fn_input(&args, built)
+                self.dispatch_fn_input(args, built)
             }),
             Direction::Output => self.select_output_type(&reading, built),
         }
@@ -1391,10 +1390,11 @@ impl Declarations {
 impl Declarations {
     fn dispatch_fn_input(
         &self,
-        args: &[syn::Type],
+        args: &[crate::api::core::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args);
+        let spellings: Vec<syn::Type> = args.iter().map(|a| a.origin.syntax.clone()).collect();
+        let outer_ty = build_fn_type(&spellings);
         let (wire, body) = callback_input(self, args, registry)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
