@@ -168,7 +168,10 @@ impl Declarations {
                 return Some(c);
             }
         }
-        None
+        // 4. Last resort: the spelling differs from something convertible only
+        //    by the wrappers the model erased. Nothing that resolves above
+        //    reaches here, so this adds routes rather than changing them.
+        self.input_transparent_bridge(ty, registry)
     }
 
     /// Select the output converter for `ty`: terminals, user wrappers, then

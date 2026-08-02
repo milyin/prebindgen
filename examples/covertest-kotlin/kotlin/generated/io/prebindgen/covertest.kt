@@ -894,9 +894,34 @@ internal object CovNative {
         errorSink: Any,
     ): Any?
 
+    external fun boxedElemIdSum(ps: List<Payload>, errorSink: Any): Long
+
     external fun boxedLatest(a: Long, build: Any, errorSink: Any): Any?
 
     external fun boxedNoteEcho(note: String?, errorSink: Any): String?
+
+    external fun boxedOptPayloadId(
+        pPresent: Boolean,
+        pId: Long,
+        pSeq: Int,
+        pValue: Double,
+        pFlag: Boolean,
+        pLabel: String?,
+        errorSink: Any,
+    ): Long
+
+    external fun boxedOptPriorityWeight(pPresent: Boolean, pValue: Int, errorSink: Any): Long
+
+    external fun boxedPayloadId(
+        pId: Long,
+        pSeq: Int,
+        pValue: Double,
+        pFlag: Boolean,
+        pLabel: String?,
+        errorSink: Any,
+    ): Long
+
+    external fun boxedRunIdSum(ps: Long, errorSink: Any): Long
 
     external fun cacheConfigWeight(
         cachePresent: Boolean,

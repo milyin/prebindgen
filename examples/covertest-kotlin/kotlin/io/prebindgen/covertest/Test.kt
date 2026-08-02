@@ -44,7 +44,12 @@ import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
 import io.prebindgen.covertest.model.blobValueEcho
+import io.prebindgen.covertest.model.boxedElemIdSum
 import io.prebindgen.covertest.model.boxedLatest
+import io.prebindgen.covertest.model.boxedOptPayloadId
+import io.prebindgen.covertest.model.boxedOptPriorityWeight
+import io.prebindgen.covertest.model.boxedPayloadId
+import io.prebindgen.covertest.model.boxedRunIdSum
 import io.prebindgen.covertest.model.boxedNoteEcho
 import io.prebindgen.covertest.model.plainNoteEcho
 import io.prebindgen.covertest.model.blobValueNew
@@ -1449,6 +1454,20 @@ fun main() {
         archiveStore(a, 0, 5L, 100.0, null, boom)
         check(boxedLatest(a, boom) { count, total -> count to total } == 5L to 100.0)
         a.close()
+
+        // INPUT side (#292 item 3). These lowerings REBUILD their parameter, so
+        // the wrapper has to go back on before the value reaches the signature.
+        // Every surface below is the unwrapped one — a wrapper must not cost a
+        // parameter its lowering, and must not show up in Kotlin either.
+        val p = payload(7L, 1, 2.0, true, "w")
+        check(boxedPayloadId(p, boom) == 7L)              // core wrap
+        check(boxedOptPayloadId(p, boom) == 7L)           // core + optional wrap
+        check(boxedOptPayloadId(null, boom) == -1L)       // …and the absent arm
+        check(boxedOptPriorityWeight(Priority.HIGH, boom) == 10L)  // option-scalar
+        check(boxedOptPriorityWeight(null, boom) == -1L)
+        val many = listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null))
+        check(boxedElemIdSum(many, boom) == 3L)           // wrapped element
+        check(boxedRunIdSum(many, boom) == 3L)            // wrapped run, by value
     }
 
     // ── Vec<String> fold + Option<data-class> input + plain String return ────

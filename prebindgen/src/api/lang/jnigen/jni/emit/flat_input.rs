@@ -4,9 +4,12 @@
 use super::*;
 // `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
 // classifier (via `use super::*`), and an explicit import would shadow it.
-use crate::api::core::{
-    flat::{self, TypeRef},
-    registry::Conversions,
+use crate::api::{
+    core::{
+        flat::{self, TypeRef},
+        registry::Conversions,
+    },
+    lang::jnigen::jni::trait_impl::{build_through_erased_wrappers, build_through_wrappers},
 };
 
 pub(crate) fn struct_input_body(
@@ -744,44 +747,119 @@ pub(crate) struct FlatSumVariant {
     pub fields: Vec<(syn::Member, usize)>,
 }
 
-/// Peel `&` then `Option<…>` off the model to reach the value a specialized
-/// lowering would **rebuild**, refusing at any layer whose spelling adds a
-/// wrapper the classification erased.
+/// The three layers a specialized struct lowering descends through, each paired
+/// with the reading whose spelling it must satisfy.
 ///
-/// One function because it is one rule. `kind` decides what the destination
-/// sees; the **conversion** follows the syntax, and these lowerings do not
-/// decode their parameter — they emit a literal `S { .. }`, wrap it in
-/// `Option::Some`, and hand it to the source function. Rebuilding from the
-/// classification alone produces the stripped type, so a parameter spelled
-/// `Box<Option<S>>` receives an `Option<S>`: `E0308` in the generated crate.
+/// `kind` decides what the destination sees; the **conversion** follows the
+/// syntax, and this lowering does not decode its parameter — it emits a literal
+/// `S { .. }`, wraps it in `Option::Some`, and hands it to the source function.
+/// Rebuilding from the classification alone produces the *stripped* type, so a
+/// parameter spelled `Box<Option<S>>` would receive an `Option<S>`: `E0308` in
+/// the generated crate.
 ///
-/// Refusing rather than rebuilding is a **gap, not a requirement**:
-/// `Box::new(v)` is exactly what the syntax asks for and is trivially
-/// emittable. It is left out here because doing it properly means teaching the
-/// converters to rebuild each wrapper, and `Cow` cannot be rebuilt from an
-/// owned payload at all. A wrapped spelling therefore keeps the general
-/// converter path, which is correct if less direct.
-///
-/// The wrapper question goes to [`TypeRef::erased_wrapper`] — the model holds
-/// both halves, so it is the only thing that can answer it, and no spelling is
-/// taken apart here.
-fn rebuildable_target(arg: &TypeRef) -> Option<(bool, bool, &TypeRef)> {
-    if arg.erased_wrapper().is_some() {
-        return None;
+/// So each layer keeps its own reading, and the emitter puts that layer's
+/// wrappers back as it builds outward — see [`RebuildTarget::wrap_core`] and its
+/// siblings. Collected on the way **down** because an erasure sits *outside* the
+/// layer it wraps: `Box<&S>` classifies as `Ref`, and reading `kind` first would
+/// leave the `Box` unreachable.
+pub(crate) struct RebuildTarget {
+    /// Wrappers over the borrow, if there is one — the `Box` of `Box<&S>`.
+    arg: Vec<&'static str>,
+    /// Wrappers over the `Option` — the `Box` of `Box<Option<S>>`.
+    under_borrow: Vec<&'static str>,
+    /// Wrappers over the `S { .. }` literal — the `Box` of `Option<Box<S>>`.
+    core: Vec<&'static str>,
+    /// `true` when the source fn takes `&Struct`.
+    pub by_ref: bool,
+    /// `true` when the value is `Option`-wrapped.
+    pub optional: bool,
+}
+
+impl RebuildTarget {
+    /// Put back the wrappers standing over the `S { .. }` literal —
+    /// `Option<Box<S>>` wraps here, not at [`Self::wrap_optional`].
+    pub fn wrap_core(&self, e: TokenStream) -> TokenStream {
+        Self::wrap(&self.core, e)
     }
+
+    /// Put back the wrappers over the `Option<..>` — the `Box` of
+    /// `Box<Option<S>>`.
+    ///
+    /// A no-op when the parameter is not optional, for the same reason
+    /// [`Self::wrap_arg`] is one when it is not a borrow: with no `Option` to
+    /// peel, `under_borrow` and `core` are the *same reading*, and wrapping at
+    /// both would apply one layer twice.
+    ///
+    /// Stated once as the rule the three share: **a layer's wrappers are
+    /// applied only where that layer exists**, and the innermost always applies.
+    pub fn wrap_optional(&self, e: TokenStream) -> TokenStream {
+        if !self.optional {
+            return e;
+        }
+        Self::wrap(&self.under_borrow, e)
+    }
+
+    /// Put back the wrappers over the **borrow** — the `Box` of `Box<&S>`,
+    /// which goes on after the call site has added its `&`.
+    ///
+    /// A no-op when the parameter is not a borrow, and that is not an
+    /// optimisation: with no `&` to peel, `arg` and `under_borrow` are the *same
+    /// reading*, so wrapping at both would apply one layer twice —
+    /// `Box::new(Box::new(v))` for a `Box<Option<S>>` parameter.
+    pub fn wrap_arg(&self, e: TokenStream) -> TokenStream {
+        if !self.by_ref {
+            return e;
+        }
+        Self::wrap(&self.arg, e)
+    }
+
+    /// Every wrap goes through the one helper, and every layer was proved
+    /// buildable by [`rebuildable_target`] before a plan existed — so a `None`
+    /// here would mean the descent and the emission disagree about the same
+    /// reading, which is a bug in this file rather than an unsupported source.
+    fn wrap(names: &[&'static str], e: TokenStream) -> TokenStream {
+        build_through_wrappers(names, e)
+            .expect("every layer was checked buildable when the plan was built")
+    }
+}
+
+/// Descend `&` then `Option<…>` off the model to the struct a specialized
+/// lowering will **rebuild**, keeping each layer's reading so its spelling can
+/// be restored.
+///
+/// One function because it is one rule, and the layers are checked **on the way
+/// down**: an erasure sits outside the layer it wraps, so `Box<&S>` classifies
+/// as `Ref` and interpreting `kind` before asking would discard the `Box`.
+///
+/// The only refusal left is a wrapper the adapter cannot **build** — `Cow`, by
+/// policy rather than by impossibility (see its `WRAPPER_OPS` row). A wrapped
+/// spelling that declines here keeps the general converter path, which is
+/// correct if less direct.
+fn rebuildable_target(arg: &TypeRef) -> Option<(RebuildTarget, &TypeRef)> {
+    // A probe per layer: "can this spelling be rebuilt at all", asked before the
+    // peel that would hide it. The token is irrelevant — only the `Option` is.
+    let buildable = |t: &TypeRef| build_through_erased_wrappers(t, quote!(__probe)).map(|_| ());
+    buildable(arg)?;
     let by_ref = arg.borrow_target().is_some();
     let t1 = arg.borrow_target().unwrap_or(arg);
-    if t1.erased_wrapper().is_some() {
-        return None;
-    }
+    buildable(t1)?;
     let optional = t1.optional_inner().is_some();
     let inner = t1.optional_inner().unwrap_or(t1);
-    // The struct is rebuilt BY NAME (`S { .. }`), so its own spelling must name
-    // it — a `Box<S>` target would need the `Box::new` this emitter never writes.
-    if inner.erased_wrapper().is_some() {
-        return None;
-    }
-    Some((by_ref, optional, inner))
+    // The struct is rebuilt BY NAME (`S { .. }`), and its own spelling may add a
+    // wrapper over that name — `Box<S>` gets its `Box::new` at `wrap_core`.
+    buildable(inner)?;
+    // Only the wrapper LISTS are kept: they are all a rebuild uses, and a
+    // `TypeRef` apiece would put ~800 bytes into every `InputKind`.
+    Some((
+        RebuildTarget {
+            arg: arg.erased_wrappers(),
+            under_borrow: t1.erased_wrappers(),
+            core: inner.erased_wrappers(),
+            by_ref,
+            optional,
+        },
+        inner,
+    ))
 }
 
 /// A flattened plan for one struct input parameter. Built once by
@@ -794,6 +872,9 @@ pub(crate) struct FlatInputPlan {
     /// Vec/slice element lowering deliberately retains its previous
     /// non-recursive ABI; callers use this bit to decline recursive plans.
     pub contains_nested: bool,
+    /// The layer readings the rebuild has to satisfy — carried rather than
+    /// re-derived at the emission sites, so the descent is stated once.
+    pub target: RebuildTarget,
 }
 
 // `impl_into_target` lived here: it extracted `S` from an `impl Into<S> + …`
@@ -1173,10 +1254,11 @@ pub(crate) fn build_flat_input_plan(
     arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {
     // 1. Resolve the struct target through `&` and `Option<…>` — off the model,
-    //    and refusing any layer whose spelling the rebuild could not satisfy.
-    let Some((by_ref, optional, inner)) = rebuildable_target(arg) else {
+    //    keeping each layer's reading so the rebuild can restore its spelling.
+    let Some((target, inner)) = rebuildable_target(arg) else {
         return Ok(None);
     };
+    let (by_ref, optional) = (target.by_ref, target.optional);
     // `impl Into<S>` is NOT peeled here, and cannot be: the model refuses
     // `impl Trait` that is not the callback form (`DisallowedImplTrait`), so a
     // parameter spelled that way never becomes a reading and never reaches this
@@ -1197,7 +1279,13 @@ pub(crate) fn build_flat_input_plan(
     else {
         return Ok(None);
     };
-    let key = inner.key();
+    // The DECLARATION is keyed by the type, not by the spelling: a
+    // `Box<Payload>` parameter is a `Payload` to Kotlin and must find
+    // `Payload`'s data-class declaration. Keying by spelling looked up
+    // `Box < Payload >`, found nothing, and silently dropped the parameter to
+    // the general converter — the flatten lowering was unreachable for every
+    // wrapped core.
+    let key = inner.stripped_key();
     let Some(cfg) = ext.types.get(&key) else {
         return Ok(None);
     };
@@ -1254,6 +1342,7 @@ pub(crate) fn build_flat_input_plan(
         root,
         by_ref,
         contains_nested,
+        target,
     }))
 }
 
@@ -1593,18 +1682,21 @@ pub(crate) fn render_flat_input_decode(
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
 ) -> (TokenStream, TokenStream) {
-    let reconstruct = render_flat_struct_node(plan, &plan.root, on_err);
+    let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err);
     let root_binding = &plan.root.binding;
     let prelude = quote! {
         #reconstruct
         let #arg_ident = #root_binding;
     };
-    let call_arg = if plan.by_ref {
+    // The borrow, then the wrappers standing OVER it — `Box<&S>` is
+    // `Box::new(&arg)`, in that order, because the erasure sits outside the
+    // layer it wraps and the `&` is that layer.
+    let borrowed = if plan.by_ref {
         quote!(&#arg_ident)
     } else {
         quote!(#arg_ident)
     };
-    (prelude, call_arg)
+    (prelude, plan.target.wrap_arg(borrowed))
 }
 
 fn render_entry_decode(
@@ -1653,9 +1745,14 @@ fn render_entry_decode(
     body
 }
 
+/// `target` is `Some` for the parameter's ROOT node, whose spelling may add
+/// transparent wrappers the rebuild has to restore, and `None` for a nested one
+/// — a nested struct is reached through a field, and a field's own wrappers are
+/// applied where that field is decoded.
 fn render_flat_struct_node(
     plan: &FlatInputPlan,
     node: &FlatStructNode,
+    target: Option<&RebuildTarget>,
     on_err: &TokenStream,
 ) -> TokenStream {
     let mut decodes = TokenStream::new();
@@ -1663,7 +1760,7 @@ fn render_flat_struct_node(
     for field in &node.fields {
         match field {
             FlatFieldNode::Nested { field, node: child } => {
-                decodes.extend(render_flat_struct_node(plan, child, on_err));
+                decodes.extend(render_flat_struct_node(plan, child, None, on_err));
                 let child_binding = &child.binding;
                 inits.push(quote!(#field: #child_binding));
             }
@@ -1804,21 +1901,40 @@ fn render_flat_struct_node(
     let module = &node.struct_module;
     let sid = &node.struct_ident;
     let binding = &node.binding;
-    let built = quote!(#module::#sid { #(#inits),* });
+    // The struct literal, then the wrappers the CORE spelling adds over it —
+    // `Option<Box<S>>` gets its `Box::new` here, inside the present gate, not
+    // around it. `None` for a nested node, whose own layers are its field's
+    // question rather than the parameter's.
+    let built = match target {
+        Some(t) => t.wrap_core(quote!(#module::#sid { #(#inits),* })),
+        None => quote!(#module::#sid { #(#inits),* }),
+    };
+    // …and the wrappers over the `Option` (or over the bare value) go around
+    // the whole gate — the `Box` of `Box<Option<S>>`.
+    let outer = |e: TokenStream| match target {
+        Some(t) => t.wrap_optional(e),
+        None => e,
+    };
     if node.optional {
         let present = node.present_ident.as_ref().expect("optional node has gate");
-        quote! {
-            let #binding = if #present != 0u8 {
-                #decodes
+        let gate = outer(quote! {
+            if #present != 0u8 {
                 ::core::option::Option::Some(#built)
             } else {
                 ::core::option::Option::None
+            }
+        });
+        quote! {
+            let #binding = {
+                #decodes
+                #gate
             };
         }
     } else {
+        let value = outer(built);
         quote! {
             #decodes
-            let #binding = #built;
+            let #binding = #value;
         }
     }
 }
@@ -1852,6 +1968,17 @@ pub(crate) struct OptionScalarInputPlan {
     pub value_kt_type: String,
     /// Kotlin zero literal filling the value leaf when the option is absent.
     pub value_kt_zero: String,
+    /// The transparent wrappers the parameter's spelling adds over `Optional`,
+    /// outermost first — what the emitter puts back.
+    ///
+    /// This plan **rebuilds** its parameter — the emitter writes a literal
+    /// `Option::Some(v)` / `Option::None` and hands it to the source fn — so a
+    /// parameter spelled `Box<Option<T>>` must receive a `Box`, not the bare
+    /// `Option` the classification names. Carried rather than re-derived at the
+    /// two emission sites, which would be the same rule stated twice; the list
+    /// rather than the reading, because that is all a rebuild uses and this
+    /// plan sits in `InputKind`, whose size every variant pays.
+    pub arg_wrappers: Vec<&'static str>,
     /// `true` when the inner is an `enum_class` — the call site reads `?.value`.
     pub is_enum: bool,
 }
@@ -1868,13 +1995,13 @@ pub(crate) fn build_option_scalar_input_plan(
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Option<OptionScalarInputPlan> {
-    // The optional layer off the model — but the emitter rebuilds a bare
-    // `Option::Some(v)` and hands it to the source fn, so a spelling the model
-    // erased a wrapper from could not receive it. Conversion follows the syntax;
-    // see [`rebuildable_target`], which applies the same rule to the struct path.
-    if arg.erased_wrapper().is_some() {
-        return None;
-    }
+    // The wrappers this spelling adds over `Optional` have to be BUILDABLE, not
+    // absent: the emitter rebuilds a bare `Option::Some(v)` and hands it to the
+    // source fn, so a parameter spelled `Box<Option<T>>` receives a `Box`.
+    // Asked here, before the peel, because an erasure sits outside the layer it
+    // wraps — and asked as "can I build it" rather than "is there one", so the
+    // only refusal left is a wrapper `WRAPPER_OPS` declines (`Cow`).
+    build_through_erased_wrappers(arg, quote!(__probe))?;
     let inner = arg.optional_inner()?;
     // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
     if inner.borrow_target().is_some() {
@@ -1912,6 +2039,7 @@ pub(crate) fn build_option_scalar_input_plan(
         value_kt_type: prim.kotlin_type().to_string(),
         value_kt_zero: prim.kotlin_zero().to_string(),
         is_enum,
+        arg_wrappers: arg.erased_wrappers(),
     })
 }
 

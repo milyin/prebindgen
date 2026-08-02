@@ -63,9 +63,14 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
 - `blob_value_new` — `fun blobValueNew(secs: Long, id: ByteArray, chunks: List<ByteArray>, onError: JniErrorHandler<BlobValue>): BlobValue`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
+- `boxed_elem_id_sum` — `fun boxedElemIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `boxed_latest` — `fun <R> boxedLatest(a: SummaryVault, onError: JniErrorHandler<R?>, build: SummaryBuilder<R>): R?`
   - shaped by: return `Summary` decomposed → [count, total] (Callback delivery)
 - `boxed_note_echo` — `fun boxedNoteEcho(note: String?, onError: JniErrorHandler<String?>): String?`
+- `boxed_opt_payload_id` — `fun boxedOptPayloadId(p: Payload?, onError: JniErrorHandler<Long>): Long`
+- `boxed_opt_priority_weight` — `fun boxedOptPriorityWeight(p: Priority?, onError: JniErrorHandler<Long>): Long`
+- `boxed_payload_id` — `fun boxedPayloadId(p: Payload, onError: JniErrorHandler<Long>): Long`
+- `boxed_run_id_sum` — `fun boxedRunIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`

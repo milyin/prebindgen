@@ -382,6 +382,28 @@ impl TypeRef {
         names
     }
 
+    /// This type's identity as a table key with every transparent wrapper
+    /// removed — the key of [`stripped_syntax`](Self::stripped_syntax).
+    ///
+    /// What [`key`](Self::key) answers for a **spelling**, this answers for the
+    /// **type**. The two are different questions and both are legitimate:
+    ///
+    /// * a *conversion* is keyed by `key`, because `Box<Option<T>>` and
+    ///   `Option<T>` genuinely need different converter bodies — one has to put
+    ///   a `Box` back and the other must not;
+    /// * a **declaration** is keyed by this, because a declaration says what a
+    ///   type *is* to the destination language, and a wrapper the model erases
+    ///   cannot change that. A `Box<Payload>` parameter is a `Payload` to
+    ///   Kotlin, so it must find `Payload`'s data-class declaration — keying it
+    ///   by spelling finds nothing and silently costs the parameter its
+    ///   lowering.
+    ///
+    /// Use this wherever the lookup is against declarations the binding author
+    /// wrote, and `key` wherever it is against something derived per spelling.
+    pub fn stripped_key(&self) -> crate::api::core::registry::TypeKey {
+        crate::api::core::registry::TypeKey::from_type(&self.stripped_syntax())
+    }
+
     /// This type's spelling with every [transparent
     /// wrapper](TRANSPARENT_WRAPPERS) removed — `Box<Box<Option<T>>>` →
     /// `Option<T>`, an unwrapped spelling → itself.

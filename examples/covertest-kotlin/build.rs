@@ -522,6 +522,19 @@ fn main() {
                 // with the wrong number of dereferences fails the build (#270).
                 .fun(fun!(boxed_note_echo))
                 .fun(fun!(plain_note_echo))
+                // Transparent wrappers on the INPUT side (#292 item 3), one per
+                // specialized lowering. These rebuild their parameter rather
+                // than decoding it, so the erased wrapper has to go back on
+                // before the value reaches the signature — and each layer is
+                // applied at a different point in the construction, which is why
+                // one shape cannot cover them all. Compiling this crate is the
+                // check: a missing `Box::new` is an `E0308`, invisible to any
+                // text assertion.
+                .fun(fun!(boxed_payload_id))
+                .fun(fun!(boxed_opt_payload_id))
+                .fun(fun!(boxed_opt_priority_weight))
+                .fun(fun!(boxed_elem_id_sum))
+                .fun(fun!(boxed_run_id_sum))
                 // The same wrapper over a DECOMPOSED return (#292). `Summary`
                 // has an output expansion, so this return takes no converter to
                 // name the spelling for it — the extern binds the value and

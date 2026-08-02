@@ -5,7 +5,10 @@ use super::*;
 // `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
 // classifier (reached through `use super::*`), and an explicit import would win
 // over the glob and silently retarget it.
-use crate::api::core::flat::{self, RefMode, TypeRef};
+use crate::api::{
+    core::flat::{self, RefMode, TypeRef},
+    lang::jnigen::jni::trait_impl::build_through_erased_wrappers,
+};
 
 // `slice_or_vec_elem` lived here: it matched `&[T]` / `Vec<T>` off the SPELLING
 // and returned the element. `vec_build_elem` was its only caller and now reads
@@ -48,22 +51,45 @@ pub(crate) fn vec_build_elem(
     // sequence — whose spelling is a clean `Vec<T>` — and let the outer `Box`
     // through unseen. Every layer is checked on the way down, the way
     // `rebuildable_target` does it.
-    if arg.erased_wrapper().is_some() {
-        return None;
-    }
     let (run, by_ref) = match arg.kind() {
         flat::TypeKind::Ref { mode, inner } if *mode == RefMode::Shared => (&**inner, true),
         _ => (arg, false),
     };
-    // Still needed after the peel: `&Box<Vec<T>>` puts the wrapper on the
-    // referent, where the check above (a `syn::Type::Reference`) cannot see it.
-    if run.erased_wrapper().is_some() {
-        return None;
+    // A wrapper over the RUN is buildable only on the by-value path, and the
+    // reason is a cost rather than a type error. By value the local is owned, so
+    // `Box<Vec<T>>` is `Box::new(mem::take(..))` — free. Borrowed, the local is
+    // a borrow of the Vec the Kotlin side owns, and there is no way to put a
+    // `Box` between that borrow and the callee without **copying** the run
+    // (`&Box::new(v.clone())`) — which needs a `T: Clone` nothing here
+    // guarantees, and silently adds a per-call copy to a path whose entire point
+    // is not having one.
+    //
+    // Definitive, not deferred: the borrowed shape keeps the `input_vec` path,
+    // which is correct. If a binding ever wants the copy, it is a decision to
+    // make on purpose, at the declaration.
+    let wrapped_run = !arg.erased_wrappers().is_empty() || !run.erased_wrappers().is_empty();
+    if wrapped_run {
+        if by_ref {
+            return None;
+        }
+        // By value: both layers must be buildable (`Cow` still declines).
+        build_through_erased_wrappers(arg, quote!(__probe))?;
+        build_through_erased_wrappers(run, quote!(__probe))?;
     }
     let elem = run.sequence_elem()?;
-    // The element is spelled into `Vec<#elem>` and rebuilt per push, so a
-    // wrapped element spelling is unbuildable for the same reason.
-    if elem.erased_wrapper().is_some() {
+    // A wrapped ELEMENT keeps the general converter path, and the obstruction is
+    // naming rather than typing. The helper trio stores a `Vec<#elem>`, so
+    // `Vec<Payload>` and `Vec<Box<Payload>>` are two different storages needing
+    // two trios — but the trio's base name is derived from the element's
+    // **Kotlin class** (`Payload` → `payloadVec`), which the two share, so both
+    // would emit `payloadVecNew`/`Push`/`Free` and collide.
+    //
+    // Definitive as long as the name comes from the Kotlin class: the
+    // alternative is spelling a Rust wrapper into a JNI symbol, which is the
+    // representation leak this whole layer exists to prevent. The general
+    // converter serves the shape correctly (see `input_transparent_bridge`),
+    // just without the per-element push loop.
+    if !elem.erased_wrappers().is_empty() {
         return None;
     }
     // The element must flatten; the probe ident is irrelevant here.
@@ -256,6 +282,7 @@ pub(crate) fn build_vec_build_helper_items(
         }
         let module = &h.plan.root.struct_module;
         let sid = &h.plan.root.struct_ident;
+
         named.push((
             push_sym.clone(),
             syn::parse_quote!(

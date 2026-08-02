@@ -703,6 +703,22 @@ const WRAPPER_OPS: &[WrapperOps] = &[
         // implied by anything the model knows about the payload. Refused until
         // something needs it; that is one row, not a redesign.
         read: None,
+        // Building is a DIFFERENT question, and it is refused for a different
+        // reason — the two `None`s here are not one fact repeated.
+        //
+        // `Cow::Owned(v)` is well-typed: an input rebuild owns its value, and
+        // `Cow<'_, [T]>` takes a `Vec<T>` while `Cow<'_, str>` takes a
+        // `String`. So this is not "cannot", it is **should not**. A source
+        // spells `Cow` to accept borrowed data without copying; a binding that
+        // can only ever hand it `Owned` pays that copy on every call and
+        // silently removes the borrow path — and the callee can see the
+        // difference (`matches!(c, Cow::Borrowed(_))`), so it is observable
+        // rather than merely wasteful.
+        //
+        // **Deliberate, not deferred.** If a binding decides the copy is
+        // acceptable for its own source, this is one line —
+        // `Some(|e| quote!(::std::borrow::Cow::Owned(#e)))` — and nothing else
+        // moves. The refusal is here so that decision is made on purpose.
         build: None,
     },
 ];
@@ -783,6 +799,57 @@ pub(crate) fn read_through_erased_wrappers(
     // Outermost first, which is the order they have to come off in.
     for name in ty.erased_wrappers() {
         out = (wrapper_ops(name)?.read?)(out);
+    }
+    Some(out)
+}
+
+/// Put back the transparent wrappers a **rebuild** dropped, so a value the
+/// emitter constructed from the classification has the type the source spelled
+/// — `Box<Option<S>>` ← `Box::new(v)`, an unwrapped spelling ← `v` unchanged.
+///
+/// The input-side dual of [`read_through_erased_wrappers`], and the reason both
+/// live here rather than at the sites that need them: the specialized input
+/// lowerings do not *decode* their parameter, they **rebuild** it — a literal
+/// `S { .. }`, an `Option::Some(v)`, a `Vec<T>` pushed element by element — and
+/// a rebuild from the classification alone produces the *stripped* type. Handing
+/// that to a parameter spelled `Box<..>` is an `E0308` in the generated crate,
+/// which is why this is one rule in one place instead of three selection sites
+/// each remembering it.
+///
+/// Applied **innermost-out**, the reverse of reading: the value in hand is the
+/// canonical shape, and each layer wraps what the previous one produced.
+///
+/// `None` when any layer has no [`WrapperOps::build`] — `Cow`, by policy rather
+/// than by impossibility; see its row. A caller that gets `None` has a crossing
+/// it cannot serve and must decline or report it, never emit the bare value.
+///
+/// **This answers for one layer's spelling.** It restores the wrappers standing
+/// over `ty`'s own classification; a wrapper *inside* — the `Box` of
+/// `Option<Box<S>>` — belongs to the inner reading, is applied when that layer
+/// is built, and is invisible here. An erasure sits **outside** the layer it
+/// wraps, so a rebuild collects wrappers as it descends and applies them as it
+/// comes back out.
+pub(crate) fn build_through_erased_wrappers(
+    ty: &crate::api::core::flat::TypeRef,
+    value: TokenStream,
+) -> Option<TokenStream> {
+    build_through_wrappers(&ty.erased_wrappers(), value)
+}
+
+/// [`build_through_erased_wrappers`] over a wrapper list already taken off a
+/// reading — for a plan that recorded *what to put back* rather than keeping the
+/// whole `TypeRef` to ask again.
+///
+/// The list is the only part of the reading a rebuild uses, and it is two
+/// pointers instead of a `TypeRef`'s ~264 bytes. That matters because these
+/// plans live in `InputKind`, whose size every variant pays.
+pub(crate) fn build_through_wrappers(
+    names: &[&'static str],
+    value: TokenStream,
+) -> Option<TokenStream> {
+    let mut out = value;
+    for name in names.iter().rev() {
+        out = (wrapper_ops(name)?.build?)(out);
     }
     Some(out)
 }
@@ -2046,6 +2113,79 @@ impl Declarations {
     /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
     /// `t1` = its captured inner): the built-in `&`/`Option<&>`/`Vec`/`Option`
     /// handlers.
+    /// **Last resort**: a spelling whose only difference from something this
+    /// adapter can already convert is the transparent wrappers over it.
+    ///
+    /// The layer arms each handle one *classification* layer — `Optional`,
+    /// `Sequence`, `Ref` — and bridge a wrapper as part of doing so. What none of
+    /// them covers is a wrapper over a **terminal**: `Box<Payload>` classifies as
+    /// `Named`, so no layer arm claims it, and `input_terminal` keys on the whole
+    /// spelling and finds no `Payload` config under `Box < Payload >`. Before
+    /// this it resolved to nothing at all — the crossing was refused for a
+    /// wrapper the model exists to make invisible.
+    ///
+    /// So this delegates to the **stripped** spelling's own converter and puts
+    /// the wrappers back on what it produced. The inner type is declared as a
+    /// `sub`, exactly as a layer arm declares its inner, so it is required and
+    /// resolved through the ordinary machinery rather than being resolved here.
+    ///
+    /// Deliberately tried **after** every layer arm, so nothing that resolves
+    /// today changes route: `Box<Option<T>>` keeps the `Optional` arm (which
+    /// bridges via `build_from_canonical`), and only the shapes that previously
+    /// reached `None` arrive here.
+    pub(crate) fn input_transparent_bridge(
+        &self,
+        reading: &crate::api::core::flat::TypeRef,
+        registry: &impl Conversions<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        if reading.erased_wrappers().is_empty() {
+            return None;
+        }
+        let produced = reading.syntax();
+        // The spelling under every wrapper — by the model's own definition, the
+        // one whose lowering yields this `kind`.
+        let stripped = reading.stripped_syntax();
+        // A wrapper over a **borrow** is not bridgeable here, and the reason is
+        // the converter's own shape rather than the wrapper's: this produces an
+        // owned value, and there is nothing for a `Box<&T>` to borrow *from* —
+        // the returned reference would have to outlive the call that made it
+        // (`E0106` on the generated signature). The borrow arms own that case,
+        // and they serve the canonical spelling only.
+        //
+        // Asked of the MODEL, not of `stripped`: an erasure is transparent, so
+        // `Box<&T>` already classifies as `Ref` and `kind` answers this without
+        // anything here matching a `syn` variant.
+        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Ref { .. }) {
+            return None;
+        }
+        // It has to be a type this binding already crosses; if it is not, the
+        // ordinary "unresolved" diagnostic names it, which is the better error.
+        let inner = registry.reading_of(&stripped)?;
+        let entry = registry.input_entry(&inner)?;
+        let wire = entry.destination.clone();
+        let inner_fn = &entry.function.sig.ident;
+        // Wrap what the inner converter produced. `None` here is `Cow`'s policy
+        // refusal — the crossing then stays unresolved and names the type,
+        // rather than resolving and emitting Rust the consumer cannot build.
+        let built = build_through_erased_wrappers(reading, quote!(__inner))?;
+        let body: syn::Expr = syn::parse_quote!({
+            let __inner = #inner_fn(env, v)?;
+            #built
+        });
+        Some(ConverterImpl {
+            subs: vec![stripped],
+            pre_stages: vec![],
+            function: self.build_input_fn(produced, &wire, &body, None),
+            destination: wire,
+            niches: entry.niches.clone(),
+            // The surface is the inner type's: a wrapper is invisible to the
+            // destination language, which is the whole reason the model erases
+            // it. Inheriting rather than recomputing also keeps a projection's
+            // Kotlin class from being lost behind the wrapper.
+            metadata: entry.metadata.clone(),
+        })
+    }
+
     pub(crate) fn input_wrapper_shape(
         &self,
         shape: WrapperShape,
@@ -2695,5 +2835,62 @@ mod wrapper_ops_tests {
             stray.is_empty(),
             "`WRAPPER_OPS` rows for non-erased {stray:?}"
         );
+    }
+
+    /// A rebuild puts the wrappers back **innermost-out**, the reverse of the
+    /// order a read takes them off.
+    ///
+    /// Asserted on a `Box<Box<_>>` rather than a single layer, because a single
+    /// layer cannot tell the two orders apart — which is exactly how a
+    /// composition bug survives. And asserted against `read` on the same type,
+    /// so the two are pinned as duals rather than as two independent claims.
+    #[test]
+    fn a_rebuild_puts_the_wrappers_back_inside_out() {
+        let ty = crate::api::test_util::reading(syn::parse_quote!(Box<Box<Option<String>>>));
+        assert_eq!(ty.erased_wrappers(), ["Box", "Box"]);
+
+        let built = build_through_erased_wrappers(&ty, quote!(v)).expect("Box builds");
+        assert_eq!(
+            built.to_string().replace(' ', ""),
+            ":: std :: boxed :: Box :: new (:: std :: boxed :: Box :: new (v))".replace(' ', ""),
+        );
+        // The dual, on the same type: reading takes them off outermost-first.
+        let read = read_through_erased_wrappers(&ty, quote!(v)).expect("Box reads");
+        assert_eq!(read.to_string().replace(' ', ""), "**v");
+
+        // The control: nothing erased, so both are the identity and neither
+        // test above can be passing on an unconditional wrap.
+        let plain = crate::api::test_util::reading(syn::parse_quote!(Option<String>));
+        assert!(plain.erased_wrappers().is_empty());
+        for e in [
+            build_through_erased_wrappers(&plain, quote!(v)),
+            read_through_erased_wrappers(&plain, quote!(v)),
+        ] {
+            assert_eq!(e.expect("identity").to_string(), "v");
+        }
+    }
+
+    /// `Cow` declines a rebuild, and the two directions decline for **different
+    /// reasons** — which is why the row carries two `None`s rather than one
+    /// capability flag.
+    ///
+    /// Reading is impossible (`E0507`: a `Cow` payload cannot be moved through
+    /// `Deref`). Building is *possible* — `Cow::Owned(v)` is well-typed for an
+    /// owned payload — and refused on purpose, because a binding that can only
+    /// ever hand a `Cow` parameter `Owned` pays a copy per call and removes the
+    /// borrow path the source asked for. If that policy is ever revisited, this
+    /// test is the thing that has to change with it.
+    #[test]
+    fn a_cow_declines_a_rebuild_by_policy() {
+        let ty = crate::api::test_util::reading(syn::parse_quote!(Cow<'_, str>));
+        assert_eq!(ty.erased_wrappers(), ["Cow"]);
+        assert!(build_through_erased_wrappers(&ty, quote!(v)).is_none());
+        assert!(read_through_erased_wrappers(&ty, quote!(v)).is_none());
+
+        // A `Cow` under a `Box` declines too: one unbuildable layer refuses the
+        // whole chain, rather than the `Box` half quietly succeeding.
+        let nested = crate::api::test_util::reading(syn::parse_quote!(Box<Cow<'_, str>>));
+        assert_eq!(nested.erased_wrappers(), ["Box", "Cow"]);
+        assert!(build_through_erased_wrappers(&nested, quote!(v)).is_none());
     }
 }
