@@ -146,11 +146,19 @@ impl<M> RegistryBuilder<M> {
     /// type and to diagnose its spelling — reasoning backwards from an identity
     /// to a thing that already existed. A build script wrote `ptr_class!(Foo)`;
     /// this is that `Foo` (#291).
+    ///
+    /// Declaring the same type twice keeps the **first** spelling. That is what
+    /// the `HashSet` this replaced did with the identity, and what
+    /// `register_class` does with a reopened declarator: the two spellings agree
+    /// on identity by construction, so the tie-break only decides which
+    /// equivalent rendering the scan reads, and it should not depend on
+    /// declaration order.
     pub fn export_type(mut self, ty: Origin<syn::Type>) -> Self {
         self.registry
             .declared
             .types
-            .insert(TypeKey::from_type(&ty.syntax), ty);
+            .entry(TypeKey::from_type(&ty.syntax))
+            .or_insert(ty);
         self
     }
 

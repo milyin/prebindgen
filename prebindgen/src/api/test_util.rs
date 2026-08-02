@@ -33,7 +33,8 @@ pub(crate) fn scanned_with<M>(sources: &[&str]) -> Registry<M> {
 }
 
 /// A type as a **build script** would declare it: real tokens, no source
-/// position. What [`RegistryBuilder::export_type`](crate::core::RegistryBuilder::export_type)
+/// position. What
+/// [`RegistryBuilder::export_type`](crate::api::core::registry::RegistryBuilder::export_type)
 /// takes.
 pub(crate) fn declared_origin(ty: syn::Type) -> crate::core::flat::Origin<syn::Type> {
     crate::core::flat::Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))

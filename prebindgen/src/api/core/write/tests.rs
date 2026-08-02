@@ -64,14 +64,14 @@ impl Prebindgen for IdentityExt {
 #[test]
 fn dedup_and_sort() {
     let mut reg: Registry<()> = Registry::empty();
-    let key_a: syn::Type = syn::parse_quote!(u64);
-    let key_b: syn::Type = syn::parse_quote!(Sample);
+    let ty_a: syn::Type = syn::parse_quote!(u64);
+    let ty_b: syn::Type = syn::parse_quote!(Sample);
     let wire: syn::Type = syn::parse_quote!(i64);
     let wire2: syn::Type = syn::parse_quote!(*const u8);
 
     reg.insert_crossing(
         Direction::Input,
-        &key_a,
+        &ty_a,
         true,
         Some(TypeEntry {
             destination: wire.clone(),
@@ -88,7 +88,7 @@ fn dedup_and_sort() {
     );
     reg.insert_crossing(
         Direction::Input,
-        &key_b,
+        &ty_b,
         true,
         Some(TypeEntry {
             destination: wire2.clone(),
