@@ -123,7 +123,7 @@ pub(crate) fn build_data_class(
         // disagreed. Reject it at the declaration instead.
         if !matches!(pf.kind, PlanFieldKind::Projection { .. }) {
             if let Some(proj) = registry
-                .input_entry(&field.ty.origin.syntax)
+                .input_entry(field.ty.syntax())
                 .and_then(|e| e.metadata.projection.clone())
             {
                 panic!(
@@ -1069,7 +1069,7 @@ fn classify_params(
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
         let mut name = leaf.kt_name.clone();
-        let arg_ty = &leaf.reading.origin.syntax;
+        let arg_ty = leaf.reading.syntax();
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or

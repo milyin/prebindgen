@@ -687,7 +687,10 @@ impl Flat {
     ///
     /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
     /// about a type the *binding* built, not a cache miss.
-    pub(crate) fn classify(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
+    pub(in crate::api::core) fn classify(
+        &self,
+        ty: &syn::Type,
+    ) -> Result<TypeRef, UnsupportedType> {
         if let Some(indexed) = self.type_ref(ty) {
             return Ok(indexed.clone());
         }
@@ -1401,6 +1404,7 @@ fn lower_variant(
         });
     }
     Ok(Variant {
+        reading: TypeRef::named(&e.ident),
         name: e.ident.clone(),
         alternatives,
         origin: Origin::new(e.clone(), Rc::clone(at)),

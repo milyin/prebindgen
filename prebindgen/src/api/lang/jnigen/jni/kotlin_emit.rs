@@ -791,7 +791,7 @@ impl Declarations {
         // The field's own reading: the nullability question below is answered
         // from `kind`, so a wrapped spelling answers as the bare one does and
         // nothing is looked up (#275).
-        let field_ty = &field.ty.origin.syntax;
+        let field_ty = field.ty.syntax();
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
         let out = registry.output_entry(field_ty).unwrap_or_else(|| {
             panic!(
@@ -1519,9 +1519,9 @@ impl Declarations {
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        if self.is_kotlin_enum(&enum_probe_type(&leaf.out_ty.origin.syntax)) {
-            let inner = option_inner_type(&leaf.out_ty.origin.syntax)
-                .unwrap_or_else(|| leaf.out_ty.origin.syntax.clone());
+        if self.is_kotlin_enum(&enum_probe_type(leaf.out_ty.syntax())) {
+            let inner = option_inner_type(leaf.out_ty.syntax())
+                .unwrap_or_else(|| leaf.out_ty.syntax().clone());
             let name = registry
                 .output_entry(&inner)
                 .and_then(|e| e.metadata.kotlin_name.clone())

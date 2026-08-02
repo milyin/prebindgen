@@ -297,7 +297,7 @@ impl CbindgenBuilder {
                     f.ret
                         .walk()
                         .iter()
-                        .any(|t| matches!(t.kind, crate::api::core::flat::TypeKind::Sequence(_)))
+                        .any(|t| matches!(t.kind(), crate::api::core::flat::TypeKind::Sequence(_)))
                 })
                 .unwrap_or(false)
         })

@@ -720,13 +720,12 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable =
-        leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty.origin.syntax);
+    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, leaf.out_ty.syntax());
     leaf_iface_param(
         ext,
         registry,
         name,
-        &leaf.out_ty.origin.syntax,
+        leaf.out_ty.syntax(),
         leaf.nullable || inert_nullable,
         true,
     )
@@ -1151,12 +1150,12 @@ pub(crate) fn callback_iface_spec(
                 any_fixed = true;
                 // Peeled off the reading — `borrow_target` is the model's
                 // answer to "is this a borrow", not a syn match.
-                let core = t.borrow_target().unwrap_or(t).origin.syntax.clone();
+                let core = t.borrow_target().unwrap_or(t).syntax().clone();
                 let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
                 let (reassemble, imports) =
                     fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
                 groups.push(GroupDesc {
-                    name: whole_value_name(&t.origin.syntax, i),
+                    name: whole_value_name(t.syntax(), i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
@@ -1182,12 +1181,11 @@ pub(crate) fn callback_iface_spec(
                     };
                     if leaf.source == LeafSource::SumTag {
                         any_fixed = true;
-                        let fqn =
-                            ext.kotlin_fqn(&TypeKey::from_type(&leaf.out_ty.origin.syntax))?;
+                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(leaf.out_ty.syntax()))?;
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
-                            &leaf.out_ty.origin.syntax,
+                            leaf.out_ty.syntax(),
                             &plan.leaves[k..seg],
                             &fqn,
                         );
@@ -1229,18 +1227,18 @@ pub(crate) fn callback_iface_spec(
             // A plan-less opaque-handle arg is delivered as a raw `jlong` and
             // wrapped + closed Kotlin-side (Phase 3 — no Rust `new_object`).
             let owned_handle = registry
-                .output_entry(&t.origin.syntax)
+                .output_entry(t.syntax())
                 .and_then(|e| e.metadata.projection.as_ref())
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
-                name: whole_value_name(&t.origin.syntax, i),
-                ty: t.origin.syntax.clone(),
+                name: whole_value_name(t.syntax(), i),
+                ty: t.syntax().clone(),
                 nullable: t.optional_inner().is_some(),
                 owned_handle,
             });
             groups.push(GroupDesc {
-                name: whole_value_name(&t.origin.syntax, i),
+                name: whole_value_name(t.syntax(), i),
                 typed: None,
                 reassemble: None,
                 imports: Vec::new(),
@@ -1297,14 +1295,14 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(|t| subject_short(&t.origin.syntax))
+                .map(|t| subject_short(t.syntax()))
                 .collect::<Vec<_>>()
                 .join("")
         )
     };
     let package = cb_args
         .first()
-        .map(|t| subject_package(ext, &t.origin.syntax))
+        .map(|t| subject_package(ext, t.syntax()))
         .unwrap_or_else(|| ext.package.clone());
     Some(IfaceSpec {
         typed_groups,

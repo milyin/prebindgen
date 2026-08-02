@@ -49,7 +49,7 @@ pub(crate) fn callback_input(
     let arg_pat_ty: Vec<TokenStream> = args
         .iter()
         .map(|t| {
-            let t = &t.origin.syntax;
+            let t = t.syntax();
             quote!(#t)
         })
         .collect();
@@ -83,7 +83,7 @@ pub(crate) fn callback_input(
             // Every leaf converter must already be resolved (deferral safety).
             // A synthesized leaf (a sum's tag) has no converter to wait for.
             for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                registry.output_entry(&leaf.out_ty.origin.syntax)?;
+                registry.output_entry(leaf.out_ty.syntax())?;
             }
             let spec = folder_iface_for_plan(ext, registry, plan)?;
             let holder_slash =
@@ -176,7 +176,7 @@ pub(crate) fn callback_input(
             // would make the trampoline wait forever on an `i32` crossing the
             // binding may not have.
             for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
-                let e = registry.output_entry(&leaf.out_ty.origin.syntax)?;
+                let e = registry.output_entry(leaf.out_ty.syntax())?;
                 if leaf.identity && e.metadata.projection.is_none() {
                     return None;
                 }
@@ -199,7 +199,7 @@ pub(crate) fn callback_input(
         // converter and clone the borrow (the callback only borrows the value). The
         // `data_class` converter composes the whole object via `fromParts`, so the
         // Kotlin `run(t: T)` receives a ready-made `T`.
-        let (cb_val, arg_entry) = match registry.output_entry(&arg_ty.origin.syntax) {
+        let (cb_val, arg_entry) = match registry.output_entry(arg_ty.syntax()) {
             Some(e) => (quote!(#cb_arg), e),
             // A borrow: the callback hands out a reference, and the value is
             // cloned for the JVM.
@@ -227,7 +227,7 @@ pub(crate) fn callback_input(
                 let core = arg_ty.borrow_target()?;
                 (
                     quote!((#cb_arg).clone()),
-                    registry.output_entry(&core.origin.syntax)?,
+                    registry.output_entry(core.syntax())?,
                 )
             }
         };
@@ -318,7 +318,7 @@ pub(crate) fn callback_input(
     // cannot give. Keyed off each arg's own `origin.syntax`, which
     // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax` pins as
     // the SAME identity the signature-derived key produces.
-    let arg_spellings: Vec<syn::Type> = args.iter().map(|a| a.origin.syntax.clone()).collect();
+    let arg_spellings: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
     let spec = ext.iface_spec(registry, &SpecKey::callback(&arg_spellings))?;
     let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
     // Local-frame capacity: roughly an encoded wire + a wrapped object per

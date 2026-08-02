@@ -312,7 +312,7 @@ pub fn apply<M>(
                     func: ed.func.clone(),
                     declared: TypeKey::from_type(declared).as_str().to_string(),
                     actual: {
-                        let s = &ret.origin.syntax;
+                        let s = ret.syntax();
                         quote::quote!(#s).to_string()
                     },
                 });
@@ -405,7 +405,7 @@ pub fn apply<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let crate::api::core::flat::TypeKind::Callback { args } = &param.ty.kind else {
+            let crate::api::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -420,7 +420,10 @@ pub fn apply<M>(
                 // `Option<T>` / `Vec<T>` / tuple arg is delivered whole. The model
                 // says which, so a wrapper the language sees through — `Box<T>` —
                 // no longer reads as un-nameable.
-                if !matches!(core_ty.kind, crate::api::core::flat::TypeKind::Named { .. }) {
+                if !matches!(
+                    core_ty.kind(),
+                    crate::api::core::flat::TypeKind::Named { .. }
+                ) {
                     continue;
                 }
                 let key = arg_ty.key();
@@ -459,7 +462,7 @@ pub fn apply<M>(
                     continue;
                 }
                 for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty.origin.syntax);
+                    registry.require_output(leaf.out_ty.syntax());
                 }
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -640,7 +643,7 @@ fn wire_fixed_returns<M>(
             }
         }
         for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-            registry.require_output(&leaf.out_ty.origin.syntax);
+            registry.require_output(leaf.out_ty.syntax());
         }
         let plan = UnfoldPlan {
             source: vd.source.clone(),
@@ -678,7 +681,7 @@ fn wire_fixed_callbacks<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let crate::api::core::flat::TypeKind::Callback { args } = &param.ty.kind else {
+            let crate::api::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -707,7 +710,7 @@ fn wire_fixed_callbacks<M>(
                     continue;
                 }
                 for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-                    registry.require_output(&leaf.out_ty.origin.syntax);
+                    registry.require_output(leaf.out_ty.syntax());
                 }
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
@@ -776,7 +779,7 @@ pub fn apply_leaf_vec_folds<M>(
                     } else {
                         inner_shape
                     };
-                    registry.require_output(&vec_elem.origin.syntax);
+                    registry.require_output(vec_elem.syntax());
                     // The fold delivers the return element-by-element, so the
                     // whole `Vec<T>` / `Option<Vec<T>>` converter is not needed.
                     // De-require it: for String / scalar elements it still
@@ -784,7 +787,7 @@ pub fn apply_leaf_vec_folds<M>(
                     // opaque-handle element it cannot resolve (`jlong` wire isn't
                     // JObject-shaped), and de-requiring keeps that `None` from
                     // being flagged as an unresolved-required error.
-                    registry.unrequire_output(&ret.origin.syntax);
+                    registry.unrequire_output(ret.syntax());
                     registry
                         .unfold_plans
                         .insert(func.clone(), whole_leaf_fold_plan(vec_elem, shape));
@@ -796,7 +799,7 @@ pub fn apply_leaf_vec_folds<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let crate::api::core::flat::TypeKind::Callback { args } = &param.ty.kind else {
+            let crate::api::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -811,7 +814,7 @@ pub fn apply_leaf_vec_folds<M>(
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
-                registry.require_output(&elem.origin.syntax);
+                registry.require_output(elem.syntax());
                 let plan =
                     whole_leaf_fold_plan(elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
                 registry.callback_arg_plans.insert(key, plan);
@@ -829,12 +832,12 @@ fn whole_leaf_fold_plan(
     shape: UnfoldShape,
 ) -> UnfoldPlan {
     UnfoldPlan {
-        source: vec_elem.origin.syntax.clone(),
+        source: vec_elem.syntax().clone(),
         decon: None,
         by_ref: peel_borrow(vec_elem).0,
         shape,
         leaves: vec![],
-        element: Some(vec_elem.origin.syntax.clone()),
+        element: Some(vec_elem.syntax().clone()),
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
@@ -924,9 +927,9 @@ fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
         layer_types: ty
             .layer_types()
             .iter()
-            .map(|t| t.origin.syntax.clone())
+            .map(|t| t.syntax().clone())
             .collect(),
-        core: borrowed.unwrap_or(layered).origin.syntax.clone(),
+        core: borrowed.unwrap_or(layered).syntax().clone(),
         by_ref: borrowed.is_some(),
     }
 }
@@ -1021,9 +1024,9 @@ fn process_decl<M>(
             // recursive registration also required) — same reasoning as
             // [`apply_leaf_vec_folds`] for the fixed folds.
             if ed.target == DeconTarget::Output {
-                registry.unrequire_output(&ret_ty.origin.syntax);
+                registry.unrequire_output(ret_ty.syntax());
                 if optional {
-                    registry.unrequire_output(&after_opt.origin.syntax);
+                    registry.unrequire_output(after_opt.syntax());
                 }
             }
             // Element type peeled of a leading `&` (accessors take `&Element`).
@@ -1036,7 +1039,7 @@ fn process_decl<M>(
                 register_decon_spec(registry, acc, &decon, &records, element)?;
                 let plan = build_plan(acc, registry, ed, by_ref, element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty.origin.syntax);
+                    registry.require_output(leaf.out_ty.syntax());
                 }
                 plan
             } else {
@@ -1045,14 +1048,14 @@ fn process_decl<M>(
                 // No declaration is involved (`decon: None`) — the element
                 // crosses whole through its own converter.
                 let by_ref = peel_borrow(inner).0;
-                registry.require_output(&inner.origin.syntax);
+                registry.require_output(inner.syntax());
                 UnfoldPlan {
-                    source: inner.origin.syntax.clone(),
+                    source: inner.syntax().clone(),
                     decon: None,
                     by_ref,
                     shape,
                     leaves: vec![],
-                    element: Some(inner.origin.syntax.clone()),
+                    element: Some(inner.syntax().clone()),
                     delivery: ed.delivery,
                     convert_out_ty: None,
                     fixed_builder: false,
@@ -1082,7 +1085,7 @@ fn process_decl<M>(
             register_decon_spec(registry, acc, &decon, &records, source)?;
             let plan = build_plan(acc, registry, ed, by_ref, source, shape, &records, decon)?;
             for leaf in &plan.leaves {
-                registry.require_output(&leaf.out_ty.origin.syntax);
+                registry.require_output(leaf.out_ty.syntax());
             }
             plan
         };
@@ -1110,7 +1113,7 @@ fn process_decl<M>(
             && plan.leaves.len() == 1
             && !plan.leaves[0].nullable;
         let plan = if single_return {
-            let leaf_ty = plan.leaves[0].out_ty.origin.syntax.clone();
+            let leaf_ty = plan.leaves[0].out_ty.syntax().clone();
             let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
                 syn::parse_quote!(Option<#leaf_ty>)
             } else {
@@ -1173,11 +1176,11 @@ fn register_decon_spec<M>(
         // derived from it, never emitted code — so its hoists are discarded.
         &mut Vec::new(),
     )?;
-    require_unique_leaf_names(&source.origin.syntax, &leaves)?;
+    require_unique_leaf_names(source.syntax(), &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
         DeconSpec {
-            source: source.origin.syntax.clone(),
+            source: source.syntax().clone(),
             leaves,
         },
     );
@@ -1250,11 +1253,11 @@ fn build_plan<M>(
         &mut leaves,
         &mut hoists,
     )?;
-    require_unique_leaf_names(&source.origin.syntax, &leaves)?;
-    require_root_identity_last(by_ref, &source.origin.syntax, &leaves)?;
+    require_unique_leaf_names(source.syntax(), &leaves)?;
+    require_root_identity_last(by_ref, source.syntax(), &leaves)?;
 
     Ok(UnfoldPlan {
-        source: source.origin.syntax.clone(),
+        source: source.syntax().clone(),
         decon: Some(decon),
         by_ref,
         shape,
@@ -1389,7 +1392,7 @@ fn flatten<M>(
                 // call, so the whole record shares a single `Call` step and the
                 // emitter can hoist it.
                 let (takes, _ret) = accessor_signature(registry, func)?;
-                check_takes(func, &takes, &source.origin.syntax)?;
+                check_takes(func, &takes, source.syntax())?;
                 // The declarator states whether the value is given away; the
                 // signature has to agree, or the emitted call would not compile
                 // in the consumer's crate. Checked rather than inferred so that
@@ -1576,7 +1579,7 @@ fn flatten<M>(
                     DeconRecord::Identity | DeconRecord::Fields { .. } => unreachable!(),
                 };
                 let (takes, ret) = accessor_signature(registry, &func)?;
-                check_takes(&func, &takes, &source.origin.syntax)?;
+                check_takes(&func, &takes, source.syntax())?;
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
@@ -1723,9 +1726,9 @@ fn accessor_signature<M>(
         .params
         .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
-    let takes = match &first.ty.kind {
-        crate::api::core::flat::TypeKind::Ref { inner, .. } => inner.origin.syntax.clone(),
-        _ => first.ty.origin.syntax.clone(),
+    let takes = match first.ty.kind() {
+        crate::api::core::flat::TypeKind::Ref { inner, .. } => inner.syntax().clone(),
+        _ => first.ty.syntax().clone(),
     };
     Ok((takes, f.ret.clone()))
 }
@@ -1761,7 +1764,7 @@ fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
         .flat()
         .function(&func)
         .and_then(|f| f.params.first())
-        .is_some_and(|p| !matches!(p.ty.kind, crate::api::core::flat::TypeKind::Ref { .. }))
+        .is_some_and(|p| !matches!(p.ty.kind(), crate::api::core::flat::TypeKind::Ref { .. }))
 }
 
 fn check_takes(

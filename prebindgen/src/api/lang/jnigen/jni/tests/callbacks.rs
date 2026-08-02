@@ -621,7 +621,7 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
     let cb = f
         .params
         .iter()
-        .find_map(|p| match &p.ty.kind {
+        .find_map(|p| match p.ty.kind() {
             crate::api::core::flat::TypeKind::Callback { args } => Some((p, args)),
             _ => None,
         })
@@ -632,11 +632,11 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
     let from_reading = SpecKey::callback(
         &arg_readings
             .iter()
-            .map(|a| a.origin.syntax.clone())
+            .map(|a| a.syntax().clone())
             .collect::<Vec<_>>(),
     );
     let from_syntax = SpecKey::callback(
-        &crate::api::core::registry::extract_fn_trait_args(&param.ty.origin.syntax)
+        &crate::api::core::registry::extract_fn_trait_args(param.ty.syntax())
             .expect("the param is an impl Fn"),
     );
 

@@ -50,7 +50,7 @@ impl Declarations {
         // comes from here. The converter yields this spelling, so a
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
         // is dispatched as no longer decides what it is called.
-        let syntax = &ty.origin.syntax;
+        let syntax = ty.syntax();
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.input_terminal(ty, registry) {
@@ -66,13 +66,13 @@ impl Declarations {
             // that resolves correctly wins.
             if let Some(target) = inner.borrow_target() {
                 let mutable = matches!(
-                    inner.kind,
+                    inner.kind(),
                     crate::api::core::flat::TypeKind::Ref {
                         mode: RefMode::Exclusive,
                         ..
                     }
                 );
-                let t1 = target.origin.syntax.clone();
+                let t1 = target.syntax().clone();
                 if let Some(mut c) = self.input_wrapper_shape(
                     WrapperShape::OptionRef { mutable },
                     syntax,
@@ -91,14 +91,14 @@ impl Declarations {
             // wrapped optional borrow stops here rather than resolving wrong.
             if inner.borrow_target().is_some() {
                 let canonical: syn::Type = {
-                    let b = &inner.origin.syntax;
+                    let b = inner.syntax();
                     syn::parse_quote!(Option<#b>)
                 };
                 if syntax.to_token_stream().to_string() != canonical.to_token_stream().to_string() {
                     return None;
                 }
             }
-            let inner_ty = inner.origin.syntax.clone();
+            let inner_ty = inner.syntax().clone();
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Optional, syntax, &inner_ty, registry)
             {
@@ -108,7 +108,7 @@ impl Declarations {
             return None;
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
-            let elem_ty = elem.origin.syntax.clone();
+            let elem_ty = elem.syntax().clone();
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Sequence, syntax, &elem_ty, registry)
             {
@@ -117,7 +117,7 @@ impl Declarations {
             }
             return None;
         }
-        if let crate::api::core::flat::TypeKind::Ref { mode, inner } = &ty.kind {
+        if let crate::api::core::flat::TypeKind::Ref { mode, inner } = ty.kind() {
             // `&[T]` shared slice borrow: there is no owned `[T]` to decode, so
             // reuse the `Vec<_>` shape — decode the Java `List<T>` into an owned
             // `Vec<T>`; the call site borrows it (`&Vec<T>` deref-coerces to
@@ -138,9 +138,9 @@ impl Declarations {
             // NOT: passing `&Vec<T>` there does not compile. Those fall through to
             // the plain borrow arm below, which hands the whole spelling on as the
             // sub, exactly as the old syntactic slice check did.
-            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(&inner.origin.syntax) {
+            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(inner.syntax()) {
                 if let Some(elem) = inner.sequence_elem() {
-                    let elem_ty = elem.origin.syntax.clone();
+                    let elem_ty = elem.syntax().clone();
                     // The one place `produced` is NOT the crossing's spelling:
                     // there is no owned `[T]` to decode into, so the converter
                     // yields an owned `Vec<T>` and the call site borrows it.
@@ -158,7 +158,7 @@ impl Declarations {
                 }
             }
             let mutable = matches!(mode, RefMode::Exclusive);
-            let t1 = inner.origin.syntax.clone();
+            let t1 = inner.syntax().clone();
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, &t1, registry)
             {
@@ -184,7 +184,7 @@ impl Declarations {
         // detected its layers with `option_inner_type`/`vec_inner_type`, which
         // read the last path segment's ident. A `Box<Option<T>>` answered
         // "neither", and got no converter at all (#270).
-        let syntax = &ty.origin.syntax;
+        let syntax = ty.syntax();
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.output_terminal(ty, registry) {
@@ -204,7 +204,7 @@ impl Declarations {
         //    whose inner converter is the `&Handle` borrow entry (no deep
         //    output handler).
         if let Some(inner) = ty.optional_inner() {
-            let inner_ty = inner.origin.syntax.clone();
+            let inner_ty = inner.syntax().clone();
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Optional, syntax, &inner_ty, registry)
             {
@@ -214,7 +214,7 @@ impl Declarations {
             return None;
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
-            let elem_ty = elem.origin.syntax.clone();
+            let elem_ty = elem.syntax().clone();
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Sequence, syntax, &elem_ty, registry)
             {
@@ -223,19 +223,19 @@ impl Declarations {
             }
             return None;
         }
-        if let crate::api::core::flat::TypeKind::Ref { mode, inner } = &ty.kind {
+        if let crate::api::core::flat::TypeKind::Ref { mode, inner } = ty.kind() {
             // `&[T]` shared slice (a callback argument crossing native→JVM):
             // build a `List<T>` from the borrowed slice. Dual of the `&[T]`
             // input branch, and the same split: `kind` says it is a borrow of a
             // run of values; whether the generated Rust can iterate the borrow
             // directly is a question about the SPELLING.
-            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(&inner.origin.syntax) {
+            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(inner.syntax()) {
                 if let Some(elem) = inner.sequence_elem() {
-                    return self.output_slice(&elem.origin.syntax, registry);
+                    return self.output_slice(elem.syntax(), registry);
                 }
             }
             let mutable = matches!(mode, RefMode::Exclusive);
-            let t1 = inner.origin.syntax.clone();
+            let t1 = inner.syntax().clone();
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, &t1, registry)
             {
@@ -264,8 +264,8 @@ fn fallible_parts(
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Type)> {
     use crate::api::core::flat::TypeKind;
-    if let Some(TypeKind::Fallible { ok, err }) = registry.flat().type_ref(ty).map(|t| &t.kind) {
-        return Some((ok.origin.syntax.clone(), err.origin.syntax.clone()));
+    if let Some(TypeKind::Fallible { ok, err }) = registry.flat().type_ref(ty).map(|t| t.kind()) {
+        return Some((ok.syntax().clone(), err.syntax().clone()));
     }
     crate::api::core::types_util::result_parts(ty)
 }

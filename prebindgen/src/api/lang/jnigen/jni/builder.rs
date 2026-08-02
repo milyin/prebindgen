@@ -852,17 +852,17 @@ impl Declarations {
         // model already normalized them.
         let ret = accessor.ret.borrow_target().unwrap_or(&accessor.ret);
         assert!(
-            !matches!(ret.kind, crate::api::core::flat::TypeKind::Unit),
+            !matches!(ret.kind(), crate::api::core::flat::TypeKind::Unit),
             "expand_return!({}).fields(fields!({func})): `{func}` returns nothing — a \
              value form returns the struct holding this type's fields",
             key.as_str(),
         );
-        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret.origin.syntax) else {
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, ret.syntax()) else {
             panic!(
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
                 key.as_str(),
-                ret.origin.syntax.to_token_stream(),
+                ret.syntax().to_token_stream(),
             )
         };
         let st = st.clone();
@@ -1001,7 +1001,7 @@ impl Declarations {
             // must decompose into its selector and groups wherever it appears.
             let bare = field.ty.optional_inner().unwrap_or(&field.ty);
             let probe = bare.sequence_elem().unwrap_or(bare);
-            match self.type_kind(registry, &probe.origin.syntax) {
+            match self.type_kind(registry, probe.syntax()) {
                 TypeKind::DataStruct { st, cfg: Some(_) }
                     if field.ty.optional_inner().is_none()
                         && field.ty.sequence_elem().is_none() =>
@@ -1035,7 +1035,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.origin.syntax.to_token_stream(),
+                        probe.syntax().to_token_stream(),
                     );
                     assert!(
                         field.ty.optional_inner().is_none(),
@@ -1048,12 +1048,12 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.origin.syntax.to_token_stream(),
+                        probe.syntax().to_token_stream(),
                         dotted,
                     );
                     // The name is the reading's, not a path taken apart to
                     // re-derive one.
-                    let crate::api::core::flat::TypeKind::Named { id } = &probe.kind else {
+                    let crate::api::core::flat::TypeKind::Named { id } = probe.kind() else {
                         panic!("a sum type is a named type")
                     };
                     let crate::api::core::flat::Type::Variant(sum) = registry

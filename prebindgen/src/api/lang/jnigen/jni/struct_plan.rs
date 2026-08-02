@@ -225,7 +225,7 @@ pub(crate) fn classify_field(
     // classified this type. Taking a `syn::Type` meant asking the registry per
     // question, and a type it had never seen answered "no layer" rather than
     // saying so — which is the missing `?` of #273 waiting to happen again.
-    let effective_ty = reading.origin.syntax.clone();
+    let effective_ty = reading.syntax().clone();
 
     // A sum is classified FIRST, because it is the one kind with no converter
     // of its own: it crosses as a tag plus one leaf group per variant, never
@@ -244,9 +244,9 @@ pub(crate) fn classify_field(
     // other about the same field (#273).
     let optional_inner = reading.optional_inner();
     let bare_ref = optional_inner.unwrap_or(reading);
-    let bare = bare_ref.origin.syntax.clone();
+    let bare = bare_ref.syntax().clone();
     let seq_elem = bare_ref.sequence_elem();
-    let core = seq_elem.map_or_else(|| bare.clone(), |e| e.origin.syntax.clone());
+    let core = seq_elem.map_or_else(|| bare.clone(), |e| e.syntax().clone());
     if matches!(ext.type_kind(registry, &core), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
@@ -282,7 +282,7 @@ pub(crate) fn classify_field(
             return Some(PlanFieldKind::Enum { conv, kotlin });
         }
         // `Option<enum>` leaf.
-        if let Some(inner) = optional_inner.map(|i| i.origin.syntax.clone()) {
+        if let Some(inner) = optional_inner.map(|i| i.syntax().clone()) {
             if ext.is_kotlin_enum(&inner) {
                 let kotlin = registry
                     .output_entry(&inner)?
@@ -322,8 +322,8 @@ pub(crate) fn classify_field(
             None => {
                 // Object-shaped wire with no fixed descriptor; the JVM slot
                 // must be the field's actual declared type (Option-stripped).
-                let slot_ty = optional_inner
-                    .map_or_else(|| effective_ty.clone(), |i| i.origin.syntax.clone());
+                let slot_ty =
+                    optional_inner.map_or_else(|| effective_ty.clone(), |i| i.syntax().clone());
                 let descriptor = registry
                     .output_entry(&slot_ty)
                     .and_then(|e| jni_field_access(&e.destination))

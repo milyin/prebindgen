@@ -137,7 +137,7 @@ pub(crate) fn synthetic_getter(
     ident: syn::Ident,
     ret: crate::api::core::flat::TypeRef,
 ) -> crate::api::core::flat::Function {
-    let ret_syntax = &ret.origin.syntax;
+    let ret_syntax = ret.syntax();
     let item: syn::ItemFn = syn::parse_quote! {
         pub fn #ident() -> #ret_syntax {
             unimplemented!()
@@ -146,7 +146,7 @@ pub(crate) fn synthetic_getter(
     crate::api::core::flat::Function {
         name: ident,
         params: Vec::new(),
-        origin: ret.origin.with(item),
+        origin: ret.origin_with(item),
         ret,
     }
 }
@@ -754,7 +754,7 @@ pub(crate) fn emit_expanded_param(
 
     debug_assert_eq!(plan.leaves.len(), leaves.len());
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
-        let leaf_ty = &leaf.ty.origin.syntax;
+        let leaf_ty = leaf.ty.syntax();
         let lookup_entry = || {
             registry.input_entry(leaf_ty).unwrap_or_else(|| {
                 panic!(

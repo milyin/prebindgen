@@ -337,7 +337,7 @@ impl<M> Registry<M> {
             .map(|c| &c.subject)
         {
             let (children, child_dir): (Vec<&crate::api::core::flat::TypeRef>, Direction) =
-                match &reading.kind {
+                match reading.kind() {
                     TypeKind::Optional(t)
                     | TypeKind::Sequence(t)
                     | TypeKind::Ref { inner: t, .. } => (vec![t], dir),
@@ -354,7 +354,7 @@ impl<M> Registry<M> {
                     | TypeKind::Unit => (Vec::new(), dir),
                 };
             for child in children {
-                out.push((child_dir, child.origin.syntax.clone()));
+                out.push((child_dir, child.syntax().clone()));
             }
         }
         // A declared type's own fields, read off the element rather than off its
@@ -371,7 +371,7 @@ impl<M> Registry<M> {
         if let Some(name) = self
             .type_table(dir)
             .get(&TypeKey::from_type(ty))
-            .and_then(|c| match &c.subject.kind {
+            .and_then(|c| match c.subject.kind() {
                 TypeKind::Named { id } => Some(id.name.clone()),
                 _ => None,
             })
@@ -387,7 +387,7 @@ impl<M> Registry<M> {
                 Some(Type::Enum(_) | Type::Extern(_)) | None => Vec::new(),
             };
             for field in fields {
-                out.push((dir, field.ty.origin.syntax.clone()));
+                out.push((dir, field.ty.syntax().clone()));
             }
         }
         out
