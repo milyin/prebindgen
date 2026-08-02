@@ -26,16 +26,36 @@ impl IdentityExt {
 impl Prebindgen for IdentityExt {
     type Metadata = ();
 
-    fn on_function(&self, f: &syn::ItemFn, _registry: &Registry<Self::Metadata>) -> TokenStream {
-        f.to_token_stream()
+    fn on_function(
+        &self,
+        f: &crate::api::core::flat::Function,
+        _registry: &Registry<Self::Metadata>,
+    ) -> TokenStream {
+        f.origin.syntax.to_token_stream()
     }
 
-    fn on_struct(&self, s: &syn::ItemStruct, _registry: &Registry<Self::Metadata>) -> TokenStream {
-        s.to_token_stream()
+    fn on_struct(
+        &self,
+        s: &crate::api::core::flat::Struct,
+        _registry: &Registry<Self::Metadata>,
+    ) -> TokenStream {
+        s.origin.syntax.to_token_stream()
     }
 
-    fn on_enum(&self, e: &syn::ItemEnum, _registry: &Registry<Self::Metadata>) -> TokenStream {
-        e.to_token_stream()
+    fn on_variant(
+        &self,
+        v: &crate::api::core::flat::Variant,
+        _registry: &Registry<Self::Metadata>,
+    ) -> TokenStream {
+        v.origin.syntax.to_token_stream()
+    }
+
+    fn on_enum(
+        &self,
+        e: &crate::api::core::flat::Enum,
+        _registry: &Registry<Self::Metadata>,
+    ) -> TokenStream {
+        e.origin.syntax.to_token_stream()
     }
 }
 
@@ -217,14 +237,25 @@ fn guards_emit_ungated_and_in_stream_order() {
     impl Prebindgen for ConstGatingExt {
         type Metadata = ();
 
-        fn on_function(&self, f: &syn::ItemFn, _r: &Registry<()>) -> TokenStream {
-            f.to_token_stream()
+        fn on_function(
+            &self,
+            f: &crate::api::core::flat::Function,
+            _r: &Registry<()>,
+        ) -> TokenStream {
+            f.origin.syntax.to_token_stream()
         }
-        fn on_struct(&self, s: &syn::ItemStruct, _r: &Registry<()>) -> TokenStream {
-            s.to_token_stream()
+        fn on_struct(&self, s: &crate::api::core::flat::Struct, _r: &Registry<()>) -> TokenStream {
+            s.origin.syntax.to_token_stream()
         }
-        fn on_enum(&self, e: &syn::ItemEnum, _r: &Registry<()>) -> TokenStream {
-            e.to_token_stream()
+        fn on_variant(
+            &self,
+            v: &crate::api::core::flat::Variant,
+            _r: &Registry<()>,
+        ) -> TokenStream {
+            v.origin.syntax.to_token_stream()
+        }
+        fn on_enum(&self, e: &crate::api::core::flat::Enum, _r: &Registry<()>) -> TokenStream {
+            e.origin.syntax.to_token_stream()
         }
     }
 

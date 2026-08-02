@@ -65,7 +65,10 @@ pub(crate) enum ParamForm {
 
 /// One classified effective parameter (a source param, or one expansion leaf).
 pub(crate) struct PlanLeaf {
-    pub ty: syn::Type,
+    /// The leaf's **reading** — classification and spelling in one value, so
+    /// the two cannot disagree and no consumer has to look the type up. Spell
+    /// with `reading.origin.syntax`.
+    pub reading: crate::api::core::flat::TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
     /// `external fun` declaration.
@@ -313,8 +316,7 @@ pub(crate) fn validate_bindings(
         if !declared.contains(ident) {
             continue;
         }
-        let item_fn = &f.origin.syntax;
-        match ext.fn_plan(registry, item_fn) {
+        match ext.fn_plan(registry, f) {
             Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
             Err(e) => errors.push(e.message(ident)),
         }
@@ -331,10 +333,10 @@ pub(crate) fn validate_bindings(
             if !declared_consts.contains(ident) {
                 continue;
             }
-            let getter = const_getter_fn(&c.origin.syntax);
+            let getter = const_getter_fn(c);
             match ext.fn_plan(registry, &getter) {
                 Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
-                Err(e) => errors.push(e.message(&getter.sig.ident)),
+                Err(e) => errors.push(e.message(&getter.name)),
             }
         }
     }
@@ -348,10 +350,10 @@ pub(crate) fn validate_bindings(
         .collect();
     expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
     for decl in expr_decls {
-        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
         match ext.fn_plan(registry, &getter) {
             Ok(plan) => record_symbol(&plan.native_symbol, decl.kotlin_name.clone(), &mut errors),
-            Err(e) => errors.push(e.message(&getter.sig.ident)),
+            Err(e) => errors.push(e.message(&getter.name)),
         }
     }
 
@@ -393,15 +395,15 @@ impl Declarations {
     pub(crate) fn fn_plan(
         &self,
         registry: &Registry<KotlinMeta>,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
     ) -> Result<std::rc::Rc<JniFunctionPlan>, PlanError> {
-        if let Some(hit) = self.fn_plans.borrow().get(&f.sig.ident).cloned() {
+        if let Some(hit) = self.fn_plans.borrow().get(&f.name).cloned() {
             return Ok(hit);
         }
         let plan = std::rc::Rc::new(JniFunctionPlan::build(self, registry, f)?);
         self.fn_plans
             .borrow_mut()
-            .insert(f.sig.ident.clone(), plan.clone());
+            .insert(f.name.clone(), plan.clone());
         Ok(plan)
     }
 }
@@ -413,40 +415,56 @@ impl JniFunctionPlan {
     pub fn build(
         ext: &Declarations,
         registry: &Registry<KotlinMeta>,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
     ) -> Result<Self, PlanError> {
-        let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.sig.ident.to_string()));
+        let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
         let native_symbol = ext.native_method_symbol(&jni_method);
-        let onerror_iface = onerror_iface_spec(ext, registry, &f.sig.ident);
+        let onerror_iface = onerror_iface_spec(ext, registry, &f.name);
         // Output first: the Rust emitter historically resolved the output
         // before the inputs, so an unresolved-output failure takes precedence
         // over an unresolved-input one.
         let output = build_output(ext, registry, f)?;
         let mut params = Vec::new();
-        for input in &f.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else {
-                continue;
-            };
-            let syn::Pat::Ident(pid) = &*pt.pat else {
-                continue;
-            };
-            let ident = pid.ident.clone();
-            let ty = (*pt.ty).clone();
+        // The element's parameters: each already a name and a `TypeRef`, so
+        // there is no `FnArg`/`Pat` destructuring and no position that could
+        // fail to yield a type.
+        for param in &f.params {
+            let ident = param.name.clone();
+            let ty = param.ty.origin.syntax.clone();
 
             let form = if let Some(plan) = registry
                 .expansion_plans()
-                .get(&(f.sig.ident.clone(), ident.clone()))
+                .get(&(f.name.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();
                 for leaf in &plan.leaves {
+                    // The ONE lookup left on this path: `FoldLeaf::ty` is a
+                    // `syn::Type` in core, so the reading has to be fetched
+                    // rather than carried. #275's second half removes it by
+                    // making the plan leaves carry `TypeRef`; until then a miss
+                    // means the leaf's type never entered the pipeline, which
+                    // is worth naming rather than absorbing.
+                    let leaf_reading = registry.reading(&leaf.ty).unwrap_or_else(|| {
+                        panic!(
+                            "fold leaf `{}` of `{}`: type `{}` never entered the pipeline",
+                            leaf.name,
+                            f.name,
+                            quote::ToTokens::to_token_stream(&leaf.ty),
+                        )
+                    });
                     leaves.push(classify_leaf(
-                        ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
+                        ext,
+                        registry,
+                        &leaf.name,
+                        &leaf_reading,
+                        /*expanded=*/ true,
+                        &ident,
                     )?);
                 }
                 ParamForm::Expanded(leaves)
             } else {
                 ParamForm::Single(Box::new(classify_leaf(
-                    ext, registry, &ident, &ty, /*expanded=*/ false, &ident,
+                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident,
                 )?))
             };
             params.push(PlanParam { ident, ty, form });
@@ -474,7 +492,11 @@ impl JniFunctionPlan {
         })
     }
 
-    fn jvm_parameter_slots(&self, registry: &Registry<KotlinMeta>, f: &syn::ItemFn) -> usize {
+    fn jvm_parameter_slots(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        f: &crate::api::core::flat::Function,
+    ) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
         // methods and the JVM counts the implicit receiver as one unit.
         let mut slots = 1usize;
@@ -489,7 +511,7 @@ impl JniFunctionPlan {
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
                 InputKind::Unsigned64 { .. } | InputKind::Plain => registry
-                    .input_entry(&leaf.ty)
+                    .input_entry(&leaf.reading.origin.syntax)
                     .and_then(|entry| JniPrim::from_wire(&entry.destination))
                     .map_or(1, |prim| match prim {
                         JniPrim::Long | JniPrim::Double => 2,
@@ -503,7 +525,7 @@ impl JniFunctionPlan {
             FnOutputPlan::Value(_) => 0,
         };
         slots += 1; // binding-error sink
-        if registry.error_plans().contains_key(&f.sig.ident) {
+        if registry.error_plans().contains_key(&f.name) {
             slots += 1;
         }
         slots
@@ -525,11 +547,14 @@ fn classify_leaf(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     ident: &syn::Ident,
-    ty: &syn::Type,
+    reading: &crate::api::core::flat::TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    let optional = registry.is_optional(ty);
+    // The reading, so the layer questions cannot miss. What generated Rust must
+    // spell is `origin.syntax`, unchanged.
+    let ty = &reading.origin.syntax;
+    let optional = reading.optional_inner().is_some();
     let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(ty));
     let kt_name = kt_param_name(&ident.to_string());
 
@@ -538,7 +563,7 @@ fn classify_leaf(
     if let Some(args) = extract_fn_trait_args(ty) {
         let iface = ext.iface_spec(registry, &SpecKey::callback(&args));
         return Ok(PlanLeaf {
-            ty: ty.clone(),
+            reading: reading.clone(),
             kt_name,
             kt_public: None,
             kt_meta: registry
@@ -582,8 +607,9 @@ fn classify_leaf(
             },
             Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
                 niche: entry.metadata.projection.as_ref().and_then(|p| {
-                    registry
-                        .is_optional(ty)
+                    reading
+                        .optional_inner()
+                        .is_some()
                         .then(|| p.niche_sentinels.first().cloned())
                         .flatten()
                 }),
@@ -601,7 +627,7 @@ fn classify_leaf(
     };
 
     Ok(PlanLeaf {
-        ty: ty.clone(),
+        reading: reading.clone(),
         kt_name,
         kt_public,
         kt_meta,
@@ -619,13 +645,13 @@ fn classify_leaf(
 fn build_output(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
 ) -> Result<FnOutputPlan, PlanError> {
     use crate::api::core::{
         types_util::result_ok_type,
         unfold::{Delivery, UnfoldShape},
     };
-    let ident = &f.sig.ident;
+    let ident = &f.name;
     let unfold_plan = registry.unfold_plans().get(ident);
 
     // Callback delivery: the return is decomposed to a foreign builder/fold
@@ -668,10 +694,9 @@ fn build_output(
     // `Return` delivery, the `Result` Ok type when an error plan peels, else
     // the function's own return.
     let is_convert = unfold_plan.is_some();
-    let return_ty: syn::Type = match &f.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, ty) => (**ty).clone(),
-    };
+    // The element normalizes an elided return and a written `-> ()` to one
+    // `Unit` reading, so there is no `ReturnType` match here.
+    let return_ty: syn::Type = f.ret.origin.syntax.clone();
     let error_plan = registry.error_plans().get(ident);
     let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
     let target_ty = match unfold_plan {
@@ -695,7 +720,8 @@ fn build_output(
     let ret_decl: syn::ReturnType = if is_convert {
         syn::parse_quote!(-> #target_ty)
     } else {
-        f.sig.output.clone()
+        let ret = &f.ret.origin.syntax;
+        syn::parse_quote!(-> #ret)
     };
     let (surface, canonical) = ReturnSurface::classify(ext, registry, &ret_decl);
     let is_enum = ext.is_kotlin_enum(&canonical);

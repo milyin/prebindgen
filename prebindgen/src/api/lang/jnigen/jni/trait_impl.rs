@@ -1690,7 +1690,7 @@ impl Prebindgen for Declarations {
         }
         for decl in self.packages.values().flat_map(|p| &p.constant_exprs) {
             validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
             let expr = &decl.expr;
             let callee: syn::Expr = syn::parse_quote!({
                 #(
@@ -1714,18 +1714,38 @@ impl Prebindgen for Declarations {
 
     // ── Item methods ─────────────────────────────────────────────────
 
-    fn on_function(&self, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> TokenStream {
+    fn on_function(
+        &self,
+        f: &crate::api::core::flat::Function,
+        registry: &Registry<KotlinMeta>,
+    ) -> TokenStream {
         emit_jni_function_wrapper(self, f, registry)
     }
 
-    fn on_struct(&self, _s: &syn::ItemStruct, _registry: &Registry<KotlinMeta>) -> TokenStream {
+    fn on_struct(
+        &self,
+        _s: &crate::api::core::flat::Struct,
+        _registry: &Registry<KotlinMeta>,
+    ) -> TokenStream {
         // Struct converter bodies are emitted by the resolver via
         // input_terminal / output_terminal below; no separate
         // per-struct item is needed.
         TokenStream::new()
     }
 
-    fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<KotlinMeta>) -> TokenStream {
+    fn on_variant(
+        &self,
+        _v: &crate::api::core::flat::Variant,
+        _registry: &Registry<KotlinMeta>,
+    ) -> TokenStream {
+        TokenStream::new()
+    }
+
+    fn on_enum(
+        &self,
+        _e: &crate::api::core::flat::Enum,
+        _registry: &Registry<KotlinMeta>,
+    ) -> TokenStream {
         TokenStream::new()
     }
 
@@ -1736,14 +1756,18 @@ impl Prebindgen for Declarations {
     /// extern. The getter reuses the whole function-wrapper pipeline (so the
     /// const's type flows through the ordinary output-converter machinery);
     /// only the callee expression differs — a path to the const, not a call.
-    fn on_const(&self, c: &syn::ItemConst, registry: &Registry<KotlinMeta>) -> TokenStream {
-        reject_handle_const(self, c);
+    fn on_const(
+        &self,
+        c: &crate::api::core::flat::Constant,
+        registry: &Registry<KotlinMeta>,
+    ) -> TokenStream {
+        reject_handle_const(self, &c.origin.syntax);
         let getter = const_getter_fn(c);
-        let const_ident = &c.ident;
+        let const_ident = &c.name;
         let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
         let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
-        let alias = crate::api::core::const_path_alias(c, &source_module);
+        let alias = crate::api::core::const_path_alias(&c.origin.syntax, &source_module);
         quote! {
             #alias
             #wrapper

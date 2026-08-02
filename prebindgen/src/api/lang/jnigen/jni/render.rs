@@ -305,11 +305,7 @@ pub(crate) fn build_typed_handle(
             .param(kt::KtParam::new("ptr", kt::KtType::long())),
     );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
-        if let Some(item_fn) = registry
-            .flat()
-            .function(&m.rust_ident)
-            .map(|func| &func.origin.syntax)
-        {
+        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
@@ -418,11 +414,7 @@ pub(crate) fn build_typed_handle(
     // (receiver bound to `this`), delegating to the same centralized
     // `JNINative` extern as a free wrapper would.
     for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-        if let Some(item_fn) = registry
-            .flat()
-            .function(&m.rust_ident)
-            .map(|func| &func.origin.syntax)
-        {
+        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
@@ -460,7 +452,7 @@ pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) ->
 /// resolved. Full-FQN types throughout — no derivation-time shortening.
 pub(crate) fn render_extern_decl(
     ext: &Declarations,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<kt::KtFun> {
     // The name and wire params come straight off the lowered plan — the
@@ -545,7 +537,7 @@ pub(crate) fn render_extern_decl(
     // erased to `Any` (JObject) on the wire; the wrapper passes a capture for
     // each. A domain plan ⇒ `error_plans` has this fn.
     params.push(kt::KtParam::new("errorSink", kt::KtType::any()));
-    if registry.error_plans().contains_key(&f.sig.ident) {
+    if registry.error_plans().contains_key(&f.name) {
         params.push(kt::KtParam::new("domainSink", kt::KtType::any()));
     }
 
@@ -748,7 +740,7 @@ pub(crate) struct WrapperSurface {
 /// (`build_native_call` / `render_body` / KDoc / opaque-lock collection).
 pub(crate) fn build_wrapper_surface(
     ext: &Declarations,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
@@ -761,7 +753,7 @@ pub(crate) fn build_wrapper_surface(
     // to hit the one extern that the Rust extern actually emits.
     let kt_name = match kotlin_name_override {
         Some(n) => n.to_string(),
-        None => kt_snake_to_camel(&f.sig.ident.to_string()),
+        None => kt_snake_to_camel(&f.name.to_string()),
     };
     let jni_call = fplan.jni_method.clone();
     let (params, receiver_idx) =
@@ -827,7 +819,7 @@ pub(crate) fn build_wrapper_surface(
 
 pub(crate) fn render_wrapper_fn(
     ext: &Declarations,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
@@ -885,24 +877,24 @@ pub(crate) fn render_wrapper_fn(
 pub(crate) fn render_const_val(
     ext: &Declarations,
     package: &str,
-    c: &syn::ItemConst,
+    c: &crate::api::core::flat::Constant,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
     let getter = const_getter_fn(c);
-    let default = kt_snake_to_camel(&getter.sig.ident.to_string());
+    let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
-        .unwrap_or_else(|| c.ident.to_string());
+        .unwrap_or_else(|| c.name.to_string());
     let framework_line = format!(
         "Mirrors the Rust `#[prebindgen]` const `{}` (read lazily, once, through \
          the generated JNI getter on first use).",
-        c.ident
+        c.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.attrs)
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.origin.syntax.attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -916,23 +908,23 @@ pub(crate) fn render_const_val(
 pub(crate) fn render_constant_fn_val(
     ext: &Declarations,
     package: &str,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
-    let default = kt_snake_to_camel(&f.sig.ident.to_string());
+    let default = kt_snake_to_camel(&f.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn(ext, f, registry, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
-        .unwrap_or_else(|| f.sig.ident.to_string());
+        .unwrap_or_else(|| f.name.to_string());
     let framework_line = format!(
         "Mirrors the Rust `#[prebindgen]` fn `{}()` (evaluated lazily, once, \
          through the generated JNI wrapper on first use).",
-        f.sig.ident
+        f.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.attrs)
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -950,8 +942,8 @@ pub(crate) fn render_const_expr_val(
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
-    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
-    let default = kt_snake_to_camel(&getter.sig.ident.to_string());
+    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+    let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
     let expr = decl.expr.to_token_stream();
@@ -1077,7 +1069,7 @@ fn classify_params(
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
         let mut name = leaf.kt_name.clone();
-        let arg_ty = &leaf.ty;
+        let arg_ty = &leaf.reading.origin.syntax;
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
@@ -1205,9 +1197,15 @@ fn classify_params(
                 // Handle → Borrow/Consume by Rust syntactic shape (locked);
                 // `Option<&T>` / by-value `Option<T>` mark the param nullable
                 // and the wrapper body branches on null before lock selection.
-                if registry.is_optional_borrow(arg_ty) {
+                // Both read off the leaf's own reading — no lookup, and a
+                // wrapped spelling answers as the bare one does.
+                if leaf
+                    .reading
+                    .optional_inner()
+                    .is_some_and(|i| i.borrow_target().is_some())
+                {
                     ParamMode::BorrowNullable
-                } else if registry.is_optional(arg_ty) {
+                } else if leaf.reading.optional_inner().is_some() {
                     // by-value `Option<T>` opaque → nullable consume
                     ParamMode::ConsumeNullable
                 } else if matches!(arg_ty, syn::Type::Reference(_)) {
@@ -1258,12 +1256,12 @@ fn classify_params(
 /// unchanged).
 fn classify_output(
     ext: &Declarations,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<OutputPlan> {
-    let unfold = registry.unfold_plans().get(&f.sig.ident);
+    let unfold = registry.unfold_plans().get(&f.name);
     // `builder_param` is the trailing **lambda** param (build / fold) as a
     // `(name, function-type)` pair. For the `Iterable` shape, the non-lambda
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
@@ -1607,7 +1605,7 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
 /// separate SAM param; the wrapper passes a per-thread capture to the extern,
 /// then after the native call redispatches to whichever channel fired.
 fn error_sink_parts(
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1624,7 +1622,7 @@ fn error_sink_parts(
     let domain = if let Some(domain_spec) = &ifaces.domain {
         let error_plan = registry
             .error_plans()
-            .get(&f.sig.ident)
+            .get(&f.name)
             .expect("domain handler ⇒ error plan");
         // Per ze leaf: (raw capture Kotlin type, raw→typed wrap). The CAPTURE
         // is the raw twin (what the native side calls); the user's handler is
@@ -2223,8 +2221,11 @@ pub(crate) fn kt_param_name(rust_ident: &str) -> String {
 /// documenting the REAL prototype after all expansions — one note per
 /// position a plan reshaped, phrased for the caller. `None` for an
 /// undocumented, unshaped fn.
-fn wrapper_kdoc(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
-    let prose = crate::api::lang::jnigen::util::doc_string(&f.attrs);
+fn wrapper_kdoc(
+    f: &crate::api::core::flat::Function,
+    registry: &Registry<KotlinMeta>,
+) -> Option<String> {
+    let prose = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs);
     let notes = shape_notes(f, registry);
     match (prose, notes) {
         (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
@@ -2239,8 +2240,11 @@ fn wrapper_kdoc(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Stri
 /// returns (what the builder/fold receives), and error decompositions
 /// (what `onError` receives). Reads the same resolved plan maps the C7
 /// report uses.
-fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
-    let fn_ident = &f.sig.ident;
+fn shape_notes(
+    f: &crate::api::core::flat::Function,
+    registry: &Registry<KotlinMeta>,
+) -> Option<String> {
+    let fn_ident = &f.name;
     let mut notes: Vec<String> = Vec::new();
 
     let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry

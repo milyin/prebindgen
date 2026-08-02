@@ -228,17 +228,50 @@ pub trait Prebindgen {
     }
 
     // ── Item methods ───────────────────────────────────────────────
+    //
+    // Each takes the **element**, not the `syn` item it was parsed from.
+    //
+    // The element is the model's own node: its types are `TypeRef`s, already
+    // classified. An adapter handed one therefore cannot ask what a type means
+    // and be told "no reading" — the question a `&syn::ItemFn` forced it to ask
+    // the registry, and which answered wrongly for a type that never entered
+    // the pipeline (#275). What generated Rust must *spell* is still exactly
+    // available, on `origin.syntax`: classify off `kind`, spell off `syntax`.
 
     /// Wrap a `#[prebindgen]` fn into the destination-language wrapper
     /// (e.g. JNI `extern "C"` fn).
-    fn on_function(&self, f: &syn::ItemFn, registry: &Registry<Self::Metadata>) -> TokenStream;
+    fn on_function(
+        &self,
+        f: &crate::api::core::flat::Function,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
 
     /// Per-struct emission. Typically empty for languages that get
     /// everything they need from auto-generated converters.
-    fn on_struct(&self, s: &syn::ItemStruct, registry: &Registry<Self::Metadata>) -> TokenStream;
+    fn on_struct(
+        &self,
+        s: &crate::api::core::flat::Struct,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
 
-    /// Per-enum emission.
-    fn on_enum(&self, e: &syn::ItemEnum, registry: &Registry<Self::Metadata>) -> TokenStream;
+    /// Per-sum emission — an `enum` whose alternatives carry payloads.
+    ///
+    /// Separate from [`Self::on_enum`] because the model separates them: the
+    /// two are numbered differently and consumed as different constructs. An
+    /// adapter with nothing to say about one shape returns an empty stream, as
+    /// both in-tree adapters do for both.
+    fn on_variant(
+        &self,
+        v: &crate::api::core::flat::Variant,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
+
+    /// Per-enum emission — the fieldless shape, a named set of integers.
+    fn on_enum(
+        &self,
+        e: &crate::api::core::flat::Enum,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
 
     /// Per-const emission. Default: a named const re-emits as a path-alias
     /// (see [`const_path_alias`]) when [`Self::source_module`] is available —
@@ -249,11 +282,15 @@ pub trait Prebindgen {
     /// A const reaching here is always named: prebindgen's own injected feature
     /// checks are [`Guard`](crate::api::core::flat::Guard)s, not consts, so this
     /// never has to recognise one.
-    fn on_const(&self, c: &syn::ItemConst, _registry: &Registry<Self::Metadata>) -> TokenStream {
+    fn on_const(
+        &self,
+        c: &crate::api::core::flat::Constant,
+        _registry: &Registry<Self::Metadata>,
+    ) -> TokenStream {
         use quote::ToTokens;
         match self.source_module() {
-            Some(m) => const_path_alias(c, m),
-            None => c.to_token_stream(),
+            Some(m) => const_path_alias(&c.origin.syntax, m),
+            None => c.origin.syntax.to_token_stream(),
         }
     }
 }

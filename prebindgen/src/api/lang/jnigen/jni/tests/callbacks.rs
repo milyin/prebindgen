@@ -565,12 +565,7 @@ fn fn_plan_memo_shares_one_derivation() {
     // resolve runs validation, which builds and stores every function's plan.
     let gen = jni.build_with(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
-    let f = &registry
-        .flat()
-        .function("z_do_thing")
-        .expect("indexed")
-        .origin
-        .syntax;
+    let f = registry.flat().function("z_do_thing").expect("indexed");
 
     // The plan is already in the memo (populated at resolve by validation) —
     // repeated lookups return the SAME allocation, and it equals what a fresh
