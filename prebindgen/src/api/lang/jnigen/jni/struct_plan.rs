@@ -261,9 +261,7 @@ pub(crate) fn classify_field(
         return sum_plan_kind(ext, registry, &bare, owner, optional_inner.is_some(), depth);
     }
 
-    let field_entry = registry
-        .reading_of(&effective_ty)
-        .and_then(|tr| registry.output_entry(&tr))?;
+    let field_entry = registry.output_entry(reading)?;
     let conv = ConvChain::of(field_entry);
 
     {
@@ -284,14 +282,9 @@ pub(crate) fn classify_field(
             return Some(PlanFieldKind::Enum { conv, kotlin });
         }
         // `Option<enum>` leaf.
-        if let Some(inner) = optional_inner.map(|i| i.syntax().clone()) {
-            if ext.is_kotlin_enum(&inner) {
-                let kotlin = registry
-                    .reading_of(&inner)
-                    .and_then(|tr| registry.output_entry(&tr))?
-                    .metadata
-                    .kotlin_name
-                    .clone()?;
+        if let Some(inner) = optional_inner {
+            if ext.is_kotlin_enum(inner.syntax()) {
+                let kotlin = registry.output_entry(inner)?.metadata.kotlin_name.clone()?;
                 return Some(PlanFieldKind::OptionEnum { conv, kotlin });
             }
         }
@@ -325,11 +318,11 @@ pub(crate) fn classify_field(
             None => {
                 // Object-shaped wire with no fixed descriptor; the JVM slot
                 // must be the field's actual declared type (Option-stripped).
-                let slot_ty =
-                    optional_inner.map_or_else(|| effective_ty.clone(), |i| i.syntax().clone());
+                // Option-stripped off the MODEL: `optional_inner` is the
+                // layer's own reading, so there is nothing to re-look-up.
+                let slot = optional_inner.unwrap_or(reading);
                 let descriptor = registry
-                    .reading_of(&slot_ty)
-                    .and_then(|tr| registry.output_entry(&tr))
+                    .output_entry(slot)
                     .and_then(|e| jni_field_access(&e.destination))
                     .and_then(|(sig, _, is_obj)| {
                         if is_obj {
@@ -344,13 +337,23 @@ pub(crate) fn classify_field(
                         }
                     })
                     .or_else(|| {
-                        bare_path_ident(&slot_ty).and_then(|name| {
+                        // The NAME off the classification, not off the last
+                        // path segment: `Box<T>` IS `T` here, and taking the
+                        // spelling apart would answer about the wrapper.
+                        match slot.kind() {
+                            crate::api::core::flat::TypeKind::Named { id } => id.ident(),
+                            _ => None,
+                        }
+                        .and_then(|name| {
                             ext.kotlin_fqn(&TypeKey::from_ident(&name))
                                 .map(|v| format!("L{};", v.replace('.', "/")))
                         })
                     })
                     .or_else(|| {
-                        if pat_match_top(&slot_ty, "Vec") {
+                        // A run of values is what `kind` says it is.
+                        // `pat_match_top(.., "Vec")` compared the last path
+                        // segment, so a `Box<Vec<T>>` answered false.
+                        if slot.sequence_elem().is_some() {
                             Some("Ljava/util/List;".to_string())
                         } else {
                             // The wire table already names every reference wire's
