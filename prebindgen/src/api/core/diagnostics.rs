@@ -15,7 +15,6 @@ use crate::api::core::{
     flat::{type_from_ident, Flat},
     prebindgen::NamePredicate,
     registry::TypeKey,
-    types_util::bare_path_ident,
 };
 
 /// What a binding claimed, so everything else can be reported.
@@ -79,7 +78,7 @@ pub(crate) fn unclaimed_report(flat: &Flat, claimed: &Claimed) -> Vec<String> {
     for key in sorted(claimed.ignored_types.iter().map(|k| k.as_str().to_owned())) {
         let named = TypeKey::parse(&key)
             .ok()
-            .and_then(|k| bare_path_ident(&k.to_type()))
+            .and_then(|k| k.ident())
             .is_some_and(|ident| flat.declared_type(&ident).is_some());
         if !named {
             out.push(format!(

@@ -102,10 +102,144 @@ impl TypeKey {
     pub fn to_type(&self) -> syn::Type {
         (*self.ty).clone()
     }
+
+    /// The bare item ident this key names — `Foo`, `a::Foo` → `Foo`; `None`
+    /// when the type carries generic arguments or is not a path.
+    ///
+    /// Matches [`bare_path_ident`](crate::api::core::types_util::bare_path_ident)
+    /// on the same type, which is the property
+    /// `key_name_accessors_match_the_syn_walks` pins.
+    ///
+    /// **A name is not syntax**, which is why this is the key's business and
+    /// producing a `syn::Type` is not. A caller that wants to look a declared
+    /// item up by name was never asking for tokens; it was asking the key what
+    /// it is called (#291).
+    pub fn ident(&self) -> Option<syn::Ident> {
+        let short = self.short_name()?;
+        // The generic-argument rule the syn walk has: `Vec<u8>` names no bare
+        // item, so it answers `None` where `short_name` still says "Vec".
+        if self.canon.contains('<') {
+            return None;
+        }
+        syn::parse_str::<syn::Ident>(&short).ok()
+    }
+
+    /// The last path segment's ident, **ignoring** generic arguments —
+    /// `Publisher<'static>` → `"Publisher"`, `a::Foo` → `"Foo"`. `None` for
+    /// anything that is not a path.
+    ///
+    /// The looser sibling of [`Self::ident`], for the callers that derive a
+    /// destination-language class name from a Rust type: a declaration writes
+    /// `ptr_class!(Publisher<'static>)` and means the class `Publisher`.
+    ///
+    /// # Read off the canonical string
+    ///
+    /// Deliberately, and not as a shortcut. `canon` is a token-stream
+    /// rendering, so its tokens are space-separated — `Vec < u8 >`, `& Foo`,
+    /// `a :: Foo`, `[u8 ; 4]` — which makes a path's head everything before the
+    /// first `<`, and its last segment everything after the last `::`.
+    /// `syn::parse_str::<syn::Ident>` is the total validator on the far end:
+    /// every non-path shape fails it. Reparsing the whole type instead would
+    /// make a name depend on a serialize-then-reparse round trip, which is the
+    /// dependency #95 removed.
+    ///
+    /// One deliberate limit: a qualified-self path (`<T as Tr>::Item`) answers
+    /// `None` rather than `Item`. It cannot reach here — `scan_declared_items`
+    /// refuses a `qself` declaration — and refusing is the safe direction for a
+    /// shape this cannot read.
+    pub fn short_name(&self) -> Option<String> {
+        // Strip generic arguments FIRST: in `Vec < a :: B >` the `::` belongs to
+        // the argument, and the segment being named is still `Vec`.
+        let head = self.canon.split('<').next()?;
+        let tail = head.rsplit("::").next()?.trim();
+        syn::parse_str::<syn::Ident>(tail)
+            .ok()
+            .map(|i| i.to_string())
+    }
 }
 
 impl fmt::Display for TypeKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.canon)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::core::types_util::bare_path_ident;
+
+    /// Every shape a key can hold, as a build script or a source could spell it.
+    ///
+    /// A `qself` path is absent on purpose: `scan_declared_items` refuses one,
+    /// and `short_name` documents answering `None` for it rather than reading
+    /// through the qualification.
+    const SHAPES: &[&str] = &[
+        "Foo",
+        "a::Foo",
+        "std::string::String",
+        "Vec<u8>",
+        "Vec<a::B>",
+        "Publisher<'static>",
+        "Option<Box<Node>>",
+        "&Foo",
+        "&mut Foo",
+        "&[u8]",
+        "[u8; 4]",
+        "()",
+        "(u8, u8)",
+        "*const u8",
+        "dyn Error",
+        "fn() -> u8",
+    ];
+
+    /// The accessors and the `syn` walks they replace answer identically.
+    ///
+    /// This is the whole warrant for reading names off the canonical string
+    /// instead of off a parsed type. Both walks are the incumbent definition —
+    /// `bare_path_ident` for [`TypeKey::ident`], and `rust_short_name_opt`'s
+    /// last-segment rule (spelled out here rather than imported, since it lives
+    /// under a language adapter) for [`TypeKey::short_name`].
+    #[test]
+    fn key_name_accessors_match_the_syn_walks() {
+        for spec in SHAPES {
+            let ty: syn::Type = syn::parse_str(spec).expect("test shape parses");
+            let key = TypeKey::from_type(&ty);
+
+            assert_eq!(
+                key.ident(),
+                bare_path_ident(&crate::api::core::flat::canonical_type(&ty)),
+                "ident() disagrees with bare_path_ident on `{spec}` (canon `{key}`)"
+            );
+
+            // `rust_short_name_opt`: the last path segment's ident, generic
+            // arguments and all.
+            let expected_short = match &crate::api::core::flat::canonical_type(&ty) {
+                syn::Type::Path(tp) => tp.path.segments.last().map(|s| s.ident.to_string()),
+                _ => None,
+            };
+            assert_eq!(
+                key.short_name(),
+                expected_short,
+                "short_name() disagrees with the last-segment rule on `{spec}` (canon `{key}`)"
+            );
+        }
+    }
+
+    /// `short_name` is looser than `ident` in exactly one way: generic arguments.
+    #[test]
+    fn short_name_reads_through_generics_and_ident_does_not() {
+        let key = TypeKey::from_type(&syn::parse_quote!(Publisher<'static>));
+        assert_eq!(key.short_name().as_deref(), Some("Publisher"));
+        assert_eq!(key.ident(), None);
+    }
+
+    /// A name comes back out as the ident it names — `from_ident` is the inverse.
+    #[test]
+    fn ident_round_trips_through_from_ident() {
+        let ident = syn::Ident::new("ZKeyExpr", proc_macro2::Span::call_site());
+        let key = TypeKey::from_ident(&ident);
+        assert_eq!(key.ident().as_ref(), Some(&ident));
+        assert_eq!(key.short_name().as_deref(), Some("ZKeyExpr"));
     }
 }
