@@ -427,14 +427,18 @@ impl<M> RegistryBuilder<M> {
 ///
 /// [`conversion`]: Conversions::conversion
 impl<M> Conversions<M> for RegistryBuilder<M> {
-    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
-        self.registry.reading(ty)
+    fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef> {
+        self.registry.reading(key)
     }
     fn flat(&self) -> &crate::api::core::flat::Flat {
         &self.registry.flat
     }
-    fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>> {
-        self.built.get(&(dir, TypeKey::from_type(ty)))
+    fn conversion(
+        &self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+    ) -> Option<&TypeEntry<M>> {
+        self.built.get(&(dir, reading.key()))
     }
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey> {
         self.order

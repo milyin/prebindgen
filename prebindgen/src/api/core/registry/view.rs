@@ -35,19 +35,49 @@ pub trait Conversions<M> {
     /// rebuilding a spelling from the key and classifying that — the round trip
     /// `api/core` removed from itself in #263, which is the same defect one layer
     /// out.
-    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef>;
+    ///
+    /// **Keyed**, because that is the one thing a caller has before it has a
+    /// reading. This is the door FROM identity TO the model's answer, and the
+    /// only lookup on this trait that does not already take a `TypeRef` — the
+    /// rest take one precisely because this exists to hand them one (#284).
+    fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef>;
 
-    /// The conversion for `ty` in `dir`, if there is one.
-    fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>>;
+    /// The conversion for `reading` in `dir`, if there is one.
+    ///
+    /// Takes the **reading**, not a spelling. A caller that has to ask what a
+    /// type converts to has already established what the type *is*; asking with
+    /// tokens instead let a spelling nobody classified reach the table, and cost
+    /// a `TypeKey::from_type` on every call for an identity the reading already
+    /// carries.
+    fn conversion(
+        &self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+    ) -> Option<&TypeEntry<M>>;
+
+    /// The reading for a **spelling** — identify, then look up.
+    ///
+    /// The door for a caller holding tokens it peeled or composed itself, which
+    /// is a real position: an adapter may strip a `&` or name a wire type, and
+    /// #280 sealed minting so it cannot make a reading for the result. It asks
+    /// instead, and `None` means the registry never saw that type.
+    ///
+    /// Kept separate from the entry lookups on purpose. Those take a `TypeRef`,
+    /// so they cannot be called about a type the registry does not know — which
+    /// is the guarantee, and it survives only while getting a reading from
+    /// tokens is a visible step with a `None` to handle.
+    fn reading_of(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
+        self.reading(&TypeKey::from_type(ty))
+    }
 
     /// Wire → rust.
-    fn input_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
-        self.conversion(Direction::Input, ty)
+    fn input_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+        self.conversion(Direction::Input, reading)
     }
 
     /// Rust → wire.
-    fn output_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
-        self.conversion(Direction::Output, ty)
+    fn output_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+        self.conversion(Direction::Output, reading)
     }
 
     /// The decomposition of a callback argument type, if it has one.
@@ -93,11 +123,15 @@ impl<M> Conversions<M> for Building<'_, M> {
     fn flat(&self) -> &crate::api::core::flat::Flat {
         &self.registry.flat
     }
-    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
-        self.registry.reading(ty)
+    fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef> {
+        self.registry.reading(key)
     }
-    fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>> {
-        self.built.get(&(dir, TypeKey::from_type(ty)))
+    fn conversion(
+        &self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+    ) -> Option<&TypeEntry<M>> {
+        self.built.get(&(dir, reading.key()))
     }
     fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan> {
         self.registry.callback_arg_plans.get(key)
@@ -129,14 +163,15 @@ impl<M> Conversions<M> for Registry<M> {
     fn flat(&self) -> &crate::api::core::flat::Flat {
         &self.flat
     }
-    fn reading(&self, ty: &syn::Type) -> Option<crate::api::core::flat::TypeRef> {
-        Registry::reading(self, ty)
+    fn reading(&self, key: &TypeKey) -> Option<crate::api::core::flat::TypeRef> {
+        Registry::reading(self, key)
     }
-    fn conversion(&self, dir: Direction, ty: &syn::Type) -> Option<&TypeEntry<M>> {
-        self.type_table(dir)
-            .get(&TypeKey::from_type(ty))?
-            .entry
-            .as_ref()
+    fn conversion(
+        &self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+    ) -> Option<&TypeEntry<M>> {
+        self.type_table(dir).get(&reading.key())?.entry.as_ref()
     }
     fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::api::core::unfold::UnfoldPlan> {
         self.callback_arg_plans.get(key)

@@ -29,7 +29,9 @@ pub(crate) fn struct_input_body(
 
         // Defer if any field's input converter isn't resolved yet — the
         // fixed-point loop will retry on the next iteration.
-        let field_entry = registry.input_entry(&field.ty)?;
+        let field_entry = registry
+            .reading_of(&field.ty)
+            .and_then(|tr| registry.input_entry(&tr))?;
         let field_wire = field_entry.destination.clone();
         // The field's COMPLETE decode, stages included — a `convert!` type
         // reaches its Rust value through them (`jlong -> u64 -> Duration`).
@@ -98,7 +100,9 @@ pub(crate) fn struct_input_body(
                             FoldStrategy::Optional(NullableKind::Niche, _)
                         );
                         let inner_conv = composed_entry_decode(
-                            registry.input_entry(&inner_ty)?,
+                            registry
+                                .reading_of(&inner_ty)
+                                .and_then(|tr| registry.input_entry(&tr))?,
                             &raw_ident,
                             &fname_ident,
                         );
@@ -159,7 +163,9 @@ pub(crate) fn struct_input_body(
             {
                 let sig = format!("L{};", fqn.replace('.', "/"));
                 let inner_conv = composed_entry_decode(
-                    registry.input_entry(&f_inner)?,
+                    registry
+                        .reading_of(&f_inner)
+                        .and_then(|tr| registry.input_entry(&tr))?,
                     &raw_ident,
                     &fname_ident,
                 );
@@ -222,7 +228,8 @@ pub(crate) fn struct_input_body(
                 // `Vec` field.
                 let slot_ty = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
                 let sig = registry
-                    .input_entry(&slot_ty)
+                    .reading_of(&slot_ty)
+                    .and_then(|tr| registry.input_entry(&tr))
                     .and_then(|e| jni_field_access(&e.destination))
                     .and_then(|(sig, _, is_obj)| {
                         if is_obj {
@@ -385,7 +392,9 @@ fn read_kotlin_property(
     bind: &syn::Ident,
     err_prefix: &str,
 ) -> Option<(TokenStream, TokenStream)> {
-    let entry = registry.input_entry(ty)?;
+    let entry = registry
+        .reading_of(ty)
+        .and_then(|tr| registry.input_entry(&tr))?;
     let wire = entry.destination.clone();
     let raw = format_ident!("{}_raw", bind);
     // The COMPLETE wire → Rust chain, not just the wire-facing converter: a
@@ -461,7 +470,13 @@ fn read_kotlin_property(
         // Under `Option`, JVM null is `None` and the INNER converter decodes
         // the discriminant; the outer converter would expect a boxed Integer.
         let decode = if option_inner_type(ty).is_some() {
-            let inner_conv = composed_entry_decode(registry.input_entry(&enum_inner)?, &raw, bind);
+            let inner_conv = composed_entry_decode(
+                registry
+                    .reading_of(&enum_inner)
+                    .and_then(|tr| registry.input_entry(&tr))?,
+                &raw,
+                bind,
+            );
             quote! {
                 let #bind = if #obj.is_null() {
                     ::core::option::Option::None
@@ -908,7 +923,9 @@ fn build_flat_sum_field(
         let kotlin = ext.sum_variant_class_name(sum_cfg, &v.ident);
         let mut fields = Vec::new();
         for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
-            let entry = registry.input_entry(&item_field.ty)?;
+            let entry = registry
+                .reading_of(&item_field.ty)
+                .and_then(|tr| registry.input_entry(&tr))?;
             // A projection payload (handle) carries ownership
             // and locking rules the tag-gated group does not model yet.
             if entry.metadata.projection.is_some() {
@@ -1154,7 +1171,10 @@ pub(crate) fn build_flat_input_plan(
     // surfaces as `"Any"` Dispatch or a foreign source type). The resolved
     // param's Kotlin type (compared by short name, since metadata carries the
     // FQN) must equal the struct's data-class name.
-    let Some(entry) = registry.input_entry(arg_ty) else {
+    let Some(entry) = registry
+        .reading_of(arg_ty)
+        .and_then(|tr| registry.input_entry(&tr))
+    else {
         return Ok(None);
     };
     if entry.metadata.projection.is_some() {
@@ -1305,7 +1325,10 @@ fn build_flat_struct_node(
         }
 
         let path = child_native.clone();
-        let Some(fentry) = registry.input_entry(&field.ty) else {
+        let Some(fentry) = registry
+            .reading_of(&field.ty)
+            .and_then(|tr| registry.input_entry(&tr))
+        else {
             return Err(flat_error(
                 root,
                 &path,
@@ -1320,7 +1343,10 @@ fn build_flat_struct_node(
         // `(present, value)` representation at every recursion depth.
         if let Some(inner_ty) = option_inner_type(&field.ty) {
             if !matches!(inner_ty, syn::Type::Reference(_)) {
-                if let Some(inner) = registry.input_entry(&inner_ty) {
+                if let Some(inner) = registry
+                    .reading_of(&inner_ty)
+                    .and_then(|tr| registry.input_entry(&tr))
+                {
                     if let Some(prim) = JniPrim::from_wire(&inner.destination) {
                         if inner.niches.clone().carve().is_none()
                             && inner.metadata.projection.is_none()
@@ -1370,16 +1396,19 @@ fn build_flat_struct_node(
             if proj.kind == ProjectionKind::Unsigned64 {
                 if let Some(inner_ty) = option_inner_type(&field.ty) {
                     if JniPrim::from_wire(&fentry.destination).is_none() {
-                        let inner = registry.input_entry(&inner_ty).ok_or_else(|| {
-                            flat_error(
-                                root,
-                                &path,
-                                format!(
-                                    "unsigned field representation `{}` has no input converter",
-                                    TypeKey::from_type(&inner_ty)
-                                ),
-                            )
-                        })?;
+                        let inner = registry
+                            .reading_of(&inner_ty)
+                            .and_then(|tr| registry.input_entry(&tr))
+                            .ok_or_else(|| {
+                                flat_error(
+                                    root,
+                                    &path,
+                                    format!(
+                                        "unsigned field representation `{}` has no input converter",
+                                        TypeKey::from_type(&inner_ty)
+                                    ),
+                                )
+                            })?;
                         let present_index = push_present_leaf(
                             leaves,
                             &format!("{child_native}_present"),
@@ -1807,7 +1836,9 @@ pub(crate) fn build_option_scalar_input_plan(
     if matches!(inner, syn::Type::Reference(_)) {
         return None;
     }
-    let inner_entry = registry.input_entry(&inner)?;
+    let inner_entry = registry
+        .reading_of(&inner)
+        .and_then(|tr| registry.input_entry(&tr))?;
     let value_wire = inner_entry.destination.clone();
     // Only the boxed-primitive fallback shape: primitive wire, no niche,
     // no projection, no composed pre-stages.

@@ -533,7 +533,15 @@ impl CbindgenBuilder {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.opaque) {
             let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            if registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_none()
+                && registry
+                    .reading_of(&ty)
+                    .and_then(|tr| registry.output_entry(&tr))
+                    .is_none()
+            {
                 continue;
             }
             let c_struct = self.c_type_ident(&ty);
@@ -568,7 +576,15 @@ impl CbindgenBuilder {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.data) {
             let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            if registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_none()
+                && registry
+                    .reading_of(&ty)
+                    .and_then(|tr| registry.output_entry(&tr))
+                    .is_none()
+            {
                 continue;
             }
             let Some(fields) = self.struct_fields(registry, &ty) else {
@@ -610,7 +626,15 @@ impl CbindgenBuilder {
         vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
         for (key, cfg) in vo {
             let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            if registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_none()
+                && registry
+                    .reading_of(&ty)
+                    .and_then(|tr| registry.output_entry(&tr))
+                    .is_none()
+            {
                 continue;
             }
             let src = self.src_ty(&ty);
@@ -807,7 +831,15 @@ impl CbindgenBuilder {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
             let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            if registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_none()
+                && registry
+                    .reading_of(&ty)
+                    .and_then(|tr| registry.output_entry(&tr))
+                    .is_none()
+            {
                 continue;
             }
             let Some(e) = enum_item(registry, &ty) else {
@@ -849,7 +881,15 @@ impl CbindgenBuilder {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
             let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            if registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_none()
+                && registry
+                    .reading_of(&ty)
+                    .and_then(|tr| registry.output_entry(&tr))
+                    .is_none()
+            {
                 continue;
             }
             let Some(e) = enum_item(registry, &ty) else {
@@ -1079,7 +1119,11 @@ impl CbindgenBuilder {
         // degrades to a passthrough and the generated code does not compile.
         for v in &e.variants {
             for f in &v.fields {
-                if self.payload_needs_converter(&f.ty) && r.input_entry(&f.ty).is_none() {
+                if self.payload_needs_converter(&f.ty)
+                    && r.reading_of(&f.ty)
+                        .and_then(|tr| r.input_entry(&tr))
+                        .is_none()
+                {
                     return None;
                 }
             }
@@ -1204,7 +1248,11 @@ impl CbindgenBuilder {
         // Deferral, as in `in_tagged_union` — the output counterpart.
         for v in &e.variants {
             for f in &v.fields {
-                if self.payload_needs_converter(&f.ty) && r.output_entry(&f.ty).is_none() {
+                if self.payload_needs_converter(&f.ty)
+                    && r.reading_of(&f.ty)
+                        .and_then(|tr| r.output_entry(&tr))
+                        .is_none()
+                {
                     return None;
                 }
             }
@@ -1319,7 +1367,10 @@ impl CbindgenBuilder {
         // came from that converter's destination, so the two cannot disagree.
         // A fallible one propagates with `?`, which the union's own `Result`
         // already provides.
-        match registry.input_entry(fty) {
+        match registry
+            .reading_of(fty)
+            .and_then(|tr| registry.input_entry(&tr))
+        {
             Some(entry) => {
                 let conv = &entry.function.sig.ident;
                 if returns_result(&entry.function.sig.output) {
@@ -1372,7 +1423,10 @@ impl CbindgenBuilder {
         // including the refusal of a FALLIBLE output converter, which a union
         // cannot report through — is decided once in `payload_field_wire`, so
         // this site only emits the call.
-        match registry.output_entry(fty) {
+        match registry
+            .reading_of(fty)
+            .and_then(|tr| registry.output_entry(&tr))
+        {
             Some(entry) => {
                 let conv = entry.function.sig.ident.clone();
                 quote!(#conv(#b))
@@ -1397,7 +1451,11 @@ impl CbindgenBuilder {
             let args: Vec<syn::Type> = key.iter().map(|t| t.to_type()).collect();
             // Emit only if the callback is required (its input resolved); skip a
             // declared-but-unused signature.
-            if registry.input_entry(&callback_fn_type(&args)).is_none() {
+            if registry
+                .reading_of(&callback_fn_type(&args))
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_none()
+            {
                 continue;
             }
             let takeable = &self.callbacks.get(key).expect("callback cfg").takeable;
@@ -1411,7 +1469,8 @@ impl CbindgenBuilder {
                     continue;
                 }
                 let wire = registry
-                    .output_entry(a)
+                    .reading_of(a)
+                    .and_then(|tr| registry.output_entry(&tr))
                     .unwrap_or_else(|| {
                         panic!(
                             "Cbindgen: callback arg `{}` has no output converter (declare it \
@@ -1583,7 +1642,9 @@ impl CbindgenBuilder {
                 call_args.push(quote!(#ai.len()));
                 continue;
             }
-            let entry = registry.output_entry(arg)?;
+            let entry = registry
+                .reading_of(arg)
+                .and_then(|tr| registry.output_entry(&tr))?;
             let conv = entry.function.sig.ident.clone();
             let opaque = entry.destination.clone();
             let fallible = matches!(
@@ -1985,7 +2046,7 @@ impl CbindgenBuilder {
         // converter, never the owned one.
         if is_option(ty) {
             let inner = first_type_arg(ty)?;
-            let entry = r.input_entry(&inner)?;
+            let entry = r.reading_of(&inner).and_then(|tr| r.input_entry(&tr))?;
             let inner_wire = entry.destination.clone();
             let inner_conv = entry.function.sig.ident.clone();
             let (inner_ok, fallible): (syn::Type, bool) = match &entry.function.sig.output {
@@ -2301,7 +2362,7 @@ impl CbindgenBuilder {
         // `Option<T>` / `Vec<T>` marker.
         if is_option(ty) || is_vec(ty) {
             let inner = first_type_arg(ty)?;
-            r.output_entry(&inner)?;
+            r.reading_of(&inner).and_then(|tr| r.output_entry(&tr))?;
             let kind = if is_option(ty) { "option" } else { "vec" };
             let name = format_ident!(
                 "__cbg_outmark_{}_{}",
@@ -2324,7 +2385,7 @@ impl CbindgenBuilder {
         // `Cow<'_, [T]>` marker. The actual C ABI shape is structural in
         // `lower_shape`/`encode_value`, like `Vec<T>`.
         if let Some(inner) = cow_slice_elem(ty) {
-            r.output_entry(&inner)?;
+            r.reading_of(&inner).and_then(|tr| r.output_entry(&tr))?;
             let name = format_ident!(
                 "__cbg_outmark_cow_slice_{}",
                 sanitize(&TypeKey::from_type(&inner))
@@ -2352,7 +2413,7 @@ impl CbindgenBuilder {
             .value_opaque_slice_elem(ty)
             .or_else(|| scalar_slice_elem(ty))
         {
-            r.output_entry(&elem)?;
+            r.reading_of(&elem).and_then(|tr| r.output_entry(&tr))?;
             let name = format_ident!(
                 "__cbg_outmark_slice_{}",
                 sanitize(&TypeKey::from_type(&elem))

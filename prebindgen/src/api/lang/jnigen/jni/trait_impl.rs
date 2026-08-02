@@ -572,7 +572,15 @@ pub(crate) fn build_handle_destructor_items(
         // Skip handles the (feature-aware) scan never references — their
         // type may not be in scope in the generated module.
         let ty = key.to_type();
-        if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+        if registry
+            .reading_of(&ty)
+            .and_then(|tr| registry.input_entry(&tr))
+            .is_none()
+            && registry
+                .reading_of(&ty)
+                .and_then(|tr| registry.output_entry(&tr))
+                .is_none()
+        {
             continue;
         }
         let class_fqn = cfg
@@ -797,7 +805,7 @@ impl Declarations {
         if !is_canonical_spelling(produced, &canonical) {
             return None;
         }
-        let inner = registry.input_entry(t1_ty)?;
+        let inner = registry.input_entry(t1)?;
         let outer_ty = produced.clone();
         // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
         // type's name, unless the user pinned an explicit override
@@ -854,7 +862,7 @@ impl Declarations {
         if !is_canonical_spelling(produced, &canonical) {
             return None;
         }
-        let inner = registry.input_entry(t1_ty)?;
+        let inner = registry.input_entry(t1)?;
         if !inner.metadata.is_direct_handle() {
             // Non-opaque: let the general `Option<_>` handler take it.
             return None;
@@ -914,7 +922,7 @@ impl Declarations {
         if shape != WrapperShape::Sequence {
             return None;
         }
-        let inner = registry.input_entry(t1_ty)?;
+        let inner = registry.input_entry(t1)?;
         reject_vec_of_handle(&inner.metadata.projection, t1_ty);
         let inner_wire = inner.destination.clone();
         if !is_jobject_shaped_wire(&inner_wire) {
@@ -983,7 +991,7 @@ impl Declarations {
         // READING stays in `t1` for the lookups (#284).
         let t1_ty = t1.syntax();
         if shape == WrapperShape::Optional {
-            let inner = registry.input_entry(t1_ty)?;
+            let inner = registry.input_entry(t1)?;
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
                 let outer_ty = produced.clone();
@@ -1054,7 +1062,7 @@ impl Declarations {
             // Inherit the inner's name; user pins on `Option<T>` win.
             // The nullability marker (`?`) is added by the use site.
             let inherited = registry
-                .input_entry(t1_ty)
+                .input_entry(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -1064,7 +1072,7 @@ impl Declarations {
             // fallback widens the wire to `JObject`.
             let nullable_kind = nullable_kind_for(&wire, t1_ty, registry);
             let projection = registry
-                .input_entry(t1_ty)
+                .input_entry(t1)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -1188,11 +1196,12 @@ impl Declarations {
         built: &Building<'_, KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
-        let ty = key.to_type();
-        // The reading the scan already took for this crossing. Rebuilding a
-        // spelling from the key and classifying *that* is the round trip #263
-        // removed from `api/core`; this is the same door, one layer out.
-        let reading = built.reading(&ty)?;
+        // The reading the scan already took for this crossing, fetched by the
+        // key the crossing IS. This used to go `key -> to_type() -> reading`,
+        // and its own comment called that "the same door, one layer out" as the
+        // round trip #263 removed from `api/core`. The door is now keyed, so
+        // there is no spelling to rebuild (#284).
+        let reading = built.reading(key)?;
         match dir {
             Direction::Input => self.select_input_type(&reading, built).or_else(|| {
                 // `impl Fn(args)` that nothing else claimed. Callback args cross
@@ -2257,7 +2266,7 @@ impl Declarations {
                 #inner_body
             });
             let inherited = registry
-                .output_entry(t1_ty)
+                .output_entry(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
             let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
@@ -2267,7 +2276,7 @@ impl Declarations {
             // and uses JVM null.
             let nullable_kind = nullable_kind_for_output(&wire, t1_ty, registry);
             let projection = registry
-                .output_entry(t1_ty)
+                .output_entry(t1)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
                     strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
@@ -2299,7 +2308,7 @@ impl Declarations {
         // Symmetric to the input handler. `Vec<u8>` is special-cased at
         // rank-0 (primitive_output → JByteArray) so rank-1 never sees it.
         if shape == WrapperShape::Sequence {
-            let inner = registry.output_entry(t1_ty)?;
+            let inner = registry.output_entry(t1)?;
             // `Vec<opaque-handle>` output is delivered by the Kotlin-side leaf
             // fold (`apply_leaf_vec_folds` → typed-handle wrap), so this
             // whole-`ArrayList` converter is bypassed for it. A handle's `jlong`
@@ -2382,7 +2391,9 @@ impl Declarations {
         elem: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let inner = registry.output_entry(elem)?;
+        let inner = registry
+            .reading_of(elem)
+            .and_then(|tr| registry.output_entry(&tr))?;
         // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf
         // fold (typed-handle wrap), bypassing this whole-`ArrayList` converter; a
         // handle's `jlong` wire isn't JObject-shaped, so it returns `None` here.

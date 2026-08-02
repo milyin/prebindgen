@@ -793,15 +793,18 @@ impl Declarations {
         // nothing is looked up (#275).
         let field_ty = field.ty.syntax();
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
-        let out = registry.output_entry(field_ty).unwrap_or_else(|| {
-            panic!(
-                "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
+        let out = registry
+            .reading_of(field_ty)
+            .and_then(|tr| registry.output_entry(&tr))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
                  cannot be derived — register converters for the payload type before \
                  declaring the sealed class",
-                where_(),
-                field_ty.to_token_stream(),
-            )
-        });
+                    where_(),
+                    field_ty.to_token_stream(),
+                )
+            });
 
         if let Some(h) = out.metadata.projection.clone() {
             let leaf = projection_leaf_kt(self, &h).unwrap_or_else(|| {
@@ -833,7 +836,10 @@ impl Declarations {
         // boxed value, a present flag, a niche) rather than in the type name.
         // Comparing the rendered types would reject that legitimate shape —
         // which is what an `Option<enum>` payload does.
-        if let Some(inp) = registry.input_entry(field_ty) {
+        if let Some(inp) = registry
+            .reading_of(field_ty)
+            .and_then(|tr| registry.input_entry(&tr))
+        {
             if let (Some(in_ty), (Some(a), Some(b))) = (
                 inp.metadata.kotlin_name.clone(),
                 (
@@ -1523,7 +1529,8 @@ impl Declarations {
             let inner = option_inner_type(leaf.out_ty.syntax())
                 .unwrap_or_else(|| leaf.out_ty.syntax().clone());
             let name = registry
-                .output_entry(&inner)
+                .reading_of(&inner)
+                .and_then(|tr| registry.output_entry(&tr))
                 .and_then(|e| e.metadata.kotlin_name.clone())
                 .and_then(|t| t.leaf_name().map(str::to_string))
                 .unwrap_or_else(|| {

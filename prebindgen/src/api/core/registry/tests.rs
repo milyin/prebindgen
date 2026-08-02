@@ -872,7 +872,7 @@ fn a_composed_reading_reaches_the_cell_unchanged() {
 
     // The source's own reading for `Thing`, which carries where it was written.
     let thing = reg
-        .reading(&syn::parse_quote!(Thing))
+        .reading(&TypeKey::parse("Thing").unwrap())
         .expect("the declared struct is registered");
     assert_eq!(thing.location(), &loc, "fixture precondition");
 
@@ -922,13 +922,13 @@ fn reading_is_a_lookup_not_a_classification() {
 
     // Registered by the declared fn — the lookup hits.
     assert!(
-        reg.reading(&syn::parse_quote!(u64)).is_some(),
+        reg.reading(&TypeKey::parse("u64").unwrap()).is_some(),
         "a type the scan registered has its reading in a cell"
     );
     // Never registered, and perfectly expressible. The grammar's answer is not
     // this method's to give.
     assert!(
-        reg.reading(&syn::parse_quote!(i64)).is_none(),
+        reg.reading(&TypeKey::parse("i64").unwrap()).is_none(),
         "`reading` answers from the type table; it must not classify on a miss"
     );
 }

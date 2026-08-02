@@ -123,7 +123,7 @@ pub(crate) fn build_data_class(
         // disagreed. Reject it at the declaration instead.
         if !matches!(pf.kind, PlanFieldKind::Projection { .. }) {
             if let Some(proj) = registry
-                .input_entry(field.ty.syntax())
+                .input_entry(&field.ty)
                 .and_then(|e| e.metadata.projection.clone())
             {
                 panic!(
@@ -2007,7 +2007,8 @@ pub(crate) fn unfold_leaf_kt(
     pk: &str,
 ) -> Option<(kt::KtType, String, String, bool)> {
     let proj = registry
-        .output_entry(out_ty)
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
         .and_then(|e| e.metadata.projection.clone());
     let is_value_projection = proj
         .as_ref()

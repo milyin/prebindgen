@@ -757,7 +757,11 @@ fn leaf_iface_param(
     // entry was never required.
     let mut out_ty = out_ty;
     let peeled: syn::Type;
-    if registry.output_entry(out_ty).is_none() {
+    if registry
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
+        .is_none()
+    {
         if let syn::Type::Reference(r) = out_ty {
             peeled = (*r.elem).clone();
             out_ty = &peeled;
@@ -766,7 +770,8 @@ fn leaf_iface_param(
     let (builder_kt, _wire_kt, _wrap, is_value_projection) =
         unfold_leaf_kt(ext, registry, out_ty, nullable, "x")?;
     let proj = registry
-        .output_entry(out_ty)
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
         .and_then(|e| e.metadata.projection.as_ref());
     let nullable_kt = |t: kt::KtType| {
         if builder_kt.is_nullable() {
@@ -861,7 +866,12 @@ pub(crate) fn owned_handle_iface_param(
     out_ty: &syn::Type,
     nullable: bool,
 ) -> Option<IfaceParam> {
-    let proj = registry.output_entry(out_ty)?.metadata.projection.clone()?;
+    let proj = registry
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))?
+        .metadata
+        .projection
+        .clone()?;
     let fqn = ext.kotlin_fqn(&proj.leaf_key)?.to_string();
     let typed = kt::KtType::cls(fqn.clone());
     let (typed, raw) = if nullable {
@@ -997,7 +1007,7 @@ fn derive_iface_spec(
             // the accessor used to do here.
             let args: Vec<crate::api::core::flat::TypeRef> = arg_keys
                 .iter()
-                .map(|k| registry.reading(&k.to_type()))
+                .map(|k| registry.reading(k))
                 .collect::<Option<_>>()?;
             callback_iface_spec(ext, registry, &args)
         }
@@ -1227,7 +1237,7 @@ pub(crate) fn callback_iface_spec(
             // A plan-less opaque-handle arg is delivered as a raw `jlong` and
             // wrapped + closed Kotlin-side (Phase 3 — no Rust `new_object`).
             let owned_handle = registry
-                .output_entry(t.syntax())
+                .output_entry(t)
                 .and_then(|e| e.metadata.projection.as_ref())
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
