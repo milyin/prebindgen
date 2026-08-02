@@ -70,6 +70,30 @@ impl CbindgenBuilder {
         Some(item.variants.iter().cloned().collect())
     }
 
+    /// The declared `opaque_ptr` under a union payload's spelling, when there is
+    /// one and the spelling does **not** already carry a `Box` —
+    /// `Option<Handle>` / `Handle` → `Some(Handle)`, `Option<Box<Handle>>` →
+    /// `None` (that shape keeps its own arm, so its emitted Rust does not move).
+    ///
+    /// Keyed on `stripped_key`, because a **declaration** is about the type: a
+    /// wrapper the model erases cannot change which declaration a payload
+    /// matches. See [`Self::payload_field_wire`] for why a union payload asks
+    /// this at all where a `repr_c_struct` mirror must not.
+    pub(super) fn declared_opaque_payload_inner(
+        &self,
+        fty: &syn::Type,
+        registry: &impl Conversions<()>,
+    ) -> Option<syn::Type> {
+        if opaque_ptr_payload_inner(fty).is_some() {
+            return None;
+        }
+        let reading = registry.reading_of(fty)?;
+        let core = reading.optional_inner().unwrap_or(&reading);
+        self.opaque
+            .contains_key(&core.stripped_key())
+            .then(|| core.stripped_syntax())
+    }
+
     /// Wire type of one **tagged-union payload field**: the
     /// [`Self::mirror_field_wire`] policy (scalar / declared `enum_type` /
     /// opaque pointer `Option<Box<T>>` / `Box<T>`) extended with `String` →
@@ -129,6 +153,34 @@ impl CbindgenBuilder {
         // opaque pointer), so what already worked keeps its exact wire.
         if let Some(w) = self.mirror_field_wire(fty) {
             return Ok(w);
+        }
+        // The opaque-pointer arm again, keyed on the **declaration** instead of
+        // on the spelling — which is what a *converted* position must do.
+        //
+        // `mirror_field_wire` above answers for a `repr_c_struct`, where the C
+        // type is a **layout** fact: the mirror is reinterpreted from the source
+        // struct's bytes, so `Box<T>` (a pointer) and `T` (inline) genuinely are
+        // different C types and the spelling is load-bearing. A union payload is
+        // not mirrored — it is rebuilt arm by arm through real conversions — so
+        // that reasoning does not carry over, and reusing the same
+        // `Box`-in-the-spelling test made an erased wrapper decide what C sees.
+        //
+        // Concretely: `Option<Box<Handle>>` crossed as `*mut handle_t` while
+        // `Option<Handle>` — the same optional handle to every destination
+        // language — was REFUSED, because it fell through to the
+        // converter-destination rule below where its output side is a structural
+        // marker (`()`) that cannot agree with the input's pointer. A wrapper the
+        // model erases decided whether the shape was expressible at all.
+        //
+        // So: peel the optional off the model and ask whether what is under it is
+        // a declared `opaque_ptr`. `stripped_key` rather than `key`, because a
+        // declaration is about the TYPE — see the same rule on the jnigen side
+        // (#292). The two spellings now share this C type; their converter bodies
+        // differ, which is exactly the split (`kind` decides what C sees, syntax
+        // decides how the value is built).
+        if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
+            let c = self.c_type_ident(&inner);
+            return Ok(syn::parse_quote!(*mut #c));
         }
         // Otherwise the payload's wire is its **resolved converter
         // destination** — the same source a `data_struct` field effectively
