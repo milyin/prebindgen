@@ -55,11 +55,10 @@
 4	api/lang/jnigen/jni/emit/convert.rs
 2	api/lang/jnigen/jni/emit/delivery.rs
 5	api/lang/jnigen/jni/emit/flat_input.rs
-17	api/lang/jnigen/jni/emit/names.rs
+16	api/lang/jnigen/jni/emit/names.rs
 11	api/lang/jnigen/jni/emit/wrapper.rs
 3	api/lang/jnigen/jni/fold.rs
 4	api/lang/jnigen/jni/iface.rs
-2	api/lang/jnigen/jni/kotlin_emit.rs
 2	api/lang/jnigen/jni/overloads.rs
 1	api/lang/jnigen/jni/prim.rs
 3	api/lang/jnigen/jni/prim_array.rs
@@ -69,4 +68,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 120
+# total: 117

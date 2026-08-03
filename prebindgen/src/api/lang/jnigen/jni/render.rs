@@ -2332,8 +2332,7 @@ fn shape_notes(
 /// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
 /// key, when the item is indexed (a re-exported foreign type has none).
 pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Option<String> {
-    let ident = bare_path_ident(&key.to_type())?;
-    let name = ident.to_string();
+    let name = key.ident()?.to_string();
     let attrs = registry
         .flat()
         .struct_type(&name)

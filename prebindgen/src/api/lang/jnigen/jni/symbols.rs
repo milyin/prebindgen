@@ -127,9 +127,7 @@ pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMet
                 short.to_string(),
                 format!("sealed class `{key}` itself (its variants' supertype)"),
             )]);
-            if let Some(item_enum) =
-                bare_path_ident(&key.to_type()).and_then(|i| registry.flat().enum_item(&i))
-            {
+            if let Some(item_enum) = key.ident().and_then(|i| registry.flat().enum_item(&i)) {
                 for v in &item_enum.variants {
                     let name = ext.sum_variant_class_name(sum_cfg, &v.ident);
                     let vorigin = format!("variant `{}` of sealed class `{key}`", v.ident);
@@ -268,9 +266,8 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>
         .collect();
     class_keys.sort_by_key(|k| k.as_str().to_string());
     for key in class_keys {
-        let ident = match bare_path_ident(&key.to_type()) {
-            Some(i) => i,
-            None => continue,
+        let Some(ident) = key.ident() else {
+            continue;
         };
         if let Some(s) = registry
             .flat()

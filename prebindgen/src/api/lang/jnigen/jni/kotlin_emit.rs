@@ -487,16 +487,11 @@ impl Declarations {
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
-            // Look up the syn::ItemEnum by the type-key's bare ident.
-            let ty = key.to_type();
-            let Some(ident) = (if let syn::Type::Path(tp) = &ty {
-                tp.path.segments.last().map(|s| s.ident.clone())
-            } else {
-                None
-            }) else {
+            // Look up the syn::ItemEnum by the type-key's own short name.
+            let Some(name) = key.short_name() else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&ident) else {
+            let Some(item_enum) = registry.flat().enum_item(&name) else {
                 continue;
             };
             let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
@@ -548,8 +543,7 @@ impl Declarations {
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
-            let ty = key.to_type();
-            let Some(ident) = bare_path_ident(&ty) else {
+            let Some(ident) = key.ident() else {
                 continue;
             };
             // The sum as the MODEL holds it: its alternatives' payloads are
@@ -891,15 +885,10 @@ impl Declarations {
                 continue;
             };
 
-            let ty = key.to_type();
-            let Some(ident) = (if let syn::Type::Path(tp) = &ty {
-                tp.path.segments.last().map(|s| s.ident.clone())
-            } else {
-                None
-            }) else {
+            let Some(name) = key.short_name() else {
                 continue;
             };
-            let Some(item_struct) = registry.flat().struct_type(&ident) else {
+            let Some(item_struct) = registry.flat().struct_type(&name) else {
                 continue;
             };
 

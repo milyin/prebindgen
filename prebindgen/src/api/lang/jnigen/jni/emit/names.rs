@@ -27,13 +27,7 @@ pub(crate) fn rust_short_name(key: &TypeKey) -> String {
 /// wrapper patterns including non-path shapes like `()` where there
 /// is no Kotlin short name to derive.
 pub(crate) fn rust_short_name_opt(key: &TypeKey) -> Option<String> {
-    let ty = key.to_type();
-    if let syn::Type::Path(tp) = &ty {
-        if let Some(last) = tp.path.segments.last() {
-            return Some(last.ident.to_string());
-        }
-    }
-    None
+    key.short_name()
 }
 
 /// `VisitMut` that prefixes every bare single-segment `Type::Path` whose
