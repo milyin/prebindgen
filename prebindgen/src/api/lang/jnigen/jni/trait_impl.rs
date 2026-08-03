@@ -2113,9 +2113,6 @@ impl Declarations {
         None
     }
 
-    /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
-    /// `t1` = its captured inner): the built-in `&`/`Option<&>`/`Vec`/`Option`
-    /// handlers.
     /// The **outbound** half of [`Self::input_transparent_bridge`], and the same
     /// last resort: a spelling whose only difference from something this adapter
     /// can already convert is the transparent wrappers over it.
@@ -2270,6 +2267,13 @@ impl Declarations {
         })
     }
 
+    /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
+    /// `t1` = its captured inner): the built-in `&`/`Option<&>`/`Vec`/`Option`
+    /// handlers. The dual of [`Self::output_wrapper_shape`], whose own doc has
+    /// said so all along — this had been stranded above a different function
+    /// since the transparent bridge was inserted between them (#294), and
+    /// adding the outbound bridge moved it onto an OUTPUT converter, where it
+    /// read as an outright contradiction.
     pub(crate) fn input_wrapper_shape(
         &self,
         shape: WrapperShape,

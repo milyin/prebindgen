@@ -2603,8 +2603,11 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
 #[test]
 fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
     let loc = myflat_loc();
-    // Each field type is wrapped and unwrapped in one struct, so the test says
-    // "these present alike", not merely "the wrapped one compiles".
+    // The enum is carried wrapped AND bare, so the Kotlin assertion below can
+    // say "these present alike" rather than merely "the wrapped one compiles".
+    // The handle and the data class are wrapped only: what they are here to
+    // show is that ONE arm serves every terminal kind, and a bare twin of each
+    // would test the terminal lookup rather than the bridge.
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Enum(syn::parse_quote!(
