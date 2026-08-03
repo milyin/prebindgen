@@ -77,7 +77,7 @@ pub(crate) fn synth_sum_leaves(
     for (variant, alt) in spec.variants.iter().zip(&sum.alternatives) {
         let kotlin_name = ext.sum_variant_class_name(sum_cfg, &variant.ident);
         for (field, alt_field) in variant.fields.iter().zip(&alt.fields) {
-            let prop = sum_field_prop_name(field);
+            let prop = sum_field_prop_name(&field.member);
             leaves.push(UnfoldLeaf {
                 name: sum_slot_fragment(&kotlin_name, &prop),
                 path: Vec::new(),

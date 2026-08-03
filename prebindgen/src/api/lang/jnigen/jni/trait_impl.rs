@@ -2062,8 +2062,10 @@ impl Declarations {
             // OUTPUT direction has no counterpart: a sum crosses Rust →
             // Kotlin flattened, always.)
             if self.types.get(&key).is_some_and(|c| c.sum().is_some()) {
-                if let Some(e) = registry.flat().enum_item(&name) {
-                    let (wire, body) = sum_input_body(self, e, registry)?;
+                if let Some(crate::api::core::flat::Type::Variant(v)) =
+                    registry.flat().declared_type(&name)
+                {
+                    let (wire, body) = sum_input_body(self, v, registry)?;
                     // The wire's own null niche, exactly as a data class gets
                     // — that is what lets `Option<sum>` fold with JVM null as
                     // `None` instead of needing a boxed wrapper.

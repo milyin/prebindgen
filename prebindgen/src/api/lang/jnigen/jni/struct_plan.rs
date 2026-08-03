@@ -531,7 +531,7 @@ fn sum_plan_kind(
         let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.ident);
         let mut fields: Vec<SumPlanField> = Vec::new();
         for (f, alt_field) in v.fields.iter().zip(alt.fields.iter()) {
-            let prop = sum_field_prop_name(f);
+            let prop = sum_field_prop_name(&f.member);
             let slot = sum_slot_fragment(&kotlin_name, &prop);
             let owner = format!("{ident}::{}.{prop}", v.ident);
             // `?` — a payload whose converter has not resolved yet defers the
@@ -564,8 +564,13 @@ fn sum_plan_kind(
 /// Kotlin property name of one sum payload field — a named field keeps its
 /// camelCased name, a tuple field becomes `v0`, `v1`. Must agree with the
 /// sealed-interface emitter, which is why both call this.
-pub(crate) fn sum_field_prop_name(field: &crate::api::core::types_util::SumField) -> String {
-    match &field.member {
+///
+/// Takes the **member**, which is the whole of what the name depends on, so a
+/// caller holding a `flat::Field` asks `Field::member()` and a caller holding a
+/// `SumField` reads its own — one derivation for both, rather than a second
+/// convention that could drift from this one (#289).
+pub(crate) fn sum_field_prop_name(member: &syn::Member) -> String {
+    match member {
         syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
         syn::Member::Unnamed(i) => format!("v{}", i.index),
     }
