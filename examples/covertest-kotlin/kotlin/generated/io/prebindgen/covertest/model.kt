@@ -1635,6 +1635,8 @@ public fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): L
         w.boxed ?: 0L,
         w.plain != null,
         w.plain ?: 0L,
+        w.boxedEnum.value,
+        w.plainEnum.value,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)

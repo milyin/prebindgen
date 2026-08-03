@@ -1693,12 +1693,22 @@ pub struct WrappedFields {
     pub id: i64,
     pub boxed: Box<Option<i64>>,
     pub plain: Option<i64>,
+    /// The same pairing over a **terminal**, which is the shape that had no
+    /// outbound route at all: `Box<Option<_>>` above rides the `Optional` layer
+    /// arm, while `Box<Priority>` classifies as `Named` and no arm claims it
+    /// (#309). Both must present as `Priority` in Kotlin — the wrapper is
+    /// invisible there, which is why the model erases it.
+    pub boxed_enum: Box<Priority>,
+    pub plain_enum: Priority,
 }
 
 /// Round-trip a [`WrappedFields`] so both field spellings cross in one call.
 #[prebindgen]
 pub fn wrapped_fields_sum(w: WrappedFields) -> i64 {
-    w.id + w.boxed.unwrap_or(0) + w.plain.unwrap_or(0)
+    w.id + w.boxed.unwrap_or(0)
+        + w.plain.unwrap_or(0)
+        + i64::from(priority_weight(*w.boxed_enum))
+        + i64::from(priority_weight(w.plain_enum))
 }
 
 /// Transparent wrappers on the **input** side, one per specialized lowering.

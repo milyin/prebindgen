@@ -1485,10 +1485,18 @@ fun main() {
         // are one type to the model, so both cross as `Long?` on the decoupled
         // `(present, value)` pair — the boxed one used to be read by path
         // segment as "not optional" and crossed as one boxed object.
-        check(wrappedFieldsSum(WrappedFields(1L, 2L, 4L), boom) == 7L)
-        check(wrappedFieldsSum(WrappedFields(1L, null, 4L), boom) == 5L)
-        check(wrappedFieldsSum(WrappedFields(1L, 2L, null), boom) == 3L)
-        check(wrappedFieldsSum(WrappedFields(1L, null, null), boom) == 1L)
+        // `Priority.LOW` weighs 1, `HIGH` weighs 10 — see `priority_weight`.
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, 4L, Priority.LOW, Priority.LOW), boom) == 9L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, 4L, Priority.LOW, Priority.LOW), boom) == 7L)
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, null, Priority.LOW, Priority.LOW), boom) == 5L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, null, Priority.LOW, Priority.LOW), boom) == 3L)
+
+        // And over a TERMINAL (#309): `Box<Priority>` had no outbound route at
+        // all, where `Box<Option<Long>>` above rode the `Optional` layer arm.
+        // Both enum fields are declared `Priority` in Kotlin — the wrapper is
+        // invisible — and the pair differing only in spelling must weigh alike.
+        check(wrappedFieldsSum(WrappedFields(0L, null, null, Priority.HIGH, Priority.LOW), boom) == 11L)
+        check(wrappedFieldsSum(WrappedFields(0L, null, null, Priority.LOW, Priority.HIGH), boom) == 11L)
 
         // An absent `Option<data class>` must deliver `None`, not an error. Its
         // leaves are inert placeholders when the object is null, and a required
