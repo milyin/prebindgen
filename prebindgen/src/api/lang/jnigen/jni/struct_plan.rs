@@ -483,8 +483,6 @@ fn sum_plan_kind(
     optional: bool,
     depth: usize,
 ) -> Option<PlanFieldKind> {
-    use crate::api::core::types_util::SumSpec;
-
     // Sum expansion needs its OWN depth guard. A sum whose payload is a sum
     // never passes through `build_struct_plan`, so that function's assert —
     // the only one on this recursion before now — cannot see a chain made
@@ -501,15 +499,13 @@ fn sum_plan_kind(
     let ident = bare_path_ident(ty).unwrap_or_else(|| {
         panic!("fromParts bridge: sealed-class field `{owner}` is not a path type")
     });
-    let item_enum = registry.flat().enum_item(&ident).unwrap_or_else(|| {
-        panic!("fromParts bridge: sealed-class field `{owner}` has no indexed enum `{ident}`")
-    });
     // The sum as the MODEL holds it: its alternatives' payloads are `TypeRef`s
     // already, so classifying one asks nothing and cannot be asked about a type
-    // the model never saw.
+    // the model never saw. One lookup, not two — the `enum_item` that used to
+    // sit beside this only fed a `SumSpec` of what the element already says.
     let Some(crate::api::core::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
     else {
-        panic!("fromParts bridge: sealed-class field `{owner}`: `{ident}` is not a sum")
+        panic!("fromParts bridge: sealed-class field `{owner}`: `{ident}` is not an indexed sum")
     };
     let key = TypeKey::from_ident(&ident);
     let cfg = ext
@@ -525,26 +521,22 @@ fn sum_plan_kind(
         .map(|s| ext.fqn_of(s))
         .unwrap_or_else(|| panic!("fromParts bridge: sealed class `{ident}` has no Kotlin name"));
 
-    let spec = SumSpec::from_item_enum(item_enum);
     let mut variants: Vec<SumPlanVariant> = Vec::new();
-    for (v, alt) in spec.variants.iter().zip(&sum.alternatives) {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.ident);
+    for alt in &sum.alternatives {
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
         let mut fields: Vec<SumPlanField> = Vec::new();
-        for (f, alt_field) in v.fields.iter().zip(alt.fields.iter()) {
-            let prop = sum_field_prop_name(&f.member);
+        for field in &alt.fields {
+            let member = field.member();
+            let prop = sum_field_prop_name(&member);
             let slot = sum_slot_fragment(&kotlin_name, &prop);
-            let owner = format!("{ident}::{}.{prop}", v.ident);
+            let owner = format!("{ident}::{}.{prop}", alt.name);
             // `?` — a payload whose converter has not resolved yet defers the
             // whole plan to the next iteration, it does not fail the build.
-            let kind = classify_field(ext, registry, &alt_field.ty, &owner, depth + 1)?;
-            fields.push(SumPlanField {
-                member: f.member.clone(),
-                slot,
-                kind,
-            });
+            let kind = classify_field(ext, registry, &field.ty, &owner, depth + 1)?;
+            fields.push(SumPlanField { member, slot, kind });
         }
         variants.push(SumPlanVariant {
-            rust_ident: v.ident.clone(),
+            rust_ident: alt.name.clone(),
             kotlin_name,
             fields,
         });
@@ -565,15 +557,31 @@ fn sum_plan_kind(
 /// camelCased name, a tuple field becomes `v0`, `v1`. Must agree with the
 /// sealed-interface emitter, which is why both call this.
 ///
-/// Takes the **member**, which is the whole of what the name depends on, so a
-/// caller holding a `flat::Field` asks `Field::member()` and a caller holding a
-/// `SumField` reads its own — one derivation for both, rather than a second
-/// convention that could drift from this one (#289).
+/// Takes the **member**, which is the whole of what the name depends on: every
+/// caller holds a `flat::Field` and asks `Field::member()`. It took a
+/// `types_util::SumField` when a second description of a sum still existed
+/// beside the model's (#289).
 pub(crate) fn sum_field_prop_name(member: &syn::Member) -> String {
     match member {
         syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
         syn::Member::Unnamed(i) => format!("v{}", i.index),
     }
+}
+
+/// The wire tag of one alternative: its declaration-order index, as the `jint`
+/// the selector leaf carries.
+///
+/// One place, because the tag has to agree in three: the leaf's `group`, the
+/// Kotlin `when` arm, and the Rust `match` arm. Three separate `as i32` casts
+/// agreed by coincidence rather than by construction.
+///
+/// Deliberately **not** a checked conversion. `usize` → `i32` can truncate in
+/// general, but not here: the index counts alternatives of one enum, and an
+/// enum with `i32::MAX` variants is not a thing rustc can be handed. A
+/// `try_from(..).expect(..)` would put a panic in the working path for a state
+/// the compiler cannot produce, which is the shape this crate avoids.
+pub(crate) fn sum_tag(alt: &crate::api::core::flat::Alternative) -> i32 {
+    alt.index as i32
 }
 
 /// Slot-name fragment for one variant field: `<variantCamel>_<prop>`. Keyed

@@ -45,15 +45,8 @@ pub(crate) fn synth_sum_leaves(
     sum_cfg: &SumConfig,
     sum: &crate::api::core::flat::Variant,
 ) -> Vec<crate::api::core::unfold::UnfoldLeaf> {
-    use crate::api::core::{
-        types_util::SumSpec,
-        unfold::{LeafSource, UnfoldLeaf},
-    };
+    use crate::api::core::unfold::{LeafSource, UnfoldLeaf};
 
-    // `SumSpec` still reads the item — it owns the leaf-NAMING convention, which
-    // is jnigen's own. The payload TYPES come from the element beside it, whose
-    // fields are already readings, so nothing here has to compose or look one up.
-    let spec = SumSpec::from_item_enum(&sum.origin.syntax);
     // The selector rides ahead of the groups it chooses between, and carries
     // **which sum** it selects over as its `out_ty` — that is how the emitter
     // finds the enum to `match` when the sum is a field rather than the whole
@@ -74,21 +67,21 @@ pub(crate) fn synth_sum_leaves(
         source: LeafSource::SumTag,
         group: None,
     }];
-    for (variant, alt) in spec.variants.iter().zip(&sum.alternatives) {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &variant.ident);
-        for (field, alt_field) in variant.fields.iter().zip(&alt.fields) {
-            let prop = sum_field_prop_name(&field.member);
+    for alt in &sum.alternatives {
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
+        for field in &alt.fields {
+            let prop = sum_field_prop_name(&field.member());
             leaves.push(UnfoldLeaf {
                 name: sum_slot_fragment(&kotlin_name, &prop),
                 path: Vec::new(),
-                out_ty: alt_field.ty.clone(),
+                out_ty: field.ty.clone(),
                 identity: false,
                 nullable: false,
                 source: LeafSource::VariantField {
-                    variant: variant.ident.clone(),
-                    member: field.member.clone(),
+                    variant: alt.name.clone(),
+                    member: field.member(),
                 },
-                group: Some(variant.tag),
+                group: Some(sum_tag(alt)),
             });
         }
     }
@@ -251,7 +244,7 @@ pub(crate) fn encode_sum_group(
         .alternatives
         .iter()
         .map(|alt| {
-            let tag = alt.index as i32;
+            let tag = sum_tag(alt);
             let group: Vec<usize> = leaves
                 .iter()
                 .enumerate()

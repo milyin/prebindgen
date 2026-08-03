@@ -154,8 +154,8 @@ pub(crate) fn ident(s: &str) -> syn::Ident {
 
 /// Convert a `PascalCase` / `camelCase` identifier to `snake_case`
 /// (`ZKeyExpr` → `z_key_expr`). The single implementation behind the
-/// public `prebindgen::lang::snake_case` re-export and the sum-variant
-/// leaf naming in [`SumSpec`].
+/// public `prebindgen::lang::snake_case` re-export, and behind cbindgen's
+/// type-name mangling.
 pub fn pascal_to_snake(s: &str) -> String {
     let mut out = String::new();
     for (i, c) in s.chars().enumerate() {
@@ -213,109 +213,6 @@ pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
         .find(|v| !matches!(v.fields, syn::Fields::Unit))
 }
 
-/// The language-neutral description of a data-carrying enum: a **tag** —
-/// which alternative is live — plus one **leaf group per variant**.
-///
-/// Core describes the sum; adapters decide what its leaves look like on the
-/// wire (`JniGenBuilder` overlays the groups in the signature, `CbindgenBuilder` overlays
-/// them in memory as a `#[repr(C)]` union). Nothing here names a wire
-/// detail — in particular a payload enum carries no `repr`, so tags are
-/// declaration order and never an explicit discriminant.
-/// The neutral description lands before either lowering, so both adapters
-/// read one definition instead of growing a private one each; the
-/// `dead_code` allow covers that gap and goes away with the first adapter
-/// that reads a sum.
-#[allow(dead_code)]
-pub struct SumSpec {
-    /// Canonical key of the enum type.
-    pub key: crate::api::core::registry::TypeKey,
-    /// The enum's ident as declared in the source crate — the spelling
-    /// adapters use to build `Enum::Variant` constructor paths.
-    pub source: syn::Ident,
-    /// Variants in declaration order; `variants[i].tag == i as i32`.
-    pub variants: Vec<SumVariant>,
-}
-
-/// One alternative of a [`SumSpec`].
-#[allow(dead_code)]
-pub struct SumVariant {
-    /// The variant ident as declared (`PeriodicQueries`).
-    pub ident: syn::Ident,
-    /// Declaration-order tag, `0..N-1`.
-    pub tag: i32,
-    /// The variant's payload, in declaration order. Empty for a unit
-    /// variant — the group that contributes nothing but its tag.
-    pub fields: Vec<SumField>,
-}
-
-/// One payload field of a [`SumVariant`].
-#[allow(dead_code)]
-pub struct SumField {
-    /// How the field is addressed in a pattern: `Named(ident)` for a
-    /// struct variant, `Unnamed(index)` for a tuple variant.
-    pub member: syn::Member,
-    /// Leaf name, following the existing nested-prefix convention:
-    /// `<variant_snake>_<field>` for a named field, `<variant_snake>_<i>`
-    /// for a tuple field.
-    pub name: String,
-    /// The field's declared type.
-    pub ty: syn::Type,
-}
-
-#[allow(dead_code)]
-impl SumSpec {
-    /// Describe `e` as a sum. Every enum has a description — a
-    /// [`Unit`](EnumShape::Unit) enum yields all-empty groups, which is
-    /// exactly the "tag only" lowering — so this never fails and never
-    /// consults [`enum_shape`].
-    pub fn from_item_enum(e: &syn::ItemEnum) -> Self {
-        let variants = e
-            .variants
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                let prefix = pascal_to_snake(&v.ident.to_string());
-                let fields = v
-                    .fields
-                    .iter()
-                    .enumerate()
-                    .map(|(fi, f)| match &f.ident {
-                        Some(id) => SumField {
-                            member: syn::Member::Named(id.clone()),
-                            name: format!("{prefix}_{id}"),
-                            ty: f.ty.clone(),
-                        },
-                        None => SumField {
-                            member: syn::Member::Unnamed(syn::Index::from(fi)),
-                            name: format!("{prefix}_{fi}"),
-                            ty: f.ty.clone(),
-                        },
-                    })
-                    .collect();
-                SumVariant {
-                    ident: v.ident.clone(),
-                    tag: i as i32,
-                    fields,
-                }
-            })
-            .collect();
-        Self {
-            key: crate::api::core::registry::TypeKey::from_ident(&e.ident),
-            source: e.ident.clone(),
-            variants,
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl SumVariant {
-    /// True when this variant carries no payload — its leaf group is empty
-    /// and it contributes only its tag.
-    pub fn is_unit(&self) -> bool {
-        self.fields.is_empty()
-    }
-}
-
 /// Resolve each enum variant to its discriminant value following Rust's own
 /// assignment rule: an explicit `= N` sets the value, an implicit variant
 /// takes the previous value plus one (starting at 0).
@@ -329,8 +226,9 @@ impl SumVariant {
 /// expressions at codegen time.
 ///
 /// This describes the **unit** enum's wire numbering. A payload enum's
-/// alternatives are identified by the declaration-order tag of
-/// [`SumSpec`], never by a discriminant.
+/// alternatives are identified by
+/// [`Alternative::index`](crate::api::core::flat::Alternative::index) —
+/// declaration order — never by a discriminant.
 pub fn enum_discriminant_values(e: &syn::ItemEnum) -> Vec<(syn::Ident, i64)> {
     let mut out = Vec::with_capacity(e.variants.len());
     let mut next: i64 = 0;
