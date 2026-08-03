@@ -659,6 +659,77 @@ fn sum_is_its_own_type_kind() {
     assert!(cfg.special_decl());
 }
 
+/// What the registry holds for a `sealed_class!` sum, in all three parts (#282).
+///
+/// The `SumTag` selector's `out_ty` is the **sum**, not the `i32` — it names
+/// which sum it chooses between. That type is *registered* and *not required*,
+/// and those are separate claims a single predicate cannot state:
+///
+/// * a **cell** says the type entered the pipeline;
+/// * a **root** says the binding demands its converter — cleared here, because
+///   a sum crosses decomposed and has no whole-value output converter;
+/// * an **entry** says one resolved — present INPUT-side (`sum_input_body`
+///   decodes a whole `JObject`), absent OUTPUT-side, and that asymmetry is the
+///   design, not an accident.
+///
+/// Asserted against a real `Registry` rather than a hand-assembled one, because
+/// the claim is about what a *declaration* produces.
+#[test]
+fn a_sums_registry_cells_are_registered_but_not_required() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one() -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_one)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    let reg = gen.registry();
+    let key = TypeKey::from_type(&syn::parse_quote!(Reading));
+
+    let input = reg.input_types.get(&key).expect("input cell");
+    let output = reg.output_types.get(&key).expect("output cell");
+
+    // Registered both ways — the declaration put them there.
+    // Required neither way — `boundary_only_types` clears the root, because the
+    // sum crosses in pieces.
+    assert!(!input.root, "a declared sum crosses decomposed, not whole");
+    assert!(!output.root, "a declared sum crosses decomposed, not whole");
+
+    // The asymmetry: Kotlin → Rust decodes a whole `JObject`; Rust → Kotlin is
+    // always flattened, so there is nothing to resolve.
+    assert!(
+        input.entry.is_some(),
+        "the input direction has a whole-object decoder"
+    );
+    assert!(
+        output.entry.is_none(),
+        "the output direction has none — a sum crosses flattened, always"
+    );
+}
+
 /// A `Vec` of tag-gated groups has variable arity, so it cannot ride the
 /// fixed-layout `fromParts` bridge — the same reason `Vec<data class>` is
 /// rejected. The guard has to peel `Vec` before asking `type_kind`, which

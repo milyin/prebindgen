@@ -1756,12 +1756,26 @@ fn sum_return_is_a_fixed_builder_plan() {
     // requirement into a binding that has no `i32` crossing of its own.
     assert!(!plan.leaves[0].has_converter());
     assert!(plan.leaves[1].has_converter());
-    assert!(
-        !reg.output_types
-            .get(&TypeKey::from_type(&syn::parse_quote!(Reading)))
-            .is_some_and(|c| c.root),
-        "a sum has no whole-value converter, so its return must not require one"
-    );
+    // #282's invariant, stated over the plan rather than over one type name:
+    // EVERY leaf's `out_ty` is registered, and only a converter-bearing leaf is
+    // a root. The assertion this replaced could state neither half — it read
+    // `!...is_some_and(|c| c.root)` on `Reading`, which is also true when the
+    // cell is ABSENT, and absent is what it was: this fixture's registry
+    // declares nothing, so it passed for the wrong reason.
+    for leaf in &plan.leaves {
+        let cell = reg
+            .output_types
+            .get(&leaf.out_ty.key())
+            .unwrap_or_else(|| panic!("leaf `{}` registers its out_ty", leaf.name));
+        assert_eq!(
+            cell.root,
+            leaf.has_converter(),
+            "leaf `{}`: a cell says the type entered the pipeline, a root says \
+             the binding demands its converter — the selector makes only the \
+             first, because a sum has no whole-value output converter",
+            leaf.name
+        );
+    }
 }
 
 /// `Option` and `Vec` layers ride the existing shape fold — a sum needs

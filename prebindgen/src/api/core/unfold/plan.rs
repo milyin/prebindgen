@@ -192,6 +192,15 @@ pub enum LeafSource {
     /// assigns it per `match` arm — so it has no path. Emitted once, ahead of
     /// the groups it selects between (see
     /// [`crate::api::core::unfold::apply_sum_returns`]).
+    ///
+    /// Its [`out_ty`](UnfoldLeaf::out_ty) is **the sum**, not the `i32` — it
+    /// carries *which* sum it chooses between, which is how the emitter finds
+    /// the enum to `match`. That type is **registered and not required** (#282):
+    /// it gets a table cell like every other leaf's, but no root, because a sum
+    /// has no whole-value output converter and demanding one would fail
+    /// resolution over a type that never crosses whole. The reading comes from
+    /// the declaration — [`Variant::type_ref`](crate::api::core::flat::Variant::type_ref)
+    /// — never from an adapter composing one out of a name.
     SumTag,
     /// A payload field of ONE alternative of a decomposed sum, reached through
     /// a **variant pattern** rather than an accessor chain or a field chain:
@@ -339,6 +348,14 @@ impl UnfoldLeaf {
     /// selector: it is assigned per `match` arm, never converted, so requiring
     /// a converter for it would make every sum depend on an unrelated `i32`
     /// crossing existing in the binding.
+    ///
+    /// **This is the root question, not the registration question.** Every
+    /// leaf's `out_ty` gets a table cell; this decides which of them the
+    /// binding additionally *demands* a converter for. A cell says the type
+    /// entered the pipeline, a root says the binding asked for it directly, and
+    /// an entry says one resolved — three separate claims, and a `SumTag` leaf
+    /// makes only the first (#282). See
+    /// [`Registry::reference_output`](crate::api::core::registry::Registry::reference_output).
     pub fn has_converter(&self) -> bool {
         self.source != LeafSource::SumTag
     }
