@@ -315,26 +315,28 @@ pub(crate) fn struct_input_body(
 /// design's rejected-alternative note about per-crossing JVM objects. Reading
 /// one field out of a `JObject` the caller already handed us costs nothing
 /// extra, so the asymmetry is real rather than an oversight.
+/// Takes the **element**, not the `syn::ItemEnum` it was parsed from (#289):
+/// `Alternative::fields` carries a `TypeRef` per payload, so the property read
+/// below asks the model instead of peeling tokens. It also retires the two zips
+/// this used to run — a `SumSpec` derived from the item, paired back against the
+/// item it came from — because `Alternative` already is that pairing.
 pub(crate) fn sum_input_body(
     ext: &Declarations,
-    e: &syn::ItemEnum,
+    v: &flat::Variant,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
-    use crate::api::core::types_util::SumSpec;
-
-    let key = TypeKey::from_ident(&e.ident);
+    let key = TypeKey::from_ident(&v.name);
     let cfg = ext.types.get(&key)?;
     let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
     let iface_path = iface_fqn.replace('.', "/");
-    let source_module = ext.fn_module(registry, &e.ident);
-    let enum_ident = &e.ident;
-    let enum_name = e.ident.to_string();
+    let source_module = ext.fn_module(registry, &v.name);
+    let enum_ident = &v.name;
+    let enum_name = v.name.to_string();
 
-    let spec = SumSpec::from_item_enum(e);
     let mut arms: Vec<TokenStream> = Vec::new();
-    for (v, item_variant) in spec.variants.iter().zip(&e.variants) {
-        let vident = &v.ident;
+    for alt in &v.alternatives {
+        let vident = &alt.name;
         let kotlin_name = ext.sum_variant_class_name(sum_cfg, vident);
         // A variant class is NESTED in the interface, so its JVM binary name
         // is `Outer$Variant`.
@@ -342,8 +344,9 @@ pub(crate) fn sum_input_body(
 
         let mut preludes: Vec<TokenStream> = Vec::new();
         let mut inits: Vec<TokenStream> = Vec::new();
-        for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
-            let prop = crate::api::lang::jnigen::jni::struct_plan::sum_field_prop_name(f);
+        for field in &alt.fields {
+            let prop =
+                crate::api::lang::jnigen::jni::struct_plan::sum_field_prop_name(&field.member());
             let bind = format_ident!("__p_{}", prop);
             let err_prefix = format!("{enum_name}.{kotlin_name}.{prop}: {{}}");
             let (pre, value) = read_kotlin_property(
@@ -351,25 +354,19 @@ pub(crate) fn sum_input_body(
                 registry,
                 &quote!(__obj),
                 &prop,
-                &item_field.ty,
+                &field.ty,
                 &bind,
                 &err_prefix,
             )?;
             preludes.push(pre);
-            match &f.member {
-                syn::Member::Named(n) => inits.push(quote!(#n: #value)),
-                syn::Member::Unnamed(_) => inits.push(quote!(#value)),
-            }
+            inits.push(field.bind(&value));
         }
-        let ctor = match item_variant.fields {
-            syn::Fields::Unit => quote!(#source_module::#enum_ident::#vident),
-            syn::Fields::Named(_) => {
-                quote!(#source_module::#enum_ident::#vident { #(#inits),* })
-            }
-            syn::Fields::Unnamed(_) => {
-                quote!(#source_module::#enum_ident::#vident(#(#inits),*))
-            }
-        };
+        // The alternative's OWN delimiters, from the one place that chooses
+        // them. `B()` carries no payload and still must be written `E::B()` —
+        // a three-arm `syn::Fields` match here would have had to re-derive
+        // that, and `Alternative::is_empty()` cannot: `B`, `B()` and `B {}`
+        // are all empty by it.
+        let ctor = alt.spell(quote!(#source_module::#enum_ident::#vident), &inits);
         arms.push(quote! {
             if env.is_instance_of(__obj, #jvm_class)
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
@@ -417,13 +414,18 @@ fn read_kotlin_property(
     registry: &impl Conversions<KotlinMeta>,
     receiver: &TokenStream,
     prop: &str,
-    ty: &syn::Type,
+    reading: &TypeRef,
     bind: &syn::Ident,
     err_prefix: &str,
 ) -> Option<(TokenStream, TokenStream)> {
-    let entry = registry
-        .reading_of(ty)
-        .and_then(|tr| registry.input_entry(&tr))?;
+    // The payload's own reading straight to its entry, and the layer questions
+    // below asked of it once — `option_inner_type` compared the last path
+    // segment, so a payload spelled `Box<Option<T>>` answered "not optional"
+    // four separate times here (#289).
+    let entry = registry.input_entry(reading)?;
+    let ty = reading.syntax();
+    let optional = reading.optional_inner().is_some();
+    let inner = reading.optional_inner().unwrap_or(reading);
     let wire = entry.destination.clone();
     let raw = format_ident!("{}_raw", bind);
     // The COMPLETE wire → Rust chain, not just the wire-facing converter: a
@@ -449,7 +451,7 @@ fn read_kotlin_property(
             // (and same reasoning) as an owned handle field of a data class;
             // `Option<_>` keeps the niche-aware converter (jlong 0 ⇒ `None`).
             let closed_msg = "Operation on a closed native handle.";
-            let decode = if option_inner_type(ty).is_some() {
+            let decode = if optional {
                 quote! { let #bind = #conv; }
             } else {
                 quote! {
@@ -489,23 +491,20 @@ fn read_kotlin_property(
     // `Option<enum>` one unboxes a `java.lang.Integer`, and neither matches
     // what the JVM slot actually holds. `struct_input_body` makes the same
     // distinction for data-class fields; this is that logic for a property.
-    let enum_inner = option_inner_type(ty).unwrap_or_else(|| ty.clone());
-    if ext.is_kotlin_enum(&enum_inner) {
-        let fqn = bare_path_ident(&enum_inner)
-            .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
-            .map(|v| v.to_string())?;
+    if ext.is_kotlin_enum_reading(inner) {
+        // The NAME off the classification, not off the last path segment.
+        let fqn = match inner.kind() {
+            flat::TypeKind::Named { id } => id.ident(),
+            _ => None,
+        }
+        .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
+        .map(|v| v.to_string())?;
         let sig = format!("L{};", fqn.replace('.', "/"));
         let obj = format_ident!("{}_obj", bind);
         // Under `Option`, JVM null is `None` and the INNER converter decodes
         // the discriminant; the outer converter would expect a boxed Integer.
-        let decode = if option_inner_type(ty).is_some() {
-            let inner_conv = composed_entry_decode(
-                registry
-                    .reading_of(&enum_inner)
-                    .and_then(|tr| registry.input_entry(&tr))?,
-                &raw,
-                bind,
-            );
+        let decode = if optional {
+            let inner_conv = composed_entry_decode(registry.input_entry(inner)?, &raw, bind);
             quote! {
                 let #bind = if #obj.is_null() {
                     ::core::option::Option::None
@@ -562,12 +561,24 @@ fn read_kotlin_property(
             // class, another sum, a `List`): the slot's descriptor is the
             // registered Kotlin class and the value decodes through its own
             // converter — the same delegation the data-class path uses.
-            let slot_ty = option_inner_type(ty).unwrap_or_else(|| ty.clone());
-            let sig = bare_path_ident(&slot_ty)
-                .and_then(|name| ext.kotlin_fqn(&TypeKey::from_ident(&name)))
-                .map(|v| format!("L{};", v.replace('.', "/")))
-                .or_else(|| pat_match_top(&slot_ty, "Vec").then(|| "Ljava/util/List;".to_string()))
-                .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
+            let sig = match inner.kind() {
+                // The NAME off the classification, not off the last path
+                // segment: `Box<T>` IS `T` here.
+                flat::TypeKind::Named { id } => id.ident(),
+                _ => None,
+            }
+            .and_then(|name| ext.kotlin_fqn(&TypeKey::from_ident(&name)))
+            .map(|v| format!("L{};", v.replace('.', "/")))
+            .or_else(|| {
+                // A run of values is what `kind` says it is.
+                // `pat_match_top(.., "Vec")` compared the last path segment, so
+                // a `Box<Vec<T>>` answered false.
+                inner
+                    .sequence_elem()
+                    .is_some()
+                    .then(|| "Ljava/util/List;".to_string())
+            })
+            .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
             Some((
                 quote! {
                     let #raw: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
@@ -1037,7 +1048,7 @@ fn wire_kotlin_type(entry: &crate::api::core::registry::TypeEntry<KotlinMeta>) -
 fn build_flat_sum_field(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    sum_ty: &syn::Type,
+    sum_reading: &TypeRef,
     field: syn::Ident,
     optional: bool,
     native_prefix: &str,
@@ -1047,14 +1058,20 @@ fn build_flat_sum_field(
     leaves: &mut Vec<FlatLeaf>,
 ) -> Option<FlatFieldNode> {
     let rust_ty = field_reading.syntax();
-    use crate::api::core::types_util::SumSpec;
 
-    let ident = bare_path_ident(sum_ty)?;
-    let item_enum = registry.flat().enum_item(&ident)?;
+    // The NAME off the classification, and then the ELEMENT — `enum_item`
+    // hands back only the `syn::ItemEnum`, deliberately, so a consumer that
+    // acts on the Variant/Enum distinction asks `declared_type` (#289).
+    let ident = match sum_reading.kind() {
+        flat::TypeKind::Named { id } => id.ident(),
+        _ => None,
+    }?;
+    let flat::Type::Variant(sum) = registry.flat().declared_type(&ident)? else {
+        return None;
+    };
     let cfg = ext.types.get(&TypeKey::from_ident(&ident))?;
     let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
-    let spec = SumSpec::from_item_enum(item_enum);
 
     // Plan every group first: a single unflattenable payload means the whole
     // sum stays object-shaped, so nothing may be pushed until all of them are
@@ -1071,13 +1088,12 @@ fn build_flat_sum_field(
         nullable_wire: bool,
     }
     let mut planned: Vec<Planned> = Vec::new();
-    for (v, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-        let kotlin = ext.sum_variant_class_name(sum_cfg, &v.ident);
+    for alt in &sum.alternatives {
+        let kotlin = ext.sum_variant_class_name(sum_cfg, &alt.name);
         let mut fields = Vec::new();
-        for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
-            let entry = registry
-                .reading_of(&item_field.ty)
-                .and_then(|tr| registry.input_entry(&tr))?;
+        for field in &alt.fields {
+            // The payload's own reading straight to its entry.
+            let entry = registry.input_entry(&field.ty)?;
             // A projection payload (handle) carries ownership
             // and locking rules the tag-gated group does not model yet.
             if entry.metadata.projection.is_some() {
@@ -1091,7 +1107,8 @@ fn build_flat_sum_field(
             if prim.is_none() && !is_string_like {
                 return None;
             }
-            let prop = crate::api::lang::jnigen::jni::struct_plan::sum_field_prop_name(f);
+            let member = field.member();
+            let prop = crate::api::lang::jnigen::jni::struct_plan::sum_field_prop_name(&member);
             let slot =
                 crate::api::lang::jnigen::jni::struct_plan::sum_slot_fragment(&kotlin, &prop);
             // `(<base>.field as? io.x.E.V)?.prop` — inert groups yield null,
@@ -1101,7 +1118,7 @@ fn build_flat_sum_field(
             // An `enum_class` payload is a Kotlin enum object whose wire is
             // the `jint` discriminant, so the access reads `.value` — without
             // it the slot would be `Priority?` where the wire wants `Int`.
-            let read = if ext.is_kotlin_enum(&item_field.ty) {
+            let read = if ext.is_kotlin_enum_reading(&field.ty) {
                 format!("{prop}?.value")
             } else {
                 prop.clone()
@@ -1112,7 +1129,7 @@ fn build_flat_sum_field(
                 None => (cast, true),
             };
             fields.push((
-                f.member.clone(),
+                member,
                 PlannedLeaf {
                     native: format!("{native_prefix}_{slot}"),
                     entry: entry.clone(),
@@ -1122,7 +1139,7 @@ fn build_flat_sum_field(
             ));
         }
         planned.push(Planned {
-            rust_ident: v.ident.clone(),
+            rust_ident: alt.name.clone(),
             kotlin,
             fields,
         });
@@ -1463,7 +1480,7 @@ fn build_flat_struct_node(
             if let Some(node) = build_flat_sum_field(
                 ext,
                 registry,
-                &nested_ty,
+                nested,
                 fident.clone(),
                 field_optional,
                 &child_native,
