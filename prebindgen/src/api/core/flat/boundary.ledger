@@ -54,7 +54,7 @@
 4	api/lang/jnigen/jni/builder.rs
 4	api/lang/jnigen/jni/emit/convert.rs
 2	api/lang/jnigen/jni/emit/delivery.rs
-5	api/lang/jnigen/jni/emit/flat_input.rs
+4	api/lang/jnigen/jni/emit/flat_input.rs
 16	api/lang/jnigen/jni/emit/names.rs
 11	api/lang/jnigen/jni/emit/wrapper.rs
 3	api/lang/jnigen/jni/fold.rs
@@ -68,4 +68,4 @@
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total: 117
+# total: 116

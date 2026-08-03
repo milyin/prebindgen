@@ -12,34 +12,46 @@ use crate::api::{
     lang::jnigen::jni::trait_impl::{build_through_erased_wrappers, build_through_wrappers},
 };
 
+/// Takes the **element**, not the `syn::ItemStruct` it was parsed from (#289):
+/// `flat::Field::ty` is already a `TypeRef`, so every peel below is the model's
+/// answer rather than a last-path-segment test on tokens that had a reading one
+/// level up. Same move `build_flat_struct_node` made for the flatten path; this
+/// is the whole-object `.jobject_input()` decoder.
 pub(crate) fn struct_input_body(
     ext: &Declarations,
-    s: &syn::ItemStruct,
+    s: &flat::Struct,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
-    let struct_name = s.ident.to_string();
-    let struct_module = struct_module_path(ext, registry, &s.ident);
-    let struct_ident = &s.ident;
-
-    let syn::Fields::Named(named) = &s.fields else {
-        return None;
-    };
+    let struct_name = s.name.to_string();
+    let struct_module = struct_module_path(ext, registry, &s.name);
+    let struct_ident = &s.name;
 
     let mut field_preludes: Vec<TokenStream> = Vec::new();
     let mut field_init: Vec<TokenStream> = Vec::new();
 
-    for field in &named.named {
-        let fname_ident = field.ident.as_ref().unwrap().clone();
+    for field in &s.fields {
+        // A positional field has no name to read a JVM slot by, which is what
+        // the `syn::Fields::Named` guard used to say one level up. Said per
+        // field now, because the element models a field list rather than a
+        // `syn::Fields` shape.
+        let fname_ident = field.name.clone()?;
         let fname = fname_ident.to_string();
         let camel = mangle_kotlin_ident(&snake_to_camel(&fname));
         let err_prefix = format!("{struct_name}.{camel}: {{}}");
         let raw_ident = format_ident!("__{}_raw", fname_ident);
 
         // Defer if any field's input converter isn't resolved yet — the
-        // fixed-point loop will retry on the next iteration.
-        let field_entry = registry
-            .reading_of(&field.ty)
-            .and_then(|tr| registry.input_entry(&tr))?;
+        // fixed-point loop will retry on the next iteration. The field's own
+        // reading straight to its entry — the `reading_of` hop only ever
+        // recovered what the field already carried.
+        let field_entry = registry.input_entry(&field.ty)?;
+        // The optional layer off the MODEL, asked once and reused: every site
+        // below that wants "is this field optional" reads this, so they cannot
+        // disagree with each other the way four independent path-segment tests
+        // could (#273). `option_inner_type` compared the last path segment, so
+        // a field spelled `Box<Option<T>>` answered "not optional" here.
+        let field_optional = field.ty.optional_inner().is_some();
+        let inner = field.ty.optional_inner().unwrap_or(&field.ty);
         let field_wire = field_entry.destination.clone();
         // The field's COMPLETE decode, stages included — a `convert!` type
         // reaches its Rust value through them (`jlong -> u64 -> Duration`).
@@ -62,13 +74,8 @@ pub(crate) fn struct_input_body(
                     // converter would yield `OwnedObject<T>`, which can't
                     // populate an owned field. `Option<_>` handle fields keep
                     // the niche-aware converter (jlong 0 ⇒ `None`).
-                    let field_ty = &field.ty;
-                    let field_is_option = matches!(
-                        field_ty,
-                        syn::Type::Path(p) if p.path.segments.last()
-                            .map(|s| s.ident == "Option").unwrap_or(false)
-                    );
-                    let decode = if field_is_option {
+                    let field_ty = field.ty.syntax();
+                    let decode = if field_optional {
                         quote! { let #fname_ident = #field_conv; }
                     } else {
                         quote! {
@@ -102,15 +109,13 @@ pub(crate) fn struct_input_body(
                     });
                 }
                 ProjectionKind::Unsigned64 => {
-                    if let Some(inner_ty) = option_inner_type(&field.ty) {
+                    if field_optional {
                         let niche = matches!(
                             proj.strategy,
                             FoldStrategy::Optional(NullableKind::Niche, _)
                         );
                         let inner_conv = composed_entry_decode(
-                            registry
-                                .reading_of(&inner_ty)
-                                .and_then(|tr| registry.input_entry(&tr))?,
+                            registry.input_entry(inner)?,
                             &raw_ident,
                             &fname_ident,
                         );
@@ -163,22 +168,22 @@ pub(crate) fn struct_input_body(
         // its `value` getter (`getValue()I`); a null object is the `None` arm.
         // (The generic converters can't be used here: the bare-enum one is
         // jint-keyed, the `Option<enum>` one unboxes `java.lang.Integer`.)
-        let f_inner = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
-        if ext.is_kotlin_enum(&f_inner) {
-            if let Some(fqn) = bare_path_ident(&f_inner)
-                .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
-                .map(|v| v.to_string())
+        if ext.is_kotlin_enum_reading(inner) {
+            // The NAME off the classification, not off the last path segment:
+            // `Box<T>` IS `T` here, and taking the spelling apart would answer
+            // about the wrapper.
+            if let Some(fqn) = match inner.kind() {
+                flat::TypeKind::Named { id } => id.ident(),
+                _ => None,
+            }
+            .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
+            .map(|v| v.to_string())
             {
                 let sig = format!("L{};", fqn.replace('.', "/"));
-                let inner_conv = composed_entry_decode(
-                    registry
-                        .reading_of(&f_inner)
-                        .and_then(|tr| registry.input_entry(&tr))?,
-                    &raw_ident,
-                    &fname_ident,
-                );
+                let inner_conv =
+                    composed_entry_decode(registry.input_entry(inner)?, &raw_ident, &fname_ident);
                 let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-                let decode = if option_inner_type(&field.ty).is_some() {
+                let decode = if field_optional {
                     quote! {
                         let #fname_ident = if #tmp_ident.is_null() {
                             ::core::option::Option::None
@@ -234,10 +239,8 @@ pub(crate) fn struct_input_body(
                 // Kotlin class for a nested data-class field (Option-stripped
                 // — a nullable field keeps the same descriptor), `List` for a
                 // `Vec` field.
-                let slot_ty = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
                 let sig = registry
-                    .reading_of(&slot_ty)
-                    .and_then(|tr| registry.input_entry(&tr))
+                    .input_entry(inner)
                     .and_then(|e| jni_field_access(&e.destination))
                     .and_then(|(sig, _, is_obj)| {
                         if is_obj {
@@ -247,13 +250,22 @@ pub(crate) fn struct_input_body(
                         }
                     })
                     .or_else(|| {
-                        bare_path_ident(&slot_ty).and_then(|name| {
+                        // The NAME off the classification, not off the last
+                        // path segment.
+                        match inner.kind() {
+                            flat::TypeKind::Named { id } => id.ident(),
+                            _ => None,
+                        }
+                        .and_then(|name| {
                             ext.kotlin_fqn(&TypeKey::from_ident(&name))
                                 .map(|v| format!("L{};", v.replace('.', "/")))
                         })
                     })
                     .or_else(|| {
-                        if pat_match_top(&slot_ty, "Vec") {
+                        // A run of values is what `kind` says it is.
+                        // `pat_match_top(.., "Vec")` compared the last path
+                        // segment, so a `Box<Vec<T>>` answered false.
+                        if inner.sequence_elem().is_some() {
                             Some("Ljava/util/List;".to_string())
                         } else {
                             None
@@ -271,9 +283,18 @@ pub(crate) fn struct_input_body(
         field_init.push(quote!(#fname_ident));
     }
 
+    // The struct's OWN delimiters, from the one place that chooses them.
+    // `flat::Struct` does not record whether its fields were named — that is
+    // spelling — so hard-coding braces here emitted `Unit {}` for
+    // `struct Unit;` and `Empty {}` for `struct Empty()`, neither of which is
+    // Rust. The `syn::Fields::Named` guard this walk replaced happened to
+    // refuse both; the per-field name check cannot, because an empty struct
+    // has no field to refuse. `Struct::spell` is the dual of the
+    // `Alternative::spell` the sum decoder uses for exactly this.
+    let ctor = s.spell(quote!(#struct_module::#struct_ident), &field_init);
     let body: syn::Expr = syn::parse_quote!({
         #(#field_preludes)*
-        #struct_module::#struct_ident { #(#field_init),* }
+        #ctor
     });
     Some((syn::parse_quote!(jni::objects::JObject), body))
 }
@@ -712,7 +733,17 @@ pub(crate) enum FlatFieldNode {
         field: syn::Ident,
         value_leaf: usize,
         present_leaf: Option<usize>,
-        direct_handle: bool,
+        /// `Some(target)` iff this field crosses as a raw handle jlong, where
+        /// `target` is the type the `Box` points at — the field's own type with
+        /// its optional layer peeled, **taken off the model at plan time**.
+        ///
+        /// Paired rather than a `bool` beside a spelling the renderer re-peels:
+        /// `option_inner_type` compared the last path segment, so a field
+        /// spelled `Box<Option<T>>` would have handed `Box::from_raw` the wrong
+        /// target. There is no reading here to ask — `FlatFieldNode` is an
+        /// emission IR and tokens are what it is for — so the answer travels
+        /// from where the reading was (#289).
+        direct_handle: Option<Box<syn::Type>>,
         optional_handle: bool,
         rust_ty: Box<syn::Type>,
         /// The transparent wrappers this field's spelling adds over its
@@ -1486,7 +1517,6 @@ fn build_flat_struct_node(
         // Nullable primitive/enum with no niche: keep the allocation-free
         // `(present, value)` representation at every recursion depth.
         if let Some(inner_reading) = field.ty.optional_inner() {
-            let inner_ty = inner_reading.syntax().clone();
             if inner_reading.borrow_target().is_none() {
                 if let Some(inner) = registry.input_entry(inner_reading) {
                     if let Some(prim) = JniPrim::from_wire(&inner.destination) {
@@ -1500,7 +1530,7 @@ fn build_flat_struct_node(
                                 format!("{field_ref} != null"),
                                 Some(fident.clone()),
                             );
-                            let value_access = if ext.is_kotlin_enum(&inner_ty) {
+                            let value_access = if ext.is_kotlin_enum_reading(inner_reading) {
                                 format!("{field_ref}?.value ?: {}", prim.kotlin_zero())
                             } else {
                                 format!("{field_ref} ?: {}", prim.kotlin_zero())
@@ -1517,7 +1547,7 @@ fn build_flat_struct_node(
                                 field: fident,
                                 value_leaf: value_index,
                                 present_leaf: Some(present_index),
-                                direct_handle: false,
+                                direct_handle: None,
                                 optional_handle: false,
                                 rust_ty: Box::new(field.ty.syntax().clone()),
                                 wrappers: field.ty.erased_wrappers(),
@@ -1537,21 +1567,18 @@ fn build_flat_struct_node(
             // provides a niche already have a primitive destination and stay
             // a single leaf below.
             if proj.kind == ProjectionKind::Unsigned64 {
-                if let Some(inner_ty) = field.ty.optional_inner().map(|t| t.syntax().clone()) {
+                if let Some(inner_reading) = field.ty.optional_inner() {
                     if JniPrim::from_wire(&fentry.destination).is_none() {
-                        let inner = registry
-                            .reading_of(&inner_ty)
-                            .and_then(|tr| registry.input_entry(&tr))
-                            .ok_or_else(|| {
-                                flat_error(
-                                    root,
-                                    &path,
-                                    format!(
-                                        "unsigned field representation `{}` has no input converter",
-                                        TypeKey::from_type(&inner_ty)
-                                    ),
-                                )
-                            })?;
+                        let inner = registry.input_entry(inner_reading).ok_or_else(|| {
+                            flat_error(
+                                root,
+                                &path,
+                                format!(
+                                    "unsigned field representation `{}` has no input converter",
+                                    inner_reading.key()
+                                ),
+                            )
+                        })?;
                         let present_index = push_present_leaf(
                             leaves,
                             &format!("{child_native}_present"),
@@ -1570,7 +1597,7 @@ fn build_flat_struct_node(
                             field: fident,
                             value_leaf: value_index,
                             present_leaf: Some(present_index),
-                            direct_handle: false,
+                            direct_handle: None,
                             optional_handle: false,
                             rust_ty: Box::new(field.ty.syntax().clone()),
                             wrappers: field.ty.erased_wrappers(),
@@ -1600,7 +1627,7 @@ fn build_flat_struct_node(
                         field: fident,
                         value_leaf: value_index,
                         present_leaf: None,
-                        direct_handle: true,
+                        direct_handle: Some(Box::new(nested.syntax().clone())),
                         optional_handle,
                         rust_ty: Box::new(field.ty.syntax().clone()),
                         wrappers: field.ty.erased_wrappers(),
@@ -1631,7 +1658,7 @@ fn build_flat_struct_node(
                         field: fident,
                         value_leaf: value_index,
                         present_leaf: None,
-                        direct_handle: false,
+                        direct_handle: None,
                         optional_handle: false,
                         rust_ty: Box::new(field.ty.syntax().clone()),
                         wrappers: field.ty.erased_wrappers(),
@@ -1678,7 +1705,7 @@ fn build_flat_struct_node(
             field: fident,
             value_leaf: value_index,
             present_leaf: None,
-            direct_handle: false,
+            direct_handle: None,
             optional_handle: false,
             rust_ty: Box::new(field.ty.syntax().clone()),
             wrappers: field.ty.erased_wrappers(),
@@ -1887,8 +1914,7 @@ fn render_flat_struct_node(
                     build_through_wrappers(wrappers, e)
                         .expect("a field spelling the plan accepted is buildable")
                 };
-                if *direct_handle {
-                    let target = option_inner_type(rust_ty).unwrap_or_else(|| (**rust_ty).clone());
+                if let Some(target) = direct_handle {
                     if *optional_handle {
                         let gated = wrap(quote! {
                             if #wire == 0 {

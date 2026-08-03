@@ -3570,7 +3570,7 @@ pub(crate) unsafe fn JObject_to_WrappedFields_f14f08c1<'env, 'v>(
             >>::from(format!("WrappedFields.id: {}", e)))? as _;
         let id = jlong_to_i64_fbf9a9bc(env, &__id_raw)?;
         let __boxed_raw: jni::objects::JObject = env
-            .get_field(v, "boxed", "Ljava/lang/Object;")
+            .get_field(v, "boxed", "Ljava/lang/Long;")
             .and_then(|val| val.l())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,

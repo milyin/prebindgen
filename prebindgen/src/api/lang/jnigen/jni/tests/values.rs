@@ -715,6 +715,79 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     assert!(generation.report().contains("input `JObject` opt-in"));
 }
 
+/// A payload-less struct keeps its own delimiters through the `.jobject_input()`
+/// decoder.
+///
+/// The decoder walks `flat::Struct::fields`, and the element does not record
+/// whether the fields were named — that is spelling. So the braced initializer
+/// this used to hard-code emitted `myflat::Unit {}` for `struct Unit;`, which is
+/// not Rust. The `syn::Fields::Named` guard the walk replaced happened to refuse
+/// it by returning `None`; the per-field name check cannot, because an empty
+/// struct has no field to refuse.
+///
+/// A tuple struct is absent because it cannot reach here at all: the model
+/// reads one as an `Extern`, so `Flat::struct_type` answers `None` for it.
+///
+/// `Struct::spell` is the one place those delimiters are chosen — the dual of
+/// the `Alternative::spell` the sum decoder uses for `E::B()`.
+#[test]
+fn empty_structs_keep_their_own_constructor_delimiters() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Unit;
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct EmptyNamed {}
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn take_empties(a: Unit, c: EmptyNamed) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Unit).jobject_input())
+                .class(crate::data_class!(EmptyNamed).jobject_input())
+                .fun(crate::fun!(take_empties)),
+        );
+    let dir = unique_test_dir("jnigen_empty_struct_delimiters");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // Each shape gets the delimiters Rust demands for it, and none gets braces
+    // it cannot have.
+    assert!(
+        rc.contains("myflat::Unit)") || rc.contains("myflat::Unit}"),
+        "unit struct must be constructed bare, got:\n{rust}"
+    );
+    assert!(
+        !rc.contains("myflat::Unit{}"),
+        "unit struct must not take braces:\n{rust}"
+    );
+    assert!(
+        rc.contains("myflat::EmptyNamed{}"),
+        "empty named struct keeps its braces:\n{rust}"
+    );
+}
+
 #[test]
 fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     let loc = myflat_loc();

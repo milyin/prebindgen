@@ -2084,7 +2084,7 @@ impl Declarations {
                 }
             }
             if let Some(s) = registry.flat().struct_type(&name) {
-                let (wire, body) = struct_input_body(self, &s.origin.syntax, registry)?;
+                let (wire, body) = struct_input_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
                 // Auto-generated struct: the value-context Kotlin name is
                 // whatever the user pinned via `data_class`. If
