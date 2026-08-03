@@ -82,7 +82,10 @@ pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMet
         .collect();
     class_keys.sort_by_key(|k| k.as_str().to_string());
     for key in class_keys {
-        let cfg = &ext.types[key];
+        let cfg = &ext
+            .types
+            .by_declared_key(key)
+            .expect("a key this table handed out");
         let spec = cfg.name_spec.as_ref().expect("filtered to Some");
         let fqn = ext.fqn_of(spec);
         let (package, short) = fqn.rsplit_once('.').unwrap_or(("", fqn.as_str()));

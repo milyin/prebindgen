@@ -525,7 +525,7 @@ fn sum_plan_kind(
     let key = TypeKey::from_ident(&ident);
     let cfg = ext
         .types
-        .get(&key)
+        .by_declared_key(&key)
         .unwrap_or_else(|| panic!("fromParts bridge: `{ident}` is not declared"));
     let sum_cfg = cfg
         .sum()

@@ -598,7 +598,7 @@ pub(crate) fn struct_output_body(
     let struct_ty: syn::Type = syn::parse_quote!(#struct_ident);
     let registered_fqn = ext
         .types
-        .get(&TypeKey::from_type(&struct_ty))
+        .declaration_of_spelling(&struct_ty)
         .and_then(|cfg| cfg.name_spec.as_ref())
         .map(|s| ext.fqn_of(s));
     let java_class_prefix = ext.java_class_prefix();

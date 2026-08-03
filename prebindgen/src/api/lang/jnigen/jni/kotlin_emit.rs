@@ -398,7 +398,10 @@ impl Declarations {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
-            let cfg = &self.types[key];
+            let cfg = &self
+                .types
+                .by_declared_key(key)
+                .expect("a key this table handed out");
             if !cfg.is_opaque() {
                 continue;
             }
@@ -449,7 +452,10 @@ impl Declarations {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
-            let cfg = &self.types[key];
+            let cfg = &self
+                .types
+                .by_declared_key(key)
+                .expect("a key this table handed out");
             if !cfg.is_enum_class() {
                 continue;
             }
@@ -503,7 +509,10 @@ impl Declarations {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
-            let cfg = &self.types[key];
+            let cfg = &self
+                .types
+                .by_declared_key(key)
+                .expect("a key this table handed out");
             let Some(sum_cfg) = cfg.sum() else {
                 continue;
             };
@@ -840,7 +849,10 @@ impl Declarations {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
         for key in keys {
-            let cfg = &self.types[key];
+            let cfg = &self
+                .types
+                .by_declared_key(key)
+                .expect("a key this table handed out");
             // Opaque handles, enums and sealed classes each have their own
             // emitter; only plain structs become data classes here.
             if cfg.special_decl() {
@@ -1398,7 +1410,10 @@ impl Declarations {
         else {
             panic!("sum builder: `{ident}` is not an indexed sum")
         };
-        let sum_cfg = self.types[&key]
+        let sum_cfg = self
+            .types
+            .by_declared_key(&key)
+            .expect("a key this table handed out")
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
         let tag = &names[0];
@@ -1897,7 +1912,7 @@ impl Declarations {
         base_abstracts: Vec<kt::KtFun>,
         include_ctor_props: bool,
     ) -> Option<kt::KtClass> {
-        let cfg = self.types.get(key)?;
+        let cfg = self.types.by_declared_key(key)?;
         let interfaces = cfg.interfaces.clone();
         let enabled = cfg.interface_enabled;
         let name_override = cfg.interface_name_override.clone();

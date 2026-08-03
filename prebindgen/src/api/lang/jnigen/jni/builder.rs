@@ -113,7 +113,9 @@ impl Declarations {
     /// should use.
     pub(crate) fn is_kotlin_enum(&self, ty: &syn::Type) -> bool {
         let key = TypeKey::from_type(ty);
-        self.types.get(&key).is_some_and(|c| c.is_enum_class())
+        self.types
+            .by_declared_key(&key)
+            .is_some_and(|c| c.is_enum_class())
     }
 
     /// Whether this value's core is a type registered via an `EnumClassDecl`,
@@ -131,7 +133,7 @@ impl Declarations {
             return false;
         };
         id.ident()
-            .and_then(|i| self.types.get(&TypeKey::from_ident(&i)))
+            .and_then(|i| self.types.declaration_of_name(&i))
             .is_some_and(|c| c.is_enum_class())
     }
 }
@@ -147,7 +149,7 @@ impl Default for Declarations {
             method_name_mangle: None,
             harness_name_mangle: None,
             interface_name_mangle: None,
-            types: HashMap::new(),
+            types: Default::default(),
             packages: BTreeMap::new(),
             emit_handle_locks: true,
             jni_native_init: None,
@@ -464,7 +466,7 @@ impl JniGenBuilder {
         let cfg = self
             .decls
             .types
-            .get_mut(key)
+            .declared_mut(key)
             .expect("register_class created the entry");
         cfg.interface_enabled |= iface.enabled;
         if iface.name_override.is_some() {
@@ -716,7 +718,7 @@ impl Declarations {
         }
         let spec = self
             .types
-            .get(key)
+            .by_declared_key(key)
             .and_then(|cfg| cfg.name_spec.as_ref())
             .unwrap_or_else(|| panic!("class member `{}` has no class name", m.rust_ident));
         let fqn = self.fqn_of(spec);
@@ -748,7 +750,7 @@ impl Declarations {
     /// boundary and never materializes in Kotlin — so the `_self` arms are
     /// structurally impossible for it.
     fn is_class_declared(&self, key: &TypeKey) -> bool {
-        self.types.contains_key(key)
+        self.types.contains_declared_key(key)
     }
 
     /// Lower the raw [`ExpandParamDecl`]s into the core's immutable
@@ -1110,7 +1112,10 @@ impl Declarations {
                     else {
                         panic!("TypeKind::Sum implies a payload-carrying enum")
                     };
-                    let sum_cfg = self.types[&probe.key()]
+                    let sum_cfg = self
+                        .types
+                        .by_declared_key(&probe.key())
+                        .expect("TypeKind::Sum implies a declared sum")
                         .sum()
                         .expect("TypeKind::Sum implies a sealed-class config");
                     out.push(FieldRecord {
@@ -1314,7 +1319,9 @@ impl Declarations {
         };
         let inner_key = TypeKey::from_type(&r.elem);
         assert!(
-            self.types.get(&inner_key).is_some_and(|c| c.is_opaque()),
+            self.types
+                .by_declared_key(&inner_key)
+                .is_some_and(|c| c.is_opaque()),
             "expand_return!({}).field(… .name(\"{name}\")): an `Option<&T>` binding-local field \
              delivers a nullable typed HANDLE, so `T` must be a declared ptr_class — `{}` is \
              not; return an owned `Option<{}>` instead",
@@ -1918,7 +1925,7 @@ impl Declarations {
                 // Terminal: `ty` is the wire; the body produces `outer`.
                 let kotlin_name = self
                     .types
-                    .get(&key)
+                    .by_declared_key(&key)
                     .and_then(|c| c.name_spec.as_ref())
                     .map(|s| kt::KtType::cls(self.fqn_of(s)))
                     .or_else(|| kotlin_for_wire(&ty));
@@ -2068,7 +2075,7 @@ impl Declarations {
                 } else {
                     let kn = self
                         .types
-                        .get(&key)
+                        .by_declared_key(&key)
                         .and_then(|c| c.name_spec.as_ref())
                         .map(|s| kt::KtType::cls(self.fqn_of(s)))
                         .or_else(|| kotlin_for_wire(&ty));

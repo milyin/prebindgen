@@ -150,7 +150,11 @@ fn rust_type_erased(
         other => other,
     };
     let key = TypeKey::from_type(peeled);
-    if ext.types.get(&key).is_some_and(|c| c.name_spec.is_some()) {
+    if ext
+        .types
+        .by_declared_key(&key)
+        .is_some_and(|c| c.name_spec.is_some())
+    {
         if let Some(fqn) = ext.kotlin_fqn(&key) {
             return erase_kt_type(&[], &kt::KtType::cls(fqn));
         }

@@ -309,7 +309,7 @@ impl Declarations {
         inherited: Option<kt::KtType>,
     ) -> Option<kt::KtType> {
         let key = TypeKey::from_type(outer_ty);
-        if let Some(cfg) = self.types.get(&key) {
+        if let Some(cfg) = self.types.by_declared_key(&key) {
             // Opaque-handle entries keep their typed FQN in
             // `name_spec` for FQN-consumers, but the value-context
             // name is `"Long"` (set on the rank-0 handler's metadata).
@@ -565,7 +565,7 @@ pub(crate) fn build_handle_destructor_items(
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
-    for (key, cfg) in &ext.types {
+    for (key, cfg) in ext.types.iter() {
         if !cfg.is_opaque() {
             continue;
         }
@@ -1206,7 +1206,7 @@ impl Declarations {
     /// `String` builtin), not the resolver's output converters — this runs
     /// **before** type resolution, exactly like [`Self::value_struct_decons`].
     fn is_leaf_vec_element(&self, elem: &syn::Type) -> bool {
-        match self.types.get(&TypeKey::from_type(elem)) {
+        match self.types.declaration_of_spelling(elem) {
             // A declared opaque handle crosses as a single `jlong` (pointer)
             // leaf that the Kotlin folder wraps into its typed handle class.
             // Enums and multi-field data classes are not leaf-folded — data
@@ -1446,14 +1446,17 @@ impl Declarations {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         let mut out = Vec::new();
         for key in keys {
-            let Some(sum_cfg) = self.types[key].sum() else {
+            let Some(sum_cfg) = self.types.by_declared_key(key).and_then(|c| c.sum()) else {
                 continue;
             };
             // The `sealed_class!` declaration's own spelling. This runs during
             // the declare phase, where a `reading()` would legitimately answer
             // `None` for a type nothing has interned yet — the declaration is
             // the only thing that can say (#291).
-            let source = self.types[key].rust_type.syntax.clone();
+            let Some(cfg) = self.types.by_declared_key(key) else {
+                continue;
+            };
+            let source = cfg.rust_type.syntax.clone();
             let Some(ident) = bare_path_ident(&source) else {
                 continue;
             };
@@ -1923,8 +1926,25 @@ impl Declarations {
         let ty = reading.syntax();
         // Structured-config overrides first (opaque handles, then user-
         // registered rank-0 wrappers, then built-ins).
-        let key = TypeKey::from_type(ty);
-        if let Some(cfg) = self.types.get(&key) {
+        // The declaration-keyed arms, and ONLY those, decline a wrapped
+        // spelling: `declaration` strips, so `Box<Priority>` would otherwise
+        // find `Priority`'s enum config here and emit a body taking a bare
+        // `Priority` — `E0308`. The transparent bridge serves it instead, by
+        // delegating to the stripped spelling's converter and putting the
+        // wrapper back, and it uses this same predicate in the opposite sense.
+        //
+        // Scoped to these arms rather than to the whole function, because the
+        // arms below that dispatch on `kind()` handle a wrapper correctly by
+        // re-spelling — `Box<String>` is `Str`, and its terminal encoder is
+        // right. A blanket guard sent that one to the bridge too; measured, it
+        // moved goldens. Today those arms decline a wrapped spelling only
+        // because `bare_path_ident` answers `None` for a generic spelling —
+        // true, incidental, and stated here so it stops being either.
+        let declared = self
+            .types
+            .declaration(reading)
+            .filter(|_| reading.erased_wrappers().is_empty());
+        if let Some(cfg) = declared {
             if cfg.is_opaque() {
                 return Some(self.opaque_handle_input(ty));
             }
@@ -1951,7 +1971,25 @@ impl Declarations {
         // `input_wrapper` registration on the same key would have to be
         // intentional. The rank-0 enum arm produces a terminal converter
         // (jint → Rust enum) with the configured Kotlin FQN in metadata.
-        if let Some(cfg) = self.types.get(&key) {
+        // The declaration-keyed arms, and ONLY those, decline a wrapped
+        // spelling: `declaration` strips, so `Box<Priority>` would otherwise
+        // find `Priority`'s enum config here and emit a body taking a bare
+        // `Priority` — `E0308`. The transparent bridge serves it instead, by
+        // delegating to the stripped spelling's converter and putting the
+        // wrapper back, and it uses this same predicate in the opposite sense.
+        //
+        // Scoped to these arms rather than to the whole function, because the
+        // arms below that dispatch on `kind()` handle a wrapper correctly by
+        // re-spelling — `Box<String>` is `Str`, and its terminal encoder is
+        // right. A blanket guard sent that one to the bridge too; measured, it
+        // moved goldens. Today those arms decline a wrapped spelling only
+        // because `bare_path_ident` answers `None` for a generic spelling —
+        // true, incidental, and stated here so it stops being either.
+        let declared = self
+            .types
+            .declaration(reading)
+            .filter(|_| reading.erased_wrappers().is_empty());
+        if let Some(cfg) = declared {
             if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
                     if let Some(e) = registry.flat().enum_item(&name) {
@@ -2061,7 +2099,7 @@ impl Declarations {
             // delegates exactly as it does for a nested data class. (The
             // OUTPUT direction has no counterpart: a sum crosses Rust →
             // Kotlin flattened, always.)
-            if self.types.get(&key).is_some_and(|c| c.sum().is_some()) {
+            if declared.is_some_and(|c| c.sum().is_some()) {
                 if let Some(crate::api::core::flat::Type::Variant(v)) =
                     registry.flat().declared_type(&name)
                 {
@@ -2072,7 +2110,7 @@ impl Declarations {
                     let niches = default_niches_for_wire(&wire);
                     let kotlin_name = self
                         .types
-                        .get(&key)
+                        .declaration(reading)
                         .and_then(|c| c.name_spec.as_ref())
                         .map(|s| kt::KtType::cls(self.fqn_of(s)));
                     return Some(ConverterImpl {
@@ -2094,7 +2132,7 @@ impl Declarations {
                 // surfaces this as a build-time hard error.
                 let kotlin_name = self
                     .types
-                    .get(&key)
+                    .declaration(reading)
                     .and_then(|c| c.name_spec.as_ref())
                     .map(|s| kt::KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
@@ -2303,8 +2341,25 @@ impl Declarations {
         // Classify off `kind`, spell off `syntax` — see `input_terminal`.
         let ty = reading.syntax();
         // Structured-config overrides first (opaque handles, then built-ins).
-        let key = TypeKey::from_type(ty);
-        if let Some(cfg) = self.types.get(&key) {
+        // The declaration-keyed arms, and ONLY those, decline a wrapped
+        // spelling: `declaration` strips, so `Box<Priority>` would otherwise
+        // find `Priority`'s enum config here and emit a body taking a bare
+        // `Priority` — `E0308`. The transparent bridge serves it instead, by
+        // delegating to the stripped spelling's converter and putting the
+        // wrapper back, and it uses this same predicate in the opposite sense.
+        //
+        // Scoped to these arms rather than to the whole function, because the
+        // arms below that dispatch on `kind()` handle a wrapper correctly by
+        // re-spelling — `Box<String>` is `Str`, and its terminal encoder is
+        // right. A blanket guard sent that one to the bridge too; measured, it
+        // moved goldens. Today those arms decline a wrapped spelling only
+        // because `bare_path_ident` answers `None` for a generic spelling —
+        // true, incidental, and stated here so it stops being either.
+        let declared = self
+            .types
+            .declaration(reading)
+            .filter(|_| reading.erased_wrappers().is_empty());
+        if let Some(cfg) = declared {
             if cfg.is_opaque() {
                 return Some(self.opaque_handle_output(ty));
             }
@@ -2330,7 +2385,25 @@ impl Declarations {
         // encode. Symmetric to the input arm above; relies on
         // `#[repr(i32)]` (or any repr that supports the cast) on the
         // declared enum so the discriminant value round-trips identically.
-        if let Some(cfg) = self.types.get(&key) {
+        // The declaration-keyed arms, and ONLY those, decline a wrapped
+        // spelling: `declaration` strips, so `Box<Priority>` would otherwise
+        // find `Priority`'s enum config here and emit a body taking a bare
+        // `Priority` — `E0308`. The transparent bridge serves it instead, by
+        // delegating to the stripped spelling's converter and putting the
+        // wrapper back, and it uses this same predicate in the opposite sense.
+        //
+        // Scoped to these arms rather than to the whole function, because the
+        // arms below that dispatch on `kind()` handle a wrapper correctly by
+        // re-spelling — `Box<String>` is `Str`, and its terminal encoder is
+        // right. A blanket guard sent that one to the bridge too; measured, it
+        // moved goldens. Today those arms decline a wrapped spelling only
+        // because `bare_path_ident` answers `None` for a generic spelling —
+        // true, incidental, and stated here so it stops being either.
+        let declared = self
+            .types
+            .declaration(reading)
+            .filter(|_| reading.erased_wrappers().is_empty());
+        if let Some(cfg) = declared {
             if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
                     if let Some(e) = registry.flat().enum_item(&name) {
@@ -2438,7 +2511,7 @@ impl Declarations {
                 let niches = default_niches_for_wire(&wire);
                 let kotlin_name = self
                     .types
-                    .get(&key)
+                    .declaration(reading)
                     .and_then(|c| c.name_spec.as_ref())
                     .map(|s| kt::KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
@@ -2480,7 +2553,7 @@ impl Declarations {
             if r.mutability.is_none()
                 && self
                     .types
-                    .get(&TypeKey::from_type(t1_ty))
+                    .declaration_of_spelling(t1_ty)
                     .is_some_and(|c| c.is_opaque())
             {
                 let mut ref_ty = r.clone();

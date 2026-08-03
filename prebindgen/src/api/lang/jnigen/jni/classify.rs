@@ -56,7 +56,7 @@ impl Declarations {
         registry: &'r impl Conversions<KotlinMeta>,
         bare: &syn::Type,
     ) -> TypeKind<'r, 'c> {
-        let cfg = self.types.get(&TypeKey::from_type(bare));
+        let cfg = self.types.declaration_of_spelling(bare);
         if let Some(c) = cfg {
             match c.kind {
                 DeclaredKind::Ptr(_) => return TypeKind::Handle,

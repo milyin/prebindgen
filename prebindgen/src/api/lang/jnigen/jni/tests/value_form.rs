@@ -2690,6 +2690,17 @@ fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
             rc.contains(&format!("_to_Box_{kind}_")),
             "`Box<{kind}>` needs an inbound converter:\n{rust}"
         );
+        // And it must be the BRIDGE's converter, not the terminal's. The
+        // declaration lookup strips, so a terminal arm that did not decline a
+        // wrapped spelling would find `{kind}`'s own config here and emit a body
+        // taking a bare `{kind}` — `E0308`. Today several arms decline only
+        // because `bare_path_ident` answers `None` for a generic spelling; this
+        // asserts the routing itself, so the incidental protection is not what
+        // the correctness rests on.
+        assert!(
+            rc.contains(&format!("let__inner=*v;{kind}_to_")),
+            "`Box<{kind}>` must delegate through the bridge, unwrapping first:\n{rust}"
+        );
     }
     // The wrapper is invisible to Kotlin, so the bare and wrapped enum fields
     // present as the same type — the point of the model erasing it.

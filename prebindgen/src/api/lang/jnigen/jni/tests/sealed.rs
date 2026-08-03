@@ -300,7 +300,7 @@ fn reopened_ptr_class_keeps_gc_managed() {
         let key = TypeKey::from_type(&syn::parse_quote!(Session));
         jni.decls
             .types
-            .get(&key)
+            .by_declared_key(&key)
             .expect("declared")
             .opaque()
             .expect("ptr_class")
@@ -654,7 +654,7 @@ fn sum_is_its_own_type_kind() {
     let cfg = jni
         .decls
         .types
-        .get(&TypeKey::from_type(&ty))
+        .declaration_of_spelling(&ty)
         .expect("declared");
     assert!(cfg.special_decl());
 }

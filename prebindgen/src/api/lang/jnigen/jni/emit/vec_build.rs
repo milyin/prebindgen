@@ -178,7 +178,7 @@ pub(crate) fn vec_build_helpers(
     let key = elem.key();
     let kt_fqn = ext
         .types
-        .get(&key)
+        .by_declared_key(&key)
         .and_then(|c| c.name_spec.as_ref())
         .map(|s| ext.fqn_of(s))?;
     let short = kt_fqn.rsplit('.').next().unwrap_or(&kt_fqn);

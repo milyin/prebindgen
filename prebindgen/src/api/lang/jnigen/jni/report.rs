@@ -124,7 +124,10 @@ impl super::JniGen {
         let mut type_keys: Vec<&TypeKey> = ext.types.keys().collect();
         type_keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in type_keys {
-            let cfg = &ext.types[key];
+            let cfg = &ext
+                .types
+                .by_declared_key(key)
+                .expect("a key this table handed out");
             if cfg.name_spec.is_none() {
                 continue;
             }
@@ -248,7 +251,7 @@ impl super::JniGen {
 impl Declarations {
     /// Human-readable class-kind name of a declared type (report use).
     pub(crate) fn class_kind_name(&self, key: &TypeKey) -> &'static str {
-        let Some(cfg) = self.types.get(key) else {
+        let Some(cfg) = self.types.by_declared_key(key) else {
             return "undeclared";
         };
         cfg.kind.macro_name()

@@ -239,7 +239,7 @@ impl Declarations {
     /// the former linear string scan is gone (issue #95).
     pub(crate) fn kotlin_fqn(&self, key: &TypeKey) -> Option<String> {
         self.types
-            .get(key)
+            .by_declared_key(key)
             .and_then(|cfg| cfg.name_spec.as_ref())
             .map(|spec| self.fqn_of(spec))
     }

@@ -267,7 +267,7 @@ pub(crate) fn build_typed_handle(
     // its own type-specific `close()`/`take()`/`freePtr`.
     let class_fqn = ext
         .types
-        .get(key)
+        .by_declared_key(key)
         .and_then(|cfg| cfg.name_spec.as_ref())
         .map(|spec| ext.fqn_of(spec))
         .unwrap_or_else(|| class_name.to_string());
@@ -277,7 +277,7 @@ pub(crate) fn build_typed_handle(
     let free_extern = ext.mangle_method(class_package, final_class_name, "freePtr");
     let gc_managed = ext
         .types
-        .get(key)
+        .by_declared_key(key)
         .and_then(|cfg| cfg.opaque())
         .is_some_and(|o| o.gc_managed);
     let base_short = if gc_managed {

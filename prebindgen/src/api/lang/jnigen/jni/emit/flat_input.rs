@@ -327,7 +327,7 @@ pub(crate) fn sum_input_body(
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     let key = TypeKey::from_ident(&v.name);
-    let cfg = ext.types.get(&key)?;
+    let cfg = ext.types.by_declared_key(&key)?;
     let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
     let iface_path = iface_fqn.replace('.', "/");
@@ -1070,7 +1070,7 @@ fn build_flat_sum_field(
     let flat::Type::Variant(sum) = registry.flat().declared_type(&ident)? else {
         return None;
     };
-    let cfg = ext.types.get(&TypeKey::from_ident(&ident))?;
+    let cfg = ext.types.declaration_of_name(&ident)?;
     let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
 
@@ -1340,7 +1340,7 @@ pub(crate) fn build_flat_input_plan(
     // the general converter — the flatten lowering was unreachable for every
     // wrapped core.
     let key = inner.stripped_key();
-    let Some(cfg) = ext.types.get(&key) else {
+    let Some(cfg) = ext.types.by_declared_key(&key) else {
         return Ok(None);
     };
     if cfg.special_decl() || cfg.name_spec.is_none() || cfg.jobject_input {

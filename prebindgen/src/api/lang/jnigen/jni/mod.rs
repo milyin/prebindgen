@@ -496,7 +496,7 @@ pub struct Declarations {
     /// [`JniGenBuilder::fqn_of`]). Terminal dispatch order is opaque → enum →
     /// `convert!` → primitive → struct; see
     /// [`JniGenBuilder::select_input_type`](crate::lang::JniGenBuilder)'s selector.
-    pub(crate) types: HashMap<TypeKey, TypeConfig>,
+    pub(crate) types: decl_table::DeclTable,
 
     /// Free-standing package-level wrappers, keyed by subpackage path
     /// (relative to [`Self::package`], dot-separated; the empty key is the
@@ -639,6 +639,7 @@ mod builder;
 mod classify;
 mod config;
 mod decl;
+mod decl_table;
 mod emit;
 mod equality;
 mod iface;
