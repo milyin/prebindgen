@@ -59,6 +59,15 @@ use crate::SourceLocation;
 /// false by design for stored readings — `unrequire_output` leaves a cell whose
 /// converter genuinely cannot resolve, and a `SumTag` leaf never has one — so
 /// converter existence stays a lookup that answers `Option`.
+///
+/// It does **not** claim a registry cell either, and the two are separate
+/// questions. Holding a `TypeRef` means the model classified the type; whether
+/// it is in a type table is the registry's business, and the registry states it
+/// in three parts — a **cell** (the type entered the pipeline), a **root** (the
+/// binding asked for it directly), an **entry** (a converter resolved). A
+/// `SumTag` leaf's type makes the first and not the second, deliberately
+/// (#282); see
+/// [`Registry::reference_output`](crate::api::core::registry::Registry::reference_output).
 #[derive(Clone, Debug)]
 pub struct TypeRef {
     /// What the type means — the closed, destination-neutral classification.

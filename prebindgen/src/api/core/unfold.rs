@@ -556,6 +556,35 @@ pub struct SumDecon {
 /// including the `Option<E>` / `Vec<E>` layers, which the boundary-only pass
 /// does not reach — is dropped here as the plan takes over.
 ///
+/// Put every leaf's `out_ty` in the table, and demand a converter for the ones
+/// that need one.
+///
+/// **Every leaf is registered; only a converter-bearing leaf is a root** (#282).
+/// The two are separate facts and this is the one place a sum plan states both:
+/// a cell says the type entered the pipeline, a root says the binding needs its
+/// conversion to resolve. The `SumTag` selector is registered and not required —
+/// it names *which* sum it chooses between, and a sum has no whole-value output
+/// converter, so requiring one would fail resolution over a type that never
+/// crosses whole.
+///
+/// This used to `filter` the selector out entirely, which left its `out_ty`
+/// with a cell only when the adapter happened to declare the sum separately —
+/// true for jnigen via `export_type`, and not true at all for a registry
+/// assembled without declarations. The invariant holds by construction now
+/// rather than by declaration order.
+fn register_leaves<M>(
+    registry: &mut crate::api::core::registry::Registry<M>,
+    leaves: &[UnfoldLeaf],
+) {
+    for leaf in leaves {
+        if leaf.has_converter() {
+            registry.require_output(&leaf.out_ty);
+        } else {
+            registry.reference_output(&leaf.out_ty);
+        }
+    }
+}
+
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
 pub fn apply_sum_returns<M>(
     registry: &mut Registry<M>,
@@ -642,9 +671,7 @@ fn wire_fixed_returns<M>(
                 registry.unrequire_output(layer);
             }
         }
-        for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-            registry.require_output(&leaf.out_ty);
-        }
+        register_leaves(registry, &vd.leaves);
         let plan = UnfoldPlan {
             source: vd.source.clone(),
             decon: Some(decon.clone()),
@@ -709,9 +736,7 @@ fn wire_fixed_callbacks<M>(
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
-                for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
-                    registry.require_output(&leaf.out_ty);
-                }
+                register_leaves(registry, &vd.leaves);
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
                     decon: Some(decon.clone()),
