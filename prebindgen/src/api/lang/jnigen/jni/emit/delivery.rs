@@ -1424,14 +1424,27 @@ mod tests {
     /// rather than reaching around the seal — which is the seal working.
     use crate::api::test_util::reading as tref;
 
-    fn leaf(out_ty: syn::Type, path: Vec<PathStep>, identity: bool) -> UnfoldLeaf {
+    /// A leaf as the resolver builds one. `source` is not decoration: it
+    /// decides the terminal treatment (a `Field` leaf is CLONED out of the
+    /// place it reached), and production pairs it with the path shape —
+    /// `Accessor` for identity leaves and accessor chains (`unfold.rs`'s
+    /// `DeconRecord::Identity` arm), `Field` only for the synthesized
+    /// by-value `data_class` decomposition, whose paths are field idents and
+    /// never calls. A fixture that mixed them would exercise a leaf the
+    /// resolver cannot produce.
+    fn leaf(
+        out_ty: syn::Type,
+        path: Vec<PathStep>,
+        identity: bool,
+        source: LeafSource,
+    ) -> UnfoldLeaf {
         UnfoldLeaf {
             name: "probe".to_string(),
             path,
             out_ty: tref(out_ty),
             identity,
             nullable: false,
-            source: LeafSource::Field,
+            source,
             group: None,
         }
     }
@@ -1464,7 +1477,12 @@ mod tests {
             ],
         ] {
             assert!(steps_are_movable(&path), "fixture must be movable");
-            let l = leaf(syn::parse_quote!(Owned), path.clone(), true);
+            let l = leaf(
+                syn::parse_quote!(Owned),
+                path.clone(),
+                true,
+                LeafSource::Accessor,
+            );
             let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
             assert!(
                 !got.contains('&') && !got.contains("clone"),
@@ -1478,11 +1496,40 @@ mod tests {
     #[test]
     fn a_borrowed_out_ty_is_never_moved() {
         let path = vec![PathStep::field(syn::parse_quote!(a), false)];
-        let l = leaf(syn::parse_quote!(&Owned), path.clone(), true);
+        let l = leaf(
+            syn::parse_quote!(&Owned),
+            path.clone(),
+            true,
+            LeafSource::Accessor,
+        );
         let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
         assert!(
             got.contains('&'),
             "a borrowed out_ty keeps its borrow — got `{got}`"
+        );
+    }
+
+    /// A `Field` leaf is cloned out of the place it reached, whatever the path
+    /// shape says — its converter takes the field type as written.
+    ///
+    /// The counterpart of the move above, and what keeps `source` load-bearing
+    /// in these fixtures rather than a value they all happen to share.
+    #[test]
+    fn a_field_leaf_is_cloned_out_of_its_place() {
+        let path = vec![
+            PathStep::field(syn::parse_quote!(a), false),
+            PathStep::field(syn::parse_quote!(b), false),
+        ];
+        let l = leaf(
+            syn::parse_quote!(Owned),
+            path.clone(),
+            false,
+            LeafSource::Field,
+        );
+        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        assert!(
+            got.contains("clone"),
+            "a non-consuming field leaf clones rather than moves — got `{got}`"
         );
     }
 
@@ -1499,7 +1546,7 @@ mod tests {
             PathStep::call(syn::parse_quote!(get_it), true, false),
             PathStep::field(syn::parse_quote!(a), false),
         ];
-        let l = leaf(syn::parse_quote!(Owned), full, false);
+        let l = leaf(syn::parse_quote!(Owned), full, false, LeafSource::Accessor);
         // The suffix a rebase would hand over — the optional call is gone from
         // it, and used to take the guard with it.
         let rest = vec![PathStep::field(syn::parse_quote!(a), false)];
