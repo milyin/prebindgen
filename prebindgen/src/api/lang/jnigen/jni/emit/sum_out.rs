@@ -81,7 +81,7 @@ pub(crate) fn synth_sum_leaves(
                     variant: alt.name.clone(),
                     member: field.member(),
                 },
-                group: Some(alt.index as i32),
+                group: Some(sum_tag(alt)),
             });
         }
     }
@@ -244,7 +244,7 @@ pub(crate) fn encode_sum_group(
         .alternatives
         .iter()
         .map(|alt| {
-            let tag = alt.index as i32;
+            let tag = sum_tag(alt);
             let group: Vec<usize> = leaves
                 .iter()
                 .enumerate()

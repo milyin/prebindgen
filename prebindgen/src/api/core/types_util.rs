@@ -227,8 +227,8 @@ pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
 ///
 /// This describes the **unit** enum's wire numbering. A payload enum's
 /// alternatives are identified by
-/// [`Alternative::index`](crate::api::core::flat::Alternative) — declaration
-/// order — never by a discriminant.
+/// [`Alternative::index`](crate::api::core::flat::Alternative::index) —
+/// declaration order — never by a discriminant.
 pub fn enum_discriminant_values(e: &syn::ItemEnum) -> Vec<(syn::Ident, i64)> {
     let mut out = Vec::with_capacity(e.variants.len());
     let mut next: i64 = 0;

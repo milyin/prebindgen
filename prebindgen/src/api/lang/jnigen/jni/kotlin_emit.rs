@@ -671,7 +671,9 @@ impl Declarations {
                 } else {
                     format!("{vname}({})", args.join(", "))
                 };
-                w = w.line(format!("{} -> {ctor}", alt.index));
+                // The same tag the selector leaf carries — a `when` arm that
+                // disagreed with the wire value would simply never match.
+                w = w.line(format!("{} -> {ctor}", sum_tag(alt)));
             }
             w.line(format!(
                 "else -> throw IllegalArgumentException(\"{class_name}: invalid tag $tag\")"
@@ -1423,7 +1425,7 @@ impl Declarations {
 
         let mut arms: Vec<String> = Vec::new();
         for alt in &sum.alternatives {
-            let group = alt.index as i32;
+            let group = sum_tag(alt);
             let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
             let args: Vec<String> = leaves
                 .iter()

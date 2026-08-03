@@ -568,6 +568,22 @@ pub(crate) fn sum_field_prop_name(member: &syn::Member) -> String {
     }
 }
 
+/// The wire tag of one alternative: its declaration-order index, as the `jint`
+/// the selector leaf carries.
+///
+/// One place, because the tag has to agree in three: the leaf's `group`, the
+/// Kotlin `when` arm, and the Rust `match` arm. Three separate `as i32` casts
+/// agreed by coincidence rather than by construction.
+///
+/// Deliberately **not** a checked conversion. `usize` → `i32` can truncate in
+/// general, but not here: the index counts alternatives of one enum, and an
+/// enum with `i32::MAX` variants is not a thing rustc can be handed. A
+/// `try_from(..).expect(..)` would put a panic in the working path for a state
+/// the compiler cannot produce, which is the shape this crate avoids.
+pub(crate) fn sum_tag(alt: &crate::api::core::flat::Alternative) -> i32 {
+    alt.index as i32
+}
+
 /// Slot-name fragment for one variant field: `<variantCamel>_<prop>`. Keyed
 /// on the **Kotlin** variant name so a `variant!(V).name(...)` rename carries
 /// through to the slots.
