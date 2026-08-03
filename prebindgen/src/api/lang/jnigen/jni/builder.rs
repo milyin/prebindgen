@@ -412,9 +412,14 @@ impl JniGenBuilder {
     ///
     /// Returns the stored config so the caller can fold in its cross-kind
     /// options (`jobject_input`, interfaces).
+    ///
+    /// `rust_type` is the declaration's own spelling; `key` is the identity
+    /// derived from it. They cannot disagree — every `*ClassDecl::new` builds
+    /// both from the one `syn::Type` it was handed.
     fn register_class(
         &mut self,
         key: &TypeKey,
+        rust_type: Origin<syn::Type>,
         kind: DeclaredKind,
         spec: NameSpec,
     ) -> &mut TypeConfig {
@@ -437,12 +442,17 @@ impl JniGenBuilder {
         let short = rust_short_name(key);
         match self.decls.types.entry(key.clone()) {
             std::collections::hash_map::Entry::Occupied(e) => {
+                // A reopened declarator keeps the first spelling: the two agree
+                // on identity by construction, and the model indexes types
+                // first-mention-wins for the same reason.
                 let cfg = e.into_mut();
                 cfg.kind.merge(kind, &short);
                 cfg.name_spec = Some(spec);
                 cfg
             }
-            std::collections::hash_map::Entry::Vacant(e) => e.insert(TypeConfig::new(kind, spec)),
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(TypeConfig::new(kind, spec, rust_type))
+            }
         }
     }
 
@@ -472,6 +482,7 @@ impl JniGenBuilder {
         let key = decl.key;
         self.register_class(
             &key,
+            decl.rust_type,
             DeclaredKind::Ptr(OpaqueConfig {
                 gc_managed: decl.gc_managed,
             }),
@@ -491,6 +502,7 @@ impl JniGenBuilder {
         let key = decl.key;
         self.register_class(
             &key,
+            decl.rust_type,
             DeclaredKind::Enum(EnumConfig::default()),
             NameSpec {
                 subpackage: subpackage.to_string(),
@@ -509,6 +521,7 @@ impl JniGenBuilder {
     fn accept_sealed_class(&mut self, subpackage: &str, decl: SealedClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
+        let rust_type = decl.rust_type;
         // Reopened decls merge — `DeclaredKind::merge` owns that rule for
         // every kind, so this acceptor only builds its own payload.
         let mut sum = SumConfig::default();
@@ -519,6 +532,7 @@ impl JniGenBuilder {
         }
         self.register_class(
             &key,
+            rust_type,
             DeclaredKind::Sealed(sum),
             NameSpec {
                 subpackage: subpackage.to_string(),
@@ -547,7 +561,7 @@ impl JniGenBuilder {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
         let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
-        self.register_class(&key, DeclaredKind::Data, spec)
+        self.register_class(&key, decl.rust_type, DeclaredKind::Data, spec)
             .jobject_input |= decl.jobject_input;
         self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
@@ -772,7 +786,7 @@ impl Declarations {
             }
             exp.constructors
                 .push(crate::api::core::expand::ConstructorDecl {
-                    target: decl.key.to_type(),
+                    target: decl.rust_type.syntax.clone(),
                     variants: decl.variants.iter().map(lower).collect(),
                     default: true,
                 });
@@ -795,7 +809,7 @@ impl Declarations {
             exp.expands.push(ExpandDecl {
                 func: func.clone(),
                 param: syn::Ident::new(param, Span::call_site()),
-                declared_target: Some(decl.key.to_type()),
+                declared_target: Some(decl.rust_type.syntax.clone()),
                 sel: ExpandSel::Subset(decl.variants.iter().map(lower).collect()),
             });
         }
@@ -1158,7 +1172,7 @@ impl Declarations {
                 k = decl.key.as_str()
             );
             dec.deconstructors.push(DeconstructorDecl {
-                target: decl.key.to_type(),
+                target: decl.rust_type.syntax.clone(),
                 records: self.lower_fields(registry, &decl.key, &decl.fields),
                 default: Some((DeconTarget::Output, Delivery::Callback)),
             });
@@ -1183,7 +1197,7 @@ impl Declarations {
                 sel: DeconSel::Inline(self.lower_fields(registry, &decl.key, &decl.fields)),
                 target: DeconTarget::Output,
                 delivery: Delivery::Callback,
-                declared_source: Some(decl.key.to_type()),
+                declared_source: Some(decl.rust_type.syntax.clone()),
             });
         }
         dec
@@ -1315,15 +1329,33 @@ impl Declarations {
     /// **rust-side-only** types. Unioned into [`Prebindgen::ignored_types`]
     /// so the registry treats them as acknowledged (no "skipping undeclared"
     /// warning, no direct converter requirement, no Kotlin emission).
-    pub(crate) fn rust_side_only_types(&self) -> impl Iterator<Item = TypeKey> + '_ {
+    ///
+    /// Yields each decl's own `syn::Type` beside its key: these are types a
+    /// build script wrote, and the scan diagnoses their spelling before
+    /// anything has classified them (#291).
+    pub(crate) fn rust_side_only_types(
+        &self,
+    ) -> impl Iterator<Item = (TypeKey, Origin<syn::Type>)> + '_ {
         self.param_expand_decls
             .iter()
-            .map(|d| &d.key)
-            .chain(self.return_expand_decls.iter().map(|d| &d.key))
-            .chain(self.fn_param_expands.iter().map(|(_, _, d)| &d.key))
-            .chain(self.fn_return_expands.iter().map(|(_, d)| &d.key))
-            .filter(|k| !self.is_class_declared(k))
-            .cloned()
+            .map(|d| (&d.key, &d.rust_type))
+            .chain(
+                self.return_expand_decls
+                    .iter()
+                    .map(|d| (&d.key, &d.rust_type)),
+            )
+            .chain(
+                self.fn_param_expands
+                    .iter()
+                    .map(|(_, _, d)| (&d.key, &d.rust_type)),
+            )
+            .chain(
+                self.fn_return_expands
+                    .iter()
+                    .map(|(_, d)| (&d.key, &d.rust_type)),
+            )
+            .filter(|(k, _)| !self.is_class_declared(k))
+            .map(|(k, t)| (k.clone(), t.clone()))
     }
 
     /// Function idents referenced only inside boundary decls (type-level and
@@ -1454,7 +1486,9 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
-        let target = key.to_type();
+        // The `convert!` declaration's own spelling — the key is how the decl
+        // was found, not a second source for what it says (#291).
+        let target = decl.rust_type.syntax.clone();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry
@@ -1530,7 +1564,9 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
-        let target = key.to_type();
+        // The `convert!` declaration's own spelling — the key is how the decl
+        // was found, not a second source for what it says (#291).
+        let target = decl.rust_type.syntax.clone();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
                 let item_fn = registry

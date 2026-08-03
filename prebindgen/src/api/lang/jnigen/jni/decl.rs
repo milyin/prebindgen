@@ -12,6 +12,16 @@
 
 use super::*;
 
+/// The origin of a type a **build script** wrote.
+///
+/// Real tokens, and deliberately no source position: `SourceLocation::default()`
+/// is the sanctioned placeless location for exactly this — a signature or type a
+/// build script authored was never in a captured file, and `has_position` already
+/// gates what a diagnostic prints for one.
+pub(crate) fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
+    Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Shared local accumulators (replayed into `Expansions`/`Deconstructors`
 // by the accept logic in `builder.rs` once a decl is handed to `Declarations`)
@@ -349,6 +359,10 @@ macro_rules! fields {
 /// [`implements`](Self::implements).
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
     pub(crate) iface: IfaceOpts,
@@ -443,6 +457,7 @@ impl PtrClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             members: Vec::new(),
             iface: IfaceOpts::default(),
@@ -562,6 +577,10 @@ impl From<syn::Type> for PtrClassDecl {
 #[derive(Clone)]
 pub struct ExpandParamDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) variants: Vec<LocalVariant>,
     /// `.no_split()` — suppress the proactive splittability check for this
     /// variant set (it will only ever be used as the selector form). See
@@ -573,6 +592,7 @@ impl ExpandParamDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             variants: Vec::new(),
             no_split: false,
         }
@@ -664,6 +684,10 @@ impl ExpandParamDecl {
 #[derive(Clone)]
 pub struct ExpandReturnDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) fields: Vec<LocalField>,
 }
 
@@ -671,6 +695,7 @@ impl ExpandReturnDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             fields: Vec::new(),
         }
     }
@@ -993,6 +1018,10 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// identity — a "method" on it is just a free function taking the enum.
 pub struct EnumClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) iface: IfaceOpts,
 }
@@ -1001,6 +1030,7 @@ impl EnumClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             iface: IfaceOpts::default(),
         }
@@ -1053,6 +1083,10 @@ impl From<syn::Type> for EnumClassDecl {
 /// taking it.
 pub struct SealedClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) variants: Vec<VariantDecl>,
     pub(crate) iface: IfaceOpts,
@@ -1062,6 +1096,7 @@ impl SealedClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             variants: Vec::new(),
             iface: IfaceOpts::default(),
@@ -1124,6 +1159,10 @@ impl VariantDecl {
 /// destructuring a data-class parameter gets), just rebased to `this`.
 pub struct DataClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) jobject_input: bool,
     pub(crate) iface: IfaceOpts,
@@ -1134,6 +1173,7 @@ impl DataClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             jobject_input: false,
             iface: IfaceOpts::default(),
@@ -1880,6 +1920,10 @@ impl From<FunctionDecl> for ConvertSourceDecl {
 #[derive(Clone)]
 pub struct ConvertDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) input: Option<ConvertSpec>,
     pub(crate) output: Option<ConvertSpec>,
     pub(crate) domain: Option<crate::core::RepresentationDomain>,
@@ -1910,6 +1954,7 @@ impl ConvertDecl {
         reject_builtin_convert_type(&TypeKey::from_type(&rust_type));
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             input: None,
             output: None,
             domain: None,

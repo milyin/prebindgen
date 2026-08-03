@@ -22,16 +22,23 @@ impl<M> Registry<M> {
         // shadows a captured item's name — the likely-mistake heuristic).
         //
         // The two syntax matches below **stay** as this file's boundary-ledger
-        // entries, and the reason is what they look at: `declared.types` are keys a
+        // entries, and the reason is what they look at: `declared.types` are types a
         // *build script author* wrote, and this is a diagnostic about the spelling
         // they wrote — is it path-qualified, and does its tail shadow a captured
         // item? No source type is being classified, so there is no element to read
         // instead; asking the model would answer about a type rather than about the
         // declaration. This is the "legitimately the adapter's business" case the
         // integration map (L2, #229) predicts, not a migration still owed.
+        //
+        // It reads the **declaration's own** spelling, canonicalized here. Both
+        // halves of that matter. Normalizing is what the paragraph above relies
+        // on — `crate::Foo` must not read as a qualified path — and it used to
+        // arrive for free because the tokens came out of the key, which is
+        // normalized by construction. Doing it explicitly costs one call and
+        // stops the key from being the source of tokens at all (#291).
         let mut qualified: Vec<(String, String)> = Vec::new();
         let mut probed: HashSet<&TypeKey> = HashSet::new();
-        for key in declared
+        for (key, declared_ty) in declared
             .types
             .iter()
             .chain(declared.decompositions.replaces.iter())
@@ -39,7 +46,7 @@ impl<M> Registry<M> {
             if !probed.insert(key) {
                 continue;
             }
-            let ty = key.to_type();
+            let ty = crate::api::core::flat::canonical_type(&declared_ty.syntax);
             // Peel one reference level; the qualified head only appears on
             // path types.
             let inner = match &ty {
@@ -119,9 +126,15 @@ impl<M> Registry<M> {
             self.intern(*dir, ty, true)?;
         }
 
-        // Scan declared types.
-        for key in &declared.types {
-            let ty = key.to_type();
+        // Scan declared types. The spelling is the declaration's own — `intern`
+        // needs real tokens for a type that is in no table yet, which is exactly
+        // the case a key cannot answer once it is only an identity (#291).
+        for declared_ty in declared.types.values() {
+            // Canonicalized for the same reason the diagnostic above is: this
+            // is the form the type used to arrive in, and interning the
+            // as-written spelling instead would put a differently-spelled
+            // reading in the cell for the same key.
+            let ty = crate::api::core::flat::canonical_type(&declared_ty.syntax);
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
                 if let Some(s) = self
@@ -469,18 +482,24 @@ impl<M> Registry<M> {
     /// key is held to the same grammar. A test that wants the whole scan builds its
     /// registry from items instead; this is for the ones that need a specific table
     /// shape and nothing else.
+    /// Takes the **spelling**, like every other door into the table: interning
+    /// needs real tokens, and a fixture has them — it wrote them (#291).
     #[cfg(test)]
     pub(crate) fn insert_crossing(
         &mut self,
         dir: Direction,
-        key: &TypeKey,
+        ty: &syn::Type,
         root: bool,
         entry: Option<TypeEntry<M>>,
     ) {
-        self.intern(dir, &key.to_type(), root)
-            .unwrap_or_else(|e| panic!("fixture key `{key}` is not expressible: {e}"));
+        self.intern(dir, ty, root).unwrap_or_else(|e| {
+            panic!(
+                "fixture type `{}` is not expressible: {e}",
+                ty.to_token_stream()
+            )
+        });
         self.type_table_mut(dir)
-            .get_mut(key)
+            .get_mut(&TypeKey::from_type(ty))
             .expect("just registered")
             .entry = entry;
     }

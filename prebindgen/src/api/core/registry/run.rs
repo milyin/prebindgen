@@ -58,7 +58,7 @@ impl<M> Registry<M> {
         // unresolvable, since such a type has no destination representation.
         // Drop it both ways; the cell stays, so a converter is still produced
         // if one happens to resolve.
-        for key in &declared.decompositions.replaces {
+        for key in declared.decompositions.replaces.keys() {
             // The key is what a root flag is stored under, so it goes straight
             // in — no `to_type()` round trip to be re-keyed on the far side.
             self.clear_root(Direction::Input, key);

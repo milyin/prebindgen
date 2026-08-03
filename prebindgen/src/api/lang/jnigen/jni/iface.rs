@@ -981,10 +981,11 @@ pub(crate) fn fixed_leaf_element_keys(
 }
 
 /// Derive the spec for one identity — the SINGLE construction point behind
-/// [`Declarations::iface_spec`]. Any `syn` context comes from the key's stored
-/// normalized type ([`TypeKey::to_type`] — a clone, not a reparse). A
-/// `Folder` derivation folds the fixed-builder typed-group view in per
-/// `DeconId` (see [`fixed_decon_ids`]).
+/// [`Declarations::iface_spec`]. Any `syn` context is **looked up**, never
+/// rebuilt from the key: `Registry::reading` answers from the type table, and a
+/// key it cannot answer for defers rather than producing tokens nothing
+/// classified (#291). A `Folder` derivation folds the fixed-builder
+/// typed-group view in per `DeconId` (see [`fixed_decon_ids`]).
 fn derive_iface_spec(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
@@ -1019,7 +1020,12 @@ fn derive_iface_spec(
             }
             Some(spec)
         }
-        SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(ext, registry, &el_key.to_type()),
+        // Same round trip, same reason, same answer as the `Callback` arm
+        // above: the memo key holds an identity, and the reading behind it is a
+        // lookup. `None` defers, exactly as it does there (#291).
+        SpecKey::WholeFolder(el_key) => {
+            whole_folder_iface_spec(ext, registry, registry.reading(el_key)?.syntax())
+        }
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
     }

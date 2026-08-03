@@ -32,6 +32,14 @@ pub(crate) fn scanned_with<M>(sources: &[&str]) -> Registry<M> {
     reg_with(sources).scanned().expect("scan")
 }
 
+/// A type as a **build script** would declare it: real tokens, no source
+/// position. What
+/// [`RegistryBuilder::export_type`](crate::api::core::registry::RegistryBuilder::export_type)
+/// takes.
+pub(crate) fn declared_origin(ty: syn::Type) -> crate::core::flat::Origin<syn::Type> {
+    crate::core::flat::Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
+}
+
 /// One type as the **model** reads it, for a test that needs a `TypeRef` and has
 /// only a spelling.
 ///

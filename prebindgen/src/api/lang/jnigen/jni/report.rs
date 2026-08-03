@@ -167,7 +167,7 @@ impl super::JniGen {
         // listed above with the other declared classes, not here.
         let mut boundary: Vec<String> = ext
             .rust_side_only_types()
-            .map(|k| format!("- `{}` (never materializes in Kotlin)\n", k.as_str()))
+            .map(|(k, _)| format!("- `{}` (never materializes in Kotlin)\n", k.as_str()))
             .collect();
         boundary.sort();
         if !boundary.is_empty() {

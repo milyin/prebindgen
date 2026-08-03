@@ -18,7 +18,7 @@ impl CbindgenBuilder {
                 .get(&decl.key)
                 .cloned()
                 .unwrap_or_else(|| {
-                    let short = type_short(&decl.key.to_type());
+                    let short = type_short(&decl.rust_type.syntax.clone());
                     self.mangle_rust_type
                         .as_ref()
                         .map(|m| m(&short))
@@ -190,7 +190,7 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.key.to_type());
+        let target = self.src_ty(&decl.rust_type.syntax.clone());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
@@ -234,7 +234,7 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.key.to_type());
+        let target = self.src_ty(&decl.rust_type.syntax.clone());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
