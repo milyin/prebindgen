@@ -114,11 +114,13 @@ mod spelling_census {
     /// `(file, call count)` — every `.rs` under `api/lang/jnigen`, checked
     /// against the directory tree so a new module cannot sit outside the census.
     const CENSUS: &[(&str, usize)] = &[
-        // 18 -> 9 (#289): `build_flat_struct_node` takes `flat::Struct` and
-        // peels its fields off the model. What remains is `struct_input_body` /
-        // `sum_input_body`, the `.jobject_input()` decoders — a separate walk
-        // over `syn::Fields`, and the rest of #289.
-        ("jni/emit/flat_input.rs", 9),
+        // 18 -> 9 -> 4 (#289): `build_flat_struct_node` took `flat::Struct`
+        // first, then `struct_input_body` — the whole-object `.jobject_input()`
+        // decoder — did the same. What remains is the SUM side:
+        // `sum_input_body` and the `read_kotlin_property` helper it alone
+        // calls, which need `Type::Variant` rather than the `syn::ItemEnum`
+        // `Flat::enum_item` hands back.
+        ("jni/emit/flat_input.rs", 4),
         ("jni/emit/struct_out.rs", 2),
         ("jni/emit/wrapper.rs", 2),
         //
