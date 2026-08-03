@@ -105,7 +105,7 @@ pub(crate) fn build_data_class(
                 item_struct.name
             )
         });
-        let kotlin_field_name = mangle_kotlin_ident(&kt_snake_to_camel(&field_ident.to_string()));
+        let kotlin_field_name = kotlin_property_name(field_ident);
         let owner = format!("{}.{}", item_struct.name, field_ident);
 
         // The declaration reads ONE direction — output — because that is the
@@ -2192,6 +2192,23 @@ pub(crate) fn render_return_surface(
 /// the file renderer produces for the same type.
 pub(crate) fn kt_type_short(ty: &kt::KtType) -> String {
     ty.render(&mut kt::ImportSet::new(""))
+}
+
+/// The Kotlin property name of one struct field — the single derivation, so the
+/// site that DECLARES a property and the sites that ACCESS it cannot disagree.
+///
+/// They did. `render_data_class_source` declared it through `kt_snake_to_camel`,
+/// while `flat_input`'s access expression and JVM-slot name went through
+/// `util::snake_to_camel`, which additionally lower-cases the first character.
+/// The two agree for a conventional lower-snake field and only for that: a field
+/// spelled `Xyz` was declared `Xyz` and read as `xyz`, and a JNI `GetFieldID`
+/// for a name that is not the declared one fails at runtime.
+///
+/// `kt_snake_to_camel` is the behaviour kept, because the declaration is what a
+/// Kotlin property actually gets called; `snake_to_camel` stays where it names
+/// PARAMETERS, which is a different namespace with no declaration to match.
+pub(crate) fn kotlin_property_name(field: &syn::Ident) -> String {
+    mangle_kotlin_ident(&kt_snake_to_camel(&field.to_string()))
 }
 
 pub(crate) fn kt_snake_to_camel(s: &str) -> String {

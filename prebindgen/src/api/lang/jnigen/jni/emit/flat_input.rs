@@ -35,8 +35,9 @@ pub(crate) fn struct_input_body(
         // field now, because the element models a field list rather than a
         // `syn::Fields` shape.
         let fname_ident = field.name.clone()?;
-        let fname = fname_ident.to_string();
-        let camel = mangle_kotlin_ident(&snake_to_camel(&fname));
+        // The name the property was DECLARED with — `GetFieldID` takes the
+        // slot's exact name, so this cannot be derived a second way.
+        let camel = kotlin_property_name(&fname_ident);
         let err_prefix = format!("{struct_name}.{camel}: {{}}");
         let raw_ident = format_ident!("__{}_raw", fname_ident);
 
@@ -1459,7 +1460,7 @@ fn build_flat_struct_node(
                 "only named-field structs can flatten",
             ));
         };
-        let fcamel = mangle_kotlin_ident(&snake_to_camel(&fident.to_string()));
+        let fcamel = kotlin_property_name(&fident);
         let child_native = format!("{native_prefix}_{}", fident);
         let field_ref = if nullable_context {
             format!("{access_prefix}?.{fcamel}")
