@@ -276,17 +276,32 @@ pub(crate) fn classify_field(
             let fqn = projection_leaf_kt(ext, &proj)?.to_string();
             return Some(PlanFieldKind::Projection { conv, proj, fqn });
         }
-        // Bare enum leaf.
-        if ext.is_kotlin_enum(&effective_ty) {
-            let kotlin = field_entry.metadata.kotlin_name.clone()?;
-            return Some(PlanFieldKind::Enum { conv, kotlin });
-        }
-        // `Option<enum>` leaf.
-        if let Some(inner) = optional_inner {
-            if ext.is_kotlin_enum(inner.syntax()) {
-                let kotlin = registry.output_entry(inner)?.metadata.kotlin_name.clone()?;
-                return Some(PlanFieldKind::OptionEnum { conv, kotlin });
-            }
+        // Enum leaf, bare or under `Option` — asked ONCE, of the model, and of
+        // the already-peeled reading beside us.
+        //
+        // It used to ask `is_kotlin_enum` twice, of two spellings. That answers
+        // about the WRAPPER: `builder.rs` documents `Box<Priority>` as `false`
+        // for it and `true` for the reading form, so a wrapped enum field fell
+        // through to the plain-leaf arm and rendered as its wire instead of the
+        // Kotlin enum class — the #273 family, output-side. `flat_input.rs` had
+        // already moved to the reading; this is the other half of the same
+        // question finally giving the same answer.
+        //
+        // Optionality stays the CALLER's fact rather than the probe's:
+        // `enum_probe` peels `Option` as well as borrows, so asking it about
+        // the unpeeled reading would make `Priority` and `Option<Priority>`
+        // indistinguishable and collapse the two arms into one.
+        if ext.is_kotlin_enum_reading(bare_ref) {
+            return match optional_inner {
+                None => {
+                    let kotlin = field_entry.metadata.kotlin_name.clone()?;
+                    Some(PlanFieldKind::Enum { conv, kotlin })
+                }
+                Some(inner) => {
+                    let kotlin = registry.output_entry(inner)?.metadata.kotlin_name.clone()?;
+                    Some(PlanFieldKind::OptionEnum { conv, kotlin })
+                }
+            };
         }
         // Nested plain data-class (optionally under `Option`).
         let inner_ty = bare.clone();

@@ -423,26 +423,6 @@ impl Declarations {
     }
 }
 
-/// Slot name of one variant field in the flattened `fromParts` signature:
-/// `<variantCamel>_<property>` (`periodicQueries_period`, `pair_v0`) — the
-/// existing nested-prefix convention, with `_` marking the variant boundary
-/// exactly as core's `<variant_snake>_<field>` leaf names do.
-///
-/// Keyed on the **Kotlin** variant class name, not the Rust ident, so a
-/// `variant!(V).name(...)` rename carries through to the slots and the
-/// emitted surface stays self-consistent.
-fn sum_slot_name(kotlin_variant: &str, property: &str) -> String {
-    // The variant class name is PascalCase; lower its first character so the
-    // slot reads as an ordinary Kotlin parameter (`PeriodicQueries` →
-    // `periodicQueries_period`).
-    let mut chars = kotlin_variant.chars();
-    let head: String = match chars.next() {
-        Some(c) => c.to_lowercase().collect(),
-        None => String::new(),
-    };
-    format!("{head}{}_{property}", chars.as_str())
-}
-
 /// Owned counterpart of [`TypedHandle`] — used internally so the
 /// `collect_typed_handles` helper doesn't have to hand out borrows of
 /// `self.types`.
@@ -654,7 +634,7 @@ impl Declarations {
             for field in &alt.fields {
                 let prop = sum_field_prop_name(&field.member());
                 let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
-                factory = factory.param(KtParam::new(sum_slot_name(&vname, &prop), ty));
+                factory = factory.param(KtParam::new(sum_slot_fragment(&vname, &prop), ty));
             }
         }
         let mut body = Code::new();
@@ -664,7 +644,7 @@ impl Declarations {
                 let args: Vec<String> = alt
                     .fields
                     .iter()
-                    .map(|f| sum_slot_name(&vname, &sum_field_prop_name(&f.member())))
+                    .map(|f| sum_slot_fragment(&vname, &sum_field_prop_name(&f.member())))
                     .collect();
                 let ctor = if alt.is_empty() {
                     vname
