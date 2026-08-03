@@ -283,9 +283,18 @@ pub(crate) fn struct_input_body(
         field_init.push(quote!(#fname_ident));
     }
 
+    // The struct's OWN delimiters, from the one place that chooses them.
+    // `flat::Struct` does not record whether its fields were named — that is
+    // spelling — so hard-coding braces here emitted `Unit {}` for
+    // `struct Unit;` and `Empty {}` for `struct Empty()`, neither of which is
+    // Rust. The `syn::Fields::Named` guard this walk replaced happened to
+    // refuse both; the per-field name check cannot, because an empty struct
+    // has no field to refuse. `Struct::spell` is the dual of the
+    // `Alternative::spell` the sum decoder uses for exactly this.
+    let ctor = s.spell(quote!(#struct_module::#struct_ident), &field_init);
     let body: syn::Expr = syn::parse_quote!({
         #(#field_preludes)*
-        #struct_module::#struct_ident { #(#field_init),* }
+        #ctor
     });
     Some((syn::parse_quote!(jni::objects::JObject), body))
 }
