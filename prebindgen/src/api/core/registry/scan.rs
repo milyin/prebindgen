@@ -233,13 +233,13 @@ impl<M> Registry<M> {
         visited: &mut HashSet<TypeKey>,
     ) {
         let key = reading.key();
-        if !visited.insert(key) {
+        if !visited.insert(key.clone()) {
             return; // cycle guard
         }
 
         self.ensure_entry(dir, reading, is_top);
 
-        for (child_dir, sub) in self.immediate_edges(dir, reading.syntax()) {
+        for (child_dir, sub) in self.immediate_edges(dir, &key) {
             self.register_type_inner(child_dir, &sub, false, visited);
         }
     }
@@ -363,14 +363,20 @@ impl<M> Registry<M> {
         Ok(())
     }
 
-    /// Enumerate the immediate type-graph edges out of `(dir, ty)`: the model's
-    /// own children of this type, plus — if `ty` names a declared struct or sum —
+    /// Enumerate the immediate type-graph edges out of `(dir, key)`: the model's
+    /// own children of this type, plus — if `key` names a declared struct or sum —
     /// the field types of that item.
     ///
     /// A callback's argument types flow with `dir.flip()`, because an argument the
     /// binding *hands to* a callback crosses the other way; everything else
     /// inherits `dir`. Used by both `register_type_inner` (during scan) and the
     /// unresolved-descendants BFS in `resolve` (for diagnostics).
+    ///
+    /// **Takes the key, because a key is all it ever used.** This asked for a
+    /// `&syn::Type` and opened by re-keying it, so every caller spelled a key into
+    /// tokens purely so this could undo that — a normalize pass and a token render
+    /// per call, to arrive back where it started. What the walk needs is a table
+    /// lookup, and a table lookup takes an identity (#291).
     ///
     /// The children come from [`TypeKind`], not from taking the syntax apart, and
     /// the difference is load-bearing rather than cosmetic. `&mut MaybeUninit<T>`
@@ -388,16 +394,12 @@ impl<M> Registry<M> {
     pub(crate) fn immediate_edges(
         &self,
         dir: Direction,
-        ty: &syn::Type,
+        key: &TypeKey,
     ) -> Vec<(Direction, crate::api::core::flat::TypeRef)> {
         use crate::api::core::flat::TypeKind;
 
         let mut out: Vec<(Direction, crate::api::core::flat::TypeRef)> = Vec::new();
-        if let Some(reading) = self
-            .type_table(dir)
-            .get(&TypeKey::from_type(ty))
-            .map(|c| &c.subject)
-        {
+        if let Some(reading) = self.type_table(dir).get(key).map(|c| &c.subject) {
             let (children, child_dir): (Vec<&crate::api::core::flat::TypeRef>, Direction) =
                 match reading.kind() {
                     TypeKind::Optional(t)
@@ -436,7 +438,7 @@ impl<M> Registry<M> {
         // have answered `None` and dead-ended the walk.
         if let Some(name) = self
             .type_table(dir)
-            .get(&TypeKey::from_type(ty))
+            .get(key)
             .and_then(|c| match c.subject.kind() {
                 TypeKind::Named { id } => Some(id.name.clone()),
                 _ => None,

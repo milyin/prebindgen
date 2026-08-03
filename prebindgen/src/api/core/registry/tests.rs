@@ -42,7 +42,9 @@ impl DeclareAndResolve<()> for RegistryBuilder<()> {
             .stub()
             .declare_into_any(self)?
             .validate_with(&ext)?
-            .convert_with(|crossing, _built| ext.converter(&crossing.1.to_type()))?
+            // The reading, not a spelling re-derived from the key: this is the
+            // route a real generator takes, so the stub takes it too (#291).
+            .convert_with(|crossing, built| ext.converter(built.reading(&crossing.1)?.syntax()))?
             .build()?;
         ext.validate_resolved(&registry)
             .map_err(|message| ScanError::AdapterInvariant { message })?;
@@ -1721,19 +1723,19 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
     // fixture property this test needs.
     let node = TypeKey::parse("Node").expect("test type");
     let mut seen_keys: Set<TypeKey> = Set::new();
-    let mut frontier = vec![node.to_type()];
+    let mut frontier = vec![node];
     let mut revisited = false;
     for _ in 0..8 {
         let mut next = Vec::new();
-        for t in frontier {
-            if !seen_keys.insert(TypeKey::from_type(&t)) {
+        for k in frontier {
+            if !seen_keys.insert(k.clone()) {
                 revisited = true;
                 break;
             }
             next.extend(
-                reg.immediate_edges(Direction::Output, &t)
+                reg.immediate_edges(Direction::Output, &k)
                     .into_iter()
-                    .map(|(_, sub)| sub.syntax().clone()),
+                    .map(|(_, sub)| sub.key()),
             );
         }
         if revisited {

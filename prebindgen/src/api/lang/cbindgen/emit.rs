@@ -29,11 +29,11 @@ impl CbindgenBuilder {
         // A tagged union with a `String` payload hands out a `char*` per active
         // arm — allocated by its output converter, released by its typed drop.
         if self.tagged_unions.keys().any(|key| {
-            let ty = key.to_type();
-            registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.output_entry(&tr))
-                .is_some()
+            let Some(reading) = registry.reading(key) else {
+                return false;
+            };
+            let ty = reading.syntax().clone();
+            registry.output_entry(&reading).is_some()
                 && self
                     .enum_variants(registry, &ty)
                     .map(|vs| {
@@ -46,11 +46,11 @@ impl CbindgenBuilder {
             return true;
         }
         self.data.keys().any(|key| {
-            let ty = key.to_type();
-            registry
-                .reading_of(&ty)
-                .and_then(|tr| registry.output_entry(&tr))
-                .is_some()
+            let Some(reading) = registry.reading(key) else {
+                return false;
+            };
+            let ty = reading.syntax().clone();
+            registry.output_entry(&reading).is_some()
                 && self
                     .struct_fields(registry, &ty)
                     .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
