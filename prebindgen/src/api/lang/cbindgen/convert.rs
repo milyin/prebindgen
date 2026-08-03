@@ -8,8 +8,8 @@ impl CbindgenBuilder {
             let Some(domain) = &decl.domain else { continue };
             let demand = [Direction::Input, Direction::Output]
                 .into_iter()
-                .flat_map(|direction| registry.type_table(direction).keys())
-                .map(|candidate| option_depth(candidate, &decl.key))
+                .flat_map(|direction| registry.type_table(direction).values())
+                .map(|cell| option_depth(&cell.subject, &decl.key))
                 .max()
                 .unwrap_or(0);
             let ty = domain.ty();
@@ -281,10 +281,21 @@ impl CbindgenBuilder {
         let Some(domain) = &decl.domain else {
             return Niches::empty();
         };
+        // A crossing with no reading contributes no demand, and that is an
+        // answer rather than a gap being swallowed: the niche allocator is
+        // reserving values no SIBLING CONVERSION can produce, and a crossing
+        // the registry never entered has no conversion to produce one. Spelled
+        // as an explicit `0` — the same answer jnigen's twin gives — so the
+        // reasoning is in the code instead of in a claim that a `filter_map`
+        // silently relied on.
         let demand = registry
             .crossing_keys(direction)
             .iter()
-            .map(|candidate| option_depth(candidate, &decl.key))
+            .map(|candidate| {
+                registry
+                    .reading(candidate)
+                    .map_or(0, |reading| option_depth(&reading, &decl.key))
+            })
             .max()
             .unwrap_or(0);
         Niches::from_slots(
@@ -351,17 +362,21 @@ fn fn_ret(item: &syn::ItemFn) -> syn::Type {
     }
 }
 
-fn option_depth(candidate: &TypeKey, target: &TypeKey) -> usize {
-    let mut ty = candidate.to_type();
+/// How many `Option<…>` layers `candidate` puts over `target`, or 0 if it is
+/// not that type under any number of them.
+///
+/// Counted off the **reading**. The optional layers are already what the model
+/// says this type is — `TypeKind::Optional` is produced for exactly `Option<T>`
+/// — so peeling tokens to rediscover them was re-deriving the classification
+/// the registry stored (#291).
+fn option_depth(candidate: &crate::api::core::flat::TypeRef, target: &TypeKey) -> usize {
+    let mut reading = candidate;
     let mut depth = 0;
-    while is_option(&ty) {
-        let Some(inner) = first_type_arg(&ty) else {
-            return 0;
-        };
-        ty = inner;
+    while let Some(inner) = reading.optional_inner() {
+        reading = inner;
         depth += 1;
     }
-    if TypeKey::from_type(&ty) == *target {
+    if reading.key() == *target {
         depth
     } else {
         0

@@ -7,16 +7,32 @@ use quote::ToTokens;
 /// Canonical type-shape key: identity is the token string of the
 /// **normalized** type ([`crate::api::core::flat::spelling::normalize_type`] —
 /// group/paren unwrap, `crate::`/`self::` and std-prelude path reduction;
-/// the complete equivalence rule set is documented there). The normalized
-/// parsed form is kept alongside the string, so [`Self::to_type`] is an
-/// infallible clone — no core invariant depends on serialize-then-reparse
-/// round trips (issue #95).
+/// the complete equivalence rule set is documented there).
+///
+/// # A key is an identity, and nothing else
+///
+/// It is what a table is indexed by. It is **not** a route to `syn::Type`: the
+/// only way to reach a type's syntax is
+/// [`Conversions::reading`](super::Conversions::reading) followed by
+/// [`TypeRef::syntax`](crate::api::core::flat::TypeRef::syntax), because a
+/// reading is what pairs a spelling with the classification that vouches for
+/// it.
+///
+/// This used to keep the parsed form beside the string and hand it out through
+/// `to_type()`, which let any holder of a key produce tokens for a type the
+/// model never classified — the same capability #280 sealed `TypeRef` against,
+/// granted by the key itself. A caller that wants tokens now has to have gotten
+/// them from somewhere that knows what they mean: the registry's reading, or
+/// the declaration that wrote them (#291).
+///
+/// What a key can still answer about itself is what it is **called** —
+/// [`Self::as_str`], [`Self::ident`], [`Self::short_name`] — because a name is
+/// not syntax.
 #[derive(Clone)]
 pub struct TypeKey {
-    /// Canonical token string — the identity `Eq`/`Hash` compare.
+    /// Canonical token string — the identity `Eq`/`Hash` compare, and the whole
+    /// of what a key is.
     canon: std::rc::Rc<str>,
-    /// The normalized parsed form the string was rendered from.
-    ty: std::rc::Rc<syn::Type>,
 }
 
 impl PartialEq for TypeKey {
@@ -66,6 +82,10 @@ impl std::error::Error for TypeKeyParseError {}
 
 impl TypeKey {
     /// Build a key by parsing the input as a type and normalizing.
+    ///
+    /// The parse is kept for **validation** and then discarded: a key that
+    /// cannot be a type is a mistake worth reporting at the declaration, and a
+    /// key that can is still only its canonical string.
     pub fn parse(s: &str) -> Result<Self, TypeKeyParseError> {
         let ty: syn::Type = syn::parse_str(s).map_err(|error| TypeKeyParseError {
             input: s.to_string(),
@@ -79,10 +99,11 @@ impl TypeKey {
     pub fn from_type(ty: &syn::Type) -> Self {
         // Off the shared reduction, so this key and the model's type index
         // cannot drift apart about what a type is called.
-        let t = crate::api::core::flat::canonical_type(ty);
         Self {
-            canon: t.to_token_stream().to_string().into(),
-            ty: std::rc::Rc::new(t),
+            canon: crate::api::core::flat::canonical_type(ty)
+                .to_token_stream()
+                .to_string()
+                .into(),
         }
     }
 
@@ -97,17 +118,10 @@ impl TypeKey {
         &self.canon
     }
 
-    /// The normalized parsed form. Infallible — a clone of the stored type,
-    /// never a reparse.
-    pub fn to_type(&self) -> syn::Type {
-        (*self.ty).clone()
-    }
-
     /// The bare item ident this key names — `Foo`, `a::Foo` → `Foo`,
     /// `a::Foo<u8>::Bar` → `Bar`; `None` when the **last** segment carries
     /// generic arguments (`Vec<u8>` names no bare item) or the key is not a
     /// path.
-    ///
     /// Matches [`bare_path_ident`](crate::api::core::types_util::bare_path_ident)
     /// on the same type, which is what
     /// `key_name_accessors_match_the_syn_walks` pins.
