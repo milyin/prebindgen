@@ -824,9 +824,11 @@ impl ReturnSurface {
             .and_then(|tr| registry.output_entry(&tr))
             .map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
-        // `value_rust_type`) declare no Kotlin return type. The peeled type
-        // comes straight off the stored key — no reparse, no silent
-        // fallback.
+        // `value_rust_type`) declare no Kotlin return type. The peeled type is
+        // the one the converter's metadata stored — a canonical `syn::Type`,
+        // so nothing is rebuilt here. Falling back to the declared return is
+        // not a miss: `value_rust_type` is `None` exactly for plain values and
+        // arity-0 converters, which have no inner identity to peel to.
         let canonical: syn::Type = outer_meta
             .as_ref()
             .and_then(|m| m.value_rust_type.as_ref())

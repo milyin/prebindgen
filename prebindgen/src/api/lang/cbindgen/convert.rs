@@ -281,13 +281,21 @@ impl CbindgenBuilder {
         let Some(domain) = &decl.domain else {
             return Niches::empty();
         };
-        // Every crossing key has a cell — that is where `crossing_keys` got it
-        // — so the reading is always there to count layers off.
+        // A crossing with no reading contributes no demand, and that is an
+        // answer rather than a gap being swallowed: the niche allocator is
+        // reserving values no SIBLING CONVERSION can produce, and a crossing
+        // the registry never entered has no conversion to produce one. Spelled
+        // as an explicit `0` — the same answer jnigen's twin gives — so the
+        // reasoning is in the code instead of in a claim that a `filter_map`
+        // silently relied on.
         let demand = registry
             .crossing_keys(direction)
             .iter()
-            .filter_map(|candidate| registry.reading(candidate))
-            .map(|candidate| option_depth(&candidate, &decl.key))
+            .map(|candidate| {
+                registry
+                    .reading(candidate)
+                    .map_or(0, |reading| option_depth(&reading, &decl.key))
+            })
             .max()
             .unwrap_or(0);
         Niches::from_slots(
