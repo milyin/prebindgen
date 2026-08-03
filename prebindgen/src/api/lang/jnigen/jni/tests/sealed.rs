@@ -673,7 +673,13 @@ fn sum_is_its_own_type_kind() {
 ///   design, not an accident.
 ///
 /// Asserted against a real `Registry` rather than a hand-assembled one, because
-/// the claim is about what a *declaration* produces.
+/// the claim is about what a *declaration* produces — and that is the limit of
+/// what it can claim. It does **not** pin #282: `sealed_class!(Reading)` creates
+/// the output cell through `export_type` whether or not the selector registers
+/// anything, so this passes against the filtered loop too. The selector's own
+/// half is pinned in `core::unfold`'s `sum_return_is_a_fixed_builder_plan`,
+/// whose fixture carries the sum as the tag's `out_ty` exactly so it can fail
+/// when the leaf stops registering it.
 #[test]
 fn a_sums_registry_cells_are_registered_but_not_required() {
     let loc = myflat_loc();

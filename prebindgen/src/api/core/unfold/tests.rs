@@ -1689,11 +1689,17 @@ fn duplicate_declarations_collected() {
 
 /// The tag + group leaves a sum decomposition is made of. Mirrors what the
 /// JNI adapter synthesizes: a selector followed by one group per alternative.
+///
+/// The selector's `out_ty` is **the sum**, as `synth_sum_leaves` stores it — it
+/// names *which* sum it chooses between, which is how the emitter finds the enum
+/// to `match`. It said `i32` here, the tag's wire type, which made the
+/// registration test prove only that *some* converter-free leaf gets a cell
+/// rather than that the selector registers the sum it names (#282).
 fn reading_sum_decon() -> SumDecon {
     let tag = UnfoldLeaf {
         name: "tag".to_string(),
         path: vec![],
-        out_ty: tref(syn::parse_quote!(i32)),
+        out_ty: tref(syn::parse_quote!(Reading)),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
