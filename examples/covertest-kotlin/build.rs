@@ -577,6 +577,7 @@ fn main() {
                 .fun(fun!(blob_value_echo))
                 .fun(fun!(arrays_echo))
                 .fun(fun!(duration_optional))
+                .fun(fun!(boxed_duration_echo))
                 .fun(fun!(duration_boundary_echo))
                 // The converted analogue of `unsigned_emit`: a whole-value
                 // callback argument, which encodes on its own path rather than

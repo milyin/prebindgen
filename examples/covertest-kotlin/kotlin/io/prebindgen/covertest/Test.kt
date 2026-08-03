@@ -59,6 +59,7 @@ import io.prebindgen.covertest.model.plainNoteEcho
 import io.prebindgen.covertest.model.blobValueNew
 import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
+import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.durationEmit
@@ -251,6 +252,13 @@ fun main() {
         check(durationOptional(null, boom) == null)
         check(durationOptional(0uL, boom) == 0uL)
         check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
+
+        // A `Box<Duration>` crosses as a bare `Duration` does — the wrapper is
+        // invisible to Kotlin, which is why the model erases it. Both
+        // directions run the full staged chain; skipping it put `Box::new`
+        // around a `u64` and did not compile (#309).
+        check(boxedDurationEcho(86_400_000uL, boom) == 86_400_000uL)
+        check(boxedDurationEcho(0uL, boom) == 0uL)
 
         // The data-class properties are semantic `ULong` / `ULong?`, while the
         // native output factory receives primitive Longs (the optional one

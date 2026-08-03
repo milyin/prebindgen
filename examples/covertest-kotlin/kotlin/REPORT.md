@@ -63,6 +63,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
 - `blob_value_new` — `fun blobValueNew(secs: Long, id: ByteArray, chunks: List<ByteArray>, onError: JniErrorHandler<BlobValue>): BlobValue`
   - shaped by: return `BlobValue` decomposed → [stamp__secs, stamp__nanos, id, chunks] (Callback delivery)
+- `boxed_duration_echo` — `fun boxedDurationEcho(value: ULong, onError: JniErrorHandler<ULong>): ULong`
 - `boxed_elem_id_sum` — `fun boxedElemIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `boxed_latest` — `fun <R> boxedLatest(a: SummaryVault, onError: JniErrorHandler<R?>, build: SummaryBuilder<R>): R?`
   - shaped by: return `Summary` decomposed → [count, total] (Callback delivery)

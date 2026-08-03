@@ -2058,6 +2058,22 @@ public fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): UL
 }
 
 /**
+ * A transparent wrapper over a **`convert!`-declared** type, both directions.
+ *
+ * `Duration` reaches its Rust value through a staged chain
+ * (`jlong -> u64 -> Duration`), and the transparent bridge used to call the
+ * inner converter's function directly and leave `pre_stages` empty — so the
+ * stages were skipped and the rebuild put `Box::new` around a `u64`. Not a
+ * silent wrong value: `E0308` in the generated crate (#309).
+ */
+public fun boxedDurationEcho(value: ULong, onError: JniErrorHandler<ULong>): ULong {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.boxedDurationEcho(value.toLong(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret.toULong()
+}
+
+/**
  * Round-trip [`DurationBoundary`] through the explicit object-input bridge.
  *
  * The Rust `DurationBoundary` result is delivered decomposed: the builder callback receives (`required`, `delay`).

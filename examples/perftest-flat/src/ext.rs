@@ -732,6 +732,18 @@ pub fn duration_optional(value: Option<Duration>) -> Option<Duration> {
     value
 }
 
+/// A transparent wrapper over a **`convert!`-declared** type, both directions.
+///
+/// `Duration` reaches its Rust value through a staged chain
+/// (`jlong -> u64 -> Duration`), and the transparent bridge used to call the
+/// inner converter's function directly and leave `pre_stages` empty — so the
+/// stages were skipped and the rebuild put `Box::new` around a `u64`. Not a
+/// silent wrong value: `E0308` in the generated crate (#309).
+#[prebindgen]
+pub fn boxed_duration_echo(value: Box<Duration>) -> Box<Duration> {
+    value
+}
+
 /// Deliberately violate the binding's declared output domain so the Kotlin
 /// covertest can verify outbound validation and error routing.
 #[prebindgen]

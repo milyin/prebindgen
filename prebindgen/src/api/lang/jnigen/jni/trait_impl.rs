@@ -2240,13 +2240,20 @@ impl Declarations {
         let inner = registry.reading_of(&stripped)?;
         let entry = registry.input_entry(&inner)?;
         let wire = entry.destination.clone();
-        let inner_fn = &entry.function.sig.ident;
         // Wrap what the inner converter produced. `None` here is `Cow`'s policy
         // refusal — the crossing then stays unresolved and names the type,
         // rather than resolving and emitting Rust the consumer cannot build.
         let built = build_through_erased_wrappers(reading, quote!(__inner))?;
+        // The inner's COMPLETE chain, stages included. This called
+        // `entry.function` directly and left `pre_stages` empty, which SKIPPED
+        // them: a `convert!`-declared type reaches its Rust value through those
+        // stages (`jlong -> u64 -> Duration`), so a `Box` over one arrived
+        // un-staged. Every other composing arm goes through this helper for
+        // exactly that reason (#309).
+        let inner_call =
+            crate::api::lang::jnigen::jni::emit::composed_inner_input(entry, quote!(v));
         let body: syn::Expr = syn::parse_quote!({
-            let __inner = #inner_fn(env, v)?;
+            let __inner = #inner_call;
             #built
         });
         Some(ConverterImpl {
