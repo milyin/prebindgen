@@ -2586,6 +2586,127 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
     );
 }
 
+/// An erased wrapper over a **terminal** crosses in BOTH directions, and one
+/// selector arm serves every terminal kind (#309).
+///
+/// The layer arms bridge a wrapper as part of handling their own layer, so
+/// `Box<Option<T>>` and `Box<Vec<T>>` resolved all along — which is what made
+/// the gap hard to see. A wrapper over a plain `TypeKind::Named` has no arm, and
+/// the terminal lookup keys on the SPELLING: no config sits under
+/// `Box < Priority >`. Inbound that was a last resort added by #294; outbound it
+/// was nothing at all, so the same field was a parameter this binding could take
+/// and a return it could not give.
+///
+/// The three terminal kinds are asserted together because they miss the terminal
+/// lookup the same way, and one arm therefore covers them all — a claim worth
+/// showing rather than arguing.
+#[test]
+fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
+    let loc = myflat_loc();
+    // The enum is carried wrapped AND bare, so the Kotlin assertion below can
+    // say "these present alike" rather than merely "the wrapped one compiles".
+    // The handle and the data class are wrapped only: what they are here to
+    // show is that ONE arm serves every terminal kind, and a bare twin of each
+    // would test the terminal lookup rather than the bridge.
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Leaf {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Wrapped {
+                    pub boxed_enum: Box<Priority>,
+                    pub plain_enum: Priority,
+                    pub boxed_handle: Box<ZSample>,
+                    pub boxed_data: Box<Leaf>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_sample_to_wrapped(s: &ZSample) -> Wrapped {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_wrapped_take(w: Wrapped) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZSample))
+                .class(crate::enum_class!(Priority))
+                .class(crate::data_class!(Leaf))
+                .class(crate::data_class!(Wrapped))
+                .fun(crate::fun!(z_wrapped_take)),
+        )
+        .expand(crate::expand_return!(ZSample).fields(crate::fields!(z_sample_to_wrapped)));
+    let dir = unique_test_dir("jnigen_terminal_bridge");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // Resolving at all is the claim: every one of these reached `None` outbound
+    // before, and the build failed naming the wrapped spelling.
+    let gen = jni
+        .build_with(registry)
+        .expect("an erased wrapper over a terminal resolves in both directions");
+    let rust =
+        std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust")).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // Outbound: the wrapper comes off, then the inner converter runs. Inbound
+    // is the mirror — the inner converter runs, then the wrapper goes back on.
+    for kind in ["Priority", "ZSample", "Leaf"] {
+        assert!(
+            rc.contains(&format!("Box_{kind}_to_")),
+            "`Box<{kind}>` needs an OUTBOUND converter:\n{rust}"
+        );
+        assert!(
+            rc.contains(&format!("_to_Box_{kind}_")),
+            "`Box<{kind}>` needs an inbound converter:\n{rust}"
+        );
+    }
+    // The wrapper is invisible to Kotlin, so the bare and wrapped enum fields
+    // present as the same type — the point of the model erasing it.
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+    assert!(
+        kc.contains("valboxedEnum:Priority") && kc.contains("valplainEnum:Priority"),
+        "a wrapped enum presents as the enum class, exactly as the bare one does:\n{kotlin}"
+    );
+}
+
 /// A wrapper cannot be bridged where the converter does not produce the spelled
 /// type at all — the **borrow** shapes — so those refuse rather than resolve.
 ///

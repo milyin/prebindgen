@@ -438,6 +438,29 @@ impl<M> Registry<M> {
                 out.push((child_dir, child.clone()));
             }
         }
+        // A spelling the model **erased wrappers from** depends on the stripped
+        // spelling: whoever converts `Box<T>` does it by delegating to `T`'s own
+        // converter and putting the wrapper back. That is a real edge and the
+        // `kind` walk above cannot see it — `Box<T>` classifies as whatever `T`
+        // is, so the two share a classification and differ only in spelling.
+        //
+        // Without it the dependency existed but the ORDER did not: a converter
+        // that delegates is built in one pass, so it needs its inner already
+        // built, and `subs` says "this is required" rather than "this comes
+        // first". `Box<Payload>` resolved only because some other root's fields
+        // happened to pull `Payload` in earlier — alphabetical luck, which
+        // `Box<ZSample>` did not have.
+        if let Some(cell) = self.type_table(dir).get(key) {
+            let reading = &cell.subject;
+            if !reading.erased_wrappers().is_empty() {
+                let stripped = reading.stripped_key();
+                if stripped != *key {
+                    if let Some(inner) = self.type_table(dir).get(&stripped) {
+                        out.push((dir, (*inner.subject).clone()));
+                    }
+                }
+            }
+        }
         // A declared type's own fields, read off the element rather than off its
         // `syn::Fields`: a positional field is an ordinary `Field` there, so the
         // named-only asymmetry the syntax walk had does not arise. An `Enum` has

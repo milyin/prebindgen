@@ -11,6 +11,7 @@ import io.prebindgen.covertest.model.Lookup
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.Observation
+import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Tagged
 import java.lang.ref.Cleaner
@@ -248,10 +249,16 @@ public data class Payload(override val id: Long, override val seq: Int, override
  * `plain` is the control: the two fields must produce the same wire, since the
  * model says they are the same type.
  */
-public data class WrappedFields(val id: Long, val boxed: Long?, val plain: Long?) {
+public data class WrappedFields(val id: Long, val boxed: Long?, val plain: Long?, val boxedEnum: Priority, val plainEnum: Priority) {
     public companion object {
         @JvmStatic
-        public fun fromParts(id: Long, boxed: Long?, plain: Long?): WrappedFields = WrappedFields(id, boxed, plain)
+        public fun fromParts(
+            id: Long,
+            boxed: Long?,
+            plain: Long?,
+            boxedEnum: Int,
+            plainEnum: Int,
+        ): WrappedFields = WrappedFields(id, boxed, plain, Priority.fromInt(boxedEnum), Priority.fromInt(plainEnum))
     }
 }
 
@@ -940,6 +947,8 @@ internal object CovNative {
         errorSink: Any,
     ): Any?
 
+    external fun boxedDurationEcho(value: Long, errorSink: Any): Long
+
     external fun boxedElemIdSum(ps: List<Payload>, errorSink: Any): Long
 
     external fun boxedLatest(a: Long, build: Any, errorSink: Any): Any?
@@ -1334,6 +1343,8 @@ internal object CovNative {
         wBoxedValue: Long,
         wPlainPresent: Boolean,
         wPlainValue: Long,
+        wBoxedEnum: Int,
+        wPlainEnum: Int,
         errorSink: Any,
     ): Long
 

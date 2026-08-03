@@ -684,6 +684,34 @@ pub(crate) unsafe fn Box_Box_Option_String_to_JString_299999e0<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Box_Duration_to_jlong_0776c1ca<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<perftest_flat::Duration>,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    Ok({
+        let __inner = *v;
+        {
+            let __inner_s0 = Duration_to_u64_e3980876(env, __inner)
+                .map_err(|__e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string()))?;
+            u64_to_jlong_4384a5d6(env, __inner_s0)?
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Box_Option_Summary_to_jlong_75560ba9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Box<Option<perftest_flat::Summary>>,
@@ -729,6 +757,28 @@ pub(crate) unsafe fn Box_Option_i64_to_JObject_cf5a3724<'a>(
                 None => jni::objects::JObject::null(),
             }
         }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Box_Priority_to_jint_a16653ae<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Box<perftest_flat::Priority>,
+) -> ::core::result::Result<jni::sys::jint, __JniErr> {
+    Ok({
+        let __inner = *v;
+        Priority_to_jint_447102d2(env, __inner)?
     })
 }
 #[allow(
@@ -3583,10 +3633,38 @@ pub(crate) unsafe fn JObject_to_WrappedFields_f14f08c1<'env, 'v>(
                 String,
             >>::from(format!("WrappedFields.plain: {}", e)))?;
         let plain = JObject_to_Option_i64_2ba9a5ed(env, &__plain_raw)?;
+        let __boxed_enum_jobj: jni::objects::JObject = env
+            .get_field(v, "boxedEnum", "Lio/prebindgen/covertest/model/Priority;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("WrappedFields.boxedEnum: {}", e)))?;
+        let __boxed_enum_raw: jni::sys::jint = env
+            .call_method(&__boxed_enum_jobj, "getValue", "()I", &[])
+            .and_then(|val| val.i())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("WrappedFields.boxedEnum: {}", e)))?;
+        let boxed_enum = jint_to_Box_Priority_a16653ae(env, &__boxed_enum_raw)?;
+        let __plain_enum_jobj: jni::objects::JObject = env
+            .get_field(v, "plainEnum", "Lio/prebindgen/covertest/model/Priority;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("WrappedFields.plainEnum: {}", e)))?;
+        let __plain_enum_raw: jni::sys::jint = env
+            .call_method(&__plain_enum_jobj, "getValue", "()I", &[])
+            .and_then(|val| val.i())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("WrappedFields.plainEnum: {}", e)))?;
+        let plain_enum = jint_to_Priority_447102d2(env, &__plain_enum_raw)?;
         perftest_flat::WrappedFields {
             id,
             boxed,
             plain,
+            boxed_enum,
+            plain_enum,
         }
     })
 }
@@ -9471,15 +9549,25 @@ pub(crate) unsafe fn WrappedFields_to_JObject_f14f08c1<'a>(
             env,
             v.plain.clone(),
         )?;
+        let ___boxed_enum: jni::sys::jint = Box_Priority_to_jint_a16653ae(
+            env,
+            v.boxed_enum.clone(),
+        )?;
+        let ___plain_enum: jni::sys::jint = Priority_to_jint_447102d2(
+            env,
+            v.plain_enum.clone(),
+        )?;
         let __obj = env
             .call_static_method(
                 "io/prebindgen/covertest/WrappedFields",
                 "fromParts",
-                "(JLjava/lang/Long;Ljava/lang/Long;)Lio/prebindgen/covertest/WrappedFields;",
+                "(JLjava/lang/Long;Ljava/lang/Long;II)Lio/prebindgen/covertest/WrappedFields;",
                 &[
                     jni::objects::JValue::from(___id),
                     jni::objects::JValue::Object(&___boxed),
                     jni::objects::JValue::Object(&___plain),
+                    jni::objects::JValue::from(___boxed_enum),
+                    jni::objects::JValue::from(___plain_enum),
                 ],
             )
             .and_then(|__v| __v.l())
@@ -9866,6 +9954,28 @@ pub(crate) unsafe fn jdouble_to_f64_9e4a8f70<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn jint_to_Box_Priority_a16653ae<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jint,
+) -> ::core::result::Result<Box<perftest_flat::Priority>, __JniErr> {
+    Ok({
+        let __inner = jint_to_Priority_447102d2(env, v)?;
+        ::std::boxed::Box::new(__inner)
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jint_to_Priority_447102d2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
@@ -9981,6 +10091,35 @@ pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
         );
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Archive) })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn jlong_to_Box_Duration_0776c1ca<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<Box<perftest_flat::Duration>, __JniErr> {
+    Ok({
+        let __inner = {
+            let __inner_s0 = jlong_to_u64_4384a5d6(env, v)?;
+            let __inner_s1 = u64_to_Duration_7c0845f9(env, __inner_s0)
+                .map_err(|__e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string()))?;
+            __inner_s1
+        };
+        ::std::boxed::Box::new(__inner)
+    })
 }
 #[allow(
     non_snake_case,
@@ -13178,6 +13317,48 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_blobValueNew<'a>
                 &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedDurationEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let value = match jlong_to_Box_Duration_0776c1ca(&mut env, &value) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::boxed_duration_echo(value);
+    match Box_Duration_to_jlong_0776c1ca(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
         }
     }
 }
@@ -22818,6 +22999,8 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_wrappedFieldsSum
     w_boxed_value: jni::sys::jlong,
     w_plain_present: jni::sys::jboolean,
     w_plain_value: jni::sys::jlong,
+    w_boxed_enum: jni::sys::jint,
+    w_plain_enum: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
@@ -22884,10 +23067,43 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_wrappedFieldsSum
     } else {
         ::core::option::Option::None
     };
+    let __flat_w_boxed_enum = match jint_to_Box_Priority_a16653ae(
+        &mut env,
+        &w_boxed_enum,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __flat_w_plain_enum = match jint_to_Priority_447102d2(&mut env, &w_plain_enum) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
     let __flat_w = perftest_flat::WrappedFields {
         id: __flat_w_id,
         boxed: __flat_w_boxed,
         plain: __flat_w_plain,
+        boxed_enum: __flat_w_boxed_enum,
+        plain_enum: __flat_w_plain_enum,
     };
     let w = __flat_w;
     let __out = perftest_flat::wrapped_fields_sum(w);

@@ -245,7 +245,11 @@ impl Declarations {
                 return Some(c);
             }
         }
-        None
+        // 4. Last resort: the spelling differs from something convertible only
+        //    by the wrappers the model erased. Dual of the input side's step 4,
+        //    and reached the same way — after every layer arm, so nothing that
+        //    resolves today changes route (#309).
+        self.output_transparent_bridge(ty, registry)
     }
 }
 

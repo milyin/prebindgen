@@ -1635,6 +1635,8 @@ public fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): L
         w.boxed ?: 0L,
         w.plain != null,
         w.plain ?: 0L,
+        w.boxedEnum.value,
+        w.plainEnum.value,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2055,6 +2057,22 @@ public fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): UL
     val __ret = CovNative.durationOptional(value?.toLong() ?: -1L, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret.let { if (it == -1L) null else it.toULong() }
+}
+
+/**
+ * A transparent wrapper over a **`convert!`-declared** type, both directions.
+ *
+ * `Duration` reaches its Rust value through a staged chain
+ * (`jlong -> u64 -> Duration`), and the transparent bridge used to call the
+ * inner converter's function directly and leave `pre_stages` empty — so the
+ * stages were skipped and the rebuild put `Box::new` around a `u64`. Not a
+ * silent wrong value: `E0308` in the generated crate (#309).
+ */
+public fun boxedDurationEcho(value: ULong, onError: JniErrorHandler<ULong>): ULong {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.boxedDurationEcho(value.toLong(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret.toULong()
 }
 
 /**
