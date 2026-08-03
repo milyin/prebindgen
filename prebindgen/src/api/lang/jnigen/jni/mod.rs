@@ -107,9 +107,9 @@ pub(crate) struct EnumConfig {}
 /// of [`DeclaredKind::Sealed`], which is what marks a `#[prebindgen]`
 /// **data-carrying** enum as mirrored by a
 /// Kotlin `sealed interface`. The tag/leaf-group structure itself is read
-/// from the source enum through the neutral
-/// [`SumSpec`](crate::api::core::types_util::SumSpec) — only what the
-/// declaration adds lives here.
+/// from the model's [`Variant`](crate::api::core::flat::Variant) — its
+/// `alternatives` in declaration order, indexed as they are tagged — and only
+/// what the declaration adds lives here.
 #[derive(Clone, Default)]
 pub(crate) struct SumConfig {
     /// Per-variant Kotlin class-name overrides, keyed by the Rust variant

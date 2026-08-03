@@ -43,8 +43,8 @@
 // This tier lands before its consumers: Stage 3 (#193) rewrites the emitters
 // that produce plan-carried expressions, and #199 migrates the rest. Until
 // then the AST is exercised by its own tests and by nothing else — the same gap
-// `SumSpec` and Tier 0 carry, and it closes with the first emitter that builds
-// a tree instead of a string.
+// Tier 0 carries, and it closes with the first emitter that builds a tree
+// instead of a string.
 #![allow(dead_code)]
 
 use std::collections::{BTreeSet, HashMap};

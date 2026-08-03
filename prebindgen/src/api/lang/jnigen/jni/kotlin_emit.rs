@@ -423,17 +423,6 @@ impl Declarations {
     }
 }
 
-/// Kotlin property name of one sum payload field: a named field keeps its
-/// (camelCased) name, a tuple field becomes `v0`, `v1`, …. Derived from the
-/// neutral [`SumField`](crate::api::core::types_util::SumField)'s `member`,
-/// so core's leaf naming and the Kotlin surface cannot drift apart.
-fn sum_field_property_name(field: &crate::api::core::types_util::SumField) -> String {
-    match &field.member {
-        syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
-        syn::Member::Unnamed(i) => format!("v{}", i.index),
-    }
-}
-
 /// Slot name of one variant field in the flattened `fromParts` signature:
 /// `<variantCamel>_<property>` (`periodicQueries_period`, `pair_v0`) — the
 /// existing nested-prefix convention, with `_` marking the variant boundary
@@ -513,8 +502,8 @@ impl Declarations {
     /// Emit one Kotlin `sealed interface` per `sealed_class`-declared type —
     /// the surface of a sum where the target language has sums natively.
     ///
-    /// The shape follows the neutral
-    /// [`SumSpec`](crate::api::core::types_util::SumSpec) directly: a variant
+    /// The shape follows the model's own
+    /// [`Variant`](crate::api::core::flat::Variant) directly: an alternative
     /// with an empty leaf group becomes a `data object`, one with a payload a
     /// `data class`, both **nested inside** the interface so variant names
     /// cannot collide package-wide. The `fromParts(tag, …slots)` companion is
@@ -529,8 +518,6 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
     ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
-        use crate::api::core::types_util::SumSpec;
-
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -568,12 +555,11 @@ impl Declarations {
                 unreachable!("asserted just above")
             };
 
-            let spec = SumSpec::from_item_enum(&sum.origin.syntax);
             // Every declared `.variant(...)` must name a real variant —
             // a typo would otherwise silently do nothing.
             for declared in sum_cfg.variant_names.keys() {
                 assert!(
-                    spec.variants.iter().any(|v| v.ident == declared),
+                    sum.alternatives.iter().any(|a| a.name == *declared),
                     "sealed_class!({ident}): variant!({declared}) does not name a variant of \
                      `{ident}`"
                 );
@@ -583,7 +569,7 @@ impl Declarations {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            let mut class = self.build_sealed_class(registry, &class_name, sum, &spec, sum_cfg);
+            let mut class = self.build_sealed_class(registry, &class_name, sum, sum_cfg);
             let mut file = kt::KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
@@ -605,12 +591,11 @@ impl Declarations {
         registry: &Registry<KotlinMeta>,
         class_name: &str,
         sum: &crate::api::core::flat::Variant,
-        spec: &crate::api::core::types_util::SumSpec,
         sum_cfg: &SumConfig,
     ) -> KtClass {
-        // `SumSpec` owns the leaf-NAMING convention, which is jnigen's own; the
-        // payload TYPES come from the element beside it. Same split #278 drew
-        // in `synth_sum_leaves`.
+        // Everything below comes off the element: `alternatives` for the
+        // classes, `Field::member()` for the property names. The docs and the
+        // framework line are spelling, so they read `origin.syntax`.
         let item_enum = &sum.origin.syntax;
         let framework_line = format!(
             "JVM-side surface for the native Rust `{}` sum: exactly one alternative is live.",
@@ -625,9 +610,9 @@ impl Declarations {
             .kdoc(kdoc);
 
         // Nested variant classes, in declaration (tag) order.
-        for (variant, alt) in spec.variants.iter().zip(&sum.alternatives) {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
-            let mut vclass = if variant.is_unit() {
+        for alt in &sum.alternatives {
+            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
+            let mut vclass = if alt.is_empty() {
                 KtClass::new(ClassKind::DataObject, &vname)
             } else {
                 KtClass::new(ClassKind::Data, &vname)
@@ -639,10 +624,9 @@ impl Declarations {
                 vclass = vclass.kdoc(doc);
             }
             let mut vprops: Vec<(String, KtType)> = Vec::new();
-            for (field, alt_field) in variant.fields.iter().zip(alt.fields.iter()) {
-                let prop = sum_field_property_name(field);
-                let ty =
-                    self.sum_payload_kt_type(registry, &sum.name, &variant.ident, &prop, alt_field);
+            for field in &alt.fields {
+                let prop = sum_field_prop_name(&field.member());
+                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
                 vprops.push((prop.clone(), ty.clone()));
                 vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
             }
@@ -665,30 +649,29 @@ impl Declarations {
             .annotation("JvmStatic")
             .param(KtParam::new("tag", KtType::int()))
             .returns(KtType::cls(class_name));
-        for (variant, alt) in spec.variants.iter().zip(&sum.alternatives) {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
-            for (field, alt_field) in variant.fields.iter().zip(alt.fields.iter()) {
-                let prop = sum_field_property_name(field);
-                let ty =
-                    self.sum_payload_kt_type(registry, &sum.name, &variant.ident, &prop, alt_field);
+        for alt in &sum.alternatives {
+            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
+            for field in &alt.fields {
+                let prop = sum_field_prop_name(&field.member());
+                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
                 factory = factory.param(KtParam::new(sum_slot_name(&vname, &prop), ty));
             }
         }
         let mut body = Code::new();
         body = body.blk("when (tag) {", |mut w| {
-            for variant in &spec.variants {
-                let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
-                let args: Vec<String> = variant
+            for alt in &sum.alternatives {
+                let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
+                let args: Vec<String> = alt
                     .fields
                     .iter()
-                    .map(|f| sum_slot_name(&vname, &sum_field_property_name(f)))
+                    .map(|f| sum_slot_name(&vname, &sum_field_prop_name(&f.member())))
                     .collect();
-                let ctor = if variant.is_unit() {
+                let ctor = if alt.is_empty() {
                     vname
                 } else {
                     format!("{vname}({})", args.join(", "))
                 };
-                w = w.line(format!("{} -> {ctor}", variant.tag));
+                w = w.line(format!("{} -> {ctor}", alt.index));
             }
             w.line(format!(
                 "else -> throw IllegalArgumentException(\"{class_name}: invalid tag $tag\")"
@@ -1421,8 +1404,6 @@ impl Declarations {
         names: &[String],
         imports: &mut BTreeSet<String>,
     ) -> (String, String) {
-        use crate::api::core::types_util::SumSpec;
-
         let key = TypeKey::from_type(source);
         let iface_fqn = self
             .kotlin_fqn(&key)
@@ -1430,32 +1411,36 @@ impl Declarations {
         let iface_short = register_fqn(&iface_fqn, imports);
         let ident = bare_path_ident(source)
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
-        let item_enum = registry
-            .flat()
-            .enum_item(&ident)
-            .unwrap_or_else(|| panic!("sum builder: no indexed enum `{ident}`"));
+        let Some(crate::api::core::flat::Type::Variant(sum)) =
+            registry.flat().declared_type(&ident)
+        else {
+            panic!("sum builder: `{ident}` is not an indexed sum")
+        };
         let sum_cfg = self.types[&key]
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
-        let spec = SumSpec::from_item_enum(item_enum);
         let tag = &names[0];
 
         let mut arms: Vec<String> = Vec::new();
-        for variant in &spec.variants {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+        for alt in &sum.alternatives {
+            let group = alt.index as i32;
+            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
             let args: Vec<String> = leaves
                 .iter()
                 .zip(params)
                 .zip(names)
-                .filter(|((l, _), _)| l.group == Some(variant.tag))
+                .filter(|((l, _), _)| l.group == Some(group))
                 .map(|((l, p), n)| self.sum_ctor_arg(registry, l, p, n, imports))
                 .collect();
+            // Kotlin has no `B()` / `B {}` distinction to keep: a payload-less
+            // alternative is a `data object`, named bare. The Rust side is where
+            // the delimiters matter, and `Alternative::spell` owns them there.
             let ctor = if args.is_empty() {
                 format!("{iface_short}.{vname}")
             } else {
                 format!("{iface_short}.{vname}({})", args.join(", "))
             };
-            arms.push(format!("{} -> {ctor}", variant.tag));
+            arms.push(format!("{group} -> {ctor}"));
         }
         // A NULLABLE selector carries the absent case of a conditional value
         // form: null in means null out. Without this arm the `when` would fall
