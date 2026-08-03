@@ -1702,3 +1702,77 @@ fn a_raw_named_sum_generates() {
         "the sum encoder matches the raw-named enum by its real path:\n{rust}"
     );
 }
+
+/// A payload-less alternative keeps its own delimiters in the output match.
+///
+/// The arm builder branched on `variant.fields.first()`, so an alternative with
+/// no fields took the `None` arm and was spelled bare — `myflat::Shape::Parens`
+/// for `Parens()`, which is **E0533**: a zero-field tuple or struct variant
+/// still needs its delimiters in pattern position. An empty alternative has no
+/// first field to branch on, exactly as the empty struct in #302 had no field to
+/// refuse.
+///
+/// `Alternative::spell` is the one place those delimiters are chosen — its own
+/// doc says "for match patterns and constructors alike, in either direction" —
+/// and this is the pattern half of that sentence.
+#[test]
+fn empty_sum_alternatives_keep_their_own_pattern_delimiters() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Shape {
+                    Bare,
+                    Parens(),
+                    Braces {},
+                    Full(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn make_shape() -> Shape {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Shape))
+                .fun(crate::fun!(make_shape)),
+        );
+
+    let dir = unique_test_dir("jnigen_empty_sum_alternatives");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+
+    // Each alternative is matched with the delimiters Rust demands for it.
+    assert!(
+        rc.contains("myflat::Shape::Bare=>"),
+        "a unit alternative is matched bare:\n{rust}"
+    );
+    assert!(
+        rc.contains("myflat::Shape::Parens()=>"),
+        "an empty TUPLE alternative keeps its parens:\n{rust}"
+    );
+    assert!(
+        rc.contains("myflat::Shape::Braces{}=>"),
+        "an empty STRUCT alternative keeps its braces:\n{rust}"
+    );
+    // And the bare spelling must not appear for the two that cannot take it.
+    assert!(
+        !rc.contains("myflat::Shape::Parens=>") && !rc.contains("myflat::Shape::Braces=>"),
+        "neither empty alternative may be matched bare:\n{rust}"
+    );
+}

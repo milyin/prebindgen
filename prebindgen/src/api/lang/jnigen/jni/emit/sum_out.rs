@@ -239,20 +239,23 @@ pub(crate) fn encode_sum_group(
         .expect("a sum plan carries its selector leaf");
     let tag_id = &obj_idents[tag_idx];
     // A unit variant contributes no leaf, so the arm list is driven by the
-    // enum's own variants, not by the grouped leaves.
-    let item_enum = registry.flat().enum_item(&ident).unwrap_or_else(|| {
-        panic!("jnigen sum unfold: no indexed enum `{ident}` for the decomposed sum")
-    });
-    let spec = crate::api::core::types_util::SumSpec::from_item_enum(item_enum);
+    // enum's own alternatives, not by the grouped leaves. `enum_item` hands
+    // back only the `syn::ItemEnum`, deliberately — a consumer that acts on the
+    // Variant/Enum distinction asks `declared_type` (#289).
+    let Some(crate::api::core::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
+    else {
+        panic!("jnigen sum unfold: no indexed sum `{ident}` for the decomposed sum")
+    };
 
-    let arms: Vec<TokenStream> = spec
-        .variants
+    let arms: Vec<TokenStream> = sum
+        .alternatives
         .iter()
-        .map(|variant| {
+        .map(|alt| {
+            let tag = alt.index as i32;
             let group: Vec<usize> = leaves
                 .iter()
                 .enumerate()
-                .filter(|(_, l)| l.group == Some(variant.tag))
+                .filter(|(_, l)| l.group == Some(tag))
                 .map(|(i, _)| i)
                 .collect();
             let binds: Vec<syn::Ident> = group
@@ -260,20 +263,21 @@ pub(crate) fn encode_sum_group(
                 .enumerate()
                 .map(|(k, _)| format_ident!("__sv{}", k))
                 .collect();
-            let vident = &variant.ident;
-            let pattern = match variant.fields.first().map(|f| &f.member) {
-                None => quote!(#source::#vident),
-                Some(syn::Member::Named(_)) => {
-                    let pairs = variant.fields.iter().zip(&binds).map(|(f, b)| {
-                        let syn::Member::Named(n) = &f.member else {
-                            unreachable!("variant field shapes are uniform")
-                        };
-                        quote!(#n: #b)
-                    });
-                    quote!(#source::#vident { #(#pairs),* })
-                }
-                Some(syn::Member::Unnamed(_)) => quote!(#source::#vident(#(#binds),*)),
-            };
+            let vident = &alt.name;
+            // The alternative's OWN delimiters, from the one place that chooses
+            // them — for match patterns and constructors alike. Branching on
+            // `fields.first()` could not answer this: an empty alternative has
+            // no first field, so `enum E { B() }` and `enum E { B {} }` both
+            // matched the `None` arm and emitted the bare `E::B`, which is
+            // E0533 in pattern position. Same shape as the empty struct that
+            // emitted `Unit {}` in #302.
+            let parts: Vec<TokenStream> = alt
+                .fields
+                .iter()
+                .zip(&binds)
+                .map(|(f, b)| f.bind(b))
+                .collect();
+            let pattern = alt.spell(quote!(#source::#vident), &parts);
             // The live group: convert each payload through its own output
             // converter, exactly as a struct field of the same type would be.
             let live: TokenStream = group
@@ -299,7 +303,7 @@ pub(crate) fn encode_sum_group(
                     quote! { #id = #d; }
                 })
                 .collect();
-            let tag_lit = proc_macro2::Literal::i32_unsuffixed(variant.tag);
+            let tag_lit = proc_macro2::Literal::i32_unsuffixed(tag);
             // A nullable selector rides an OBJECT slot (its absent case is JVM
             // null, which a raw `jint` has no room for), so the live tag boxes
             // like any other nullable primitive leaf.
