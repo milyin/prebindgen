@@ -456,8 +456,16 @@ pub(crate) fn reach_leaf_flat(
     // somewhere to go. This derivation has none — it yields a plain Rust value,
     // not a `JObject` that could be null — so the shape is refused here rather
     // than composed into code that cannot type-check in the consumer's crate.
+    //
+    // Asked of the leaf's OWN path, not of `path`. The caller may hand a
+    // suffix: `wrapper.rs` rebases onto a hoisted local, and `Hoisted::innermost`
+    // strips the prefix that bound it — including any optional step inside it.
+    // Checking the parameter would therefore pass exactly when the hoist is the
+    // conditional one, which is the case that cannot compose (an `Option<T>`
+    // local with a field read hung off it). The full path is what the shape
+    // question is about.
     assert!(
-        !path.iter().rev().skip(1).any(PathStep::is_optional),
+        !leaf.path.iter().rev().skip(1).any(PathStep::is_optional),
         "jnigen unfold: leaf `{}` reaches through an optional step but is \
          delivered as a single return value, which has no `None` arm — this \
          shape needs callback delivery",
@@ -475,17 +483,21 @@ pub(crate) fn reach_leaf_flat(
     //   so ownership is the enclosing form's: only a consuming one gives its
     //   fields away.
     //
-    // A trailing `Option` step cannot arrive here at all: return delivery has
-    // no `None` arm for the absent case, so a nullable leaf is routed to
-    // callback delivery when the plan picks its `Delivery` — see
-    // `single_return` in `core/unfold.rs`. `is_plain_field` is what that rules
-    // out, and it stays as the local statement of the same fact.
+    // How to project that place is `steps_are_movable`'s question, and it is
+    // asked there rather than restated here. This used to spell it
+    // `all(is_plain_field)`, defending the restatement on the grounds that a
+    // trailing `Option` cannot reach return delivery anyway — true, and enforced
+    // in `single_return` (`core/unfold.rs`), which is precisely why a local
+    // restatement could disagree with the rule for as long as the invariant held
+    // somewhere else. `plan.rs` says two readings would drift and the
+    // disagreement would be a borrow handed to an owning converter; this is the
+    // second reading, removed.
     let reached_is_ours = if leaf.identity {
         !matches!(leaf.out_ty.syntax(), syn::Type::Reference(_))
     } else {
         consuming
     };
-    if reached_is_ours && path.iter().all(PathStep::is_plain_field) {
+    if reached_is_ours && steps_are_movable(path) {
         let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
         return quote!(#base #(.#segs)*);
     }
@@ -1401,4 +1413,96 @@ pub(crate) fn leaf_ty_is_prim(registry: &impl Conversions<KotlinMeta>, out_ty: &
         Some(p) => matches!(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
     };
     proj_ok && matches!(jni_field_access(&entry.destination), Some((_, _, false)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::core::unfold::{LeafSource, UnfoldLeaf};
+    /// A `TypeRef` through the model. `Flat::classify` is sealed to `api::core`
+    /// (#280), so a test under `api::lang` asks the sanctioned probe helper
+    /// rather than reaching around the seal — which is the seal working.
+    use crate::api::test_util::reading as tref;
+
+    fn leaf(out_ty: syn::Type, path: Vec<PathStep>, identity: bool) -> UnfoldLeaf {
+        UnfoldLeaf {
+            name: "probe".to_string(),
+            path,
+            out_ty: tref(out_ty),
+            identity,
+            nullable: false,
+            source: LeafSource::Field,
+            group: None,
+        }
+    }
+
+    fn qualify(id: &syn::Ident) -> syn::Path {
+        syn::parse_quote!(myflat::#id)
+    }
+
+    /// `reach_leaf_flat` projects the place `steps_are_movable` says is movable
+    /// — the two are one rule, not two readings of one.
+    ///
+    /// The trailing-optional path is the case that discriminates: it IS movable
+    /// (a `None` arm still hands the whole `Option` over by value), and the
+    /// `all(is_plain_field)` restatement this replaced called it not-movable.
+    /// Where the plan had already granted an owned `out_ty` on the strength of
+    /// `steps_are_movable`, that disagreement is a borrow reaching an owning
+    /// converter — `plan.rs`'s stated hazard, and PR#221's P1.
+    #[test]
+    fn a_movable_place_is_projected_as_a_move() {
+        for path in [
+            vec![PathStep::field(syn::parse_quote!(a), false)],
+            vec![
+                PathStep::field(syn::parse_quote!(a), false),
+                PathStep::field(syn::parse_quote!(b), false),
+            ],
+            // Movable by `steps_are_movable`; NOT by `all(is_plain_field)`.
+            vec![
+                PathStep::field(syn::parse_quote!(a), false),
+                PathStep::field(syn::parse_quote!(b), true),
+            ],
+        ] {
+            assert!(steps_are_movable(&path), "fixture must be movable");
+            let l = leaf(syn::parse_quote!(Owned), path.clone(), true);
+            let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+            assert!(
+                !got.contains('&') && !got.contains("clone"),
+                "a movable place is moved, not borrowed or cloned — got `{got}`"
+            );
+        }
+    }
+
+    /// A borrow stays a borrow: an identity leaf whose `out_ty` is a reference
+    /// did not own what it reached, whatever the path shape says.
+    #[test]
+    fn a_borrowed_out_ty_is_never_moved() {
+        let path = vec![PathStep::field(syn::parse_quote!(a), false)];
+        let l = leaf(syn::parse_quote!(&Owned), path.clone(), true);
+        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        assert!(
+            got.contains('&'),
+            "a borrowed out_ty keeps its borrow — got `{got}`"
+        );
+    }
+
+    /// The optional-step guard asks the LEAF's path, not the caller's slice.
+    ///
+    /// `wrapper.rs` rebases onto a hoisted local and hands over the remaining
+    /// suffix, so checking the parameter would pass exactly when the hoist is
+    /// the conditional one — an `Option<T>` local with a field read hung off it,
+    /// which cannot compose. Passing the suffix here mimics that rebase.
+    #[test]
+    #[should_panic(expected = "which has no `None` arm")]
+    fn an_optional_step_in_a_stripped_prefix_is_still_refused() {
+        let full = vec![
+            PathStep::call(syn::parse_quote!(get_it), true, false),
+            PathStep::field(syn::parse_quote!(a), false),
+        ];
+        let l = leaf(syn::parse_quote!(Owned), full, false);
+        // The suffix a rebase would hand over — the optional call is gone from
+        // it, and used to take the guard with it.
+        let rest = vec![PathStep::field(syn::parse_quote!(a), false)];
+        let _ = reach_leaf_flat(&qualify, &l, &rest, quote!(__vf0), false, false);
+    }
 }
