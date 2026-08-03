@@ -2116,6 +2116,80 @@ impl Declarations {
     /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
     /// `t1` = its captured inner): the built-in `&`/`Option<&>`/`Vec`/`Option`
     /// handlers.
+    /// The **outbound** half of [`Self::input_transparent_bridge`], and the same
+    /// last resort: a spelling whose only difference from something this adapter
+    /// can already convert is the transparent wrappers over it.
+    ///
+    /// It had no twin, so an erased wrapper resolved inbound and not outbound —
+    /// `Box<Priority>` was a parameter this binding could take and a return it
+    /// could not give, for a wrapper the model exists to make invisible (#309).
+    /// The one arm covers `Box<Handle>`, `Box<enum>` and `Box<DataClass>` alike,
+    /// because [`Self::output_terminal`] misses all three the same way: it keys
+    /// on the SPELLING, and no config sits under `Box < Priority >`.
+    ///
+    /// The wrappers come **off** here rather than going on, which is the whole
+    /// difference:
+    ///
+    /// ```text
+    /// input : let __inner = <inner>(env, v)?;      build_through_erased_wrappers(__inner)
+    /// output: let __inner = read_through(v);       <inner>(env, __inner)
+    /// ```
+    ///
+    /// Everything else is direction-independent — `subs`, `destination`,
+    /// `niches`, `metadata` all mean the same thing either way, and inheriting
+    /// the inner's metadata is what keeps `Box<Priority>` presenting as the
+    /// Kotlin enum class instead of losing it behind the wrapper.
+    pub(crate) fn output_transparent_bridge(
+        &self,
+        reading: &crate::api::core::flat::TypeRef,
+        registry: &impl Conversions<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        if reading.erased_wrappers().is_empty() {
+            return None;
+        }
+        let produced = reading.syntax();
+        let stripped = reading.stripped_syntax();
+        // A wrapper over a **borrow** is refused here too, and outbound the
+        // reason is its own: a borrow's output route is the clone-into-a-fresh-
+        // handle arm, which hands back a wire built from a reference — there is
+        // no owned value to read the wrapper off. Inbound the same guard is
+        // about `E0106`; the shapes coincide, the reasons do not.
+        //
+        // Asked of the MODEL: an erasure is transparent, so `Box<&T>` already
+        // classifies as `Ref` and nothing here matches a `syn` variant.
+        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Ref { .. }) {
+            return None;
+        }
+        // It has to be a type this binding already crosses; if it is not, the
+        // ordinary "unresolved" diagnostic names it, which is the better error.
+        let inner = registry.reading_of(&stripped)?;
+        let entry = registry.output_entry(&inner)?;
+        let wire = entry.destination.clone();
+        // Take the wrappers off what the caller handed us. `None` is `Cow`'s
+        // policy refusal — the crossing then stays unresolved and names the
+        // type, rather than resolving and emitting Rust the consumer cannot
+        // build.
+        let read = read_through_erased_wrappers(reading, quote!(v))?;
+        // The inner's COMPLETE chain, stages included: a `convert!` type reaches
+        // its wire through them.
+        let inner_call =
+            crate::api::lang::jnigen::jni::emit::composed_inner_output(entry, quote!(__inner));
+        let body: syn::Expr = syn::parse_quote!({
+            let __inner = #read;
+            #inner_call
+        });
+        Some(ConverterImpl {
+            subs: vec![stripped],
+            pre_stages: vec![],
+            function: self.build_output_fn(produced, &wire, &body, None),
+            destination: wire,
+            niches: entry.niches.clone(),
+            // The surface is the inner type's — a wrapper is invisible to the
+            // destination language, which is why the model erases it.
+            metadata: entry.metadata.clone(),
+        })
+    }
+
     /// **Last resort**: a spelling whose only difference from something this
     /// adapter can already convert is the transparent wrappers over it.
     ///
