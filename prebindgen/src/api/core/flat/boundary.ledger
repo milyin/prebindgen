@@ -137,10 +137,9 @@
 3	api/lang/cbindgen/convert.rs
 3	api/lang/cbindgen/emit.rs
 6	api/lang/cbindgen/trait_impl.rs
-2	api/lang/jnigen/jni/builder.rs
 1	api/lang/jnigen/jni/emit/callback.rs
 7	api/lang/jnigen/jni/emit/delivery.rs
-8	api/lang/jnigen/jni/emit/flat_input.rs
+2	api/lang/jnigen/jni/emit/flat_input.rs
 1	api/lang/jnigen/jni/emit/struct_out.rs
 1	api/lang/jnigen/jni/emit/wrapper.rs
 4	api/lang/jnigen/jni/fn_plan.rs
@@ -150,9 +149,9 @@
 1	api/lang/jnigen/jni/render.rs
 8	api/lang/jnigen/jni/selector.rs
 3	api/lang/jnigen/jni/struct_plan.rs
-17	api/lang/jnigen/jni/trait_impl.rs
+16	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 91
+# total escapes: types: 82
 
 ## escapes: items
 1	api/core/prebindgen.rs

@@ -115,7 +115,7 @@ pub(crate) fn synth_value_struct_leaves(
         // non-optional (recurse); `Option`/`Vec`-wrapped nesting is deferred
         // to the whole-value path.
         let probe = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-        let nested = match ext.type_kind(registry, &probe) {
+        let nested = match ext.type_kind(registry, &TypeKey::from_type(&probe)) {
             // A sum joins the kinds this fixed builder cannot forward: it has
             // no single leaf and no converter of its own — it crosses as a tag
             // plus one group per variant, which only the whole-value

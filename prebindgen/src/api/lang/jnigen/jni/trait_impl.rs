@@ -1416,7 +1416,7 @@ impl Declarations {
             // A `data_class` is a registered type that is neither an opaque
             // handle nor an enum.
             let is_data_class = matches!(
-                self.type_kind(registry, reading.as_syn()),
+                self.type_kind(registry, &reading.key()),
                 TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
             );
             if !is_data_class {
@@ -1657,7 +1657,10 @@ impl Prebindgen for Declarations {
             if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
                 if let Some(ok) = crate::api::core::types_util::result_ok_type(ret) {
                     let core = crate::api::core::types_util::peel_ref_option_vec(&ok);
-                    if matches!(self.type_kind(binding, &core), TypeKind::Sum) {
+                    if matches!(
+                        self.type_kind(binding, &TypeKey::from_type(&core)),
+                        TypeKind::Sum
+                    ) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
                              supported in the success position of a fallible return. A sum \
@@ -1695,7 +1698,12 @@ impl Prebindgen for Declarations {
                         .return_expand_decls
                         .iter()
                         .any(|d| d.key == TypeKey::from_type(&err_ty));
-                    if !declared && matches!(self.type_kind(binding, &core), TypeKind::Sum) {
+                    if !declared
+                        && matches!(
+                            self.type_kind(binding, &TypeKey::from_type(&core)),
+                            TypeKind::Sum
+                        )
+                    {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
                              but nothing decomposes it in the error position, so it would be \
@@ -1742,7 +1750,10 @@ impl Prebindgen for Declarations {
                         syn::Type::Reference(r) => (*r.elem).clone(),
                         other => other.clone(),
                     };
-                    if matches!(self.type_kind(binding, &elem), TypeKind::Sum) {
+                    if matches!(
+                        self.type_kind(binding, &TypeKey::from_type(&elem)),
+                        TypeKind::Sum
+                    ) {
                         return Err(format!(
                             "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
                              is not supported as a callback argument. A sum crosses as a tag \

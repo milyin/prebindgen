@@ -648,7 +648,7 @@ fn sum_is_its_own_type_kind() {
         .package(crate::package!().class(crate::sealed_class!(Reading)));
     let ty: syn::Type = syn::parse_quote!(Reading);
     assert!(matches!(
-        jni.decls.type_kind(&registry, &ty),
+        jni.decls.type_kind(&registry, &TypeKey::from_type(&ty)),
         crate::api::lang::jnigen::jni::classify::TypeKind::Sum
     ));
     let cfg = jni
