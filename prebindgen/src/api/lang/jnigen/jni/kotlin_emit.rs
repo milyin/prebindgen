@@ -1293,7 +1293,7 @@ impl Declarations {
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
             registry,
-            plan.source.as_syn(),
+            &plan.source.key(),
             &plan.leaves,
             &spec.params,
             &names,
@@ -1332,7 +1332,7 @@ impl Declarations {
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
             registry,
-            plan.source.as_syn(),
+            &plan.source.key(),
             &plan.leaves,
             &spec.params[1..],
             &names[1..],
@@ -1371,25 +1371,28 @@ impl Declarations {
     pub(crate) fn sum_reconstruct(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-        source: &syn::Type,
+        // The sum's **identity**: every use of `source` here was
+        // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
+        // identifier IS the ident — the same reduction `type_kind` made.
+        key: &TypeKey,
         leaves: &[crate::api::core::unfold::UnfoldLeaf],
         params: &[crate::api::lang::jnigen::jni::IfaceParam],
         names: &[String],
         imports: &mut BTreeSet<String>,
     ) -> (String, String) {
-        let key = TypeKey::from_type(source);
         let iface_fqn = self
-            .kotlin_fqn(&key)
+            .kotlin_fqn(key)
             .unwrap_or_else(|| panic!("sum builder: no Kotlin FQN for {key}"));
         let iface_short = register_fqn(&iface_fqn, imports);
-        let ident = bare_path_ident(source)
+        let ident = key
+            .ident()
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
         let Some(crate::api::core::flat::Type::Variant(sum)) =
             registry.flat().declared_type(&ident)
         else {
             panic!("sum builder: `{ident}` is not an indexed sum")
         };
-        let sum_cfg = self.types[&key]
+        let sum_cfg = self.types[key]
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
         let tag = &names[0];
