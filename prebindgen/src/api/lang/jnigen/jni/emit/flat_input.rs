@@ -755,7 +755,9 @@ pub(crate) enum FlatFieldNode {
         /// target. There is no reading here to ask — `FlatFieldNode` is an
         /// emission IR and tokens are what it is for — so the answer travels
         /// from where the reading was (#289).
-        direct_handle: Option<Box<syn::Type>>,
+        /// The handle type a leaf reconstructs by `Box::from_raw` — the
+        /// reading, spelled at the emit site like every other generated type.
+        direct_handle: Option<Box<crate::api::core::flat::TypeRef>>,
         optional_handle: bool,
         rust_ty: Box<crate::api::core::flat::TypeRef>,
         /// The transparent wrappers this field's spelling adds over its
@@ -1473,14 +1475,10 @@ fn build_flat_struct_node(
         // could (#273).
         let field_optional = field.ty.optional_inner().is_some();
         let nested = field.ty.optional_inner().unwrap_or(&field.ty);
-        let nested_ty = nested.as_syn().clone();
         // A data-carrying enum flattens into a tag plus one group per variant.
         // `None` means some payload is not leaf-shaped — fall through and let
         // it cross as one object through its own converter.
-        if matches!(
-            ext.type_kind(registry, &TypeKey::from_type(&nested_ty)),
-            TypeKind::Sum
-        ) {
+        if matches!(ext.type_kind(registry, &nested.key()), TypeKind::Sum) {
             if let Some(node) = build_flat_sum_field(
                 ext,
                 registry,
@@ -1500,7 +1498,7 @@ fn build_flat_struct_node(
         if let TypeKind::DataStruct {
             st: child,
             cfg: Some(cfg),
-        } = ext.type_kind(registry, &TypeKey::from_type(&nested_ty))
+        } = ext.type_kind(registry, &nested.key())
         {
             if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
                 let child_optional = field_optional;
@@ -1648,7 +1646,7 @@ fn build_flat_struct_node(
                         field: fident,
                         value_leaf: value_index,
                         present_leaf: None,
-                        direct_handle: Some(Box::new(nested.as_syn().clone())),
+                        direct_handle: Some(Box::new(nested.clone())),
                         optional_handle,
                         rust_ty: Box::new(field.ty.clone()),
                         wrappers: field.ty.erased_wrappers(),
@@ -1940,6 +1938,7 @@ fn render_flat_struct_node(
                         .expect("a field spelling the plan accepted is buildable")
                 };
                 if let Some(target) = direct_handle {
+                    let target_ty = target.spell();
                     if *optional_handle {
                         let gated = wrap(quote! {
                             if #wire == 0 {
@@ -1950,7 +1949,7 @@ fn render_flat_struct_node(
                                     return #on_err;
                                 }
                                 ::core::option::Option::Some(unsafe {
-                                    *::std::boxed::Box::from_raw(#wire as *mut #target)
+                                    *::std::boxed::Box::from_raw(#wire as *mut #target_ty)
                                 })
                             }
                         });

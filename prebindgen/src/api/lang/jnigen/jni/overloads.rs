@@ -62,7 +62,7 @@ impl Declarations {
             if decl.no_split || decl.variants.len() < 2 {
                 continue;
             }
-            let target = decl.rust_type.as_syn().clone();
+            let target = decl.rust_type.key();
             let sigs: Vec<(String, Vec<ErasedJvmType>)> = decl
                 .variants
                 .iter()
@@ -110,7 +110,7 @@ impl Declarations {
 fn arm_erased_sig(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    target: &syn::Type,
+    target: &TypeKey,
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
     match ctor {
@@ -118,11 +118,20 @@ fn arm_erased_sig(
             Some(f) => f
                 .params
                 .iter()
-                .map(|p| rust_type_erased(ext, registry, p.ty.as_syn()))
+                .map(|p| rust_type_erased(ext, registry, &p.ty))
                 .collect(),
             None => Vec::new(),
         },
-        None => vec![rust_type_erased(ext, registry, target)],
+        // The identity, because the two callers reach it differently: one holds
+        // a plan's reading, the other a `.expand_param(...)` DECLARATION, which
+        // the build script wrote and the model may never have interned. Where
+        // it did, the reading answers as before; where it did not, the erased
+        // form is the identity's own canonical spelling — which is all a
+        // declaration has to be told apart by.
+        None => vec![match registry.reading(target) {
+            Some(reading) => rust_type_erased(ext, registry, &reading),
+            None => ErasedJvmType::raw(target.as_str().to_string()),
+        }],
     }
 }
 
@@ -135,26 +144,27 @@ fn arm_erased_sig(
 fn rust_type_erased(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    ty: &syn::Type,
+    ty: &crate::api::core::flat::TypeRef,
 ) -> ErasedJvmType {
-    let peeled = match ty {
-        syn::Type::Reference(r) => &*r.elem,
-        other => other,
+    // The spelling's own outermost borrow, as `TypeKind::Ref` — not
+    // `borrow_target`, which reaches through the erased wrappers (#S31).
+    let peeled = match ty.kind() {
+        crate::api::core::flat::TypeKind::Ref { inner, .. } => inner,
+        _ => ty,
     };
-    let key = TypeKey::from_type(peeled);
+    let key = peeled.key();
     if ext.types.get(&key).is_some_and(|c| c.name_spec.is_some()) {
         if let Some(fqn) = ext.kotlin_fqn(&key) {
             return erase_kt_type(&[], &kt::KtType::cls(fqn));
         }
     }
     if let Some(kt) = registry
-        .reading_of(peeled)
-        .and_then(|tr| registry.input_entry(&tr))
+        .input_entry(peeled)
         .and_then(|e| e.metadata.kotlin_name.clone())
     {
         return erase_kt_type(&[], &kt);
     }
-    ErasedJvmType::raw(peeled.to_token_stream().to_string())
+    ErasedJvmType::raw(peeled.spell().to_string())
 }
 
 /// Whether `plan` is a multi-variant expansion that can be turned into
@@ -435,7 +445,7 @@ pub(crate) fn render_param_overloads(
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
                     let ctor = s.plan.variants[s.arms[ai].0].ctor.as_ref();
-                    arm_erased_sig(ext, registry, s.plan.target.as_syn(), ctor)
+                    arm_erased_sig(ext, registry, &s.plan.target.key(), ctor)
                 })
                 .collect()
         })
