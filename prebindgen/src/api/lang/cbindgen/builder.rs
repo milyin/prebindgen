@@ -678,11 +678,22 @@ impl CbindgenBuilder {
     }
 
     pub(super) fn in_name(ty: &syn::Type) -> syn::Ident {
-        format_ident!("__cbg_in_{}", sanitize(&TypeKey::from_type(ty)))
+        Self::in_name_of(&TypeKey::from_type(ty))
     }
 
     pub(super) fn out_name(ty: &syn::Type) -> syn::Ident {
-        format_ident!("__cbg_out_{}", sanitize(&TypeKey::from_type(ty)))
+        Self::out_name_of(&TypeKey::from_type(ty))
+    }
+
+    /// [`Self::in_name`] off the **identity**, for a caller holding a reading
+    /// rather than a node — which is every per-field site.
+    pub(super) fn in_name_of(key: &TypeKey) -> syn::Ident {
+        format_ident!("__cbg_in_{}", sanitize(key))
+    }
+
+    /// [`Self::out_name`] off the identity. See [`Self::in_name_of`].
+    pub(super) fn out_name_of(key: &TypeKey) -> syn::Ident {
+        format_ident!("__cbg_out_{}", sanitize(key))
     }
 
     /// Config of a declared type (across the opaque/data/enum maps), by key.

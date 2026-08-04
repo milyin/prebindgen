@@ -51,7 +51,7 @@ impl CbindgenBuilder {
             registry.output_entry(&reading).is_some()
                 && self
                     .struct_fields(registry, key)
-                    .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
+                    .map(|fields| fields.iter().any(|(_, fty)| r_is_string(fty)))
                     .unwrap_or(false)
         })
     }
@@ -82,16 +82,11 @@ impl CbindgenBuilder {
     /// wrapper the model erases cannot change which declaration a payload
     /// matches. See [`Self::payload_field_wire`] for why a union payload asks
     /// this at all where a `repr_c_struct` mirror must not.
-    pub(super) fn declared_opaque_payload_inner(
-        &self,
-        fty: &syn::Type,
-        registry: &impl Conversions<()>,
-    ) -> Option<syn::Type> {
-        if opaque_ptr_payload_inner(fty).is_some() {
+    pub(super) fn declared_opaque_payload_inner(&self, fty: &TypeRef) -> Option<syn::Type> {
+        if r_boxed_inner(fty).is_some() {
             return None;
         }
-        let reading = registry.reading_of(fty)?;
-        let core = reading.optional_inner().unwrap_or(&reading);
+        let core = fty.optional_inner().unwrap_or(fty);
         self.opaque
             .contains_key(&core.stripped_key())
             .then(|| core.stripped_syntax())
@@ -120,31 +115,31 @@ impl CbindgenBuilder {
     /// `bool` parameter now share (#170).
     pub(super) fn payload_field_wire(
         &self,
-        fty: &syn::Type,
+        fty: &TypeRef,
         registry: &Registry<()>,
     ) -> Result<syn::Type, String> {
         // `String` is the one type whose two directions disagree on the wire
         // (`*const c_char` in, `*mut c_char` out), so the union field fixes the
         // OWNING form and the per-arm expressions convert by hand.
-        if is_string(fty) {
+        if r_is_string(fty) {
             return Ok(syn::parse_quote!(*mut ::core::ffi::c_char));
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(&TypeKey::from_type(fty));
+        if self.enums.contains_key(&fty.key()) {
+            let c = self.c_type_ident(&fty.key());
             return Ok(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         // `bool` is the one scalar with a restricted domain: `2` is a byte a C
         // caller can write into the union and NOT a Rust `bool`, so holding it
         // in the mirror is the same UB an out-of-range discriminant is. Same
         // remedy everywhere C writes a `bool` — see `bool_wire`.
-        if is_bool(fty) {
+        if r_is_bool(fty) {
             return Ok(bool_wire());
         }
         // A `Vec` payload needs TWO C wires (pointer + length) and one union
         // field can carry only one, so its length would be silently dropped.
         // Rejected explicitly, because the converter-destination rule below
         // would otherwise hand back the pointer alone and look like it worked.
-        if is_vec(fty) {
+        if r_is_vec(fty) {
             return Err(
                 "a `Vec` needs TWO C wires (pointer + length) and one union field carries only \
                  one, so its length would be silently dropped — hand the sequence over through \
@@ -181,7 +176,7 @@ impl CbindgenBuilder {
         // (#292). The two spellings now share this C type; their converter bodies
         // differ, which is exactly the split (`kind` decides what C sees, syntax
         // decides how the value is built).
-        if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
+        if let Some(inner) = self.declared_opaque_payload_inner(fty) {
             let c = self.c_type_ident(&TypeKey::from_type(&inner));
             return Ok(syn::parse_quote!(*mut #c));
         }
@@ -197,7 +192,7 @@ impl CbindgenBuilder {
         // legitimately differ (a `String`'s const-ness above), which is why a
         // disagreement is `None` — a rejection naming the payload — rather
         // than a silent pick of one side.
-        let out_entry = registry.reading_of(fty).and_then(|tr| registry.output_entry(&tr)).ok_or_else(|| {
+        let out_entry = registry.output_entry(fty).ok_or_else(|| {
             "no resolved OUTPUT converter — a payload crosses as its converter's destination, so \
              it must be a scalar, a `String`, or a type this binding declares (`enum_type`, \
              `data_struct`, `opaque_ptr`, or a `convert!` conversion)"
@@ -214,10 +209,7 @@ impl CbindgenBuilder {
             );
         }
         let out = out_entry.destination.clone();
-        if let Some(inp) = registry
-            .reading_of(fty)
-            .and_then(|tr| registry.input_entry(&tr))
-        {
+        if let Some(inp) = registry.input_entry(fty) {
             if TypeKey::from_type(&inp.destination) != TypeKey::from_type(&out) {
                 return Err(format!(
                     "its input and output converters disagree on the wire (`{}` in, `{}` out) \
@@ -244,12 +236,20 @@ impl CbindgenBuilder {
     /// [`::core::mem::MaybeUninit`]: one mirror struct serves both directions,
     /// and on the way in its bytes are C's, so the field may not be a Rust enum
     /// until its tag has been validated. Invisible in C either way.
-    pub(super) fn data_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
-        if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(&TypeKey::from_type(fty));
+    pub(super) fn data_field_wire(&self, fty: &TypeRef) -> Option<syn::Type> {
+        if self.tagged_unions.contains_key(&fty.key()) {
+            let c = self.c_type_ident(&fty.key());
             return Some(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
-        c_field_wire(fty)
+        if r_is_string(fty) {
+            return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
+        }
+        // #170 instance 2: the field arrives from C by value, so it may not be
+        // a Rust `bool` until the byte has been normalised.
+        if r_is_bool(fty) {
+            return Some(bool_wire());
+        }
+        r_is_scalar(fty).then(|| spelled(fty))
     }
 
     /// True when a payload wire hands owned memory to C — a `char *` block or
@@ -264,7 +264,7 @@ impl CbindgenBuilder {
     /// zenoh-flat#30 needs.
     pub(super) fn payload_wire_owns(
         &self,
-        fty: &syn::Type,
+        fty: &TypeRef,
         wire: &syn::Type,
         registry: &Registry<()>,
     ) -> bool {
@@ -282,11 +282,11 @@ impl CbindgenBuilder {
     /// dependency so its converter exists by the time the union's own is
     /// emitted; without that it silently degrades to a passthrough and the
     /// generated code does not compile.
-    pub(super) fn payload_needs_converter(&self, fty: &syn::Type) -> bool {
-        if is_string(fty) || is_scalar(fty) || is_vec(fty) {
+    pub(super) fn payload_needs_converter(&self, fty: &TypeRef) -> bool {
+        if r_is_string(fty) || r_is_scalar(fty) || r_is_vec(fty) {
             return false;
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+        if self.enums.contains_key(&fty.key()) {
             return true;
         }
         // `Box<T>` / `Option<Box<T>>` opaque pointers are built inline from the
@@ -296,15 +296,15 @@ impl CbindgenBuilder {
 
     /// The `(name, type)` of every field of a declared `data_struct` whose own
     /// C wire owns memory. Empty when `fty` is not a declared data struct.
-    pub(super) fn owning_data_struct_fields(
+    pub(super) fn owning_data_struct_fields<'r>(
         &self,
-        fty: &syn::Type,
-        registry: &Registry<()>,
-    ) -> Vec<(syn::Ident, syn::Type)> {
-        if !self.data.contains_key(&TypeKey::from_type(fty)) {
+        fty: &TypeRef,
+        registry: &'r Registry<()>,
+    ) -> Vec<(syn::Ident, &'r TypeRef)> {
+        if !self.data.contains_key(&fty.key()) {
             return Vec::new();
         }
-        self.struct_fields(registry, &TypeKey::from_type(fty))
+        self.struct_fields(registry, &fty.key())
             .unwrap_or_default()
             .into_iter()
             .filter(|(_, fty)| self.data_field_owns(fty, registry))
@@ -315,7 +315,7 @@ impl CbindgenBuilder {
     /// is a pointer (`String` → `char *`), or it is a declared
     /// [`CbindgenBuilder::tagged_union`] with an owning arm — which crosses by value,
     /// so the pointer it owns is one level further down.
-    fn data_field_owns(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
+    fn data_field_owns(&self, fty: &TypeRef, registry: &Registry<()>) -> bool {
         if matches!(self.data_field_wire(fty), Some(syn::Type::Ptr(_))) {
             return true;
         }
@@ -330,24 +330,19 @@ impl CbindgenBuilder {
     /// containing struct has to call it, so a union nested inside a payload
     /// cannot be freed through a symbol that was never emitted. `false` for
     /// anything that is not a declared tagged union.
-    pub(super) fn tagged_union_has_drop(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
-        if !self.tagged_unions.contains_key(&TypeKey::from_type(fty))
-            || registry
-                .reading_of(fty)
-                .and_then(|tr| registry.output_entry(&tr))
-                .is_none()
-        {
+    pub(super) fn tagged_union_has_drop(&self, fty: &TypeRef, registry: &Registry<()>) -> bool {
+        if !self.tagged_unions.contains_key(&fty.key()) || registry.output_entry(fty).is_none() {
             return false;
         }
-        self.enum_alternatives(registry, &TypeKey::from_type(fty))
+        self.enum_alternatives(registry, &fty.key())
             .unwrap_or_default()
             .iter()
             .flat_map(|a| a.fields.iter())
-            .any(|f| match self.payload_field_wire(f.ty.as_syn(), registry) {
+            .any(|f| match self.payload_field_wire(&f.ty, registry) {
                 // A rejected payload is reported from the emission site, which
                 // panics before any of this matters.
                 Err(_) => false,
-                Ok(wire) => self.payload_wire_owns(f.ty.as_syn(), &wire, registry),
+                Ok(wire) => self.payload_wire_owns(&f.ty, &wire, registry),
             })
     }
 
@@ -374,11 +369,11 @@ impl CbindgenBuilder {
     /// Fields (`name`, `type`) of a declared data struct, looked up from the
     /// registry's indexed structs. `None` if the type isn't an indexed named
     /// struct.
-    pub(super) fn struct_fields(
+    pub(super) fn struct_fields<'r>(
         &self,
-        registry: &impl Conversions<()>,
+        registry: &'r impl Conversions<()>,
         key: &TypeKey,
-    ) -> Option<Vec<(syn::Ident, syn::Type)>> {
+    ) -> Option<Vec<(syn::Ident, &'r TypeRef)>> {
         // The element, not its item. A `Struct` holds the field list the
         // `syn::Fields::Named` match used to dig out, each field's name beside
         // the reading of its type — so the name lookup is the key's own ident
@@ -387,7 +382,7 @@ impl CbindgenBuilder {
         let st = registry.flat().struct_type(&key.ident()?)?;
         st.fields
             .iter()
-            .map(|f| Some((f.name.clone()?, f.ty.as_syn().clone())))
+            .map(|f| Some((f.name.clone()?, &f.ty)))
             .collect()
     }
 
@@ -403,24 +398,19 @@ impl CbindgenBuilder {
     /// from C's bytes with no chance to check them. That gap is audited
     /// separately by [`Self::restricted_validity_field`] — this function keeps
     /// answering what the layout is.
-    pub(super) fn mirror_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
-        if is_scalar(fty) {
-            return Some(fty.clone());
+    pub(super) fn mirror_field_wire(&self, fty: &TypeRef) -> Option<syn::Type> {
+        if r_is_scalar(fty) {
+            return Some(spelled(fty));
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(&TypeKey::from_type(fty));
+        if self.enums.contains_key(&fty.key()) {
+            let c = self.c_type_ident(&fty.key());
             return Some(syn::parse_quote!(#c));
         }
         // Opaque pointer: `Option<Box<T>>` (nullable, null-niche ↔ NULL) or `Box<T>`
         // where `T` is a declared `opaque_ptr` → `*mut t_t`.
-        let boxed = if is_option(fty) {
-            first_type_arg(fty).and_then(|inner| box_inner(&inner))
-        } else {
-            box_inner(fty)
-        };
-        if let Some(inner) = boxed {
-            if self.opaque.contains_key(&TypeKey::from_type(&inner)) {
-                let c = self.c_type_ident(&TypeKey::from_type(&inner));
+        if let Some(inner) = r_boxed_inner(fty) {
+            if self.opaque.contains_key(&inner.key()) {
+                let c = self.c_type_ident(&inner.key());
                 return Some(syn::parse_quote!(*mut #c));
             }
         }
@@ -446,11 +436,11 @@ impl CbindgenBuilder {
     /// value already exists. Wrapping the mirror field in `MaybeUninit` moves
     /// the problem rather than solving it — the transmute's *output* still has
     /// the real field.
-    pub(super) fn restricted_validity_field(&self, fty: &syn::Type) -> Option<&'static str> {
-        if is_bool(fty) {
+    pub(super) fn restricted_validity_field(&self, fty: &TypeRef) -> Option<&'static str> {
+        if r_is_bool(fty) {
             return Some("`bool` — only `0` and `1` are valid");
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+        if self.enums.contains_key(&fty.key()) {
             return Some("a declared `enum_type` — only its declared discriminants are valid");
         }
         None
@@ -462,13 +452,13 @@ impl CbindgenBuilder {
     pub(super) fn restricted_validity_fields(
         &self,
         registry: &Registry<()>,
-        ty: &syn::Type,
+        key: &TypeKey,
     ) -> Vec<(syn::Ident, &'static str)> {
-        self.struct_fields(registry, &TypeKey::from_type(ty))
+        self.struct_fields(registry, key)
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(fname, fty)| {
-                self.restricted_validity_field(&fty)
+                self.restricted_validity_field(fty)
                     .map(|reason| (fname, reason))
             })
             .collect()
