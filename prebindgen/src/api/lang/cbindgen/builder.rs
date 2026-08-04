@@ -310,7 +310,7 @@ impl CbindgenBuilder {
             "Cbindgen::repr_c_struct cannot declare `{}` because it is already ignored",
             key
         );
-        let mirror = self.c_type_ident(&ty);
+        let mirror = self.c_type_ident(&key);
         self.value_opaque.insert(
             key.clone(),
             ValueOpaqueCfg {
@@ -686,14 +686,13 @@ impl CbindgenBuilder {
     }
 
     /// Config of a declared type (across the opaque/data/enum maps), by key.
-    pub(super) fn type_cfg(&self, ty: &syn::Type) -> Option<&TypeCfg> {
-        let key = TypeKey::from_type(ty);
+    pub(super) fn type_cfg(&self, key: &TypeKey) -> Option<&TypeCfg> {
         self.opaque
-            .get(&key)
-            .or_else(|| self.data.get(&key))
-            .or_else(|| self.value_opaque.get(&key).map(|c| &c.cfg))
-            .or_else(|| self.enums.get(&key))
-            .or_else(|| self.tagged_unions.get(&key))
+            .get(key)
+            .or_else(|| self.data.get(key))
+            .or_else(|| self.value_opaque.get(key).map(|c| &c.cfg))
+            .or_else(|| self.enums.get(key))
+            .or_else(|| self.tagged_unions.get(key))
     }
 
     /// The opaque counterpart type of a declared inline-opaque type, if any.
@@ -721,21 +720,21 @@ impl CbindgenBuilder {
     /// Public "take" (move) symbol for a takeable value_opaque type:
     /// [`Self::mangle_take`] over the base, else `<base>_take` (e.g.
     /// `z_sample_take`). Symmetric with [`Self::destructor_symbol`].
-    pub(super) fn take_symbol(&self, ty: &syn::Type) -> syn::Ident {
+    pub(super) fn take_symbol(&self, key: &TypeKey) -> syn::Ident {
         if let Some(f) = &self.mangle_take {
-            return format_ident!("{}", f(&self.rust_base(ty)));
+            return format_ident!("{}", f(&self.rust_base(key)));
         }
-        format_ident!("{}_take", self.rust_base(ty))
+        format_ident!("{}_take", self.rust_base(key))
     }
 
     /// Base token for a Rust type: [`Self::mangle_rust_type`] applied to the Rust
     /// short name, or the short name verbatim when unset. Feeds the type-name,
     /// destructor and callback manglers.
-    pub(super) fn rust_base(&self, ty: &syn::Type) -> String {
-        if let Some(b) = self.type_cfg(ty).and_then(|c| c.base.clone()) {
+    pub(super) fn rust_base(&self, key: &TypeKey) -> String {
+        if let Some(b) = self.type_cfg(key).and_then(|c| c.base.clone()) {
             return b;
         }
-        let short = type_short(ty);
+        let short = type_short(key);
         match &self.mangle_rust_type {
             Some(f) => f(&short),
             // No mangler: a C-like `snake_case` default (so destructors/take/type
@@ -746,8 +745,8 @@ impl CbindgenBuilder {
 
     /// Emitted C type name of a declared type: [`Self::mangle_type_name`] over the
     /// base, else the base (which is the `mangle_rust_type`/`.base_name` token).
-    pub(super) fn c_type_name(&self, ty: &syn::Type) -> String {
-        let base = self.rust_base(ty);
+    pub(super) fn c_type_name(&self, key: &TypeKey) -> String {
+        let base = self.rust_base(key);
         match &self.mangle_type_name {
             Some(f) => f(&base),
             None => base,
@@ -756,17 +755,17 @@ impl CbindgenBuilder {
 
     /// C type identifier (the `#[repr(C)]` struct/enum name + the wire type used
     /// across converters and wrappers).
-    pub(super) fn c_type_ident(&self, ty: &syn::Type) -> syn::Ident {
-        format_ident!("{}", self.c_type_name(ty))
+    pub(super) fn c_type_ident(&self, key: &TypeKey) -> syn::Ident {
+        format_ident!("{}", self.c_type_name(key))
     }
 
     /// Destructor symbol of an opaque handle: [`Self::mangle_destructor`] over the
     /// base, else `<base>_drop`.
-    pub(super) fn destructor_symbol(&self, ty: &syn::Type) -> syn::Ident {
+    pub(super) fn destructor_symbol(&self, key: &TypeKey) -> syn::Ident {
         if let Some(f) = &self.mangle_destructor {
-            return format_ident!("{}", f(&self.rust_base(ty)));
+            return format_ident!("{}", f(&self.rust_base(key)));
         }
-        format_ident!("{}_drop", self.rust_base(ty))
+        format_ident!("{}_drop", self.rust_base(key))
     }
 
     /// Emitted C type name of a callback's closure struct: [`Self::mangle_callback`]
@@ -781,7 +780,10 @@ impl CbindgenBuilder {
             // The override (when set) is the sole base; otherwise the args' bases.
             let bases: Vec<String> = match &base_override {
                 Some(b) => vec![b.clone()],
-                None => args.iter().map(|a| self.rust_base(a)).collect(),
+                None => args
+                    .iter()
+                    .map(|a| self.rust_base(&TypeKey::from_type(a)))
+                    .collect(),
             };
             return f(&bases);
         }
@@ -793,7 +795,10 @@ impl CbindgenBuilder {
         if args.is_empty() {
             "closure".to_string()
         } else {
-            let parts: Vec<String> = args.iter().map(|a| self.rust_base(a)).collect();
+            let parts: Vec<String> = args
+                .iter()
+                .map(|a| self.rust_base(&TypeKey::from_type(a)))
+                .collect();
             format!("closure_{}", parts.join("_"))
         }
     }

@@ -127,7 +127,7 @@ impl CbindgenBuilder {
             return Ok(syn::parse_quote!(*mut ::core::ffi::c_char));
         }
         if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+            let c = self.c_type_ident(&TypeKey::from_type(fty));
             return Ok(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         // `bool` is the one scalar with a restricted domain: `2` is a byte a C
@@ -179,7 +179,7 @@ impl CbindgenBuilder {
         // differ, which is exactly the split (`kind` decides what C sees, syntax
         // decides how the value is built).
         if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
-            let c = self.c_type_ident(&inner);
+            let c = self.c_type_ident(&TypeKey::from_type(&inner));
             return Ok(syn::parse_quote!(*mut #c));
         }
         // Otherwise the payload's wire is its **resolved converter
@@ -243,7 +243,7 @@ impl CbindgenBuilder {
     /// until its tag has been validated. Invisible in C either way.
     pub(super) fn data_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
         if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+            let c = self.c_type_ident(&TypeKey::from_type(fty));
             return Some(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         c_field_wire(fty)
@@ -411,7 +411,7 @@ impl CbindgenBuilder {
             return Some(fty.clone());
         }
         if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+            let c = self.c_type_ident(&TypeKey::from_type(fty));
             return Some(syn::parse_quote!(#c));
         }
         // Opaque pointer: `Option<Box<T>>` (nullable, null-niche ↔ NULL) or `Box<T>`
@@ -423,7 +423,7 @@ impl CbindgenBuilder {
         };
         if let Some(inner) = boxed {
             if self.opaque.contains_key(&TypeKey::from_type(&inner)) {
-                let c = self.c_type_ident(&inner);
+                let c = self.c_type_ident(&TypeKey::from_type(&inner));
                 return Some(syn::parse_quote!(*mut #c));
             }
         }

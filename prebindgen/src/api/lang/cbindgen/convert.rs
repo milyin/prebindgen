@@ -18,7 +18,7 @@ impl CbindgenBuilder {
                 .get(&decl.key)
                 .cloned()
                 .unwrap_or_else(|| {
-                    let short = type_short(&decl.rust_type.as_syn().clone());
+                    let short = type_short(&decl.rust_type.key().clone());
                     self.mangle_rust_type
                         .as_ref()
                         .map(|m| m(&short))
