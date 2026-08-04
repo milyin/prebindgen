@@ -237,17 +237,6 @@ pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn:
 // reconstructed as `Box<_>`, matched nothing, and got no converter at all
 // (#270). Dispatch reads `TypeKind` now; nothing needs it.
 
-/// `true` if `ty` is a path whose final segment is `name` (e.g. `Vec<_>` for
-/// `name = "Vec"`, `Option<&T>` for `name = "Option"`). Ignores generic args.
-pub(crate) fn pat_match_top(ty: &syn::Type, name: &str) -> bool {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            return last.ident == name;
-        }
-    }
-    false
-}
-
 /// INPUT: wire → rust. Format `<wire_id>_to_<rust_id>_<hash>` (including
 /// `impl Fn(...)` lambda converters — the legacy
 /// `process_kotlin_<Name>_callback` naming is gone with the fun-interface
