@@ -114,19 +114,11 @@ fn arm_erased_sig(
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
     match ctor {
-        Some(cf) => match registry
-            .flat()
-            .function(&cf)
-            .map(|func| func.origin.as_syn())
-        {
-            Some(item_fn) => item_fn
-                .sig
-                .inputs
+        Some(cf) => match registry.flat().function(&cf) {
+            Some(f) => f
+                .params
                 .iter()
-                .filter_map(|a| match a {
-                    syn::FnArg::Typed(pt) => Some(rust_type_erased(ext, registry, &pt.ty)),
-                    _ => None,
-                })
+                .map(|p| rust_type_erased(ext, registry, p.ty.as_syn()))
                 .collect(),
             None => Vec::new(),
         },
@@ -199,17 +191,16 @@ struct Split<'a> {
 }
 
 /// Camel-cased Kotlin names of a `#[prebindgen]` constructor's parameters.
-fn ctor_param_names(f: &syn::ItemFn) -> Vec<String> {
-    f.sig
-        .inputs
+/// The Kotlin names of a constructor's parameters.
+///
+/// Off `Function::params`, where a parameter **is** a name and a reading. The
+/// `sig.inputs` walk this replaced had to skip a receiver it could not have
+/// (the frontend refuses one) and match `Pat::Ident` for a pattern the frontend
+/// already required.
+fn ctor_param_names(f: &crate::api::core::flat::Function) -> Vec<String> {
+    f.params
         .iter()
-        .filter_map(|a| match a {
-            syn::FnArg::Typed(pt) => match &*pt.pat {
-                syn::Pat::Ident(pid) => Some(kt_param_name(&pid.ident.to_string())),
-                _ => None,
-            },
-            _ => None,
-        })
+        .map(|p| kt_param_name(&p.name.to_string()))
         .collect()
 }
 
@@ -233,15 +224,6 @@ fn non_null(mut ty: kt::KtType) -> kt::KtType {
     ty
 }
 
-fn is_option(ty: &syn::Type) -> bool {
-    matches!(
-        ty,
-        syn::Type::Path(p)
-            if p.qself.is_none()
-                && p.path.segments.last().is_some_and(|s| s.ident == "Option")
-    )
-}
-
 /// The typed overload params of one variant arm, paired with the leaf index
 /// each fills. `origin`/`multi` drive name disambiguation (build-arm params are
 /// prefixed with the origin parameter name when the function splits more than
@@ -259,20 +241,15 @@ fn variant_typed_params(
     let origin_kt = kt_param_name(&origin.to_string());
     let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
         Some(cf) => {
-            let item_fn = registry
-                .flat()
-                .function(&cf)
-                .map(|func| func.origin.as_syn())?;
-            let optional = item_fn
-                .sig
-                .inputs
+            let f = registry.flat().function(&cf)?;
+            // `Optional` off the kind, not `is_option` off a path: the same
+            // question, asked of the grammar the source wrote.
+            let optional = f
+                .params
                 .iter()
-                .filter_map(|a| match a {
-                    syn::FnArg::Typed(pt) => Some(is_option(&pt.ty)),
-                    _ => None,
-                })
+                .map(|p| matches!(p.ty.kind(), crate::api::core::flat::TypeKind::Optional(_)))
                 .collect();
-            (ctor_param_names(item_fn), optional)
+            (ctor_param_names(f), optional)
         }
         // Identity arm: one parameter, the value itself, named after the origin
         // parameter (already unique across split params — never prefixed).
