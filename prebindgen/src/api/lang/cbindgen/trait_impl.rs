@@ -1331,12 +1331,12 @@ impl CbindgenBuilder {
         // is just moved out of the box instead of kept in one. Conversion
         // follows the SYNTAX; the C type followed `kind` + the declaration.
         if let Some(inner) = self.declared_opaque_payload_inner(fty) {
-            let src_inner = self.src_ty(&inner);
+            let src_inner = self.src_ty_of(&inner);
             let owned = quote!(*::std::boxed::Box::from_raw(#b as *mut #src_inner));
             let null_msg = format!(
                 "null payload for `{}` (a non-optional handle payload cannot be NULL — the \
                  union may already have been dropped)",
-                type_short(&TypeKey::from_type(&inner))
+                type_short(&inner)
             );
             return if fty.optional_inner().is_some() {
                 quote!(if #b.is_null() {
@@ -1429,7 +1429,7 @@ impl CbindgenBuilder {
         // The peer of the input arm above: an owned value the C side must later
         // release, so it is boxed HERE rather than having arrived boxed.
         if let Some(inner) = self.declared_opaque_payload_inner(fty) {
-            let c = self.c_type_ident(&TypeKey::from_type(&inner));
+            let c = self.c_type_ident(&inner);
             return if fty.optional_inner().is_some() {
                 quote!(match #b {
                     ::core::option::Option::Some(__v) => {

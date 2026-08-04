@@ -82,14 +82,16 @@ impl CbindgenBuilder {
     /// wrapper the model erases cannot change which declaration a payload
     /// matches. See [`Self::payload_field_wire`] for why a union payload asks
     /// this at all where a `repr_c_struct` mirror must not.
-    pub(super) fn declared_opaque_payload_inner(&self, fty: &TypeRef) -> Option<syn::Type> {
+    pub(super) fn declared_opaque_payload_inner(&self, fty: &TypeRef) -> Option<TypeKey> {
         if r_boxed_inner(fty).is_some() {
             return None;
         }
         let core = fty.optional_inner().unwrap_or(fty);
-        self.opaque
-            .contains_key(&core.stripped_key())
-            .then(|| core.stripped_syntax())
+        let key = core.stripped_key();
+        // The IDENTITY, not the stripped spelling: every caller turned that
+        // spelling straight back into this key (`c_type_ident`, `type_short`)
+        // or into the source path it names (`src_ty_of`).
+        self.opaque.contains_key(&key).then_some(key)
     }
 
     /// Wire type of one **tagged-union payload field**: the
@@ -177,7 +179,7 @@ impl CbindgenBuilder {
         // differ, which is exactly the split (`kind` decides what C sees, syntax
         // decides how the value is built).
         if let Some(inner) = self.declared_opaque_payload_inner(fty) {
-            let c = self.c_type_ident(&TypeKey::from_type(&inner));
+            let c = self.c_type_ident(&inner);
             return Ok(syn::parse_quote!(*mut #c));
         }
         // Otherwise the payload's wire is its **resolved converter
