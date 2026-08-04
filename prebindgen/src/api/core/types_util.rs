@@ -154,38 +154,5 @@ pub fn pascal_to_snake(s: &str) -> String {
     out
 }
 
-// ── Enum shape: the one definition of "is this enum C-like" ────────────
-
-/// How a captured `enum` can cross a language boundary — the single
-/// classifier both adapters consult instead of each asserting on
-/// `syn::Fields` itself.
-///
-/// The two shapes are not two mechanisms: a [`Unit`](EnumShape::Unit) enum
-/// is the degenerate sum whose every variant group is empty, so a lowering
-/// written for [`Sum`](EnumShape::Sum) collapses to "just a tag" for it.
-/// The distinction exists because the *declarators* differ — `enum_class!`
-/// / `.enum_type()` accept only the degenerate case, and handing them a
-/// payload enum is an error naming the sum declarator rather than a shape
-/// assertion.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EnumShape {
-    /// Every variant is fieldless: the value is exactly its discriminant.
-    Unit,
-    /// At least one variant carries a payload.
-    Sum,
-}
-
-/// Classify an enum. See [`EnumShape`].
-pub fn enum_shape(e: &syn::ItemEnum) -> EnumShape {
-    if e.variants
-        .iter()
-        .all(|v| matches!(v.fields, syn::Fields::Unit))
-    {
-        EnumShape::Unit
-    } else {
-        EnumShape::Sum
-    }
-}
-
 #[cfg(test)]
 mod tests;

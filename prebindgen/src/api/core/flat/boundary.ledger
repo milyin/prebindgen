@@ -131,8 +131,8 @@
 2	api/core/registry/order.rs
 2	api/core/registry/scan.rs
 2	api/lang/cbindgen/convert.rs
-4	api/lang/cbindgen/emit.rs
-5	api/lang/cbindgen/trait_impl.rs
+1	api/lang/cbindgen/emit.rs
+4	api/lang/cbindgen/trait_impl.rs
 1	api/lang/jnigen/jni/emit/callback.rs
 2	api/lang/jnigen/jni/emit/flat_input.rs
 3	api/lang/jnigen/jni/fn_plan.rs
@@ -143,18 +143,17 @@
 6	api/lang/jnigen/jni/selector.rs
 13	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 51
+# total escapes: types: 47
 
 ## escapes: items
 1	api/core/prebindgen.rs
 2	api/core/registry/scan.rs
 1	api/core/write.rs
 2	api/lang/cbindgen/convert.rs
-1	api/lang/cbindgen/mod.rs
-5	api/lang/cbindgen/trait_impl.rs
+2	api/lang/cbindgen/trait_impl.rs
 2	api/lang/jnigen/jni/builder.rs
 2	api/lang/jnigen/jni/kotlin_emit.rs
 3	api/lang/jnigen/jni/symbols.rs
 2	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 21
+# total escapes: items: 17
