@@ -529,7 +529,9 @@ fn iface_spec_memo_shares_one_derivation() {
 
     // The impl-Fn identity: the trampoline (resolve time) and the wrapper
     // surface key on the same canonical arg types.
-    let args: Vec<syn::Type> = vec![syn::parse_quote!(ZThing)];
+    let args = vec![registry
+        .reading_of(&syn::parse_quote!(ZThing))
+        .expect("ZThing is interned")];
     let cb1 = ext
         .iface_spec(registry, &SpecKey::callback(&args))
         .expect("callback spec");
@@ -628,16 +630,17 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
         .expect("z_sub takes a callback");
     let (param, arg_readings) = cb;
 
-    // The two routes to the same identity.
-    let from_reading = SpecKey::callback(
-        &arg_readings
+    // The two routes to the same identity. The syntax route builds the key's
+    // own `Vec<TypeKey>` directly, because `SpecKey::callback` now takes
+    // readings — which is exactly the claim being pinned: the readings and the
+    // signature's own `impl Fn` bounds agree on every arg's identity.
+    let from_reading = SpecKey::callback(arg_readings);
+    let from_syntax = SpecKey::Callback(
+        crate::api::core::registry::extract_fn_trait_args(param.ty.as_syn())
+            .expect("the param is an impl Fn")
             .iter()
-            .map(|a| a.as_syn().clone())
-            .collect::<Vec<_>>(),
-    );
-    let from_syntax = SpecKey::callback(
-        &crate::api::core::registry::extract_fn_trait_args(param.ty.as_syn())
-            .expect("the param is an impl Fn"),
+            .map(crate::api::core::registry::TypeKey::from_type)
+            .collect(),
     );
 
     assert_eq!(

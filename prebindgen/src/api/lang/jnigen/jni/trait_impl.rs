@@ -1612,30 +1612,23 @@ impl Prebindgen for Declarations {
         for (key, members) in &self.class_members {
             for m in members {
                 // A binding-absent fn already hard-errored in the scan.
-                let Some(item_fn) = binding
-                    .flat()
-                    .function(&m.rust_ident)
-                    .map(|func| func.origin.as_syn())
-                else {
+                //
+                // The ELEMENT, not its item: a signature is a parameter list
+                // and a return, both already classified, so neither check
+                // below walks `syn::FnArg` / `syn::ReturnType` to re-derive
+                // what the model states.
+                let Some(func) = binding.flat().function(&m.rust_ident) else {
                     continue;
                 };
                 match m.kind {
                     MemberKind::Method => {
-                        let has_receiver = item_fn.sig.inputs.iter().any(|input| {
-                            matches!(input, syn::FnArg::Typed(pt)
-                                if &peel_receiver_key(&pt.ty) == key)
-                        });
+                        let has_receiver =
+                            func.params.iter().any(|p| &peel_receiver_key(&p.ty) == key);
                         if !has_receiver {
-                            let took: Vec<String> = item_fn
-                                .sig
-                                .inputs
+                            let took: Vec<String> = func
+                                .params
                                 .iter()
-                                .filter_map(|i| match i {
-                                    syn::FnArg::Typed(pt) => {
-                                        Some(pt.ty.to_token_stream().to_string())
-                                    }
-                                    _ => None,
-                                })
+                                .map(|p| p.ty.spell().to_string())
                                 .collect();
                             return Err(format!(
                                 "class `{}` method `{}`: no parameter of type `{}` — an \
@@ -1653,14 +1646,13 @@ impl Prebindgen for Declarations {
                         }
                     }
                     MemberKind::Constructor => {
-                        let ret = match &item_fn.sig.output {
-                            syn::ReturnType::Type(_, ty) => (**ty).clone(),
-                            syn::ReturnType::Default => syn::parse_quote!(()),
-                        };
                         // Allowed factory shapes: `Self` and `Result<Self, E>`.
-                        let core = crate::api::core::types_util::result_ok_type(&ret)
-                            .unwrap_or_else(|| ret.clone());
-                        if &peel_receiver_key(&core) != key {
+                        // The element normalizes an elided return to `Unit`, so
+                        // there is no `ReturnType::Default` arm to write, and
+                        // `fallible_parts` is `result_ok_type` asked of the
+                        // classification instead of of a path.
+                        let core = func.ret.fallible_parts().map_or(&func.ret, |(ok, _)| ok);
+                        if &peel_receiver_key(core) != key {
                             return Err(format!(
                                 "class `{}` constructor `{}`: must return `{}` or \
                                  `Result<{}, E>` — it returns `{}`",
@@ -1668,7 +1660,7 @@ impl Prebindgen for Declarations {
                                 m.rust_ident,
                                 key.as_str(),
                                 key.as_str(),
-                                ret.to_token_stream()
+                                func.ret.spell()
                             ));
                         }
                     }
