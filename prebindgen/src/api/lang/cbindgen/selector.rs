@@ -8,7 +8,7 @@ impl CbindgenBuilder {
     /// C structural wrappers.
     pub(crate) fn select_input_type(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         self.in_custom(ty, registry)
@@ -28,7 +28,7 @@ impl CbindgenBuilder {
     /// C structural wrappers.
     pub(crate) fn select_output_type(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         self.out_custom(ty, registry)

@@ -11,11 +11,7 @@
 
 use std::collections::HashSet;
 
-use crate::api::core::{
-    flat::{type_from_ident, Flat},
-    prebindgen::NamePredicate,
-    registry::TypeKey,
-};
+use crate::api::core::{flat::Flat, prebindgen::NamePredicate, registry::TypeKey};
 
 /// What a binding claimed, so everything else can be reported.
 ///
@@ -113,7 +109,7 @@ pub(crate) fn unclaimed_report(flat: &Flat, claimed: &Claimed) -> Vec<String> {
     for name in sorted(
         struct_enum_idents(flat)
             .filter(|i| {
-                let key = TypeKey::from_type(&type_from_ident(i));
+                let key = TypeKey::from_ident(i);
                 !claimed.types.contains(&key) && !claimed.ignored_types.contains(&key)
             })
             .map(|i| i.to_string())

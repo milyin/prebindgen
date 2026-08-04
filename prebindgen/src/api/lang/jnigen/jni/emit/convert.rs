@@ -35,8 +35,8 @@ pub(crate) fn sentinel_for_wire(wire: &syn::Type) -> TokenStream {
 // Primitive bodies
 // ──────────────────────────────────────────────────────────────────────
 
-pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
-    let key = TypeKey::from_type(ty).as_str().to_string();
+pub(crate) fn primitive_input(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
+    let key = key.as_str().to_string();
     // Bodies receive `v: &<wire>`; primitives are Copy so `*v` works.
     Some(match key.as_str() {
         "bool" => (
@@ -107,8 +107,8 @@ pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> 
     })
 }
 
-pub(crate) fn primitive_output(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
-    let key = TypeKey::from_type(ty).as_str().to_string();
+pub(crate) fn primitive_output(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
+    let key = key.as_str().to_string();
     // Output wrappers take v by value (move). Primitives are Copy, so
     // `v as wire` works. String/Vec consume v.
     Some(match key.as_str() {
@@ -242,12 +242,11 @@ pub(crate) fn composed_inner_output(
 /// If neither path applies (non-primitive wire, no niche), the wrap
 /// fails and the resolver falls through to other rank-1 attempts.
 pub(crate) fn option_input(
-    t1: &syn::Type,
+    t1: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry
-        .reading_of(t1)
-        .and_then(|tr| registry.input_entry(&tr))?;
+    let inner_entry = registry.input_entry(t1)?;
+    let t1_spelled = t1.spell();
     let inner_wire = inner_entry.destination.clone();
     let inner_decode = composed_inner_input(inner_entry, quote!(v));
 
@@ -267,7 +266,7 @@ pub(crate) fn option_input(
                 if #pred {
                     None
                 } else {
-                    Some(unsafe { OwnedObject::from_raw(*v as *const #t1).clone() })
+                    Some(unsafe { OwnedObject::from_raw(*v as *const #t1_spelled).clone() })
                 }
             })
         } else {
@@ -310,12 +309,10 @@ pub(crate) fn option_input(
 
 /// Build `Option<T>`'s output converter — symmetric to [`option_input`].
 pub(crate) fn option_output(
-    t1: &syn::Type,
+    t1: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry
-        .reading_of(t1)
-        .and_then(|tr| registry.output_entry(&tr))?;
+    let inner_entry = registry.output_entry(t1)?;
     let inner_wire = inner_entry.destination.clone();
     let inner_encode = composed_inner_output(inner_entry, quote!(value));
 
@@ -409,17 +406,26 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 pub(crate) fn enum_input_body(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    e: &syn::ItemEnum,
+    e: &crate::api::core::flat::Enum,
 ) -> (syn::Type, syn::Expr) {
-    assert_only_unit_variants(e);
-    let ident = &e.ident;
+    let ident = &e.name;
     let ident_name = ident.to_string();
     // Qualify the variant constructors with the enum's origin module,
     // exactly as the type-position pass qualifies the enum's return type —
     // otherwise a bare `Enum::Variant` fails to resolve when the enum lives
     // in a source crate (the usual flat-library case).
     let source_module = ext.fn_module(registry, ident);
-    let arms = crate::api::core::types_util::enum_discriminant_values(e)
+    // The model's numbering, not a second copy of it: `Enum::discriminant_values`
+    // is what the frontend computed at parse time, overflow rule and all.
+    let arms = e
+        .discriminant_values()
+        .unwrap_or_else(|name| {
+            panic!(
+                "enum `{}` variant `{name}` has a non-literal discriminant; use a literal \
+                 integer value (e.g. `= 1`) or an implicit discriminant",
+                e.name
+            )
+        })
         .into_iter()
         .map(|(variant, value)| {
             let lit = proc_macro2::Literal::i64_unsuffixed(value);
@@ -447,33 +453,12 @@ pub(crate) fn enum_input_body(
 /// upstream of the cast. The body works without naming the enum type
 /// at all — `v` is already typed via the wrapper signature, so the
 /// `as` cast picks up the right type by inference.
-pub(crate) fn enum_output_body(_ext: &Declarations, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
-    assert_only_unit_variants(e);
+pub(crate) fn enum_output_body(
+    _ext: &Declarations,
+    _e: &crate::api::core::flat::Enum,
+) -> (syn::Type, syn::Expr) {
     let body: syn::Expr = syn::parse_quote!({ v as jni::sys::jint });
     (syn::parse_quote!(jni::sys::jint), body)
-}
-
-/// Hard error when an `enum_class!`-declared enum is not the shape that
-/// declarator describes. `enum_class`'s discriminant-keyed Kotlin emission
-/// and `as jint` encode both depend on the value being exactly its
-/// discriminant, which is [`EnumShape::Unit`] — a data-carrying enum is a
-/// different Kotlin surface (a `sealed interface`) reached through a
-/// different declarator, so this names that declarator rather than
-/// asserting on `syn::Fields`.
-pub(crate) fn assert_only_unit_variants(e: &syn::ItemEnum) {
-    use crate::api::core::types_util::{enum_shape, first_payload_variant, EnumShape};
-    if enum_shape(e) == EnumShape::Sum {
-        let offender = first_payload_variant(e)
-            .map(|v| v.ident.to_string())
-            .unwrap_or_default();
-        panic!(
-            "`{}` is a data-carrying enum (variant `{}` has fields): declare it \
-             with `sealed_class!({})`, not `enum_class!({})` — `enum_class` \
-             crosses the boundary as a bare discriminant and has no room for a \
-             payload",
-            e.ident, offender, e.ident, e.ident
-        );
-    }
 }
 
 /// Decide which [`NullableKind`] to fold for an `Option<_>` wrapper, given
@@ -488,12 +473,11 @@ pub(crate) fn assert_only_unit_variants(e: &syn::ItemEnum) {
 /// they consult — the comparison is identical.
 pub(crate) fn nullable_kind_for(
     outer_wire: &syn::Type,
-    inner_ty: &syn::Type,
+    inner_ty: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry
-        .reading_of(inner_ty)
-        .and_then(|tr| registry.input_entry(&tr))
+        .input_entry(inner_ty)
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for: Option<_> input handler reached here only after option_input \
@@ -508,12 +492,11 @@ pub(crate) fn nullable_kind_for(
 
 pub(crate) fn nullable_kind_for_output(
     outer_wire: &syn::Type,
-    inner_ty: &syn::Type,
+    inner_ty: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry
-        .reading_of(inner_ty)
-        .and_then(|tr| registry.output_entry(&tr))
+        .output_entry(inner_ty)
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for_output: Option<_> output handler reached here only after \

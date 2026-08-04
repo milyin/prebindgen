@@ -25,16 +25,102 @@
 # A count going DOWN is the goal (a classifier reads elements instead) and is
 # still a ledger edit, so the win shows up in the diff.
 #
-# KNOWN BLIND SPOTS — classification this check cannot see, because it never
-# writes a `syn::` path. Each is a candidate addition to WATCHED:
+# ── THE ESCAPES ───────────────────────────────────────────────────────────
+#
+# The model's syntax is sealed: `Origin::syntax` is private, `spell()` hands out
+# tokens, and `as_syn()` is the ONE way to a `syn` node. So the two sections
+# below count what the first section can only measure — every place that still
+# has a node to take apart.
+#
+#   ## escapes: types   `as_syn()`, `stripped_syntax()`, `to_syn()`,
+#                       `type_from_ident()`   — ZERO, and must STAY zero: a new
+#                       row is a consumer taking a node the model can answer
+#                       for, and the fix is to ask the model
+#   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
+#                                             — persists, and is ACCOUNTED:
+#                       an emitter re-stating a whole item verbatim, nothing
+#                       else
+#
+# A type escape is a source type the model should have been able to answer for.
+# There are none: every consumer outside `core::flat` reads `kind`, spells
+# `spell()`, or looks up a `TypeKey`.
+#
+# An item escape is a captured item's own node, which an emitter re-stating a
+# whole item verbatim legitimately needs — and that is the ONLY reason it is
+# legitimate. Taking an item to read a FACT off it (a name, a type, a signature)
+# is a missing accessor. `ITEM_FLOOR` says per file which of the two it is, and
+# `the_item_floor_is_accounted_for` fails on an unaccounted file or a stale
+# entry, exactly as `FLOOR` does below. Two `registry/scan.rs` sites sat in this
+# count for forty-five stages reading a signature and a const's type: the header
+# called the whole population `expected to persist` and nothing checked which
+# sites had earned it (S46).
+#
+# So the classification sites above are a DIFFERENT POPULATION — one this
+# transition never had to remove, because it was never the model's to answer
+# for. That claim is CHECKED rather than asserted: `FLOOR` in `boundary.rs`
+# names, per file, which of four things its sites read — a WIRE the adapter
+# composed, a build-script DECLARATION, a GENERATED SIGNATURE, or the
+# array-length whitelist — and `the_classification_floor_is_accounted_for` fails
+# if a file classifies with no entry, or holds an entry and no longer
+# classifies. A new classifier has to say which population it joins, in the
+# commit that adds it; if it is none of them, it is reading source syntax.
+#
+# (S8 claimed `api/core` held zero type escapes and it held seven, for
+# twenty-five stages, because nothing checked it. An unchecked claim drifts —
+# which is also why THIS text lives in `boundary.rs`'s `HEADER`, the file the
+# ledger is generated from. Editing the generated `.ledger` instead is undone by
+# the next `UPDATE_BOUNDARY_LEDGER=1`.)
+#
+# The scan counts FIVE doors — `as_syn`, `stripped_syntax`, `to_syn`,
+# `enum_item`, `type_from_ident` — each by NAME rather than by call shape, so UFCS
+# (`TypeRef::as_syn(&ty)`) and a function item (`let read = TypeRef::as_syn;`)
+# are counted like a method call. A shape-matched rule missed both, which is a
+# ratchet that can be stepped around. `escape_surface_is_closed` keeps the list
+# honest: it reads the model's own surface and fails if a public method hands
+# out a non-leaf syn node under a name the scan does not count — which is how
+# four of the five doors were found. It asks the question the safe way round:
+# every syn return is a door unless the type is on a small LEAF allowlist, and
+# unless the function is one of three NAMED transformers that take a node and
+# nothing else. Both allowlists are the exception side, where being wrong is a
+# false alarm rather than a silent hole.
+#
+# It reads more than functions, because more than a function can hand out a
+# node: a public field, a trait method and its impl, and an alias that hides the
+# name (`use syn::Type as SynType` is resolved; a crate rename, a local
+# `type Node = syn::Type` and an associated `type Target = syn::Type` are
+# reported, since flat names syn types in full). An alias is reported whatever
+# its own visibility is: an alias is transparent, so a private one still lets a
+# public signature hand out the node.
+#
+# The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
+# item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
+# the item's node, anything else means a type. Two over-counts land in the type bucket on purpose, both in
+# the safe direction — adapter declarations reuse `Origin` for a placeless
+# location (`decl.rust_type`), and carrying a spelling into an adapter-owned
+# `syn::Type` field is not classification either. Both are follow-ups the count
+# names rather than hides.
+#
+# A NODE CACHE is why the type count can go UP for a good change. A field typed
+# `syn::Type` holds a node permanently: it costs ONE escape where it is filled
+# and none at all where it is read, so N consumers read a node for free and the
+# census sees 1. Replacing that field with a `TypeRef` removes the one and
+# reveals the N — the reads were always there. A rising count after a field is
+# de-cached is the measure becoming true, not the boundary getting worse; a
+# rising count with no field removed is the thing this ledger exists to catch.
+#
+# KNOWN BLIND SPOTS — classification neither half sees:
 #
 #   * token-string classification, e.g. `core/domain.rs` matching
-#     `ty.to_token_stream().to_string()` against "i8" / "f32";
-#   * ident-name classification, e.g. `seg.ident == "Option"`;
+#     `ty.to_token_stream().to_string()` against "i8" / "f32". The seal does
+#     NOT close this and cannot: what `domain.rs` reads is a `syn::Type` a build
+#     script supplied, which never was the model's. `spell().to_string()` reaches
+#     a string too — one call further, and greppable, which is the whole gain;
+#   * ident-name classification, e.g. `seg.ident == "Option"` — now gated, in
+#     that a path has to come from an escape first;
 #   * helper delegation — `jnigen/jni/classify.rs` is a whole classifier with
-#     zero watched sites;
+#     zero watched sites; gated the same way;
 #   * syn enums outside WATCHED: Item, Fields, FnArg, ReturnType,
-#     GenericArgument, Pat, ...
+#     GenericArgument, Pat, ... — likewise reachable only through an escape.
 #
 # One listed gap is closed rather than still open: `types_util::match_pattern`
 # unified against `parse_quote!(_)` patterns, adding shape rules with no watched
@@ -45,27 +131,33 @@
 # gaps are listed here rather than implied away.
 
 2	api/core/registry/scan.rs
-9	api/core/types_util.rs
-8	api/lang/cbindgen/builder.rs
-1	api/lang/cbindgen/convert.rs
-5	api/lang/cbindgen/emit.rs
-5	api/lang/cbindgen/mod.rs
-6	api/lang/cbindgen/trait_impl.rs
-4	api/lang/jnigen/jni/builder.rs
+5	api/core/types_util.rs
+4	api/lang/cbindgen/builder.rs
+4	api/lang/cbindgen/emit.rs
+3	api/lang/cbindgen/mod.rs
+2	api/lang/cbindgen/trait_impl.rs
+3	api/lang/jnigen/jni/builder.rs
 4	api/lang/jnigen/jni/emit/convert.rs
-2	api/lang/jnigen/jni/emit/delivery.rs
 4	api/lang/jnigen/jni/emit/flat_input.rs
-16	api/lang/jnigen/jni/emit/names.rs
-11	api/lang/jnigen/jni/emit/wrapper.rs
-3	api/lang/jnigen/jni/fold.rs
-4	api/lang/jnigen/jni/iface.rs
-2	api/lang/jnigen/jni/overloads.rs
+5	api/lang/jnigen/jni/emit/names.rs
+6	api/lang/jnigen/jni/emit/wrapper.rs
+1	api/lang/jnigen/jni/fold.rs
 1	api/lang/jnigen/jni/prim.rs
-3	api/lang/jnigen/jni/prim_array.rs
-8	api/lang/jnigen/jni/render.rs
-3	api/lang/jnigen/jni/selector.rs
-11	api/lang/jnigen/jni/trait_impl.rs
+1	api/lang/jnigen/jni/render.rs
+1	api/lang/jnigen/jni/trait_impl.rs
 2	api/lang/jnigen/jni/wire_access.rs
-2	api/lang/jnigen/util.rs
+1	api/lang/jnigen/util.rs
 
-# total: 116
+# total classification sites: 49
+
+## escapes: types
+
+# total escapes: types: 0
+
+## escapes: items
+1	api/core/prebindgen.rs
+1	api/core/write.rs
+1	api/lang/cbindgen/trait_impl.rs
+1	api/lang/jnigen/jni/trait_impl.rs
+
+# total escapes: items: 4

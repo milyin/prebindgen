@@ -238,12 +238,7 @@ fn deriving_matches_the_equivalent_hand_written_list() {
             .callback_arg_plans
             .values()
             .flat_map(|p| p.leaves.iter())
-            .map(|l| {
-                (
-                    l.name.clone(),
-                    l.out_ty.syntax().to_token_stream().to_string(),
-                )
-            })
+            .map(|l| (l.name.clone(), l.out_ty.spell().to_string()))
             .collect()
     };
 

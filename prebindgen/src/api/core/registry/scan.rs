@@ -11,6 +11,18 @@ use quote::ToTokens;
 
 use super::*;
 
+/// The canonical `syn::Type` a **declaration** names, off its identity.
+///
+/// A [`TypeKey`] is `canonical_type` already rendered, so re-parsing it yields
+/// the same type `canonical_type(origin.as_syn())` built — without taking the
+/// node. `declared_ty` is a BUILD-SCRIPT declaration reusing `Origin` for a
+/// placeless location, the over-count the boundary ledger documents, and
+/// `Origin::key` is the answer it names.
+fn canonical_of(declared_ty: &crate::api::core::flat::Origin<syn::Type>) -> syn::Type {
+    syn::parse_str(declared_ty.key().as_str())
+        .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses")
+}
+
 impl<M> Registry<M> {
     pub(super) fn scan_declared_items(&mut self, declared: &Declared) -> Result<(), ScanError> {
         // Source-qualified declared types are a hard error (issue #95). The
@@ -46,7 +58,13 @@ impl<M> Registry<M> {
             if !probed.insert(key) {
                 continue;
             }
-            let ty = crate::api::core::flat::canonical_type(&declared_ty.syntax);
+            // The canonical form off the declaration's own identity: a
+            // `TypeKey` IS `canonical_type` rendered, so re-parsing it is the
+            // same type this spelled the node to build. `declared_ty` is a
+            // BUILD-SCRIPT declaration reusing `Origin` for a placeless
+            // location — the ledger's documented over-count, and `Origin::key`
+            // is the answer it names.
+            let ty = canonical_of(declared_ty);
             // Peel one reference level; the qualified head only appears on
             // path types.
             let inner = match &ty {
@@ -88,8 +106,8 @@ impl<M> Registry<M> {
 
         // Scan declared functions.
         for ident in &declared.functions {
-            if let Some(item_fn) = self.flat.function(&ident).map(|f| f.origin.syntax.clone()) {
-                self.scan_fn_signature(&item_fn)?;
+            if let Some(func) = self.flat.function(&ident).cloned() {
+                self.scan_fn_signature(&func)?;
             } else {
                 missing.push(("function", ident.to_string()));
             }
@@ -108,8 +126,10 @@ impl<M> Registry<M> {
         // Scan declared consts: a const is a nullary source of its type, so
         // the type is required in the output direction only.
         for ident in declared.consts.iter().flatten() {
-            if let Some(item_const) = self.flat.constant(&ident).map(|c| c.origin.syntax.clone()) {
-                self.intern(Direction::Output, &item_const.ty, true)?;
+            // The const's own TYPE, which the element carries. This cloned the
+            // whole `syn::ItemConst` to reach `.ty`.
+            if let Some(ty) = self.flat.constant(&ident).map(|c| c.ty.clone()) {
+                self.intern_reading(Direction::Output, &ty, true);
             } else {
                 missing.push(("constant", ident.to_string()));
             }
@@ -134,20 +154,27 @@ impl<M> Registry<M> {
             // is the form the type used to arrive in, and interning the
             // as-written spelling instead would put a differently-spelled
             // reading in the cell for the same key.
-            let ty = crate::api::core::flat::canonical_type(&declared_ty.syntax);
+            let ty = canonical_of(declared_ty);
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
-                if let Some(s) = self
-                    .flat
-                    .struct_type(&ident)
-                    .map(|s| s.origin.syntax.clone())
-                {
-                    self.scan_struct(&s)?;
+                if let Some(s) = self.flat.struct_type(&ident).cloned() {
+                    self.scan_struct(&s);
                     self.intern(Direction::Input, &ty, true)?;
                     self.intern(Direction::Output, &ty, true)?;
                     matched = true;
-                } else if let Some(e) = self.flat.enum_item(&ident).cloned() {
-                    self.scan_enum(&e)?;
+                } else if let Some(e) = self
+                    .flat
+                    .declared_type(&ident)
+                    .filter(|t| {
+                        matches!(
+                            t,
+                            crate::api::core::flat::Type::Enum(_)
+                                | crate::api::core::flat::Type::Variant(_)
+                        )
+                    })
+                    .cloned()
+                {
+                    self.scan_enum(&e);
                     self.intern(Direction::Input, &ty, true)?;
                     self.intern(Direction::Output, &ty, true)?;
                     matched = true;
@@ -166,60 +193,78 @@ impl<M> Registry<M> {
         Ok(())
     }
 
-    pub(super) fn scan_fn_signature(&mut self, f: &syn::ItemFn) -> Result<(), ScanError> {
+    pub(super) fn scan_fn_signature(
+        &mut self,
+        f: &crate::api::core::flat::Function,
+    ) -> Result<(), ScanError> {
         // Mechanical: register every fn-signature type as the user wrote it.
         // No semantic transformations (no &T→T strip, no ZResult<T>→T strip,
         // no skip for () / ZResult<()>). The adapter handles structural
         // wrappers; propagation through `subs` then marks transitive deps
         // (e.g. &Foo's `&_` converter returns subs=[Foo], so Foo becomes
         // required).
+        //
+        // The ELEMENT. A signature is a parameter list and a return, both
+        // already classified — so the readings here are the ones `flat`
+        // produced, not ones re-derived by interning a spelling. Two arms this
+        // used to carry are gone with the node: `FnArg::Receiver`, which the
+        // comment below says can never arrive, and `ReturnType::Default`, which
+        // the element normalizes to `TypeKind::Unit`.
+        //
         // No receiver or non-ident pattern can reach here: a captured item was
         // refused by the frontend and `from_flat` failed before indexing it, and
         // a binding-local fn was checked against the same grammar
         // (`Flat::lower_signature`) when `resolve` synthesized it.
-        for input in &f.sig.inputs {
-            match input {
-                syn::FnArg::Receiver(_) => continue,
-                syn::FnArg::Typed(pt) => {
-                    self.intern_recursive(Direction::Input, &pt.ty, true)?;
+        for p in &f.params {
+            self.intern_recursive_reading(Direction::Input, &p.ty, true);
+        }
+        self.intern_recursive_reading(Direction::Output, &f.ret, true);
+        Ok(())
+    }
+
+    /// Register a declared struct and every one of its field types.
+    ///
+    /// Takes the **element**: the struct's own type is `Struct::type_ref` — the
+    /// reading the declaration carries — and each field already holds one, so
+    /// nothing here is spelled, keyed or classified on the way in. It used to
+    /// take a `syn::ItemStruct`, rebuild the type from the ident, and walk
+    /// `syn::Fields::Named` to reach types the element had all along.
+    pub(super) fn scan_struct(&mut self, s: &crate::api::core::flat::Struct) {
+        // The struct itself can appear in either direction.
+        self.intern_reading(Direction::Input, s.type_ref(), false);
+        self.intern_reading(Direction::Output, s.type_ref(), false);
+
+        for field in &s.fields {
+            self.intern_recursive_reading(Direction::Input, &field.ty, false);
+            self.intern_recursive_reading(Direction::Output, &field.ty, false);
+        }
+    }
+
+    /// Register a declared enum and every payload type its alternatives carry.
+    ///
+    /// The [`Struct`](crate::api::core::flat::Struct) twin, and it takes the
+    /// model's split seriously: a fieldless [`Enum`](crate::api::core::flat::Enum)
+    /// has no payload to reach, and a [`Variant`](crate::api::core::flat::Variant)
+    /// carries its alternatives' fields as readings. Walking `syn`'s `variants`
+    /// could not tell the two apart and had to look at every field to find out.
+    pub(super) fn scan_enum(&mut self, e: &crate::api::core::flat::Type) {
+        use crate::api::core::flat::Type;
+        let reading = match e {
+            Type::Enum(en) => en.type_ref(),
+            Type::Variant(v) => v.type_ref(),
+            _ => return,
+        };
+        self.intern_reading(Direction::Input, reading, false);
+        self.intern_reading(Direction::Output, reading, false);
+
+        if let Type::Variant(v) = e {
+            for alt in &v.alternatives {
+                for field in &alt.fields {
+                    self.intern_recursive_reading(Direction::Input, &field.ty, false);
+                    self.intern_recursive_reading(Direction::Output, &field.ty, false);
                 }
             }
         }
-        let ret_ty: syn::Type = match &f.sig.output {
-            syn::ReturnType::Default => syn::parse_quote!(()),
-            syn::ReturnType::Type(_, ty) => (**ty).clone(),
-        };
-        self.intern_recursive(Direction::Output, &ret_ty, true)?;
-        Ok(())
-    }
-
-    pub(super) fn scan_struct(&mut self, s: &syn::ItemStruct) -> Result<(), ScanError> {
-        // The struct itself can appear in either direction.
-        let ty: syn::Type = crate::api::core::flat::type_from_ident(&s.ident);
-        self.intern(Direction::Input, &ty, false)?;
-        self.intern(Direction::Output, &ty, false)?;
-
-        if let syn::Fields::Named(named) = &s.fields {
-            for field in &named.named {
-                self.intern_recursive(Direction::Input, &field.ty, false)?;
-                self.intern_recursive(Direction::Output, &field.ty, false)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub(super) fn scan_enum(&mut self, e: &syn::ItemEnum) -> Result<(), ScanError> {
-        let ty: syn::Type = crate::api::core::flat::type_from_ident(&e.ident);
-        self.intern(Direction::Input, &ty, false)?;
-        self.intern(Direction::Output, &ty, false)?;
-
-        for variant in &e.variants {
-            for field in &variant.fields {
-                self.intern_recursive(Direction::Input, &field.ty, false)?;
-                self.intern_recursive(Direction::Output, &field.ty, false)?;
-            }
-        }
-        Ok(())
     }
 
     /// Register `ty` as a cell in the given direction, then recurse into every
@@ -359,21 +404,36 @@ impl<M> Registry<M> {
         Ok(reading)
     }
 
-    /// [`intern`](Self::intern), then register every nested position — the
-    /// recursive door, for a spelling whose children must become crossings too
-    /// (a parameter, a return, a declared field).
+    /// [`Self::intern`] for a caller that **already holds the reading**.
     ///
-    /// Only the top type is classified: the walk below it takes each child's
-    /// reading off the parent's, so nothing under here is re-derived.
-    pub(super) fn intern_recursive(
+    /// `intern` exists to turn a spelling into one: it keys the type, looks for
+    /// a cell, and classifies when there is none. A caller with a reading in
+    /// hand needs none of that — the model already answered, and re-deriving
+    /// would be the "two answers that never meet" shape `intern`'s own comment
+    /// warns about, arriving from the other side.
+    pub(in crate::api::core) fn intern_reading(
         &mut self,
         dir: Direction,
-        ty: &syn::Type,
+        reading: &crate::api::core::flat::TypeRef,
         root: bool,
-    ) -> Result<(), ScanError> {
-        let reading = self.intern(dir, ty, root)?;
-        self.register_type_recursive(dir, &reading, root);
-        Ok(())
+    ) {
+        let known = self
+            .input_types
+            .get(&reading.key())
+            .or_else(|| self.output_types.get(&reading.key()))
+            .map(|c| (*c.subject).clone());
+        self.ensure_entry(dir, known.as_ref().unwrap_or(reading), root);
+    }
+
+    /// [`Self::intern_recursive`] for a caller that already holds the reading.
+    pub(super) fn intern_recursive_reading(
+        &mut self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+        root: bool,
+    ) {
+        self.intern_reading(dir, reading, root);
+        self.register_type_recursive(dir, reading, root);
     }
 
     /// Enumerate the immediate type-graph edges out of `(dir, key)`: the model's
@@ -396,7 +456,7 @@ impl<M> Registry<M> {
     /// yields `T` — [`borrow_target`](crate::api::core::flat::TypeRef::borrow_target)
     /// sees past the slot — instead of an intermediate `MaybeUninit<T>` that no
     /// adapter can convert and no table holds. Each edge is still *spelled* from
-    /// the child's own `origin.syntax`, which is what the caller keys the table by.
+    /// the child's own `spell()`, which is what the caller keys the table by.
     ///
     /// The reading comes from **this registry's own table**, where `ensure_entry`
     /// put it before the walk reached this type — so a spelling the binding composed

@@ -225,7 +225,6 @@ pub(crate) fn classify_field(
     // classified this type. Taking a `syn::Type` meant asking the registry per
     // question, and a type it had never seen answered "no layer" rather than
     // saying so — which is the missing `?` of #273 waiting to happen again.
-    let effective_ty = reading.syntax().clone();
 
     // A sum is classified FIRST, because it is the one kind with no converter
     // of its own: it crosses as a tag plus one leaf group per variant, never
@@ -244,10 +243,9 @@ pub(crate) fn classify_field(
     // other about the same field (#273).
     let optional_inner = reading.optional_inner();
     let bare_ref = optional_inner.unwrap_or(reading);
-    let bare = bare_ref.syntax().clone();
     let seq_elem = bare_ref.sequence_elem();
-    let core = seq_elem.map_or_else(|| bare.clone(), |e| e.syntax().clone());
-    if matches!(ext.type_kind(registry, &core), TypeKind::Sum) {
+    let core = seq_elem.unwrap_or(bare_ref);
+    if matches!(ext.type_kind(registry, &core.key()), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
         // construction.
@@ -255,10 +253,17 @@ pub(crate) fn classify_field(
             panic!(
                 "fromParts bridge: `Vec<{}>` sealed-class field (`{owner}`) is not supported \
                  (variable arity)",
-                core.to_token_stream(),
+                core.spell(),
             );
         }
-        return sum_plan_kind(ext, registry, &bare, owner, optional_inner.is_some(), depth);
+        return sum_plan_kind(
+            ext,
+            registry,
+            bare_ref,
+            owner,
+            optional_inner.is_some(),
+            depth,
+        );
     }
 
     let field_entry = registry.output_entry(reading)?;
@@ -304,13 +309,15 @@ pub(crate) fn classify_field(
             };
         }
         // Nested plain data-class (optionally under `Option`).
-        let inner_ty = bare.clone();
-        if let TypeKind::DataStruct { st, cfg } = ext.type_kind(registry, &inner_ty) {
-            if pat_match_top(&effective_ty, "Vec") {
+        let inner_ty = bare_ref;
+        if let TypeKind::DataStruct { st, cfg } = ext.type_kind(registry, &inner_ty.key()) {
+            // `Vec` off the kind — the layer the model names, not a last path
+            // segment that spells it.
+            if matches!(reading.kind(), crate::api::core::flat::TypeKind::Vec(_)) {
                 panic!(
                     "fromParts bridge: `Vec<{}>` data-class field (`{owner}`) is not supported \
                      (variable arity)",
-                    inner_ty.to_token_stream(),
+                    inner_ty.spell(),
                 );
             }
             let child_fqn = cfg
@@ -493,7 +500,7 @@ impl PlanFieldKind {
 fn sum_plan_kind(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    ty: &syn::Type,
+    ty: &crate::api::core::flat::TypeRef,
     owner: &str,
     optional: bool,
     depth: usize,
@@ -511,7 +518,9 @@ fn sum_plan_kind(
         depth <= 16,
         "fromParts bridge: sealed-class expansion too deep at `{owner}` (recursive sum?)"
     );
-    let ident = bare_path_ident(ty).unwrap_or_else(|| {
+    // The key's ident: a sum is a declared name, and the key is that name when
+    // the key is one identifier.
+    let ident = ty.key().ident().unwrap_or_else(|| {
         panic!("fromParts bridge: sealed-class field `{owner}` is not a path type")
     });
     // The sum as the MODEL holds it: its alternatives' payloads are `TypeRef`s

@@ -14,27 +14,39 @@ use crate::api::core::registry::Conversions;
 /// `val value: Int`, plus a `fromInt(value: Int)` companion. Mirrors
 /// the hand-written `io.zenoh.qos.Priority` shape so adapter code that
 /// already speaks the `.value` / `.fromInt(...)` idiom keeps working.
-pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> kt::KtClass {
+pub(crate) fn build_enum_class(
+    class_name: &str,
+    item_enum: &crate::api::core::flat::Enum,
+) -> kt::KtClass {
     // Same discriminant source of truth the Rust `jint → variant` decode
-    // uses, so Kotlin `value(N)` and the generated decode agree.
-    let entries: Vec<kt::KtEnumEntry> =
-        crate::api::core::types_util::enum_discriminant_values(item_enum)
-            .into_iter()
-            .map(|(ident, value)| {
-                kt::KtEnumEntry::legacy_args(
-                    mangle_kotlin_ident(&crate::api::lang::jnigen::util::camel_to_screaming_snake(
-                        &ident.to_string(),
-                    )),
-                    value.to_string(),
-                )
-            })
-            .collect();
+    // uses, so Kotlin `value(N)` and the generated decode agree — and it is the
+    // model's, which is where "same" stops needing to be maintained.
+    let entries: Vec<kt::KtEnumEntry> = item_enum
+        .discriminant_values()
+        .unwrap_or_else(|name| {
+            panic!(
+                "enum `{}` variant `{name}` has a non-literal discriminant; use a literal \
+                 integer value (e.g. `= 1`) or an implicit discriminant",
+                item_enum.name
+            )
+        })
+        .into_iter()
+        .map(|(ident, value)| {
+            kt::KtEnumEntry::legacy_args(
+                mangle_kotlin_ident(&crate::api::lang::jnigen::util::camel_to_screaming_snake(
+                    &ident.to_string(),
+                )),
+                value.to_string(),
+            )
+        })
+        .collect();
 
     let framework_line = format!(
         "JVM-side surface for the native Rust `{}` enum.",
-        item_enum.ident
+        item_enum.name
     );
-    let enum_kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.attrs)
+    let enum_kdoc = item_enum
+        .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     kt::KtClass::new(kt::ClassKind::Enum(entries), class_name)
@@ -166,8 +178,7 @@ pub(crate) fn build_data_class(
     });
 
     let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
-    if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.origin.syntax.attrs)
-    {
+    if let Some(doc) = item_struct.docs() {
         class = class.kdoc(doc);
     }
     for p in ctor_params {
@@ -666,27 +677,17 @@ struct Opaque {
 /// Peel `&` / `Option<…>` / `Option<&…>` layers and return the inner type's
 /// [`TypeKey`] — used to match an accessor's receiver parameter against its
 /// owning class key in [`render_wrapper_fn`].
-pub(crate) fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
-    let core = match ty {
-        syn::Type::Reference(r) => &*r.elem,
-        other => other,
-    };
-    if let syn::Type::Path(tp) = core {
-        if let Some(seg) = tp.path.segments.last() {
-            if seg.ident == "Option" {
-                if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
-                        let inner_core = match inner {
-                            syn::Type::Reference(r) => &*r.elem,
-                            other => other,
-                        };
-                        return TypeKey::from_type(inner_core);
-                    }
-                }
-            }
-        }
+///
+/// Off the model. This walked a node four levels deep — a `Type::Reference`,
+/// a `Type::Path`'s last segment compared against the *name* `"Option"`, its
+/// `AngleBracketed` arguments, and a second `Type::Reference` — to reach a
+/// question `borrow_target` / `optional_inner` / `key` answer directly.
+pub(crate) fn peel_receiver_key(ty: &crate::api::core::flat::TypeRef) -> TypeKey {
+    let core = ty.borrow_target().unwrap_or(ty);
+    match core.optional_inner() {
+        Some(inner) => inner.borrow_target().unwrap_or(inner).key(),
+        None => core.key(),
     }
-    TypeKey::from_type(core)
 }
 
 /// Build a single top-level (free-function) wrapper as a [`kt::KtFun`].
@@ -894,7 +895,8 @@ pub(crate) fn render_const_val(
          the generated JNI getter on first use).",
         c.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.origin.syntax.attrs)
+    let kdoc = c
+        .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -924,7 +926,8 @@ pub(crate) fn render_constant_fn_val(
          through the generated JNI wrapper on first use).",
         f.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs)
+    let kdoc = f
+        .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -1069,7 +1072,6 @@ fn classify_params(
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
         let mut name = leaf.kt_name.clone();
-        let arg_ty = leaf.reading.syntax();
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
@@ -1077,7 +1079,7 @@ fn classify_params(
         // from the rendered signature.
         if receiver_idx.is_none() {
             if let Some(rk) = receiver_key {
-                if &peel_receiver_key(arg_ty) == rk {
+                if &peel_receiver_key(&leaf.reading) == rk {
                     receiver_idx = Some(params.len());
                     name = "this".to_string();
                 }
@@ -1208,7 +1210,7 @@ fn classify_params(
                 } else if leaf.reading.optional_inner().is_some() {
                     // by-value `Option<T>` opaque → nullable consume
                     ParamMode::ConsumeNullable
-                } else if matches!(arg_ty, syn::Type::Reference(_)) {
+                } else if leaf.reading.borrow_target().is_some() {
                     ParamMode::Borrow
                 } else {
                     ParamMode::Consume
@@ -1312,9 +1314,7 @@ fn classify_output(
             let spec = u.iface.as_deref()?;
             spec.params[1].typed.clone()
         } else {
-            let class_fqn = ext
-                .kotlin_fqn(&TypeKey::from_type(&plan.source))
-                .map(|s| s.to_string())?;
+            let class_fqn = ext.kotlin_fqn(&plan.source.key()).map(|s| s.to_string())?;
             kt::KtType::cls(class_fqn)
         };
         let class_short = kt_type_short(&class_ty);
@@ -2002,13 +2002,12 @@ fn render_body(
 pub(crate) fn unfold_leaf_kt(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    out_ty: &syn::Type,
+    out_ty: &crate::api::core::flat::TypeRef,
     nullable: bool,
     pk: &str,
 ) -> Option<(kt::KtType, String, String, bool)> {
     let proj = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
+        .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.clone());
     let is_value_projection = proj
         .as_ref()
@@ -2021,11 +2020,10 @@ pub(crate) fn unfold_leaf_kt(
         .unwrap_or(false);
     // builder_kt: enum → Int; otherwise the normal classified type
     // (handle class / String / ByteArray / Long …).
-    let builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+    let builder_kt = if ext.is_kotlin_enum_reading(out_ty) {
         kt::KtType::int()
     } else {
-        let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-        classify_return(ext, &rt, registry)?.0?
+        classify_return(ext, out_ty, registry)?.0?
     };
     let (mut wire_kt, wrap) = if is_value_projection {
         let p = proj.as_ref().unwrap();
@@ -2079,32 +2077,24 @@ pub(crate) fn plan_leaf_names(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -
 /// Lambda parameter name for a whole-value (plan-less) callback arg: the
 /// decapitalized bare type short (`ZQuery` → `zQuery`), peeling a `&` /
 /// `Option<…>` layer; `arg{i}` for non-path shapes.
-pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
-    let mut t = ty.clone();
-    if let syn::Type::Reference(r) = &t {
-        t = (*r.elem).clone();
-    }
-    if let syn::Type::Path(tp) = &t {
-        if let Some(last) = tp.path.segments.last() {
-            if last.ident == "Option" {
-                if let syn::PathArguments::AngleBracketed(ab) = &last.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
-                        t = inner.clone();
-                    }
-                }
-            }
-        }
-    }
-    if let syn::Type::Path(tp) = &t {
-        if let Some(last) = tp.path.segments.last() {
-            let s = last.ident.to_string();
+pub(crate) fn whole_value_name(ty: &crate::api::core::flat::TypeRef, i: usize) -> String {
+    use crate::api::core::flat::TypeKind;
+    // One borrow, then one `Option` — a fixed depth, not the general peel, and
+    // read off `kind()` rather than through `optional_inner` so a `Box` stops
+    // it here as it stopped the `syn::Type::Path` match before.
+    let t = ty.borrow_target().unwrap_or(ty);
+    let t = match t.kind() {
+        TypeKind::Optional(inner) => inner,
+        _ => t,
+    };
+    match crate::api::lang::jnigen::util::head_name(t) {
+        Some(s) => {
             let mut cs = s.chars();
-            if let Some(f) = cs.next() {
-                return kt_param_name(&format!("{}{}", f.to_lowercase(), cs.as_str()));
-            }
+            let f = cs.next().expect("a name is not empty");
+            kt_param_name(&format!("{}{}", f.to_lowercase(), cs.as_str()))
         }
+        None => format!("arg{i}"),
     }
-    format!("arg{i}")
 }
 
 /// Fall-back Kotlin type derived directly from the JNI wire type.
@@ -2140,7 +2130,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 ///   plain non-projection returns.
 pub(crate) fn classify_return(
     ext: &Declarations,
-    output: &syn::ReturnType,
+    output: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(
     Option<kt::KtType>,
@@ -2243,7 +2233,7 @@ fn wrapper_kdoc(
     f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<String> {
-    let prose = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs);
+    let prose = f.docs();
     let notes = shape_notes(f, registry);
     match (prose, notes) {
         (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
@@ -2273,7 +2263,7 @@ fn shape_notes(
         .collect();
     plans.sort_by_key(|(p, _)| p.to_string());
     for (param, plan) in plans {
-        let target = plan.target.to_token_stream().to_string();
+        let target = plan.target.spell().to_string();
         let arms: Vec<String> = plan
             .variants
             .iter()
@@ -2310,7 +2300,7 @@ fn shape_notes(
     }
 
     if let Some(plan) = registry.unfold_plans().get(fn_ident) {
-        let source = plan.source.to_token_stream().to_string();
+        let source = plan.source.spell().to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
             crate::api::core::unfold::Delivery::Callback if !leaves.is_empty() => {
@@ -2330,7 +2320,7 @@ fn shape_notes(
     }
 
     if let Some(plan) = registry.error_plans().get(fn_ident) {
-        let source = plan.source.to_token_stream().to_string();
+        let source = plan.source.spell().to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         notes.push(format!(
             "On a domain error `onError` receives the decomposed Rust `{source}` error \
@@ -2349,11 +2339,12 @@ fn shape_notes(
 /// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
 /// key, when the item is indexed (a re-exported foreign type has none).
 pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Option<String> {
-    let name = key.ident()?.to_string();
-    let attrs = registry
-        .flat()
-        .struct_type(&name)
-        .map(|s| s.origin.syntax.attrs.as_slice())
-        .or_else(|| registry.flat().enum_item(&name).map(|e| e.attrs.as_slice()))?;
-    crate::api::lang::jnigen::util::doc_string(attrs)
+    // Whichever of the three shapes the name declares — the docs are the
+    // element's answer, so there is no `attrs` slice to unify across them.
+    match registry.flat().declared_type(&key.ident()?)? {
+        crate::api::core::flat::Type::Struct(s) => s.docs(),
+        crate::api::core::flat::Type::Enum(e) => e.docs(),
+        crate::api::core::flat::Type::Variant(v) => v.docs(),
+        crate::api::core::flat::Type::Extern(_) => None,
+    }
 }

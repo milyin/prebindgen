@@ -786,7 +786,7 @@ impl Declarations {
             }
             exp.constructors
                 .push(crate::api::core::expand::ConstructorDecl {
-                    target: decl.rust_type.syntax.clone(),
+                    target: decl.rust_type.key(),
                     variants: decl.variants.iter().map(lower).collect(),
                     default: true,
                 });
@@ -809,7 +809,7 @@ impl Declarations {
             exp.expands.push(ExpandDecl {
                 func: func.clone(),
                 param: syn::Ident::new(param, Span::call_site()),
-                declared_target: Some(decl.rust_type.syntax.clone()),
+                declared_target: Some(decl.rust_type.key()),
                 sel: ExpandSel::Subset(decl.variants.iter().map(lower).collect()),
             });
         }
@@ -904,12 +904,12 @@ impl Declarations {
              value form returns the struct holding this type's fields",
             key.as_str(),
         );
-        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, ret.syntax()) else {
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret.key()) else {
             panic!(
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
                 key.as_str(),
-                ret.syntax().to_token_stream(),
+                ret.spell(),
             )
         };
         let st = st.clone();
@@ -1048,7 +1048,7 @@ impl Declarations {
             // must decompose into its selector and groups wherever it appears.
             let bare = field.ty.optional_inner().unwrap_or(&field.ty);
             let probe = bare.sequence_elem().unwrap_or(bare);
-            match self.type_kind(registry, probe.syntax()) {
+            match self.type_kind(registry, &probe.key()) {
                 TypeKind::DataStruct { st, cfg: Some(_) }
                     if field.ty.optional_inner().is_none()
                         && field.ty.sequence_elem().is_none() =>
@@ -1082,7 +1082,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.syntax().to_token_stream(),
+                        probe.spell(),
                     );
                     assert!(
                         field.ty.optional_inner().is_none(),
@@ -1095,7 +1095,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.syntax().to_token_stream(),
+                        probe.spell(),
                         dotted,
                     );
                     // The name is the reading's, not a path taken apart to
@@ -1172,7 +1172,7 @@ impl Declarations {
                 k = decl.key.as_str()
             );
             dec.deconstructors.push(DeconstructorDecl {
-                target: decl.rust_type.syntax.clone(),
+                target: decl.rust_type.key(),
                 records: self.lower_fields(registry, &decl.key, &decl.fields),
                 default: Some((DeconTarget::Output, Delivery::Callback)),
             });
@@ -1197,7 +1197,7 @@ impl Declarations {
                 sel: DeconSel::Inline(self.lower_fields(registry, &decl.key, &decl.fields)),
                 target: DeconTarget::Output,
                 delivery: Delivery::Callback,
-                declared_source: Some(decl.rust_type.syntax.clone()),
+                declared_source: Some(decl.rust_type.key()),
             });
         }
         dec
@@ -1488,32 +1488,24 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.syntax.clone();
+        let target = decl.rust_type.spell();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
-                let item_fn = registry
-                    .flat()
-                    .function(&f)
-                    .map(|func| &func.origin.syntax)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "convert!({}).input({f}): function not found among #[prebindgen] items",
-                            key.as_str()
-                        )
-                    });
-                let (param_ty, by_ref) = convert_single_param(key, f, item_fn, "input");
+                let item_fn = registry.flat().function(&f).unwrap_or_else(|| {
+                    panic!(
+                        "convert!({}).input({f}): function not found among #[prebindgen] items",
+                        key.as_str()
+                    )
+                });
+                let (param_reading, by_ref) = convert_single_param(key, f, item_fn, "input");
+                let param_ty = spelled_ty(param_reading);
                 // Return: `T` (infallible) or `Result<T, E>` (fallible — E
                 // routes to the caller's error handler via the exc slot).
-                let ret = fn_return_type(item_fn);
-                let (ok_ty, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
-                    Some(ok) => (
-                        ok,
-                        Some(
-                            crate::api::core::types_util::result_err_type(&ret)
-                                .expect("result_ok_type implies result_err_type"),
-                        ),
-                    ),
-                    None => (ret, None),
+                // Off `TypeKind::Fallible`, where `result_ok_type` /
+                // `result_err_type` each found the `Result` in a path.
+                let (ok_ty, exc) = match item_fn.ret.fallible_parts() {
+                    Some((ok, err)) => (spelled_ty(ok), Some(spelled_ty(err))),
+                    None => (spelled_ty(&item_fn.ret), None),
                 };
                 assert!(
                     TypeKey::from_type(&ok_ty) == *key,
@@ -1566,36 +1558,25 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.syntax.clone();
+        let target = decl.rust_type.spell();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
-                let item_fn = registry
-                    .flat()
-                    .function(&g)
-                    .map(|func| &func.origin.syntax)
-                    .unwrap_or_else(|| {
-                        panic!(
+                let item_fn = registry.flat().function(&g).unwrap_or_else(|| {
+                    panic!(
                         "convert!({}).output({g}): function not found among #[prebindgen] items",
                         key.as_str()
                     )
-                    });
-                let (param_ty, by_ref) = convert_single_param_any(g, item_fn);
+                });
+                let (param_reading, by_ref) = convert_single_param_any(g, item_fn);
                 assert!(
-                    TypeKey::from_type(&param_ty) == *key,
+                    param_reading.key() == *key,
                     "convert!({k}).output({g}): the function takes `{got}`, not `{k}`",
                     k = key.as_str(),
-                    got = TypeKey::from_type(&param_ty).as_str()
+                    got = param_reading.key().as_str()
                 );
-                let ret = fn_return_type(item_fn);
-                let (repr, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
-                    Some(ok) => (
-                        ok,
-                        Some(
-                            crate::api::core::types_util::result_err_type(&ret)
-                                .expect("result_ok_type implies result_err_type"),
-                        ),
-                    ),
-                    None => (ret, None),
+                let (repr, exc) = match item_fn.ret.fallible_parts() {
+                    Some((ok, err)) => (spelled_ty(ok), Some(spelled_ty(err))),
+                    None => (spelled_ty(&item_fn.ret), None),
                 };
                 assert!(
                     TypeKey::from_type(&repr) != *key,
@@ -1736,49 +1717,42 @@ impl Declarations {
 
 /// The single typed parameter of a conversion fn, peeled of a leading `&`;
 /// asserts arity 1. Returns `(peeled_type, was_by_ref)`.
-fn convert_single_param_any(f: &syn::Ident, item_fn: &syn::ItemFn) -> (syn::Type, bool) {
-    let params: Vec<&syn::PatType> = item_fn
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|i| match i {
-            syn::FnArg::Typed(pt) => Some(pt),
-            _ => None,
-        })
-        .collect();
+fn convert_single_param_any<'f>(
+    f: &syn::Ident,
+    item_fn: &'f crate::api::core::flat::Function,
+) -> (&'f TypeRef, bool) {
     assert!(
-        params.len() == 1,
+        item_fn.params.len() == 1,
         "convert fn `{f}` must take exactly one parameter, it takes {}",
-        params.len()
+        item_fn.params.len()
     );
-    match &*params[0].ty {
-        syn::Type::Reference(r) => ((*r.elem).clone(), true),
-        other => (other.clone(), false),
+    let ty = &item_fn.params[0].ty;
+    match ty.kind() {
+        flat::TypeKind::Ref { inner, .. } => (inner, true),
+        _ => (ty, false),
     }
 }
 
 /// [`convert_single_param_any`] + the direction-specific error context.
-fn convert_single_param(
+fn convert_single_param<'f>(
     key: &TypeKey,
     f: &syn::Ident,
-    item_fn: &syn::ItemFn,
+    item_fn: &'f crate::api::core::flat::Function,
     dir: &str,
-) -> (syn::Type, bool) {
+) -> (&'f TypeRef, bool) {
     let (ty, by_ref) = convert_single_param_any(f, item_fn);
     assert!(
-        TypeKey::from_type(&ty) != *key,
+        ty.key() != *key,
         "convert!({k}).{dir}({f}): the function must take the converted form, not `{k}` itself",
         k = key.as_str()
     );
     (ty, by_ref)
 }
 
-/// A fn's return type (`()` for none).
-fn fn_return_type(item_fn: &syn::ItemFn) -> syn::Type {
-    match &item_fn.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, t) => (**t).clone(),
-    }
+/// A reading spelled back as a `syn::Type` — the source's own tokens, re-parsed.
+fn spelled_ty(t: &TypeRef) -> syn::Type {
+    let toks = t.spell();
+    syn::parse_quote!(#toks)
 }
 
 impl Declarations {
@@ -1887,13 +1861,13 @@ impl Declarations {
     ///
     pub(crate) fn lookup_input(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // A `convert!`-declared conversion is the only thing that answers here.
         // There was a wildcard-pattern table beside it; nothing ever wrote to
         // the input half, so every lookup through it returned `None`.
-        let key = TypeKey::from_type(outer);
+        let key = outer.key();
         let (ty, exc_ty, body) = self.convert_input_body(&key, registry)?;
         // The closure's middle slot carries the `Result`'s raw Rust error
         // type (or `None` for the framework `__JniErr`); it feeds the
@@ -1905,7 +1879,11 @@ impl Declarations {
         // distinguishes a rust continue-type (compose) from a wire
         // (terminal) without forcing `()` either way. A non-wire `ty` that
         // isn't yet resolved defers.
-        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(outer);
+        let outer_node: syn::Type = {
+            let spelled = outer.spell();
+            syn::parse_quote!(#spelled)
+        };
+        let is_self = TypeKey::from_type(&ty) == outer.key();
         let inner = if is_self {
             None
         } else {
@@ -1926,7 +1904,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn(outer, &ty, &body, exc),
+                    function: self.build_input_fn_of(outer, &ty, &body, exc),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -1948,7 +1926,10 @@ impl Declarations {
                 // yields `outer`, i.e. the same shape an output converter
                 // has — so it's built with `build_output_fn`.
                 let stage = Stage {
-                    function: self.build_output_fn(&ty, outer, &body, exc),
+                    // `outer` sits in the WIRE slot here: the stage yields it
+                    // from `ty`, so it is spelled into the signature rather
+                    // than classified.
+                    function: self.build_output_fn(&ty, &outer_node, &body, exc),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];
@@ -1992,10 +1973,10 @@ impl Declarations {
     ///   (`None`) if `ty`'s converter isn't resolved yet.
     pub(crate) fn lookup_output(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let key = TypeKey::from_type(outer);
+        let key = outer.key();
         let (ty, exc_ty, body) = self.convert_output_body(&key, registry)?;
         self.build_output_converter(outer, None, ty, exc_ty, body, registry)
     }
@@ -2009,7 +1990,7 @@ impl Declarations {
     /// engine expressed one fact the frontend states outright.
     pub(crate) fn result_peel(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         ok: &syn::Type,
         err: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
@@ -2031,19 +2012,19 @@ impl Declarations {
     /// tested.
     fn build_output_converter(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         arg0: Option<&syn::Type>,
         ty: syn::Type,
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let key = TypeKey::from_type(outer);
+        let key = outer.key();
         // The middle slot carries the `Result`'s raw Rust error type (or `None`
         // for the framework `__JniErr`).
         let exc = exc_ty.as_ref();
         // Terminal vs composed — see [`Self::lookup_input`] for the rule.
-        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(outer);
+        let is_self = TypeKey::from_type(&ty) == key;
         let inner = if is_self {
             None
         } else {
@@ -2081,7 +2062,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -2098,7 +2079,7 @@ impl Declarations {
             Some(inner) => {
                 // Composed: `ty` is the continue rust type; chain its converter.
                 let stage = Stage {
-                    function: self.build_output_fn(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];

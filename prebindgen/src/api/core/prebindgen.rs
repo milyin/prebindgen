@@ -106,7 +106,14 @@ pub struct ConverterImpl<M = ()> {
     /// required-ness flows through the registry's type-graph edges, not here). The
     /// resolver copies these into `TypeEntry::subs`, which `propagate_required`
     /// walks to mark reachable types required.
-    pub subs: Vec<syn::Type>,
+    ///
+    /// **Identities, not spellings.** They are looked up and walked, never
+    /// emitted — [`TypeEntry::subs`](crate::api::core::registry::TypeEntry::subs)
+    /// was already `Vec<TypeKey>` and the resolver keyed these on arrival, so
+    /// the spelling existed only to be converted. An adapter that composed the
+    /// inner type keys it (`TypeKey::from_type`); one that read it off the model
+    /// asks the reading (`TypeRef::key`), and names no escape to do it.
+    pub subs: Vec<crate::api::core::registry::TypeKey>,
 }
 
 /// Re-emit a captured `#[prebindgen]` const as a **path-alias** to its
@@ -236,7 +243,7 @@ pub trait Prebindgen {
     // and be told "no reading" — the question a `&syn::ItemFn` forced it to ask
     // the registry, and which answered wrongly for a type that never entered
     // the pipeline (#275). What generated Rust must *spell* is still exactly
-    // available, on `origin.syntax`: classify off `kind`, spell off `syntax`.
+    // available, through `spell()`: classify off `kind`, spell with `spell()`.
 
     /// Wrap a `#[prebindgen]` fn into the destination-language wrapper
     /// (e.g. JNI `extern "C"` fn).
@@ -287,10 +294,9 @@ pub trait Prebindgen {
         c: &crate::api::core::flat::Constant,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        use quote::ToTokens;
         match self.source_module() {
-            Some(m) => const_path_alias(&c.origin.syntax, m),
-            None => c.origin.syntax.to_token_stream(),
+            Some(m) => const_path_alias(c.origin.as_syn(), m),
+            None => c.origin.spell(),
         }
     }
 }

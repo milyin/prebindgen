@@ -32,14 +32,13 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            let ty = reading.syntax().clone();
             registry.output_entry(&reading).is_some()
                 && self
-                    .enum_variants(registry, &ty)
-                    .map(|vs| {
-                        vs.iter()
-                            .flat_map(|v| v.fields.iter())
-                            .any(|f| is_string(&f.ty))
+                    .enum_alternatives(registry, key)
+                    .map(|alts| {
+                        alts.iter().flat_map(|a| a.fields.iter()).any(|f| {
+                            matches!(f.ty.kind(), crate::api::core::flat::TypeKind::String)
+                        })
                     })
                     .unwrap_or(false)
         }) {
@@ -49,25 +48,29 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            let ty = reading.syntax().clone();
             registry.output_entry(&reading).is_some()
                 && self
-                    .struct_fields(registry, &ty)
-                    .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
+                    .struct_fields(registry, key)
+                    .map(|fields| fields.iter().any(|(_, fty)| r_is_string(fty)))
                     .unwrap_or(false)
         })
     }
 
-    /// Variants of a declared enum, looked up from the registry's indexed
-    /// enums. `None` if the type isn't an indexed enum.
-    pub(super) fn enum_variants(
+    /// The alternatives of a declared sum, by **identity**.
+    ///
+    /// Off the element: an `Alternative` holds its fields already classified,
+    /// so the callers that ask "does any payload own memory" read a `TypeRef`
+    /// per field instead of a `syn::Field`. This took a node, took its last
+    /// path segment, and fetched the `syn::ItemEnum` to reach the same list.
+    pub(super) fn enum_alternatives<'r>(
         &self,
-        registry: &Registry<()>,
-        ty: &syn::Type,
-    ) -> Option<Vec<syn::Variant>> {
-        let ident = type_path_tail(ty)?;
-        let item = registry.flat().enum_item(&ident)?;
-        Some(item.variants.iter().cloned().collect())
+        registry: &'r Registry<()>,
+        key: &TypeKey,
+    ) -> Option<&'r [crate::api::core::flat::Alternative]> {
+        match registry.flat().declared_type(&key.ident()?)? {
+            crate::api::core::flat::Type::Variant(v) => Some(&v.alternatives),
+            _ => None,
+        }
     }
 
     /// The declared `opaque_ptr` under a union payload's spelling, when there is
@@ -79,19 +82,16 @@ impl CbindgenBuilder {
     /// wrapper the model erases cannot change which declaration a payload
     /// matches. See [`Self::payload_field_wire`] for why a union payload asks
     /// this at all where a `repr_c_struct` mirror must not.
-    pub(super) fn declared_opaque_payload_inner(
-        &self,
-        fty: &syn::Type,
-        registry: &impl Conversions<()>,
-    ) -> Option<syn::Type> {
-        if opaque_ptr_payload_inner(fty).is_some() {
+    pub(super) fn declared_opaque_payload_inner(&self, fty: &TypeRef) -> Option<TypeKey> {
+        if r_boxed_inner(fty).is_some() {
             return None;
         }
-        let reading = registry.reading_of(fty)?;
-        let core = reading.optional_inner().unwrap_or(&reading);
-        self.opaque
-            .contains_key(&core.stripped_key())
-            .then(|| core.stripped_syntax())
+        let core = fty.optional_inner().unwrap_or(fty);
+        let key = core.stripped_key();
+        // The IDENTITY, not the stripped spelling: every caller turned that
+        // spelling straight back into this key (`c_type_ident`, `type_short`)
+        // or into the source path it names (`src_ty_of`).
+        self.opaque.contains_key(&key).then_some(key)
     }
 
     /// Wire type of one **tagged-union payload field**: the
@@ -117,31 +117,31 @@ impl CbindgenBuilder {
     /// `bool` parameter now share (#170).
     pub(super) fn payload_field_wire(
         &self,
-        fty: &syn::Type,
+        fty: &TypeRef,
         registry: &Registry<()>,
     ) -> Result<syn::Type, String> {
         // `String` is the one type whose two directions disagree on the wire
         // (`*const c_char` in, `*mut c_char` out), so the union field fixes the
         // OWNING form and the per-arm expressions convert by hand.
-        if is_string(fty) {
+        if r_is_string(fty) {
             return Ok(syn::parse_quote!(*mut ::core::ffi::c_char));
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+        if self.enums.contains_key(&fty.key()) {
+            let c = self.c_type_ident(&fty.key());
             return Ok(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
         // `bool` is the one scalar with a restricted domain: `2` is a byte a C
         // caller can write into the union and NOT a Rust `bool`, so holding it
         // in the mirror is the same UB an out-of-range discriminant is. Same
         // remedy everywhere C writes a `bool` — see `bool_wire`.
-        if is_bool(fty) {
+        if r_is_bool(fty) {
             return Ok(bool_wire());
         }
         // A `Vec` payload needs TWO C wires (pointer + length) and one union
         // field can carry only one, so its length would be silently dropped.
         // Rejected explicitly, because the converter-destination rule below
         // would otherwise hand back the pointer alone and look like it worked.
-        if is_vec(fty) {
+        if r_is_vec(fty) {
             return Err(
                 "a `Vec` needs TWO C wires (pointer + length) and one union field carries only \
                  one, so its length would be silently dropped — hand the sequence over through \
@@ -178,7 +178,7 @@ impl CbindgenBuilder {
         // (#292). The two spellings now share this C type; their converter bodies
         // differ, which is exactly the split (`kind` decides what C sees, syntax
         // decides how the value is built).
-        if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
+        if let Some(inner) = self.declared_opaque_payload_inner(fty) {
             let c = self.c_type_ident(&inner);
             return Ok(syn::parse_quote!(*mut #c));
         }
@@ -194,7 +194,7 @@ impl CbindgenBuilder {
         // legitimately differ (a `String`'s const-ness above), which is why a
         // disagreement is `None` — a rejection naming the payload — rather
         // than a silent pick of one side.
-        let out_entry = registry.reading_of(fty).and_then(|tr| registry.output_entry(&tr)).ok_or_else(|| {
+        let out_entry = registry.output_entry(fty).ok_or_else(|| {
             "no resolved OUTPUT converter — a payload crosses as its converter's destination, so \
              it must be a scalar, a `String`, or a type this binding declares (`enum_type`, \
              `data_struct`, `opaque_ptr`, or a `convert!` conversion)"
@@ -211,10 +211,7 @@ impl CbindgenBuilder {
             );
         }
         let out = out_entry.destination.clone();
-        if let Some(inp) = registry
-            .reading_of(fty)
-            .and_then(|tr| registry.input_entry(&tr))
-        {
+        if let Some(inp) = registry.input_entry(fty) {
             if TypeKey::from_type(&inp.destination) != TypeKey::from_type(&out) {
                 return Err(format!(
                     "its input and output converters disagree on the wire (`{}` in, `{}` out) \
@@ -241,12 +238,20 @@ impl CbindgenBuilder {
     /// [`::core::mem::MaybeUninit`]: one mirror struct serves both directions,
     /// and on the way in its bytes are C's, so the field may not be a Rust enum
     /// until its tag has been validated. Invisible in C either way.
-    pub(super) fn data_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
-        if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+    pub(super) fn data_field_wire(&self, fty: &TypeRef) -> Option<syn::Type> {
+        if self.tagged_unions.contains_key(&fty.key()) {
+            let c = self.c_type_ident(&fty.key());
             return Some(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
-        c_field_wire(fty)
+        if r_is_string(fty) {
+            return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
+        }
+        // #170 instance 2: the field arrives from C by value, so it may not be
+        // a Rust `bool` until the byte has been normalised.
+        if r_is_bool(fty) {
+            return Some(bool_wire());
+        }
+        r_is_scalar(fty).then(|| spelled(fty))
     }
 
     /// True when a payload wire hands owned memory to C — a `char *` block or
@@ -261,7 +266,7 @@ impl CbindgenBuilder {
     /// zenoh-flat#30 needs.
     pub(super) fn payload_wire_owns(
         &self,
-        fty: &syn::Type,
+        fty: &TypeRef,
         wire: &syn::Type,
         registry: &Registry<()>,
     ) -> bool {
@@ -279,11 +284,11 @@ impl CbindgenBuilder {
     /// dependency so its converter exists by the time the union's own is
     /// emitted; without that it silently degrades to a passthrough and the
     /// generated code does not compile.
-    pub(super) fn payload_needs_converter(&self, fty: &syn::Type) -> bool {
-        if is_string(fty) || is_scalar(fty) || is_vec(fty) {
+    pub(super) fn payload_needs_converter(&self, fty: &TypeRef) -> bool {
+        if r_is_string(fty) || r_is_scalar(fty) || r_is_vec(fty) {
             return false;
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+        if self.enums.contains_key(&fty.key()) {
             return true;
         }
         // `Box<T>` / `Option<Box<T>>` opaque pointers are built inline from the
@@ -293,15 +298,15 @@ impl CbindgenBuilder {
 
     /// The `(name, type)` of every field of a declared `data_struct` whose own
     /// C wire owns memory. Empty when `fty` is not a declared data struct.
-    pub(super) fn owning_data_struct_fields(
+    pub(super) fn owning_data_struct_fields<'r>(
         &self,
-        fty: &syn::Type,
-        registry: &Registry<()>,
-    ) -> Vec<(syn::Ident, syn::Type)> {
-        if !self.data.contains_key(&TypeKey::from_type(fty)) {
+        fty: &TypeRef,
+        registry: &'r Registry<()>,
+    ) -> Vec<(syn::Ident, &'r TypeRef)> {
+        if !self.data.contains_key(&fty.key()) {
             return Vec::new();
         }
-        self.struct_fields(registry, fty)
+        self.struct_fields(registry, &fty.key())
             .unwrap_or_default()
             .into_iter()
             .filter(|(_, fty)| self.data_field_owns(fty, registry))
@@ -312,7 +317,7 @@ impl CbindgenBuilder {
     /// is a pointer (`String` → `char *`), or it is a declared
     /// [`CbindgenBuilder::tagged_union`] with an owning arm — which crosses by value,
     /// so the pointer it owns is one level further down.
-    fn data_field_owns(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
+    fn data_field_owns(&self, fty: &TypeRef, registry: &Registry<()>) -> bool {
         if matches!(self.data_field_wire(fty), Some(syn::Type::Ptr(_))) {
             return true;
         }
@@ -327,19 +332,14 @@ impl CbindgenBuilder {
     /// containing struct has to call it, so a union nested inside a payload
     /// cannot be freed through a symbol that was never emitted. `false` for
     /// anything that is not a declared tagged union.
-    pub(super) fn tagged_union_has_drop(&self, fty: &syn::Type, registry: &Registry<()>) -> bool {
-        if !self.tagged_unions.contains_key(&TypeKey::from_type(fty))
-            || registry
-                .reading_of(fty)
-                .and_then(|tr| registry.output_entry(&tr))
-                .is_none()
-        {
+    pub(super) fn tagged_union_has_drop(&self, fty: &TypeRef, registry: &Registry<()>) -> bool {
+        if !self.tagged_unions.contains_key(&fty.key()) || registry.output_entry(fty).is_none() {
             return false;
         }
-        self.enum_variants(registry, fty)
+        self.enum_alternatives(registry, &fty.key())
             .unwrap_or_default()
             .iter()
-            .flat_map(|v| v.fields.iter())
+            .flat_map(|a| a.fields.iter())
             .any(|f| match self.payload_field_wire(&f.ty, registry) {
                 // A rejected payload is reported from the emission site, which
                 // panics before any of this matters.
@@ -371,27 +371,21 @@ impl CbindgenBuilder {
     /// Fields (`name`, `type`) of a declared data struct, looked up from the
     /// registry's indexed structs. `None` if the type isn't an indexed named
     /// struct.
-    pub(super) fn struct_fields(
+    pub(super) fn struct_fields<'r>(
         &self,
-        registry: &impl Conversions<()>,
-        ty: &syn::Type,
-    ) -> Option<Vec<(syn::Ident, syn::Type)>> {
-        let ident = type_path_tail(ty)?;
-        let item = registry
-            .flat()
-            .struct_type(&ident)
-            .map(|st| &st.origin.syntax)?;
-        if let syn::Fields::Named(named) = &item.fields {
-            Some(
-                named
-                    .named
-                    .iter()
-                    .map(|f| (f.ident.clone().unwrap(), f.ty.clone()))
-                    .collect(),
-            )
-        } else {
-            None
-        }
+        registry: &'r impl Conversions<()>,
+        key: &TypeKey,
+    ) -> Option<Vec<(syn::Ident, &'r TypeRef)>> {
+        // The element, not its item. A `Struct` holds the field list the
+        // `syn::Fields::Named` match used to dig out, each field's name beside
+        // the reading of its type — so the name lookup is the key's own ident
+        // and the positional case is `f.name` being `None` rather than a
+        // `Fields` variant.
+        let st = registry.flat().struct_type(&key.ident()?)?;
+        st.fields
+            .iter()
+            .map(|f| Some((f.name.clone()?, &f.ty)))
+            .collect()
     }
 
     /// Wire type of a `repr_c_struct` field in the generated **visible** mirror: a
@@ -406,24 +400,19 @@ impl CbindgenBuilder {
     /// from C's bytes with no chance to check them. That gap is audited
     /// separately by [`Self::restricted_validity_field`] — this function keeps
     /// answering what the layout is.
-    pub(super) fn mirror_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
-        if is_scalar(fty) {
-            return Some(fty.clone());
+    pub(super) fn mirror_field_wire(&self, fty: &TypeRef) -> Option<syn::Type> {
+        if r_is_scalar(fty) {
+            return Some(spelled(fty));
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
-            let c = self.c_type_ident(fty);
+        if self.enums.contains_key(&fty.key()) {
+            let c = self.c_type_ident(&fty.key());
             return Some(syn::parse_quote!(#c));
         }
         // Opaque pointer: `Option<Box<T>>` (nullable, null-niche ↔ NULL) or `Box<T>`
         // where `T` is a declared `opaque_ptr` → `*mut t_t`.
-        let boxed = if is_option(fty) {
-            first_type_arg(fty).and_then(|inner| box_inner(&inner))
-        } else {
-            box_inner(fty)
-        };
-        if let Some(inner) = boxed {
-            if self.opaque.contains_key(&TypeKey::from_type(&inner)) {
-                let c = self.c_type_ident(&inner);
+        if let Some(inner) = r_boxed_inner(fty) {
+            if self.opaque.contains_key(&inner.key()) {
+                let c = self.c_type_ident(&inner.key());
                 return Some(syn::parse_quote!(*mut #c));
             }
         }
@@ -449,11 +438,11 @@ impl CbindgenBuilder {
     /// value already exists. Wrapping the mirror field in `MaybeUninit` moves
     /// the problem rather than solving it — the transmute's *output* still has
     /// the real field.
-    pub(super) fn restricted_validity_field(&self, fty: &syn::Type) -> Option<&'static str> {
-        if is_bool(fty) {
+    pub(super) fn restricted_validity_field(&self, fty: &TypeRef) -> Option<&'static str> {
+        if r_is_bool(fty) {
             return Some("`bool` — only `0` and `1` are valid");
         }
-        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+        if self.enums.contains_key(&fty.key()) {
             return Some("a declared `enum_type` — only its declared discriminants are valid");
         }
         None
@@ -465,13 +454,13 @@ impl CbindgenBuilder {
     pub(super) fn restricted_validity_fields(
         &self,
         registry: &Registry<()>,
-        ty: &syn::Type,
+        key: &TypeKey,
     ) -> Vec<(syn::Ident, &'static str)> {
-        self.struct_fields(registry, ty)
+        self.struct_fields(registry, key)
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(fname, fty)| {
-                self.restricted_validity_field(&fty)
+                self.restricted_validity_field(fty)
                     .map(|reason| (fname, reason))
             })
             .collect()
@@ -495,35 +484,34 @@ impl CbindgenBuilder {
     /// Assemble the `#[no_mangle] extern "C"` wrapper for one declared fn.
     pub(super) fn emit_function_wrapper(
         &self,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
     ) -> TokenStream {
-        let orig = &f.sig.ident;
+        let orig = &f.name;
         let call_path = self.src_fn(orig);
         let sym = self.fn_symbol(orig);
 
-        let return_ty: syn::Type = match &f.sig.output {
-            syn::ReturnType::Default => syn::parse_quote!(()),
-            syn::ReturnType::Type(_, ty) => (**ty).clone(),
-        };
+        // The ELEMENT: a signature is a parameter list and a return, both
+        // already classified. An elided return is `TypeKind::Unit`, which is
+        // the `ReturnType::Default` arm this used to write.
 
-        let has_fallible_input = f.sig.inputs.iter().any(|input| {
-            let syn::FnArg::Typed(pt) = input else {
-                return false;
-            };
+        let has_fallible_input = f.params.iter().any(|p| {
             registry
-                .reading_of(&pt.ty)
-                .and_then(|tr| registry.input_entry(&tr))
+                .input_entry(&p.ty)
                 .map(|e| returns_result(&e.function.sig.output))
                 .unwrap_or(false)
         });
 
         // Peel an outer `Result<_, E>`; `value_ty` is the success/return value.
-        let (value_ty, err_ty): (syn::Type, Option<syn::Type>) = match result_parts(&return_ty) {
+        // Off `TypeKind::Fallible`, where `result_parts` found the `Result` in a
+        // path first — and both sides come back as readings, so everything
+        // downstream of here reads too.
+        let (value_ty, err_reading) = match f.ret.fallible_parts() {
             Some((ok, e)) => (ok, Some(e)),
-            None => (return_ty.clone(), None),
+            None => (&f.ret, None),
         };
-        let has_fallible_output = Self::output_is_fallible(&value_ty, registry);
+        let err_ty: Option<syn::Type> = err_reading.map(spelled);
+        let has_fallible_output = Self::output_is_fallible(value_ty, registry);
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -570,7 +558,7 @@ impl CbindgenBuilder {
         //   * Result + a free pointer niche  → NULL marks `Err` (value in-band);
         //   * Result without a free niche     → `bool` status, value to out-params;
         //   * no Result                       → field 0 is the C return, rest out.
-        let shape = self.lower_shape(&value_ty, registry);
+        let shape = self.lower_shape(value_ty, registry);
         let result_slot = shape.niches.clone().carve().map(|(slot, _)| slot);
         let result_in_band = err_ty.is_some() && result_slot.is_some();
         let field0_is_return = result_in_band || err_ty.is_none();
@@ -650,7 +638,7 @@ impl CbindgenBuilder {
             (None, _) => {
                 if let Some(field0_wire) = field0_wire.as_ref() {
                     let enc =
-                        self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
+                        self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
                     quote!(
                         #(#decodes)*
                         let __v = #call;
@@ -670,7 +658,7 @@ impl CbindgenBuilder {
                     .expect("in-band result has a niche")
                     .value;
                 let enc =
-                    self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
+                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -685,7 +673,7 @@ impl CbindgenBuilder {
             // `Result` without a free niche: `bool` status, value to out-params.
             (Some((_, e_conv, _)), false) => {
                 let enc =
-                    self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
+                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -717,8 +705,8 @@ impl CbindgenBuilder {
     /// available for enclosing `Option`/`Result` layers. Mirrors the
     /// niche-stacking model in `core::niches`.
     #[allow(clippy::only_used_in_recursion)]
-    pub(super) fn lower_shape(&self, ty: &syn::Type, registry: &Registry<()>) -> ValueShape {
-        if is_unit(ty) {
+    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &Registry<()>) -> ValueShape {
+        if matches!(ty.kind(), TypeKind::Unit) {
             return ValueShape {
                 fields: vec![],
                 niches: Niches::empty(),
@@ -726,23 +714,24 @@ impl CbindgenBuilder {
         }
         // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
         // value (one converter); a composite element is unsupported.
-        if is_vec(ty) {
-            let elem = first_type_arg(ty).expect("Vec<T> has a type argument");
+        // `TypeKind::Vec` and not `sequence_elem`: that reading peels the
+        // erased wrappers first, so a `Cow<'_, [u8]>` would answer here and
+        // take the `Vec` lowering instead of its own arm below.
+        if let TypeKind::Vec(elem) = ty.kind() {
             assert!(
-                !is_option(&elem) && !is_vec(&elem) && !is_result(&elem),
+                elem.optional_inner().is_none()
+                    && elem.sequence_elem().is_none()
+                    && elem.fallible_parts().is_none(),
                 "Cbindgen: `Vec<{}>` element must be a single-value type \
                  (scalar, data struct, String, or handle), not a composite",
-                TypeKey::from_type(&elem),
+                elem.key(),
             );
-            let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen: `Vec` element `{}` has no output converter",
-                        TypeKey::from_type(&elem)
-                    )
-                });
+            let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen: `Vec` element `{}` has no output converter",
+                    elem.key()
+                )
+            });
             let elem_wire = entry.destination.clone();
             return ValueShape {
                 fields: vec![
@@ -760,16 +749,13 @@ impl CbindgenBuilder {
         }
         // `Cow<'_, [T]>` → `T_wire* + size_t`. The C side receives an owned
         // malloc'd copy, just like `Vec<T>` outputs.
-        if let Some(elem) = cow_slice_elem(ty) {
-            let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen: `Cow` slice element `{}` has no output converter",
-                        TypeKey::from_type(&elem)
-                    )
-                });
+        if let Some(elem) = r_cow_slice_elem(ty) {
+            let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen: `Cow` slice element `{}` has no output converter",
+                    elem.key()
+                )
+            });
             let elem_wire = entry.destination.clone();
             return ValueShape {
                 fields: vec![
@@ -788,9 +774,8 @@ impl CbindgenBuilder {
         // `Option<T>` consumes one available inner niche. This includes NULL
         // pointers and invalid scalar values declared by `convert!`; without a
         // niche it prepends an explicit `present: bool`.
-        if is_option(ty) {
-            let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
-            let inner = self.lower_shape(&inner_ty, registry);
+        if let Some(inner_ty) = ty.optional_inner() {
+            let inner = self.lower_shape(inner_ty, registry);
             if let Some((_slot, rest)) = inner.niches.clone().carve() {
                 return ValueShape {
                     fields: inner.fields,
@@ -810,15 +795,12 @@ impl CbindgenBuilder {
         // Base value: one wire component from its rank-0/1 converter. Custom
         // conversions may declare scalar niches; otherwise a pointer wire
         // (String, opaque handle, `&'static`) carries a free NULL niche.
-        let entry = registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
-            .unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen::on_function: type `{}` has no output converter",
-                    TypeKey::from_type(ty)
-                )
-            });
+        let entry = registry.output_entry(ty).unwrap_or_else(|| {
+            panic!(
+                "Cbindgen::on_function: type `{}` has no output converter",
+                ty.key()
+            )
+        });
         let wire = entry.destination.clone();
         let niches = if entry.niches.is_empty() && matches!(wire, syn::Type::Ptr(_)) {
             let null = null_for(&wire);
@@ -836,21 +818,17 @@ impl CbindgenBuilder {
     /// `targets` lvalues (one per field of `lower_shape(ty)`, in order).
     pub(super) fn encode_value(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         val: TokenStream,
         targets: &[TokenStream],
         registry: &Registry<()>,
         route: &ErrRoute,
     ) -> TokenStream {
-        if is_unit(ty) {
+        if matches!(ty.kind(), TypeKind::Unit) {
             return quote!();
         }
-        if is_vec(ty) {
-            let elem = first_type_arg(ty).expect("Vec<T> has a type argument");
-            let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
-                .expect("Vec element converter");
+        if let TypeKind::Vec(elem) = ty.kind() {
+            let entry = registry.output_entry(elem).expect("Vec element converter");
             let elem_conv = entry.function.sig.ident.clone();
             let elem_wire = entry.destination.clone();
             let t_ptr = &targets[0];
@@ -876,10 +854,9 @@ impl CbindgenBuilder {
                 );
             }
         }
-        if let Some(elem) = cow_slice_elem(ty) {
+        if let Some(elem) = r_cow_slice_elem(ty) {
             let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
+                .output_entry(elem)
                 .expect("Cow slice element converter");
             let elem_conv = entry.function.sig.ident.clone();
             let elem_wire = entry.destination.clone();
@@ -906,12 +883,11 @@ impl CbindgenBuilder {
                 );
             }
         }
-        if is_option(ty) {
-            let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
-            let inner = self.lower_shape(&inner_ty, registry);
+        if let Some(inner_ty) = ty.optional_inner() {
+            let inner = self.lower_shape(inner_ty, registry);
             if let Some((slot, _rest)) = inner.niches.clone().carve() {
                 // None reuses the next inner niche; Some encodes inline.
-                let inner_enc = self.encode_value(&inner_ty, quote!(__x), targets, registry, route);
+                let inner_enc = self.encode_value(inner_ty, quote!(__x), targets, registry, route);
                 let null = &slot.value;
                 let t0 = &targets[0];
                 return quote!(
@@ -924,7 +900,7 @@ impl CbindgenBuilder {
             // Explicit `present` flag in targets[0]; inner value follows.
             let present = &targets[0];
             let inner_enc =
-                self.encode_value(&inner_ty, quote!(__x), &targets[1..], registry, route);
+                self.encode_value(inner_ty, quote!(__x), &targets[1..], registry, route);
             return quote!(
                 match #val {
                     ::core::option::Option::Some(__x) => { #present = true; #inner_enc }
@@ -933,10 +909,7 @@ impl CbindgenBuilder {
             );
         }
         // Base value: run its output converter into the single target.
-        let entry = registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
-            .expect("base value converter");
+        let entry = registry.output_entry(ty).expect("base value converter");
         let conv = entry.function.sig.ident.clone();
         let t0 = &targets[0];
         if returns_result(&entry.function.sig.output) {
@@ -947,17 +920,20 @@ impl CbindgenBuilder {
         }
     }
 
-    fn output_is_fallible(ty: &syn::Type, registry: &Registry<()>) -> bool {
-        if is_option(ty) || is_vec(ty) {
-            return first_type_arg(ty)
-                .is_some_and(|inner| Self::output_is_fallible(&inner, registry));
-        }
-        if let Some(inner) = cow_slice_elem(ty) {
-            return Self::output_is_fallible(&inner, registry);
+    fn output_is_fallible(ty: &TypeRef, registry: &Registry<()>) -> bool {
+        let vec_elem = match ty.kind() {
+            TypeKind::Vec(e) => Some(&**e),
+            _ => None,
+        };
+        if let Some(inner) = ty
+            .optional_inner()
+            .or(vec_elem)
+            .or_else(|| r_cow_slice_elem(ty))
+        {
+            return Self::output_is_fallible(inner, registry);
         }
         registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
+            .output_entry(ty)
             .is_some_and(|entry| returns_result(&entry.function.sig.output))
     }
 
@@ -970,33 +946,35 @@ impl CbindgenBuilder {
     /// handle pointer, and comparing the syntactic parameter type instead would
     /// miss `f(x: ZThing, y: Option<ZThing>)` called with the same handle
     /// twice.
-    fn alias_slot(&self, ty: &syn::Type) -> Option<(TypeKey, AliasAccess)> {
-        let inner = if is_option(ty) {
-            first_type_arg(ty)?
-        } else {
-            ty.clone()
-        };
+    /// [`Self::alias_slot`] off the classification: the optional peel, the
+    /// borrow and its mutability, and the `MaybeUninit` under a `&mut` are all
+    /// what `TypeKind` states — where this walked `Option`'s type argument, a
+    /// `syn::Type::Reference` and its `mutability` field.
+    fn alias_slot_of(&self, ty: &TypeRef) -> Option<(TypeKey, AliasAccess)> {
+        let inner = ty.optional_inner().unwrap_or(ty);
         let declared =
             |key: &TypeKey| self.opaque.contains_key(key) || self.value_opaque.contains_key(key);
-        if let syn::Type::Reference(r) = &inner {
+        if let TypeKind::Ref { mutable, inner, .. } = inner.kind() {
             // `&mut MaybeUninit<T>` borrows T's slot exclusively just as
             // `&mut T` does; the wire is the same pointer.
-            let elem = (*r.elem).clone();
-            let elem = maybe_uninit_inner(&elem).unwrap_or(elem);
-            let key = TypeKey::from_type(&elem);
+            let elem = match inner.kind() {
+                TypeKind::Uninit(t) => t,
+                _ => inner,
+            };
+            let key = elem.key();
             if !declared(&key) {
                 return None;
             }
             return Some((
                 key,
-                if r.mutability.is_some() {
+                if *mutable {
                     AliasAccess::Exclusive
                 } else {
                     AliasAccess::Shared
                 },
             ));
         }
-        let key = TypeKey::from_type(&inner);
+        let key = inner.key();
         declared(&key).then_some((key, AliasAccess::Consume))
     }
 
@@ -1023,17 +1001,15 @@ impl CbindgenBuilder {
     ///
     /// Shared/shared is *not* rejected: two `&T` to one resource is legal Rust
     /// and legal C.
-    pub(super) fn alias_preflight(&self, f: &syn::ItemFn, route: &ErrRoute) -> Option<TokenStream> {
+    pub(super) fn alias_preflight(
+        &self,
+        f: &crate::api::core::flat::Function,
+        route: &ErrRoute,
+    ) -> Option<TokenStream> {
         let mut slots: Vec<(syn::Ident, TypeKey, AliasAccess)> = Vec::new();
-        for input in &f.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else {
-                continue;
-            };
-            let syn::Pat::Ident(pat_id) = &*pt.pat else {
-                continue;
-            };
-            if let Some((key, access)) = self.alias_slot(&pt.ty) {
-                slots.push((pat_id.ident.clone(), key, access));
+        for p in &f.params {
+            if let Some((key, access)) = self.alias_slot_of(&p.ty) {
+                slots.push((p.name.clone(), key, access));
             }
         }
 
@@ -1077,7 +1053,7 @@ impl CbindgenBuilder {
     pub(super) fn emit_inputs(
         &self,
         orig: &syn::Ident,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
         route: &ErrRoute,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
@@ -1088,19 +1064,14 @@ impl CbindgenBuilder {
         let mut decodes: Vec<TokenStream> = self.alias_preflight(f, route).into_iter().collect();
         let mut call_args = Vec::new();
 
-        for input in &f.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else {
-                continue;
-            };
-            let syn::Pat::Ident(pat_id) = &*pt.pat else {
-                continue;
-            };
-            let ident = &pat_id.ident;
-            let arg_ty = &*pt.ty;
+        for param in &f.params {
+            let ident = &param.name;
+            let arg_reading = &param.ty;
+            let arg_ty = &spelled(arg_reading);
 
             // `&[E]` slice (scalar `E`): two wire params (`*const E`, `usize`),
             // decoded zero-copy. NULL pointer ⇒ empty slice (not an error).
-            if let Some(elem) = scalar_slice_elem(arg_ty) {
+            if let Some(elem) = r_scalar_slice_elem(arg_reading).map(spelled) {
                 let len_id = format_ident!("{}_len", ident);
                 params.push(quote!(#ident: *const #elem));
                 params.push(quote!(#len_id: usize));
@@ -1121,7 +1092,7 @@ impl CbindgenBuilder {
             // by a generated `const _`), so the whole block transmutes in one shot —
             // the slice analogue of the single-`&E` `__cbg_in_*` converter. NULL ⇒
             // empty slice.
-            if let Some(elem) = self.value_opaque_slice_elem(arg_ty) {
+            if let Some(elem) = self.r_value_opaque_slice_elem(arg_reading).map(spelled) {
                 // The C wire element is the inline-opaque counterpart (e.g. the
                 // generated `payload_t` mirror), layout-identical to the Rust value.
                 let elem_wire = self

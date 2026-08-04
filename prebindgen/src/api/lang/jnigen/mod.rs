@@ -119,19 +119,25 @@ mod spelling_census {
         // `.jobject_input()` decoders — struct, then sum. Every layer question
         // in that file now asks a `TypeRef`, and its walks take `flat::Struct`
         // and `flat::Variant` rather than the items they were parsed from.
-        ("jni/emit/struct_out.rs", 2),
+        // struct_out.rs is off the census: both layer questions ask the field's
+        // own reading — `optional_inner` to look through, the `Vec` kind to
+        // defer.
         ("jni/emit/wrapper.rs", 2),
         //
         // vec_build.rs is absent, and off the boundary ledger too: its element
         // peel reads `sequence_elem`/`borrow_target` off the model now.
         //
-        // fold.rs's one call is inside `enum_probe_type`, the spelling twin of
-        // `enum_probe` kept for `unfold_leaf_kt`'s `syn::Type` callers.
-        ("jni/fold.rs", 1),
-        ("jni/iface.rs", 2),
+        // fold.rs is off the census: `enum_probe_type`, the spelling twin kept
+        // for `unfold_leaf_kt`'s `syn::Type` callers, is deleted — that caller
+        // takes a reading and asks `is_kotlin_enum_reading`.
+        // iface.rs is off the census: `subject_short` / `subject_package` peel
+        // `&`/`Option`/`Vec` off the KIND now, which is the same grammar the
+        // spelling was — see `util::head_type`.
         // kotlin_emit.rs is off the census: `sum_ctor_arg`'s enum payload peels
         // its `Option` off the leaf's own reading.
-        ("jni/trait_impl.rs", 4),
+        // trait_impl.rs is off the census: the two sum-position checks read the
+        // model's `fallible_parts` and peel the reading, so no helper of this
+        // kind is left in the file.
         // Down from 2: the nullability decisions now ask the model. The one
         // left probes for an enum through its layers.
         ("jni/fn_plan.rs", 1),

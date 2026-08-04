@@ -647,29 +647,23 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
 /// surfaces as `List<E>`) gets a `List` suffix — `<E>List` — so it yields a valid,
 /// distinct interface name (`<E>ListCallback`) instead of the bracketed `[E]` and
 /// without colliding with the scalar `&E` callback (`<E>Callback`).
-fn subject_short(ty: &syn::Type) -> String {
-    let no_ref = match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    if let syn::Type::Slice(s) = &no_ref {
-        return format!("{}List", subject_short(&s.elem));
+fn subject_short(ty: &crate::api::core::flat::TypeRef) -> String {
+    use crate::api::lang::jnigen::util::{head_name, head_type};
+    // One `&` off, then a slice — the `List` suffix is decided before the
+    // general peel, exactly as it was, because `&[E]` and `Vec<E>` must not
+    // collapse to the same interface name.
+    let no_ref = ty.borrow_target().unwrap_or(ty);
+    if let crate::api::core::flat::TypeKind::Slice(elem) = no_ref.kind() {
+        return format!("{}List", subject_short(elem));
     }
-    let peeled = crate::api::core::types_util::peel_ref_option_vec(ty);
-    if let syn::Type::Path(tp) = &peeled {
-        if let Some(seg) = tp.path.segments.last() {
-            return seg.ident.to_string();
-        }
-    }
-    TypeKey::from_type(&peeled)
-        .to_string()
-        .replace([' ', ':', '<', '>'], "")
+    let peeled = head_type(ty);
+    head_name(peeled).unwrap_or_else(|| peeled.key().to_string().replace([' ', ':', '<', '>'], ""))
 }
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
-fn subject_package(ext: &Declarations, subject: &syn::Type) -> String {
-    let key = TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject));
+fn subject_package(ext: &Declarations, subject: &crate::api::core::flat::TypeRef) -> String {
+    let key = crate::api::lang::jnigen::util::head_type(subject).key();
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
         .unwrap_or_else(|| ext.package.clone())
@@ -720,12 +714,12 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, leaf.out_ty.syntax());
+    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty);
     leaf_iface_param(
         ext,
         registry,
         name,
-        leaf.out_ty.syntax(),
+        &leaf.out_ty,
         leaf.nullable || inert_nullable,
         true,
     )
@@ -746,7 +740,7 @@ fn leaf_iface_param(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
-    out_ty: &syn::Type,
+    out_ty: &crate::api::core::flat::TypeRef,
     nullable: bool,
     raw_handle: bool,
 ) -> Option<IfaceParam> {
@@ -755,23 +749,22 @@ fn leaf_iface_param(
     // OWNED resolved only `T`'s output entry. Both classify to the same
     // projection/class, so fall back to the peeled form when the borrowed
     // entry was never required.
+    //
+    // `TypeKind::Ref` and NOT `borrow_target`: this peels the spelling's own
+    // outermost borrow, where `borrow_target` reaches the target *through* the
+    // erased wrappers. `Box<&T>` has a borrow target and is deliberately not
+    // servable here (`a_wrapped_borrow_callback_arg_declines`) — peeling it
+    // would resolve a shape the wrapper arms own.
     let mut out_ty = out_ty;
-    let peeled: syn::Type;
-    if registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
-        .is_none()
-    {
-        if let syn::Type::Reference(r) = out_ty {
-            peeled = (*r.elem).clone();
-            out_ty = &peeled;
+    if registry.output_entry(out_ty).is_none() {
+        if let crate::api::core::flat::TypeKind::Ref { inner, .. } = out_ty.kind() {
+            out_ty = inner;
         }
     }
     let (builder_kt, _wire_kt, _wrap, is_value_projection) =
         unfold_leaf_kt(ext, registry, out_ty, nullable, "x")?;
     let proj = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
+        .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.as_ref());
     let nullable_kt = |t: kt::KtType| {
         if builder_kt.is_nullable() {
@@ -831,7 +824,7 @@ fn leaf_iface_param(
     // no `asRaw` proxy is generated.
     if let kt::KtType::Named { fqn: bk_fqn, .. } = &builder_kt {
         if !bk_fqn.contains('.') {
-            if let Some(reg_fqn) = ext.kotlin_fqn(&TypeKey::from_type(out_ty)) {
+            if let Some(reg_fqn) = ext.kotlin_fqn(&out_ty.key()) {
                 let reg_short = reg_fqn.rsplit('.').next().unwrap_or(&reg_fqn);
                 if reg_fqn.contains('.') && reg_short == bk_fqn {
                     let raw = kt::KtType::cls(reg_fqn.to_string());
@@ -863,15 +856,10 @@ pub(crate) fn owned_handle_iface_param(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
-    out_ty: &syn::Type,
+    out_ty: &crate::api::core::flat::TypeRef,
     nullable: bool,
 ) -> Option<IfaceParam> {
-    let proj = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))?
-        .metadata
-        .projection
-        .clone()?;
+    let proj = registry.output_entry(out_ty)?.metadata.projection.clone()?;
     let fqn = ext.kotlin_fqn(&proj.leaf_key)?.to_string();
     let typed = kt::KtType::cls(fqn.clone());
     let (typed, raw) = if nullable {
@@ -913,13 +901,17 @@ pub(crate) enum SpecKey {
 
 impl SpecKey {
     /// The impl-Fn identity for a callback's arg types.
-    pub fn callback(args: &[syn::Type]) -> Self {
-        SpecKey::Callback(args.iter().map(TypeKey::from_type).collect())
+    ///
+    /// Off the readings, like its [`whole_folder`](Self::whole_folder) peer:
+    /// the key IS a `Vec<TypeKey>`, and every caller was spelling each arg into
+    /// a throwaway `Vec<syn::Type>` for `TypeKey::from_type` to read back.
+    pub fn callback(args: &[crate::api::core::flat::TypeRef]) -> Self {
+        SpecKey::Callback(args.iter().map(|a| a.key()).collect())
     }
 
     /// The whole-element fold identity for an element type.
-    pub fn whole_folder(element: &syn::Type) -> Self {
-        SpecKey::WholeFolder(TypeKey::from_type(element))
+    pub fn whole_folder(element: &crate::api::core::flat::TypeRef) -> Self {
+        SpecKey::WholeFolder(element.key())
     }
 }
 
@@ -976,7 +968,7 @@ pub(crate) fn fixed_leaf_element_keys(
         .chain(registry.callback_arg_plans().values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.element.as_ref())
-        .map(TypeKey::from_type)
+        .map(|el| el.key())
         .collect()
 }
 
@@ -1024,7 +1016,7 @@ fn derive_iface_spec(
         // above: the memo key holds an identity, and the reading behind it is a
         // lookup. `None` defers, exactly as it does there (#291).
         SpecKey::WholeFolder(el_key) => {
-            whole_folder_iface_spec(ext, registry, registry.reading(el_key)?.syntax())
+            whole_folder_iface_spec(ext, registry, &registry.reading(el_key)?)
         }
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
@@ -1079,7 +1071,7 @@ impl Declarations {
 fn fixed_reassembly(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    source: &syn::Type,
+    source: &TypeKey,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
     class_fqn: &str,
 ) -> (String, Vec<String>) {
@@ -1130,7 +1122,7 @@ pub(crate) fn callback_iface_spec(
         Plan(String, crate::api::core::unfold::UnfoldLeaf),
         Whole {
             name: String,
-            ty: syn::Type,
+            ty: crate::api::core::flat::TypeRef,
             nullable: bool,
             owned_handle: bool,
         },
@@ -1166,12 +1158,12 @@ pub(crate) fn callback_iface_spec(
                 any_fixed = true;
                 // Peeled off the reading — `borrow_target` is the model's
                 // answer to "is this a borrow", not a syn match.
-                let core = t.borrow_target().unwrap_or(t).syntax().clone();
-                let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
+                let core = t.borrow_target().unwrap_or(t);
+                let fqn = ext.kotlin_fqn(&core.key())?;
                 let (reassemble, imports) =
-                    fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
+                    fixed_reassembly(ext, registry, &core.key(), &plan.leaves, &fqn);
                 groups.push(GroupDesc {
-                    name: whole_value_name(t.syntax(), i),
+                    name: whole_value_name(t, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
@@ -1197,11 +1189,11 @@ pub(crate) fn callback_iface_spec(
                     };
                     if leaf.source == LeafSource::SumTag {
                         any_fixed = true;
-                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(leaf.out_ty.syntax()))?;
+                        let fqn = ext.kotlin_fqn(&leaf.out_ty.key())?;
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
-                            leaf.out_ty.syntax(),
+                            &leaf.out_ty.key(),
                             &plan.leaves[k..seg],
                             &fqn,
                         );
@@ -1248,13 +1240,13 @@ pub(crate) fn callback_iface_spec(
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
-                name: whole_value_name(t.syntax(), i),
-                ty: t.syntax().clone(),
+                name: whole_value_name(t, i),
+                ty: (*t).clone(),
                 nullable: t.optional_inner().is_some(),
                 owned_handle,
             });
             groups.push(GroupDesc {
-                name: whole_value_name(t.syntax(), i),
+                name: whole_value_name(t, i),
                 typed: None,
                 reassemble: None,
                 imports: Vec::new(),
@@ -1311,14 +1303,14 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(|t| subject_short(t.syntax()))
+                .map(subject_short)
                 .collect::<Vec<_>>()
                 .join("")
         )
     };
     let package = cb_args
         .first()
-        .map(|t| subject_package(ext, t.syntax()))
+        .map(|t| subject_package(ext, t))
         .unwrap_or_else(|| ext.package.clone());
     Some(IfaceSpec {
         typed_groups,
@@ -1387,7 +1379,7 @@ pub(crate) fn folder_iface_spec(
 pub(crate) fn whole_folder_iface_spec(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    element: &syn::Type,
+    element: &crate::api::core::flat::TypeRef,
 ) -> Option<IfaceSpec> {
     let mut params: Vec<IfaceParam> =
         vec![IfaceParam::same("acc".to_string(), kt::KtType::var_("A"))];
@@ -1451,8 +1443,9 @@ pub(crate) fn fixed_folder_typed_groups(
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans().get(decon)?;
-    let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source))?;
-    let (reassemble, imports) = fixed_reassembly(ext, registry, &spec.source, &spec.leaves, &fqn);
+    let fqn = ext.kotlin_fqn(&spec.source.key())?;
+    let (reassemble, imports) =
+        fixed_reassembly(ext, registry, &spec.source.key(), &spec.leaves, &fqn);
     Some(vec![
         TypedGroup {
             name: "acc".to_string(),

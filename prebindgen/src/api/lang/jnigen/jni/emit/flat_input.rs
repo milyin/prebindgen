@@ -75,7 +75,7 @@ pub(crate) fn struct_input_body(
                     // converter would yield `OwnedObject<T>`, which can't
                     // populate an owned field. `Option<_>` handle fields keep
                     // the niche-aware converter (jlong 0 ⇒ `None`).
-                    let field_ty = field.ty.syntax();
+                    let field_ty = field.ty.spell();
                     let decode = if field_optional {
                         quote! { let #fname_ident = #field_conv; }
                     } else {
@@ -424,7 +424,7 @@ fn read_kotlin_property(
     // segment, so a payload spelled `Box<Option<T>>` answered "not optional"
     // four separate times here (#289).
     let entry = registry.input_entry(reading)?;
-    let ty = reading.syntax();
+    let ty = reading.spell();
     let optional = reading.optional_inner().is_some();
     let inner = reading.optional_inner().unwrap_or(reading);
     let wire = entry.destination.clone();
@@ -755,9 +755,11 @@ pub(crate) enum FlatFieldNode {
         /// target. There is no reading here to ask — `FlatFieldNode` is an
         /// emission IR and tokens are what it is for — so the answer travels
         /// from where the reading was (#289).
-        direct_handle: Option<Box<syn::Type>>,
+        /// The handle type a leaf reconstructs by `Box::from_raw` — the
+        /// reading, spelled at the emit site like every other generated type.
+        direct_handle: Option<Box<crate::api::core::flat::TypeRef>>,
         optional_handle: bool,
-        rust_ty: Box<syn::Type>,
+        rust_ty: Box<crate::api::core::flat::TypeRef>,
         /// The transparent wrappers this field's spelling adds over its
         /// classification, outermost first — put back wherever the decode
         /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
@@ -783,7 +785,7 @@ pub(crate) enum FlatFieldNode {
         source: syn::Path,
         /// Variants in declaration order; index == tag.
         variants: Vec<FlatSumVariant>,
-        rust_ty: Box<syn::Type>,
+        rust_ty: Box<crate::api::core::flat::TypeRef>,
         /// The transparent wrappers this field's spelling adds over its
         /// classification, outermost first — put back wherever the decode
         /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
@@ -1058,7 +1060,7 @@ fn build_flat_sum_field(
     field_reading: &TypeRef,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Option<FlatFieldNode> {
-    let rust_ty = field_reading.syntax();
+    let rust_ty = field_reading;
 
     // The NAME off the classification, and then the ELEMENT — `enum_item`
     // hands back only the `syn::ItemEnum`, deliberately, so a consumer that
@@ -1473,11 +1475,10 @@ fn build_flat_struct_node(
         // could (#273).
         let field_optional = field.ty.optional_inner().is_some();
         let nested = field.ty.optional_inner().unwrap_or(&field.ty);
-        let nested_ty = nested.syntax().clone();
         // A data-carrying enum flattens into a tag plus one group per variant.
         // `None` means some payload is not leaf-shaped — fall through and let
         // it cross as one object through its own converter.
-        if matches!(ext.type_kind(registry, &nested_ty), TypeKind::Sum) {
+        if matches!(ext.type_kind(registry, &nested.key()), TypeKind::Sum) {
             if let Some(node) = build_flat_sum_field(
                 ext,
                 registry,
@@ -1497,7 +1498,7 @@ fn build_flat_struct_node(
         if let TypeKind::DataStruct {
             st: child,
             cfg: Some(cfg),
-        } = ext.type_kind(registry, &nested_ty)
+        } = ext.type_kind(registry, &nested.key())
         {
             if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
                 let child_optional = field_optional;
@@ -1567,7 +1568,7 @@ fn build_flat_struct_node(
                                 present_leaf: Some(present_index),
                                 direct_handle: None,
                                 optional_handle: false,
-                                rust_ty: Box::new(field.ty.syntax().clone()),
+                                rust_ty: Box::new(field.ty.clone()),
                                 wrappers: field.ty.erased_wrappers(),
                             });
                             continue;
@@ -1617,7 +1618,7 @@ fn build_flat_struct_node(
                             present_leaf: Some(present_index),
                             direct_handle: None,
                             optional_handle: false,
-                            rust_ty: Box::new(field.ty.syntax().clone()),
+                            rust_ty: Box::new(field.ty.clone()),
                             wrappers: field.ty.erased_wrappers(),
                         });
                         continue;
@@ -1645,9 +1646,9 @@ fn build_flat_struct_node(
                         field: fident,
                         value_leaf: value_index,
                         present_leaf: None,
-                        direct_handle: Some(Box::new(nested.syntax().clone())),
+                        direct_handle: Some(Box::new(nested.clone())),
                         optional_handle,
-                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        rust_ty: Box::new(field.ty.clone()),
                         wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
@@ -1678,7 +1679,7 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: None,
                         optional_handle: false,
-                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        rust_ty: Box::new(field.ty.clone()),
                         wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
@@ -1725,7 +1726,7 @@ fn build_flat_struct_node(
             present_leaf: None,
             direct_handle: None,
             optional_handle: false,
-            rust_ty: Box::new(field.ty.syntax().clone()),
+            rust_ty: Box::new(field.ty.clone()),
             wrappers: field.ty.erased_wrappers(),
         });
     }
@@ -1846,6 +1847,9 @@ fn render_flat_struct_node(
                 rust_ty,
             } => {
                 let tmp = format_ident!("{}_{}", node.binding, field);
+                // The slot's ascription, spelled from the reading the node
+                // carries — see the comment below on why the type is written.
+                let rust_ty = rust_ty.spell();
                 let tag = &plan.leaves[*tag_leaf].native_ident;
                 let arms = variants.iter().enumerate().map(|(t, v)| {
                     let vident = &v.rust_ident;
@@ -1928,11 +1932,13 @@ fn render_flat_struct_node(
                 let leaf = &plan.leaves[*value_leaf];
                 let wire = &leaf.native_ident;
                 let tmp = format_ident!("{}_{}", node.binding, field);
+                let rust_ty = rust_ty.spell();
                 let wrap = |e: TokenStream| {
                     build_through_wrappers(wrappers, e)
                         .expect("a field spelling the plan accepted is buildable")
                 };
                 if let Some(target) = direct_handle {
+                    let target_ty = target.spell();
                     if *optional_handle {
                         let gated = wrap(quote! {
                             if #wire == 0 {
@@ -1943,7 +1949,7 @@ fn render_flat_struct_node(
                                     return #on_err;
                                 }
                                 ::core::option::Option::Some(unsafe {
-                                    *::std::boxed::Box::from_raw(#wire as *mut #target)
+                                    *::std::boxed::Box::from_raw(#wire as *mut #target_ty)
                                 })
                             }
                         });

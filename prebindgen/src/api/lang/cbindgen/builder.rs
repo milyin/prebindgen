@@ -310,7 +310,7 @@ impl CbindgenBuilder {
             "Cbindgen::repr_c_struct cannot declare `{}` because it is already ignored",
             key
         );
-        let mirror = self.c_type_ident(&ty);
+        let mirror = self.c_type_ident(&key);
         self.value_opaque.insert(
             key.clone(),
             ValueOpaqueCfg {
@@ -600,6 +600,21 @@ impl CbindgenBuilder {
         ty.clone()
     }
 
+    /// [`Self::src_ty`] off the **identity** — the type peer of
+    /// [`Self::src_fn`], for the emitters that hold a declared type's key or a
+    /// declaration's own `Origin` rather than a node.
+    ///
+    /// A `TypeKey` is a normalized type, so re-parsing it is the reverse of
+    /// `from_type` and the qualification policy stays in one place: `String`
+    /// still resolves to `::std::string::String` (it can be declared
+    /// `opaque_ptr`), scalars are still left bare, and only a bare
+    /// single-segment path is prefixed.
+    pub(super) fn src_ty_of(&self, key: &TypeKey) -> syn::Type {
+        let spelled: syn::Type = syn::parse_str(key.as_str())
+            .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses");
+        self.src_ty(&spelled)
+    }
+
     /// Path to a source function (e.g. `zenoh_flat::z_keyexpr_try_from`).
     pub(super) fn src_fn(&self, ident: &syn::Ident) -> syn::Path {
         match &self.source_module {
@@ -657,50 +672,93 @@ impl CbindgenBuilder {
         scalar_slice_elem(ty).map(|elem| (elem.clone(), elem))
     }
 
+    /// [`Self::callback_slice_elem_wire`] off the classification, for the
+    /// resolver side — the declaration side keeps the node peer above, because
+    /// a `.callback(...)` argument is written by the build script and the model
+    /// may never have interned it.
+    pub(super) fn callback_slice_elem_wire_of(
+        &self,
+        ty: &TypeRef,
+    ) -> Option<(syn::Type, syn::Type)> {
+        let elem = super::r_shared_slice_elem(ty)?;
+        let key = elem.key();
+        if let Some(wire) = self.value_opaque_ty_of(&key) {
+            return Some((self.src_ty_of(&key), wire.clone()));
+        }
+        super::r_is_scalar(elem).then(|| {
+            let s = super::spelled(elem);
+            (s.clone(), s)
+        })
+    }
+
     /// Like [`Self::src_ty`], but recurses into reference and slice element types so
     /// `&ZSample` becomes `&zenoh_flat::ZSample` and `&[Payload]` becomes
     /// `&[perftest_flat::Payload]` (needed so a callback's `Fn(&[E])` closure type
     /// names the qualified element).
-    pub(super) fn src_ty_deep(&self, ty: &syn::Type) -> syn::Type {
-        match ty {
-            syn::Type::Reference(r) => {
-                let mut out = r.clone();
-                out.elem = Box::new(self.src_ty_deep(&r.elem));
-                syn::Type::Reference(out)
+    /// [`Self::src_ty`], recursing into a borrow's and a slice's element — off
+    /// the classification. `&ZSample` becomes `&zenoh_flat::ZSample` and
+    /// `&[Payload]` becomes `&[perftest_flat::Payload]`, so a callback's
+    /// `Fn(&[E])` closure type names the qualified element.
+    ///
+    /// The two recursing forms are `TypeKind::Ref` and `TypeKind::Slice`, which
+    /// is what the `syn::Type::Reference` / `syn::Type::Slice` match this
+    /// replaces was reading — and the borrow's lifetime and mutability are on
+    /// the kind, so the rebuilt spelling says what the source said.
+    pub(super) fn src_ty_deep_of(&self, ty: &TypeRef) -> syn::Type {
+        match ty.kind() {
+            TypeKind::Ref {
+                lifetime,
+                mutable,
+                inner,
+            } => {
+                let inner = self.src_ty_deep_of(inner);
+                let lt = lifetime.as_ref().map(|l| quote!(#l)).unwrap_or_default();
+                let m = if *mutable { quote!(mut) } else { quote!() };
+                syn::parse_quote!(& #lt #m #inner)
             }
-            syn::Type::Slice(s) => {
-                let mut out = s.clone();
-                out.elem = Box::new(self.src_ty_deep(&s.elem));
-                syn::Type::Slice(out)
+            TypeKind::Slice(elem) => {
+                let elem = self.src_ty_deep_of(elem);
+                syn::parse_quote!([#elem])
             }
-            _ => self.src_ty(ty),
+            _ => self.src_ty_of(&ty.key()),
         }
     }
 
-    pub(super) fn in_name(ty: &syn::Type) -> syn::Ident {
-        format_ident!("__cbg_in_{}", sanitize(&TypeKey::from_type(ty)))
+    /// [`Self::in_name`] off the **identity**, for a caller holding a reading
+    /// rather than a node — which is every per-field site.
+    pub(super) fn in_name_of(key: &TypeKey) -> syn::Ident {
+        format_ident!("__cbg_in_{}", sanitize(key))
     }
 
-    pub(super) fn out_name(ty: &syn::Type) -> syn::Ident {
-        format_ident!("__cbg_out_{}", sanitize(&TypeKey::from_type(ty)))
+    /// [`Self::out_name`] off the identity. See [`Self::in_name_of`].
+    pub(super) fn out_name_of(key: &TypeKey) -> syn::Ident {
+        format_ident!("__cbg_out_{}", sanitize(key))
     }
 
     /// Config of a declared type (across the opaque/data/enum maps), by key.
-    pub(super) fn type_cfg(&self, ty: &syn::Type) -> Option<&TypeCfg> {
-        let key = TypeKey::from_type(ty);
+    pub(super) fn type_cfg(&self, key: &TypeKey) -> Option<&TypeCfg> {
         self.opaque
-            .get(&key)
-            .or_else(|| self.data.get(&key))
-            .or_else(|| self.value_opaque.get(&key).map(|c| &c.cfg))
-            .or_else(|| self.enums.get(&key))
-            .or_else(|| self.tagged_unions.get(&key))
+            .get(key)
+            .or_else(|| self.data.get(key))
+            .or_else(|| self.value_opaque.get(key).map(|c| &c.cfg))
+            .or_else(|| self.enums.get(key))
+            .or_else(|| self.tagged_unions.get(key))
     }
 
     /// The opaque counterpart type of a declared inline-opaque type, if any.
     pub(super) fn value_opaque_ty(&self, ty: &syn::Type) -> Option<&syn::Type> {
-        self.value_opaque
-            .get(&TypeKey::from_type(ty))
-            .map(|c| &c.opaque)
+        self.value_opaque_ty_of(&TypeKey::from_type(ty))
+    }
+
+    /// [`Self::value_opaque_ty`] off the **identity**, for a caller holding a
+    /// reading — which is the whole selector chain.
+    pub(super) fn value_opaque_ty_of(&self, key: &TypeKey) -> Option<&syn::Type> {
+        self.value_opaque.get(key).map(|c| &c.opaque)
+    }
+
+    /// [`Self::value_opaque_slice_elem`] off the classification.
+    pub(super) fn r_value_opaque_slice_elem<'t>(&self, t: &'t TypeRef) -> Option<&'t TypeRef> {
+        super::r_shared_slice_elem(t).filter(|e| self.value_opaque.contains_key(&e.key()))
     }
 
     /// Type keys used as a takeable callback parameter (any `.takeable_param(idx)`
@@ -721,21 +779,21 @@ impl CbindgenBuilder {
     /// Public "take" (move) symbol for a takeable value_opaque type:
     /// [`Self::mangle_take`] over the base, else `<base>_take` (e.g.
     /// `z_sample_take`). Symmetric with [`Self::destructor_symbol`].
-    pub(super) fn take_symbol(&self, ty: &syn::Type) -> syn::Ident {
+    pub(super) fn take_symbol(&self, key: &TypeKey) -> syn::Ident {
         if let Some(f) = &self.mangle_take {
-            return format_ident!("{}", f(&self.rust_base(ty)));
+            return format_ident!("{}", f(&self.rust_base(key)));
         }
-        format_ident!("{}_take", self.rust_base(ty))
+        format_ident!("{}_take", self.rust_base(key))
     }
 
     /// Base token for a Rust type: [`Self::mangle_rust_type`] applied to the Rust
     /// short name, or the short name verbatim when unset. Feeds the type-name,
     /// destructor and callback manglers.
-    pub(super) fn rust_base(&self, ty: &syn::Type) -> String {
-        if let Some(b) = self.type_cfg(ty).and_then(|c| c.base.clone()) {
+    pub(super) fn rust_base(&self, key: &TypeKey) -> String {
+        if let Some(b) = self.type_cfg(key).and_then(|c| c.base.clone()) {
             return b;
         }
-        let short = type_short(ty);
+        let short = type_short(key);
         match &self.mangle_rust_type {
             Some(f) => f(&short),
             // No mangler: a C-like `snake_case` default (so destructors/take/type
@@ -746,8 +804,8 @@ impl CbindgenBuilder {
 
     /// Emitted C type name of a declared type: [`Self::mangle_type_name`] over the
     /// base, else the base (which is the `mangle_rust_type`/`.base_name` token).
-    pub(super) fn c_type_name(&self, ty: &syn::Type) -> String {
-        let base = self.rust_base(ty);
+    pub(super) fn c_type_name(&self, key: &TypeKey) -> String {
+        let base = self.rust_base(key);
         match &self.mangle_type_name {
             Some(f) => f(&base),
             None => base,
@@ -756,17 +814,17 @@ impl CbindgenBuilder {
 
     /// C type identifier (the `#[repr(C)]` struct/enum name + the wire type used
     /// across converters and wrappers).
-    pub(super) fn c_type_ident(&self, ty: &syn::Type) -> syn::Ident {
-        format_ident!("{}", self.c_type_name(ty))
+    pub(super) fn c_type_ident(&self, key: &TypeKey) -> syn::Ident {
+        format_ident!("{}", self.c_type_name(key))
     }
 
     /// Destructor symbol of an opaque handle: [`Self::mangle_destructor`] over the
     /// base, else `<base>_drop`.
-    pub(super) fn destructor_symbol(&self, ty: &syn::Type) -> syn::Ident {
+    pub(super) fn destructor_symbol(&self, key: &TypeKey) -> syn::Ident {
         if let Some(f) = &self.mangle_destructor {
-            return format_ident!("{}", f(&self.rust_base(ty)));
+            return format_ident!("{}", f(&self.rust_base(key)));
         }
-        format_ident!("{}_drop", self.rust_base(ty))
+        format_ident!("{}_drop", self.rust_base(key))
     }
 
     /// Emitted C type name of a callback's closure struct: [`Self::mangle_callback`]
@@ -774,14 +832,13 @@ impl CbindgenBuilder {
     /// else the args' derived bases — or, with no mangler, a generic default
     /// (`closure` for zero bases, `closure_<base0>_<base1>…` otherwise). The
     /// adapter's own default carries no target-language naming convention.
-    pub(super) fn callback_c_name(&self, args: &[syn::Type]) -> String {
-        let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
-        let base_override = self.callbacks.get(&key).and_then(|c| c.base.clone());
+    pub(super) fn callback_c_name(&self, key: &CallbackKey) -> String {
+        let base_override = self.callbacks.get(key).and_then(|c| c.base.clone());
         if let Some(f) = &self.mangle_callback {
             // The override (when set) is the sole base; otherwise the args' bases.
             let bases: Vec<String> = match &base_override {
                 Some(b) => vec![b.clone()],
-                None => args.iter().map(|a| self.rust_base(a)).collect(),
+                None => key.iter().map(|k| self.rust_base(k)).collect(),
             };
             return f(&bases);
         }
@@ -790,18 +847,18 @@ impl CbindgenBuilder {
         if let Some(b) = base_override {
             return b;
         }
-        if args.is_empty() {
+        if key.is_empty() {
             "closure".to_string()
         } else {
-            let parts: Vec<String> = args.iter().map(|a| self.rust_base(a)).collect();
+            let parts: Vec<String> = key.iter().map(|k| self.rust_base(k)).collect();
             format!("closure_{}", parts.join("_"))
         }
     }
 
     /// C struct identifier for a callback's closure type (see
     /// [`Self::callback_c_name`]).
-    pub(super) fn callback_c_ident(&self, args: &[syn::Type]) -> syn::Ident {
-        format_ident!("{}", self.callback_c_name(args))
+    pub(super) fn callback_c_ident(&self, key: &CallbackKey) -> syn::Ident {
+        format_ident!("{}", self.callback_c_name(key))
     }
 }
 

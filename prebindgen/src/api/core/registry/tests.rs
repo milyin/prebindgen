@@ -44,7 +44,7 @@ impl DeclareAndResolve<()> for RegistryBuilder<()> {
             .validate_with(&ext)?
             // The reading, not a spelling re-derived from the key: this is the
             // route a real generator takes, so the stub takes it too (#291).
-            .convert_with(|crossing, built| ext.converter(built.reading(&crossing.1)?.syntax()))?
+            .convert_with(|crossing, built| ext.converter(built.reading(&crossing.1)?.as_syn()))?
             .build()?;
         ext.validate_resolved(&registry)
             .map_err(|message| ScanError::AdapterInvariant { message })?;
@@ -1816,7 +1816,7 @@ fn a_built_registry_exposes_no_mutation() {
 ///
 /// The failure it exists for is specific and was live: a consumer holding an
 /// element — whose `ret` / `ty` is already a `TypeRef` — reaching into
-/// `origin.syntax`, digging the type back out, and re-classifying it. The boundary
+/// `spell()`, digging the type back out, and re-classifying it. The boundary
 /// ledger cannot see that at all: the syn matching happens inside `core::flat`,
 /// which the ledger excludes by design, so the count falls while the round trip
 /// stays. `origin` is for reconstructing Rust, not for reasoning about it.

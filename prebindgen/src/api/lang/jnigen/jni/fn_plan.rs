@@ -44,7 +44,11 @@ pub(crate) struct JniFunctionPlan {
 /// One source parameter: the ident/type as written plus its lowered form.
 pub(crate) struct PlanParam {
     pub ident: syn::Ident,
-    pub ty: syn::Type,
+    /// The parameter's **reading**. For a `ParamForm::Single` it is the very
+    /// reading the leaf carries — `emit/wrapper.rs` says as much where it uses
+    /// the leaf's instead — so carrying the spelling was carrying a copy that
+    /// could not disagree, in a form that could not be asked anything.
+    pub ty: crate::api::core::flat::TypeRef,
     pub form: ParamForm,
 }
 
@@ -67,7 +71,7 @@ pub(crate) enum ParamForm {
 pub(crate) struct PlanLeaf {
     /// The leaf's **reading** — classification and spelling in one value, so
     /// the two cannot disagree and no consumer has to look the type up. Spell
-    /// with `reading.origin.syntax`.
+    /// with `reading.spell()`.
     pub reading: TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
@@ -111,7 +115,7 @@ pub(crate) enum InputKind {
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
     /// The element as a **reading**: the vec-helper plan and the element key
-    /// are both taken from it, and generated Rust spells `elem.syntax()`.
+    /// are both taken from it, and generated Rust spells `elem.spell()`.
     VecBuild { elem: TypeRef, by_ref: bool },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
@@ -177,9 +181,11 @@ pub(crate) struct ValueOutputPlan {
     pub is_convert: bool,
     /// The type whose output converter runs: `convert_out_ty` for a convert,
     /// the `Result` Ok type when an error plan peels, else the declared
-    /// return. Its entry is validated at plan build; the Rust emitter
-    /// re-looks it up (`expect`) to keep the plan lifetime-free.
-    pub target_ty: syn::Type,
+    /// return. A **reading** — all three candidates are one, and the emitter
+    /// asks it for the entry directly. Its entry is validated at plan build;
+    /// the Rust emitter re-looks it up (`expect`) to keep the plan
+    /// lifetime-free.
+    pub target_ty: crate::api::core::flat::TypeRef,
     /// The resolved output entry's `destination` — the extern's wire return
     /// and the sentinel source.
     pub wire_ty: syn::Type,
@@ -491,7 +497,7 @@ impl JniFunctionPlan {
         // fail to yield a type.
         for param in &f.params {
             let ident = param.name.clone();
-            let ty = param.ty.syntax().clone();
+            let ty = param.ty.clone();
 
             let form = if let Some(plan) = registry
                 .expansion_plans()
@@ -608,12 +614,10 @@ fn classify_leaf(
     // erased entry exists but its metadata carries no surface type.
     if let Some(args) = reading.callback_args() {
         // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
-        // spellings either way — but as each arg reading's OWN spelling now,
-        // rather than one re-extracted from the parameter's bounds.
+        // each arg reading's own identity.
         // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax`
-        // pins that the two routes are one memo identity.
-        let arg_tys: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
-        let iface = ext.iface_spec(registry, &SpecKey::callback(&arg_tys));
+        // pins that this is the same identity the signature-derived key gives.
+        let iface = ext.iface_spec(registry, &SpecKey::callback(args));
         return Ok(PlanLeaf {
             reading: reading.clone(),
             kt_name,
@@ -703,10 +707,7 @@ fn build_output(
     registry: &Registry<KotlinMeta>,
     f: &crate::api::core::flat::Function,
 ) -> Result<FnOutputPlan, PlanError> {
-    use crate::api::core::{
-        types_util::result_ok_type,
-        unfold::{Delivery, UnfoldShape},
-    };
+    use crate::api::core::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
     let unfold_plan = registry.unfold_plans().get(ident);
 
@@ -752,24 +753,30 @@ fn build_output(
     let is_convert = unfold_plan.is_some();
     // The element normalizes an elided return and a written `-> ()` to one
     // `Unit` reading, so there is no `ReturnType` match here.
-    let return_ty: syn::Type = f.ret.syntax().clone();
     let error_plan = registry.error_plans().get(ident);
-    let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
-    let target_ty = match unfold_plan {
+    // The `Ok` side off `TypeKind::Fallible`, where `result_ok_type` found the
+    // `Result` in a path first.
+    let ok_ty = error_plan
+        .and_then(|_| f.ret.fallible_parts())
+        .map(|(ok, _)| ok);
+    // All three candidates are readings: a plan's `convert_out_ty`, the `Ok`
+    // side of the return, and the return itself. This met them as spellings
+    // because one of them used to be a node.
+    let target_ty: &crate::api::core::flat::TypeRef = match unfold_plan {
         Some(p) => p
             .convert_out_ty
-            .clone()
+            .as_ref()
             .expect("Return delivery carries convert_out_ty"),
-        None => ok_ty.unwrap_or(return_ty),
+        None => ok_ty.unwrap_or(&f.ret),
     };
-    // Two failures, told apart. `target_ty` is composed here (`convert_out_ty`,
-    // or the `Result` peeled to its `Ok`), so unlike the input side there may
-    // genuinely be no reading — and "not registered" wants different advice
+    // Two failures, told apart. Holding a reading is not the same as being in
+    // the type table — `target_ty` is reached through a plan or a peel, so it
+    // may genuinely have no cell — and "not registered" wants different advice
     // from "registered, no converter". Collapsed into one `and_then`, both got
     // the `output_wrapper` message and the first one got it wrong.
-    let Some(target) = registry.reading_of(&target_ty) else {
+    let Some(target) = registry.reading(&target_ty.key()) else {
         return Err(PlanError::UnknownOutputType {
-            ty: TypeKey::from_type(&target_ty),
+            ty: target_ty.key(),
         });
     };
     let Some(entry) = registry.output_entry(&target) else {
@@ -783,13 +790,8 @@ fn build_output(
     // for a convert, else the signature's own output. (Not `target_ty`: the
     // Kotlin error peel rides the entry's `value_rust_type`, so the full
     // `Result<T, E>` type is looked up as written.)
-    let ret_decl: syn::ReturnType = if is_convert {
-        syn::parse_quote!(-> #target_ty)
-    } else {
-        let ret = f.ret.syntax();
-        syn::parse_quote!(-> #ret)
-    };
-    let (surface, canonical) = ReturnSurface::classify(ext, registry, &ret_decl);
+    let ret_decl = if is_convert { target_ty } else { &f.ret };
+    let (surface, canonical) = ReturnSurface::classify(ext, registry, ret_decl);
     let is_enum = ext.is_kotlin_enum(&canonical);
     let is_option_enum = crate::api::core::types_util::option_inner_type(&canonical)
         .map(|inner| ext.is_kotlin_enum(&inner))
@@ -797,7 +799,7 @@ fn build_output(
 
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
         is_convert,
-        target_ty,
+        target_ty: target_ty.clone(),
         wire_ty,
         surface,
         is_enum,
@@ -813,28 +815,35 @@ impl ReturnSurface {
     pub fn classify(
         ext: &Declarations,
         registry: &impl Conversions<KotlinMeta>,
-        output: &syn::ReturnType,
+        ret: &crate::api::core::flat::TypeRef,
     ) -> (Self, syn::Type) {
-        let ty = match output {
-            syn::ReturnType::Default => return (Self::Unit, syn::parse_quote!(())),
-            syn::ReturnType::Type(_, t) => &**t,
-        };
-        let outer_meta = registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
-            .map(|e| e.metadata.clone());
+        // The RETURN, as the model classified it. Both callers used to spell a
+        // reading into a `-> #ty` fragment for this to take apart again, and
+        // the `ReturnType::Default` arm was a unit the element already states.
+        let outer_meta = registry.output_entry(ret).map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
         // `value_rust_type`) declare no Kotlin return type. The peeled type is
         // the one the converter's metadata stored — a canonical `syn::Type`,
         // so nothing is rebuilt here. Falling back to the declared return is
         // not a miss: `value_rust_type` is `None` exactly for plain values and
         // arity-0 converters, which have no inner identity to peel to.
-        let canonical: syn::Type = outer_meta
-            .as_ref()
-            .and_then(|m| m.value_rust_type.as_ref())
-            .cloned()
-            .unwrap_or_else(|| ty.clone());
-        if crate::api::lang::jnigen::util::is_unit(&canonical) {
+        //
+        // `value_rust_type` is a canonical `syn::Type` the ADAPTER composed,
+        // which is why `is_unit` still asks it of a node; with no metadata the
+        // question is the reading's own kind.
+        let stored = outer_meta.as_ref().and_then(|m| m.value_rust_type.as_ref());
+        let is_unit = match stored {
+            Some(t) => crate::api::lang::jnigen::util::is_unit(t),
+            None => matches!(ret.kind(), crate::api::core::flat::TypeKind::Unit),
+        };
+        let canonical: syn::Type = match stored {
+            Some(t) => t.clone(),
+            None => {
+                let toks = ret.spell();
+                syn::parse_quote!(#toks)
+            }
+        };
+        if is_unit {
             return (Self::Unit, canonical);
         }
         // Projection return (opaque handle or `ULong`): read the folded

@@ -100,6 +100,22 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
 /// Inverting it makes the failure mode "a legitimate length is refused", which
 /// is loud and trivially worked around by hoisting the value into a named
 /// `const`.
+///
+/// # The whitelist is the model's
+///
+/// It listed eight forms — adding `Binary`, `Unary`, `Paren`, `Group`, `Cast`
+/// and `Call` "const arithmetic over those" — and six of them could never
+/// arrive. [`lower_array_len`](crate::api::core::flat) accepts an integer
+/// literal or a **bare single-segment name of a marked const**, and nothing
+/// else: `[u8; A + 1]`, `[u8; A as usize]` and `[u8; array_len()]` are all
+/// `ArrayLenReason::NotLiteralOrName`, so the type never becomes a
+/// `TypeKind::Array` and never reaches an emitter at all
+/// (`an_extent_is_a_literal_or_a_marked_const_and_nothing_else` pins it).
+///
+/// So the two forms below are the two the language accepts, restated where the
+/// qualifier needs them. Narrowing a whitelist to what upstream already
+/// enforces cannot open a hole — it closes the gap between the two lists, which
+/// is the only way they could have disagreed.
 fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
     // Rendered before the mutable walk below borrows the length.
     let rendered = quote::ToTokens::to_token_stream(&*arr).to_string();
@@ -108,21 +124,13 @@ fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
     // feature this crate does not enable, and the walk mutates nothing.
     impl syn::visit_mut::VisitMut for Check {
         fn visit_expr_mut(&mut self, e: &mut syn::Expr) {
+            // The two forms the language accepts — see the note above.
             let ok = matches!(
                 e,
                 // A literal length, `[u8; 4]`.
                 syn::Expr::Lit(_)
-                    // The names this pass exists to qualify: `MAX`,
-                    // `Holder::N`, and the callee of `array_len()`.
+                    // The name this pass exists to qualify: a marked const.
                     | syn::Expr::Path(_)
-                    // Const arithmetic over those: `A + 1`, `-1`, `(A) * 2`,
-                    // `A as usize`, `array_len()`.
-                    | syn::Expr::Binary(_)
-                    | syn::Expr::Unary(_)
-                    | syn::Expr::Paren(_)
-                    | syn::Expr::Group(_)
-                    | syn::Expr::Cast(_)
-                    | syn::Expr::Call(_)
             );
             if !ok && self.0.is_none() {
                 self.0 = Some("an unsupported expression form");
@@ -134,8 +142,8 @@ fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
     syn::visit_mut::VisitMut::visit_expr_mut(&mut check, &mut arr.len);
     if let Some(what) = check.0 {
         panic!(
-            "fixed-size array `{rendered}`: the length uses {what}. Only a literal, a path, a \
-             call, and const arithmetic over those are supported — anything that can bind a name \
+            "fixed-size array `{rendered}`: the length uses {what}. Only a literal and the name \
+             of a `#[prebindgen]` const are supported — anything that can bind a name \
              (`const {{ … }}`, `match`, `if let`, a closure, a loop) would let a LOCAL be \
              mistaken for a source item, because this generator qualifies the length's paths \
              against their source module. Hoist the value into a named `const` and use that as \
@@ -181,22 +189,6 @@ impl syn::visit_mut::VisitMut for QualifyLengthPaths<'_> {
     }
 }
 
-/// If `ty` is a `&T` borrow with no explicit lifetime, splice in `'<life>`.
-/// Otherwise return `ty` unchanged.
-pub(crate) fn annotate_borrow_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {
-    if let syn::Type::Reference(r) = ty {
-        if r.lifetime.is_none() {
-            let mut new = r.clone();
-            new.lifetime = Some(syn::Lifetime::new(
-                &format!("'{}", life),
-                proc_macro2::Span::call_site(),
-            ));
-            return syn::Type::Reference(new);
-        }
-    }
-    ty.clone()
-}
-
 /// If `ty` is `JObject` / `JString` / `JByteArray` (no explicit angle args),
 /// splice in `<'<life>>`. Otherwise return `ty` unchanged.
 pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {
@@ -237,45 +229,12 @@ pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn:
 // reconstructed as `Box<_>`, matched nothing, and got no converter at all
 // (#270). Dispatch reads `TypeKind` now; nothing needs it.
 
-/// `true` if `ty` is a path whose final segment is `name` (e.g. `Vec<_>` for
-/// `name = "Vec"`, `Option<&T>` for `name = "Option"`). Ignores generic args.
-pub(crate) fn pat_match_top(ty: &syn::Type, name: &str) -> bool {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            return last.ident == name;
-        }
-    }
-    false
-}
-
-/// If `ty` is `Option<&T>` or `Option<&mut T>`, return `Some(is_mut)`.
-/// Returns `None` for any other shape. Used by `emit_jni_function_wrapper`
-/// to decide whether the call site needs `.as_deref()` / `.as_deref_mut()`
-/// when the input converter produced `Option<OwnedObject<T>>`.
-pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Option" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return None;
-    };
-    let syn::GenericArgument::Type(inner) = ab.args.first()? else {
-        return None;
-    };
-    let syn::Type::Reference(r) = inner else {
-        return None;
-    };
-    Some(r.mutability.is_some())
-}
-
 /// INPUT: wire → rust. Format `<wire_id>_to_<rust_id>_<hash>` (including
 /// `impl Fn(...)` lambda converters — the legacy
 /// `process_kotlin_<Name>_callback` naming is gone with the fun-interface
 /// subsystem).
-pub(crate) fn input_name(rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
-    let rust_id = sanitize_for_ident(&rust.to_token_stream().to_string());
+pub(crate) fn input_name(rust: &TokenStream, wire: &syn::Type) -> syn::Ident {
+    let rust_id = sanitize_for_ident(&rust.to_string());
     let wire_id = wire_short(wire);
     let h = hash_pair(rust, wire);
     let s = format!("{}_to_{}_{:08x}", wire_id, rust_id, h & 0xffff_ffff);
@@ -283,8 +242,8 @@ pub(crate) fn input_name(rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
 }
 
 /// OUTPUT: rust → wire. Format `<rust_id>_to_<wire_id>_<hash>`.
-pub(crate) fn output_name(rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
-    let rust_id = sanitize_for_ident(&rust.to_token_stream().to_string());
+pub(crate) fn output_name(rust: &TokenStream, wire: &syn::Type) -> syn::Ident {
+    let rust_id = sanitize_for_ident(&rust.to_string());
     let wire_id = wire_short(wire);
     let h = hash_pair(rust, wire);
     let s = format!("{}_to_{}_{:08x}", rust_id, wire_id, h & 0xffff_ffff);
@@ -332,13 +291,13 @@ pub(crate) fn wire_short(wire: &syn::Type) -> String {
     sanitize_for_ident(&wire.to_token_stream().to_string())
 }
 
-pub(crate) fn hash_pair(rust: &syn::Type, wire: &syn::Type) -> u64 {
+pub(crate) fn hash_pair(rust: &TokenStream, wire: &syn::Type) -> u64 {
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
     };
     let mut h = DefaultHasher::new();
-    rust.to_token_stream().to_string().hash(&mut h);
+    rust.to_string().hash(&mut h);
     "::".hash(&mut h);
     wire.to_token_stream().to_string().hash(&mut h);
     h.finish()

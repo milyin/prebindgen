@@ -127,10 +127,15 @@ pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMet
                 short.to_string(),
                 format!("sealed class `{key}` itself (its variants' supertype)"),
             )]);
-            if let Some(item_enum) = key.ident().and_then(|i| registry.flat().enum_item(&i)) {
-                for v in &item_enum.variants {
-                    let name = ext.sum_variant_class_name(sum_cfg, &v.ident);
-                    let vorigin = format!("variant `{}` of sealed class `{key}`", v.ident);
+            // The ELEMENT's alternatives, not the `syn::ItemEnum`'s variants:
+            // this needs each one's NAME, which an `Alternative` carries.
+            if let Some(alts) = key
+                .ident()
+                .and_then(|i| declared_member_names(registry, &i))
+            {
+                for v in alts {
+                    let name = ext.sum_variant_class_name(sum_cfg, &v);
+                    let vorigin = format!("variant `{v}` of sealed class `{key}`");
                     check_ident(&name, &vorigin, &mut errors);
                     if let Some(prev) = seen.insert(name.clone(), vorigin.clone()) {
                         errors.push(format!(
@@ -269,13 +274,9 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>
         let Some(ident) = key.ident() else {
             continue;
         };
-        if let Some(s) = registry
-            .flat()
-            .struct_type(&ident)
-            .map(|st| &st.origin.syntax)
-        {
+        if let Some(s) = registry.flat().struct_type(&ident) {
             for f in &s.fields {
-                if let Some(fname) = &f.ident {
+                if let Some(fname) = &f.name {
                     let camel = kt_snake_to_camel(&fname.to_string());
                     warn(
                         &camel,
@@ -286,10 +287,10 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>
                 }
             }
         }
-        if let Some(e) = registry.flat().enum_item(&ident) {
-            for v in &e.variants {
+        if let Some(names) = declared_member_names(registry, &ident) {
+            for v in names {
                 let screaming =
-                    crate::api::lang::jnigen::util::camel_to_screaming_snake(&v.ident.to_string());
+                    crate::api::lang::jnigen::util::camel_to_screaming_snake(&v.to_string());
                 warn(
                     &screaming,
                     &mangle_kotlin_ident(&screaming),
@@ -298,6 +299,24 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>
                 );
             }
         }
+    }
+}
+
+/// The member names of a declared `enum` — its values for a fieldless one, its
+/// alternatives for a sum.
+///
+/// `enum_item` answered for both shapes by handing back the whole
+/// `syn::ItemEnum`; the model states them as two elements, and both carry the
+/// names this asks for. `None` when `ident` names neither.
+fn declared_member_names(
+    registry: &impl crate::api::core::registry::Conversions<KotlinMeta>,
+    ident: &syn::Ident,
+) -> Option<Vec<syn::Ident>> {
+    use crate::api::core::flat::Type;
+    match registry.flat().declared_type(ident)? {
+        Type::Enum(e) => Some(e.values.iter().map(|v| v.name.clone()).collect()),
+        Type::Variant(v) => Some(v.alternatives.iter().map(|a| a.name.clone()).collect()),
+        _ => None,
     }
 }
 

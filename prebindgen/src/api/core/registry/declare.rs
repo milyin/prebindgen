@@ -154,11 +154,7 @@ impl<M> RegistryBuilder<M> {
     /// equivalent rendering the scan reads, and it should not depend on
     /// declaration order.
     pub fn export_type(mut self, ty: Origin<syn::Type>) -> Self {
-        self.registry
-            .declared
-            .types
-            .entry(TypeKey::from_type(&ty.syntax))
-            .or_insert(ty);
+        self.registry.declared.types.entry(ty.key()).or_insert(ty);
         self
     }
 

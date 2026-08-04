@@ -64,7 +64,9 @@ pub enum Variant {
 /// of the `variants` vector.
 #[derive(Clone)]
 pub struct ConstructorDecl {
-    pub target: syn::Type,
+    /// The type being built, as an **identity**. Every use keyed it; none
+    /// spelled it.
+    pub target: TypeKey,
     pub variants: Vec<Variant>,
     /// Auto-`construct` every matching param of every declared fn. Always
     /// `true` for type-level default (`expand_param!` `.variant*`) declarations.
@@ -95,7 +97,7 @@ pub struct ExpandDecl {
     /// cross-checked against the named param's peeled type in [`apply`].
     /// `None` for the internal `TopLevel` form (the type comes from the
     /// param itself).
-    pub declared_target: Option<syn::Type>,
+    pub declared_target: Option<TypeKey>,
     pub sel: ExpandSel,
 }
 
@@ -126,7 +128,7 @@ fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
     let mut entries: Vec<ExpandDeclError> = Vec::new();
     let mut ctor_targets: HashSet<String> = HashSet::new();
     for c in &exp.constructors {
-        let target = TypeKey::from_type(&c.target).as_str().to_string();
+        let target = c.target.as_str().to_string();
         if c.variants.is_empty() {
             entries.push(ExpandDeclError::EmptyConstructor {
                 target: target.clone(),
@@ -191,13 +193,13 @@ pub fn apply<M>(
         // typo guard for both coordinates of `.expand_param(name, decl)`.
         if let Some(declared) = &ed.declared_target {
             let param_ty = param_reading(registry, &ed.func, &ed.param)?;
-            let bare = constructed_value(&param_ty);
-            if TypeKey::from_type(&bare) != TypeKey::from_type(declared) {
+            let bare = constructed_value(&param_ty).key();
+            if bare != *declared {
                 return Err(ExpandError::ParamTypeMismatch {
                     func: ed.func.clone(),
                     param: ed.param.clone(),
-                    declared: TypeKey::from_type(declared).as_str().to_string(),
-                    actual: TypeKey::from_type(&bare).as_str().to_string(),
+                    declared: declared.as_str().to_string(),
+                    actual: bare.as_str().to_string(),
                 });
             }
         }
@@ -221,7 +223,7 @@ pub fn apply<M>(
         if !c.default {
             continue;
         }
-        let ckey = TypeKey::from_type(&c.target);
+        let ckey = c.target.clone();
         for func in declared_fns {
             // Read accessors are excluded from the composer.
             if accessor_fns.contains(func) {
@@ -235,8 +237,7 @@ pub fn apply<M>(
             let receiver_key = method_receivers.get(func);
             let mut receiver_skipped = false;
             for (pname, pty) in params.iter().map(|p| (p.name.clone(), p.ty.clone())) {
-                let bare = constructed_value(&pty);
-                let bare_key = TypeKey::from_type(&bare);
+                let bare_key = constructed_value(&pty).key();
                 if !receiver_skipped && receiver_key == Some(&bare_key) {
                     receiver_skipped = true;
                     continue;
@@ -267,7 +268,7 @@ pub fn apply<M>(
 /// The **reading** of a declared function's parameter.
 ///
 /// `Param::ty` is a `TypeRef` computed at parse time. Reaching into the item's
-/// `origin.syntax` and digging the parameter out of `sig.inputs` — what these
+/// `spell()` and digging the parameter out of `sig.inputs` — what these
 /// three sites used to do — re-derives a fact the model was already handing over,
 /// which is `origin` used for reasoning rather than for emission.
 fn param_reading<M>(
@@ -336,7 +337,7 @@ fn resolve_constructor<M>(
         ExpandSel::TopLevel => exp
             .constructors
             .iter()
-            .find(|c| TypeKey::from_type(&c.target) == *target_key)
+            .find(|c| c.target == *target_key)
             .map(|c| c.variants.clone())
             .ok_or_else(|| ExpandError::NoConstructor {
                 func: ed.func.clone(),
@@ -365,8 +366,8 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
     // The model already read this return; `fallible_parts` is that reading, not a
     // second look at the spelling.
     let (target, fallible) = match f.ret.fallible_parts() {
-        Some((ok, _)) => (ok.syntax().clone(), true),
-        None => (f.ret.syntax().clone(), false),
+        Some((ok, _)) => (ok.key(), true),
+        None => (f.ret.key(), false),
     };
     Ok(CtorSig {
         params,
@@ -379,7 +380,9 @@ struct CtorSig {
     /// Readings, not spellings: they come off `Function::params`, and a consumer
     /// that needs the spelling takes it at the point it stores one.
     params: Vec<(syn::Ident, crate::api::core::flat::TypeRef)>,
-    target: syn::Type,
+    /// The type the constructor produces, as an **identity**: every use of it
+    /// is `check_target`, which keyed both sides.
+    target: TypeKey,
     fallible: bool,
 }
 
@@ -429,7 +432,7 @@ fn build_plan<M>(
             )?;
             visited.remove(&target.key());
             return Ok(FoldPlan {
-                target: target.syntax().clone(),
+                target: target.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -439,7 +442,7 @@ fn build_plan<M>(
             });
         };
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target.syntax())?;
+        check_target(func, &sig.target, &target.key())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
@@ -447,7 +450,7 @@ fn build_plan<M>(
                 ty: pty.optional(),
             });
             return Ok(FoldPlan {
-                target: target.syntax().clone(),
+                target: target.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -491,7 +494,7 @@ fn build_plan<M>(
             inputs.push(arg);
         }
         return Ok(FoldPlan {
-            target: target.syntax().clone(),
+            target: target.clone(),
             by_ref,
             shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
             leaves,
@@ -523,7 +526,7 @@ fn build_plan<M>(
     )?;
     visited.remove(&target.key());
     Ok(FoldPlan {
-        target: target.syntax().clone(),
+        target: target.clone(),
         by_ref,
         shape: FoldShape::Base,
         leaves,
@@ -553,7 +556,7 @@ fn build_core<M>(
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target.syntax())?;
+        check_target(func, &sig.target, &target.key())?;
         let np = sig.params.len();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
@@ -588,7 +591,7 @@ fn build_core<M>(
             match v {
                 Variant::Ctor(func) => {
                     let sig = ctor_signature(registry, func)?;
-                    check_target(func, &sig.target, target.syntax())?;
+                    check_target(func, &sig.target, &target.key())?;
                     let np = sig.params.len();
                     let mut args = Vec::new();
                     for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
@@ -656,7 +659,7 @@ fn build_arg<M>(
     let canon = exp
         .constructors
         .iter()
-        .find(|c| TypeKey::from_type(&c.target) == key && !c.variants.is_empty());
+        .find(|c| c.target == key && !c.variants.is_empty());
     if let Some(c) = canon {
         if dispatched {
             return Err(ExpandError::UnsupportedRecursive {
@@ -689,7 +692,7 @@ fn build_arg<M>(
         )?;
         visited.remove(&key);
         Ok(FoldArg::Build(Box::new(FoldBuild {
-            target: bare.syntax().clone(),
+            target: bare.clone(),
             by_ref: pby_ref,
             selector,
             variants: vars,
@@ -716,16 +719,16 @@ fn build_arg<M>(
 
 fn check_target(
     func: &syn::Ident,
-    produces: &syn::Type,
-    expected: &syn::Type,
+    produces: &TypeKey,
+    expected: &TypeKey,
 ) -> Result<(), ExpandError> {
-    if TypeKey::from_type(produces) == TypeKey::from_type(expected) {
+    if produces == expected {
         Ok(())
     } else {
         Err(ExpandError::TargetMismatch {
             ctor: func.to_string(),
-            produces: TypeKey::from_type(produces).to_string(),
-            expected: TypeKey::from_type(expected).to_string(),
+            produces: produces.to_string(),
+            expected: expected.to_string(),
         })
     }
 }
@@ -1080,13 +1083,11 @@ fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: 
 /// A type the grammar cannot express answers itself — the identity, not a
 /// fallback classifier. Nothing reaching here can be one: every signature in play
 /// was accepted by the frontend before the scan registered it.
-fn constructed_value(reading: &crate::api::core::flat::TypeRef) -> syn::Type {
+fn constructed_value(
+    reading: &crate::api::core::flat::TypeRef,
+) -> &crate::api::core::flat::TypeRef {
     let after_opt = reading.optional_inner().unwrap_or(reading);
-    after_opt
-        .borrow_target()
-        .unwrap_or(after_opt)
-        .syntax()
-        .clone()
+    after_opt.borrow_target().unwrap_or(after_opt)
 }
 
 /// [`constructed_value`], plus which of the two layers were there.

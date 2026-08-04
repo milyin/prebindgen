@@ -5,35 +5,36 @@ use crate::api::core::registry::Conversions;
 
 /// Whether a decoded `Vec<T>` local can be borrowed where `referent` is expected.
 ///
-/// A **spelling** question, deliberately: it decides what the generated Rust must
-/// be able to say, and Rust distinguishes forms the boundary classification does
-/// not. `[T]` is reached by deref coercion from `&Vec<T>` and `Vec<T>` is the
-/// thing itself; a transparent wrapper such as `Box<Vec<T>>` or `Cow<'_, [T]>`
-/// classifies identically and cannot be reconstructed from the decoded local.
-fn decoded_vec_satisfies(referent: &syn::Type) -> bool {
-    match referent {
-        syn::Type::Slice(_) => true,
-        syn::Type::Path(tp) => tp
-            .path
-            .segments
-            .last()
-            .is_some_and(|s| s.ident == "Vec" && tp.path.segments.len() == 1),
-        _ => false,
-    }
+/// A question about the **form**, and it always was: `[T]` is reached by deref
+/// coercion from `&Vec<T>` and `Vec<T>` is the thing itself, while a transparent
+/// wrapper — `Box<Vec<T>>`, `Cow<'_, [T]>` — cannot be rebuilt from the decoded
+/// local.
+///
+/// It asked the spelling because it had to. This doc used to say so: *"Rust
+/// distinguishes forms the boundary classification does not"*, and that was true
+/// when `Vec<T>` and `[T]` were one `Sequence` and a `Box` was erased. `TypeKind`
+/// **is** the accepted syntax now, so the kind draws every distinction this needs
+/// — `Vec`, `Slice`, `Boxed` and `Cow` are four kinds — and the question is
+/// answered by the model instead of by a `match` on `syn`.
+fn decoded_vec_satisfies(referent: &crate::api::core::flat::TypeRef) -> bool {
+    matches!(
+        referent.kind(),
+        crate::api::core::flat::TypeKind::Slice(_) | crate::api::core::flat::TypeKind::Vec(_)
+    )
 }
 
-/// Whether a spelling has no size, so no by-value converter can name it.
+/// Whether a type has no size, so no by-value converter can name it.
 ///
-/// A **spelling** question, like [`decoded_vec_satisfies`]: `[T]` and `Vec<T>`
-/// are one concept to the model — both `Sequence` — and Rust can return only
-/// one of them. A bare slice is reached exclusively through a borrow, whose own
-/// arm handles it; claiming it here would generate `fn f(..) -> [T]`.
+/// The peer of [`decoded_vec_satisfies`], and it stopped being a *spelling*
+/// question for the same reason: `[T]` and `Vec<T>` were one concept once and
+/// are two kinds now. A bare slice is reached exclusively through a borrow,
+/// whose own arm handles it; claiming it here would generate `fn f(..) -> [T]`.
 ///
 /// `str` is the same shape of fact and is handled the same way, one layer up:
 /// its terminal arm resolves it to the borrowed `&str` converter rather than
-/// pretending an owned `str` exists.
-fn is_unsized_spelling(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Slice(_))
+/// pretending an owned `str` exists — which is why `Str` is not an arm here.
+fn is_unsized_spelling(ty: &crate::api::core::flat::TypeRef) -> bool {
+    matches!(ty.kind(), crate::api::core::flat::TypeKind::Slice(_))
 }
 
 impl Declarations {
@@ -44,11 +45,11 @@ impl Declarations {
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // What the type IS comes from `kind`; what generated Rust must SPELL it
-        // comes from here. The converter yields this spelling, so a
+        // What the converter YIELDS: this crossing's own reading, so a
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
-        // is dispatched as no longer decides what it is called.
-        let syntax = ty.syntax();
+        // is dispatched as does not decide what it is called. The one arm that
+        // yields something else says so with `crate::api::lang::jnigen::jni::trait_impl::Produced::Composed`.
+        let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Reading(ty);
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.input_terminal(ty, registry) {
@@ -66,11 +67,11 @@ impl Declarations {
                 let mutable = inner.is_exclusive_borrow();
                 if let Some(mut c) = self.input_wrapper_shape(
                     WrapperShape::OptionRef { mutable },
-                    syntax,
+                    &produced,
                     target,
                     registry,
                 ) {
-                    c.subs = vec![target.syntax().clone()];
+                    c.subs = vec![target.key()];
                     return Some(c);
                 }
             }
@@ -80,28 +81,25 @@ impl Declarations {
             // carries a wrapper it cannot bridge. The shallow handler cannot
             // tell those apart and would decode the jlong as a `*mut &T`, so a
             // wrapped optional borrow stops here rather than resolving wrong.
-            if inner.borrow_target().is_some() {
-                let canonical: syn::Type = {
-                    let b = inner.syntax();
-                    syn::parse_quote!(Option<#b>)
-                };
-                if syntax.to_token_stream().to_string() != canonical.to_token_stream().to_string() {
-                    return None;
-                }
+            if inner.borrow_target().is_some() && !ty.erased_wrappers().is_empty() {
+                // "the spelling is exactly `Option<inner>`", off the model: this
+                // rebuilt that canonical form and compared token strings, where
+                // a wrapper over it is what `erased_wrappers` reports.
+                return None;
             }
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
+                self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, registry)
             {
-                c.subs = vec![inner.syntax().clone()];
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
             return None;
         }
-        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
+        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
+                self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
             {
-                c.subs = vec![elem.syntax().clone()];
+                c.subs = vec![elem.key()];
                 return Some(c);
             }
             return None;
@@ -130,9 +128,9 @@ impl Declarations {
             // NOT: passing `&Vec<T>` there does not compile. Those fall through to
             // the plain borrow arm below, which hands the whole spelling on as the
             // sub, exactly as the old syntactic slice check did.
-            if !*mutable && decoded_vec_satisfies(inner.syntax()) {
+            if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
-                    let elem_ty = elem.syntax().clone();
+                    let elem_ty = elem.spell();
                     // The one place `produced` is NOT the crossing's spelling:
                     // there is no owned `[T]` to decode into, so the converter
                     // yields an owned `Vec<T>` and the call site borrows it.
@@ -145,21 +143,26 @@ impl Declarations {
                     // the tokens the converter yields, and every question asked
                     // of it (`is_canonical_spelling`, the `Type::Reference`
                     // bridgeability guards) is a spelling question.
-                    let produced: syn::Type = syn::parse_quote!(Vec<#elem_ty>);
+                    let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Composed(
+                        syn::parse_quote!(Vec<#elem_ty>),
+                    );
                     if let Some(mut c) =
                         self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
                     {
-                        c.subs = vec![elem_ty];
+                        c.subs = vec![elem.key()];
                         return Some(c);
                     }
                     return None;
                 }
             }
             let mutable = ty.is_exclusive_borrow();
-            if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
-            {
-                c.subs = vec![inner.syntax().clone()];
+            if let Some(mut c) = self.input_wrapper_shape(
+                WrapperShape::Borrow { mutable },
+                &produced,
+                inner,
+                registry,
+            ) {
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
         }
@@ -176,13 +179,12 @@ impl Declarations {
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // What the type IS comes from `kind`; the spelling is what generated
-        // Rust must say. This direction used to be handed only the spelling —
-        // `convert_crossing` fetched the reading and threw it away — so it
-        // detected its layers with `option_inner_type`/`vec_inner_type`, which
-        // read the last path segment's ident. A `Box<Option<T>>` answered
+        // What the converter YIELDS. This direction used to be handed only the
+        // spelling — `convert_crossing` fetched the reading and threw it away —
+        // so it detected its layers with `option_inner_type`/`vec_inner_type`,
+        // which read the last path segment's ident. A `Box<Option<T>>` answered
         // "neither", and got no converter at all (#270).
-        let syntax = ty.syntax();
+        let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Reading(ty);
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.output_terminal(ty, registry) {
@@ -192,8 +194,8 @@ impl Declarations {
         //    Read off the model, which calls this shape `TypeKind::Fallible`.
         //    `result_parts` covers a `Result` the adapter composed itself, which
         //    the frontend never read.
-        if let Some((ok, err)) = fallible_parts(syntax, registry) {
-            if let Some(c) = self.result_peel(syntax, &ok, &err, registry) {
+        if let Some((ok, err)) = fallible_parts(ty) {
+            if let Some(c) = self.result_peel(ty, &ok, &err, registry) {
                 return Some(c);
             }
         }
@@ -203,18 +205,18 @@ impl Declarations {
         //    output handler).
         if let Some(inner) = ty.optional_inner() {
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
+                self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, registry)
             {
-                c.subs = vec![inner.syntax().clone()];
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
             return None;
         }
-        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
+        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
+                self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
             {
-                c.subs = vec![elem.syntax().clone()];
+                c.subs = vec![elem.key()];
                 return Some(c);
             }
             return None;
@@ -227,16 +229,19 @@ impl Declarations {
             // input branch, and the same split: `kind` says it is a borrow of a
             // run of values; whether the generated Rust can iterate the borrow
             // directly is a question about the SPELLING.
-            if !*mutable && decoded_vec_satisfies(inner.syntax()) {
+            if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
-                    return self.output_slice(elem.syntax(), registry);
+                    return self.output_slice(elem, registry);
                 }
             }
             let mutable = ty.is_exclusive_borrow();
-            if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
-            {
-                c.subs = vec![inner.syntax().clone()];
+            if let Some(mut c) = self.output_wrapper_shape(
+                WrapperShape::Borrow { mutable },
+                &produced,
+                inner,
+                registry,
+            ) {
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
         }
@@ -248,28 +253,20 @@ impl Declarations {
     }
 }
 
-/// The `Ok`/`Err` of a `Result`, preferring the frontend's reading.
+/// The `Ok`/`Err` of a `Result`, spelled.
 ///
-/// The model classifies a `Result` as [`TypeKind::Fallible`]; the syntactic
-/// fallback is for a `Result` the adapter composed itself, which no captured
-/// item spells and the frontend therefore never read.
+/// The model classifies a `Result` as [`TypeKind::Fallible`], so a reading
+/// answers this directly — no lookup, and no syntactic fallback.
 ///
-/// **Measured: the fallback never fires in-tree** — zero occurrences across
-/// covertest-kotlin and perftest-kotlin, because #246 indexes a binding-local
-/// fn's types, so even a `sig!((..) -> Result<Summary, String>)` has a reading.
-/// It is kept rather than made a hard error because an out-of-tree consumer may
-/// compose a `Result` the model never sees, and it costs nothing: `result_parts`
-/// already exists and already has six other callers.
-fn fallible_parts(
-    ty: &syn::Type,
-    registry: &impl Conversions<KotlinMeta>,
-) -> Option<(syn::Type, syn::Type)> {
-    if let Some((ok, err)) = registry
-        .flat()
-        .type_ref(ty)
-        .and_then(|t| t.fallible_parts())
-    {
-        return Some((ok.syntax().clone(), err.syntax().clone()));
-    }
-    crate::api::core::types_util::result_parts(ty)
+/// The fallback there used to be (`types_util::result_parts` over the node)
+/// existed because the caller held only a **spelling**: a `Result` the adapter
+/// composed itself would have no entry in `flat`, so the reading lookup could
+/// miss. A caller holding a `TypeRef` cannot be in that position — #280 sealed
+/// minting to the model, so every reading reaching here was classified, and
+/// `kind` is what says whether it is a `Result`. The fallback was measured
+/// never to fire in-tree; it is now unreachable by construction.
+fn fallible_parts(ty: &crate::api::core::flat::TypeRef) -> Option<(syn::Type, syn::Type)> {
+    let (ok, err) = ty.fallible_parts()?;
+    let (ok, err) = (ok.spell(), err.spell());
+    Some((syn::parse_quote!(#ok), syn::parse_quote!(#err)))
 }

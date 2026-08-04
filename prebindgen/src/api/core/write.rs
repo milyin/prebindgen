@@ -142,7 +142,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     //    purpose: with no name there is nothing for an adapter to declare, so
     //    the const gate above cannot apply to them.
     for guard in flat.guards() {
-        items.push(syn::Item::Const(guard.origin.syntax.clone()));
+        items.push(syn::Item::Const(guard.origin.as_syn().clone()));
     }
 
     // 4. Cross-cutting post-process pass. Adapters use this to qualify

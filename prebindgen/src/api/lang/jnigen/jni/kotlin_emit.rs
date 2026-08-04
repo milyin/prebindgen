@@ -460,7 +460,12 @@ impl Declarations {
             let Some(name) = key.short_name() else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&name) else {
+            // The element: a fieldless `Enum`, which is what an `enum_class!`
+            // declares. A sum under the same name is a `Variant` and is not one
+            // of these — the model's own distinction, made at parse time.
+            let Some(crate::api::core::flat::Type::Enum(item_enum)) =
+                registry.flat().declared_type(&name)
+            else {
                 continue;
             };
             let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
@@ -574,14 +579,14 @@ impl Declarations {
         sum_cfg: &SumConfig,
     ) -> KtClass {
         // Everything below comes off the element: `alternatives` for the
-        // classes, `Field::member()` for the property names. The docs and the
-        // framework line are spelling, so they read `origin.syntax`.
-        let item_enum = &sum.origin.syntax;
+        // classes, `Field::member()` for the property names, `docs()` for the
+        // prose the source wrote.
         let framework_line = format!(
             "JVM-side surface for the native Rust `{}` sum: exactly one alternative is live.",
-            item_enum.ident
+            sum.name
         );
-        let kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.attrs)
+        let kdoc = sum
+            .docs()
             .map(|d| format!("{d}\n\n{framework_line}"))
             .unwrap_or(framework_line);
 
@@ -599,8 +604,7 @@ impl Declarations {
             }
             .vis(Vis::Public)
             .supertype(KtType::cls(class_name), None);
-            if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&alt.origin.syntax.attrs)
-            {
+            if let Some(doc) = alt.docs() {
                 vclass = vclass.kdoc(doc);
             }
             let mut vprops: Vec<(String, KtType)> = Vec::new();
@@ -664,7 +668,7 @@ impl Declarations {
         // The companion is named only when it has to be (a variant took
         // `Companion`), so ordinary emission keeps the anonymous form.
         let mut companion = KtClass::companion_object().vis(Vis::Public).member(factory);
-        let companion_name = self.sum_companion_name(sum_cfg, item_enum);
+        let companion_name = self.sum_companion_name(sum_cfg, sum);
         if companion_name != "Companion" {
             companion.name = companion_name;
         }
@@ -688,12 +692,14 @@ impl Declarations {
     pub(crate) fn sum_companion_name(
         &self,
         sum_cfg: &SumConfig,
-        item_enum: &syn::ItemEnum,
+        sum: &crate::api::core::flat::Variant,
     ) -> String {
-        let taken: std::collections::HashSet<String> = item_enum
-            .variants
+        // The alternatives, not the item's `variants`: the same list, already
+        // classified, and named the way the model names them.
+        let taken: std::collections::HashSet<String> = sum
+            .alternatives
             .iter()
-            .map(|v| self.sum_variant_class_name(sum_cfg, &v.ident))
+            .map(|a| self.sum_variant_class_name(sum_cfg, &a.name))
             .collect();
         let mut name = "Companion".to_string();
         while taken.contains(&name) {
@@ -750,7 +756,7 @@ impl Declarations {
         // The field's own reading: the nullability question below is answered
         // from `kind`, so a wrapped spelling answers as the bare one does and
         // nothing is looked up (#275).
-        let field_ty = field.ty.syntax();
+        let field_ty = field.ty.spell();
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
         let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
             panic!(
@@ -1032,17 +1038,14 @@ impl Declarations {
                 let Some(func) = registry.flat().function(&ident) else {
                     continue;
                 };
-                let item_fn = &func.origin.syntax;
                 for p in &func.params {
                     if let Some(cb_args) = p.ty.callback_args() {
-                        let arg_tys: Vec<syn::Type> =
-                            cb_args.iter().map(|a| a.syntax().clone()).collect();
-                        uses.insert(SpecKey::callback(&arg_tys));
+                        uses.insert(SpecKey::callback(cb_args));
                     }
                 }
                 if let Some(plan) = registry
                     .unfold_plans()
-                    .get(&item_fn.sig.ident)
+                    .get(&func.name)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
                     let iterable = is_iterable_fold(&plan.shape);
@@ -1059,7 +1062,7 @@ impl Declarations {
                         _ => {}
                     }
                 }
-                match registry.error_plans().get(&item_fn.sig.ident) {
+                match registry.error_plans().get(&func.name) {
                     Some(ep) => {
                         let d = ep
                             .decon
@@ -1201,13 +1204,8 @@ impl Declarations {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source))
-            .unwrap_or_else(|| {
-                panic!(
-                    "value-struct builder: no Kotlin FQN for {}",
-                    TypeKey::from_type(source)
-                )
-            });
+            .kotlin_fqn(&source.key())
+            .unwrap_or_else(|| panic!("value-struct builder: no Kotlin FQN for {}", source.key()));
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run` (== the typed interface
         // when the builder needs no twin — synthesized data classes are
@@ -1244,13 +1242,8 @@ impl Declarations {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source))
-            .unwrap_or_else(|| {
-                panic!(
-                    "value-struct folder: no Kotlin FQN for {}",
-                    TypeKey::from_type(source)
-                )
-            });
+            .kotlin_fqn(&source.key())
+            .unwrap_or_else(|| panic!("value-struct folder: no Kotlin FQN for {}", source.key()));
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run(acc, leaves…)`; `acc` is the
         // accumulator list and the remaining params are the element leaves.
@@ -1302,7 +1295,7 @@ impl Declarations {
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
             registry,
-            &plan.source,
+            &plan.source.key(),
             &plan.leaves,
             &spec.params,
             &names,
@@ -1341,7 +1334,7 @@ impl Declarations {
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
             registry,
-            &plan.source,
+            &plan.source.key(),
             &plan.leaves,
             &spec.params[1..],
             &names[1..],
@@ -1380,25 +1373,28 @@ impl Declarations {
     pub(crate) fn sum_reconstruct(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-        source: &syn::Type,
+        // The sum's **identity**: every use of `source` here was
+        // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
+        // identifier IS the ident — the same reduction `type_kind` made.
+        key: &TypeKey,
         leaves: &[crate::api::core::unfold::UnfoldLeaf],
         params: &[crate::api::lang::jnigen::jni::IfaceParam],
         names: &[String],
         imports: &mut BTreeSet<String>,
     ) -> (String, String) {
-        let key = TypeKey::from_type(source);
         let iface_fqn = self
-            .kotlin_fqn(&key)
+            .kotlin_fqn(key)
             .unwrap_or_else(|| panic!("sum builder: no Kotlin FQN for {key}"));
         let iface_short = register_fqn(&iface_fqn, imports);
-        let ident = bare_path_ident(source)
+        let ident = key
+            .ident()
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
         let Some(crate::api::core::flat::Type::Variant(sum)) =
             registry.flat().declared_type(&ident)
         else {
             panic!("sum builder: `{ident}` is not an indexed sum")
         };
-        let sum_cfg = self.types[&key]
+        let sum_cfg = self.types[key]
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
         let tag = &names[0];
@@ -1580,7 +1576,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            reject_handle_const(self, &item_const.origin.syntax);
+            reject_handle_const(self, item_const);
             if let Some((helper, prop)) = render_const_val(
                 self,
                 &package,
@@ -1608,7 +1604,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            validate_constant_fn(self, &item_fn.origin.syntax);
+            validate_constant_fn(self, item_fn);
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
                 &package,

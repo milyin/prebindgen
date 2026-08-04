@@ -33,7 +33,7 @@ fn function_parts_are_the_source_tokens() {
     assert_eq!(
         func.params
             .iter()
-            .map(|p| tokens(&p.origin.syntax))
+            .map(|p| tokens(p.origin.as_syn()))
             .collect::<Vec<_>>(),
         vec![
             "key : & 'a KeyExpr",
@@ -42,10 +42,10 @@ fn function_parts_are_the_source_tokens() {
         ]
     );
     // The lifetime is nowhere in the classification, and still survives.
-    assert_eq!(tokens(&func.params[0].ty.origin.syntax), "& 'a KeyExpr");
+    assert_eq!(tokens(&func.params[0].ty.origin.spell()), "& 'a KeyExpr");
     assert!(matches!(func.params[0].ty.kind, TypeKind::Ref { .. }));
 
-    assert_eq!(tokens(&func.ret.origin.syntax), "Result < () , Error >");
+    assert_eq!(tokens(func.ret.origin.as_syn()), "Result < () , Error >");
 }
 
 /// A defaulted return and a written `-> ()` are the same function, and both
@@ -65,14 +65,14 @@ fn a_defaulted_return_spells_as_the_unit() {
         let element = parse_one(item);
         let ret = &as_fn(&element).ret;
         assert!(matches!(ret.kind, TypeKind::Unit));
-        assert_eq!(tokens(&ret.origin.syntax), "()");
+        assert_eq!(tokens(ret.origin.as_syn()), "()");
     }
 
     let defaulted = parse_one(syn::parse_quote!(
         pub fn a() {}
     ));
     assert!(matches!(
-        as_fn(&defaulted).origin.syntax.sig.output,
+        as_fn(&defaulted).origin.as_syn().sig.output,
         syn::ReturnType::Default
     ));
 }
@@ -91,9 +91,9 @@ fn struct_field_slices_keep_attributes() {
     ));
     let fields = &as_struct(&element).fields;
     assert_eq!(fields.len(), 2);
-    assert!(tokens(&fields[0].origin.syntax).contains("The key it was published on."));
+    assert!(tokens(&fields[0].origin.spell()).contains("The key it was published on."));
     assert_eq!(
-        tokens(&fields[1].origin.syntax),
+        tokens(&fields[1].origin.spell()),
         "# [allow (dead_code)] pub (crate) seq : u64"
     );
 }
@@ -137,7 +137,7 @@ fn an_item_and_its_components_share_one_location() {
     assert!(Rc::ptr_eq(item, &f.origin.location), "alternative field");
     let extent = f.ty.array_extent().expect("an extent");
     assert!(Rc::ptr_eq(item, &extent.origin.location), "extent");
-    assert_eq!(tokens(&extent.origin.syntax), "4");
+    assert_eq!(tokens(extent.origin.as_syn()), "4");
 
     let element = parse_one(syn::parse_quote!(
         pub fn f(a: u8) {}
@@ -293,7 +293,7 @@ fn struct_delimiters_survive_and_spell() {
     ));
     let o = as_extern(&element);
     assert_eq!(o.name, "D");
-    assert!(tokens(&o.origin.syntax).contains("Whatever"));
+    assert!(tokens(o.origin.as_syn()).contains("Whatever"));
 }
 
 /// A discriminant is two facts with two homes: the number is modelled, the
@@ -320,7 +320,7 @@ fn discriminant_number_and_spelling_both_survive() {
         .as_ref()
         .expect("an explicit discriminant");
     assert_eq!(tokens(expr), "0x07");
-    assert!(e.values[1].origin.syntax.discriminant.is_none());
+    assert!(e.values[1].origin.as_syn().discriminant.is_none());
 }
 
 /// A discriminant the frontend cannot evaluate breaks the *numeric* chain and
@@ -433,7 +433,7 @@ fn array_extent_carries_number_const_and_spelling() {
     let named = fields[0].ty.array_extent().expect("an extent");
     assert_eq!(named.value, 4);
     assert_eq!(named.const_id().expect("a const").name, "TAG_LEN");
-    assert_eq!(tokens(&fields[0].ty.origin.syntax), "[u8 ; TAG_LEN]");
+    assert_eq!(tokens(&fields[0].ty.origin.spell()), "[u8 ; TAG_LEN]");
 
     let literal = fields[1].ty.array_extent().expect("an extent");
     assert_eq!(literal.value, 2);
@@ -452,8 +452,8 @@ fn the_whole_item_survives() {
         }
     );
     let element = parse_one(syn::Item::Fn(source.clone()));
-    assert_eq!(tokens(&as_fn(&element).origin.syntax), tokens(&source));
-    assert_eq!(tokens(&element.syntax()), tokens(&syn::Item::Fn(source)));
+    assert_eq!(tokens(&as_fn(&element).origin.spell()), tokens(&source));
+    assert_eq!(tokens(&element.as_syn()), tokens(&syn::Item::Fn(source)));
 }
 
 /// An item the language cannot express still keeps its tokens, so a diagnosis
@@ -467,7 +467,7 @@ fn an_unsupported_item_keeps_its_tokens() {
     );
     let element = parse_one(source.clone());
     assert!(matches!(element, Element::Unsupported(_)));
-    assert_eq!(tokens(&element.syntax()), tokens(&source));
+    assert_eq!(tokens(&element.as_syn()), tokens(&source));
 }
 
 /// **Every accepted form spells back exactly what was written.**
@@ -523,9 +523,9 @@ fn syntax_is_recoverable_from_kind() {
         let ty = lower(spelling).expect("in the language");
         assert_eq!(
             tokens(&ty.kind().to_syn()),
-            tokens(ty.syntax()),
+            tokens(ty.as_syn()),
             "`{}` must spell back as itself",
-            tokens(ty.syntax()),
+            tokens(ty.as_syn()),
         );
     }
 }
@@ -554,8 +554,31 @@ fn the_two_forms_that_do_not_spell_back_verbatim() {
     let parens = lower(quote::quote!((u8))).expect("in the language");
     assert_eq!(tokens(&parens.kind().to_syn()), "u8");
     assert_eq!(
-        tokens(parens.syntax()),
+        tokens(parens.as_syn()),
         "u8",
         "the slice is the inner node's"
     );
+}
+
+/// An element answers for the prose the source wrote, sanitized for a block
+/// comment — the fact every destination that emits documentation needs, and the
+/// last common reason an emitter reached for a captured item's node.
+#[test]
+fn an_element_answers_for_its_docs() {
+    let element = parse_one(syn::parse_quote!(
+        /// Puts a payload.
+        ///
+        /// Second paragraph with */ inside.
+        pub fn put(payload: u8) {}
+    ));
+    assert_eq!(
+        as_fn(&element).docs().expect("docs present"),
+        "Puts a payload.\n\nSecond paragraph with *\u{200B}/ inside.",
+        "one leading space off each line, joined, and `*/` defanged"
+    );
+
+    let bare = parse_one(syn::parse_quote!(
+        pub fn g() {}
+    ));
+    assert_eq!(as_fn(&bare).docs(), None);
 }

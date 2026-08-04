@@ -143,12 +143,12 @@ pub(crate) fn emit_unfold_delivery(
             // otherwise (mirrors `leaf_is_prim`; the folder interface
             // declares the matching typed param).
             let out_entry = registry
-                .reading_of(element)
+                .reading(&element.key())
                 .and_then(|tr| registry.output_entry(&tr))
                 .unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                        TypeKey::from_type(element)
+                        element.key()
                     )
                 });
             // The element's COMPLETE Rust -> wire chain. No `convert!` type is
@@ -493,7 +493,10 @@ pub(crate) fn reach_leaf_flat(
     // disagreement would be a borrow handed to an owning converter; this is the
     // second reading, removed.
     let reached_is_ours = if leaf.identity {
-        !matches!(leaf.out_ty.syntax(), syn::Type::Reference(_))
+        !matches!(
+            leaf.out_ty.kind(),
+            crate::api::core::flat::TypeKind::Ref { .. }
+        )
     } else {
         consuming
     };
@@ -744,7 +747,7 @@ pub(crate) fn bind_hoists(
 /// Rust spells that `Option<T>`, `Box<Option<T>>`, or something else — the flat
 /// model states the destination-language invariant, and the side interpreting
 /// it is the side that must accept any representation. Matching the reached
-/// place directly assumed one, which is `classify off kind, spell off syntax`
+/// place directly assumed one, which is `classify off kind, spell with spell()`
 /// broken in the direction nothing was watching: the classification was right
 /// and the *spelling* came from it too. `Box<Option<T>>` then produced
 /// `match &place { Some(..) => .. }` and `E0308` (#268).
@@ -997,7 +1000,7 @@ pub(crate) fn encode_plan_leaves(
         let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
                 "jnigen unfold: leaf `{}` has no registered output converter",
-                TypeKey::from_type(leaf.out_ty.syntax())
+                leaf.out_ty.key()
             )
         });
         let conv_fail = fail(quote!(__e.to_string()));
@@ -1060,7 +1063,7 @@ pub(crate) fn encode_plan_leaves(
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
                      `.accessor_record_id()` requires a ptr_class type",
-                    TypeKey::from_type(leaf.out_ty.syntax())
+                    leaf.out_ty.key()
                 )
             });
             // The place this handle lives, when it is OURS to give away — the
@@ -1075,15 +1078,16 @@ pub(crate) fn encode_plan_leaves(
             // how to project it — a plain-field run directly, a trailing
             // `Option` through the nullable branch's `match`, which moves the
             // whole `Option` in rather than borrowing it.
-            let owned_place: Option<TokenStream> =
-                if !matches!(leaf.out_ty.syntax(), syn::Type::Reference(_))
-                    && steps_are_movable(&path)
-                {
-                    let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                    Some(quote!(#value #(.#segs)*))
-                } else {
-                    None
-                };
+            let owned_place: Option<TokenStream> = if !matches!(
+                leaf.out_ty.kind(),
+                crate::api::core::flat::TypeKind::Ref { .. }
+            ) && steps_are_movable(&path)
+            {
+                let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
+                Some(quote!(#value #(.#segs)*))
+            } else {
+                None
+            };
             match proj.kind {
                 ProjectionKind::Handle => {
                     let handle_ident = format_ident!("__h{}", idx);
@@ -1389,18 +1393,18 @@ pub(crate) fn leaf_is_prim(
     if leaf.nullable {
         return false;
     }
-    leaf_ty_is_prim(registry, leaf.out_ty.syntax())
+    leaf_ty_is_prim(registry, &leaf.out_ty)
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw
 /// primitive** slot? Split out so the interface derivation can ask the question
 /// about a leaf whose own `nullable` flag it is in the middle of computing (an
 /// inert sum group slot).
-pub(crate) fn leaf_ty_is_prim(registry: &impl Conversions<KotlinMeta>, out_ty: &syn::Type) -> bool {
-    let Some(entry) = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
-    else {
+pub(crate) fn leaf_ty_is_prim(
+    registry: &impl Conversions<KotlinMeta>,
+    out_ty: &crate::api::core::flat::TypeRef,
+) -> bool {
+    let Some(entry) = registry.output_entry(out_ty) else {
         return false;
     };
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose

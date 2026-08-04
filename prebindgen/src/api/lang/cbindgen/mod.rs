@@ -102,13 +102,17 @@ use quote::{format_ident, quote, ToTokens};
 // Shared `syn::Type` shape predicates live in `core::types_util`; re-exported
 // here under this back-end's historical names so the submodules (`use super::*`)
 // keep their call sites. `pub(crate) use` so the glob re-export reaches them.
+//
+// Down from seven: the shape questions this back-end asks are asked of a
+// `TypeRef` now, so what is left here serves the two node populations that
+// remain — a build-script declaration, and a converter's own generated
+// signature.
 pub(crate) use crate::api::core::types_util::{
-    first_type_arg, is_option_type as is_option, is_result_type as is_result, is_unit,
-    is_vec_type as is_vec, path_tail_ident as type_path_tail, result_parts,
+    first_type_arg, is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
 };
 use crate::api::{
     core::{
-        flat::Origin,
+        flat::{Field, Origin, ScalarKind, TypeKind, TypeRef},
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
         registry::{extract_fn_trait_args, Conversions, Direction, Registry, TypeKey},
@@ -477,94 +481,36 @@ fn sanitize(key: &TypeKey) -> String {
 }
 
 /// Last path-segment ident of a type as a `String` (e.g. `ZKeyExpr`).
-fn type_short(ty: &syn::Type) -> String {
-    type_path_tail(ty)
-        .map(|i| i.to_string())
-        .unwrap_or_else(|| sanitize(&TypeKey::from_type(ty)))
+/// The short name a C symbol is built from — the key's last path segment, or a
+/// sanitized rendering of the whole key when it is not a path.
+///
+/// Off the **identity**: `type_path_tail` took the last segment of a node, and
+/// `TypeKey::short_name` is the same question asked of the canonical string, so
+/// the name no longer depends on holding the node it was derived from.
+fn type_short(key: &TypeKey) -> String {
+    key.short_name().unwrap_or_else(|| sanitize(key))
 }
 
-/// The indexed `syn::ItemEnum` for a declared enum type, by tail ident.
-fn enum_item<'r>(registry: &'r impl Conversions<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
-    let ident = type_path_tail(ty)?;
-    registry.flat().enum_item(&ident)
-}
-
-/// Hard error when a `.tagged_union()`-declared enum is unit-only. The
-/// counterpart of [`assert_unit_enum`]: a fieldless enum is exactly a
-/// discriminant, so it belongs to `.enum_type()` — declaring it here would
-/// emit a `union` with no bodies and a needlessly indirect C surface. Neither
-/// declarator silently accepts the other's shape.
-fn assert_payload_enum(e: &syn::ItemEnum) {
-    use crate::api::core::types_util::{enum_shape, EnumShape};
-    if enum_shape(e) == EnumShape::Unit {
-        panic!(
+/// The declared **payload-carrying** enum under `key`, or a panic naming the
+/// right declarator when it is fieldless.
+///
+/// The mirror image of [`unit_enum`], and the same act: the model split the two
+/// enum shapes into two elements at parse time, so the lookup answers the shape
+/// question. This was `enum_item` + `assert_payload_enum`, the second running
+/// `enum_shape` over a `syn::ItemEnum` to re-derive what the first had thrown
+/// away.
+fn payload_enum<'r>(
+    registry: &'r impl Conversions<()>,
+    key: &TypeKey,
+) -> Option<&'r crate::api::core::flat::Variant> {
+    match registry.flat().declared_type(&key.ident()?)? {
+        crate::api::core::flat::Type::Variant(v) => Some(v),
+        crate::api::core::flat::Type::Enum(e) => panic!(
             "Cbindgen: `{}` has no payload variants: declare it with `.enum_type()`, \
              not `.tagged_union()` — a fieldless enum crosses as a plain C `enum`",
-            e.ident
-        );
-    }
-}
-
-/// If `fty` is an opaque-pointer payload — `Box<T>` or `Option<Box<T>>` with
-/// `T` a path type — return `T`. The shape check only; whether `T` is a
-/// declared `opaque_ptr` is [`CbindgenBuilder::mirror_field_wire`]'s call, and this
-/// is only reached for a field that already passed it.
-fn opaque_ptr_payload_inner(fty: &syn::Type) -> Option<syn::Type> {
-    if is_option(fty) {
-        first_type_arg(fty).and_then(|inner| box_inner(&inner))
-    } else {
-        box_inner(fty)
-    }
-}
-
-/// The `Type` form of a generated C type ident, for the shared
-/// [`variant_ctor`] helper (which takes the enum's path either as a source
-/// type or as a mirror ident).
-fn cname_ty(cname: &syn::Ident) -> syn::Type {
-    syn::parse_quote!(#cname)
-}
-
-/// `Enum::Variant { a: __f0, .. }` / `Enum::Variant(__f0, ..)` / `Enum::Variant`
-/// — the match pattern binding every field of one variant, shaped like the
-/// variant itself. Used for both the source enum and its C mirror, and for
-/// both directions, so the two sides always destructure the same way.
-fn variant_pattern(
-    enum_path: &impl ToTokens,
-    variant: &syn::Ident,
-    fields: &syn::Fields,
-    binds: &[syn::Ident],
-) -> TokenStream {
-    match fields {
-        syn::Fields::Unit => quote!(#enum_path::#variant),
-        syn::Fields::Named(named) => {
-            let pairs = named.named.iter().zip(binds).map(|(f, b)| {
-                let n = f.ident.as_ref().expect("named field");
-                quote!(#n: #b)
-            });
-            quote!(#enum_path::#variant { #(#pairs),* })
-        }
-        syn::Fields::Unnamed(_) => quote!(#enum_path::#variant(#(#binds),*)),
-    }
-}
-
-/// The constructor counterpart of [`variant_pattern`]: rebuild one variant
-/// from already-converted field expressions.
-fn variant_ctor(
-    enum_path: &impl ToTokens,
-    variant: &syn::Ident,
-    fields: &syn::Fields,
-    exprs: &[TokenStream],
-) -> TokenStream {
-    match fields {
-        syn::Fields::Unit => quote!(#enum_path::#variant),
-        syn::Fields::Named(named) => {
-            let pairs = named.named.iter().zip(exprs).map(|(f, e)| {
-                let n = f.ident.as_ref().expect("named field");
-                quote!(#n: #e)
-            });
-            quote!(#enum_path::#variant { #(#pairs),* })
-        }
-        syn::Fields::Unnamed(_) => quote!(#enum_path::#variant(#(#exprs),*)),
+            e.name
+        ),
+        _ => None,
     }
 }
 
@@ -573,18 +519,34 @@ fn variant_ctor(
 /// is [`EnumShape::Unit`]; a data-carrying enum crosses as a tag plus a
 /// `union` and is reached through a different declarator, so this names
 /// that declarator rather than asserting on `syn::Fields`.
-fn assert_unit_enum(e: &syn::ItemEnum) {
-    use crate::api::core::types_util::{enum_shape, first_payload_variant, EnumShape};
-    if enum_shape(e) == EnumShape::Sum {
-        let offender = first_payload_variant(e)
-            .map(|v| v.ident.to_string())
-            .unwrap_or_default();
-        panic!(
-            "Cbindgen: `{}` is a data-carrying enum (variant `{}` has fields): \
-             declare it with `.tagged_union()`, not `.enum_type()` — a C `enum` \
-             is a bare discriminant and has no room for a payload",
-            e.ident, offender
-        );
+/// The declared **fieldless** enum under `ty`'s name, or a panic naming the
+/// right declarator when it is a sum.
+///
+/// The lookup and the check are the same act: the model decided which of the
+/// two shapes an item is at parse time, and expresses it as two elements. This
+/// was `enum_item` + `assert_unit_enum`, the second running `enum_shape` over a
+/// `syn::ItemEnum` to re-derive what the first had already thrown away.
+fn unit_enum<'r>(
+    registry: &'r impl Conversions<()>,
+    key: &TypeKey,
+) -> Option<&'r crate::api::core::flat::Enum> {
+    match registry.flat().declared_type(&key.ident()?)? {
+        crate::api::core::flat::Type::Enum(e) => Some(e),
+        crate::api::core::flat::Type::Variant(v) => {
+            let offender = v
+                .alternatives
+                .iter()
+                .find(|a| !a.is_empty())
+                .map(|a| a.name.to_string())
+                .unwrap_or_default();
+            panic!(
+                "Cbindgen: `{}` is a data-carrying enum (variant `{offender}` has fields): \
+                 declare it with `.tagged_union()`, not `.enum_type()` — a C `enum` is a bare \
+                 discriminant and has no room for a payload",
+                v.name
+            )
+        }
+        _ => None,
     }
 }
 
@@ -597,21 +559,64 @@ pub fn snake_case(s: &str) -> String {
     crate::api::core::types_util::pascal_to_snake(s)
 }
 
+/// A reading spelled back as a `syn::Type`.
+///
+/// The source's **own tokens**, re-parsed — not [`TypeKind::to_syn`], which
+/// exists to check the lowering rather than to generate with. Every wire this
+/// back-end builds from a field's own type goes through here, so what C sees
+/// is what the source wrote.
+fn spelled(t: &TypeRef) -> syn::Type {
+    let toks = t.spell();
+    syn::parse_quote!(#toks)
+}
+
+/// [`spelled`] under its historical name, for the identity converters whose
+/// `destination` IS the Rust type they pass through.
+fn spelled_ty(t: &TypeRef) -> syn::Type {
+    spelled(t)
+}
+
+/// `String`, off the classification.
+fn r_is_string(t: &TypeRef) -> bool {
+    matches!(t.kind(), TypeKind::String)
+}
+
+/// `str`, off the classification.
+fn r_is_str(t: &TypeRef) -> bool {
+    matches!(t.kind(), TypeKind::Str)
+}
+
+/// `bool`, off the classification — the one scalar with a restricted domain.
+fn r_is_bool(t: &TypeRef) -> bool {
+    matches!(t.kind(), TypeKind::Scalar(ScalarKind::Bool))
+}
+
+/// An FFI-safe scalar primitive, off the classification. `ScalarKind` IS the
+/// closed set the name table below was spelling out by hand.
+fn r_is_scalar(t: &TypeRef) -> bool {
+    matches!(t.kind(), TypeKind::Scalar(_))
+}
+
+/// `Vec<T>`, off the classification.
+fn r_is_vec(t: &TypeRef) -> bool {
+    matches!(t.kind(), TypeKind::Vec(_))
+}
+
+/// The opaque-pointer payload shape — `Box<T>` or `Option<Box<T>>` — off the
+/// classification, returning the reading of `T`.
+///
+/// The model peer of [`opaque_ptr_payload_inner`]: same shape question, asked
+/// of `TypeKind` instead of of a path's tail ident.
+fn r_boxed_inner(t: &TypeRef) -> Option<&TypeRef> {
+    let core = t.optional_inner().unwrap_or(t);
+    match core.kind() {
+        TypeKind::Boxed(inner) => Some(inner),
+        _ => None,
+    }
+}
+
 fn is_string(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
-}
-
-fn is_str(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "str").unwrap_or(false)
-}
-
-/// If `ty` is `Box<T>`, return `T` (used to peel an opaque-pointer struct field
-/// such as `Box<String>` / the inner of `Option<Box<String>>`).
-fn box_inner(ty: &syn::Type) -> Option<syn::Type> {
-    if type_path_tail(ty).map(|i| i == "Box").unwrap_or(false) {
-        return first_type_arg(ty);
-    }
-    None
 }
 
 /// If `ty` is `MaybeUninit<T>` (any path form: `MaybeUninit` / `std::mem::…` /
@@ -692,23 +697,36 @@ fn is_scalar(ty: &syn::Type) -> bool {
         .unwrap_or(false)
 }
 
-/// If `ty` is `Cow<'_, [E]>` with scalar `E`, return `E`.
-fn cow_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else {
+/// The element of a shared slice borrow (`&[E]`), off the classification.
+fn r_shared_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
+    let TypeKind::Ref {
+        mutable: false,
+        inner,
+        ..
+    } = t.kind()
+    else {
         return None;
     };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Cow" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-        return None;
-    };
-    let elem = args.args.iter().find_map(|arg| match arg {
-        syn::GenericArgument::Type(syn::Type::Slice(slice)) => Some((*slice.elem).clone()),
+    match inner.kind() {
+        TypeKind::Slice(e) => Some(e),
         _ => None,
-    })?;
-    is_scalar(&elem).then_some(elem)
+    }
+}
+
+/// [`cow_slice_elem`] off the classification: `Cow<'_, [E]>` with scalar `E`.
+fn r_cow_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
+    let TypeKind::Cow { inner, .. } = t.kind() else {
+        return None;
+    };
+    match inner.kind() {
+        TypeKind::Slice(e) if r_is_scalar(e) => Some(e),
+        _ => None,
+    }
+}
+
+/// [`scalar_slice_elem`] off the classification.
+fn r_scalar_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
+    r_shared_slice_elem(t).filter(|e| r_is_scalar(e))
 }
 
 /// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.
@@ -797,22 +815,4 @@ fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {
             }
         },
     }
-}
-
-/// C-ABI wire type for a struct field. `String` → `*mut c_char`; `bool` →
-/// [`bool_wire`]; the remaining FFI-safe scalars pass through. `None` for
-/// anything else (unsupported this increment).
-fn c_field_wire(ty: &syn::Type) -> Option<syn::Type> {
-    if is_string(ty) {
-        return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
-    }
-    // #170 instance 2: the field arrives from C by value, so it may not be a
-    // Rust `bool` until the byte has been normalised.
-    if is_bool(ty) {
-        return Some(bool_wire());
-    }
-    if is_scalar(ty) {
-        return Some(ty.clone());
-    }
-    None
 }

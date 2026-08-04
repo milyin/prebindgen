@@ -49,7 +49,7 @@ pub(crate) fn callback_input(
     let arg_pat_ty: Vec<TokenStream> = args
         .iter()
         .map(|t| {
-            let t = t.syntax();
+            let t = t.spell();
             quote!(#t)
         })
         .collect();
@@ -311,12 +311,11 @@ pub(crate) fn callback_input(
     // Typed `run` descriptor of the generated callback interface — the SAME
     // memoized spec (`SpecKey::Callback`) the wrapper surface and the
     // interface declaration read, so it cannot drift from the jvalues above.
-    // The memo key is spellings — `SpecKey` needs `Ord`, which a `TypeRef`
-    // cannot give. Keyed off each arg's own `origin.syntax`, which
+    // The memo key holds `TypeKey`s — `SpecKey` needs `Ord`, which a `TypeRef`
+    // cannot give — so it is keyed off each arg's own identity, which
     // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax` pins as
     // the SAME identity the signature-derived key produces.
-    let arg_spellings: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
-    let spec = ext.iface_spec(registry, &SpecKey::callback(&arg_spellings))?;
+    let spec = ext.iface_spec(registry, &SpecKey::callback(args))?;
     let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
     // Local-frame capacity: roughly an encoded wire + a wrapped object per
     // delivered leaf, plus call temporaries.
@@ -410,14 +409,17 @@ pub(crate) fn callback_input(
 /// it by the element's folded [`Projection`] being a [`ProjectionKind::Handle`]
 /// and panic with a fix hint, instead of the `Vec<_>` handler silently
 /// `return None`-ing (which surfaces as an opaque "unresolved type" error).
-pub(crate) fn reject_vec_of_handle(inner_projection: &Option<Projection>, elem: &syn::Type) {
+pub(crate) fn reject_vec_of_handle(
+    inner_projection: &Option<Projection>,
+    elem: &crate::api::core::flat::TypeRef,
+) {
     if let Some(p) = inner_projection {
         if p.kind == ProjectionKind::Handle {
             panic!(
                 "JniGen: `Vec<{}>` is unsupported — its elements would be closeable native \
                  handles (jlong) the JVM must free individually. Expose a per-element \
                  accessor instead of returning a `Vec` of handles.",
-                elem.to_token_stream(),
+                elem.spell(),
             );
         }
     }
@@ -426,7 +428,9 @@ pub(crate) fn reject_vec_of_handle(inner_projection: &Option<Projection>, elem: 
 /// Reconstruct the `impl Fn(args...) + Send + Sync + 'static` syn::Type
 /// from a flat slice of arg types. Used by the rank-1/2/3 callback impls
 /// to feed `input_wrapper` the original outer type.
-pub(crate) fn build_fn_type(args: &[syn::Type]) -> syn::Type {
-    let arg_iter = args.iter();
+pub(crate) fn build_fn_type(args: &[crate::api::core::flat::TypeRef]) -> syn::Type {
+    // The args as the source spelled them — the callback's Rust type is
+    // re-emitted, never re-derived.
+    let arg_iter = args.iter().map(|a| a.spell());
     syn::parse_quote!(impl Fn( #(#arg_iter),* ) + Send + Sync + 'static)
 }

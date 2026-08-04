@@ -19,7 +19,7 @@ use crate::SourceLocation;
 /// `syn` tokens normally carry spans, so in principle the syntax alone could
 /// answer "where was this written". Not here: the proc-macro serializes each
 /// marked item as a **string** into JSONL, and `build.rs` re-parses it, so every
-/// span in [`Self::syntax`] points into an anonymous buffer.
+/// span in [`spell()`](Self::spell) points into an anonymous buffer.
 /// [`SourceLocation::from_span`] captures file, line and column at
 /// macro-expansion time — while real rustc spans still exist — precisely because
 /// they cannot survive that trip.
@@ -47,12 +47,27 @@ use crate::SourceLocation;
 /// in one flat namespace. [`ConstId`](super::ConstId) is not an exception — the
 /// crate it records is the const's *declaring* crate, obtained by lookup, and
 /// that is exactly what lets an array extent refuse a const from another source.
+/// # The syntax is sealed
+///
+/// > **You may output the source. You may not read it.**
+///
+/// [`spell`](Self::spell) hands out tokens and nothing else, which is all
+/// generated Rust ever needed; [`as_syn`](Self::as_syn) hands out the node and
+/// is the **one** way to get one. The field itself is `pub(super)`, so the model
+/// still reads it freely and everything downstream has to say which of the two
+/// it meant.
+///
+/// It was a public field returning a `syn` node to anyone who asked, and the
+/// boundary ledger counted the consequences — measurement, not prevention. Now
+/// the type system asks the question and the ledger counts the answer.
 #[derive(Clone, Debug)]
 pub struct Origin<S> {
-    /// The exact tokens this node was built from. Feed it to `quote!` when
-    /// generated Rust has to spell the node; never `match` on it to decide what
-    /// the node is — see the [module docs](super) on classifying off `kind`.
-    pub syntax: S,
+    /// The exact tokens this node was built from.
+    ///
+    /// `pub(super)` is the seal: inside the model this is the syntax being
+    /// lowered, classified and round-tripped, and reading it is the work. Outside,
+    /// see [`spell`](Self::spell) and [`as_syn`](Self::as_syn).
+    pub(super) syntax: S,
     /// The captured item this node belongs to, shared with every sibling.
     pub location: Rc<SourceLocation>,
 }
@@ -60,6 +75,21 @@ pub struct Origin<S> {
 impl<S> Origin<S> {
     pub fn new(syntax: S, location: Rc<SourceLocation>) -> Self {
         Self { syntax, location }
+    }
+
+    /// The node as `syn` — **the escape**.
+    ///
+    /// Every remaining place that takes the source apart instead of asking the
+    /// model comes through here, which is what makes the population countable:
+    /// `boundary.rs` counts these calls per file, and the count reaching zero is
+    /// what "the model answers every source question" would mean.
+    ///
+    /// Naming it is not an accusation. An emitter assembling a `syn::Item`, or a
+    /// signature the generated crate must restate node for node, legitimately
+    /// needs the node — that is why the ledger keeps item escapes in their own
+    /// bucket. What it stops is reaching for one *by default*.
+    pub fn as_syn(&self) -> &S {
+        &self.syntax
     }
 
     /// The crate this node's source was written in.
@@ -79,10 +109,35 @@ impl<S> Origin<S> {
     }
 }
 
-/// Spelling a node emits its syntax, so a site that re-states a whole node
-/// needs no `.syntax` hop.
-impl<S: ToTokens> ToTokens for Origin<S> {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        self.syntax.to_tokens(tokens)
+impl Origin<syn::Type> {
+    /// This type's identity as a table key — the same answer
+    /// [`TypeRef::key`](super::TypeRef::key) gives for a reading.
+    ///
+    /// Here because a **declaration** is an `Origin<syn::Type>`: the type a
+    /// build script wrote, carried with a placeless location. Asking it for its
+    /// identity is not reaching for the node, and it should not have to be
+    /// spelled as one — every `TypeKey::from_type(decl.as_syn())` was a keying
+    /// operation wearing an escape's clothes.
+    pub fn key(&self) -> crate::api::core::registry::TypeKey {
+        crate::api::core::registry::TypeKey::from_type(&self.syntax)
+    }
+}
+
+impl<S: ToTokens> Origin<S> {
+    /// The node's tokens, for generated Rust to spell.
+    ///
+    /// **The only output route, and deliberately not `ToTokens`.** Implementing
+    /// that trait would make `quote!(#node)` work — and hand every consumer
+    /// `to_token_stream().to_string()` with it, which is a classifier's input in
+    /// a spelling's clothing. A `TokenStream` interpolates just as well one `let`
+    /// earlier, and the string, if a site really wants one, is now a two-call
+    /// pattern that says so.
+    ///
+    /// It does not make a token string *impossible* — `spell().to_string()`
+    /// reaches one, and the ledger still lists that as open. What it makes is
+    /// **visible**: `.to_token_stream().to_string()` was indistinguishable from
+    /// the same call on a type an adapter built itself.
+    pub fn spell(&self) -> proc_macro2::TokenStream {
+        self.syntax.to_token_stream()
     }
 }

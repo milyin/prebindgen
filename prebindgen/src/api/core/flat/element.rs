@@ -72,14 +72,20 @@ impl Element {
         }
     }
 
-    /// The whole item as the source wrote it.
-    pub fn syntax(&self) -> syn::Item {
+    /// The whole item as `syn` — **the escape**, at the item level. See
+    /// [`Origin::as_syn`](super::Origin::as_syn).
+    ///
+    /// It builds a `syn::Item` rather than borrowing one, because each variant
+    /// keeps the item kind it was parsed as. That makes it the natural route for
+    /// an emitter re-stating a whole item, and the ledger's **item** bucket is
+    /// where those land.
+    pub fn as_syn(&self) -> syn::Item {
         match self {
-            Element::Function(f) => syn::Item::Fn(f.origin.syntax.clone()),
-            Element::Type(t) => t.syntax(),
-            Element::Constant(c) => syn::Item::Const(c.origin.syntax.clone()),
-            Element::Guard(g) => syn::Item::Const(g.origin.syntax.clone()),
-            Element::Unsupported(u) => u.origin.syntax.clone(),
+            Element::Function(f) => syn::Item::Fn(f.origin.as_syn().clone()),
+            Element::Type(t) => t.as_syn(),
+            Element::Constant(c) => syn::Item::Const(c.origin.as_syn().clone()),
+            Element::Guard(g) => syn::Item::Const(g.origin.as_syn().clone()),
+            Element::Unsupported(u) => u.origin.as_syn().clone(),
         }
     }
 }
@@ -123,13 +129,13 @@ impl Type {
         }
     }
 
-    /// The whole item as the source wrote it.
-    pub fn syntax(&self) -> syn::Item {
+    /// The whole item as `syn` — **the escape**. See [`Element::as_syn`].
+    pub fn as_syn(&self) -> syn::Item {
         match self {
-            Type::Struct(s) => syn::Item::Struct(s.origin.syntax.clone()),
-            Type::Variant(v) => syn::Item::Enum(v.origin.syntax.clone()),
-            Type::Enum(e) => syn::Item::Enum(e.origin.syntax.clone()),
-            Type::Extern(e) => e.origin.syntax.clone(),
+            Type::Struct(s) => syn::Item::Struct(s.origin.as_syn().clone()),
+            Type::Variant(v) => syn::Item::Enum(v.origin.as_syn().clone()),
+            Type::Enum(e) => syn::Item::Enum(e.origin.as_syn().clone()),
+            Type::Extern(e) => e.origin.as_syn().clone(),
         }
     }
 }
@@ -209,6 +215,24 @@ pub struct Struct {
     pub name: syn::Ident,
     pub fields: Vec<Field>,
     pub origin: Origin<syn::ItemStruct>,
+    /// This struct **as a type**, taken at parse time — the twin of
+    /// [`Variant::reading`], stored and `pub(super)` for the same two reasons.
+    pub(super) reading: TypeRef,
+}
+
+impl Struct {
+    /// This struct as a type reference — what the **declaration** answers when
+    /// something needs a reading naming it.
+    ///
+    /// The alternative is composing one from the name at the call site, which
+    /// an adapter cannot do (minting is sealed to `api::core`) and which would
+    /// be phase-dependent if routed through the registry instead: a
+    /// decomposition is declared before anything is interned. The declaration
+    /// is the one thing that can always say. Same reasoning as
+    /// [`Variant::type_ref`].
+    pub fn type_ref(&self) -> &TypeRef {
+        &self.reading
+    }
 }
 
 /// A `#[prebindgen]` enum whose alternatives carry payloads — a sum type.
@@ -334,6 +358,10 @@ impl Alternative {
 #[derive(Clone, Debug)]
 pub struct Enum {
     pub name: syn::Ident,
+    /// This enum **as a type**, taken at parse time — the twin of
+    /// [`Variant::reading`] and [`Struct::reading`], stored and `pub(super)`
+    /// for the same two reasons.
+    pub(super) reading: TypeRef,
     /// Values in declaration order; `values[i].index == i`.
     pub values: Vec<EnumValue>,
     pub origin: Origin<syn::ItemEnum>,
@@ -359,8 +387,17 @@ impl Enum {
     }
 }
 
+impl Enum {
+    /// This enum as a type reference — what the **declaration** answers.
+    /// See [`Variant::type_ref`].
+    pub fn type_ref(&self) -> &TypeRef {
+        &self.reading
+    }
+}
+
 /// One named value of an [`Enum`].
 #[derive(Clone, Debug)]
+
 pub struct EnumValue {
     pub name: syn::Ident,
     /// Position within its enum, `0..N-1`. Not the identity — see
@@ -452,3 +489,58 @@ pub struct Unsupported {
     /// The item as written, so a diagnosis can quote the source.
     pub origin: Origin<syn::Item>,
 }
+
+/// An item's `///` documentation, read off the attributes it was captured
+/// with: `#[doc = " …"]` lines in order, one leading space stripped per line,
+/// joined with `\n`; `None` when there are none. `*/` is defanged so the text
+/// is safe inside a `/** … */` block, which is what every destination that
+/// re-emits prose needs.
+///
+/// **Here rather than in an adapter.** A doc comment is something the *source*
+/// said, so it is the model's to report — and reading it was the last common
+/// reason an emitter reached for a captured item's node. Two adapters wanting
+/// the same prose is one function, not a copy each.
+fn docs_from(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for attr in attrs {
+        if !attr.path().is_ident("doc") {
+            continue;
+        }
+        let syn::Meta::NameValue(nv) = &attr.meta else {
+            continue;
+        };
+        let syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(s),
+            ..
+        }) = &nv.value
+        else {
+            continue;
+        };
+        let raw = s.value();
+        let line = raw.strip_prefix(' ').unwrap_or(&raw);
+        lines.push(line.replace("*/", "*\u{200B}/"));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
+macro_rules! docs_accessor {
+    ($($ty:ident),+ $(,)?) => {$(
+        impl $ty {
+            /// This item's `///` documentation — see [`docs_from`].
+            pub fn docs(&self) -> Option<String> {
+                docs_from(&self.origin.syntax.attrs)
+            }
+        }
+    )+};
+}
+
+docs_accessor!(
+    Function,
+    Struct,
+    Enum,
+    Variant,
+    Constant,
+    Field,
+    Alternative,
+    EnumValue
+);

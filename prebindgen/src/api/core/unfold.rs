@@ -153,7 +153,9 @@ impl DeconRecord {
 /// the leaf order is the declaration order of the `records` vector.
 #[derive(Clone)]
 pub struct DeconstructorDecl {
-    pub target: syn::Type,
+    /// The type being decomposed, as an **identity** — see
+    /// [`ConstructorDecl::target`](crate::api::core::expand::ConstructorDecl::target).
+    pub target: TypeKey,
     pub records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
     /// carries the inferred `(target-position, delivery)` to use). Always
@@ -209,7 +211,7 @@ pub struct OutputDecl {
     /// cross-checked against the fn's peeled return type in [`apply`].
     /// `None` for internally-synthesized decls (the type comes from the
     /// return itself).
-    pub declared_source: Option<syn::Type>,
+    pub declared_source: Option<TypeKey>,
 }
 
 /// Deconstructor / output-expansion declarations gathered from a language
@@ -240,7 +242,7 @@ fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
     let mut entries: Vec<UnfoldDeclError> = Vec::new();
     let mut decon_targets: std::collections::HashSet<String> = std::collections::HashSet::new();
     for d in &acc.deconstructors {
-        let target = TypeKey::from_type(&d.target).as_str().to_string();
+        let target = d.target.as_str().to_string();
         if !decon_targets.insert(target.clone()) {
             entries.push(UnfoldDeclError::DuplicateDeconstructor { target });
         }
@@ -307,12 +309,12 @@ pub fn apply<M>(
                 .function(&ed.func)
                 .map(|f| f.ret.clone())
                 .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
-            if !returns_type(&ret, &TypeKey::from_type(declared)) {
+            if !returns_type(&ret, declared) {
                 return Err(UnfoldError::ReturnTypeMismatch {
                     func: ed.func.clone(),
-                    declared: TypeKey::from_type(declared).as_str().to_string(),
+                    declared: declared.as_str().to_string(),
                     actual: {
-                        let s = ret.syntax();
+                        let s = ret.spell();
                         quote::quote!(#s).to_string()
                     },
                 });
@@ -341,7 +343,7 @@ pub fn apply<M>(
         if d.default.is_none() {
             continue;
         }
-        let dkey = TypeKey::from_type(&d.target);
+        let dkey = d.target.clone();
         let sel = DeconSel::TopLevel;
         for func in declared_fns {
             // Read accessors are never output-decomposed (they ARE the records).
@@ -434,7 +436,7 @@ pub fn apply<M>(
                 let Some(d) = acc
                     .deconstructors
                     .iter()
-                    .find(|d| d.default.is_some() && TypeKey::from_type(&d.target) == core_key)
+                    .find(|d| d.default.is_some() && d.target == core_key)
                 else {
                     continue;
                 };
@@ -481,7 +483,7 @@ pub struct ValueDecon {
     /// Canonical key of the value struct (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The struct type (owned) the leaves decompose.
-    pub source: syn::Type,
+    pub source: crate::api::core::flat::TypeRef,
     /// Field-access leaves in foreign-signature / `fromParts` order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -537,7 +539,7 @@ pub struct SumDecon {
     /// Canonical key of the sum type (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The enum type (owned) the leaves decompose.
-    pub source: syn::Type,
+    pub source: crate::api::core::flat::TypeRef,
     /// The tag leaf followed by every variant's group, in tag order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -609,7 +611,7 @@ pub fn apply_sum_returns<M>(
 fn wire_fixed_decon<M>(
     registry: &mut Registry<M>,
     key: &TypeKey,
-    source: &syn::Type,
+    source: &crate::api::core::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<DeconId, UnfoldError> {
     let decon = DeconId::Default(key.to_string());
@@ -772,13 +774,13 @@ fn wire_fixed_callbacks<M>(
 /// declared decompositions and value-struct folds win.
 pub fn apply_leaf_vec_folds<M>(
     registry: &mut Registry<M>,
-    elements: Vec<syn::Type>,
+    elements: Vec<TypeKey>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     if elements.is_empty() {
         return Ok(());
     }
-    let elem_keys: Vec<TypeKey> = elements.iter().map(TypeKey::from_type).collect();
+    let elem_keys = elements;
     // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
     let is_nominated = |bare: &crate::api::core::flat::TypeRef| elem_keys.contains(&bare.key());
     for func in declared_fns {
@@ -857,12 +859,12 @@ fn whole_leaf_fold_plan(
     shape: UnfoldShape,
 ) -> UnfoldPlan {
     UnfoldPlan {
-        source: vec_elem.syntax().clone(),
+        source: vec_elem.clone(),
         decon: None,
         by_ref: peel_borrow(vec_elem).0,
         shape,
         leaves: vec![],
-        element: Some(vec_elem.syntax().clone()),
+        element: Some(vec_elem.clone()),
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
@@ -931,8 +933,9 @@ struct Layered {
     shape: UnfoldShape,
     /// Every type on the way down, outermost first — what a registration walks.
     layer_types: Vec<crate::api::core::flat::TypeRef>,
-    /// Past the borrow too: what actually crosses.
-    core: syn::Type,
+    /// Past the borrow too: what actually crosses — as an **identity**, which
+    /// is all its one consumer ever asked of it.
+    core: TypeKey,
     /// Whether the core is reached through a borrow.
     by_ref: bool,
 }
@@ -942,7 +945,7 @@ struct Layered {
 /// Takes a `&TypeRef`, not a `&syn::Type`, and that is the whole point: a caller
 /// must hold a reading, and the ways to hold one are to take it off an element or
 /// to be the scan admitting a type with no element. Re-deriving a reading from
-/// `origin.syntax` — the round trip this signature makes impossible — is reasoning
+/// `spell()` — the round trip this signature makes impossible — is reasoning
 /// from the spelling, which is what `origin` is not for.
 fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
     let (shape, layered) = ty.layer_stack();
@@ -950,7 +953,7 @@ fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
     Layered {
         shape,
         layer_types: ty.layer_types().into_iter().cloned().collect(),
-        core: borrowed.unwrap_or(layered).syntax().clone(),
+        core: borrowed.unwrap_or(layered).key(),
         by_ref: borrowed.is_some(),
     }
 }
@@ -973,7 +976,7 @@ fn peel_borrow(ty: &crate::api::core::flat::TypeRef) -> (bool, &crate::api::core
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
 fn returns_type(ret: &crate::api::core::flat::TypeRef, key: &TypeKey) -> bool {
-    TypeKey::from_type(&peel(ret).core) == *key
+    peel(ret).core == *key
 }
 
 /// Build one output/error plan for `ed` and store it in the right registry map.
@@ -1071,12 +1074,12 @@ fn process_decl<M>(
                 let by_ref = peel_borrow(inner).0;
                 registry.require_output(inner);
                 UnfoldPlan {
-                    source: inner.syntax().clone(),
+                    source: inner.clone(),
                     decon: None,
                     by_ref,
                     shape,
                     leaves: vec![],
-                    element: Some(inner.syntax().clone()),
+                    element: Some(inner.clone()),
                     delivery: ed.delivery,
                     convert_out_ty: None,
                     fixed_builder: false,
@@ -1146,7 +1149,7 @@ fn process_decl<M>(
             registry.require_output(&cv);
             UnfoldPlan {
                 delivery: Delivery::Return,
-                convert_out_ty: Some(cv.syntax().clone()),
+                convert_out_ty: Some(cv.clone()),
                 ..plan
             }
         } else {
@@ -1200,11 +1203,11 @@ fn register_decon_spec<M>(
         // derived from it, never emitted code — so its hoists are discarded.
         &mut Vec::new(),
     )?;
-    require_unique_leaf_names(source.syntax(), &leaves)?;
+    require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
         DeconSpec {
-            source: source.syntax().clone(),
+            source: source.clone(),
             leaves,
         },
     );
@@ -1239,9 +1242,7 @@ fn find_deconstructor_by_type<'a>(
     acc: &'a Deconstructors,
     type_key: &TypeKey,
 ) -> Option<&'a DeconstructorDecl> {
-    acc.deconstructors
-        .iter()
-        .find(|c| TypeKey::from_type(&c.target) == *type_key)
+    acc.deconstructors.iter().find(|c| c.target == *type_key)
 }
 
 /// Build the [`UnfoldPlan`] for a chosen accessor. `shape` is the outer
@@ -1277,11 +1278,11 @@ fn build_plan<M>(
         &mut leaves,
         &mut hoists,
     )?;
-    require_unique_leaf_names(source.syntax(), &leaves)?;
-    require_root_identity_last(by_ref, source.syntax(), &leaves)?;
+    require_unique_leaf_names(source, &leaves)?;
+    require_root_identity_last(by_ref, source, &leaves)?;
 
     Ok(UnfoldPlan {
-        source: source.syntax().clone(),
+        source: source.clone(),
         decon: Some(decon),
         by_ref,
         shape,
@@ -1303,7 +1304,7 @@ fn build_plan<M>(
 /// decompositions clone the root identity, so any order is fine.)
 fn require_root_identity_last(
     by_ref: bool,
-    source: &syn::Type,
+    source: &crate::api::core::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     if by_ref {
@@ -1316,7 +1317,7 @@ fn require_root_identity_last(
     if let (Some(root), Some(nested)) = (root_at, last_nested_at) {
         if root < nested {
             return Err(UnfoldError::RootIdentityBeforeNested {
-                target: TypeKey::from_type(source).to_string(),
+                target: source.key().to_string(),
             });
         }
     }
@@ -1416,7 +1417,7 @@ fn flatten<M>(
                 // call, so the whole record shares a single `Call` step and the
                 // emitter can hoist it.
                 let (takes, _ret) = accessor_signature(registry, func)?;
-                check_takes(func, &takes, source.syntax())?;
+                check_takes(func, &takes, &source.key())?;
                 // The declarator states whether the value is given away; the
                 // signature has to agree, or the emitted call would not compile
                 // in the consumer's crate. Checked rather than inferred so that
@@ -1603,7 +1604,7 @@ fn flatten<M>(
                     DeconRecord::Identity | DeconRecord::Fields { .. } => unreachable!(),
                 };
                 let (takes, ret) = accessor_signature(registry, &func)?;
-                check_takes(&func, &takes, source.syntax())?;
+                check_takes(&func, &takes, &source.key())?;
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
@@ -1702,12 +1703,15 @@ fn flatten<M>(
 /// Error if two leaves of one flattened deconstructor share a name. Author leaf
 /// names are explicit and emitted literally, so a collision is a declaration
 /// bug — never auto-resolved.
-fn require_unique_leaf_names(source: &syn::Type, leaves: &[UnfoldLeaf]) -> Result<(), UnfoldError> {
+fn require_unique_leaf_names(
+    source: &crate::api::core::flat::TypeRef,
+    leaves: &[UnfoldLeaf],
+) -> Result<(), UnfoldError> {
     let mut seen: HashSet<&str> = HashSet::new();
     for l in leaves {
         if !seen.insert(l.name.as_str()) {
             return Err(UnfoldError::DuplicateLeafName {
-                target: TypeKey::from_type(source).to_string(),
+                target: source.key().to_string(),
                 name: l.name.clone(),
             });
         }
@@ -1737,7 +1741,7 @@ pub fn dedup_names(names: &mut [String]) {
 fn accessor_signature<M>(
     registry: &Registry<M>,
     func: &syn::Ident,
-) -> Result<(syn::Type, crate::api::core::flat::TypeRef), UnfoldError> {
+) -> Result<(TypeKey, crate::api::core::flat::TypeRef), UnfoldError> {
     let f = registry
         .flat()
         .function(&func)
@@ -1750,9 +1754,11 @@ fn accessor_signature<M>(
         .params
         .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
+    // The receiver's identity: `accessor_signature`'s one caller compares it,
+    // and `check_takes` keyed both sides to do so.
     let takes = match first.ty.borrow_target() {
-        Some(inner) => inner.syntax().clone(),
-        None => first.ty.syntax().clone(),
+        Some(inner) => inner.key(),
+        None => first.ty.key(),
     };
     Ok((takes, f.ret.clone()))
 }
@@ -1791,18 +1797,14 @@ fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
         .is_some_and(|p| p.ty.borrow_target().is_none())
 }
 
-fn check_takes(
-    func: &syn::Ident,
-    takes: &syn::Type,
-    expected: &syn::Type,
-) -> Result<(), UnfoldError> {
-    if TypeKey::from_type(takes) == TypeKey::from_type(expected) {
+fn check_takes(func: &syn::Ident, takes: &TypeKey, expected: &TypeKey) -> Result<(), UnfoldError> {
+    if takes == expected {
         Ok(())
     } else {
         Err(UnfoldError::AccessorTargetMismatch {
             accessor: func.to_string(),
-            takes: TypeKey::from_type(takes).to_string(),
-            expected: TypeKey::from_type(expected).to_string(),
+            takes: takes.to_string(),
+            expected: expected.to_string(),
         })
     }
 }

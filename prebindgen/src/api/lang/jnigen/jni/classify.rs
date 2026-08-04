@@ -29,7 +29,7 @@ pub(crate) enum TypeKind<'r, 'c> {
     /// The **element**, not its `syn::ItemStruct`. A flattening emitter wants
     /// each field's reading, and the model already decided one per field; going
     /// through the syntax means asking some other authority for it again. An
-    /// emitter that only re-emits the struct reads `st.origin.syntax`.
+    /// emitter that only re-emits the struct reads `st.origin.as_syn()`.
     DataStruct {
         st: &'r crate::api::core::flat::Struct,
         cfg: Option<&'c TypeConfig>,
@@ -54,9 +54,9 @@ impl Declarations {
     pub(crate) fn type_kind<'r, 'c>(
         &'c self,
         registry: &'r impl Conversions<KotlinMeta>,
-        bare: &syn::Type,
+        bare: &TypeKey,
     ) -> TypeKind<'r, 'c> {
-        let cfg = self.types.get(&TypeKey::from_type(bare));
+        let cfg = self.types.get(bare);
         if let Some(c) = cfg {
             match c.kind {
                 DeclaredKind::Ptr(_) => return TypeKind::Handle,
@@ -68,7 +68,10 @@ impl Declarations {
                 DeclaredKind::Data => {}
             }
         }
-        if let Some(name) = bare_path_ident(bare) {
+        // The key IS the canonical spelling, so a key that is one identifier is
+        // exactly what `bare_path_ident` used to fish out of the node — and this
+        // function never wanted anything else from it.
+        if let Some(name) = bare.ident() {
             if let Some(st) = registry.flat().struct_type(&name) {
                 return TypeKind::DataStruct { st, cfg };
             }

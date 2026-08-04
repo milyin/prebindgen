@@ -110,7 +110,7 @@ impl TypeKey {
     /// Build a key for a bare item ident — infallible by construction (an
     /// ident IS a single-segment path type; nothing to parse or normalize).
     pub fn from_ident(ident: &syn::Ident) -> Self {
-        Self::from_type(&crate::api::core::flat::type_from_ident(ident))
+        Self::from_type(&syn::parse_quote!(#ident))
     }
 
     /// The canonical string form.

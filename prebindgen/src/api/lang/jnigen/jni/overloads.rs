@@ -62,7 +62,7 @@ impl Declarations {
             if decl.no_split || decl.variants.len() < 2 {
                 continue;
             }
-            let target = decl.rust_type.syntax.clone();
+            let target = decl.rust_type.key();
             let sigs: Vec<(String, Vec<ErasedJvmType>)> = decl
                 .variants
                 .iter()
@@ -110,27 +110,28 @@ impl Declarations {
 fn arm_erased_sig(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    target: &syn::Type,
+    target: &TypeKey,
     ctor: Option<&syn::Ident>,
 ) -> Vec<ErasedJvmType> {
     match ctor {
-        Some(cf) => match registry
-            .flat()
-            .function(&cf)
-            .map(|func| &func.origin.syntax)
-        {
-            Some(item_fn) => item_fn
-                .sig
-                .inputs
+        Some(cf) => match registry.flat().function(&cf) {
+            Some(f) => f
+                .params
                 .iter()
-                .filter_map(|a| match a {
-                    syn::FnArg::Typed(pt) => Some(rust_type_erased(ext, registry, &pt.ty)),
-                    _ => None,
-                })
+                .map(|p| rust_type_erased(ext, registry, &p.ty))
                 .collect(),
             None => Vec::new(),
         },
-        None => vec![rust_type_erased(ext, registry, target)],
+        // The identity, because the two callers reach it differently: one holds
+        // a plan's reading, the other a `.expand_param(...)` DECLARATION, which
+        // the build script wrote and the model may never have interned. Where
+        // it did, the reading answers as before; where it did not, the erased
+        // form is the identity's own canonical spelling — which is all a
+        // declaration has to be told apart by.
+        None => vec![match registry.reading(target) {
+            Some(reading) => rust_type_erased(ext, registry, &reading),
+            None => ErasedJvmType::raw(target.as_str().to_string()),
+        }],
     }
 }
 
@@ -143,26 +144,27 @@ fn arm_erased_sig(
 fn rust_type_erased(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    ty: &syn::Type,
+    ty: &crate::api::core::flat::TypeRef,
 ) -> ErasedJvmType {
-    let peeled = match ty {
-        syn::Type::Reference(r) => &*r.elem,
-        other => other,
+    // The spelling's own outermost borrow, as `TypeKind::Ref` — not
+    // `borrow_target`, which reaches through the erased wrappers (#S31).
+    let peeled = match ty.kind() {
+        crate::api::core::flat::TypeKind::Ref { inner, .. } => inner,
+        _ => ty,
     };
-    let key = TypeKey::from_type(peeled);
+    let key = peeled.key();
     if ext.types.get(&key).is_some_and(|c| c.name_spec.is_some()) {
         if let Some(fqn) = ext.kotlin_fqn(&key) {
             return erase_kt_type(&[], &kt::KtType::cls(fqn));
         }
     }
     if let Some(kt) = registry
-        .reading_of(peeled)
-        .and_then(|tr| registry.input_entry(&tr))
+        .input_entry(peeled)
         .and_then(|e| e.metadata.kotlin_name.clone())
     {
         return erase_kt_type(&[], &kt);
     }
-    ErasedJvmType::raw(peeled.to_token_stream().to_string())
+    ErasedJvmType::raw(peeled.spell().to_string())
 }
 
 /// Whether `plan` is a multi-variant expansion that can be turned into
@@ -199,17 +201,16 @@ struct Split<'a> {
 }
 
 /// Camel-cased Kotlin names of a `#[prebindgen]` constructor's parameters.
-fn ctor_param_names(f: &syn::ItemFn) -> Vec<String> {
-    f.sig
-        .inputs
+/// The Kotlin names of a constructor's parameters.
+///
+/// Off `Function::params`, where a parameter **is** a name and a reading. The
+/// `sig.inputs` walk this replaced had to skip a receiver it could not have
+/// (the frontend refuses one) and match `Pat::Ident` for a pattern the frontend
+/// already required.
+fn ctor_param_names(f: &crate::api::core::flat::Function) -> Vec<String> {
+    f.params
         .iter()
-        .filter_map(|a| match a {
-            syn::FnArg::Typed(pt) => match &*pt.pat {
-                syn::Pat::Ident(pid) => Some(kt_param_name(&pid.ident.to_string())),
-                _ => None,
-            },
-            _ => None,
-        })
+        .map(|p| kt_param_name(&p.name.to_string()))
         .collect()
 }
 
@@ -233,15 +234,6 @@ fn non_null(mut ty: kt::KtType) -> kt::KtType {
     ty
 }
 
-fn is_option(ty: &syn::Type) -> bool {
-    matches!(
-        ty,
-        syn::Type::Path(p)
-            if p.qself.is_none()
-                && p.path.segments.last().is_some_and(|s| s.ident == "Option")
-    )
-}
-
 /// The typed overload params of one variant arm, paired with the leaf index
 /// each fills. `origin`/`multi` drive name disambiguation (build-arm params are
 /// prefixed with the origin parameter name when the function splits more than
@@ -259,20 +251,15 @@ fn variant_typed_params(
     let origin_kt = kt_param_name(&origin.to_string());
     let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
         Some(cf) => {
-            let item_fn = registry
-                .flat()
-                .function(&cf)
-                .map(|func| &func.origin.syntax)?;
-            let optional = item_fn
-                .sig
-                .inputs
+            let f = registry.flat().function(&cf)?;
+            // `Optional` off the kind, not `is_option` off a path: the same
+            // question, asked of the grammar the source wrote.
+            let optional = f
+                .params
                 .iter()
-                .filter_map(|a| match a {
-                    syn::FnArg::Typed(pt) => Some(is_option(&pt.ty)),
-                    _ => None,
-                })
+                .map(|p| matches!(p.ty.kind(), crate::api::core::flat::TypeKind::Optional(_)))
                 .collect();
-            (ctor_param_names(item_fn), optional)
+            (ctor_param_names(f), optional)
         }
         // Identity arm: one parameter, the value itself, named after the origin
         // parameter (already unique across split params — never prefixed).
@@ -458,7 +445,7 @@ pub(crate) fn render_param_overloads(
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
                     let ctor = s.plan.variants[s.arms[ai].0].ctor.as_ref();
-                    arm_erased_sig(ext, registry, &s.plan.target, ctor)
+                    arm_erased_sig(ext, registry, &s.plan.target.key(), ctor)
                 })
                 .collect()
         })

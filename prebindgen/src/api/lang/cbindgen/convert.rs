@@ -18,7 +18,7 @@ impl CbindgenBuilder {
                 .get(&decl.key)
                 .cloned()
                 .unwrap_or_else(|| {
-                    let short = type_short(&decl.rust_type.syntax.clone());
+                    let short = type_short(&decl.rust_type.key().clone());
                     self.mangle_rust_type
                         .as_ref()
                         .map(|m| m(&short))
@@ -51,10 +51,10 @@ impl CbindgenBuilder {
 
     pub(crate) fn in_custom(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
-        let key = TypeKey::from_type(ty);
+        let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
         let spec = decl.input.as_ref()?;
         let (repr, conversion, fallible) = self.input_conversion(decl, spec, registry);
@@ -69,9 +69,9 @@ impl CbindgenBuilder {
                 "Cbindgen conversion domain type does not match its input representation"
             );
         }
-        let src = self.src_ty(ty);
+        let src = self.src_ty_of(&key);
         let wire = repr.clone();
-        let name = Self::in_name(ty);
+        let name = Self::in_name_of(&key);
         let valid = decl
             .domain
             .as_ref()
@@ -107,7 +107,7 @@ impl CbindgenBuilder {
         };
         let niches = self.c_domain_niches(decl, registry, Direction::Input);
         Some(ConverterImpl {
-            subs: vec![repr],
+            subs: vec![TypeKey::from_type(&repr)],
             destination: wire,
             function,
             pre_stages: vec![],
@@ -118,10 +118,10 @@ impl CbindgenBuilder {
 
     pub(crate) fn out_custom(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
-        let key = TypeKey::from_type(ty);
+        let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
         let spec = decl.output.as_ref()?;
         let (repr, conversion, fallible) = self.output_conversion(decl, spec, registry);
@@ -136,9 +136,9 @@ impl CbindgenBuilder {
                 "Cbindgen conversion domain type does not match its output representation"
             );
         }
-        let src = self.src_ty(ty);
+        let src = self.src_ty_of(&key);
         let wire = repr.clone();
-        let name = Self::out_name(ty);
+        let name = Self::out_name_of(&key);
         let valid = decl
             .domain
             .as_ref()
@@ -175,7 +175,7 @@ impl CbindgenBuilder {
         };
         let niches = self.c_domain_niches(decl, registry, Direction::Output);
         Some(ConverterImpl {
-            subs: vec![repr],
+            subs: vec![TypeKey::from_type(&repr)],
             destination: wire,
             function,
             pre_stages: vec![],
@@ -190,21 +190,23 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.rust_type.syntax.clone());
+        let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
-                let item = &registry
+                let item = registry
                     .flat()
                     .function(&f)
-                    .map(|func| &func.origin.syntax)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
-                let (repr, by_ref) = one_param(item);
-                let ret = fn_ret(item);
-                let (ok, fallible) = match result_parts(&ret) {
+                let (repr_reading, by_ref) = one_param(item);
+                let repr = spelled(repr_reading);
+                // The element normalizes an elided return to `Unit`, and
+                // `TypeKind::Fallible` is the `Result` `result_parts` looked for
+                // in a path.
+                let (ok, fallible) = match item.ret.fallible_parts() {
                     Some((ok, _)) => (ok, true),
-                    None => (ret, false),
+                    None => (&item.ret, false),
                 };
-                assert_eq!(TypeKey::from_type(&ok), decl.key);
+                assert_eq!(ok.key(), decl.key);
                 let path = self.conversion_fn_path(registry, f);
                 let expr = if by_ref {
                     syn::parse_quote!(#path(&v))
@@ -234,20 +236,18 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.rust_type.syntax.clone());
+        let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
-                let item = &registry
+                let item = registry
                     .flat()
                     .function(&f)
-                    .map(|func| &func.origin.syntax)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);
-                assert_eq!(TypeKey::from_type(&param), decl.key);
-                let ret = fn_ret(item);
-                let (repr, fallible) = match result_parts(&ret) {
-                    Some((ok, _)) => (ok, true),
-                    None => (ret, false),
+                assert_eq!(param.key(), decl.key);
+                let (repr, fallible) = match item.ret.fallible_parts() {
+                    Some((ok, _)) => (spelled(ok), true),
+                    None => (spelled(&item.ret), false),
                 };
                 let path = self.conversion_fn_path(registry, f);
                 let expr = if by_ref {
@@ -331,34 +331,21 @@ impl CbindgenBuilder {
     }
 }
 
-fn one_param(item: &syn::ItemFn) -> (syn::Type, bool) {
-    let params: Vec<_> = item
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|p| {
-            if let syn::FnArg::Typed(p) = p {
-                Some(&*p.ty)
-            } else {
-                None
-            }
-        })
-        .collect();
+/// The single parameter of a conversion fn, peeled of a leading `&`.
+///
+/// Off the ELEMENT: a signature is a parameter list, and the borrow is
+/// `TypeKind::Ref` — where this filtered `syn::FnArg::Typed` and matched
+/// `syn::Type::Reference` to reach the same two facts.
+fn one_param(f: &crate::api::core::flat::Function) -> (&TypeRef, bool) {
     assert_eq!(
-        params.len(),
+        f.params.len(),
         1,
         "conversion functions take exactly one parameter"
     );
-    match params[0] {
-        syn::Type::Reference(r) => ((*r.elem).clone(), true),
-        ty => (ty.clone(), false),
-    }
-}
-
-fn fn_ret(item: &syn::ItemFn) -> syn::Type {
-    match &item.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, ty) => (**ty).clone(),
+    let ty = &f.params[0].ty;
+    match ty.kind() {
+        TypeKind::Ref { inner, .. } => (inner, true),
+        _ => (ty, false),
     }
 }
 

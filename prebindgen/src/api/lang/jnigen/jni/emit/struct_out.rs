@@ -96,7 +96,6 @@ pub(crate) fn synth_value_struct_leaves(
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
     for field in &s.fields {
         let fname = field.name.as_ref()?.clone();
-        let effective_ty = field.ty.syntax().clone();
         let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
         let leaf_name = if name_prefix.is_empty() {
             camel
@@ -114,8 +113,10 @@ pub(crate) fn synth_value_struct_leaves(
         // A nested data-class field (a *declared* plain struct) inlines when
         // non-optional (recurse); `Option`/`Vec`-wrapped nesting is deferred
         // to the whole-value path.
-        let probe = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-        let nested = match ext.type_kind(registry, &probe) {
+        // Both layer questions off the field's own reading: `Optional` to look
+        // through, `Vec` to defer — the kinds, not a last path segment.
+        let probe = field.ty.optional_inner().unwrap_or(&field.ty);
+        let nested = match ext.type_kind(registry, &probe.key()) {
             // A sum joins the kinds this fixed builder cannot forward: it has
             // no single leaf and no converter of its own — it crosses as a tag
             // plus one group per variant, which only the whole-value
@@ -129,7 +130,9 @@ pub(crate) fn synth_value_struct_leaves(
             _ => None,
         };
         if let Some(child) = nested {
-            if option_inner_type(&effective_ty).is_some() || pat_match_top(&effective_ty, "Vec") {
+            if field.ty.optional_inner().is_some()
+                || matches!(field.ty.kind(), crate::api::core::flat::TypeKind::Vec(_))
+            {
                 return None;
             }
             let child_leaves =

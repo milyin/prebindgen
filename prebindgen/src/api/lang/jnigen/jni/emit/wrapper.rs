@@ -35,8 +35,15 @@ pub(crate) fn const_getter_fn(
 /// shared closeable `val` is semantically wrong (whose `close()` is it?).
 /// Expose a factory function instead — the established idiom (e.g. zenoh's
 /// `encoding_const_*` companion factories).
-pub(crate) fn reject_handle_const(ext: &Declarations, c: &syn::ItemConst) {
-    reject_handle_constant_type(ext, &c.ty, "const", &c.ident.to_string());
+pub(crate) fn reject_handle_const(ext: &Declarations, c: &crate::api::core::flat::Constant) {
+    // Off the element: a constant's type is a reading, so the peel is the
+    // model's (`util::head_type`) and no node is fetched to reach it.
+    reject_handle_key(
+        ext,
+        &crate::api::lang::jnigen::util::head_type(&c.ty).key(),
+        "const",
+        &c.name.to_string(),
+    );
 }
 
 /// The constant-value handle check shared by both constant kinds: peel
@@ -45,28 +52,37 @@ pub(crate) fn reject_handle_const(ext: &Declarations, c: &syn::ItemConst) {
 /// (`const MAX_LEN` / `constant fn encoding_const_x_str`).
 pub(crate) fn reject_handle_constant_type(
     ext: &Declarations,
-    ty: &syn::Type,
+    ty: &crate::api::core::flat::TypeRef,
     what: &str,
     name: &str,
 ) {
-    let mut ty = ty.clone();
+    // The same three layers, off the classification. The node loop peeled a
+    // `Type::Reference` and then re-read the last path segment's ident twice
+    // (`option_inner_type`, `vec_inner_type`) to decide what it had.
+    let mut ty = ty;
     loop {
-        if let syn::Type::Reference(r) = &ty {
-            ty = (*r.elem).clone();
-            continue;
-        }
-        if let Some(inner) = option_inner_type(&ty) {
-            ty = inner;
-            continue;
-        }
-        if let Some(inner) = vec_inner_type(&ty) {
+        if let Some(inner) = ty
+            .borrow_target()
+            .or_else(|| ty.optional_inner())
+            .or_else(|| ty.sequence_elem())
+        {
             ty = inner;
             continue;
         }
         break;
     }
-    let key = TypeKey::from_type(&ty);
-    let is_handle = ext.types.get(&key).is_some_and(|cfg| cfg.is_opaque());
+    reject_handle_key(ext, &ty.key(), what, name);
+}
+
+/// The refusal itself, once: a declared opaque handle cannot be a shared
+/// closeable Kotlin `val`.
+///
+/// Split from the peel because the two callers peel differently — an element's
+/// type is a reading and peels off the kind, while a **build-script-supplied**
+/// expression type has no reading until something interns it and peels off the
+/// spelling. One assertion, two ways to reach it.
+fn reject_handle_key(ext: &Declarations, key: &TypeKey, what: &str, name: &str) {
+    let is_handle = ext.types.get(key).is_some_and(|cfg| cfg.is_opaque());
     assert!(
         !is_handle,
         "{what} `{name}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \
@@ -82,23 +98,26 @@ pub(crate) fn reject_handle_constant_type(
 /// the `val` initializer's throwing `JniErrorHandler` only fits the
 /// infallible wrapper shape), and its return type must not peel to a
 /// declared opaque handle (same rationale as [`reject_handle_const`]).
-pub(crate) fn validate_constant_fn(ext: &Declarations, f: &syn::ItemFn) {
+pub(crate) fn validate_constant_fn(ext: &Declarations, f: &crate::api::core::flat::Function) {
+    // The ELEMENT: a signature is a parameter list and a return, both already
+    // classified. This walked `sig.inputs` for the arity, matched
+    // `ReturnType::Type` for the return — an elided one the element already
+    // normalizes to `Unit` — and ran `result_ok_type` over a path to re-derive
+    // the fallibility `TypeKind::Fallible` states.
     assert!(
-        f.sig.inputs.is_empty(),
+        f.params.is_empty(),
         "constant fn `{}`: takes {} parameter(s) — a function-backed constant must be nullary \
          (declare it with `.fun(...)` instead if it is a real function)",
-        f.sig.ident,
-        f.sig.inputs.len()
+        f.name,
+        f.params.len()
     );
-    if let syn::ReturnType::Type(_, ty) = &f.sig.output {
-        assert!(
-            result_ok_type(ty).is_none(),
-            "constant fn `{}`: returns a `Result` — a function-backed constant must be \
-             infallible (declare it with `.fun(...)` instead if it can fail)",
-            f.sig.ident
-        );
-        reject_handle_constant_type(ext, ty, "constant fn", &f.sig.ident.to_string());
-    }
+    assert!(
+        f.ret.fallible_parts().is_none(),
+        "constant fn `{}`: returns a `Result` — a function-backed constant must be \
+         infallible (declare it with `.fun(...)` instead if it can fail)",
+        f.name
+    );
+    reject_handle_constant_type(ext, &f.ret, "constant fn", &f.name.to_string());
 }
 
 /// The synthetic nullary getter signature an **expression constant**
@@ -142,7 +161,7 @@ pub(crate) fn synthetic_getter(
     ident: syn::Ident,
     ret: crate::api::core::flat::TypeRef,
 ) -> crate::api::core::flat::Function {
-    let ret_syntax = ret.syntax();
+    let ret_syntax = ret.spell();
     let item: syn::ItemFn = syn::parse_quote! {
         pub fn #ident() -> #ret_syntax {
             unimplemented!()
@@ -165,7 +184,24 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
         "constant expr `{kotlin_name}`: type is a `Result` — an expression constant must be \
          infallible (declare a real function with `.fun(...)` instead if it can fail)"
     );
-    reject_handle_constant_type(ext, ty, "constant expr", kotlin_name);
+    // The peel, on the SPELLING. Unlike the fn path above there is no reading
+    // to ask: a `const_expr!` type is written by the BUILD SCRIPT and names no
+    // captured item, so the model never classified it (#280) — the ledger's
+    // documented adapter-owned category, and the reason this one node walk
+    // stays where its peer's could go.
+    let mut ty = ty.clone();
+    loop {
+        if let syn::Type::Reference(r) = &ty {
+            ty = (*r.elem).clone();
+            continue;
+        }
+        if let Some(inner) = option_inner_type(&ty).or_else(|| vec_inner_type(&ty)) {
+            ty = inner;
+            continue;
+        }
+        break;
+    }
+    reject_handle_key(ext, &TypeKey::from_type(&ty), "constant expr", kotlin_name);
 }
 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
@@ -226,8 +262,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let output_entry = match &plan.output {
         FnOutputPlan::Value(v) => Some(
             registry
-                .reading_of(&v.target_ty)
-                .and_then(|tr| registry.output_entry(&tr))
+                .output_entry(&v.target_ty)
                 .expect("output entry validated at plan build"),
         ),
         FnOutputPlan::Unfold(_) => None,
@@ -381,7 +416,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                      Reserved rather than refused for good: rebuilding through every \
                      transparent wrapper is #292 item 3 — until then, spell the return \
                      without it.",
-                    delivered.syntax().to_token_stream(),
+                    delivered.spell(),
                     delivered.erased_wrappers().join("<"),
                 )
             });
@@ -598,7 +633,7 @@ fn emit_input_param(
         // by-value-handle consume below.
         InputKind::VecBuild { elem, by_ref } => {
             // Generated Rust spells the reading's own tokens.
-            let elem = elem.syntax();
+            let elem = elem.spell();
             let handle_ident = format_ident!("{}_handle", arg_ident);
             wire_params.push(quote!(#handle_ident: jni::sys::jlong));
             if *by_ref {
@@ -638,10 +673,11 @@ fn emit_input_param(
         // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
         // A null or tagged (closed) pointer — a close that raced past
         // the pre-lock guard — is rejected before any dereference.
-        InputKind::Handle { direct: true } if !matches!(arg_ty, syn::Type::Reference(_)) => {
+        InputKind::Handle { direct: true }
+            if !matches!(arg_ty.kind(), crate::api::core::flat::TypeKind::Ref { .. }) =>
+        {
             let entry = registry
-                .reading_of(arg_ty)
-                .and_then(|tr| registry.input_entry(&tr))
+                .input_entry(arg_ty)
                 .expect("plan classified Handle ⇒ entry present");
             let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
                 format_ident!("{}_ptr", arg_ident)
@@ -649,6 +685,7 @@ fn emit_input_param(
                 arg_ident.clone()
             };
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
+            let arg_ty = arg_ty.spell();
             prelude.push(quote!(
                 if #wire_ident == 0 || (#wire_ident & 1) == 1 {
                     signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
@@ -693,9 +730,27 @@ fn emit_input_param(
 fn emit_plain_decode(
     entry: &crate::api::core::registry::TypeEntry<KotlinMeta>,
     arg_ident: &syn::Ident,
-    arg_ty: &syn::Type,
+    arg_ty: &crate::api::core::flat::TypeRef,
     on_err: &TokenStream,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
+    use crate::api::core::flat::TypeKind;
+    /// `&mut T`, read off the kind — and off `kind()` rather than through
+    /// `is_exclusive_borrow`, which also sees through a `Box` and refuses an
+    /// out-parameter's slot. This is the borrow the source wrote.
+    fn is_mut_ref(t: &crate::api::core::flat::TypeRef) -> bool {
+        matches!(t.kind(), TypeKind::Ref { mutable: true, .. })
+    }
+    /// `Option<&T>` / `Option<&mut T>` → `Some(is_mut)`, the shape
+    /// `option_inner_ref_mutability` used to fish out of a path.
+    fn opt_ref_mut(t: &crate::api::core::flat::TypeRef) -> Option<bool> {
+        let TypeKind::Optional(inner) = t.kind() else {
+            return None;
+        };
+        match inner.kind() {
+            TypeKind::Ref { mutable, .. } => Some(*mutable),
+            _ => None,
+        }
+    }
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
     let wire = &entry.destination;
@@ -721,9 +776,7 @@ fn emit_plain_decode(
     // which requires a mutable binding. Also for `Option<&mut T>`
     // where the call site needs `.as_deref_mut()`. Intermediate stage
     // bindings (`__{ident}_sN`) don't need it.
-    let arg_mut: TokenStream = if matches!(arg_ty, syn::Type::Reference(r) if r.mutability.is_some())
-        || matches!(option_inner_ref_mutability(arg_ty), Some(true))
-    {
+    let arg_mut: TokenStream = if is_mut_ref(arg_ty) || matches!(opt_ref_mut(arg_ty), Some(true)) {
         quote!(mut)
     } else {
         quote!()
@@ -781,18 +834,18 @@ fn emit_plain_decode(
             prev = out_ident;
         }
     }
-    let call_arg = match arg_ty {
-        syn::Type::Reference(r) if r.mutability.is_some() => quote!(&mut #arg_ident),
-        syn::Type::Reference(_) => quote!(&#arg_ident),
+    let call_arg = match arg_ty.kind() {
+        TypeKind::Ref { mutable: true, .. } => quote!(&mut #arg_ident),
+        TypeKind::Ref { .. } => quote!(&#arg_ident),
         // `Option<&T>` / `Option<&mut T>` for opaque inner: the input
         // converter produced `Option<OwnedObject<T>>` (see rank-1
         // handler above). `.as_deref()` / `.as_deref_mut()` coerces
         // back to `Option<&T>` / `Option<&mut T>` via OwnedObject's
         // Deref / DerefMut impls.
-        _ if matches!(option_inner_ref_mutability(arg_ty), Some(false)) => {
+        _ if matches!(opt_ref_mut(arg_ty), Some(false)) => {
             quote!(#arg_ident.as_deref())
         }
-        _ if matches!(option_inner_ref_mutability(arg_ty), Some(true)) => {
+        _ if matches!(opt_ref_mut(arg_ty), Some(true)) => {
             quote!(#arg_ident.as_deref_mut())
         }
         _ => quote!(#arg_ident),
@@ -821,7 +874,9 @@ pub(crate) fn emit_expanded_param(
 
     debug_assert_eq!(plan.leaves.len(), leaves.len());
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
-        let leaf_ty = leaf.ty.syntax();
+        let leaf_ty = &leaf.ty;
+        // The ascription generated Rust writes for this leaf's local.
+        let leaf_ty_tokens = leaf_ty.spell();
         let lookup_entry = || {
             // The leaf's own reading goes straight to the entry: spelling it and
             // looking the same reading back up is the round trip #286 removed.
@@ -892,7 +947,7 @@ pub(crate) fn emit_expanded_param(
             )
             .expect("an option-scalar plan is built only for a buildable spelling");
             prelude.push(quote!(
-                let #local: #leaf_ty = #built;
+                let #local: #leaf_ty_tokens = #built;
             ));
             leaf_locals.push(local);
             continue;
@@ -902,7 +957,7 @@ pub(crate) fn emit_expanded_param(
         // jlong handle inline, mirroring the normal by-value-handle path —
         // including its null/tagged (closed) pointer guard.
         let is_consume = matches!(classified.kind, InputKind::Handle { direct: true })
-            && !matches!(leaf_ty, syn::Type::Reference(_));
+            && !matches!(leaf_ty.kind(), crate::api::core::flat::TypeKind::Ref { .. });
         if is_consume {
             let wire_ident = format_ident!("{}_ptr", leaf.name);
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
@@ -911,8 +966,8 @@ pub(crate) fn emit_expanded_param(
                     signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
                     return #on_err;
                 }
-                let #local: #leaf_ty = unsafe {
-                    *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty)
+                let #local: #leaf_ty_tokens = unsafe {
+                    *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty_tokens)
                 };
             ));
             leaf_locals.push(local);

@@ -49,10 +49,11 @@ pub enum DeconId {
 /// the spec must tolerate whichever form their type tables resolved.
 #[derive(Clone)]
 pub struct DeconSpec {
-    /// The decomposed type as first encountered (path qualification may vary
-    /// by call site; compare via [`TypeKey`](crate::api::core::registry::TypeKey),
-    /// not syntactically).
-    pub source: syn::Type,
+    /// The decomposed type as first encountered. A **reading**, so "compare via
+    /// [`TypeKey`](crate::api::core::registry::TypeKey), not syntactically" is
+    /// the type rather than an instruction: `source.key()` is the identity and
+    /// `source.spell()` is what generated Rust says.
+    pub source: crate::api::core::flat::TypeRef,
     /// Flattened leaves in declared record order — names, types, paths,
     /// nullability all declaration-fixed.
     pub leaves: Vec<UnfoldLeaf>,
@@ -224,7 +225,7 @@ pub enum LeafSource {
 pub struct UnfoldPlan {
     /// Owned core type the records decompose — the function's return after
     /// peeling `&` / `Option` / `Vec`.
-    pub source: syn::Type,
+    pub source: crate::api::core::flat::TypeRef,
     /// Which deconstructor declaration produced [`Self::leaves`] — the
     /// identity adapters key signature artifacts on. `None` only for the
     /// whole-element `Iterable` arm (no declaration involved).
@@ -246,7 +247,7 @@ pub struct UnfoldPlan {
     /// delivered to the fold via its own output converter + projection (not
     /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
     /// `Iterable` fold (which uses [`Self::leaves`]).
-    pub element: Option<syn::Type>,
+    pub element: Option<crate::api::core::flat::TypeRef>,
     /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
     /// delivery.
     pub delivery: Delivery,
@@ -254,7 +255,7 @@ pub struct UnfoldPlan {
     /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option<out_ty>`). The
     /// wrapper returns this value through its ordinary output converter (no
     /// callback). `None` for [`Delivery::Callback`].
-    pub convert_out_ty: Option<syn::Type>,
+    pub convert_out_ty: Option<crate::api::core::flat::TypeRef>,
     /// `true` for a synthesized by-value `data_class` decomposition (see
     /// [`crate::api::core::unfold::apply_value_structs`]): the builder/folder
     /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
@@ -308,7 +309,7 @@ pub struct UnfoldLeaf {
     /// The **reading** of the type whose resolved output converter encodes this
     /// leaf — a reference type for accessors (`&str`, `&F`), `&Source` for the
     /// identity leaf (so the borrowed-opaque clone converter / projection is
-    /// reused). Spell it with `out_ty.origin.syntax`.
+    /// reused). Spell it with `out_ty.spell()`.
     ///
     /// A reading rather than a spelling because a consumer asking what this
     /// leaf's type *means* had to hand the spelling back to the registry and
