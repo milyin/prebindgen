@@ -358,6 +358,10 @@ impl Alternative {
 #[derive(Clone, Debug)]
 pub struct Enum {
     pub name: syn::Ident,
+    /// This enum **as a type**, taken at parse time — the twin of
+    /// [`Variant::reading`] and [`Struct::reading`], stored and `pub(super)`
+    /// for the same two reasons.
+    pub(super) reading: TypeRef,
     /// Values in declaration order; `values[i].index == i`.
     pub values: Vec<EnumValue>,
     pub origin: Origin<syn::ItemEnum>,
@@ -383,8 +387,17 @@ impl Enum {
     }
 }
 
+impl Enum {
+    /// This enum as a type reference — what the **declaration** answers.
+    /// See [`Variant::type_ref`].
+    pub fn type_ref(&self) -> &TypeRef {
+        &self.reading
+    }
+}
+
 /// One named value of an [`Enum`].
 #[derive(Clone, Debug)]
+
 pub struct EnumValue {
     pub name: syn::Ident,
     /// Position within its enum, `0..N-1`. Not the identity — see
