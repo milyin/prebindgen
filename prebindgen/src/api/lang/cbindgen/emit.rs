@@ -32,7 +32,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            let ty = reading.syntax().clone();
+            let ty = reading.as_syn().clone();
             registry.output_entry(&reading).is_some()
                 && self
                     .enum_variants(registry, &ty)
@@ -49,7 +49,7 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            let ty = reading.syntax().clone();
+            let ty = reading.as_syn().clone();
             registry.output_entry(&reading).is_some()
                 && self
                     .struct_fields(registry, &ty)
@@ -380,7 +380,7 @@ impl CbindgenBuilder {
         let item = registry
             .flat()
             .struct_type(&ident)
-            .map(|st| &st.origin.syntax)?;
+            .map(|st| st.origin.as_syn())?;
         if let syn::Fields::Named(named) = &item.fields {
             Some(
                 named

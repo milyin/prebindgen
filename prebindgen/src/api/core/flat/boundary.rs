@@ -1,16 +1,25 @@
 //! The mechanical boundary check: a committed ledger of every place outside
-//! this module that classifies captured Rust syntax.
+//! this module that can still take captured Rust syntax apart.
 //!
 //! Issue #211's sixth completion criterion is that a mechanical check must
 //! prevent new source-syntax classifiers from appearing outside the frontend.
-//! This is that check. It is test-only; it ships no production code.
+//! This is that check, and it counts **two populations**:
 //!
-//! It measures exactly the rule the [element model](super) states — **classify
-//! off `kind`, spell off `syntax`** — and it can, because it counts *variant
-//! mentions* of a syn syntax enum rather than uses of syn values. Handing a
-//! `syntax` slice to `quote!` names no variant and is invisible here; asking
-//! `matches!(ty, syn::Type::Reference(_))` names one and is counted. So the
-//! check needed no adaptation to the design: spelling was never what it saw.
+//! * **classification sites** — variant mentions of a [`WATCHED`] syn enum. What
+//!   a consumer visibly *does* with a node.
+//! * **escapes** — calls to [`Origin::as_syn`](super::Origin::as_syn), the one
+//!   route from the model to a `syn` node at all. What a consumer *can* do.
+//!
+//! The second exists because the first can only measure. Since the model's
+//! syntax is sealed — `spell()` yields tokens, `as_syn()` yields the node — a
+//! file with no escapes cannot classify source syntax however it is written, and
+//! the ledger's own blind spots (an ident compared by name, a helper handed the
+//! node, a syn enum outside `WATCHED`) are gated behind the same call. Counting
+//! them turns "we grep for what we thought of" into "we count the door".
+//!
+//! Both are read the same way and fail the same way: a count that moved is a
+//! ledger edit, and the diff is the decision. It is test-only; it ships no
+//! production code.
 //!
 //! ## What a site is
 //!
@@ -112,16 +121,41 @@ const HEADER: &str = "\
 # A count going DOWN is the goal (a classifier reads elements instead) and is
 # still a ledger edit, so the win shows up in the diff.
 #
-# KNOWN BLIND SPOTS — classification this check cannot see, because it never
-# writes a `syn::` path. Each is a candidate addition to WATCHED:
+# ── THE ESCAPES ───────────────────────────────────────────────────────────
+#
+# The model's syntax is sealed: `Origin::syntax` is private, `spell()` hands out
+# tokens, and `as_syn()` is the ONE way to a `syn` node. So the two sections
+# below count what the first section can only measure — every place that still
+# has a node to take apart.
+#
+#   ## escapes: types   `ty.as_syn()`         — MUST reach zero
+#   ## escapes: items   `f.origin.as_syn()`   — expected to persist
+#
+# A type escape is a source type the model should have been able to answer for;
+# the classification sites above are the subset that visibly does classify. An
+# item escape is a captured item's own node, which an emitter re-stating a whole
+# item legitimately needs until items grow modelled accessors.
+#
+# The bucket is read off the RECEIVER: `origin` means the item's node, anything
+# else means a type. Two over-counts land in the type bucket on purpose, both in
+# the safe direction — adapter declarations reuse `Origin` for a placeless
+# location (`decl.rust_type`), and carrying a spelling into an adapter-owned
+# `syn::Type` field is not classification either. Both are follow-ups the count
+# names rather than hides.
+#
+# KNOWN BLIND SPOTS — classification neither half sees:
 #
 #   * token-string classification, e.g. `core/domain.rs` matching
-#     `ty.to_token_stream().to_string()` against \"i8\" / \"f32\";
-#   * ident-name classification, e.g. `seg.ident == \"Option\"`;
+#     `ty.to_token_stream().to_string()` against \"i8\" / \"f32\". The seal does
+#     NOT close this and cannot: what `domain.rs` reads is a `syn::Type` a build
+#     script supplied, which never was the model's. `spell().to_string()` reaches
+#     a string too — one call further, and greppable, which is the whole gain;
+#   * ident-name classification, e.g. `seg.ident == \"Option\"` — now gated, in
+#     that a path has to come from an escape first;
 #   * helper delegation — `jnigen/jni/classify.rs` is a whole classifier with
-#     zero watched sites;
+#     zero watched sites; gated the same way;
 #   * syn enums outside WATCHED: Item, Fields, FnArg, ReturnType,
-#     GenericArgument, Pat, ...
+#     GenericArgument, Pat, ... — likewise reachable only through an escape.
 #
 # One listed gap is closed rather than still open: `types_util::match_pattern`
 # unified against `parse_quote!(_)` patterns, adding shape rules with no watched
@@ -138,7 +172,7 @@ const HEADER: &str = "\
 /// Excluded: this module's own directory (the language is where classification
 /// is *supposed* to live), and test code — `tests.rs`, anything under a `tests/`
 /// directory, and any item carrying `#[cfg(test)]`.
-fn scan_tree(src_root: &Path) -> BTreeMap<String, usize> {
+fn scan_tree(src_root: &Path) -> BTreeMap<String, Counts> {
     let mut out = BTreeMap::new();
     let mut stack = vec![src_root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -163,7 +197,7 @@ fn scan_tree(src_root: &Path) -> BTreeMap<String, usize> {
             }
             let text = fs::read_to_string(&path).expect("source file is UTF-8");
             let n = scan_file(&text);
-            if n > 0 {
+            if !n.is_empty() {
                 out.insert(rel, n);
             }
         }
@@ -181,10 +215,10 @@ fn rel_key(root: &Path, path: &Path) -> String {
 }
 
 /// Sites in one file's text.
-fn scan_file(text: &str) -> usize {
+fn scan_file(text: &str) -> Counts {
     let stream = TokenStream::from_str(text).expect("source file parses as tokens");
     let aliases = collect_aliases(stream.clone());
-    let mut n = 0;
+    let mut n = Counts::default();
     count(stream, &aliases, &mut n);
     n
 }
@@ -261,7 +295,44 @@ fn flatten_idents(tt: &TokenTree, out: &mut Vec<String>) {
     }
 }
 
-fn count(stream: TokenStream, aliases: &[String], n: &mut usize) {
+/// What one file owes, in the three populations this ledger tracks.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub(super) struct Counts {
+    /// Variant mentions of a [`WATCHED`] syn enum — the original measure.
+    classify: usize,
+    /// `as_syn()` on a type spelling.
+    escape_type: usize,
+    /// `as_syn()` on a captured item's origin.
+    escape_item: usize,
+}
+
+impl Counts {
+    fn is_empty(self) -> bool {
+        self == Self::default()
+    }
+}
+
+/// Which bucket an `as_syn()` call belongs to, read off the **receiver**.
+///
+/// Outside `flat/`, a receiver named `origin` is always a captured item's node —
+/// an `ItemFn`, an `ItemStruct`, a `Field`, a `Variant` — because `TypeRef`'s own
+/// origin is private and a type spelling is therefore reached as `ty.as_syn()`.
+/// Everything else is a type.
+///
+/// **A known over-count, in the safe direction.** Adapter *declarations* reuse
+/// `Origin` to carry a placeless location (`decl.rust_type`, `declared_ty`), and
+/// those escapes land in the type bucket though they read what a build script
+/// wrote rather than what a source crate did. The bucket that must reach zero is
+/// the one that over-counts; the real fix is that a declaration is not an
+/// `Origin`, which is a refactor and not a rule.
+fn escape_bucket(receiver: Option<&str>) -> fn(&mut Counts) -> &mut usize {
+    match receiver {
+        Some("origin") => |c: &mut Counts| &mut c.escape_item,
+        _ => |c: &mut Counts| &mut c.escape_type,
+    }
+}
+
+fn count(stream: TokenStream, aliases: &[String], n: &mut Counts) {
     let toks: Vec<TokenTree> = stream.into_iter().collect();
     let mut i = 0;
     while i < toks.len() {
@@ -295,7 +366,7 @@ fn count(stream: TokenStream, aliases: &[String], n: &mut usize) {
             && is_sep(&toks, i + 4)
             && matches!(toks.get(i + 6), Some(TokenTree::Ident(_)))
         {
-            *n += 1;
+            n.classify += 1;
             i += 7;
             continue;
         }
@@ -304,8 +375,23 @@ fn count(stream: TokenStream, aliases: &[String], n: &mut usize) {
             && is_sep(&toks, i + 1)
             && matches!(toks.get(i + 3), Some(TokenTree::Ident(_)))
         {
-            *n += 1;
+            n.classify += 1;
             i += 4;
+            continue;
+        }
+        // `<receiver> . as_syn ( )` — the escape, bucketed by receiver.
+        if matches!(&toks[i], TokenTree::Ident(id) if *id == "as_syn")
+            && i > 0
+            && is_punct(&toks[i - 1], '.')
+            && matches!(toks.get(i + 1), Some(TokenTree::Group(g))
+                if g.delimiter() == Delimiter::Parenthesis && g.stream().is_empty())
+        {
+            let receiver = match toks.get(i.wrapping_sub(2)) {
+                Some(TokenTree::Ident(id)) if i >= 2 => Some(id.to_string()),
+                _ => None,
+            };
+            *escape_bucket(receiver.as_deref())(n) += 1;
+            i += 2;
             continue;
         }
         if let TokenTree::Group(g) = &toks[i] {
@@ -361,29 +447,65 @@ fn is_punct(tt: &TokenTree, c: char) -> bool {
     matches!(tt, TokenTree::Punct(p) if p.as_char() == c)
 }
 
-fn render(sites: &BTreeMap<String, usize>) -> String {
+/// The three populations, in the order the ledger writes them. A `##` line
+/// switches section; a `#` line is a comment, as before.
+type Section = (&'static str, fn(&Counts) -> usize);
+
+const SECTIONS: &[Section] = &[
+    ("classification sites", |c| c.classify),
+    ("escapes: types", |c| c.escape_type),
+    ("escapes: items", |c| c.escape_item),
+];
+
+fn render(sites: &BTreeMap<String, Counts>) -> String {
     let mut s = String::from(HEADER);
-    s.push('\n');
-    for (path, n) in sites {
-        s.push_str(&format!("{n}\t{path}\n"));
+    for (i, (name, get)) in SECTIONS.iter().enumerate() {
+        s.push('\n');
+        // The first section is the original ledger, and its lines are written
+        // exactly as before so the two added populations read as an addition
+        // rather than a rewrite.
+        if i > 0 {
+            s.push_str(&format!("## {name}\n"));
+        }
+        let mut total = 0;
+        for (path, counts) in sites {
+            let n = get(counts);
+            if n > 0 {
+                s.push_str(&format!("{n}\t{path}\n"));
+                total += n;
+            }
+        }
+        s.push_str(&format!("\n# total {name}: {total}\n"));
     }
-    s.push_str(&format!("\n# total: {}\n", sites.values().sum::<usize>()));
     s
 }
 
-fn parse(text: &str) -> BTreeMap<String, usize> {
-    text.lines()
-        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
-        .map(|l| {
-            let (n, path) = l
-                .split_once('\t')
-                .expect("ledger line is `<count>\\t<path>`");
-            (
-                path.to_string(),
-                n.parse().expect("ledger count is a number"),
-            )
-        })
-        .collect()
+fn parse(text: &str) -> BTreeMap<String, Counts> {
+    let mut out: BTreeMap<String, Counts> = BTreeMap::new();
+    let mut section = 0usize;
+    for line in text.lines() {
+        if let Some(name) = line.strip_prefix("## ") {
+            section = SECTIONS
+                .iter()
+                .position(|(n, _)| *n == name.trim())
+                .expect("ledger section is one this scanner writes");
+            continue;
+        }
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        let (n, path) = line
+            .split_once('\t')
+            .expect("ledger line is `<count>\\t<path>`");
+        let n: usize = n.parse().expect("ledger count is a number");
+        let counts = out.entry(path.to_string()).or_default();
+        match section {
+            0 => counts.classify = n,
+            1 => counts.escape_type = n,
+            _ => counts.escape_item = n,
+        }
+    }
+    out
 }
 
 fn src_root() -> PathBuf {
@@ -410,9 +532,15 @@ fn boundary_ledger() {
     let paths: std::collections::BTreeSet<_> = committed.keys().chain(found.keys()).collect();
     for path in paths {
         let (was, now) = (committed.get(path), found.get(path));
-        if was != now {
-            let fmt = |v: Option<&usize>| v.map_or("-".to_string(), usize::to_string);
-            drift.push_str(&format!("  {path}: {} -> {}\n", fmt(was), fmt(now)));
+        if was == now {
+            continue;
+        }
+        for (name, get) in SECTIONS {
+            let fmt = |v: Option<&Counts>| v.map_or(0, get);
+            let (was, now) = (fmt(was), fmt(now));
+            if was != now {
+                drift.push_str(&format!("  {path} [{name}]: {was} -> {now}\n"));
+            }
         }
     }
     panic!(
@@ -431,40 +559,49 @@ fn scanner_recognizes_the_shapes_that_matter() {
     // A match arm, and a `matches!` body — invisible to an AST visitor, which is
     // why this walks tokens.
     assert_eq!(
-        scan_file("fn f(t: &syn::Type) { match t { syn::Type::Slice(s) => g(s), _ => {} } }"),
+        scan_file("fn f(t: &syn::Type) { match t { syn::Type::Slice(s) => g(s), _ => {} } }")
+            .classify,
         1
     );
     assert_eq!(
-        scan_file("fn f() -> bool { matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty()) }"),
+        scan_file("fn f() -> bool { matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty()) }")
+            .classify,
         1
     );
     assert_eq!(
-        scan_file("fn f() { let syn::Expr::Lit(l) = e else { return; }; }"),
+        scan_file("fn f() { let syn::Expr::Lit(l) = e else { return; }; }").classify,
         1
     );
     // Two on one line: a line count would report one.
     assert_eq!(
-        scan_file("fn f() { if let (syn::Type::Path(a), syn::Type::Path(b)) = p {} }"),
+        scan_file("fn f() { if let (syn::Type::Path(a), syn::Type::Path(b)) = p {} }").classify,
         2
     );
 
     // The one-line defeat the alias handling closes.
     assert_eq!(
-        scan_file("use syn::Type;\nfn f() { if let Type::Reference(r) = t {} }"),
+        scan_file("use syn::Type;\nfn f() { if let Type::Reference(r) = t {} }").classify,
         1
     );
     assert_eq!(
         scan_file(
             "use syn::{Expr, Type as T};\nfn f() { if let T::Ptr(p) = t { h(Expr::Lit(l)) } }"
-        ),
+        )
+        .classify,
         2
     );
     // An import is not a site, and neither is a non-syn `Type`.
-    assert_eq!(scan_file("use syn::Type;\nfn f() {}"), 0);
-    assert_eq!(scan_file("fn f() { if let Type::Reference(r) = t {} }"), 0);
+    assert_eq!(scan_file("use syn::Type;\nfn f() {}").classify, 0);
+    assert_eq!(
+        scan_file("fn f() { if let Type::Reference(r) = t {} }").classify,
+        0
+    );
 
     // Outside WATCHED — emitters construct these constantly.
-    assert_eq!(scan_file("fn f() { let i = syn::Item::Fn(f); }"), 0);
+    assert_eq!(
+        scan_file("fn f() { let i = syn::Item::Fn(f); }").classify,
+        0
+    );
 
     // Test code does not count, whatever the module is called.
     assert_eq!(
@@ -472,27 +609,71 @@ fn scanner_recognizes_the_shapes_that_matter() {
             "fn f() { match t { syn::Type::Slice(s) => (), _ => () } }\n\
              #[cfg(test)]\n\
              mod replace_ident_tests { fn g() { let _ = syn::Type::Ptr(p); } }"
-        ),
+        )
+        .classify,
         1
     );
-    assert_eq!(scan_file("#[cfg(test)]\nmod tests;"), 0);
+    assert_eq!(scan_file("#[cfg(test)]\nmod tests;").classify, 0);
 
     // But ONLY code proven test-only. Both of these compile in a production
     // build, and a rule that looked for the ident `test` anywhere let a
     // classifier under either evade the count.
     assert_eq!(
-        scan_file("#[cfg(not(test))]\nfn g() { let _ = syn::Type::Ptr(p); }"),
+        scan_file("#[cfg(not(test))]\nfn g() { let _ = syn::Type::Ptr(p); }").classify,
         1,
         "cfg(not(test)) is production code"
     );
     assert_eq!(
-        scan_file("#[cfg(any(test, feature = \"x\"))]\nfn g() { let _ = syn::Type::Ptr(p); }"),
+        scan_file("#[cfg(any(test, feature = \"x\"))]\nfn g() { let _ = syn::Type::Ptr(p); }")
+            .classify,
         1,
         "cfg(any(test, ..)) compiles whenever the other arm holds"
     );
     // A feature literally named "test" is not the test predicate either.
     assert_eq!(
-        scan_file("#[cfg(feature = \"test\")]\nfn g() { let _ = syn::Type::Ptr(p); }"),
+        scan_file("#[cfg(feature = \"test\")]\nfn g() { let _ = syn::Type::Ptr(p); }").classify,
         1
     );
+}
+
+/// The escape scan: what it counts, which bucket it lands in, and what it must
+/// not count.
+#[test]
+fn escapes_are_counted_by_their_receiver() {
+    let c = |src: &str| scan_file(src);
+
+    // A type escape, and an item escape, told apart by the receiver alone.
+    assert_eq!(c("fn f() { let t = ty.as_syn(); }").escape_type, 1);
+    assert_eq!(c("fn f() { let t = ty.as_syn(); }").escape_item, 0);
+    assert_eq!(c("fn f() { let i = func.origin.as_syn(); }").escape_item, 1);
+    assert_eq!(c("fn f() { let i = func.origin.as_syn(); }").escape_type, 0);
+
+    // Spelling is free — the whole point of the split.
+    assert_eq!(c("fn f() { quote!(fn g(x: #ty)) }").escape_type, 0);
+    assert_eq!(c("fn f() { let t = ty.spell(); }").escape_type, 0);
+
+    // Inside a macro body, where an AST visit would miss it.
+    assert_eq!(
+        c("fn f() { assert_eq!(k, TypeKey::from_type(ty.as_syn())); }").escape_type,
+        1
+    );
+    // Two on one line: a line count would report one.
+    assert_eq!(c("fn f() { g(a.as_syn(), b.as_syn()); }").escape_type, 2);
+
+    // Test code does not count here either.
+    assert_eq!(
+        c("#[cfg(test)]\nmod t { fn g() { let _ = ty.as_syn(); } }").escape_type,
+        0
+    );
+
+    // A method that merely *starts* with the name is not the escape.
+    assert_eq!(c("fn f() { let t = ty.as_syntax(); }").escape_type, 0);
+    // Nor is a call that takes arguments — the escape is nullary.
+    assert_eq!(c("fn f() { let t = ty.as_syn(x); }").escape_type, 0);
+
+    // The two populations are independent: classifying through an escape counts
+    // in both, which is the intended double entry — one says a node was taken,
+    // the other says what was done with it.
+    let both = c("fn f() { matches!(ty.as_syn(), syn::Type::Slice(_)) }");
+    assert_eq!((both.escape_type, both.classify), (1, 1));
 }

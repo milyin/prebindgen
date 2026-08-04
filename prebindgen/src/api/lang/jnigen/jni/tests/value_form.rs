@@ -241,7 +241,7 @@ fn deriving_matches_the_equivalent_hand_written_list() {
             .map(|l| {
                 (
                     l.name.clone(),
-                    l.out_ty.syntax().to_token_stream().to_string(),
+                    l.out_ty.spell().to_token_stream().to_string(),
                 )
             })
             .collect()

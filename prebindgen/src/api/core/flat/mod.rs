@@ -8,7 +8,7 @@
 //! ```text
 //! Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
 //!   raw records          parse +               indexes       classify off `kind`
-//!   (syn::Item)          validate              elements      spell off `origin`
+//!   (syn::Item)          validate              elements      spell with `spell()`
 //! ```
 //!
 //! [`Flat::source`] folds the first arrow in for the common case, so a build
@@ -34,13 +34,16 @@
 //!
 //! So the rule for every consumer is:
 //!
-//! > **Classify off `kind`, spell off `origin.syntax`.**
+//! > **Classify off `kind`, spell with [`spell()`](Origin::spell).**
 //!
-//! Matching a `syn::Type` or `syn::Expr` variant outside this module is a
-//! classifier, and issue #211 says classification lives here alone. Passing a
-//! node's [`Origin`] into `quote!` is spelling, and spelling the source is
-//! exactly what generated Rust must do — see [`spell`] for the helpers that do
-//! it.
+//! And the model enforces it rather than asking. [`Origin`]'s syntax is
+//! private: `spell()` hands out tokens, which is all generated Rust ever needed,
+//! and [`as_syn`](Origin::as_syn) hands out the node and is the one way to get
+//! one. Matching a `syn::Type` or `syn::Expr` variant outside this module is a
+//! classifier — issue #211 says classification lives here alone — and it now
+//! takes a named escape to reach the node to match on. See [`spell`] for the
+//! helpers that turn an element back into Rust, and `boundary.rs` for the
+//! ledger that counts the escapes still owed.
 //!
 //! # What earns a variant
 //!
@@ -635,8 +638,8 @@ impl Flat {
     /// reaches for [`Self::declared_type`].
     pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
         match self.declared_type(name)? {
-            Type::Variant(v) => Some(&v.origin.syntax),
-            Type::Enum(e) => Some(&e.origin.syntax),
+            Type::Variant(v) => Some(v.origin.as_syn()),
+            Type::Enum(e) => Some(e.origin.as_syn()),
             _ => None,
         }
     }
@@ -692,7 +695,7 @@ impl Flat {
     /// **The scan's entry point, and nowhere else's.** A caller holding an element
     /// already has the reading — `Function::ret`, `Param::ty`, `Field::ty` are
     /// `TypeRef`s computed at parse time — and re-deriving one from
-    /// `origin.syntax` is reasoning from the spelling, which is what `origin` is
+    /// `spell()` is reasoning from the spelling, which is what `origin` is
     /// not for. This exists for the one case with no element behind it: a type a
     /// build script declared, or one expansion composed. `ensure_entry` is its
     /// only caller — the single call in the whole crate — and
@@ -718,7 +721,7 @@ impl Flat {
         let consts = ConstIndex::new(self.constants().map(|c| {
             (
                 c.name.to_string(),
-                (*c.origin.syntax.expr).clone(),
+                (*c.origin.as_syn().expr).clone(),
                 c.origin.crate_name().map(str::to_owned),
             )
         }));
@@ -739,7 +742,7 @@ impl Flat {
         for ty in refs {
             self.by_type
                 .entry(crate::api::core::flat::canonical_spelling(
-                    &ty.origin.syntax,
+                    ty.origin.as_syn(),
                 ))
                 .or_insert(ty);
         }
@@ -777,7 +780,7 @@ impl Flat {
         let consts = ConstIndex::new(self.constants().map(|c| {
             (
                 c.name.to_string(),
-                (*c.origin.syntax.expr).clone(),
+                (*c.origin.as_syn().expr).clone(),
                 c.origin.crate_name().map(str::to_owned),
             )
         }));
@@ -866,7 +869,7 @@ fn resolve_references(elements: &mut [Element]) {
             let element = &mut elements[i];
             let name = element.name().cloned();
             let origin = Origin::new(
-                element.syntax(),
+                element.as_syn(),
                 Rc::clone(match element {
                     Element::Function(f) => &f.origin.location,
                     Element::Type(t) => t.location_rc(),

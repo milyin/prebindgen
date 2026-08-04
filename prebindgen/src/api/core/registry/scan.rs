@@ -46,7 +46,7 @@ impl<M> Registry<M> {
             if !probed.insert(key) {
                 continue;
             }
-            let ty = crate::api::core::flat::canonical_type(&declared_ty.syntax);
+            let ty = crate::api::core::flat::canonical_type(declared_ty.as_syn());
             // Peel one reference level; the qualified head only appears on
             // path types.
             let inner = match &ty {
@@ -88,7 +88,11 @@ impl<M> Registry<M> {
 
         // Scan declared functions.
         for ident in &declared.functions {
-            if let Some(item_fn) = self.flat.function(&ident).map(|f| f.origin.syntax.clone()) {
+            if let Some(item_fn) = self
+                .flat
+                .function(&ident)
+                .map(|f| f.origin.as_syn().clone())
+            {
                 self.scan_fn_signature(&item_fn)?;
             } else {
                 missing.push(("function", ident.to_string()));
@@ -108,7 +112,11 @@ impl<M> Registry<M> {
         // Scan declared consts: a const is a nullary source of its type, so
         // the type is required in the output direction only.
         for ident in declared.consts.iter().flatten() {
-            if let Some(item_const) = self.flat.constant(&ident).map(|c| c.origin.syntax.clone()) {
+            if let Some(item_const) = self
+                .flat
+                .constant(&ident)
+                .map(|c| c.origin.as_syn().clone())
+            {
                 self.intern(Direction::Output, &item_const.ty, true)?;
             } else {
                 missing.push(("constant", ident.to_string()));
@@ -134,13 +142,13 @@ impl<M> Registry<M> {
             // is the form the type used to arrive in, and interning the
             // as-written spelling instead would put a differently-spelled
             // reading in the cell for the same key.
-            let ty = crate::api::core::flat::canonical_type(&declared_ty.syntax);
+            let ty = crate::api::core::flat::canonical_type(declared_ty.as_syn());
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
                 if let Some(s) = self
                     .flat
                     .struct_type(&ident)
-                    .map(|s| s.origin.syntax.clone())
+                    .map(|s| s.origin.as_syn().clone())
                 {
                     self.scan_struct(&s)?;
                     self.intern(Direction::Input, &ty, true)?;
@@ -396,7 +404,7 @@ impl<M> Registry<M> {
     /// yields `T` — [`borrow_target`](crate::api::core::flat::TypeRef::borrow_target)
     /// sees past the slot — instead of an intermediate `MaybeUninit<T>` that no
     /// adapter can convert and no table holds. Each edge is still *spelled* from
-    /// the child's own `origin.syntax`, which is what the caller keys the table by.
+    /// the child's own `spell()`, which is what the caller keys the table by.
     ///
     /// The reading comes from **this registry's own table**, where `ensure_entry`
     /// put it before the walk reached this type — so a spelling the binding composed

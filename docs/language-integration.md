@@ -627,11 +627,27 @@ growing back.
       `prerequisites` / `local_functions` returning raw items
 - [ ] `Niches { value: syn::Expr, matches: syn::Expr }` — a semantic fact carried
       as raw expression syntax
+- [x] **The syntax is sealed, and the door is counted** — the last two bullets
+      below, answered structurally instead of by widening a grep. `Origin`'s
+      syntax is private; `spell()` yields tokens, `as_syn()` yields the node and
+      is the only route to one. So a file with no escapes cannot classify source
+      syntax *however it is written*, which is what widening `WATCHED` was trying
+      to approximate. The ledger grew two sections: **escapes: types** (115,
+      must reach zero) and **escapes: items** (28, expected until items grow
+      modelled accessors). `ToTokens` is gone from `Origin` on purpose — it would
+      have handed every consumer `to_token_stream().to_string()` back
+- [ ] Drive **escapes: types** to zero. The population is three kinds, and only
+      the first is classification: taking a node apart (what the ledger's first
+      section already sees), keying by spelling (`TypeKey::from_type` where
+      `TypeRef::key()` is the answer), and carrying a spelling into an
+      adapter-owned `syn::Type` field (`ConverterImpl::subs` / `produced`, above)
 - [ ] Extend the ledger's `WATCHED` beyond `Type` / `Expr` — `Item`, `Fields`,
-      `FnArg`, `ReturnType`, `GenericArgument`, `Pat` — one enum at a time, each
-      addition a regenerated ledger whose diff *is* the decision
-- [ ] Close or accept the blind spots the ledger header lists (token-string
-      classification, ident-name classification, helper delegation)
+      `FnArg`, `ReturnType`, `GenericArgument`, `Pat`. Still worth doing, now as
+      a *sharper* reading of what escapes are used for rather than the only one
+- [ ] The blind spots the ledger header lists: ident-name classification and
+      helper delegation are gated (each needs an escape first); token-string
+      classification is **not**, and cannot be — `core/domain.rs` reads a
+      `syn::Type` a build script supplied, which was never the model's
 
 ## Completion criteria
 

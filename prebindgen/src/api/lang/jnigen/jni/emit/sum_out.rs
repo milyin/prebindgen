@@ -347,7 +347,7 @@ fn encode_group_leaf(
         panic!(
             "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
             leaf.name,
-            TypeKey::from_type(leaf.out_ty.syntax())
+            TypeKey::from_type(leaf.out_ty.as_syn())
         )
     });
     let wire = out_entry.destination.clone();

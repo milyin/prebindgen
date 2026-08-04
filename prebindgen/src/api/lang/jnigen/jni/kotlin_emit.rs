@@ -575,8 +575,8 @@ impl Declarations {
     ) -> KtClass {
         // Everything below comes off the element: `alternatives` for the
         // classes, `Field::member()` for the property names. The docs and the
-        // framework line are spelling, so they read `origin.syntax`.
-        let item_enum = &sum.origin.syntax;
+        // framework line are spelling, so they read `spell()`.
+        let item_enum = sum.origin.as_syn();
         let framework_line = format!(
             "JVM-side surface for the native Rust `{}` sum: exactly one alternative is live.",
             item_enum.ident
@@ -599,7 +599,8 @@ impl Declarations {
             }
             .vis(Vis::Public)
             .supertype(KtType::cls(class_name), None);
-            if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&alt.origin.syntax.attrs)
+            if let Some(doc) =
+                crate::api::lang::jnigen::util::doc_string(&alt.origin.as_syn().attrs)
             {
                 vclass = vclass.kdoc(doc);
             }
@@ -750,7 +751,7 @@ impl Declarations {
         // The field's own reading: the nullability question below is answered
         // from `kind`, so a wrapped spelling answers as the bare one does and
         // nothing is looked up (#275).
-        let field_ty = field.ty.syntax();
+        let field_ty = field.ty.spell();
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
         let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
             panic!(
@@ -1032,11 +1033,11 @@ impl Declarations {
                 let Some(func) = registry.flat().function(&ident) else {
                     continue;
                 };
-                let item_fn = &func.origin.syntax;
+                let item_fn = func.origin.as_syn();
                 for p in &func.params {
                     if let Some(cb_args) = p.ty.callback_args() {
                         let arg_tys: Vec<syn::Type> =
-                            cb_args.iter().map(|a| a.syntax().clone()).collect();
+                            cb_args.iter().map(|a| a.as_syn().clone()).collect();
                         uses.insert(SpecKey::callback(&arg_tys));
                     }
                 }
@@ -1580,7 +1581,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            reject_handle_const(self, &item_const.origin.syntax);
+            reject_handle_const(self, item_const.origin.as_syn());
             if let Some((helper, prop)) = render_const_val(
                 self,
                 &package,
@@ -1608,7 +1609,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            validate_constant_fn(self, &item_fn.origin.syntax);
+            validate_constant_fn(self, item_fn.origin.as_syn());
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
                 &package,

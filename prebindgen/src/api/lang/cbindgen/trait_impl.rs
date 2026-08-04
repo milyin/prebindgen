@@ -541,7 +541,7 @@ impl CbindgenBuilder {
             {
                 continue;
             }
-            let ty = reading.syntax().clone();
+            let ty = reading.as_syn().clone();
             let c_struct = self.c_type_ident(&ty);
             // Opaque/incomplete C type: the handle is `#c_struct *`, which IS the
             // `Box::into_raw` pointer to the source value.
@@ -580,7 +580,7 @@ impl CbindgenBuilder {
             {
                 continue;
             }
-            let ty = reading.syntax().clone();
+            let ty = reading.as_syn().clone();
             let Some(fields) = self.struct_fields(registry, &ty) else {
                 continue;
             };
@@ -626,7 +626,7 @@ impl CbindgenBuilder {
             {
                 continue;
             }
-            let ty = reading.syntax().clone();
+            let ty = reading.as_syn().clone();
             let src = self.src_ty(&ty);
             let opaque = &cfg.opaque;
             // `repr_c_struct`: the opaque counterpart is an auto-generated
@@ -827,7 +827,7 @@ impl CbindgenBuilder {
             {
                 continue;
             }
-            let ty = reading.syntax().clone();
+            let ty = reading.as_syn().clone();
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
@@ -873,7 +873,7 @@ impl CbindgenBuilder {
             {
                 continue;
             }
-            let ty = reading.syntax().clone();
+            let ty = reading.as_syn().clone();
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
@@ -1609,7 +1609,7 @@ impl CbindgenBuilder {
         // `convert_with` hands out comes from a type table, so it has a cell.
         // The selectors still take the spelling: moving cbindgen's selector
         // chain onto readings is its own change.
-        let ty = built.reading(key)?.syntax().clone();
+        let ty = built.reading(key)?.as_syn().clone();
         match dir {
             Direction::Input => self.select_input_type(&ty, built).or_else(|| {
                 let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
@@ -1827,7 +1827,7 @@ impl Prebindgen for CbindgenBuilder {
         f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
     ) -> TokenStream {
-        self.emit_function_wrapper(&f.origin.syntax, registry)
+        self.emit_function_wrapper(f.origin.as_syn(), registry)
     }
 
     fn on_struct(

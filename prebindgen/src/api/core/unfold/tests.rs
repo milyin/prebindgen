@@ -112,7 +112,7 @@ fn accessor_optional_primitive() {
         "z_timestamp_ntp64"
     );
     assert_eq!(
-        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
         "i64"
     );
     assert!(
@@ -170,7 +170,7 @@ fn accessor_plan_byref() {
     assert!(plan.leaves[0].identity);
     assert!(plan.leaves[0].path.is_empty());
     assert_eq!(
-        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
         "& ZKeyExpr"
     );
     // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
@@ -181,7 +181,7 @@ fn accessor_plan_byref() {
         "z_keyexpr_as_str"
     );
     assert_eq!(
-        plan.leaves[1].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[1].out_ty.spell().to_token_stream().to_string(),
         "& str"
     );
 
@@ -527,7 +527,7 @@ fn nested_accessor_flatten() {
     assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
     assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
     assert_eq!(
-        plan.leaves[3].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[3].out_ty.spell().to_token_stream().to_string(),
         "SampleKind"
     );
     assert_eq!(
@@ -665,7 +665,7 @@ fn reply_product_double_option_flatten() {
     // Acc leaf keeping its full `Option<…>` return — not a nesting step.
     assert_eq!(path(&plan.leaves[0]), "z_reply_replier_zid");
     assert_eq!(
-        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
         "Option < ZZenohId >"
     );
     assert!(!plan.leaves[0].nullable && !plan.leaves[0].identity);
@@ -831,7 +831,7 @@ fn iterable_decomposed_plan() {
         "z_zenoh_id_to_string"
     );
     assert_eq!(
-        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
         "String"
     );
     // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
@@ -839,7 +839,7 @@ fn iterable_decomposed_plan() {
     assert!(plan.leaves[1].identity);
     assert!(plan.leaves[1].path.is_empty());
     assert_eq!(
-        plan.leaves[1].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[1].out_ty.spell().to_token_stream().to_string(),
         "ZZenohId"
     );
 }
@@ -1243,7 +1243,7 @@ fn convert_error_decomposes_result_e() {
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(
-        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
         "String"
     );
     assert_eq!(plan.source.to_token_stream().to_string(), "ZError");
@@ -1363,7 +1363,7 @@ fn callback_arg_plan_derived() {
         "z_sample_key_expr"
     );
     assert_eq!(
-        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
         "& ZKeyExpr"
     );
     assert_eq!(
@@ -1371,7 +1371,7 @@ fn callback_arg_plan_derived() {
         "z_keyexpr_as_str"
     );
     assert_eq!(
-        plan.leaves[2].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[2].out_ty.spell().to_token_stream().to_string(),
         "SampleKind"
     );
     // Leaf out_tys registered so the resolver builds their converters.
@@ -1446,7 +1446,7 @@ fn callback_arg_borrowed_decomposed() {
         "z_sample_key_expr"
     );
     assert_eq!(
-        plan.leaves[2].out_ty.syntax().to_token_stream().to_string(),
+        plan.leaves[2].out_ty.spell().to_token_stream().to_string(),
         "SampleKind"
     );
 }

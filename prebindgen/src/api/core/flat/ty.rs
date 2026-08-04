@@ -33,7 +33,8 @@ use crate::SourceLocation;
 
 /// A type as the language accepted it, plus the exact syntax it came from.
 ///
-/// The [`Origin::syntax`] slice is what generated Rust spells. It is **not**
+/// The retained slice is what generated Rust spells, through
+/// [`spell`](Self::spell). It is **not**
 /// where facts go to survive a lossy classification any more — `kind` keeps the
 /// lifetime, the wrapper and the argument it used to drop, and
 /// [`TypeKind::to_syn`] proves it. Keeping the slice anyway is cheap, exact
@@ -126,10 +127,20 @@ impl TypeRef {
     }
 
     /// The tokens generated Rust must spell. **Spell off this**, never off
-    /// `kind` — the syntax says strictly more, and re-deriving it from the
-    /// classification is how `Box<Option<T>>` becomes an `E0308`.
-    pub fn syntax(&self) -> &syn::Type {
-        &self.origin.syntax
+    /// `kind` — re-deriving a spelling from the classification is how
+    /// `Box<Option<T>>` becomes an `E0308`.
+    ///
+    /// Tokens, not a `syn::Type`: a spelling is for spelling. What the type
+    /// *is* has an answer in [`kind`](Self::kind) and in the readings beside it,
+    /// and a consumer that still has to take the node apart says so with
+    /// [`as_syn`](Self::as_syn).
+    pub fn spell(&self) -> proc_macro2::TokenStream {
+        self.origin.spell()
+    }
+
+    /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
+    pub fn as_syn(&self) -> &syn::Type {
+        self.origin.as_syn()
     }
 
     /// Where the type was written, for diagnostics. A composed type is
@@ -297,7 +308,7 @@ impl TypeRef {
     // what a crate wrote, and `classify_has_no_caller_outside_the_registry`
     // keeps it that way. These compose a type from parts already understood,
     // which needs no lowering at all: each builds `kind` **and** the matching
-    // `origin.syntax` in one place, so the classification and the spelling
+    // `spell()` in one place, so the classification and the spelling
     // cannot disagree — the invariant every consumer of a `TypeRef` relies on.
 
     /// A borrow of this type — `&T` from `T`.
@@ -305,7 +316,7 @@ impl TypeRef {
     /// Keeps this type's location: the borrow exists *because of* this value,
     /// so a diagnostic about it should point where the value came from.
     pub(in crate::api::core) fn borrowed(&self) -> TypeRef {
-        let inner = &self.origin.syntax;
+        let inner = self.origin.spell();
         TypeRef {
             kind: TypeKind::Ref {
                 lifetime: None,
@@ -319,7 +330,7 @@ impl TypeRef {
     /// An optional of this type — `Option<T>` from `T`. Location as
     /// [`Self::borrowed`].
     pub(in crate::api::core) fn optional(&self) -> TypeRef {
-        let inner = &self.origin.syntax;
+        let inner = self.origin.spell();
         TypeRef {
             kind: TypeKind::Optional(Box::new(self.clone())),
             origin: self.origin.with(syn::parse_quote!(Option<#inner>)),
@@ -367,17 +378,17 @@ impl TypeRef {
     ///
     /// The canonical spelling is what a key *is* (#113), and reading it is
     /// legitimate — but it should be the model's answer rather than every caller
-    /// reaching into [`syntax`](Self::syntax) for it, since a caller that reaches
+    /// reaching for the spelling itself, since a caller that reaches
     /// into `origin` to *reason* is the thing this model exists to stop.
     pub fn key(&self) -> crate::api::core::registry::TypeKey {
-        crate::api::core::registry::TypeKey::from_type(&self.origin.syntax)
+        crate::api::core::registry::TypeKey::from_type(self.origin.as_syn())
     }
 
     /// The [transparent wrapper](TRANSPARENT_WRAPPERS) this type's **spelling**
     /// adds over its classification, if any — `Box<Option<T>>` → `Some("Box")`,
     /// `Option<T>` → `None`.
     ///
-    /// This exists because [`kind`](Self::kind) and [`syntax`](Self::syntax)
+    /// This exists because [`kind`](Self::kind) and [`spell`](Self::spell)
     /// answer different questions, and only one of them is about the
     /// destination:
     ///
@@ -495,7 +506,7 @@ impl TypeRef {
     /// a wrapper under a borrow or inside an `Option` belongs to that inner
     /// node's own spelling.
     pub fn stripped_syntax(&self) -> syn::Type {
-        self.unwrapped().origin.syntax.clone()
+        self.unwrapped().origin.as_syn().clone()
     }
 
     /// True when this is `&mut T` over a **value** — not `&mut MaybeUninit<T>`.
@@ -603,7 +614,7 @@ impl TypeRef {
     ///
     /// A [`Named`](TypeKind::Named)'s generic arguments are **not** among them:
     /// [`TypeId`] keeps a name and nothing else, so `MyBox<Foo>` reaches no `Foo`
-    /// here. The full spelling is in [`Self::syntax`] for whoever needs it.
+    /// here. The full spelling is [`Self::spell`]'s answer for whoever needs it.
     pub fn walk(&self) -> Vec<&TypeRef> {
         let mut out = Vec::new();
         self.collect_refs(&mut out);
@@ -854,7 +865,7 @@ impl TypeKind {
             }
             Self::Array { elem, extent } => {
                 let elem = elem.kind.to_syn();
-                let len = &extent.origin.syntax;
+                let len = extent.origin.spell();
                 syn::parse_quote!([#elem; #len])
             }
             Self::Named { id, args } => {

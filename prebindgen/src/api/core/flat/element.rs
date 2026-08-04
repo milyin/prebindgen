@@ -72,14 +72,20 @@ impl Element {
         }
     }
 
-    /// The whole item as the source wrote it.
-    pub fn syntax(&self) -> syn::Item {
+    /// The whole item as `syn` — **the escape**, at the item level. See
+    /// [`Origin::as_syn`](super::Origin::as_syn).
+    ///
+    /// It builds a `syn::Item` rather than borrowing one, because each variant
+    /// keeps the item kind it was parsed as. That makes it the natural route for
+    /// an emitter re-stating a whole item, and the ledger's **item** bucket is
+    /// where those land.
+    pub fn as_syn(&self) -> syn::Item {
         match self {
-            Element::Function(f) => syn::Item::Fn(f.origin.syntax.clone()),
-            Element::Type(t) => t.syntax(),
-            Element::Constant(c) => syn::Item::Const(c.origin.syntax.clone()),
-            Element::Guard(g) => syn::Item::Const(g.origin.syntax.clone()),
-            Element::Unsupported(u) => u.origin.syntax.clone(),
+            Element::Function(f) => syn::Item::Fn(f.origin.as_syn().clone()),
+            Element::Type(t) => t.as_syn(),
+            Element::Constant(c) => syn::Item::Const(c.origin.as_syn().clone()),
+            Element::Guard(g) => syn::Item::Const(g.origin.as_syn().clone()),
+            Element::Unsupported(u) => u.origin.as_syn().clone(),
         }
     }
 }
@@ -123,13 +129,13 @@ impl Type {
         }
     }
 
-    /// The whole item as the source wrote it.
-    pub fn syntax(&self) -> syn::Item {
+    /// The whole item as `syn` — **the escape**. See [`Element::as_syn`].
+    pub fn as_syn(&self) -> syn::Item {
         match self {
-            Type::Struct(s) => syn::Item::Struct(s.origin.syntax.clone()),
-            Type::Variant(v) => syn::Item::Enum(v.origin.syntax.clone()),
-            Type::Enum(e) => syn::Item::Enum(e.origin.syntax.clone()),
-            Type::Extern(e) => e.origin.syntax.clone(),
+            Type::Struct(s) => syn::Item::Struct(s.origin.as_syn().clone()),
+            Type::Variant(v) => syn::Item::Enum(v.origin.as_syn().clone()),
+            Type::Enum(e) => syn::Item::Enum(e.origin.as_syn().clone()),
+            Type::Extern(e) => e.origin.as_syn().clone(),
         }
     }
 }

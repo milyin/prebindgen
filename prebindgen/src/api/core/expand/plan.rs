@@ -63,7 +63,7 @@ pub struct FoldLeaf {
     /// The **reading** of the type whose resolved input converter decodes this
     /// leaf. For a single constructor these are the raw constructor parameter
     /// types; for a combined one the selector (`i32`) and `Option`-wrapped
-    /// variant inputs. Spell it with `ty.origin.syntax`.
+    /// variant inputs. Spell it with `ty.spell()`.
     ///
     /// A reading rather than a spelling for the reason [`UnfoldLeaf::out_ty`]
     /// gives: a consumer asking what this leaf's type MEANS had to hand the

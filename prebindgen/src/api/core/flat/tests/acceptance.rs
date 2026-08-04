@@ -76,7 +76,7 @@ fn a_box_is_a_box_until_a_consumer_unwraps_it() {
         panic!("a box");
     };
     assert!(matches!(inner.kind, TypeKind::String));
-    assert_eq!(tokens(&ty.origin.syntax), "Box < String >");
+    assert_eq!(tokens(ty.origin.as_syn()), "Box < String >");
     // The reading a destination takes.
     assert!(matches!(ty.unwrapped().kind(), TypeKind::String));
 
@@ -87,7 +87,7 @@ fn a_box_is_a_box_until_a_consumer_unwraps_it() {
     let inner = ty.optional_inner().expect("an option");
     assert!(matches!(inner.kind, TypeKind::Boxed(_)));
     assert!(matches!(inner.unwrapped().kind(), TypeKind::String));
-    assert_eq!(tokens(&inner.origin.syntax), "Box < String >");
+    assert_eq!(tokens(inner.origin.as_syn()), "Box < String >");
 }
 
 /// The erasure, stated as something the model can be **asked**: what was taken
@@ -119,7 +119,7 @@ fn the_stripped_spelling_is_the_one_that_lowers_to_this_kind() {
             format!("{:?}", kind(quote::quote!(#stripped))),
             format!("{:?}", ty.unwrapped().kind()),
             "`{}` strips to `{}`, which must classify identically",
-            tokens(&ty.origin.syntax),
+            tokens(ty.origin.as_syn()),
             tokens(&stripped),
         );
     }
@@ -138,7 +138,7 @@ fn the_stripped_spelling_is_the_one_that_lowers_to_this_kind() {
     let plain = lower(quote::quote!(Option<Sample>)).expect("in the language");
     assert_eq!(
         tokens(&plain.stripped_syntax()),
-        tokens(&plain.origin.syntax)
+        tokens(plain.origin.as_syn())
     );
     assert_eq!(
         tokens(
@@ -462,7 +462,7 @@ fn a_run_of_values_is_read_through_either_spelling() {
                 TypeKind::Scalar(ScalarKind::U8)
             ),
             "`{}` is a run of `u8`",
-            tokens(&ty.origin.syntax)
+            tokens(ty.origin.as_syn())
         );
     }
 }
@@ -499,7 +499,7 @@ fn a_cow_reads_as_what_it_borrows() {
 
     // The `Cow` survives where codegen reads it: a generated signature must spell
     // `Cow<'_, [u8]>`, which is not interchangeable with `Vec<u8>` in Rust.
-    assert_eq!(tokens(&cow.origin.syntax), "Cow < '_ , [u8] >");
+    assert_eq!(tokens(cow.origin.as_syn()), "Cow < '_ , [u8] >");
 
     // Transparent for any target, as `Box` is: whether it can actually cross is the
     // adapter's call, and both already restrict which elements they accept.
@@ -546,7 +546,7 @@ fn a_cow_takes_a_lifetime_and_a_type_in_that_order() {
         let ty = lower(spelling).expect("in the language");
         assert!(matches!(ty.kind, TypeKind::Cow { .. }));
         // And it spells back, which is what the refusals below protect.
-        assert_eq!(tokens(&ty.kind().to_syn()), tokens(ty.syntax()));
+        assert_eq!(tokens(&ty.kind().to_syn()), tokens(ty.as_syn()));
     }
 
     // Everything else is refused by shape, and named as such.
@@ -597,7 +597,7 @@ fn a_cow_returning_accessor_resolves() {
     assert!(matches!(f.ret.kind, TypeKind::Cow { .. }));
     assert!(f.ret.sequence_elem().is_some(), "and it reads as a run");
     // And the return still spells its `Cow`, so an adapter can emit the signature.
-    assert_eq!(tokens(&f.ret.origin.syntax), "Cow < '_ , [u8] >");
+    assert_eq!(tokens(f.ret.origin.as_syn()), "Cow < '_ , [u8] >");
 }
 
 /// A raw pointer is not in the language. A `#[prebindgen]` crate is idiomatic
@@ -629,7 +629,7 @@ fn generic_arguments_are_spelling_only() {
         panic!("a named type");
     };
     assert_eq!(id.name, "Foo");
-    assert_eq!(tokens(&ty.origin.syntax), "Foo < 'a , u8 >");
+    assert_eq!(tokens(ty.origin.as_syn()), "Foo < 'a , u8 >");
 
     // Lowered, so still checked: a tuple inside a generic argument is refused.
     assert_eq!(
@@ -825,9 +825,9 @@ fn the_three_extent_projections_are_independent() {
 
     // Declaration spelling is per occurrence, and distinguishes cases the value
     // cannot: `4` is not `0x04`, and neither is `TAG_LEN`.
-    assert_eq!(tokens(&by_literal.origin.syntax), "4");
-    assert_eq!(tokens(&by_hex.origin.syntax), "0x04");
-    assert_eq!(tokens(&by_const.origin.syntax), "TAG_LEN");
+    assert_eq!(tokens(by_literal.origin.as_syn()), "4");
+    assert_eq!(tokens(by_hex.origin.as_syn()), "0x04");
+    assert_eq!(tokens(by_const.origin.as_syn()), "TAG_LEN");
 
     // Header dependency is the named const, and distinguishes cases the
     // spelling groups together and the value does not see at all.
@@ -847,7 +847,7 @@ fn the_three_extent_projections_are_independent() {
     assert!(by_const.value == by_literal.value && by_const.const_id() != by_literal.const_id());
     assert!(
         by_literal.value == by_hex.value
-            && tokens(&by_literal.origin.syntax) != tokens(&by_hex.origin.syntax)
+            && tokens(by_literal.origin.as_syn()) != tokens(by_hex.origin.as_syn())
     );
     assert!(
         by_const.const_id() != by_other_const.const_id() && by_const.value == by_other_const.value
@@ -1022,7 +1022,7 @@ fn consts_carry_their_type_and_value() {
     let c = as_const(&element);
     assert_eq!(c.name, "TAG_LEN");
     assert!(matches!(c.ty.kind, TypeKind::Scalar(ScalarKind::Usize)));
-    assert_eq!(tokens(&c.origin.syntax.expr), "4");
+    assert_eq!(tokens(&c.origin.as_syn().expr), "4");
 }
 
 /// An unnamed const is a `Guard`, not a `Constant`: nothing can name it, so it
@@ -1081,7 +1081,7 @@ fn a_marked_alias_declares_an_extern() {
     assert_eq!(e.target.as_deref(), Some("zenoh :: Session"));
     // The whole item survives, so a consumer can still read what it aliased.
     assert_eq!(
-        tokens(&e.origin.syntax),
+        tokens(e.origin.as_syn()),
         "pub type Session = zenoh :: Session ;"
     );
 
@@ -1250,7 +1250,7 @@ fn a_lifetime_binder_is_accepted() {
     ));
     let s = as_struct(&element);
     assert_eq!(s.fields.len(), 1);
-    assert_eq!(tokens(&s.fields[0].ty.origin.syntax), "& 'a str");
+    assert_eq!(tokens(&s.fields[0].ty.origin.spell()), "& 'a str");
 }
 
 /// `impl Trait` in argument position is an anonymous type parameter in Rust, but
@@ -1902,7 +1902,7 @@ fn the_layer_stack_stops_at_an_out_of_order_layer() {
         };
         (
             rendered,
-            quote::ToTokens::to_token_stream(&core.origin.syntax).to_string(),
+            quote::ToTokens::to_token_stream(core.origin.as_syn()).to_string(),
             reading.layer_types().len(),
         )
     };
@@ -1949,7 +1949,7 @@ fn the_layer_stack_stops_at_an_out_of_order_layer() {
 /// `parse_quote!(&#t)`, it would register a *different cell* and resolution
 /// would silently change. So the identity is pinned, not assumed.
 ///
-/// The pairing is the point: `kind` and `origin.syntax` are built together in
+/// The pairing is the point: `kind` and `spell()` are built together in
 /// one place, so a consumer classifying off one and spelling off the other
 /// cannot be handed a disagreement.
 #[test]
@@ -2024,7 +2024,7 @@ fn a_raw_identifier_survives_typeid() {
     // Recovered, and it spells itself back the way it was written.
     let back = id.ident().expect("a raw ident is still an ident");
     assert_eq!(back, raw);
-    assert_eq!(tokens(&t.origin.syntax), "r#type");
+    assert_eq!(tokens(t.origin.as_syn()), "r#type");
 
     // A path-qualified name is not a single identifier — the same answer the
     // old `bare_path_ident` gave.

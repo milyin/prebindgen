@@ -312,7 +312,7 @@ pub fn apply<M>(
                     func: ed.func.clone(),
                     declared: TypeKey::from_type(declared).as_str().to_string(),
                     actual: {
-                        let s = ret.syntax();
+                        let s = ret.spell();
                         quote::quote!(#s).to_string()
                     },
                 });
@@ -857,12 +857,12 @@ fn whole_leaf_fold_plan(
     shape: UnfoldShape,
 ) -> UnfoldPlan {
     UnfoldPlan {
-        source: vec_elem.syntax().clone(),
+        source: vec_elem.as_syn().clone(),
         decon: None,
         by_ref: peel_borrow(vec_elem).0,
         shape,
         leaves: vec![],
-        element: Some(vec_elem.syntax().clone()),
+        element: Some(vec_elem.as_syn().clone()),
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
@@ -942,7 +942,7 @@ struct Layered {
 /// Takes a `&TypeRef`, not a `&syn::Type`, and that is the whole point: a caller
 /// must hold a reading, and the ways to hold one are to take it off an element or
 /// to be the scan admitting a type with no element. Re-deriving a reading from
-/// `origin.syntax` — the round trip this signature makes impossible — is reasoning
+/// `spell()` — the round trip this signature makes impossible — is reasoning
 /// from the spelling, which is what `origin` is not for.
 fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
     let (shape, layered) = ty.layer_stack();
@@ -950,7 +950,7 @@ fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
     Layered {
         shape,
         layer_types: ty.layer_types().into_iter().cloned().collect(),
-        core: borrowed.unwrap_or(layered).syntax().clone(),
+        core: borrowed.unwrap_or(layered).as_syn().clone(),
         by_ref: borrowed.is_some(),
     }
 }
@@ -1071,12 +1071,12 @@ fn process_decl<M>(
                 let by_ref = peel_borrow(inner).0;
                 registry.require_output(inner);
                 UnfoldPlan {
-                    source: inner.syntax().clone(),
+                    source: inner.as_syn().clone(),
                     decon: None,
                     by_ref,
                     shape,
                     leaves: vec![],
-                    element: Some(inner.syntax().clone()),
+                    element: Some(inner.as_syn().clone()),
                     delivery: ed.delivery,
                     convert_out_ty: None,
                     fixed_builder: false,
@@ -1146,7 +1146,7 @@ fn process_decl<M>(
             registry.require_output(&cv);
             UnfoldPlan {
                 delivery: Delivery::Return,
-                convert_out_ty: Some(cv.syntax().clone()),
+                convert_out_ty: Some(cv.as_syn().clone()),
                 ..plan
             }
         } else {
@@ -1200,11 +1200,11 @@ fn register_decon_spec<M>(
         // derived from it, never emitted code — so its hoists are discarded.
         &mut Vec::new(),
     )?;
-    require_unique_leaf_names(source.syntax(), &leaves)?;
+    require_unique_leaf_names(source.as_syn(), &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
         DeconSpec {
-            source: source.syntax().clone(),
+            source: source.as_syn().clone(),
             leaves,
         },
     );
@@ -1277,11 +1277,11 @@ fn build_plan<M>(
         &mut leaves,
         &mut hoists,
     )?;
-    require_unique_leaf_names(source.syntax(), &leaves)?;
-    require_root_identity_last(by_ref, source.syntax(), &leaves)?;
+    require_unique_leaf_names(source.as_syn(), &leaves)?;
+    require_root_identity_last(by_ref, source.as_syn(), &leaves)?;
 
     Ok(UnfoldPlan {
-        source: source.syntax().clone(),
+        source: source.as_syn().clone(),
         decon: Some(decon),
         by_ref,
         shape,
@@ -1416,7 +1416,7 @@ fn flatten<M>(
                 // call, so the whole record shares a single `Call` step and the
                 // emitter can hoist it.
                 let (takes, _ret) = accessor_signature(registry, func)?;
-                check_takes(func, &takes, source.syntax())?;
+                check_takes(func, &takes, source.as_syn())?;
                 // The declarator states whether the value is given away; the
                 // signature has to agree, or the emitted call would not compile
                 // in the consumer's crate. Checked rather than inferred so that
@@ -1603,7 +1603,7 @@ fn flatten<M>(
                     DeconRecord::Identity | DeconRecord::Fields { .. } => unreachable!(),
                 };
                 let (takes, ret) = accessor_signature(registry, &func)?;
-                check_takes(&func, &takes, source.syntax())?;
+                check_takes(&func, &takes, source.as_syn())?;
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
@@ -1751,8 +1751,8 @@ fn accessor_signature<M>(
         .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
     let takes = match first.ty.borrow_target() {
-        Some(inner) => inner.syntax().clone(),
-        None => first.ty.syntax().clone(),
+        Some(inner) => inner.as_syn().clone(),
+        None => first.ty.as_syn().clone(),
     };
     Ok((takes, f.ret.clone()))
 }

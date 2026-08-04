@@ -272,7 +272,7 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>
         if let Some(s) = registry
             .flat()
             .struct_type(&ident)
-            .map(|st| &st.origin.syntax)
+            .map(|st| st.origin.as_syn())
         {
             for f in &s.fields {
                 if let Some(fname) = &f.ident {

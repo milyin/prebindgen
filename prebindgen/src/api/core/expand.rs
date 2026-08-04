@@ -267,7 +267,7 @@ pub fn apply<M>(
 /// The **reading** of a declared function's parameter.
 ///
 /// `Param::ty` is a `TypeRef` computed at parse time. Reaching into the item's
-/// `origin.syntax` and digging the parameter out of `sig.inputs` — what these
+/// `spell()` and digging the parameter out of `sig.inputs` — what these
 /// three sites used to do — re-derives a fact the model was already handing over,
 /// which is `origin` used for reasoning rather than for emission.
 fn param_reading<M>(
@@ -365,8 +365,8 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
     // The model already read this return; `fallible_parts` is that reading, not a
     // second look at the spelling.
     let (target, fallible) = match f.ret.fallible_parts() {
-        Some((ok, _)) => (ok.syntax().clone(), true),
-        None => (f.ret.syntax().clone(), false),
+        Some((ok, _)) => (ok.as_syn().clone(), true),
+        None => (f.ret.as_syn().clone(), false),
     };
     Ok(CtorSig {
         params,
@@ -429,7 +429,7 @@ fn build_plan<M>(
             )?;
             visited.remove(&target.key());
             return Ok(FoldPlan {
-                target: target.syntax().clone(),
+                target: target.as_syn().clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -439,7 +439,7 @@ fn build_plan<M>(
             });
         };
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target.syntax())?;
+        check_target(func, &sig.target, target.as_syn())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
@@ -447,7 +447,7 @@ fn build_plan<M>(
                 ty: pty.optional(),
             });
             return Ok(FoldPlan {
-                target: target.syntax().clone(),
+                target: target.as_syn().clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -491,7 +491,7 @@ fn build_plan<M>(
             inputs.push(arg);
         }
         return Ok(FoldPlan {
-            target: target.syntax().clone(),
+            target: target.as_syn().clone(),
             by_ref,
             shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
             leaves,
@@ -523,7 +523,7 @@ fn build_plan<M>(
     )?;
     visited.remove(&target.key());
     Ok(FoldPlan {
-        target: target.syntax().clone(),
+        target: target.as_syn().clone(),
         by_ref,
         shape: FoldShape::Base,
         leaves,
@@ -553,7 +553,7 @@ fn build_core<M>(
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target.syntax())?;
+        check_target(func, &sig.target, target.as_syn())?;
         let np = sig.params.len();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
@@ -588,7 +588,7 @@ fn build_core<M>(
             match v {
                 Variant::Ctor(func) => {
                     let sig = ctor_signature(registry, func)?;
-                    check_target(func, &sig.target, target.syntax())?;
+                    check_target(func, &sig.target, target.as_syn())?;
                     let np = sig.params.len();
                     let mut args = Vec::new();
                     for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
@@ -689,7 +689,7 @@ fn build_arg<M>(
         )?;
         visited.remove(&key);
         Ok(FoldArg::Build(Box::new(FoldBuild {
-            target: bare.syntax().clone(),
+            target: bare.as_syn().clone(),
             by_ref: pby_ref,
             selector,
             variants: vars,
@@ -1085,7 +1085,7 @@ fn constructed_value(reading: &crate::api::core::flat::TypeRef) -> syn::Type {
     after_opt
         .borrow_target()
         .unwrap_or(after_opt)
-        .syntax()
+        .as_syn()
         .clone()
 }
 

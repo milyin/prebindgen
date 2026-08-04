@@ -33,7 +33,7 @@ impl Prebindgen for IdentityExt {
         f: &crate::api::core::flat::Function,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        f.origin.syntax.to_token_stream()
+        f.origin.spell().to_token_stream()
     }
 
     fn on_struct(
@@ -41,7 +41,7 @@ impl Prebindgen for IdentityExt {
         s: &crate::api::core::flat::Struct,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        s.origin.syntax.to_token_stream()
+        s.origin.spell().to_token_stream()
     }
 
     fn on_variant(
@@ -49,7 +49,7 @@ impl Prebindgen for IdentityExt {
         v: &crate::api::core::flat::Variant,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        v.origin.syntax.to_token_stream()
+        v.origin.spell().to_token_stream()
     }
 
     fn on_enum(
@@ -57,7 +57,7 @@ impl Prebindgen for IdentityExt {
         e: &crate::api::core::flat::Enum,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        e.origin.syntax.to_token_stream()
+        e.origin.spell().to_token_stream()
     }
 }
 
@@ -244,20 +244,20 @@ fn guards_emit_ungated_and_in_stream_order() {
             f: &crate::api::core::flat::Function,
             _r: &Registry<()>,
         ) -> TokenStream {
-            f.origin.syntax.to_token_stream()
+            f.origin.spell().to_token_stream()
         }
         fn on_struct(&self, s: &crate::api::core::flat::Struct, _r: &Registry<()>) -> TokenStream {
-            s.origin.syntax.to_token_stream()
+            s.origin.spell().to_token_stream()
         }
         fn on_variant(
             &self,
             v: &crate::api::core::flat::Variant,
             _r: &Registry<()>,
         ) -> TokenStream {
-            v.origin.syntax.to_token_stream()
+            v.origin.spell().to_token_stream()
         }
         fn on_enum(&self, e: &crate::api::core::flat::Enum, _r: &Registry<()>) -> TokenStream {
-            e.origin.syntax.to_token_stream()
+            e.origin.spell().to_token_stream()
         }
     }
 

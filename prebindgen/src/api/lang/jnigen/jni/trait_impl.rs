@@ -579,7 +579,7 @@ pub(crate) fn build_handle_destructor_items(
         if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none() {
             continue;
         }
-        let ty = reading.syntax().clone();
+        let ty = reading.spell().clone();
         let class_fqn = cfg
             .name_spec
             .as_ref()
@@ -640,8 +640,8 @@ pub(crate) fn build_handle_destructor_items(
 /// (#270) — even though the model classifies it `Optional` and says so.
 ///
 /// So the shape comes from [`TypeKind`](crate::api::core::flat::TypeKind) and
-/// the spelling comes from `origin.syntax`, which is the same split the rest of
-/// the pipeline follows: classify off `kind`, spell off `syntax`.
+/// the spelling comes from `spell()`, which is the same split the rest of
+/// the pipeline follows: classify off `kind`, spell with `spell()`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum WrapperShape {
     /// `Ref` — a borrow of its inner.
@@ -889,7 +889,7 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions; the
         // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.syntax();
+        let t1_ty = t1.as_syn();
         let WrapperShape::Borrow { mutable } = shape else {
             return None;
         };
@@ -948,7 +948,7 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions; the
         // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.syntax();
+        let t1_ty = t1.as_syn();
         let WrapperShape::OptionRef { mutable } = shape else {
             return None;
         };
@@ -1019,7 +1019,7 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions; the
         // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.syntax();
+        let t1_ty = t1.as_syn();
         if shape != WrapperShape::Sequence {
             return None;
         }
@@ -1090,7 +1090,7 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions; the
         // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.syntax();
+        let t1_ty = t1.as_syn();
         if shape == WrapperShape::Optional {
             let inner = registry.input_entry(t1)?;
             if inner.metadata.is_direct_handle() {
@@ -1455,7 +1455,7 @@ impl Declarations {
             // the declare phase, where a `reading()` would legitimately answer
             // `None` for a type nothing has interned yet — the declaration is
             // the only thing that can say (#291).
-            let source = self.types[key].rust_type.syntax.clone();
+            let source = self.types[key].rust_type.as_syn().clone();
             let Some(ident) = bare_path_ident(&source) else {
                 continue;
             };
@@ -1488,7 +1488,7 @@ impl Declarations {
             // `Vec<T>` / `Option<Vec<T>>` return. The model's `ret` already
             // normalizes an elided return to `()`, so there is no arm for it.
             {
-                let ret = f.ret.syntax();
+                let ret = f.ret.as_syn();
                 let after_opt =
                     crate::api::core::types_util::option_inner_type(ret).unwrap_or(ret.clone());
                 if let Some(elem) = crate::api::core::types_util::vec_inner_type(&after_opt) {
@@ -1503,7 +1503,7 @@ impl Declarations {
                     continue;
                 };
                 for arg in args {
-                    if let syn::Type::Slice(s) = &peel_leading_ref(arg.syntax()) {
+                    if let syn::Type::Slice(s) = &peel_leading_ref(arg.as_syn()) {
                         consider(peel_leading_ref(&s.elem));
                     }
                 }
@@ -1519,7 +1519,7 @@ impl Declarations {
         args: &[crate::api::core::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let spellings: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
+        let spellings: Vec<syn::Type> = args.iter().map(|a| a.as_syn().clone()).collect();
         let outer_ty = build_fn_type(&spellings);
         let (wire, body) = callback_input(self, args, registry)?;
         let niches = default_niches_for_wire(&wire);
@@ -1570,7 +1570,7 @@ impl Prebindgen for Declarations {
                 let Some(item_fn) = binding
                     .flat()
                     .function(&m.rust_ident)
-                    .map(|func| &func.origin.syntax)
+                    .map(|func| func.origin.as_syn())
                 else {
                     continue;
                 };
@@ -1643,7 +1643,7 @@ impl Prebindgen for Declarations {
             let Some(func) = binding.flat().function(&ident) else {
                 continue;
             };
-            let item_fn = &func.origin.syntax;
+            let item_fn = func.origin.as_syn();
             // (1) A sum in the `Ok` position of a fallible return. A sum is
             // delivered DECOMPOSED through a builder callback, and the
             // `Result` lane has no builder: a `Result` return deliberately
@@ -1726,7 +1726,7 @@ impl Prebindgen for Declarations {
                     continue;
                 };
                 for arg in args {
-                    let after_ref = match arg.syntax() {
+                    let after_ref = match arg.as_syn() {
                         syn::Type::Reference(r) => (*r.elem).clone(),
                         other => other.clone(),
                     };
@@ -1891,13 +1891,13 @@ impl Prebindgen for Declarations {
         c: &crate::api::core::flat::Constant,
         registry: &Registry<KotlinMeta>,
     ) -> TokenStream {
-        reject_handle_const(self, &c.origin.syntax);
+        reject_handle_const(self, c.origin.as_syn());
         let getter = const_getter_fn(c);
         let const_ident = &c.name;
         let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
         let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
-        let alias = crate::api::core::const_path_alias(&c.origin.syntax, &source_module);
+        let alias = crate::api::core::const_path_alias(c.origin.as_syn(), &source_module);
         quote! {
             #alias
             #wrapper
@@ -1919,10 +1919,10 @@ impl Declarations {
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Classify off `kind`, spell off `syntax`: the arms below that ask what
+        // Classify off `kind`, spell with `spell()`: the arms below that ask what
         // a type IS use `reading`, and everything that has to name it in
         // generated Rust uses this.
-        let ty = reading.syntax();
+        let ty = reading.as_syn();
         // Structured-config overrides first (opaque handles, then user-
         // registered rank-0 wrappers, then built-ins).
         let key = TypeKey::from_type(ty);
@@ -2149,7 +2149,7 @@ impl Declarations {
         if reading.erased_wrappers().is_empty() {
             return None;
         }
-        let produced = reading.syntax();
+        let produced = reading.as_syn();
         let stripped = reading.stripped_syntax();
         // A wrapper over a **borrow** is refused here too, and outbound the
         // reason is its own: a borrow's output route is the clone-into-a-fresh-
@@ -2220,7 +2220,7 @@ impl Declarations {
         if reading.erased_wrappers().is_empty() {
             return None;
         }
-        let produced = reading.syntax();
+        let produced = reading.as_syn();
         // The spelling under every wrapper — by the model's own definition, the
         // one whose lowering yields this `kind`.
         let stripped = reading.stripped_syntax();
@@ -2305,8 +2305,8 @@ impl Declarations {
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // Classify off `kind`, spell off `syntax` — see `input_terminal`.
-        let ty = reading.syntax();
+        // Classify off `kind`, spell with `spell()` — see `input_terminal`.
+        let ty = reading.as_syn();
         // Structured-config overrides first (opaque handles, then built-ins).
         let key = TypeKey::from_type(ty);
         if let Some(cfg) = self.types.get(&key) {
@@ -2477,7 +2477,7 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions; the
         // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.syntax();
+        let t1_ty = t1.as_syn();
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
         // return *borrowed* handles for the C tier's zero-copy borrows, but

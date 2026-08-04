@@ -51,7 +51,7 @@ fn single_constructor_plan_and_fold() {
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(plan.leaves[0].name.to_string(), "a");
     assert_eq!(
-        plan.leaves[0].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].ty.spell().to_token_stream().to_string(),
         "String"
     );
 
@@ -101,16 +101,16 @@ fn constructor_plan_and_fold() {
     // selector + try_from(String) + identity(ZKeyExpr) = 3 leaves
     assert_eq!(plan.leaves.len(), 3);
     assert_eq!(
-        plan.leaves[0].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].ty.spell().to_token_stream().to_string(),
         "i32"
     );
     assert_eq!(
-        plan.leaves[1].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[1].ty.spell().to_token_stream().to_string(),
         "Option < String >"
     );
     // `&ZKeyExpr` consumer ⇒ borrowed identity leaf (clone-preserving).
     assert_eq!(
-        plan.leaves[2].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[2].ty.spell().to_token_stream().to_string(),
         "Option < & ZKeyExpr >"
     );
     assert_eq!(plan.variants.len(), 2);
@@ -166,7 +166,7 @@ fn optional_byvalue_single_ctor() {
     assert_eq!(plan.leaves.len(), 1);
     // nullable leaf wrapping the ctor param
     assert_eq!(
-        plan.leaves[0].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].ty.spell().to_token_stream().to_string(),
         "Option < Vec < u8 > >"
     );
 
@@ -217,7 +217,7 @@ fn optional_byref_single_ctor() {
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
     assert_eq!(
-        plan.leaves[0].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].ty.spell().to_token_stream().to_string(),
         "Option < String >"
     );
     assert_eq!(
@@ -271,17 +271,17 @@ fn optional_byref_multi_arg_ctor() {
     assert_eq!(plan.leaves.len(), 3);
     assert_eq!(plan.leaves[0].name.to_string(), "encoding_present");
     assert_eq!(
-        plan.leaves[0].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].ty.spell().to_token_stream().to_string(),
         "bool"
     );
     assert_eq!(plan.leaves[1].name.to_string(), "encoding_id");
     assert_eq!(
-        plan.leaves[1].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[1].ty.spell().to_token_stream().to_string(),
         "i32"
     );
     assert_eq!(plan.leaves[2].name.to_string(), "encoding_schema");
     assert_eq!(
-        plan.leaves[2].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[2].ty.spell().to_token_stream().to_string(),
         "Option < String >"
     );
 
@@ -355,20 +355,20 @@ fn optional_combined_selector_encodes_absence() {
     assert_eq!(plan.leaves.len(), 4);
     assert_eq!(plan.leaves[0].name.to_string(), "encoding_sel");
     assert_eq!(
-        plan.leaves[0].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[0].ty.spell().to_token_stream().to_string(),
         "i32"
     );
     assert_eq!(
-        plan.leaves[1].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[1].ty.spell().to_token_stream().to_string(),
         "Option < i32 >"
     );
     assert_eq!(
-        plan.leaves[2].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[2].ty.spell().to_token_stream().to_string(),
         "Option < String >",
         "already-Option ctor arg is NOT double-wrapped"
     );
     assert_eq!(
-        plan.leaves[3].ty.syntax().to_token_stream().to_string(),
+        plan.leaves[3].ty.spell().to_token_stream().to_string(),
         "Option < & ZEncoding >"
     );
     assert!(
@@ -609,7 +609,7 @@ fn recursive_input_nests_param_constructors() {
     let leaf_tys: Vec<String> = plan
         .leaves
         .iter()
-        .map(|l| l.ty.syntax().to_token_stream().to_string())
+        .map(|l| l.ty.spell().to_token_stream().to_string())
         .collect();
     assert!(
         leaf_tys.iter().any(|t| t.contains("i32")),

@@ -62,7 +62,7 @@ impl Declarations {
             if decl.no_split || decl.variants.len() < 2 {
                 continue;
             }
-            let target = decl.rust_type.syntax.clone();
+            let target = decl.rust_type.as_syn().clone();
             let sigs: Vec<(String, Vec<ErasedJvmType>)> = decl
                 .variants
                 .iter()
@@ -117,7 +117,7 @@ fn arm_erased_sig(
         Some(cf) => match registry
             .flat()
             .function(&cf)
-            .map(|func| &func.origin.syntax)
+            .map(|func| func.origin.as_syn())
         {
             Some(item_fn) => item_fn
                 .sig
@@ -262,7 +262,7 @@ fn variant_typed_params(
             let item_fn = registry
                 .flat()
                 .function(&cf)
-                .map(|func| &func.origin.syntax)?;
+                .map(|func| func.origin.as_syn())?;
             let optional = item_fn
                 .sig
                 .inputs
