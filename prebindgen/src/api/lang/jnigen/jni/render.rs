@@ -45,7 +45,8 @@ pub(crate) fn build_enum_class(
         "JVM-side surface for the native Rust `{}` enum.",
         item_enum.name
     );
-    let enum_kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.origin.as_syn().attrs)
+    let enum_kdoc = item_enum
+        .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     kt::KtClass::new(kt::ClassKind::Enum(entries), class_name)
@@ -177,9 +178,7 @@ pub(crate) fn build_data_class(
     });
 
     let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
-    if let Some(doc) =
-        crate::api::lang::jnigen::util::doc_string(&item_struct.origin.as_syn().attrs)
-    {
+    if let Some(doc) = item_struct.docs() {
         class = class.kdoc(doc);
     }
     for p in ctor_params {
@@ -906,7 +905,8 @@ pub(crate) fn render_const_val(
          the generated JNI getter on first use).",
         c.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.origin.as_syn().attrs)
+    let kdoc = c
+        .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -936,7 +936,8 @@ pub(crate) fn render_constant_fn_val(
          through the generated JNI wrapper on first use).",
         f.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.origin.as_syn().attrs)
+    let kdoc = f
+        .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -2245,7 +2246,7 @@ fn wrapper_kdoc(
     f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<String> {
-    let prose = crate::api::lang::jnigen::util::doc_string(&f.origin.as_syn().attrs);
+    let prose = f.docs();
     let notes = shape_notes(f, registry);
     match (prose, notes) {
         (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
@@ -2351,11 +2352,12 @@ fn shape_notes(
 /// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
 /// key, when the item is indexed (a re-exported foreign type has none).
 pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Option<String> {
-    let name = key.ident()?.to_string();
-    let attrs = registry
-        .flat()
-        .struct_type(&name)
-        .map(|s| s.origin.as_syn().attrs.as_slice())
-        .or_else(|| registry.flat().enum_item(&name).map(|e| e.attrs.as_slice()))?;
-    crate::api::lang::jnigen::util::doc_string(attrs)
+    // Whichever of the three shapes the name declares — the docs are the
+    // element's answer, so there is no `attrs` slice to unify across them.
+    match registry.flat().declared_type(&key.ident()?)? {
+        crate::api::core::flat::Type::Struct(s) => s.docs(),
+        crate::api::core::flat::Type::Enum(e) => e.docs(),
+        crate::api::core::flat::Type::Variant(v) => v.docs(),
+        crate::api::core::flat::Type::Extern(_) => None,
+    }
 }

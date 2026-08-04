@@ -489,3 +489,58 @@ pub struct Unsupported {
     /// The item as written, so a diagnosis can quote the source.
     pub origin: Origin<syn::Item>,
 }
+
+/// An item's `///` documentation, read off the attributes it was captured
+/// with: `#[doc = " …"]` lines in order, one leading space stripped per line,
+/// joined with `\n`; `None` when there are none. `*/` is defanged so the text
+/// is safe inside a `/** … */` block, which is what every destination that
+/// re-emits prose needs.
+///
+/// **Here rather than in an adapter.** A doc comment is something the *source*
+/// said, so it is the model's to report — and reading it was the last common
+/// reason an emitter reached for a captured item's node. Two adapters wanting
+/// the same prose is one function, not a copy each.
+fn docs_from(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for attr in attrs {
+        if !attr.path().is_ident("doc") {
+            continue;
+        }
+        let syn::Meta::NameValue(nv) = &attr.meta else {
+            continue;
+        };
+        let syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(s),
+            ..
+        }) = &nv.value
+        else {
+            continue;
+        };
+        let raw = s.value();
+        let line = raw.strip_prefix(' ').unwrap_or(&raw);
+        lines.push(line.replace("*/", "*\u{200B}/"));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
+macro_rules! docs_accessor {
+    ($($ty:ident),+ $(,)?) => {$(
+        impl $ty {
+            /// This item's `///` documentation — see [`docs_from`].
+            pub fn docs(&self) -> Option<String> {
+                docs_from(&self.origin.syntax.attrs)
+            }
+        }
+    )+};
+}
+
+docs_accessor!(
+    Function,
+    Struct,
+    Enum,
+    Variant,
+    Constant,
+    Field,
+    Alternative,
+    EnumValue
+);

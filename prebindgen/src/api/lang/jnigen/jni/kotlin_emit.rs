@@ -579,14 +579,14 @@ impl Declarations {
         sum_cfg: &SumConfig,
     ) -> KtClass {
         // Everything below comes off the element: `alternatives` for the
-        // classes, `Field::member()` for the property names. The docs and the
-        // framework line are spelling, so they read `spell()`.
-        let item_enum = sum.origin.as_syn();
+        // classes, `Field::member()` for the property names, `docs()` for the
+        // prose the source wrote.
         let framework_line = format!(
             "JVM-side surface for the native Rust `{}` sum: exactly one alternative is live.",
-            item_enum.ident
+            sum.name
         );
-        let kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.attrs)
+        let kdoc = sum
+            .docs()
             .map(|d| format!("{d}\n\n{framework_line}"))
             .unwrap_or(framework_line);
 
@@ -604,9 +604,7 @@ impl Declarations {
             }
             .vis(Vis::Public)
             .supertype(KtType::cls(class_name), None);
-            if let Some(doc) =
-                crate::api::lang::jnigen::util::doc_string(&alt.origin.as_syn().attrs)
-            {
+            if let Some(doc) = alt.docs() {
                 vclass = vclass.kdoc(doc);
             }
             let mut vprops: Vec<(String, KtType)> = Vec::new();
@@ -670,7 +668,7 @@ impl Declarations {
         // The companion is named only when it has to be (a variant took
         // `Companion`), so ordinary emission keeps the anonymous form.
         let mut companion = KtClass::companion_object().vis(Vis::Public).member(factory);
-        let companion_name = self.sum_companion_name(sum_cfg, item_enum);
+        let companion_name = self.sum_companion_name(sum_cfg, sum);
         if companion_name != "Companion" {
             companion.name = companion_name;
         }
@@ -694,12 +692,14 @@ impl Declarations {
     pub(crate) fn sum_companion_name(
         &self,
         sum_cfg: &SumConfig,
-        item_enum: &syn::ItemEnum,
+        sum: &crate::api::core::flat::Variant,
     ) -> String {
-        let taken: std::collections::HashSet<String> = item_enum
-            .variants
+        // The alternatives, not the item's `variants`: the same list, already
+        // classified, and named the way the model names them.
+        let taken: std::collections::HashSet<String> = sum
+            .alternatives
             .iter()
-            .map(|v| self.sum_variant_class_name(sum_cfg, &v.ident))
+            .map(|a| self.sum_variant_class_name(sum_cfg, &a.name))
             .collect();
         let mut name = "Companion".to_string();
         while taken.contains(&name) {
