@@ -455,22 +455,6 @@ impl Declarations {
 /// `err` is generic over `Display`, so both the framework `__JniErr`
 /// (`JniBindingError`, a `String` wrapper) and a domain `Result<T, E>`'s `E`
 /// funnel through one function with no per-type routing.
-/// Strip a single leading `&` (one level) from a type, leaving non-references
-/// unchanged. Used to reach a `Vec`/slice element's bare type for nomination.
-fn peel_leading_ref(ty: &syn::Type) -> syn::Type {
-    match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    }
-}
-
-/// True for the `String` builtin (final path segment `String`) — the one
-/// undeclared type that crosses as a single JObject-shaped leaf (`JString`).
-fn is_string_type(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Path(tp)
-        if tp.path.segments.last().is_some_and(|s| s.ident == "String"))
-}
-
 /// The pending-exception guard shared by both signal helpers: if a JVM
 /// exception is already pending (a Java upcall threw during a converter), let
 /// it propagate untouched — do NOT invoke an error callback over it, and do
@@ -1205,8 +1189,8 @@ impl Declarations {
     /// Classified from the adapter's declared [`TypeConfig`] table (and the
     /// `String` builtin), not the resolver's output converters — this runs
     /// **before** type resolution, exactly like [`Self::value_struct_decons`].
-    fn is_leaf_vec_element(&self, elem: &syn::Type) -> bool {
-        match self.types.get(&TypeKey::from_type(elem)) {
+    fn is_leaf_vec_element(&self, elem: &crate::api::core::flat::TypeRef) -> bool {
+        match self.types.get(&elem.key()) {
             // A declared opaque handle crosses as a single `jlong` (pointer)
             // leaf that the Kotlin folder wraps into its typed handle class.
             // Enums and multi-field data classes are not leaf-folded — data
@@ -1216,7 +1200,10 @@ impl Declarations {
             // scalar projection whose raw jlong leaf the Kotlin folder wraps
             // into `ULong`. Other primitive collections retain their existing
             // unsupported status (`Vec<u8>` is the rank-0 ByteArray special).
-            None => is_string_type(elem) || TypeKey::from_type(elem).as_str() == "u64",
+            None => {
+                matches!(elem.kind(), crate::api::core::flat::TypeKind::String)
+                    || elem.key().as_str() == "u64"
+            }
         }
     }
 }
@@ -1481,23 +1468,24 @@ impl Declarations {
     pub(crate) fn build_leaf_vec_fold_elements(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-    ) -> Vec<syn::Type> {
+    ) -> Vec<TypeKey> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
-        let mut consider = |bare: syn::Type| {
-            if seen.insert(TypeKey::from_type(&bare)) && self.is_leaf_vec_element(&bare) {
-                out.push(bare);
+        let mut consider = |bare: &crate::api::core::flat::TypeRef| {
+            if seen.insert(bare.key()) && self.is_leaf_vec_element(bare) {
+                out.push(bare.key());
             }
         };
         for f in registry.flat().functions() {
             // `Vec<T>` / `Option<Vec<T>>` return. The model's `ret` already
             // normalizes an elided return to `()`, so there is no arm for it.
             {
-                let ret = f.ret.as_syn();
-                let after_opt =
-                    crate::api::core::types_util::option_inner_type(ret).unwrap_or(ret.clone());
-                if let Some(elem) = crate::api::core::types_util::vec_inner_type(&after_opt) {
-                    consider(peel_leading_ref(&elem));
+                let after_opt = match f.ret.kind() {
+                    crate::api::core::flat::TypeKind::Optional(inner) => inner,
+                    _ => &f.ret,
+                };
+                if let crate::api::core::flat::TypeKind::Vec(elem) = after_opt.kind() {
+                    consider(peel_one_borrow(elem));
                 }
             }
             // `impl Fn(&[T])` / `impl Fn([T])` callback arg. Over the model's
@@ -1508,13 +1496,24 @@ impl Declarations {
                     continue;
                 };
                 for arg in args {
-                    if let syn::Type::Slice(s) = &peel_leading_ref(arg.as_syn()) {
-                        consider(peel_leading_ref(&s.elem));
+                    if let crate::api::core::flat::TypeKind::Slice(elem) =
+                        peel_one_borrow(arg).kind()
+                    {
+                        consider(peel_one_borrow(elem));
                     }
                 }
             }
         }
         out
+    }
+}
+
+/// One `&` off, and nothing else — the model's own `borrow_target` would also
+/// see through a `Box`/`Cow`, which `peel_leading_ref` did not.
+fn peel_one_borrow(t: &crate::api::core::flat::TypeRef) -> &crate::api::core::flat::TypeRef {
+    match t.kind() {
+        crate::api::core::flat::TypeKind::Ref { inner, .. } => inner,
+        _ => t,
     }
 }
 

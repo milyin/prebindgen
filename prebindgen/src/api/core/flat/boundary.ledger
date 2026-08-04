@@ -119,11 +119,11 @@
 1	api/lang/jnigen/jni/prim.rs
 3	api/lang/jnigen/jni/prim_array.rs
 5	api/lang/jnigen/jni/render.rs
-11	api/lang/jnigen/jni/trait_impl.rs
+8	api/lang/jnigen/jni/trait_impl.rs
 2	api/lang/jnigen/jni/wire_access.rs
 2	api/lang/jnigen/util.rs
 
-# total classification sites: 105
+# total classification sites: 102
 
 ## escapes: types
 1	api/core/diagnostics.rs
@@ -146,9 +146,9 @@
 1	api/lang/jnigen/jni/render.rs
 6	api/lang/jnigen/jni/selector.rs
 3	api/lang/jnigen/jni/struct_plan.rs
-16	api/lang/jnigen/jni/trait_impl.rs
+14	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 69
+# total escapes: types: 67
 
 ## escapes: items
 1	api/core/prebindgen.rs

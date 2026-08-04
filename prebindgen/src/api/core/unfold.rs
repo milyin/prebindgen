@@ -774,13 +774,13 @@ fn wire_fixed_callbacks<M>(
 /// declared decompositions and value-struct folds win.
 pub fn apply_leaf_vec_folds<M>(
     registry: &mut Registry<M>,
-    elements: Vec<syn::Type>,
+    elements: Vec<TypeKey>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     if elements.is_empty() {
         return Ok(());
     }
-    let elem_keys: Vec<TypeKey> = elements.iter().map(TypeKey::from_type).collect();
+    let elem_keys = elements;
     // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
     let is_nominated = |bare: &crate::api::core::flat::TypeRef| elem_keys.contains(&bare.key());
     for func in declared_fns {
