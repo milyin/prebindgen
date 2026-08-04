@@ -409,17 +409,26 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 pub(crate) fn enum_input_body(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    e: &syn::ItemEnum,
+    e: &crate::api::core::flat::Enum,
 ) -> (syn::Type, syn::Expr) {
-    assert_only_unit_variants(e);
-    let ident = &e.ident;
+    let ident = &e.name;
     let ident_name = ident.to_string();
     // Qualify the variant constructors with the enum's origin module,
     // exactly as the type-position pass qualifies the enum's return type —
     // otherwise a bare `Enum::Variant` fails to resolve when the enum lives
     // in a source crate (the usual flat-library case).
     let source_module = ext.fn_module(registry, ident);
-    let arms = crate::api::core::types_util::enum_discriminant_values(e)
+    // The model's numbering, not a second copy of it: `Enum::discriminant_values`
+    // is what the frontend computed at parse time, overflow rule and all.
+    let arms = e
+        .discriminant_values()
+        .unwrap_or_else(|name| {
+            panic!(
+                "enum `{}` variant `{name}` has a non-literal discriminant; use a literal \
+                 integer value (e.g. `= 1`) or an implicit discriminant",
+                e.name
+            )
+        })
         .into_iter()
         .map(|(variant, value)| {
             let lit = proc_macro2::Literal::i64_unsuffixed(value);
@@ -447,33 +456,12 @@ pub(crate) fn enum_input_body(
 /// upstream of the cast. The body works without naming the enum type
 /// at all — `v` is already typed via the wrapper signature, so the
 /// `as` cast picks up the right type by inference.
-pub(crate) fn enum_output_body(_ext: &Declarations, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
-    assert_only_unit_variants(e);
+pub(crate) fn enum_output_body(
+    _ext: &Declarations,
+    _e: &crate::api::core::flat::Enum,
+) -> (syn::Type, syn::Expr) {
     let body: syn::Expr = syn::parse_quote!({ v as jni::sys::jint });
     (syn::parse_quote!(jni::sys::jint), body)
-}
-
-/// Hard error when an `enum_class!`-declared enum is not the shape that
-/// declarator describes. `enum_class`'s discriminant-keyed Kotlin emission
-/// and `as jint` encode both depend on the value being exactly its
-/// discriminant, which is [`EnumShape::Unit`] — a data-carrying enum is a
-/// different Kotlin surface (a `sealed interface`) reached through a
-/// different declarator, so this names that declarator rather than
-/// asserting on `syn::Fields`.
-pub(crate) fn assert_only_unit_variants(e: &syn::ItemEnum) {
-    use crate::api::core::types_util::{enum_shape, first_payload_variant, EnumShape};
-    if enum_shape(e) == EnumShape::Sum {
-        let offender = first_payload_variant(e)
-            .map(|v| v.ident.to_string())
-            .unwrap_or_default();
-        panic!(
-            "`{}` is a data-carrying enum (variant `{}` has fields): declare it \
-             with `sealed_class!({})`, not `enum_class!({})` — `enum_class` \
-             crosses the boundary as a bare discriminant and has no room for a \
-             payload",
-            e.ident, offender, e.ident, e.ident
-        );
-    }
 }
 
 /// Decide which [`NullableKind`] to fold for an `Option<_>` wrapper, given

@@ -1531,6 +1531,40 @@ fn peel_one_borrow(t: &crate::api::core::flat::TypeRef) -> &crate::api::core::fl
     }
 }
 
+/// The declared **fieldless** enum under `name`, or a panic naming the right
+/// declarator when it is a sum.
+///
+/// `enum_class` crosses the boundary as a bare discriminant and has no room for
+/// a payload, which is why this is a hard error rather than a fallthrough. It
+/// used to be `assert_only_unit_variants`, running `enum_shape` over a
+/// `syn::ItemEnum` to work out which of the two shapes it had — the
+/// classification the model makes once, at parse time, and expresses as two
+/// different elements.
+fn flat_unit_enum<'r>(
+    registry: &'r impl Conversions<KotlinMeta>,
+    name: &syn::Ident,
+    declarator: &str,
+) -> Option<&'r crate::api::core::flat::Enum> {
+    match registry.flat().declared_type(name)? {
+        crate::api::core::flat::Type::Enum(e) => Some(e),
+        crate::api::core::flat::Type::Variant(v) => {
+            let offender = v
+                .alternatives
+                .iter()
+                .find(|a| !a.is_empty())
+                .map(|a| a.name.to_string())
+                .unwrap_or_default();
+            panic!(
+                "`{name}` is a data-carrying enum (variant `{offender}` has fields): declare \
+                 it with `sealed_class!({name})`, not `{declarator}!({name})` — \
+                 `{declarator}` crosses the boundary as a bare discriminant and has no room \
+                 for a payload"
+            )
+        }
+        _ => None,
+    }
+}
+
 impl Declarations {
     fn dispatch_fn_input(
         &self,
@@ -1973,7 +2007,11 @@ impl Declarations {
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
-                    if let Some(e) = registry.flat().enum_item(&name) {
+                    // The ELEMENT, and the match is the check: a declared
+                    // `enum_class!` over a data-carrying enum is a `Variant`,
+                    // not an `Enum`, so the shape assertion the two bodies used
+                    // to run is the kind the model already decided.
+                    if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
                         let (wire, body) = enum_input_body(self, registry, e);
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg
@@ -2355,7 +2393,7 @@ impl Declarations {
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
-                    if let Some(e) = registry.flat().enum_item(&name) {
+                    if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
                         let (wire, body) = enum_output_body(self, e);
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg
