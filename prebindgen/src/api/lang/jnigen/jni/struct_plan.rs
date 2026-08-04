@@ -355,8 +355,8 @@ pub(crate) fn classify_field(
                         // The NAME off the classification, not off the last
                         // path segment: `Box<T>` IS `T` here, and taking the
                         // spelling apart would answer about the wrapper.
-                        match slot.kind() {
-                            crate::api::core::flat::TypeKind::Named { id } => id.ident(),
+                        match slot.unwrapped().kind() {
+                            crate::api::core::flat::TypeKind::Named { id, .. } => id.ident(),
                             _ => None,
                         }
                         .and_then(|name| {

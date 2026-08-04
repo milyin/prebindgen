@@ -1,14 +1,25 @@
-//! Types: a closed classification paired with the syntax it was read from.
+//! Types: the accepted syntax, paired with the tokens it was read from.
 //!
-//! [`TypeRef`] is the pattern the whole element model follows — `kind` says what
-//! the type *means*, `syntax` is the tokens the source wrote. Consumers
-//! **classify off `kind` and spell off `syntax`**; see the [module docs](super)
-//! for why that split is the point.
+//! [`TypeKind`] is the subset of [`syn::Type`] a `#[prebindgen]` crate may
+//! write — one variant per accepted **form**, nothing folded together, nothing
+//! interpreted. What `&str` and `String` have in common is a *destination*
+//! language's business, and the adapters are where that decision belongs.
+//!
+//! [`TypeRef`] pairs that kind with the tokens the source wrote. The pairing
+//! survives the pivot because the two answer different questions — the kind is
+//! the grammar an adapter may rely on, the syntax is what generated Rust must
+//! spell — but the syntax is no longer *load-bearing*: nothing is recoverable
+//! only from it. [`TypeKind::to_syn`] is what checks that, and
+//! `syntax_is_recoverable_from_kind` is what runs it over the whole acceptance
+//! corpus.
 //!
 //! [`TypeKind`] is total over the accepted grammar: a form with no variant here
-//! is a form the language does not accept, so acceptance is a consequence of
-//! lowering rather than a second list that can drift from it. Same contract, and
-//! for the same reason, as [`lower_array_len`].
+//! is a form the language does not accept, so acceptance is mostly a
+//! consequence of lowering rather than a second list that can drift from it.
+//! Mostly: [`Uninit`](TypeKind::Uninit) is accepted in one **position** only,
+//! which no variant set can express — see
+//! [`OwnedUninit`](UnsupportedTypeReason::OwnedUninit). Same contract otherwise,
+//! and for the same reason, as [`lower_array_len`].
 
 use std::{fmt, rc::Rc};
 
@@ -20,12 +31,14 @@ use super::{
 };
 use crate::SourceLocation;
 
-/// A type as the language decided it, plus the exact syntax it came from.
+/// A type as the language accepted it, plus the exact syntax it came from.
 ///
-/// The [`Origin::syntax`] slice is what removes the pressure to make `kind`
-/// lossless: a lifetime, an elided argument, a `Box` that changes nothing
-/// outside Rust all survive there at zero modelling cost, so `kind` can stay
-/// language-neutral and small.
+/// The [`Origin::syntax`] slice is what generated Rust spells. It is **not**
+/// where facts go to survive a lossy classification any more — `kind` keeps the
+/// lifetime, the wrapper and the argument it used to drop, and
+/// [`TypeKind::to_syn`] proves it. Keeping the slice anyway is cheap, exact
+/// (nothing has to reconstruct token for token what the source already wrote),
+/// and it is what makes the proof possible at all.
 ///
 /// # The invariant
 ///
@@ -70,16 +83,17 @@ use crate::SourceLocation;
 /// [`Registry::reference_output`](crate::api::core::registry::Registry::reference_output).
 #[derive(Clone, Debug)]
 pub struct TypeRef {
-    /// What the type means — the closed, destination-neutral classification.
+    /// The accepted syntax this type is — the closed grammar, not an
+    /// interpretation of it.
     pub(super) kind: TypeKind,
     /// The type as generated Rust must spell it — the source's own tokens,
     /// normalized to the flat namespace the generated crate can name (see
     /// [`Flat::parse`](super::Flat::parse)) — plus the source they came
     /// from.
     ///
-    /// The syntax can say strictly more than `kind` does — `Box<String>` is a
-    /// `Str` here — which is the point: what Rust needs and no destination
-    /// language can see lives in the tokens, not in the classification.
+    /// It says exactly what `kind` says — that is the invariant
+    /// [`TypeKind::to_syn`] checks — and it says it in the source's own tokens,
+    /// which is why generated Rust re-emits this rather than a reconstruction.
     pub(super) origin: Origin<syn::Type>,
 }
 
@@ -165,13 +179,16 @@ impl TypeRef {
         // which reads the inner optional as a boundary layer when it is part of
         // the element, and `Option<Option<T>>` as two nullable layers when the
         // boundary has one way to say absent.
+        // Through the transparent wrappers, never past the node: a layer is read
+        // off `unwrapped`, while the type this returns is the one the source
+        // spelled — `Box<Foo>` is a `Base` whose core still spells the `Box`.
         let mut core = self;
-        let optional = matches!(core.kind, TypeKind::Optional(_));
-        if let TypeKind::Optional(inner) = &core.kind {
+        let optional = matches!(core.unwrapped().kind, TypeKind::Optional(_));
+        if let TypeKind::Optional(inner) = &core.unwrapped().kind {
             core = inner;
         }
-        let iterable = matches!(core.kind, TypeKind::Sequence(_));
-        if let TypeKind::Sequence(inner) = &core.kind {
+        let iterable = matches!(core.unwrapped().kind, TypeKind::Vec(_) | TypeKind::Slice(_));
+        if let TypeKind::Vec(inner) | TypeKind::Slice(inner) = &core.unwrapped().kind {
             core = inner;
         }
 
@@ -196,14 +213,33 @@ impl TypeRef {
         // un-require types the shape says are part of the element.
         let mut out = vec![self];
         let mut cur = self;
-        if let TypeKind::Optional(inner) = &cur.kind {
+        if let TypeKind::Optional(inner) = &cur.unwrapped().kind {
             out.push(inner);
             cur = inner;
         }
-        if let TypeKind::Sequence(inner) = &cur.kind {
+        if let TypeKind::Vec(inner) | TypeKind::Slice(inner) = &cur.unwrapped().kind {
             out.push(inner);
         }
         out
+    }
+
+    /// This type with every [transparent wrapper](TRANSPARENT_WRAPPERS) peeled
+    /// off — `Box<Cow<'_, [T]>>` → the `[T]` node, an unwrapped type → itself.
+    ///
+    /// **The fold, made explicit.** [`kind`](Self::kind) is the syntax the source
+    /// wrote, wrappers and all; a consumer that does not care which of them stand
+    /// over a type says so here, at its own call site, and the ones that must put
+    /// them back in generated Rust ask [`erased_wrappers`](Self::erased_wrappers)
+    /// instead. That split is why the wrapper is no longer erased during
+    /// lowering: the model reports, the consumer decides.
+    ///
+    /// Per layer, and only this one: a wrapper under a borrow or inside an
+    /// `Option` belongs to that inner node, which answers for itself.
+    pub fn unwrapped(&self) -> &TypeRef {
+        match &self.kind {
+            TypeKind::Boxed(inner) | TypeKind::Cow { inner, .. } => inner.unwrapped(),
+            _ => self,
+        }
     }
 
     /// What an `Option<T>` wraps, else `None`.
@@ -211,8 +247,12 @@ impl TypeRef {
     /// One layer, named. [`layer_stack`](Self::layer_stack) reads the whole
     /// arity stack; these three read exactly the layer a caller asks for, which
     /// is what a consumer wants when it can only *represent* some of them.
+    ///
+    /// Read through [`unwrapped`](Self::unwrapped), like every layer accessor
+    /// here: `Box<Option<T>>` is an optional to a destination language, and the
+    /// `Box` is still on the node for whoever has to spell it.
     pub fn optional_inner(&self) -> Option<&TypeRef> {
-        match &self.kind {
+        match &self.unwrapped().kind {
             TypeKind::Optional(inner) => Some(inner),
             _ => None,
         }
@@ -220,18 +260,28 @@ impl TypeRef {
 
     /// The element of a run of values (`Vec<T>`, `[T]`), else `None`.
     pub fn sequence_elem(&self) -> Option<&TypeRef> {
-        match &self.kind {
-            TypeKind::Sequence(elem) => Some(elem),
+        match &self.unwrapped().kind {
+            TypeKind::Vec(elem) | TypeKind::Slice(elem) => Some(elem),
             _ => None,
         }
     }
 
     /// What a borrow points at, else `None`.
+    ///
+    /// Through an out-parameter's [`Uninit`](TypeKind::Uninit): `&mut
+    /// MaybeUninit<T>` points at a `T`'s storage, and the slot is not a type
+    /// anything converts, registers or crosses with. A consumer that needs to
+    /// tell the two borrows apart reads the [`kind`](Self::kind), where the
+    /// `MaybeUninit` the source wrote is still standing.
     pub fn borrow_target(&self) -> Option<&TypeRef> {
-        match &self.kind {
-            TypeKind::Ref { inner, .. } => Some(inner),
-            _ => None,
-        }
+        let inner = match &self.unwrapped().kind {
+            TypeKind::Ref { inner, .. } => inner,
+            _ => return None,
+        };
+        Some(match &inner.kind {
+            TypeKind::Uninit(slot) => slot,
+            _ => inner,
+        })
     }
 
     // ── Composition ───────────────────────────────────────────────
@@ -258,7 +308,8 @@ impl TypeRef {
         let inner = &self.origin.syntax;
         TypeRef {
             kind: TypeKind::Ref {
-                mode: RefMode::Shared,
+                lifetime: None,
+                mutable: false,
                 inner: Box::new(self.clone()),
             },
             origin: self.origin.with(syn::parse_quote!(&#inner)),
@@ -303,6 +354,7 @@ impl TypeRef {
                 id: TypeId {
                     name: ident.to_string(),
                 },
+                args: Vec::new(),
             },
             origin: Origin::new(
                 syn::parse_quote!(#ident),
@@ -383,12 +435,21 @@ impl TypeRef {
     /// they are missing from.
     pub fn erased_wrappers(&self) -> Vec<&'static str> {
         let mut names = Vec::new();
-        let mut ty = std::borrow::Cow::Borrowed(&self.origin.syntax);
-        while let Some((name, inner)) = peel_transparent(&ty) {
+        let mut ty = self;
+        loop {
+            let name = match &ty.kind {
+                TypeKind::Boxed(inner) => {
+                    ty = inner;
+                    "Box"
+                }
+                TypeKind::Cow { inner, .. } => {
+                    ty = inner;
+                    "Cow"
+                }
+                _ => return names,
+            };
             names.push(name);
-            ty = std::borrow::Cow::Owned(inner);
         }
-        names
     }
 
     /// This type's identity as a table key with every transparent wrapper
@@ -434,16 +495,26 @@ impl TypeRef {
     /// a wrapper under a borrow or inside an `Option` belongs to that inner
     /// node's own spelling.
     pub fn stripped_syntax(&self) -> syn::Type {
-        let mut ty = self.origin.syntax.clone();
-        while let Some((_, inner)) = peel_transparent(&ty) {
-            ty = inner;
-        }
-        ty
+        self.unwrapped().origin.syntax.clone()
+    }
+
+    /// True when this is `&mut T` over a **value** — not `&mut MaybeUninit<T>`.
+    ///
+    /// The one distinction an out-parameter's form makes to a converter: an
+    /// exclusive borrow may be read before it is written and an out-parameter
+    /// may not, so the two cannot share a conversion. Everything else about the
+    /// slot — that it points at a `T`, that the `T` is what crosses — is
+    /// [`borrow_target`](Self::borrow_target)'s answer.
+    pub fn is_exclusive_borrow(&self) -> bool {
+        matches!(
+            &self.unwrapped().kind,
+            TypeKind::Ref { mutable: true, inner, .. } if !matches!(inner.kind, TypeKind::Uninit(_))
+        )
     }
 
     /// The `Ok` and `Err` sides when this is a `Result`, else `None`.
     pub fn fallible_parts(&self) -> Option<(&TypeRef, &TypeRef)> {
-        match &self.kind {
+        match &self.unwrapped().kind {
             TypeKind::Fallible { ok, err } => Some((ok, err)),
             _ => None,
         }
@@ -468,7 +539,7 @@ impl TypeRef {
     /// callback but was refused (a missing `Send`, an `impl Fn() -> u8`): the
     /// acceptance already happened, and asking again is how the two drift.
     pub fn callback_args(&self) -> Option<&[TypeRef]> {
-        match &self.kind {
+        match &self.unwrapped().kind {
             TypeKind::Callback { args } => Some(args),
             _ => None,
         }
@@ -476,7 +547,7 @@ impl TypeRef {
 
     /// The extent of this type when it is an array, else `None`.
     pub fn array_extent(&self) -> Option<&ArrayExtent> {
-        match &self.kind {
+        match &self.unwrapped().kind {
             TypeKind::Array { extent, .. } => Some(extent),
             _ => None,
         }
@@ -503,16 +574,24 @@ impl TypeRef {
         declared: &std::collections::HashSet<String>,
     ) -> Option<String> {
         match &self.kind {
-            TypeKind::Named { id } => (!declared.contains(&id.name)).then(|| id.name.clone()),
-            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
-                t.first_unresolved(declared)
-            }
+            // The name resolves; the arguments do not. No declaration takes type
+            // parameters, so `Foo<Bar>` is one reference to `Foo` — requiring
+            // `Bar` to be declared as well would refuse a reference the source
+            // crate compiles.
+            TypeKind::Named { id, .. } => (!declared.contains(&id.name)).then(|| id.name.clone()),
+            TypeKind::Optional(t)
+            | TypeKind::Vec(t)
+            | TypeKind::Slice(t)
+            | TypeKind::Boxed(t)
+            | TypeKind::Uninit(t)
+            | TypeKind::Cow { inner: t, .. }
+            | TypeKind::Ref { inner: t, .. } => t.first_unresolved(declared),
             TypeKind::Array { elem, .. } => elem.first_unresolved(declared),
             TypeKind::Fallible { ok, err } => ok
                 .first_unresolved(declared)
                 .or_else(|| err.first_unresolved(declared)),
             TypeKind::Callback { args } => args.iter().find_map(|a| a.first_unresolved(declared)),
-            TypeKind::Scalar(_) | TypeKind::Str | TypeKind::Unit => None,
+            TypeKind::Scalar(_) | TypeKind::Str | TypeKind::String | TypeKind::Unit => None,
         }
     }
 
@@ -531,10 +610,20 @@ impl TypeRef {
         out
     }
 
+    // Both walks descend through [`unwrapped`](Self::unwrapped): a transparent
+    // wrapper is not a type of its own to a consumer that indexes or converts,
+    // so `Box<Vec<Foo>>` reaches `Foo` and yields no node in between.
     fn collect_refs<'a>(&'a self, out: &mut Vec<&'a TypeRef>) {
         out.push(self);
-        match &self.kind {
-            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
+        match &self.unwrapped().kind {
+            // Through [`borrow_target`](Self::borrow_target), so an
+            // out-parameter reaches the value and not its slot.
+            TypeKind::Ref { .. } => {
+                if let Some(t) = self.borrow_target() {
+                    t.collect_refs(out)
+                }
+            }
+            TypeKind::Optional(t) | TypeKind::Vec(t) | TypeKind::Slice(t) | TypeKind::Uninit(t) => {
                 t.collect_refs(out)
             }
             TypeKind::Array { elem, .. } => elem.collect_refs(out),
@@ -543,79 +632,98 @@ impl TypeRef {
                 err.collect_refs(out);
             }
             TypeKind::Callback { args } => args.iter().for_each(|t| t.collect_refs(out)),
-            TypeKind::Named { .. } | TypeKind::Scalar(_) | TypeKind::Str | TypeKind::Unit => {}
+            TypeKind::Named { .. }
+            | TypeKind::Scalar(_)
+            | TypeKind::Str
+            | TypeKind::String
+            | TypeKind::Unit => {}
+            // `unwrapped` peeled these off, so reaching one is impossible.
+            TypeKind::Boxed(_) | TypeKind::Cow { .. } => unreachable!(),
         }
     }
 
     fn collect_extents<'a>(&'a self, out: &mut Vec<&'a ArrayExtent>) {
-        match &self.kind {
+        match &self.unwrapped().kind {
             TypeKind::Array { elem, extent } => {
                 out.push(extent);
                 elem.collect_extents(out);
             }
-            TypeKind::Optional(t) | TypeKind::Sequence(t) | TypeKind::Ref { inner: t, .. } => {
-                t.collect_extents(out)
-            }
+            TypeKind::Optional(t)
+            | TypeKind::Vec(t)
+            | TypeKind::Slice(t)
+            | TypeKind::Uninit(t)
+            | TypeKind::Ref { inner: t, .. } => t.collect_extents(out),
             TypeKind::Fallible { ok, err } => {
                 ok.collect_extents(out);
                 err.collect_extents(out);
             }
             TypeKind::Callback { args } => args.iter().for_each(|t| t.collect_extents(out)),
-            TypeKind::Named { .. } => {}
-            TypeKind::Scalar(_) | TypeKind::Str | TypeKind::Unit => {}
+            TypeKind::Named { .. }
+            | TypeKind::Scalar(_)
+            | TypeKind::Str
+            | TypeKind::String
+            | TypeKind::Unit => {}
+            TypeKind::Boxed(_) | TypeKind::Cow { .. } => unreachable!(),
         }
     }
 }
 
-/// What a [`TypeRef`] means. The variants are the accepted type grammar.
+/// The **accepted syntax** of a [`TypeRef`]: the subset of [`syn::Type`] a
+/// `#[prebindgen]` crate may write, and nothing more.
 ///
-/// One Rust spelling per concept is **not** the rule here — several are. A
-/// concept earns a variant when a destination language would act on it; a
-/// spelling that changes nothing outside Rust folds into the concept it carries
-/// and survives in [`TypeRef::syntax`]:
+/// One variant per accepted Rust **form**, not per destination concept. `str`
+/// and `String` are two forms and get two variants; `Box<T>` is a form of its
+/// own and does not disappear into `T`. Nothing here folds two spellings
+/// together, which is what makes [`TypeRef::syntax`] recoverable from this —
+/// see [`TypeKind::to_syn`], the round-trip that checks it.
 ///
-/// | Spelling | Kind | Why |
-/// |---|---|---|
-/// | `String`, `str` | [`Str`](TypeKind::Str) | one concept, two Rust types |
-/// | `Vec<T>`, `[T]` | [`Sequence`](TypeKind::Sequence) | a run of `T`; owned vs borrowed is the [`Ref`](TypeKind::Ref) layer's fact, not a second variant |
-/// | `Box<T>` | *whatever `T` is* | an owned `T` either way; nothing outside Rust can tell |
+/// # Why it is only syntax
+///
+/// It was a *destination-neutral classification* once, and that leaked: `&T`
+/// earned a layer while `Box<T>` was declared transparent, on no principle
+/// either adapter shared, and `Cbindgen` went on picking its C type from the
+/// Rust spelling anyway. Deciding that `&str` and `String` are both "a string"
+/// is a **destination** decision, so it belongs to the destination — the model
+/// hands over what the source wrote and stays out of it.
+///
+/// Where two adapters want the same fold, it is a *reading*, not a variant:
+/// [`TypeRef::unwrapped`] peels `Box`/`Cow` for the consumers that want them
+/// gone, and the ones that must rebuild the Rust value ask
+/// [`TypeRef::erased_wrappers`] instead. One helper, visible at the call site,
+/// rather than a fold baked into every classification.
 #[derive(Clone, Debug)]
 pub enum TypeKind {
-    /// A primitive with a fixed C/JVM counterpart.
-    Scalar(ScalarKind),
-    /// A UTF-8 string — `String` owned, `str` behind a [`Ref`](TypeKind::Ref).
+    /// A primitive with a fixed C/JVM counterpart — `u8`, `bool`, `f64`.
     ///
-    /// Both spellings are one concept: `&str` and `&String` are each a borrowed
-    /// string and classify identically, which is what every adapter already
-    /// does by hand.
+    /// A closed set of bare idents, so recognising one is reading the syntax
+    /// rather than interpreting it — and it keeps every adapter off a name
+    /// table of its own.
+    Scalar(ScalarKind),
+    /// `str` — unsized, so it is only ever reached through a
+    /// [`Ref`](TypeKind::Ref) or a wrapper.
     Str,
+    /// `String`.
+    String,
     /// `Option<T>`.
     Optional(Box<TypeRef>),
-    /// A run of `T` — `Vec<T>` owned, `[T]` behind a [`Ref`](TypeKind::Ref).
-    ///
-    /// One variant, because ownership is already the [`Ref`](TypeKind::Ref)
-    /// layer's fact: `&[T]` is `Ref(Sequence)`, `Vec<T>` is `Sequence`. A
-    /// second variant would encode ownership twice and let the two copies
-    /// disagree. `[T; N]` is *not* this — a fixed extent is a different
-    /// concept, see [`Array`](TypeKind::Array).
-    Sequence(Box<TypeRef>),
+    /// `Vec<T>`.
+    Vec(Box<TypeRef>),
+    /// `[T]` — the unsized run, reached through a [`Ref`](TypeKind::Ref) or a
+    /// wrapper. Not the same form as [`Vec`](TypeKind::Vec), so not the same
+    /// variant.
+    Slice(Box<TypeRef>),
     /// `Result<T, E>`.
     Fallible { ok: Box<TypeRef>, err: Box<TypeRef> },
     /// Any other named type: a `#[prebindgen]` struct or enum, or a foreign
     /// path.
     ///
-    /// `id` is the type's **identity** — a name, not syntax, so nothing outside
-    /// this module has to take a path apart to learn what a type is. The last
-    /// segment's generic arguments live in `args`, and only the *type*
-    /// arguments: a lifetime argument says nothing a destination language can
-    /// act on. The full spelling is in [`TypeRef::syntax`] for whoever re-emits it.
-    Named { id: TypeId },
+    /// `id` is the type's **identity** — a name, not a `syn::Path`, so nothing
+    /// downstream has to take a path apart to learn what a type is. `args` is
+    /// the last segment's generic arguments, in the order they were written and
+    /// including lifetimes, because dropping either would make the spelling
+    /// unrecoverable.
+    Named { id: TypeId, args: Vec<GenericArg> },
     /// `[T; N]` — a run of `T` whose length is known at compile time.
-    ///
-    /// Deliberately not a [`Sequence`](TypeKind::Sequence) with an optional
-    /// extent: a fixed array crosses by value as a primitive array, a `Vec`
-    /// crosses as a heap collection, and every adapter branches between the two
-    /// at every site.
     Array {
         elem: Box<TypeRef>,
         /// Boxed: an extent carries an [`Origin`] over the length expression, which
@@ -623,43 +731,157 @@ pub enum TypeKind {
         /// The same trade-off [`Unsupported::error`](super::Unsupported) makes.
         extent: Box<ArrayExtent>,
     },
-    /// A borrow — `&T`, `&mut T`, or `&mut MaybeUninit<T>`. The lifetime is
-    /// spelling, so it lives in [`TypeRef::syntax`] rather than here.
+    /// A borrow — `&T` or `&mut T`, with the lifetime the source wrote.
     ///
-    /// This is the ownership layer for every concept underneath it: `&str` is
-    /// `Ref(Str)`, `&[T]` is `Ref(Sequence)`. A shared-ownership handle
-    /// (`Arc<T>`, `Rc<T>`) belongs here too when the language accepts one.
+    /// An out-parameter is `&mut` over [`Uninit`](TypeKind::Uninit), which is
+    /// what the source spells. What that *means* at a boundary — the caller
+    /// supplies the slot, the callee fills it — is the adapter's reading of the
+    /// form, not a third value of a mode enum.
+    Ref {
+        lifetime: Option<syn::Lifetime>,
+        mutable: bool,
+        inner: Box<TypeRef>,
+    },
+    /// `Box<T>`.
     ///
-    /// `inner` is always the borrowed *value's* type, so an out-parameter's
-    /// `MaybeUninit` is absorbed into [`RefMode::Out`] rather than wrapping it:
-    /// uninitialized-ness is a property of the **borrow**, not of the type, and
-    /// it is meaningless anywhere else.
-    Ref { mode: RefMode, inner: Box<TypeRef> },
+    /// A form of its own. It was erased once, on the grounds that no
+    /// destination language can tell `Box<T>` from `T` — true, and still the
+    /// adapter's call to make: [`TypeRef::unwrapped`] makes it, on demand.
+    Boxed(Box<TypeRef>),
+    /// `Cow<'a, T>`.
+    Cow {
+        lifetime: Option<syn::Lifetime>,
+        inner: Box<TypeRef>,
+    },
+    /// `MaybeUninit<T>`.
+    ///
+    /// Accepted **only** directly under a `&mut` — see
+    /// [`UnsupportedTypeReason::OwnedUninit`]. It has a variant because the
+    /// source writes it; that it is refused elsewhere is an acceptance rule,
+    /// which is a separate question from how the form is represented.
+    Uninit(Box<TypeRef>),
     /// `impl Fn(A, B, …) + Send + Sync + 'static` — the callback form.
     Callback { args: Vec<TypeRef> },
     /// `()`.
     Unit,
 }
 
-/// What a borrow permits, and what the callee owes.
+/// One generic argument of a [`Named`](TypeKind::Named) type, as written.
 ///
-/// One axis with three values rather than a `mutable` flag plus a wrapper, so the
-/// combinations that mean nothing at a boundary — a shared borrow of
-/// uninitialized storage, an owned `MaybeUninit` — cannot be written down.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RefMode {
-    /// `&T` — the callee may read it and must not write it.
-    Shared,
-    /// `&mut T` — the callee may read and write an already-valid `T`.
-    Exclusive,
-    /// `&mut MaybeUninit<T>` — an **out-parameter**: the caller supplies storage
-    /// only, and the callee's job is to make it a valid `T`. The callee may not
-    /// read it first.
+/// A lifetime is kept rather than dropped: no destination language acts on it,
+/// but `Foo<'a>` is not `Foo`, and a model that cannot say which one the source
+/// wrote cannot claim to have lost nothing.
+#[derive(Clone, Debug)]
+pub enum GenericArg {
+    Lifetime(syn::Lifetime),
+    /// Boxed so a lifetime argument — the common one, and a fraction of the
+    /// size — does not pay for a type it is not. The same trade-off
+    /// [`Array`](TypeKind::Array)'s extent makes.
+    Type(Box<TypeRef>),
+}
+
+impl TypeKind {
+    /// This kind spelled back as Rust — the inverse of the lowering.
     ///
-    /// This is a boundary concept every destination language has (C's `T *out`),
-    /// which is why it is modelled here rather than left as a nominal
-    /// `MaybeUninit` for each adapter to recognise.
-    Out,
+    /// # What it is for
+    ///
+    /// **Not** for generating code: generated Rust spells
+    /// [`TypeRef::syntax`], the source's own tokens, and always will. This
+    /// exists so that claim can be *checked* — a kind that cannot reproduce the
+    /// syntax it was lowered from has dropped something, and the round-trip test
+    /// is what says so before a consumer has to discover it.
+    ///
+    /// Two forms reconstruct up to their own freedom rather than token for
+    /// token, because the model keeps what was written and not how it was
+    /// written:
+    ///
+    /// * a `Group` or `Paren` around a type, which the lowering sees through;
+    /// * a [`Callback`](TypeKind::Callback)'s bound *order* — `Send + Sync` and
+    ///   `Sync + Send` are one accepted form, and nothing reads the order.
+    pub fn to_syn(&self) -> syn::Type {
+        let opt_lifetime =
+            |l: &Option<syn::Lifetime>| l.as_ref().map(|l| quote::quote!(#l)).unwrap_or_default();
+        match self {
+            Self::Scalar(k) => {
+                let ident = syn::Ident::new(k.as_str(), proc_macro2::Span::call_site());
+                syn::parse_quote!(#ident)
+            }
+            Self::Str => syn::parse_quote!(str),
+            Self::String => syn::parse_quote!(String),
+            Self::Optional(t) => {
+                let inner = t.kind.to_syn();
+                syn::parse_quote!(Option<#inner>)
+            }
+            Self::Vec(t) => {
+                let inner = t.kind.to_syn();
+                syn::parse_quote!(Vec<#inner>)
+            }
+            Self::Slice(t) => {
+                let inner = t.kind.to_syn();
+                syn::parse_quote!([#inner])
+            }
+            Self::Boxed(t) => {
+                let inner = t.kind.to_syn();
+                syn::parse_quote!(Box<#inner>)
+            }
+            Self::Uninit(t) => {
+                let inner = t.kind.to_syn();
+                syn::parse_quote!(MaybeUninit<#inner>)
+            }
+            Self::Cow { lifetime, inner } => {
+                let lt = opt_lifetime(lifetime);
+                let inner = inner.kind.to_syn();
+                if lt.is_empty() {
+                    syn::parse_quote!(Cow<#inner>)
+                } else {
+                    syn::parse_quote!(Cow<#lt, #inner>)
+                }
+            }
+            Self::Fallible { ok, err } => {
+                let (ok, err) = (ok.kind.to_syn(), err.kind.to_syn());
+                syn::parse_quote!(Result<#ok, #err>)
+            }
+            Self::Ref {
+                lifetime,
+                mutable,
+                inner,
+            } => {
+                let lt = opt_lifetime(lifetime);
+                let mutability = mutable.then(|| quote::quote!(mut)).unwrap_or_default();
+                let inner = inner.kind.to_syn();
+                syn::parse_quote!(& #lt #mutability #inner)
+            }
+            Self::Array { elem, extent } => {
+                let elem = elem.kind.to_syn();
+                let len = &extent.origin.syntax;
+                syn::parse_quote!([#elem; #len])
+            }
+            Self::Named { id, args } => {
+                // The name is a spelling, so it parses back as one — including
+                // the leading `::` and any path segments before the last.
+                let mut path: syn::Path =
+                    syn::parse_str(&id.name).expect("a name this model built from a path");
+                if !args.is_empty() {
+                    let args = args.iter().map(|a| match a {
+                        GenericArg::Lifetime(l) => quote::quote!(#l),
+                        GenericArg::Type(t) => {
+                            let t = t.kind.to_syn();
+                            quote::quote!(#t)
+                        }
+                    });
+                    let last = path.segments.last_mut().expect("a non-empty path");
+                    last.arguments =
+                        syn::PathArguments::AngleBracketed(syn::parse_quote!(<#(#args),*>));
+                }
+                syn::parse_quote!(#path)
+            }
+            Self::Callback { args } => {
+                let args = args.iter().map(|a| a.kind.to_syn());
+                syn::parse_quote!(impl Fn(#(#args),*) + Send + Sync + 'static)
+            }
+            Self::Unit => syn::parse_quote!(()),
+        }
+    }
 }
 
 /// A nominal type's identity: a name, and nothing else.
@@ -793,17 +1015,18 @@ pub enum UnsupportedTypeReason {
     /// lowered a tuple, so accepting one would defer the failure to a late
     /// "unresolved type" instead of naming it here.
     UnsupportedTuple,
-    /// `MaybeUninit<T>` somewhere other than behind a `&mut`.
+    /// `MaybeUninit<T>` somewhere other than directly under a `&mut`.
     ///
-    /// Uninitialized storage is a property of a *borrow*, not of a type — see
-    /// [`RefMode::Out`]. Owned, returned or stored in a field it promises nothing
-    /// a destination language can use, and reading it would be undefined.
+    /// The one acceptance rule about a **position** rather than a form:
+    /// [`Uninit`](TypeKind::Uninit) exists, and only an out-parameter can hold
+    /// one. Owned, returned or stored in a field it promises nothing a
+    /// destination language can use, and reading it would be undefined.
     OwnedUninit,
     /// `&MaybeUninit<T>` — a shared borrow of uninitialized storage.
     ///
     /// A shared borrow promises a readable `T`, and this supplies storage that may
-    /// not be one. Only `&mut MaybeUninit<T>` means anything: see
-    /// [`RefMode::Out`].
+    /// not be one. Only `&mut MaybeUninit<T>` means anything — see
+    /// [`Uninit`](TypeKind::Uninit).
     SharedUninit,
     /// A path with a qualified self — `<T as Trait>::Assoc`.
     ///
@@ -885,25 +1108,30 @@ impl std::error::Error for UnsupportedType {}
 /// `at` is the origin of the item this type was written in — the location every
 /// node lowered from that item shares, and the crate an array extent's const
 /// must come from.
-/// The wrappers this language **erases**: `W<T>` classifies as whatever `T`
-/// classifies as, because no destination language can tell them apart.
+/// The wrappers a destination language **cannot see**: `W<T>` crosses as
+/// whatever `T` crosses as, because nothing outside Rust can tell them apart.
 ///
-/// The single source of truth for that set. [`lower_type`] erases exactly these,
-/// and an adapter that has to *undo* one in generated Rust reads the same list —
-/// so the question "which wrappers are transparent?" has one answer instead of a
-/// copy per consumer that can drift out of step.
+/// The single source of truth for that set. [`TypeRef::unwrapped`] peels exactly
+/// these, and an adapter that has to *put one back* in generated Rust reads the
+/// same list — so the question "which wrappers are transparent?" has one answer
+/// instead of a copy per consumer that can drift out of step.
 ///
-/// Adding one is adding a row here. What it means for a given destination is
-/// that adapter's business: erasing a wrapper says nothing about whether Rust
-/// can move a value out of it, which is why `Cow` is on this list and is still
+/// It is a **reading**, not a classification: [`TypeKind`] keeps every wrapper
+/// the source wrote, and a consumer says here, at its own call site, that it
+/// does not care. What that means for a given destination is still that
+/// adapter's business — erasing a wrapper says nothing about whether Rust can
+/// move a value out of it, which is why `Cow` is on this list and is still
 /// refused where a converter would have to move its payload.
 pub const TRANSPARENT_WRAPPERS: &[&str] = &["Box", "Cow"];
 
 /// Strip one [transparent wrapper](TRANSPARENT_WRAPPERS) from a **spelling**,
 /// naming the one removed — `Box<Option<T>>` → `("Box", Option<T>)`.
 ///
-/// Spelling in, spelling out: this is the inverse of the erasure, for a consumer
-/// that must reconstruct in Rust what the classification dropped.
+/// Spelling in, spelling out — the syntax-side peer of
+/// [`TypeRef::unwrapped`], for an adapter comparing a spelling it composed
+/// against one it has a converter for. Here rather than in the adapter because
+/// taking a `syn::Type` apart is this module's job, and doing it next door would
+/// put a classifier back outside the model.
 pub fn peel_transparent(ty: &syn::Type) -> Option<(&'static str, syn::Type)> {
     let syn::Type::Path(tp) = ty else { return None };
     let seg = tp.path.segments.last()?;
@@ -933,25 +1161,27 @@ pub(crate) fn lower_type(
         // spelling, which is the one a consumer wants to emit.
         syn::Type::Group(g) => return lower_type(&g.elem, consts, at),
         syn::Type::Paren(p) => return lower_type(&p.elem, consts, at),
-        // The mode is read off the borrow AND its target together, because
-        // `&mut MaybeUninit<T>` is one concept — an out-parameter — rather than a
-        // mutable borrow of a distinct `MaybeUninit` type.
+        // The borrow and its target are read together for one reason only: a
+        // `MaybeUninit` is accepted **here** and refused everywhere else, so the
+        // position is what decides, and only this arm knows it.
         syn::Type::Reference(r) => {
-            let (mode, target) = match maybe_uninit_inner(&r.elem) {
-                Some(inner) if r.mutability.is_some() => (RefMode::Out, inner),
+            let inner = match maybe_uninit_inner(&r.elem) {
+                Some(uninit) if r.mutability.is_some() => TypeRef {
+                    kind: TypeKind::Uninit(Box::new(lower_type(&uninit, consts, at)?)),
+                    origin: Origin::new((*r.elem).clone(), Rc::clone(at)),
+                },
                 // `&MaybeUninit<T>` promises a readable `T` and supplies storage
                 // that may not be one. Nothing at a boundary can use it.
                 Some(_) => return Err(fail(UnsupportedTypeReason::SharedUninit)),
-                None if r.mutability.is_some() => (RefMode::Exclusive, (*r.elem).clone()),
-                None => (RefMode::Shared, (*r.elem).clone()),
+                None => lower_type(&r.elem, consts, at)?,
             };
             TypeKind::Ref {
-                mode,
-                inner: Box::new(lower_type(&target, consts, at)?),
+                lifetime: r.lifetime.clone(),
+                mutable: r.mutability.is_some(),
+                inner: Box::new(inner),
             }
         }
-        // `[T]` is the borrowed spelling of the same concept `Vec<T>` owns.
-        syn::Type::Slice(s) => TypeKind::Sequence(Box::new(lower_type(&s.elem, consts, at)?)),
+        syn::Type::Slice(s) => TypeKind::Slice(Box::new(lower_type(&s.elem, consts, at)?)),
         _ if is_unit_type(ty) => TypeKind::Unit,
         // Only the unit is in the language. Refusing here names the type;
         // accepting would defer the failure to an "unresolved type" much later.
@@ -1007,20 +1237,23 @@ fn lower_path(
     };
     let name = last.ident.to_string();
 
-    // Type arguments only. A lifetime argument is accepted and dropped: it is
-    // part of the spelling (`Foo<'a>` is not `Foo`), and the spelling is in
-    // `TypeRef::origin`, so modelling it would be a second copy of one fact.
+    // Every argument is kept, in the order it was written — a lifetime among
+    // them. `Foo<'a>` is not `Foo`, and a model that drops the difference cannot
+    // spell the type back.
     let mut has_lifetime_arg = false;
-    let args: Vec<TypeRef> = match &last.arguments {
+    let args: Vec<GenericArg> = match &last.arguments {
         syn::PathArguments::None => Vec::new(),
         syn::PathArguments::AngleBracketed(ab) => {
             let mut out = Vec::new();
             for a in &ab.args {
                 match a {
                     syn::GenericArgument::Type(t) => {
-                        out.push(lower_type(t, consts, at)?);
+                        out.push(GenericArg::Type(Box::new(lower_type(t, consts, at)?)));
                     }
-                    syn::GenericArgument::Lifetime(_) => has_lifetime_arg = true,
+                    syn::GenericArgument::Lifetime(l) => {
+                        has_lifetime_arg = true;
+                        out.push(GenericArg::Lifetime(l.clone()));
+                    }
                     _ => return Err(fail(UnsupportedTypeReason::UnsupportedGenericArgument)),
                 }
             }
@@ -1030,6 +1263,19 @@ fn lower_path(
             return Err(fail(UnsupportedTypeReason::UnsupportedForm))
         }
     };
+    // `Named` holds the last segment's arguments, so a generic anywhere else is
+    // a spelling this model cannot give back. Refused rather than dropped: no
+    // flat API writes `a::B<T>::C`.
+    if tp
+        .path
+        .segments
+        .iter()
+        .rev()
+        .skip(1)
+        .any(|s| !matches!(s.arguments, syn::PathArguments::None))
+    {
+        return Err(fail(UnsupportedTypeReason::UnsupportedForm));
+    }
 
     // A builtin must be spelled BARE. `normalize_type` has already reduced the
     // real std paths (`std::option::Option` → `Option`) at ingest and
@@ -1038,16 +1284,14 @@ fn lower_path(
     // is not `Option`, and collapsing it would silently retype the field.
     let is_bare = tp.path.leading_colon.is_none() && tp.path.segments.len() == 1;
     if is_bare {
-        if args.is_empty() && !has_lifetime_arg {
+        if args.is_empty() {
             if let Some(kind) = ScalarKind::from_name(&name) {
                 return Ok(TypeKind::Scalar(kind));
             }
-            // `String` and `str` are one concept. `str` is unsized and so only
-            // ever appears behind a `&`, which the `Ref` layer already records
-            // — classifying it as a nominal type instead would send every
-            // adapter looking for an item named `str` to resolve.
-            if name == "String" || name == "str" {
-                return Ok(TypeKind::Str);
+            match name.as_str() {
+                "String" => return Ok(TypeKind::String),
+                "str" => return Ok(TypeKind::Str),
+                _ => {}
             }
         }
         // A builtin generic takes TYPE arguments only — a lifetime on one is not a
@@ -1055,9 +1299,15 @@ fn lower_path(
         // lifetime, so it is the one builtin where a lifetime argument is expected
         // rather than refused.
         if !has_lifetime_arg || name == "Cow" {
-            let mut args = args;
+            let mut types: Vec<TypeRef> = args
+                .iter()
+                .filter_map(|a| match a {
+                    GenericArg::Type(t) => Some((**t).clone()),
+                    GenericArg::Lifetime(_) => None,
+                })
+                .collect();
             let arity = |n: usize| {
-                if args.len() == n {
+                if types.len() == n {
                     Ok(())
                 } else {
                     Err(fail(UnsupportedTypeReason::WrongGenericArity {
@@ -1068,40 +1318,41 @@ fn lower_path(
             match name.as_str() {
                 "Option" => {
                     arity(1)?;
-                    return Ok(TypeKind::Optional(Box::new(args.remove(0))));
+                    return Ok(TypeKind::Optional(Box::new(types.remove(0))));
                 }
                 "Vec" => {
                     arity(1)?;
-                    return Ok(TypeKind::Sequence(Box::new(args.remove(0))));
+                    return Ok(TypeKind::Vec(Box::new(types.remove(0))));
                 }
-                // Reached here, it is not behind a `&mut`, so it is not an
-                // out-parameter — see `RefMode::Out`, which is the only place
-                // uninitialized storage means anything.
-                "MaybeUninit" => return Err(fail(UnsupportedTypeReason::OwnedUninit)),
-                // `Box<T>` **is** `T`: an owned value either way, and no
-                // destination language can tell the two apart. So it carries no
-                // kind of its own and classifies as whatever it wraps — the
-                // `Box` survives in `TypeRef::origin`, which is what generated
-                // Rust spells. (A shared-ownership handle would classify as a
-                // `Ref` for the same reason, when the language accepts one.)
-                // `Box` and `Cow` are erased — see `TRANSPARENT_WRAPPERS`,
-                // which is the list this arm consults so the set cannot drift
-                // from the one adapters undo.
-                w if TRANSPARENT_WRAPPERS.contains(&w) => {
+                "Box" => {
                     arity(1)?;
-                    return Ok(args.remove(0).kind);
+                    return Ok(TypeKind::Boxed(Box::new(types.remove(0))));
                 }
+                "Cow" => {
+                    arity(1)?;
+                    return Ok(TypeKind::Cow {
+                        lifetime: args.iter().find_map(|a| match a {
+                            GenericArg::Lifetime(l) => Some(l.clone()),
+                            _ => None,
+                        }),
+                        inner: Box::new(types.remove(0)),
+                    });
+                }
+                // Reached here it is not directly under a `&mut`, and that is the
+                // one position where uninitialized storage means anything —
+                // `TypeKind::Uninit` is built by the reference arm alone.
+                "MaybeUninit" => return Err(fail(UnsupportedTypeReason::OwnedUninit)),
                 "Result" => {
                     arity(2)?;
-                    let err = Box::new(args.remove(1));
-                    let ok = Box::new(args.remove(0));
+                    let err = Box::new(types.remove(1));
+                    let ok = Box::new(types.remove(0));
                     return Ok(TypeKind::Fallible { ok, err });
                 }
-                _ => return Ok(named(tp)),
+                _ => return Ok(named(tp, args)),
             }
         }
     }
-    Ok(named(tp))
+    Ok(named(tp, args))
 }
 
 /// If `ty` is a bare `MaybeUninit<T>`, the `T` it holds storage for.
@@ -1144,24 +1395,25 @@ pub(crate) fn is_unit_type(ty: &syn::Type) -> bool {
 
 /// `Named` with the identity read off the path: every segment joined, minus the
 /// generic arguments, which are already in `args`.
-/// `Named` with the identity read off the path: every segment joined, minus the
-/// generic arguments.
 ///
-/// The arguments are **lowered but not retained** — a bad type inside one is still
-/// diagnosed, it just leaves no trace. Nothing could read them: a surviving
-/// reference resolves to a declared type, and no declaration takes type parameters,
-/// so `Foo<u8>` against a declared `Foo` would not compile in the source crate.
-/// Accepting *instantiated* generics — `Wrapper<u8>` as its own declared type — is
-/// what would bring the field back.
-fn named(tp: &syn::TypePath) -> TypeKind {
-    let name = tp
-        .path
-        .segments
-        .iter()
-        .map(|s| s.ident.to_string())
-        .collect::<Vec<_>>()
-        .join("::");
+/// The leading `::` rides along in the name when the source wrote one. It is
+/// nothing a destination language acts on — but the name is what
+/// [`TypeKind::to_syn`] spells the path back from, and `::a::B` is not `a::B`.
+fn named(tp: &syn::TypePath, args: Vec<GenericArg>) -> TypeKind {
+    let mut name = String::new();
+    if tp.path.leading_colon.is_some() {
+        name.push_str("::");
+    }
+    name.push_str(
+        &tp.path
+            .segments
+            .iter()
+            .map(|s| s.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("::"),
+    );
     TypeKind::Named {
         id: TypeId { name },
+        args,
     }
 }

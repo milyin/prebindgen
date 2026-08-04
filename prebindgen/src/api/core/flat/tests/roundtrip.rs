@@ -1,11 +1,16 @@
-//! The round-trip property: an element's syntax slices are the source's own
-//! tokens, sliced — never a reconstruction.
+//! The round-trip property, in both directions:
 //!
-//! Every test here would also pass against a model that rebuilt syntax from its
-//! classification *for the easy cases*. The ones that matter are the cases where
-//! a reconstruction loses: an empty tuple variant, a hex discriminant, a
-//! lifetime, an aliased path, a doc comment. Those are the reason the slices
-//! ride along at all.
+//! * an element's syntax slices are the source's own tokens, sliced — never a
+//!   reconstruction. A delimiter, a hex discriminant, a doc comment survive
+//!   because the slice was kept, and that is what generated Rust re-emits;
+//! * and the type grammar can spell them back. [`TypeKind`] is the accepted
+//!   subset of `syn::Type` and nothing less, so a kind that could not reproduce
+//!   the tokens it was lowered from would have dropped something —
+//!   `syntax_is_recoverable_from_kind` is where that is checked.
+//!
+//! The second is what keeps the first honest. Slices ride along because they
+//! are exact and free, not because the classification needs them to be
+//! complete.
 
 use super::*;
 
@@ -113,7 +118,7 @@ fn an_item_and_its_components_share_one_location() {
         assert!(Rc::ptr_eq(item, &field.ty.origin.location), "field type");
     }
     // And down through a nested type's arguments.
-    let TypeKind::Sequence(elem) = &s.fields[1].ty.kind else {
+    let TypeKind::Vec(elem) = &s.fields[1].ty.kind else {
         panic!("a sequence");
     };
     assert!(Rc::ptr_eq(item, &elem.origin.location), "element type");
@@ -463,4 +468,94 @@ fn an_unsupported_item_keeps_its_tokens() {
     let element = parse_one(source.clone());
     assert!(matches!(element, Element::Unsupported(_)));
     assert_eq!(tokens(&element.syntax()), tokens(&source));
+}
+
+/// **Every accepted form spells back exactly what was written.**
+///
+/// The property the pivot rests on: [`TypeKind`] is the accepted subset of
+/// `syn::Type`, so the tokens are recoverable from the kind alone. It is checked
+/// rather than relied on — generated Rust still emits the slice — because a kind
+/// that has quietly stopped carrying a lifetime, a wrapper or a path prefix is
+/// exactly the drift the old design shipped, and it was invisible while the
+/// slice was there to cover for it.
+///
+/// One row per accepted form, plus the compositions where a lost fact would hide
+/// under an outer layer.
+#[test]
+fn syntax_is_recoverable_from_kind() {
+    for spelling in [
+        // Scalars, the unit, the two string types.
+        quote::quote!(u8),
+        quote::quote!(bool),
+        quote::quote!(f64),
+        quote::quote!(()),
+        quote::quote!(String),
+        quote::quote!(&str),
+        // The builtin generics.
+        quote::quote!(Option<u8>),
+        quote::quote!(Vec<u8>),
+        quote::quote!(Result<u8, Error>),
+        quote::quote!(Box<String>),
+        quote::quote!(Cow<'_, [u8]>),
+        quote::quote!(Cow<'a, str>),
+        // Runs and borrows, with the lifetime and the mutability the source wrote.
+        quote::quote!(&[u8]),
+        quote::quote!(&'a Sample),
+        quote::quote!(&mut Sample),
+        quote::quote!(&mut MaybeUninit<Sample>),
+        // Arrays, by literal and by named const — the extent keeps its own
+        // spelling, so `TAG_LEN` does not come back as `4`.
+        quote::quote!([u8; 4]),
+        quote::quote!([u8; TAG_LEN]),
+        quote::quote!([[u8; 4]; TAG_LEN]),
+        // Nominal types, carrying arguments a classification has no other place
+        // to put. Bare only: a path-qualified name cannot name a flat-API item,
+        // so no surviving element ever holds one.
+        quote::quote!(Sample),
+        quote::quote!(Sample<'a>),
+        quote::quote!(Sample<'a, u8, Vec<u8>>),
+        // Compositions, where a lost inner fact hides under an outer layer.
+        quote::quote!(Option<Box<String>>),
+        quote::quote!(Box<Cow<'_, [u8]>>),
+        quote::quote!(Result<Option<Vec<Sample>>, Error>),
+        quote::quote!(Vec<&'a Sample>),
+    ] {
+        let ty = lower(spelling).expect("in the language");
+        assert_eq!(
+            tokens(&ty.kind().to_syn()),
+            tokens(ty.syntax()),
+            "`{}` must spell back as itself",
+            tokens(ty.syntax()),
+        );
+    }
+}
+
+/// The two forms that reconstruct up to their own freedom rather than token for
+/// token, each because the model deliberately keeps *what* was written and not
+/// *how*.
+///
+/// Stated as a test so the exemptions are a short, named list rather than a
+/// silent gap in the one above.
+#[test]
+fn the_two_forms_that_do_not_spell_back_verbatim() {
+    // A callback's bounds are a set. `Send + Sync` and `Sync + Send` are one
+    // accepted form and nothing reads the order, so `to_syn` emits the canonical
+    // one — but the arguments, which everything reads, must survive exactly.
+    let cb = lower(quote::quote!(impl Fn(&Sample, u8) + Sync + Send + 'static))
+        .expect("in the language");
+    assert_eq!(
+        tokens(&cb.kind().to_syn()),
+        "impl Fn (& Sample , u8) + Send + Sync + 'static"
+    );
+
+    // A `Paren` (or an invisible `Group` from macro capture) wraps the same
+    // type, and the lowering sees through it: the node classifies as the inner
+    // type and reconstructs the inner spelling.
+    let parens = lower(quote::quote!((u8))).expect("in the language");
+    assert_eq!(tokens(&parens.kind().to_syn()), "u8");
+    assert_eq!(
+        tokens(parens.syntax()),
+        "u8",
+        "the slice is the inner node's"
+    );
 }

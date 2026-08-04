@@ -971,7 +971,7 @@ fn an_adapter_authored_type_cell_is_classified_but_placeless() {
     let cell = &reg.input_types[&TypeKey::parse("Foreign").expect("test type")];
     assert!(cell.root, "the binding asked for it directly");
     assert!(
-        matches!(cell.subject.kind(), TypeKind::Named { id } if id.name == "Foreign"),
+        matches!(cell.subject.kind(), TypeKind::Named { id, .. } if id.name == "Foreign"),
         "a declared name is a name, and the grammar can say so"
     );
     assert!(

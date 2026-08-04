@@ -418,10 +418,10 @@ pub fn apply<M>(
                 let (by_ref, core_ty) = peel_borrow(arg_ty);
                 // Only a NAMED core can match a deconstructor target: an
                 // `Option<T>` / `Vec<T>` / tuple arg is delivered whole. The model
-                // says which, so a wrapper the language sees through — `Box<T>` —
-                // no longer reads as un-nameable.
+                // says which, and `unwrapped` is where a wrapper the destination
+                // cannot see — `Box<T>` — stops reading as un-nameable.
                 if !matches!(
-                    core_ty.kind(),
+                    core_ty.unwrapped().kind(),
                     crate::api::core::flat::TypeKind::Named { .. }
                 ) {
                     continue;
@@ -1743,16 +1743,16 @@ fn accessor_signature<M>(
         .function(&func)
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
 
-    // First parameter is the receiver `&T`; peel the borrow to get `T`. The
-    // borrow is `TypeKind::Ref`, so the peel reads the classification instead of
-    // re-deciding it from `syn::Type::Reference`.
+    // First parameter is the receiver `&T`; peel the borrow to get `T`.
+    // `borrow_target` is the model's own answer, so the peel reads a
+    // classification instead of re-deciding it from `syn::Type::Reference`.
     let first = f
         .params
         .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
-    let takes = match first.ty.kind() {
-        crate::api::core::flat::TypeKind::Ref { inner, .. } => inner.syntax().clone(),
-        _ => first.ty.syntax().clone(),
+    let takes = match first.ty.borrow_target() {
+        Some(inner) => inner.syntax().clone(),
+        None => first.ty.syntax().clone(),
     };
     Ok((takes, f.ret.clone()))
 }
@@ -1788,7 +1788,7 @@ fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
         .flat()
         .function(&func)
         .and_then(|f| f.params.first())
-        .is_some_and(|p| !matches!(p.ty.kind(), crate::api::core::flat::TypeKind::Ref { .. }))
+        .is_some_and(|p| p.ty.borrow_target().is_none())
 }
 
 fn check_takes(

@@ -1310,7 +1310,9 @@ impl Declarations {
                 // rides `immediate_edges` rather than this converter's `subs`.
                 // The arguments are `TypeRef`s on the classification, so nothing
                 // is re-extracted from the signature's syntax.
-                let crate::api::core::flat::TypeKind::Callback { args } = reading.kind() else {
+                let crate::api::core::flat::TypeKind::Callback { args } =
+                    reading.unwrapped().kind()
+                else {
                     return None;
                 };
                 self.dispatch_fn_input(args, built)
@@ -2013,7 +2015,10 @@ impl Declarations {
         // `str` is handled above, separately and deliberately: it is unsized,
         // so its converter yields an owned `String` the call site borrows —
         // a different contract, not a different spelling.
-        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Str) {
+        if matches!(
+            reading.unwrapped().kind(),
+            crate::api::core::flat::TypeKind::Str | crate::api::core::flat::TypeKind::String
+        ) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
                 let s = env.get_string(v).map_err(|e| {
@@ -2154,7 +2159,7 @@ impl Declarations {
         //
         // Asked of the MODEL: an erasure is transparent, so `Box<&T>` already
         // classifies as `Ref` and nothing here matches a `syn` variant.
-        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Ref { .. }) {
+        if reading.borrow_target().is_some() {
             return None;
         }
         // It has to be a type this binding already crosses; if it is not, the
@@ -2229,7 +2234,7 @@ impl Declarations {
         // Asked of the MODEL, not of `stripped`: an erasure is transparent, so
         // `Box<&T>` already classifies as `Ref` and `kind` answers this without
         // anything here matching a `syn` variant.
-        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Ref { .. }) {
+        if reading.borrow_target().is_some() {
             return None;
         }
         // It has to be a type this binding already crosses; if it is not, the
@@ -2371,7 +2376,10 @@ impl Declarations {
         // Plain `String` keeps its own earlier arm in `primitive_output`, whose
         // body this matches exactly; this one is reached for the wrapped
         // spellings that arm's key cannot name.
-        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Str) {
+        if matches!(
+            reading.unwrapped().kind(),
+            crate::api::core::flat::TypeKind::Str | crate::api::core::flat::TypeKind::String
+        ) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
                 env.new_string(v.as_str()).map_err(|e| {
@@ -2403,7 +2411,10 @@ impl Declarations {
         // Wire is `()`. Body just returns `v`. No Kotlin name — Unit
         // returns are dropped from emitted signatures, so metadata stays
         // empty.
-        if matches!(reading.kind(), crate::api::core::flat::TypeKind::Unit) {
+        if matches!(
+            reading.unwrapped().kind(),
+            crate::api::core::flat::TypeKind::Unit
+        ) {
             let wire: syn::Type = syn::parse_quote!(());
             let body: syn::Expr = syn::parse_quote!(v);
             return Some(ConverterImpl {

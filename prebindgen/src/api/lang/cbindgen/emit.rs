@@ -351,9 +351,11 @@ impl CbindgenBuilder {
     /// Whether any declared function returns a `Vec<_>` (possibly nested under
     /// `Result`/`Option`), so the array builder/freer prelude must be emitted.
     ///
-    /// `TypeKind::Sequence` is the whole question: it is what `Vec<T>` lowers to,
-    /// and — since `Cow<'_, T>` **is** `T` — what `Cow<'_, [T]>` lowers to as well,
-    /// so the two spellings this used to test separately are one classification.
+    /// A run of values is the whole question — `Vec<T>` and `[T]` alike, and
+    /// through a transparent wrapper, so `Cow<'_, [T]>` counts as the `Vec<T>`
+    /// it crosses as. [`sequence_elem`](crate::api::core::flat::TypeRef::sequence_elem)
+    /// answers all three, which is why the two spellings this used to test
+    /// separately need no arms of their own.
     pub(super) fn produces_array(&self, registry: &Registry<()>) -> bool {
         self.functions.keys().any(|orig| {
             registry
@@ -361,12 +363,7 @@ impl CbindgenBuilder {
                 .function(&orig)
                 // The model already decided that an elided return and `-> ()`
                 // are one thing, so there is no second arm to write here.
-                .map(|f| {
-                    f.ret
-                        .walk()
-                        .iter()
-                        .any(|t| matches!(t.kind(), crate::api::core::flat::TypeKind::Sequence(_)))
-                })
+                .map(|f| f.ret.walk().iter().any(|t| t.sequence_elem().is_some()))
                 .unwrap_or(false)
         })
     }
