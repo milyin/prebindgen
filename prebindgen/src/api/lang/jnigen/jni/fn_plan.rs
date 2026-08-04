@@ -44,7 +44,11 @@ pub(crate) struct JniFunctionPlan {
 /// One source parameter: the ident/type as written plus its lowered form.
 pub(crate) struct PlanParam {
     pub ident: syn::Ident,
-    pub ty: syn::Type,
+    /// The parameter's **reading**. For a `ParamForm::Single` it is the very
+    /// reading the leaf carries — `emit/wrapper.rs` says as much where it uses
+    /// the leaf's instead — so carrying the spelling was carrying a copy that
+    /// could not disagree, in a form that could not be asked anything.
+    pub ty: crate::api::core::flat::TypeRef,
     pub form: ParamForm,
 }
 
@@ -491,7 +495,7 @@ impl JniFunctionPlan {
         // fail to yield a type.
         for param in &f.params {
             let ident = param.name.clone();
-            let ty = param.ty.as_syn().clone();
+            let ty = param.ty.clone();
 
             let form = if let Some(plan) = registry
                 .expansion_plans()
