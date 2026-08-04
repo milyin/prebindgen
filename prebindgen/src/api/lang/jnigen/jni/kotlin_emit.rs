@@ -1038,7 +1038,6 @@ impl Declarations {
                 let Some(func) = registry.flat().function(&ident) else {
                     continue;
                 };
-                let item_fn = func.origin.as_syn();
                 for p in &func.params {
                     if let Some(cb_args) = p.ty.callback_args() {
                         uses.insert(SpecKey::callback(cb_args));
@@ -1046,7 +1045,7 @@ impl Declarations {
                 }
                 if let Some(plan) = registry
                     .unfold_plans()
-                    .get(&item_fn.sig.ident)
+                    .get(&func.name)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
                     let iterable = is_iterable_fold(&plan.shape);
@@ -1063,7 +1062,7 @@ impl Declarations {
                         _ => {}
                     }
                 }
-                match registry.error_plans().get(&item_fn.sig.ident) {
+                match registry.error_plans().get(&func.name) {
                     Some(ep) => {
                         let d = ep
                             .decon
