@@ -1951,7 +1951,11 @@ impl Prebindgen for Declarations {
     /// The struct is referenced by an unqualified `OwnedObject` from
     /// the same generated file, so no `use` paths leak into the host
     /// crate's source tree.
-    fn prerequisites(&self, registry: &Registry<KotlinMeta>) -> Vec<syn::Item> {
+    fn prerequisites(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
         // `JniBindingError` String-wrapper. Built-in converter bodies compose
         // their `?` failures into this type via its `From<String>` impl. A
@@ -2012,7 +2016,12 @@ impl Prebindgen for Declarations {
         items
     }
 
-    fn post_process_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+    fn post_process_item(
+        &self,
+        item: &mut syn::Item,
+        registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
+    ) {
         self.qualify_item(item, registry);
     }
 
@@ -2022,6 +2031,7 @@ impl Prebindgen for Declarations {
         &self,
         f: &crate::api::core::flat::Function,
         registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         emit_jni_function_wrapper(self, f, registry)
     }
@@ -2030,6 +2040,7 @@ impl Prebindgen for Declarations {
         &self,
         _s: &crate::api::core::flat::Struct,
         _registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         // Struct converter bodies are emitted by the resolver via
         // input_terminal / output_terminal below; no separate
@@ -2041,6 +2052,7 @@ impl Prebindgen for Declarations {
         &self,
         _v: &crate::api::core::flat::Variant,
         _registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -2049,6 +2061,7 @@ impl Prebindgen for Declarations {
         &self,
         _e: &crate::api::core::flat::Enum,
         _registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -2064,6 +2077,7 @@ impl Prebindgen for Declarations {
         &self,
         c: &crate::api::core::flat::Constant,
         registry: &Registry<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);
@@ -2071,7 +2085,7 @@ impl Prebindgen for Declarations {
         let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
         let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
-        let alias = crate::api::core::const_path_alias(c.origin.as_syn(), &source_module);
+        let alias = emit.const_alias(c, &source_module);
         quote! {
             #alias
             #wrapper

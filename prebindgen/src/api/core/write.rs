@@ -64,12 +64,16 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // Validation already ran ONCE in the generator's `build` — a built generator
     // (the only source of a resolved registry) is valid by construction, so
     // this writer is a pure emission.
+    // The capability, minted here and nowhere else in this function's reach.
+    // Every callback below is handed a borrow; nothing else in the pipeline is.
+    // See `core::emit` for what that buys and what it deliberately does not.
+    let emit = crate::api::core::emit::Emit::new();
     let mut items: Vec<syn::Item> = Vec::new();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,
     //    type aliases) the converter bodies depend on. Emitted first so
     //    everything below can reference them.
-    items.extend(ext.prerequisites(registry));
+    items.extend(ext.prerequisites(registry, &emit));
 
     // 1. Auto-generated converter wrappers (sorted by ident, deduped).
     for (_, item_fn) in collect_converter_items(registry) {
@@ -88,7 +92,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
         sorted_by_name(flat.functions().map(|f| (&f.name, f)))
             .into_iter()
             .filter(|(ident, _)| declared_fns.contains(*ident))
-            .map(|(_, item)| ext.on_function(item, registry)),
+            .map(|(_, item)| ext.on_function(item, registry, &emit)),
     )?);
     items.extend(parse_items_from_tokens(
         "on_struct",
@@ -98,7 +102,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
         }))
         .into_iter()
         .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
-        .map(|(_, item)| ext.on_struct(item, registry)),
+        .map(|(_, item)| ext.on_struct(item, registry, &emit)),
     )?);
     // Both enum shapes emit through `on_enum` and sort together: they were one
     // map here before they were two elements. They still SORT together — the
@@ -115,8 +119,8 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
         .into_iter()
         .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
         .map(|(_, t)| match t {
-            crate::api::core::flat::Type::Variant(v) => ext.on_variant(v, registry),
-            crate::api::core::flat::Type::Enum(e) => ext.on_enum(e, registry),
+            crate::api::core::flat::Type::Variant(v) => ext.on_variant(v, registry, &emit),
+            crate::api::core::flat::Type::Enum(e) => ext.on_enum(e, registry, &emit),
             _ => unreachable!("filtered to the two enum shapes above"),
         }),
     )?);
@@ -135,20 +139,20 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
                     .as_ref()
                     .is_none_or(|set| set.contains(*ident))
             })
-            .map(|(_, item)| ext.on_const(item, registry)),
+            .map(|(_, item)| ext.on_const(item, registry, &emit)),
     )?);
 
     // 3. Anonymous consts, verbatim. Last, and in stream order. Ungated on
     //    purpose: with no name there is nothing for an adapter to declare, so
     //    the const gate above cannot apply to them.
     for guard in flat.guards() {
-        items.push(syn::Item::Const(guard.origin.as_syn().clone()));
+        items.push(syn::Item::Const(emit.guard(guard)));
     }
 
     // 4. Cross-cutting post-process pass. Adapters use this to qualify
     //    bare type references etc. — see Prebindgen::post_process_item.
     for item in &mut items {
-        ext.post_process_item(item, registry);
+        ext.post_process_item(item, registry, &emit);
     }
 
     let dest: Destination = items.into_iter().collect();

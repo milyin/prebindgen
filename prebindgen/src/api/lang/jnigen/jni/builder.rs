@@ -1488,7 +1488,7 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.spell();
+        let target = decl.rust_type.declared_spelling();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry.flat().function(&f).unwrap_or_else(|| {
@@ -1558,7 +1558,7 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.spell();
+        let target = decl.rust_type.declared_spelling();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
                 let item_fn = registry.flat().function(&g).unwrap_or_else(|| {

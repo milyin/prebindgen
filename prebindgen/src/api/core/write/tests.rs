@@ -31,32 +31,36 @@ impl Prebindgen for IdentityExt {
         &self,
         f: &crate::api::core::flat::Function,
         _registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        f.origin.spell()
+        emit.verbatim_fn(f)
     }
 
     fn on_struct(
         &self,
         s: &crate::api::core::flat::Struct,
         _registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        s.origin.spell()
+        emit.verbatim_struct(s)
     }
 
     fn on_variant(
         &self,
         v: &crate::api::core::flat::Variant,
         _registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        v.origin.spell()
+        emit.verbatim_variant(v)
     }
 
     fn on_enum(
         &self,
         e: &crate::api::core::flat::Enum,
         _registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        e.origin.spell()
+        emit.verbatim_enum(e)
     }
 }
 
@@ -242,20 +246,32 @@ fn guards_emit_ungated_and_in_stream_order() {
             &self,
             f: &crate::api::core::flat::Function,
             _r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
         ) -> TokenStream {
             f.origin.spell()
         }
-        fn on_struct(&self, s: &crate::api::core::flat::Struct, _r: &Registry<()>) -> TokenStream {
+        fn on_struct(
+            &self,
+            s: &crate::api::core::flat::Struct,
+            _r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
             s.origin.spell()
         }
         fn on_variant(
             &self,
             v: &crate::api::core::flat::Variant,
             _r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
         ) -> TokenStream {
             v.origin.spell()
         }
-        fn on_enum(&self, e: &crate::api::core::flat::Enum, _r: &Registry<()>) -> TokenStream {
+        fn on_enum(
+            &self,
+            e: &crate::api::core::flat::Enum,
+            _r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
             e.origin.spell()
         }
     }
