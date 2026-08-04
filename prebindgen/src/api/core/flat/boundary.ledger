@@ -37,12 +37,23 @@
 #                       row is a consumer taking a node the model can answer
 #                       for, and the fix is to ask the model
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
-#                                             — expected to persist
+#                                             — persists, and is ACCOUNTED:
+#                       an emitter re-stating a whole item verbatim, nothing
+#                       else
 #
 # A type escape is a source type the model should have been able to answer for.
 # There are none: every consumer outside `core::flat` reads `kind`, spells
-# `spell()`, or looks up a `TypeKey`. An item escape is a captured item's own
-# node, which an emitter re-stating a whole item legitimately needs.
+# `spell()`, or looks up a `TypeKey`.
+#
+# An item escape is a captured item's own node, which an emitter re-stating a
+# whole item verbatim legitimately needs — and that is the ONLY reason it is
+# legitimate. Taking an item to read a FACT off it (a name, a type, a signature)
+# is a missing accessor. `ITEM_FLOOR` says per file which of the two it is, and
+# `the_item_floor_is_accounted_for` fails on an unaccounted file or a stale
+# entry, exactly as `FLOOR` does below. Two `registry/scan.rs` sites sat in this
+# count for forty-five stages reading a signature and a const's type: the header
+# called the whole population `expected to persist` and nothing checked which
+# sites had earned it (S46).
 #
 # So the classification sites above are a DIFFERENT POPULATION — one this
 # transition never had to remove, because it was never the model's to answer
@@ -145,9 +156,8 @@
 
 ## escapes: items
 1	api/core/prebindgen.rs
-2	api/core/registry/scan.rs
 1	api/core/write.rs
 1	api/lang/cbindgen/trait_impl.rs
 1	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 6
+# total escapes: items: 4

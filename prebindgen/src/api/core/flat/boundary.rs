@@ -133,12 +133,23 @@ const HEADER: &str = "\
 #                       row is a consumer taking a node the model can answer
 #                       for, and the fix is to ask the model
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
-#                                             — expected to persist
+#                                             — persists, and is ACCOUNTED:
+#                       an emitter re-stating a whole item verbatim, nothing
+#                       else
 #
 # A type escape is a source type the model should have been able to answer for.
 # There are none: every consumer outside `core::flat` reads `kind`, spells
-# `spell()`, or looks up a `TypeKey`. An item escape is a captured item's own
-# node, which an emitter re-stating a whole item legitimately needs.
+# `spell()`, or looks up a `TypeKey`.
+#
+# An item escape is a captured item's own node, which an emitter re-stating a
+# whole item verbatim legitimately needs — and that is the ONLY reason it is
+# legitimate. Taking an item to read a FACT off it (a name, a type, a signature)
+# is a missing accessor. `ITEM_FLOOR` says per file which of the two it is, and
+# `the_item_floor_is_accounted_for` fails on an unaccounted file or a stale
+# entry, exactly as `FLOOR` does below. Two `registry/scan.rs` sites sat in this
+# count for forty-five stages reading a signature and a const's type: the header
+# called the whole population `expected to persist` and nothing checked which
+# sites had earned it (S46).
 #
 # So the classification sites above are a DIFFERENT POPULATION — one this
 # transition never had to remove, because it was never the model's to answer
@@ -734,6 +745,73 @@ const FLOOR: &[(&str, Floor)] = &[
     ("api/lang/jnigen/jni/wire_access.rs", Floor::Wire),
     ("api/lang/jnigen/util.rs", Floor::GeneratedSignature),
 ];
+
+/// Why each file still takes a captured item's own node.
+///
+/// The header has called this population "expected to persist" from the start,
+/// and that was right about the shape and silent about which sites qualify —
+/// which is how two `registry/scan.rs` sites sat here for forty-five stages
+/// reading a *fact off* an item rather than re-stating one (S46).
+///
+/// So it is accounted the same way [`FLOOR`] accounts the other census, and
+/// [`the_item_floor_is_accounted_for`] enforces it. There is exactly one
+/// legitimate reason, which is why this is a list and not an enum: an emitter
+/// re-states a **whole captured item verbatim**, tokens and all. Anything that
+/// takes an item to read one field off it is a missing accessor, and belongs in
+/// the model instead.
+const ITEM_FLOOR: &[(&str, &str)] = &[
+    (
+        "api/core/prebindgen.rs",
+        "`const_path_alias` re-emits a captured `const` as an alias — attrs,          vis, ident and type spliced verbatim",
+    ),
+    (
+        "api/core/write.rs",
+        "a `Guard`'s `const _` is spliced into the generated file as written",
+    ),
+    (
+        "api/lang/cbindgen/trait_impl.rs",
+        "the C mirror re-states an `EnumValue`'s discriminant AS WRITTEN          (`= 0x07` stays `0x07`) — the one consumer `EnumValue::origin` exists          for, and its own doc says so",
+    ),
+    (
+        "api/lang/jnigen/jni/trait_impl.rs",
+        "`const_path_alias` again, on the JNI side",
+    ),
+];
+
+/// Every file that still takes an item node is accounted for in [`ITEM_FLOOR`],
+/// and every entry there still takes one.
+///
+/// Same two directions as [`the_classification_floor_is_accounted_for`], for
+/// the same reason: a stale entry would let a new item escape land in that file
+/// and inherit an account written for something else.
+#[test]
+fn the_item_floor_is_accounted_for() {
+    let found = scan_tree(&src_root());
+    let accounted: std::collections::BTreeSet<&str> =
+        ITEM_FLOOR.iter().map(|(path, _)| *path).collect();
+
+    let unaccounted: Vec<&String> = found
+        .iter()
+        .filter(|(path, c)| c.escape_item > 0 && !accounted.contains(path.as_str()))
+        .map(|(path, _)| path)
+        .collect();
+    let stale: Vec<&&str> = accounted
+        .iter()
+        .filter(|p| found.get(**p).is_none_or(|c| c.escape_item == 0))
+        .collect();
+
+    assert!(
+        unaccounted.is_empty() && stale.is_empty(),
+        "ITEM FLOOR DRIFT\n\
+         \x20 unaccounted (takes an item node, no `ITEM_FLOOR` entry): {unaccounted:?}\n\
+         \x20 stale (`ITEM_FLOOR` entry, no longer takes one): {stale:?}\n\n\
+         An item escape is legitimate for ONE reason: an emitter re-stating a \
+         whole captured item verbatim, tokens and all. Taking an item to read a \
+         FACT off it — a name, a type, a signature — is a missing accessor, and \
+         the model is where it belongs. If this is the verbatim case, say so in \
+         `ITEM_FLOOR` in this commit.\n"
+    );
+}
 
 /// Every file that still classifies is accounted for in [`FLOOR`], and every
 /// entry there still classifies.
