@@ -51,6 +51,9 @@ mod tests;
 /// asking the kind for the head is asking the same question of the same
 /// grammar, with the model answering instead of a `match` on `syn`.
 ///
+/// The same peel the sum-position checks make, which is why they call this
+/// rather than keeping a copy: `&`, `Option`, `Vec` to a fixed point.
+///
 /// Peels exactly what `types_util::peel_ref_option_vec` peeled — `&`, `Option`,
 /// `Vec`, in any order, to a fixed point — and **not** a transparent wrapper:
 /// `Box<Vec<T>>` stops at the `Box`, as it did before. The layer accessors

@@ -1579,7 +1579,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            reject_handle_const(self, item_const.origin.as_syn());
+            reject_handle_const(self, item_const);
             if let Some((helper, prop)) = render_const_val(
                 self,
                 &package,

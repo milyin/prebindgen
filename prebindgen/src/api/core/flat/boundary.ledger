@@ -112,7 +112,7 @@
 4	api/lang/jnigen/jni/emit/convert.rs
 4	api/lang/jnigen/jni/emit/flat_input.rs
 13	api/lang/jnigen/jni/emit/names.rs
-7	api/lang/jnigen/jni/emit/wrapper.rs
+6	api/lang/jnigen/jni/emit/wrapper.rs
 3	api/lang/jnigen/jni/fold.rs
 1	api/lang/jnigen/jni/iface.rs
 1	api/lang/jnigen/jni/overloads.rs
@@ -123,7 +123,7 @@
 2	api/lang/jnigen/jni/wire_access.rs
 1	api/lang/jnigen/util.rs
 
-# total classification sites: 87
+# total classification sites: 86
 
 ## escapes: types
 1	api/core/diagnostics.rs
@@ -136,7 +136,6 @@
 5	api/lang/cbindgen/trait_impl.rs
 1	api/lang/jnigen/jni/emit/callback.rs
 2	api/lang/jnigen/jni/emit/flat_input.rs
-1	api/lang/jnigen/jni/emit/wrapper.rs
 3	api/lang/jnigen/jni/fn_plan.rs
 3	api/lang/jnigen/jni/iface.rs
 1	api/lang/jnigen/jni/kotlin_emit.rs
@@ -145,7 +144,7 @@
 6	api/lang/jnigen/jni/selector.rs
 13	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 52
+# total escapes: types: 51
 
 ## escapes: items
 1	api/core/prebindgen.rs
@@ -156,8 +155,8 @@
 1	api/lang/cbindgen/mod.rs
 5	api/lang/cbindgen/trait_impl.rs
 2	api/lang/jnigen/jni/builder.rs
-3	api/lang/jnigen/jni/kotlin_emit.rs
+2	api/lang/jnigen/jni/kotlin_emit.rs
 3	api/lang/jnigen/jni/symbols.rs
-3	api/lang/jnigen/jni/trait_impl.rs
+2	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 24
+# total escapes: items: 22

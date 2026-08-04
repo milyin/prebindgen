@@ -1508,20 +1508,6 @@ impl Declarations {
     }
 }
 
-/// `&` / `Option` / `Vec` off, to a fixed point — `peel_ref_option_vec` over a
-/// reading, and off `kind()` for the reason [`peel_one_borrow`] gives.
-fn peel_ref_option_vec_reading(
-    t: &crate::api::core::flat::TypeRef,
-) -> &crate::api::core::flat::TypeRef {
-    use crate::api::core::flat::TypeKind;
-    match t.kind() {
-        TypeKind::Ref { inner, .. } | TypeKind::Optional(inner) | TypeKind::Vec(inner) => {
-            peel_ref_option_vec_reading(inner)
-        }
-        _ => t,
-    }
-}
-
 /// One `&` off, and nothing else — the model's own `borrow_target` would also
 /// see through a `Box`/`Cow`, which `peel_leading_ref` did not.
 fn peel_one_borrow(t: &crate::api::core::flat::TypeRef) -> &crate::api::core::flat::TypeRef {
@@ -1705,7 +1691,7 @@ impl Prebindgen for Declarations {
             // the signature had to find the `Result` in a path first.
             if let Some((ok, _)) = func.ret.fallible_parts() {
                 {
-                    let core = peel_ref_option_vec_reading(ok);
+                    let core = crate::api::lang::jnigen::util::head_type(ok);
                     if matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
@@ -1739,7 +1725,7 @@ impl Prebindgen for Declarations {
             // check.
             if let Some((_, err_ty)) = func.ret.fallible_parts() {
                 {
-                    let core = peel_ref_option_vec_reading(err_ty);
+                    let core = crate::api::lang::jnigen::util::head_type(err_ty);
                     let declared = self
                         .return_expand_decls
                         .iter()
@@ -1942,7 +1928,7 @@ impl Prebindgen for Declarations {
         c: &crate::api::core::flat::Constant,
         registry: &Registry<KotlinMeta>,
     ) -> TokenStream {
-        reject_handle_const(self, c.origin.as_syn());
+        reject_handle_const(self, c);
         let getter = const_getter_fn(c);
         let const_ident = &c.name;
         let source_module = self.fn_module(registry, const_ident);
