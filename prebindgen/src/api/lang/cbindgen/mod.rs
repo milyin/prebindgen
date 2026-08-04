@@ -477,10 +477,14 @@ fn sanitize(key: &TypeKey) -> String {
 }
 
 /// Last path-segment ident of a type as a `String` (e.g. `ZKeyExpr`).
-fn type_short(ty: &syn::Type) -> String {
-    type_path_tail(ty)
-        .map(|i| i.to_string())
-        .unwrap_or_else(|| sanitize(&TypeKey::from_type(ty)))
+/// The short name a C symbol is built from — the key's last path segment, or a
+/// sanitized rendering of the whole key when it is not a path.
+///
+/// Off the **identity**: `type_path_tail` took the last segment of a node, and
+/// `TypeKey::short_name` is the same question asked of the canonical string, so
+/// the name no longer depends on holding the node it was derived from.
+fn type_short(key: &TypeKey) -> String {
+    key.short_name().unwrap_or_else(|| sanitize(key))
 }
 
 /// The indexed `syn::ItemEnum` for a declared enum type, by tail ident.
