@@ -638,10 +638,11 @@ fn emit_input_param(
         // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
         // A null or tagged (closed) pointer — a close that raced past
         // the pre-lock guard — is rejected before any dereference.
-        InputKind::Handle { direct: true } if !matches!(arg_ty, syn::Type::Reference(_)) => {
+        InputKind::Handle { direct: true }
+            if !matches!(arg_ty.kind(), crate::api::core::flat::TypeKind::Ref { .. }) =>
+        {
             let entry = registry
-                .reading_of(arg_ty)
-                .and_then(|tr| registry.input_entry(&tr))
+                .input_entry(arg_ty)
                 .expect("plan classified Handle ⇒ entry present");
             let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
                 format_ident!("{}_ptr", arg_ident)
@@ -649,6 +650,7 @@ fn emit_input_param(
                 arg_ident.clone()
             };
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
+            let arg_ty = arg_ty.spell();
             prelude.push(quote!(
                 if #wire_ident == 0 || (#wire_ident & 1) == 1 {
                     signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
@@ -693,9 +695,27 @@ fn emit_input_param(
 fn emit_plain_decode(
     entry: &crate::api::core::registry::TypeEntry<KotlinMeta>,
     arg_ident: &syn::Ident,
-    arg_ty: &syn::Type,
+    arg_ty: &crate::api::core::flat::TypeRef,
     on_err: &TokenStream,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
+    use crate::api::core::flat::TypeKind;
+    /// `&mut T`, read off the kind — and off `kind()` rather than through
+    /// `is_exclusive_borrow`, which also sees through a `Box` and refuses an
+    /// out-parameter's slot. This is the borrow the source wrote.
+    fn is_mut_ref(t: &crate::api::core::flat::TypeRef) -> bool {
+        matches!(t.kind(), TypeKind::Ref { mutable: true, .. })
+    }
+    /// `Option<&T>` / `Option<&mut T>` → `Some(is_mut)`, the shape
+    /// `option_inner_ref_mutability` used to fish out of a path.
+    fn opt_ref_mut(t: &crate::api::core::flat::TypeRef) -> Option<bool> {
+        let TypeKind::Optional(inner) = t.kind() else {
+            return None;
+        };
+        match inner.kind() {
+            TypeKind::Ref { mutable, .. } => Some(*mutable),
+            _ => None,
+        }
+    }
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
     let wire = &entry.destination;
@@ -721,9 +741,7 @@ fn emit_plain_decode(
     // which requires a mutable binding. Also for `Option<&mut T>`
     // where the call site needs `.as_deref_mut()`. Intermediate stage
     // bindings (`__{ident}_sN`) don't need it.
-    let arg_mut: TokenStream = if matches!(arg_ty, syn::Type::Reference(r) if r.mutability.is_some())
-        || matches!(option_inner_ref_mutability(arg_ty), Some(true))
-    {
+    let arg_mut: TokenStream = if is_mut_ref(arg_ty) || matches!(opt_ref_mut(arg_ty), Some(true)) {
         quote!(mut)
     } else {
         quote!()
@@ -781,18 +799,18 @@ fn emit_plain_decode(
             prev = out_ident;
         }
     }
-    let call_arg = match arg_ty {
-        syn::Type::Reference(r) if r.mutability.is_some() => quote!(&mut #arg_ident),
-        syn::Type::Reference(_) => quote!(&#arg_ident),
+    let call_arg = match arg_ty.kind() {
+        TypeKind::Ref { mutable: true, .. } => quote!(&mut #arg_ident),
+        TypeKind::Ref { .. } => quote!(&#arg_ident),
         // `Option<&T>` / `Option<&mut T>` for opaque inner: the input
         // converter produced `Option<OwnedObject<T>>` (see rank-1
         // handler above). `.as_deref()` / `.as_deref_mut()` coerces
         // back to `Option<&T>` / `Option<&mut T>` via OwnedObject's
         // Deref / DerefMut impls.
-        _ if matches!(option_inner_ref_mutability(arg_ty), Some(false)) => {
+        _ if matches!(opt_ref_mut(arg_ty), Some(false)) => {
             quote!(#arg_ident.as_deref())
         }
-        _ if matches!(option_inner_ref_mutability(arg_ty), Some(true)) => {
+        _ if matches!(opt_ref_mut(arg_ty), Some(true)) => {
             quote!(#arg_ident.as_deref_mut())
         }
         _ => quote!(#arg_ident),

@@ -248,28 +248,6 @@ pub(crate) fn pat_match_top(ty: &syn::Type, name: &str) -> bool {
     false
 }
 
-/// If `ty` is `Option<&T>` or `Option<&mut T>`, return `Some(is_mut)`.
-/// Returns `None` for any other shape. Used by `emit_jni_function_wrapper`
-/// to decide whether the call site needs `.as_deref()` / `.as_deref_mut()`
-/// when the input converter produced `Option<OwnedObject<T>>`.
-pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Option" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return None;
-    };
-    let syn::GenericArgument::Type(inner) = ab.args.first()? else {
-        return None;
-    };
-    let syn::Type::Reference(r) = inner else {
-        return None;
-    };
-    Some(r.mutability.is_some())
-}
-
 /// INPUT: wire → rust. Format `<wire_id>_to_<rust_id>_<hash>` (including
 /// `impl Fn(...)` lambda converters — the legacy
 /// `process_kotlin_<Name>_callback` naming is gone with the fun-interface
