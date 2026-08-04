@@ -32,16 +32,28 @@
 # below count what the first section can only measure — every place that still
 # has a node to take apart.
 #
-#   ## escapes: types   `ty.as_syn()`         — MUST reach zero
-#   ## escapes: items   `f.origin.as_syn()`   — expected to persist
+#   ## escapes: types   `ty.as_syn()`, `stripped_syntax()`, `to_syn()`
+#                                             — MUST reach zero
+#   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
+#                                             — expected to persist
 #
 # A type escape is a source type the model should have been able to answer for;
 # the classification sites above are the subset that visibly does classify. An
 # item escape is a captured item's own node, which an emitter re-stating a whole
 # item legitimately needs until items grow modelled accessors.
 #
-# The bucket is read off the RECEIVER: `origin` means the item's node, anything
-# else means a type. Two over-counts land in the type bucket on purpose, both in
+# The scan counts FOUR doors — `as_syn`, `stripped_syntax`, `to_syn`,
+# `enum_item` — and counts each by NAME rather than by call shape, so UFCS
+# (`TypeRef::as_syn(&ty)`) and a function item (`let read = TypeRef::as_syn;`)
+# are counted like a method call. A shape-matched rule missed both, which is a
+# ratchet that can be stepped around. `escape_surface_is_closed` keeps the list
+# honest: it reads the model's own surface and fails if a public method hands
+# out a structural syn node under a name the scan does not count — which is how
+# three of the four doors were found.
+#
+# The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
+# item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
+# the item's node, anything else means a type. Two over-counts land in the type bucket on purpose, both in
 # the safe direction — adapter declarations reuse `Origin` for a placeless
 # location (`decl.rust_type`), and carrying a spelling into an adapter-owned
 # `syn::Type` field is not classification either. Both are follow-ups the count
@@ -102,7 +114,7 @@
 2	api/core/registry/scan.rs
 15	api/core/unfold.rs
 3	api/lang/cbindgen/convert.rs
-2	api/lang/cbindgen/emit.rs
+3	api/lang/cbindgen/emit.rs
 6	api/lang/cbindgen/trait_impl.rs
 6	api/lang/jnigen/jni/builder.rs
 1	api/lang/jnigen/jni/emit/callback.rs
@@ -118,22 +130,23 @@
 1	api/lang/jnigen/jni/render.rs
 15	api/lang/jnigen/jni/selector.rs
 3	api/lang/jnigen/jni/struct_plan.rs
-14	api/lang/jnigen/jni/trait_impl.rs
+16	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 115
+# total escapes: types: 118
 
 ## escapes: items
 1	api/core/prebindgen.rs
-3	api/core/registry/scan.rs
+4	api/core/registry/scan.rs
 1	api/core/write.rs
 2	api/lang/cbindgen/convert.rs
-1	api/lang/cbindgen/emit.rs
-1	api/lang/cbindgen/trait_impl.rs
+2	api/lang/cbindgen/emit.rs
+1	api/lang/cbindgen/mod.rs
+7	api/lang/cbindgen/trait_impl.rs
 2	api/lang/jnigen/jni/builder.rs
-5	api/lang/jnigen/jni/kotlin_emit.rs
+6	api/lang/jnigen/jni/kotlin_emit.rs
 2	api/lang/jnigen/jni/overloads.rs
-5	api/lang/jnigen/jni/render.rs
-1	api/lang/jnigen/jni/symbols.rs
-4	api/lang/jnigen/jni/trait_impl.rs
+6	api/lang/jnigen/jni/render.rs
+3	api/lang/jnigen/jni/symbols.rs
+6	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 28
+# total escapes: items: 43

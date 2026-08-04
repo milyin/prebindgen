@@ -909,7 +909,7 @@ impl Declarations {
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
                 key.as_str(),
-                ret.spell().to_token_stream(),
+                ret.spell(),
             )
         };
         let st = st.clone();
@@ -1082,7 +1082,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.spell().to_token_stream(),
+                        probe.spell(),
                     );
                     assert!(
                         field.ty.optional_inner().is_none(),
@@ -1095,7 +1095,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.spell().to_token_stream(),
+                        probe.spell(),
                         dotted,
                     );
                     // The name is the reading's, not a path taken apart to
@@ -1488,7 +1488,7 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.spell().clone();
+        let target = decl.rust_type.spell();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry
@@ -1566,7 +1566,7 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.spell().clone();
+        let target = decl.rust_type.spell();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
                 let item_fn = registry

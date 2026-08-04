@@ -287,10 +287,9 @@ pub trait Prebindgen {
         c: &crate::api::core::flat::Constant,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        use quote::ToTokens;
         match self.source_module() {
             Some(m) => const_path_alias(c.origin.as_syn(), m),
-            None => c.origin.spell().to_token_stream(),
+            None => c.origin.spell(),
         }
     }
 }

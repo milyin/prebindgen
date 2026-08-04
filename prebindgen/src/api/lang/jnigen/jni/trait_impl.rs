@@ -579,7 +579,7 @@ pub(crate) fn build_handle_destructor_items(
         if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none() {
             continue;
         }
-        let ty = reading.spell().clone();
+        let ty = reading.spell();
         let class_fqn = cfg
             .name_spec
             .as_ref()

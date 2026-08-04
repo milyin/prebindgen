@@ -111,10 +111,7 @@ fn accessor_optional_primitive() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_timestamp_ntp64"
     );
-    assert_eq!(
-        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
-        "i64"
-    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "i64");
     assert!(
         reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
         "the leaf type must be a root"
@@ -169,10 +166,7 @@ fn accessor_plan_byref() {
     // Identity leaf: out_ty `&ZKeyExpr`, empty path, emitted last.
     assert!(plan.leaves[0].identity);
     assert!(plan.leaves[0].path.is_empty());
-    assert_eq!(
-        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
-        "& ZKeyExpr"
-    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "& ZKeyExpr");
     // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
     assert!(!plan.leaves[1].identity);
     assert_eq!(plan.leaves[1].path.len(), 1);
@@ -180,10 +174,7 @@ fn accessor_plan_byref() {
         plan.leaves[1].path[0].ident().to_string(),
         "z_keyexpr_as_str"
     );
-    assert_eq!(
-        plan.leaves[1].out_ty.spell().to_token_stream().to_string(),
-        "& str"
-    );
+    assert_eq!(plan.leaves[1].out_ty.spell().to_string(), "& str");
 
     // Leaf out_tys registered as required outputs so the resolver builds
     // their converters.
@@ -526,10 +517,7 @@ fn nested_accessor_flatten() {
     assert_eq!(path(&plan.leaves[1]), "z_sample_key_expr.z_keyexpr_as_str");
     assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
     assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
-    assert_eq!(
-        plan.leaves[3].out_ty.spell().to_token_stream().to_string(),
-        "SampleKind"
-    );
+    assert_eq!(plan.leaves[3].out_ty.spell().to_string(), "SampleKind");
     assert_eq!(
         path(&plan.leaves[4]),
         "z_sample_timestamp.z_timestamp_ntp64"
@@ -665,7 +653,7 @@ fn reply_product_double_option_flatten() {
     // Acc leaf keeping its full `Option<…>` return — not a nesting step.
     assert_eq!(path(&plan.leaves[0]), "z_reply_replier_zid");
     assert_eq!(
-        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
+        plan.leaves[0].out_ty.spell().to_string(),
         "Option < ZZenohId >"
     );
     assert!(!plan.leaves[0].nullable && !plan.leaves[0].identity);
@@ -830,18 +818,12 @@ fn iterable_decomposed_plan() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_zenoh_id_to_string"
     );
-    assert_eq!(
-        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
-        "String"
-    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "String");
     // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
     // owns its elements (by_ref = false).
     assert!(plan.leaves[1].identity);
     assert!(plan.leaves[1].path.is_empty());
-    assert_eq!(
-        plan.leaves[1].out_ty.spell().to_token_stream().to_string(),
-        "ZZenohId"
-    );
+    assert_eq!(plan.leaves[1].out_ty.spell().to_string(), "ZZenohId");
 }
 
 #[test]
@@ -1242,10 +1224,7 @@ fn convert_error_decomposes_result_e() {
         .expect("error plan for the fallible fn");
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 1);
-    assert_eq!(
-        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
-        "String"
-    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "String");
     assert_eq!(plan.source.to_token_stream().to_string(), "ZError");
     // The infallible fn gets no error plan.
     assert!(!reg.error_plans.contains_key(&ident("z_infallible")));
@@ -1362,18 +1341,12 @@ fn callback_arg_plan_derived() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_sample_key_expr"
     );
-    assert_eq!(
-        plan.leaves[0].out_ty.spell().to_token_stream().to_string(),
-        "& ZKeyExpr"
-    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "& ZKeyExpr");
     assert_eq!(
         plan.leaves[1].path.last().unwrap().ident().to_string(),
         "z_keyexpr_as_str"
     );
-    assert_eq!(
-        plan.leaves[2].out_ty.spell().to_token_stream().to_string(),
-        "SampleKind"
-    );
+    assert_eq!(plan.leaves[2].out_ty.spell().to_string(), "SampleKind");
     // Leaf out_tys registered so the resolver builds their converters.
     assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
     assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(SampleKind))].root);
@@ -1445,10 +1418,7 @@ fn callback_arg_borrowed_decomposed() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_sample_key_expr"
     );
-    assert_eq!(
-        plan.leaves[2].out_ty.spell().to_token_stream().to_string(),
-        "SampleKind"
-    );
+    assert_eq!(plan.leaves[2].out_ty.spell().to_string(), "SampleKind");
 }
 
 #[test]

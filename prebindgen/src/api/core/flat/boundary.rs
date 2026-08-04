@@ -128,16 +128,28 @@ const HEADER: &str = "\
 # below count what the first section can only measure — every place that still
 # has a node to take apart.
 #
-#   ## escapes: types   `ty.as_syn()`         — MUST reach zero
-#   ## escapes: items   `f.origin.as_syn()`   — expected to persist
+#   ## escapes: types   `ty.as_syn()`, `stripped_syntax()`, `to_syn()`
+#                                             — MUST reach zero
+#   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
+#                                             — expected to persist
 #
 # A type escape is a source type the model should have been able to answer for;
 # the classification sites above are the subset that visibly does classify. An
 # item escape is a captured item's own node, which an emitter re-stating a whole
 # item legitimately needs until items grow modelled accessors.
 #
-# The bucket is read off the RECEIVER: `origin` means the item's node, anything
-# else means a type. Two over-counts land in the type bucket on purpose, both in
+# The scan counts FOUR doors — `as_syn`, `stripped_syntax`, `to_syn`,
+# `enum_item` — and counts each by NAME rather than by call shape, so UFCS
+# (`TypeRef::as_syn(&ty)`) and a function item (`let read = TypeRef::as_syn;`)
+# are counted like a method call. A shape-matched rule missed both, which is a
+# ratchet that can be stepped around. `escape_surface_is_closed` keeps the list
+# honest: it reads the model's own surface and fails if a public method hands
+# out a structural syn node under a name the scan does not count — which is how
+# three of the four doors were found.
+#
+# The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
+# item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
+# the item's node, anything else means a type. Two over-counts land in the type bucket on purpose, both in
 # the safe direction — adapter declarations reuse `Origin` for a placeless
 # location (`decl.rust_type`), and carrying a spelling into an adapter-owned
 # `syn::Type` field is not classification either. Both are follow-ups the count
@@ -312,7 +324,43 @@ impl Counts {
     }
 }
 
-/// Which bucket an `as_syn()` call belongs to, read off the **receiver**.
+/// Every route from the model to a structural `syn` node.
+///
+/// `as_syn` is the door the seal opened deliberately; the other three predate it
+/// and hand out a node just as completely, so the census covers them or it is
+/// not a census. [`escape_surface_is_closed`] is what stops a fifth from
+/// appearing quietly.
+///
+/// | | hands out | why it exists |
+/// |---|---|---|
+/// | `as_syn` | the node itself | the escape |
+/// | `stripped_syntax` | `syn::Type` | the spelling under a transparent wrapper |
+/// | `to_syn` | `syn::Type` | the round-trip that checks the lowering |
+/// | `enum_item` | `&syn::ItemEnum` | a declared enum's own item |
+const ESCAPES: &[&str] = &["as_syn", "stripped_syntax", "to_syn", "enum_item"];
+
+/// The syn types a consumer can **take apart**. An ident, a lifetime or a member
+/// is a leaf: there is no shape to match on, so handing one out is not a door.
+const STRUCTURAL: &[&str] = &[
+    "Type",
+    "Expr",
+    "Item",
+    "ItemEnum",
+    "ItemStruct",
+    "ItemFn",
+    "ItemConst",
+    "Fields",
+    "Variant",
+    "Field",
+    "Path",
+    "Signature",
+    "FnArg",
+    "ReturnType",
+    "Pat",
+    "GenericArgument",
+];
+
+/// Which bucket an escape belongs to — by name, then by **receiver**.
 ///
 /// Outside `flat/`, a receiver named `origin` is always a captured item's node —
 /// an `ItemFn`, an `ItemStruct`, a `Field`, a `Variant` — because `TypeRef`'s own
@@ -325,11 +373,35 @@ impl Counts {
 /// wrote rather than what a source crate did. The bucket that must reach zero is
 /// the one that over-counts; the real fix is that a declaration is not an
 /// `Origin`, which is a refactor and not a rule.
-fn escape_bucket(receiver: Option<&str>) -> fn(&mut Counts) -> &mut usize {
-    match receiver {
-        Some("origin") => |c: &mut Counts| &mut c.escape_item,
-        _ => |c: &mut Counts| &mut c.escape_type,
+fn escape_bucket(name: &str, qualifier: Option<&str>) -> fn(&mut Counts) -> &mut usize {
+    let item: fn(&mut Counts) -> &mut usize = |c| &mut c.escape_item;
+    let ty: fn(&mut Counts) -> &mut usize = |c| &mut c.escape_type;
+    match (name, qualifier) {
+        // Hands out a whole captured item, whatever the receiver is called.
+        ("enum_item", _) => item,
+        // `f.origin.as_syn()` — a method call on an item's origin — and
+        // `Origin::as_syn(&f.origin)`, the same thing spelled through UFCS.
+        ("as_syn", Some("origin" | "Origin")) => item,
+        _ => ty,
     }
+}
+
+/// What stands before the escape's name: the receiver of `recv.as_syn()`, or the
+/// path qualifier of `TypeRef::as_syn(..)`. `None` for a bare mention.
+fn escape_qualifier(toks: &[TokenTree], i: usize) -> Option<String> {
+    // `recv . as_syn`
+    if i >= 2 && is_punct(&toks[i - 1], '.') {
+        if let Some(TokenTree::Ident(id)) = toks.get(i - 2) {
+            return Some(id.to_string());
+        }
+    }
+    // `Qualifier :: as_syn` — a `::` is two `Punct` tokens.
+    if i >= 3 && is_sep(toks, i - 2) {
+        if let Some(TokenTree::Ident(id)) = toks.get(i - 3) {
+            return Some(id.to_string());
+        }
+    }
+    None
 }
 
 fn count(stream: TokenStream, aliases: &[String], n: &mut Counts) {
@@ -379,20 +451,25 @@ fn count(stream: TokenStream, aliases: &[String], n: &mut Counts) {
             i += 4;
             continue;
         }
-        // `<receiver> . as_syn ( )` — the escape, bucketed by receiver.
-        if matches!(&toks[i], TokenTree::Ident(id) if *id == "as_syn")
-            && i > 0
-            && is_punct(&toks[i - 1], '.')
-            && matches!(toks.get(i + 1), Some(TokenTree::Group(g))
-                if g.delimiter() == Delimiter::Parenthesis && g.stream().is_empty())
-        {
-            let receiver = match toks.get(i.wrapping_sub(2)) {
-                Some(TokenTree::Ident(id)) if i >= 2 => Some(id.to_string()),
-                _ => None,
-            };
-            *escape_bucket(receiver.as_deref())(n) += 1;
-            i += 2;
-            continue;
+        // The escape — **every mention of the name**, not every call.
+        //
+        // A shape-matched rule (`<recv> . as_syn ( )`) is the census that gets
+        // bypassed: `TypeRef::as_syn(&ty)` reaches the same node through UFCS,
+        // and `let read = TypeRef::as_syn;` reaches it through a function item
+        // that is never *called* at the escape's own name at all. Both would
+        // have added a source-syntax escape with no ledger drift. Counting the
+        // ident covers call, UFCS and reference alike, because none of them can
+        // reach the node without writing the name.
+        if let TokenTree::Ident(id) = &toks[i] {
+            let name = id.to_string();
+            // ...except a definition, which is what is being counted.
+            let is_def =
+                i > 0 && matches!(toks.get(i - 1), Some(TokenTree::Ident(kw)) if *kw == "fn");
+            if ESCAPES.contains(&name.as_str()) && !is_def {
+                *escape_bucket(&name, escape_qualifier(&toks, i).as_deref())(n) += 1;
+                i += 1;
+                continue;
+            }
         }
         if let TokenTree::Group(g) = &toks[i] {
             count(g.stream(), aliases, n);
@@ -636,6 +713,119 @@ fn scanner_recognizes_the_shapes_that_matter() {
     );
 }
 
+/// **The census is only a census if it covers every door.**
+///
+/// The escape scan counts [`ESCAPES`] by name. That is a list, and a list is a
+/// thing someone forgets to add to — so this reads the model's own surface and
+/// fails if a public function in `core/flat` hands out a [`STRUCTURAL`] `syn`
+/// node under a name the scan does not count.
+///
+/// Three of the four entries were found this way rather than by design:
+/// `stripped_syntax`, `to_syn` and `enum_item` predate the seal and hand out a
+/// node just as completely as `as_syn` does. The review that asked for UFCS
+/// coverage is the same question one level up — a spelling the check does not
+/// know about is not counted, whether it is a call syntax or a whole method.
+#[test]
+fn escape_surface_is_closed() {
+    let mut doors = Vec::new();
+    let mut stack = vec![src_root().join("api/core/flat")];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).expect("flat/ is readable") {
+            let path = entry.expect("readable dir entry").path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_none_or(|e| e != "rs") {
+                continue;
+            }
+            let text = fs::read_to_string(&path).expect("source file is UTF-8");
+            let file: syn::File = syn::parse_str(&text).expect("flat source parses");
+            collect_doors(&file.items, &rel_key(&src_root(), &path), &mut doors);
+        }
+    }
+    let uncounted: Vec<_> = doors
+        .iter()
+        .filter(|(name, _)| !ESCAPES.contains(&name.as_str()))
+        .collect();
+    assert!(
+        uncounted.is_empty(),
+        "these hand a structural syn node out of the model under a name the \
+         escape scan does not count, so a consumer can take the source apart \
+         with no ledger drift:\n{}\n\nEither add the name to ESCAPES (and \
+         regenerate the ledger, so the doors it opens are counted), or return \
+         tokens instead.",
+        uncounted
+            .iter()
+            .map(|(name, at)| format!("  {at}: {name}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// Public **methods** whose return type names a [`STRUCTURAL`] `syn` type.
+///
+/// Two conditions, and each rules out a whole class of false positive:
+///
+/// * **a `self` receiver.** A door hands out a node the *model holds*; a free
+///   function has no model state, so whatever it returns it built from what the
+///   caller passed in. `canonical_type(&syn::Type) -> syn::Type` cannot give a
+///   consumer a node it could not already reach, and neither can
+///   `extract_fn_trait_args` or `type_from_ident`.
+/// * **visibility past `flat`.** A `pub(super)` method cannot be called from
+///   outside the model, so it is the model reading itself. Everything wider is a
+///   door.
+fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>) {
+    fn escapes_flat(vis: &syn::Visibility) -> bool {
+        match vis {
+            syn::Visibility::Public(_) => true,
+            syn::Visibility::Restricted(r) => !r.path.is_ident("super") && !r.path.is_ident("self"),
+            syn::Visibility::Inherited => false,
+        }
+    }
+    fn hands_out_a_node(ret: &syn::ReturnType) -> bool {
+        let syn::ReturnType::Type(_, ty) = ret else {
+            return false;
+        };
+        // `syn :: <structural>` anywhere in the return type. Qualified because
+        // `-> Option<&Type>` is *flat's own* `Type`, which is the model, not a node.
+        names_a_node(quote::ToTokens::to_token_stream(ty))
+    }
+    // Through groups: `Option<(&'static str, syn::Type)>` nests the mention
+    // inside a parenthesised token group.
+    fn names_a_node(stream: TokenStream) -> bool {
+        let toks: Vec<TokenTree> = stream.into_iter().collect();
+        (0..toks.len()).any(|i| {
+            (matches!(&toks[i], TokenTree::Ident(id) if id == "syn")
+                && is_sep(&toks, i + 1)
+                && matches!(toks.get(i + 3), Some(TokenTree::Ident(id))
+                    if STRUCTURAL.contains(&id.to_string().as_str())))
+                || matches!(&toks[i], TokenTree::Group(g) if names_a_node(g.stream()))
+        })
+    }
+    for item in items {
+        match item {
+            syn::Item::Impl(im) => {
+                for it in &im.items {
+                    if let syn::ImplItem::Fn(f) = it {
+                        let is_method =
+                            matches!(f.sig.inputs.first(), Some(syn::FnArg::Receiver(_)));
+                        if is_method && escapes_flat(&f.vis) && hands_out_a_node(&f.sig.output) {
+                            out.push((f.sig.ident.to_string(), at.to_string()));
+                        }
+                    }
+                }
+            }
+            syn::Item::Mod(m) => {
+                if let Some((_, items)) = &m.content {
+                    collect_doors(items, at, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// The escape scan: what it counts, which bucket it lands in, and what it must
 /// not count.
 #[test]
@@ -668,8 +858,51 @@ fn escapes_are_counted_by_their_receiver() {
 
     // A method that merely *starts* with the name is not the escape.
     assert_eq!(c("fn f() { let t = ty.as_syntax(); }").escape_type, 0);
-    // Nor is a call that takes arguments — the escape is nullary.
-    assert_eq!(c("fn f() { let t = ty.as_syn(x); }").escape_type, 0);
+
+    // ── The bypasses (#313 review) ────────────────────────────────────────
+    //
+    // The same node, reached without ever writing `.as_syn()`. A rule matched on
+    // the CALL SHAPE counted none of these, so a new escape could land with no
+    // ledger drift — which is the one thing a ratchet must not allow.
+    assert_eq!(
+        c("fn f() { let t = TypeRef::as_syn(&ty); }").escape_type,
+        1,
+        "UFCS reaches the node"
+    );
+    assert_eq!(
+        c("fn f() { let i = Origin::as_syn(&func.origin); }").escape_item,
+        1,
+        "UFCS on an origin is an item escape, read off the qualifier"
+    );
+    assert_eq!(
+        c("fn f() { let read = TypeRef::as_syn; read(&ty); }").escape_type,
+        1,
+        "a function item is an escape at the point it is NAMED, and the call \
+         site does not name it at all"
+    );
+    assert_eq!(
+        c("fn f() { let t = <TypeRef>::as_syn(&ty); }").escape_type,
+        1,
+        "a qualified path still writes the name"
+    );
+    // The definition is not a use of itself — the model may reach its own field.
+    assert_eq!(
+        c("impl T { pub fn as_syn(&self) -> &S { &self.syntax } }").escape_type,
+        0
+    );
+
+    // The other three doors, which predate the seal and hand out a node just as
+    // completely. `escape_surface_is_closed` is what found them.
+    assert_eq!(
+        c("fn f() { let t = reading.stripped_syntax(); }").escape_type,
+        1
+    );
+    assert_eq!(c("fn f() { let t = ty.kind().to_syn(); }").escape_type, 1);
+    assert_eq!(
+        c("fn f() { let e = registry.flat().enum_item(&n); }").escape_item,
+        1,
+        "an item, whatever the receiver is called"
+    );
 
     // The two populations are independent: classifying through an escape counts
     // in both, which is the intended double entry — one says a node was taken,

@@ -635,7 +635,12 @@ growing back.
       to approximate. The ledger grew two sections: **escapes: types** (115,
       must reach zero) and **escapes: items** (28, expected until items grow
       modelled accessors). `ToTokens` is gone from `Origin` on purpose — it would
-      have handed every consumer `to_token_stream().to_string()` back
+      have handed every consumer `to_token_stream().to_string()` back.
+      The census counts **four doors** (`as_syn`, `stripped_syntax`, `to_syn`,
+      `enum_item`) by NAME rather than by call shape, so UFCS and a function item
+      count like a method call — and `escape_surface_is_closed` reads the model's
+      own surface so a fifth cannot appear quietly, which is how three of the
+      four were found
 - [ ] Drive **escapes: types** to zero. The population is three kinds, and only
       the first is classification: taking a node apart (what the ledger's first
       section already sees), keying by spelling (`TypeKey::from_type` where

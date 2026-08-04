@@ -1,7 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use proc_macro2::TokenStream;
-use quote::ToTokens;
 
 use super::*;
 use crate::{
@@ -33,7 +32,7 @@ impl Prebindgen for IdentityExt {
         f: &crate::api::core::flat::Function,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        f.origin.spell().to_token_stream()
+        f.origin.spell()
     }
 
     fn on_struct(
@@ -41,7 +40,7 @@ impl Prebindgen for IdentityExt {
         s: &crate::api::core::flat::Struct,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        s.origin.spell().to_token_stream()
+        s.origin.spell()
     }
 
     fn on_variant(
@@ -49,7 +48,7 @@ impl Prebindgen for IdentityExt {
         v: &crate::api::core::flat::Variant,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        v.origin.spell().to_token_stream()
+        v.origin.spell()
     }
 
     fn on_enum(
@@ -57,7 +56,7 @@ impl Prebindgen for IdentityExt {
         e: &crate::api::core::flat::Enum,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        e.origin.spell().to_token_stream()
+        e.origin.spell()
     }
 }
 
@@ -244,20 +243,20 @@ fn guards_emit_ungated_and_in_stream_order() {
             f: &crate::api::core::flat::Function,
             _r: &Registry<()>,
         ) -> TokenStream {
-            f.origin.spell().to_token_stream()
+            f.origin.spell()
         }
         fn on_struct(&self, s: &crate::api::core::flat::Struct, _r: &Registry<()>) -> TokenStream {
-            s.origin.spell().to_token_stream()
+            s.origin.spell()
         }
         fn on_variant(
             &self,
             v: &crate::api::core::flat::Variant,
             _r: &Registry<()>,
         ) -> TokenStream {
-            v.origin.spell().to_token_stream()
+            v.origin.spell()
         }
         fn on_enum(&self, e: &crate::api::core::flat::Enum, _r: &Registry<()>) -> TokenStream {
-            e.origin.spell().to_token_stream()
+            e.origin.spell()
         }
     }
 
