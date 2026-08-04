@@ -262,8 +262,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let output_entry = match &plan.output {
         FnOutputPlan::Value(v) => Some(
             registry
-                .reading_of(&v.target_ty)
-                .and_then(|tr| registry.output_entry(&tr))
+                .output_entry(&v.target_ty)
                 .expect("output entry validated at plan build"),
         ),
         FnOutputPlan::Unfold(_) => None,

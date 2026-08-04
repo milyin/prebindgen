@@ -181,9 +181,11 @@ pub(crate) struct ValueOutputPlan {
     pub is_convert: bool,
     /// The type whose output converter runs: `convert_out_ty` for a convert,
     /// the `Result` Ok type when an error plan peels, else the declared
-    /// return. Its entry is validated at plan build; the Rust emitter
-    /// re-looks it up (`expect`) to keep the plan lifetime-free.
-    pub target_ty: syn::Type,
+    /// return. A **reading** — all three candidates are one, and the emitter
+    /// asks it for the entry directly. Its entry is validated at plan build;
+    /// the Rust emitter re-looks it up (`expect`) to keep the plan
+    /// lifetime-free.
+    pub target_ty: crate::api::core::flat::TypeRef,
     /// The resolved output entry's `destination` — the extern's wire return
     /// and the sentinel source.
     pub wire_ty: syn::Type,
@@ -705,10 +707,7 @@ fn build_output(
     registry: &Registry<KotlinMeta>,
     f: &crate::api::core::flat::Function,
 ) -> Result<FnOutputPlan, PlanError> {
-    use crate::api::core::{
-        types_util::result_ok_type,
-        unfold::{Delivery, UnfoldShape},
-    };
+    use crate::api::core::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
     let unfold_plan = registry.unfold_plans().get(ident);
 
@@ -754,29 +753,30 @@ fn build_output(
     let is_convert = unfold_plan.is_some();
     // The element normalizes an elided return and a written `-> ()` to one
     // `Unit` reading, so there is no `ReturnType` match here.
-    let return_ty: syn::Type = f.ret.as_syn().clone();
     let error_plan = registry.error_plans().get(ident);
-    let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
-    let target_ty = match unfold_plan {
-        // The other arm composes a type this adapter built, so the two meet as
-        // spellings: the plan's reading is unwrapped here rather than the whole
-        // local becoming a reading it cannot be.
+    // The `Ok` side off `TypeKind::Fallible`, where `result_ok_type` found the
+    // `Result` in a path first.
+    let ok_ty = error_plan
+        .and_then(|_| f.ret.fallible_parts())
+        .map(|(ok, _)| ok);
+    // All three candidates are readings: a plan's `convert_out_ty`, the `Ok`
+    // side of the return, and the return itself. This met them as spellings
+    // because one of them used to be a node.
+    let target_ty: &crate::api::core::flat::TypeRef = match unfold_plan {
         Some(p) => p
             .convert_out_ty
             .as_ref()
-            .expect("Return delivery carries convert_out_ty")
-            .as_syn()
-            .clone(),
-        None => ok_ty.unwrap_or(return_ty),
+            .expect("Return delivery carries convert_out_ty"),
+        None => ok_ty.unwrap_or(&f.ret),
     };
-    // Two failures, told apart. `target_ty` is composed here (`convert_out_ty`,
-    // or the `Result` peeled to its `Ok`), so unlike the input side there may
-    // genuinely be no reading — and "not registered" wants different advice
+    // Two failures, told apart. Holding a reading is not the same as being in
+    // the type table — `target_ty` is reached through a plan or a peel, so it
+    // may genuinely have no cell — and "not registered" wants different advice
     // from "registered, no converter". Collapsed into one `and_then`, both got
     // the `output_wrapper` message and the first one got it wrong.
-    let Some(target) = registry.reading_of(&target_ty) else {
+    let Some(target) = registry.reading(&target_ty.key()) else {
         return Err(PlanError::UnknownOutputType {
-            ty: TypeKey::from_type(&target_ty),
+            ty: target_ty.key(),
         });
     };
     let Some(entry) = registry.output_entry(&target) else {
@@ -791,7 +791,8 @@ fn build_output(
     // Kotlin error peel rides the entry's `value_rust_type`, so the full
     // `Result<T, E>` type is looked up as written.)
     let ret_decl: syn::ReturnType = if is_convert {
-        syn::parse_quote!(-> #target_ty)
+        let t = target_ty.spell();
+        syn::parse_quote!(-> #t)
     } else {
         let ret = f.ret.spell();
         syn::parse_quote!(-> #ret)
@@ -804,7 +805,7 @@ fn build_output(
 
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
         is_convert,
-        target_ty,
+        target_ty: target_ty.clone(),
         wire_ty,
         surface,
         is_enum,
