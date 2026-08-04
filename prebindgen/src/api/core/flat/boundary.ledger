@@ -123,18 +123,13 @@
 # total classification sites: 69
 
 ## escapes: types
-1	api/core/diagnostics.rs
-1	api/core/expand.rs
-1	api/core/registry/key.rs
-2	api/core/registry/order.rs
-2	api/core/registry/scan.rs
 1	api/lang/cbindgen/emit.rs
 1	api/lang/cbindgen/trait_impl.rs
 2	api/lang/jnigen/jni/fn_plan.rs
 2	api/lang/jnigen/jni/selector.rs
 5	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 18
+# total escapes: types: 11
 
 ## escapes: items
 1	api/core/prebindgen.rs

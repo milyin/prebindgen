@@ -11,6 +11,18 @@ use quote::ToTokens;
 
 use super::*;
 
+/// The canonical `syn::Type` a **declaration** names, off its identity.
+///
+/// A [`TypeKey`] is `canonical_type` already rendered, so re-parsing it yields
+/// the same type `canonical_type(origin.as_syn())` built — without taking the
+/// node. `declared_ty` is a BUILD-SCRIPT declaration reusing `Origin` for a
+/// placeless location, the over-count the boundary ledger documents, and
+/// `Origin::key` is the answer it names.
+fn canonical_of(declared_ty: &crate::api::core::flat::Origin<syn::Type>) -> syn::Type {
+    syn::parse_str(declared_ty.key().as_str())
+        .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses")
+}
+
 impl<M> Registry<M> {
     pub(super) fn scan_declared_items(&mut self, declared: &Declared) -> Result<(), ScanError> {
         // Source-qualified declared types are a hard error (issue #95). The
@@ -46,7 +58,13 @@ impl<M> Registry<M> {
             if !probed.insert(key) {
                 continue;
             }
-            let ty = crate::api::core::flat::canonical_type(declared_ty.as_syn());
+            // The canonical form off the declaration's own identity: a
+            // `TypeKey` IS `canonical_type` rendered, so re-parsing it is the
+            // same type this spelled the node to build. `declared_ty` is a
+            // BUILD-SCRIPT declaration reusing `Origin` for a placeless
+            // location — the ledger's documented over-count, and `Origin::key`
+            // is the answer it names.
+            let ty = canonical_of(declared_ty);
             // Peel one reference level; the qualified head only appears on
             // path types.
             let inner = match &ty {
@@ -142,7 +160,7 @@ impl<M> Registry<M> {
             // is the form the type used to arrive in, and interning the
             // as-written spelling instead would put a differently-spelled
             // reading in the cell for the same key.
-            let ty = crate::api::core::flat::canonical_type(declared_ty.as_syn());
+            let ty = canonical_of(declared_ty);
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
                 if let Some(s) = self.flat.struct_type(&ident).cloned() {

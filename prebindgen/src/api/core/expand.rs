@@ -193,13 +193,13 @@ pub fn apply<M>(
         // typo guard for both coordinates of `.expand_param(name, decl)`.
         if let Some(declared) = &ed.declared_target {
             let param_ty = param_reading(registry, &ed.func, &ed.param)?;
-            let bare = constructed_value(&param_ty);
-            if TypeKey::from_type(&bare) != *declared {
+            let bare = constructed_value(&param_ty).key();
+            if bare != *declared {
                 return Err(ExpandError::ParamTypeMismatch {
                     func: ed.func.clone(),
                     param: ed.param.clone(),
                     declared: declared.as_str().to_string(),
-                    actual: TypeKey::from_type(&bare).as_str().to_string(),
+                    actual: bare.as_str().to_string(),
                 });
             }
         }
@@ -237,8 +237,7 @@ pub fn apply<M>(
             let receiver_key = method_receivers.get(func);
             let mut receiver_skipped = false;
             for (pname, pty) in params.iter().map(|p| (p.name.clone(), p.ty.clone())) {
-                let bare = constructed_value(&pty);
-                let bare_key = TypeKey::from_type(&bare);
+                let bare_key = constructed_value(&pty).key();
                 if !receiver_skipped && receiver_key == Some(&bare_key) {
                     receiver_skipped = true;
                     continue;
@@ -1084,13 +1083,11 @@ fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: 
 /// A type the grammar cannot express answers itself — the identity, not a
 /// fallback classifier. Nothing reaching here can be one: every signature in play
 /// was accepted by the frontend before the scan registered it.
-fn constructed_value(reading: &crate::api::core::flat::TypeRef) -> syn::Type {
+fn constructed_value(
+    reading: &crate::api::core::flat::TypeRef,
+) -> &crate::api::core::flat::TypeRef {
     let after_opt = reading.optional_inner().unwrap_or(reading);
-    after_opt
-        .borrow_target()
-        .unwrap_or(after_opt)
-        .as_syn()
-        .clone()
+    after_opt.borrow_target().unwrap_or(after_opt)
 }
 
 /// [`constructed_value`], plus which of the two layers were there.
