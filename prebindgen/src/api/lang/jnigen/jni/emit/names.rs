@@ -189,22 +189,6 @@ impl syn::visit_mut::VisitMut for QualifyLengthPaths<'_> {
     }
 }
 
-/// If `ty` is a `&T` borrow with no explicit lifetime, splice in `'<life>`.
-/// Otherwise return `ty` unchanged.
-pub(crate) fn annotate_borrow_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {
-    if let syn::Type::Reference(r) = ty {
-        if r.lifetime.is_none() {
-            let mut new = r.clone();
-            new.lifetime = Some(syn::Lifetime::new(
-                &format!("'{}", life),
-                proc_macro2::Span::call_site(),
-            ));
-            return syn::Type::Reference(new);
-        }
-    }
-    ty.clone()
-}
-
 /// If `ty` is `JObject` / `JString` / `JByteArray` (no explicit angle args),
 /// splice in `<'<life>>`. Otherwise return `ty` unchanged.
 pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {

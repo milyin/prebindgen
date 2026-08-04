@@ -790,14 +790,8 @@ fn build_output(
     // for a convert, else the signature's own output. (Not `target_ty`: the
     // Kotlin error peel rides the entry's `value_rust_type`, so the full
     // `Result<T, E>` type is looked up as written.)
-    let ret_decl: syn::ReturnType = if is_convert {
-        let t = target_ty.spell();
-        syn::parse_quote!(-> #t)
-    } else {
-        let ret = f.ret.spell();
-        syn::parse_quote!(-> #ret)
-    };
-    let (surface, canonical) = ReturnSurface::classify(ext, registry, &ret_decl);
+    let ret_decl = if is_convert { target_ty } else { &f.ret };
+    let (surface, canonical) = ReturnSurface::classify(ext, registry, ret_decl);
     let is_enum = ext.is_kotlin_enum(&canonical);
     let is_option_enum = crate::api::core::types_util::option_inner_type(&canonical)
         .map(|inner| ext.is_kotlin_enum(&inner))
@@ -821,28 +815,35 @@ impl ReturnSurface {
     pub fn classify(
         ext: &Declarations,
         registry: &impl Conversions<KotlinMeta>,
-        output: &syn::ReturnType,
+        ret: &crate::api::core::flat::TypeRef,
     ) -> (Self, syn::Type) {
-        let ty = match output {
-            syn::ReturnType::Default => return (Self::Unit, syn::parse_quote!(())),
-            syn::ReturnType::Type(_, t) => &**t,
-        };
-        let outer_meta = registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
-            .map(|e| e.metadata.clone());
+        // The RETURN, as the model classified it. Both callers used to spell a
+        // reading into a `-> #ty` fragment for this to take apart again, and
+        // the `ReturnType::Default` arm was a unit the element already states.
+        let outer_meta = registry.output_entry(ret).map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
         // `value_rust_type`) declare no Kotlin return type. The peeled type is
         // the one the converter's metadata stored — a canonical `syn::Type`,
         // so nothing is rebuilt here. Falling back to the declared return is
         // not a miss: `value_rust_type` is `None` exactly for plain values and
         // arity-0 converters, which have no inner identity to peel to.
-        let canonical: syn::Type = outer_meta
-            .as_ref()
-            .and_then(|m| m.value_rust_type.as_ref())
-            .cloned()
-            .unwrap_or_else(|| ty.clone());
-        if crate::api::lang::jnigen::util::is_unit(&canonical) {
+        //
+        // `value_rust_type` is a canonical `syn::Type` the ADAPTER composed,
+        // which is why `is_unit` still asks it of a node; with no metadata the
+        // question is the reading's own kind.
+        let stored = outer_meta.as_ref().and_then(|m| m.value_rust_type.as_ref());
+        let is_unit = match stored {
+            Some(t) => crate::api::lang::jnigen::util::is_unit(t),
+            None => matches!(ret.kind(), crate::api::core::flat::TypeKind::Unit),
+        };
+        let canonical: syn::Type = match stored {
+            Some(t) => t.clone(),
+            None => {
+                let toks = ret.spell();
+                syn::parse_quote!(#toks)
+            }
+        };
+        if is_unit {
             return (Self::Unit, canonical);
         }
         // Projection return (opaque handle or `ULong`): read the folded
