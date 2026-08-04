@@ -128,7 +128,9 @@ mod spelling_census {
         // fold.rs's one call is inside `enum_probe_type`, the spelling twin of
         // `enum_probe` kept for `unfold_leaf_kt`'s `syn::Type` callers.
         ("jni/fold.rs", 1),
-        ("jni/iface.rs", 2),
+        // iface.rs is off the census: `subject_short` / `subject_package` peel
+        // `&`/`Option`/`Vec` off the KIND now, which is the same grammar the
+        // spelling was — see `util::head_type`.
         // kotlin_emit.rs is off the census: `sum_ctor_arg`'s enum payload peels
         // its `Option` off the leaf's own reading.
         ("jni/trait_impl.rs", 4),

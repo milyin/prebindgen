@@ -2080,32 +2080,24 @@ pub(crate) fn plan_leaf_names(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -
 /// Lambda parameter name for a whole-value (plan-less) callback arg: the
 /// decapitalized bare type short (`ZQuery` → `zQuery`), peeling a `&` /
 /// `Option<…>` layer; `arg{i}` for non-path shapes.
-pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
-    let mut t = ty.clone();
-    if let syn::Type::Reference(r) = &t {
-        t = (*r.elem).clone();
-    }
-    if let syn::Type::Path(tp) = &t {
-        if let Some(last) = tp.path.segments.last() {
-            if last.ident == "Option" {
-                if let syn::PathArguments::AngleBracketed(ab) = &last.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
-                        t = inner.clone();
-                    }
-                }
-            }
-        }
-    }
-    if let syn::Type::Path(tp) = &t {
-        if let Some(last) = tp.path.segments.last() {
-            let s = last.ident.to_string();
+pub(crate) fn whole_value_name(ty: &crate::api::core::flat::TypeRef, i: usize) -> String {
+    use crate::api::core::flat::TypeKind;
+    // One borrow, then one `Option` — a fixed depth, not the general peel, and
+    // read off `kind()` rather than through `optional_inner` so a `Box` stops
+    // it here as it stopped the `syn::Type::Path` match before.
+    let t = ty.borrow_target().unwrap_or(ty);
+    let t = match t.kind() {
+        TypeKind::Optional(inner) => inner,
+        _ => t,
+    };
+    match crate::api::lang::jnigen::util::head_name(t) {
+        Some(s) => {
             let mut cs = s.chars();
-            if let Some(f) = cs.next() {
-                return kt_param_name(&format!("{}{}", f.to_lowercase(), cs.as_str()));
-            }
+            let f = cs.next().expect("a name is not empty");
+            kt_param_name(&format!("{}{}", f.to_lowercase(), cs.as_str()))
         }
+        None => format!("arg{i}"),
     }
-    format!("arg{i}")
 }
 
 /// Fall-back Kotlin type derived directly from the JNI wire type.
