@@ -1,7 +1,7 @@
 //! Flat, FFI-friendly example library demonstrating a **zero-copy** data struct.
 //!
 //! Every public function is annotated with `#[prebindgen]`, so `prebindgen`
-//! captures this surface and a language adapter (here `prebindgen::lang::Cbindgen`,
+//! captures this surface and a language adapter (here `prebindgen::lang::CbindgenBuilder`,
 //! driven by `perftest-c`) generates the FFI layer — no hand-written `extern "C"`
 //! glue.
 //!
@@ -78,10 +78,35 @@ pub struct Payload {
 /// boundary — the adapter boxes it and emits a typed destructor. (Not
 /// `#[prebindgen]` and not `#[repr(C)]`: it is a boxed handle, like `Calculator`
 /// in `example-flat`.)
-#[derive(Default)]
-pub struct Storage {
-    payloads: Vec<Payload>,
+mod handles {
+    use super::Payload;
+
+    #[derive(Default)]
+    pub struct Storage {
+        pub(super) payloads: Vec<Payload>,
+    }
+
+    pub struct PayloadHandler(pub(super) Box<dyn Fn(&Payload) + Send + Sync>);
+
+    pub struct PayloadVecHandler(pub(super) Box<dyn Fn(&[Payload]) + Send + Sync>);
+
+    pub struct Token {
+        pub(super) value: i64,
+    }
+
+    pub struct TokenGc {
+        pub(super) value: i64,
+    }
 }
+
+/// The handle types the flat API exports.
+///
+/// Each is a marked alias to a definition in the private `handles` module: that
+/// is how a type whose contents never cross gets a **name** in the flat API,
+/// which is what lets every signature below resolve. Marking the structs
+/// themselves would instead declare their fields a boundary surface.
+#[prebindgen]
+pub type Storage = handles::Storage;
 
 /// An opaque, reusable handle wrapping a **prepared** `Fn(&Payload)` callback.
 /// The foreign-side trampoline (e.g. the JNI global ref + method lookup that turn a
@@ -91,14 +116,16 @@ pub struct Storage {
 /// once, deliver events to it (cf. zenoh's `session_declare_subscriber` →
 /// `Subscriber`). Like [`Storage`], it is a boxed handle (not `#[prebindgen]`/
 /// `#[repr(C)]`); the adapter emits a typed destructor.
-pub struct PayloadHandler(Box<dyn Fn(&Payload) + Send + Sync>);
+#[prebindgen]
+pub type PayloadHandler = handles::PayloadHandler;
 
 /// Like [`PayloadHandler`], but its callback receives the **whole batch at once** as a
 /// slice (`Fn(&[Payload])`) rather than one payload at a time. Fired by
 /// [`storage_callback_vec`]. Across the C ABI the slice is delivered **by reference**
 /// (`const payload_t *` + `size_t` — zero-copy, no per-element materialization); in
 /// Kotlin it arrives as a `List<Payload>`.
-pub struct PayloadVecHandler(Box<dyn Fn(&[Payload]) + Send + Sync>);
+#[prebindgen]
+pub type PayloadVecHandler = handles::PayloadVecHandler;
 
 /// Create a new, empty storage handle.
 #[prebindgen]
@@ -191,7 +218,7 @@ pub fn storage_get_into_uninit(s: &Storage, payload: &mut MaybeUninit<Payload>) 
 /// built here, amortized over every later delivery).
 #[prebindgen]
 pub fn payload_handler_new(f: impl Fn(&Payload) + Send + Sync + 'static) -> PayloadHandler {
-    PayloadHandler(Box::new(f))
+    handles::PayloadHandler(Box::new(f))
 }
 
 /// Invoke the prepared `handler` once **per stored payload** with a borrow of each
@@ -201,7 +228,7 @@ pub fn payload_handler_new(f: impl Fn(&Payload) + Send + Sync + 'static) -> Payl
 /// element. In C the closure receives a `const payload_t *` (zero-copy); in Kotlin
 /// the borrowed `Payload` is delivered whole to the handler's
 /// `PayloadCallback.run(Payload)` (its fields cross as decoupled leaves and are
-/// reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
+/// reassembled on the Kotlin side — see `prebindgen::lang::JniGenBuilder`).
 #[prebindgen]
 pub fn storage_callback(s: &Storage, handler: &PayloadHandler) {
     for payload in &s.payloads {
@@ -246,7 +273,7 @@ pub fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> {
 pub fn payload_vec_handler_new(
     f: impl Fn(&[Payload]) + Send + Sync + 'static,
 ) -> PayloadVecHandler {
-    PayloadVecHandler(Box::new(f))
+    handles::PayloadVecHandler(Box::new(f))
 }
 
 /// Invoke the prepared `handler` **once** with the whole stored batch as a slice
@@ -278,9 +305,8 @@ pub fn string_len(s: &String) -> usize {
 /// benchmarked head-to-head to price the GC-cleanup machinery (atomic cell,
 /// Cleaner registration, CAS release ticket) per handle. A boxed handle like
 /// [`Storage`] (not `#[prebindgen]`, not `#[repr(C)]`).
-pub struct Token {
-    value: i64,
-}
+#[prebindgen]
+pub type Token = handles::Token;
 
 /// Create a plain benchmark token.
 #[prebindgen]
@@ -296,9 +322,8 @@ pub fn token_value(t: &Token) -> i64 {
 
 /// GC-managed twin of [`Token`] — identical shape and cost on the Rust side;
 /// the Kotlin binding declares this one `.gc_managed()`.
-pub struct TokenGc {
-    value: i64,
-}
+#[prebindgen]
+pub type TokenGc = handles::TokenGc;
 
 /// Create a gc-managed benchmark token.
 #[prebindgen]

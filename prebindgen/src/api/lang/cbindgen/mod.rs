@@ -1,4 +1,4 @@
-//! `Cbindgen` — the C / cbindgen language adapter.
+//! `CbindgenBuilder` — the C / cbindgen language adapter.
 //!
 //! # Experimental API
 //!
@@ -11,23 +11,23 @@
 //! parse into a C header plus a static / dynamic library.
 //!
 //! Items are **opt-in**: nothing is converted unless it is explicitly declared
-//! with [`Cbindgen::function`] / [`Cbindgen::opaque_ptr`] /
-//! [`Cbindgen::data_struct`] / [`Cbindgen::enum_type`] /
-//! [`Cbindgen::tagged_union`]. The C name of a declared
-//! type's generated destructor can be pinned by chaining [`Cbindgen::name`].
+//! with [`CbindgenBuilder::function`] / [`CbindgenBuilder::opaque_ptr`] /
+//! [`CbindgenBuilder::data_struct`] / [`CbindgenBuilder::enum_type`] /
+//! [`CbindgenBuilder::tagged_union`]. The C name of a declared
+//! type's generated destructor can be pinned by chaining [`CbindgenBuilder::name`].
 //!
 //! ## C ABI conventions
 //!
-//! * **Pointer struct** (declared with [`Cbindgen::opaque_ptr`]): a `Box`-owned
+//! * **Pointer struct** (declared with [`CbindgenBuilder::opaque_ptr`]): a `Box`-owned
 //!   Rust value whose lifecycle is owned by the C side. The C type `T` is
 //!   **opaque/incomplete** and the handle is a bare `T *` = `Box::into_raw`. A
 //!   typed `<name>_drop(T *)` destructor (running the Rust `Drop`) is generated
 //!   per handle.
-//! * **Data struct** (declared with [`Cbindgen::data_struct`]): a by-value
+//! * **Data struct** (declared with [`CbindgenBuilder::data_struct`]): a by-value
 //!   `#[repr(C)]` struct whose fields are mapped to C-ABI wire types
 //!   (`String` → `*mut c_char`). No per-struct destructor — each `char*` field
-//!   is released individually via the [`Cbindgen::free_memory_function`].
-//! * **Enum type** (declared with [`Cbindgen::enum_type`]): a fieldless enum,
+//!   is released individually via the [`CbindgenBuilder::free_memory_function`].
+//! * **Enum type** (declared with [`CbindgenBuilder::enum_type`]): a fieldless enum,
 //!   mirrored as a `#[repr(C)]` enum that cbindgen renders as the C enum.
 //!   Rust → C hands over the mirror directly (Rust only ever builds declared
 //!   variants). C → Rust must **not** do the reverse: a C `enum` is an `int` at
@@ -39,9 +39,9 @@
 //!   its raw `c_int` is validated against the mirror's variants before the Rust
 //!   value is built. An unmatched value is a fallible-input error (see below),
 //!   so a function taking an enum by value needs either a `Result` return or
-//!   [`Cbindgen::panic`]. This relies on cbindgen's C rendering; the `C++`
+//!   [`CbindgenBuilder::panic`]. This relies on cbindgen's C rendering; the `C++`
 //!   language mode is not supported.
-//! * **Tagged union** (declared with [`Cbindgen::tagged_union`]): a
+//! * **Tagged union** (declared with [`CbindgenBuilder::tagged_union`]): a
 //!   data-carrying enum crossing by value as a `#[repr(C)]` enum with payload
 //!   variants, which cbindgen renders as a tag enum plus a `union` of the
 //!   variant bodies. When any variant's payload wire owns memory, a typed
@@ -55,7 +55,7 @@
 //!   out-of-range one as nothing to release.
 //! * **Direct `String` output**: a bare `char *` — a `malloc`'d, null-terminated
 //!   raw block (no wrapper struct), freed via the `free_memory_function`.
-//! * **[`Cbindgen::free_memory_function`]**: the single, type-agnostic raw memory
+//! * **[`CbindgenBuilder::free_memory_function`]**: the single, type-agnostic raw memory
 //!   freer (C `free`) for every `char*` the layer hands out (string returns and
 //!   data-struct `String` fields). It runs no destructor and needs no length.
 //!   Required whenever such string memory is produced.
@@ -72,7 +72,7 @@
 //! ## Error handling (multiple error types)
 //!
 //! Any type used as the `E` of a `Result<T, E>` return **must be declared** as an
-//! error type via [`Cbindgen::data_struct`] + [`Cbindgen::error`] — otherwise the
+//! error type via [`CbindgenBuilder::data_struct`] + [`CbindgenBuilder::error`] — otherwise the
 //! build fails. Error types are ordinary data structs (marshalled by value) and
 //! must additionally implement `From<String>`.
 //!
@@ -85,12 +85,12 @@
 //! directly through `E`'s output converter.
 //!
 //! If a function can produce such an internal message but does **not** return
-//! `Result`, that is a build error — suppress it by chaining [`Cbindgen::panic`]
+//! `Result`, that is a build error — suppress it by chaining [`CbindgenBuilder::panic`]
 //! after the function declaration, which makes the wrapper `panic!` on the
 //! internal error instead.
 //!
 //! References to the original Rust types in generated bodies are written
-//! fully-qualified against [`Cbindgen::source_module`] so the generated file can
+//! fully-qualified against [`CbindgenBuilder::source_module`] so the generated file can
 //! define its own identically-named `#[repr(C)]` wrapper structs without
 //! colliding with the source crate's types.
 
@@ -108,12 +108,20 @@ pub(crate) use crate::api::core::types_util::{
 };
 use crate::api::{
     core::{
+        flat::Origin,
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen},
-        registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
+        registry::{extract_fn_trait_args, Conversions, Direction, Registry, TypeKey},
     },
     lang::jnigen::{ConvertDecl, ConvertSpec},
 };
+
+/// The origin of a type a **build script** wrote: real tokens, and deliberately
+/// no source position — `SourceLocation::default()` is the sanctioned placeless
+/// location for a type that was never in a captured file.
+fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
+    Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
+}
 
 /// Identity of a declared callback signature: its argument-type list (the
 /// dedup key, since two `impl Fn` params with the same args share one closure
@@ -121,18 +129,36 @@ use crate::api::{
 type CallbackKey = Vec<TypeKey>;
 
 /// Per-opaque-handle / per-data-struct / per-enum configuration.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct TypeCfg {
+    /// The type this declaration was **written with** — the `ty` handed to
+    /// `opaque_ptr` / `data_struct` / `enum_type` / `tagged_union`.
+    ///
+    /// A declarator receives a real `syn::Type` and used to keep only the key
+    /// derived from it, so later sites had to ask the key for the tokens back.
+    /// The declaration is where the type came from, and this is where it stays
+    /// (#291).
+    rust_type: Origin<syn::Type>,
     /// Per-declaration **base** token override, fed to the name manglers
     /// (`mangle_type_name` / `mangle_destructor` / `mangle_take`) in place of the
-    /// `mangle_rust_type`-derived base. Set by [`Cbindgen::base_name`]. `None` ⇒
+    /// `mangle_rust_type`-derived base. Set by [`CbindgenBuilder::base_name`]. `None` ⇒
     /// the base comes from `mangle_rust_type(short)` (or the short name).
     base: Option<String>,
 }
 
+impl TypeCfg {
+    /// A freshly declared type, no naming override yet.
+    fn new(rust_type: syn::Type) -> Self {
+        Self {
+            rust_type: declared_origin(rust_type),
+            base: None,
+        }
+    }
+}
+
 /// What an inline-opaque by-value type holds, which decides whether its consume
 /// path needs a gravestone write-back (and thus a [`crate::core::Gravestone`]
-/// impl). See [`Cbindgen::opaque_data_struct`] / [`Cbindgen::opaque_owned_struct`].
+/// impl). See [`CbindgenBuilder::opaque_data_struct`] / [`CbindgenBuilder::opaque_owned_struct`].
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum OpaqueKind {
     /// **Plain data** — holds no external resource (typically `Copy`, e.g. a
@@ -162,13 +188,13 @@ struct ValueOpaqueCfg {
     kind: OpaqueKind,
     /// When `true`, the `opaque` counterpart is **not** supplied externally but is
     /// an auto-generated **visible-field** `#[repr(C)]` mirror of the source struct,
-    /// emitted by [`Cbindgen::prereq_value_opaque`]. Set by
-    /// [`Cbindgen::repr_c_struct`]; `false` for `opaque_data_struct` /
+    /// emitted by [`CbindgenBuilder::prereq_value_opaque`]. Set by
+    /// [`CbindgenBuilder::repr_c_struct`]; `false` for `opaque_data_struct` /
     /// `opaque_owned_struct` (counterpart defined elsewhere).
     generate_mirror: bool,
     /// Opt-out of the restricted-validity field audit (#170 instance 3, #158
-    /// instance 3). Set by [`Cbindgen::assume_c_field_validity`]. See
-    /// [`Cbindgen::restricted_validity_field`] for what the audit rejects and
+    /// instance 3). Set by [`CbindgenBuilder::assume_c_field_validity`]. See
+    /// [`CbindgenBuilder::restricted_validity_field`] for what the audit rejects and
     /// why the escape hatch exists.
     assume_c_field_validity: bool,
     /// Name config (`.base_name()` override; default naming via the manglers).
@@ -176,36 +202,53 @@ struct ValueOpaqueCfg {
 }
 
 /// Per-declared-callback configuration.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct CbCfg {
+    /// The argument types this callback was declared with, in order.
+    ///
+    /// `CallbackKey` is a `Vec<TypeKey>` — a list of identities, which is what
+    /// the map is keyed by. Emission needs the argument *types*, and these are
+    /// the ones `extract_fn_trait_args` produced at declaration time (#291).
+    args: Vec<syn::Type>,
     /// Per-declaration **base** token override fed to `mangle_callback` (as the
     /// sole base, replacing the args' derived bases). Set by
-    /// [`Cbindgen::base_name`]. `None` ⇒ bases come from the arguments.
+    /// [`CbindgenBuilder::base_name`]. `None` ⇒ bases come from the arguments.
     base: Option<String>,
     /// Argument indices delivered to the C `call` as a **takeable owned pointer**
     /// (`*mut z_x_t`) instead of by value: the callee may take the value (move it
     /// out via `z_x_take`, leaving a gravestone) or just read it, and the
     /// trampoline drops it after the call (no-op if taken). Set by
-    /// [`Cbindgen::takeable_param`]; each such arg type must be an inline-opaque
-    /// type ([`Cbindgen::opaque_owned_struct`] / [`Cbindgen::opaque_data_struct`]).
+    /// [`CbindgenBuilder::takeable_param`]; each such arg type must be an inline-opaque
+    /// type ([`CbindgenBuilder::opaque_owned_struct`] / [`CbindgenBuilder::opaque_data_struct`]).
     takeable: std::collections::BTreeSet<usize>,
+}
+
+impl CbCfg {
+    /// A freshly declared callback signature, no naming or takeable overrides yet.
+    fn new(args: Vec<syn::Type>) -> Self {
+        Self {
+            args,
+            base: None,
+            takeable: std::collections::BTreeSet::new(),
+        }
+    }
 }
 
 /// Per-declared-function configuration.
 #[derive(Clone, Default)]
 struct FnCfg {
     /// Per-declaration **base** token override fed to `mangle_function` in place of
-    /// the Rust fn ident. Set by [`Cbindgen::base_name`]. `None` ⇒ the fn ident.
+    /// the Rust fn ident. Set by [`CbindgenBuilder::base_name`]. `None` ⇒ the fn ident.
     base: Option<String>,
     /// Allow the generated wrapper to `panic!` on an internal error message
-    /// (set by [`Cbindgen::panic`]). Only meaningful for non-`Result` functions
+    /// (set by [`CbindgenBuilder::panic`]). Only meaningful for non-`Result` functions
     /// that have a fallible input.
     panic: bool,
 }
 
-/// The declaration a chained modifier ([`Cbindgen::name`] / [`Cbindgen::error`]
-/// / [`Cbindgen::panic`]) applies to. Set by each declaration method, reset to
-/// `None` by root-level modifiers (e.g. [`Cbindgen::source_module`]).
+/// The declaration a chained modifier ([`CbindgenBuilder::name`] / [`CbindgenBuilder::error`]
+/// / [`CbindgenBuilder::panic`]) applies to. Set by each declaration method, reset to
+/// `None` by root-level modifiers (e.g. [`CbindgenBuilder::source_module`]).
 #[derive(Clone)]
 enum CurrentDecl {
     Ptr(TypeKey),
@@ -257,7 +300,7 @@ fn route_message(route: &ErrRoute<'_>) -> TokenStream {
 }
 
 /// How a parameter uses the resource it names — the axis
-/// [`Cbindgen::alias_preflight`] states its rule on.
+/// [`CbindgenBuilder::alias_preflight`] states its rule on.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AliasAccess {
     /// Taken by value: the callee owns it afterwards, and the C-side handle is
@@ -281,18 +324,65 @@ impl AliasAccess {
     }
 }
 
-/// C / cbindgen language adapter. Build it with [`Cbindgen::new`], declare the
+/// C / cbindgen language adapter. Build it with [`CbindgenBuilder::new`], declare the
 /// items to convert with the fluent methods, then drive it through
-/// [`Registry::resolve`](crate::core::Registry::resolve) →
-/// [`Generation::write_rust`](crate::core::Generation::write_rust).
-#[derive(Default)]
+/// [`CbindgenBuilder::build`] → [`Cbindgen::write_rust`].
+///
+/// A resolved C binding: every crossing has a conversion, and the header-facing
+/// Rust file can be written.
+///
+/// Built by [`CbindgenBuilder::build`]. Read-only, so `write_rust` is a pure
+/// emission over a complete registry.
 pub struct Cbindgen {
+    pub(crate) gen: CbindgenBuilder,
+    pub(crate) registry: crate::core::Registry<()>,
+}
+
+// Opaque — exists so `Result<Cbindgen, _>::expect_err` works in tests.
+impl std::fmt::Debug for Cbindgen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Cbindgen(..)")
+    }
+}
+
+impl Cbindgen {
+    /// Describe a C binding.
+    pub fn builder() -> CbindgenBuilder {
+        CbindgenBuilder::new()
+    }
+
+    /// Write the generated Rust file — the `extern "C"` wrappers and their
+    /// converters, which `cbindgen` then reads to emit the header.
+    pub fn write_rust(
+        &self,
+        out_path: impl AsRef<std::path::Path>,
+    ) -> Result<std::path::PathBuf, crate::core::WriteRustError> {
+        Ok(crate::api::core::write::write_rust(
+            &self.registry,
+            &self.gen,
+            out_path,
+        )?)
+    }
+
+    /// The resolved registry — conversions, decompositions, and the model.
+    pub fn registry(&self) -> &crate::core::Registry<()> {
+        &self.registry
+    }
+
+    /// What the binding declared.
+    pub fn declarations(&self) -> &CbindgenBuilder {
+        &self.gen
+    }
+}
+
+#[derive(Default)]
+pub struct CbindgenBuilder {
     /// Module path the original `#[prebindgen]` items live under. Used to
     /// fully-qualify bare references to source types in generated bodies.
     source_module: Option<syn::Path>,
     /// `#[prebindgen]` functions explicitly declared for conversion.
     functions: HashMap<syn::Ident, FnCfg>,
-    /// Canonical scalar conversions shared with JniGen.
+    /// Canonical scalar conversions shared with JniGenBuilder.
     convert_decls: Vec<ConvertDecl>,
     /// Per-conversion C naming base used for generated niche constants.
     convert_bases: HashMap<TypeKey, String>,
@@ -310,7 +400,7 @@ pub struct Cbindgen {
     enums: HashMap<TypeKey, TypeCfg>,
     /// Data-carrying enum types crossing by value as a `#[repr(C)]` enum with
     /// payload variants, which cbindgen renders as the idiomatic C tag +
-    /// `union`. Declared with [`Cbindgen::tagged_union`].
+    /// `union`. Declared with [`CbindgenBuilder::tagged_union`].
     tagged_unions: HashMap<TypeKey, TypeCfg>,
     /// Declared callback signatures (`impl Fn(...) + Send + Sync + 'static`),
     /// keyed by their argument-type list. Each emits one `#[repr(C)]` closure
@@ -351,6 +441,9 @@ pub struct Cbindgen {
     mangle_callback: Option<MangleN>,
     /// Rust function ident → exported `#[no_mangle]` symbol.
     mangle_function: Option<Mangle1>,
+    /// Where the `#[prebindgen]` items come from — see
+    /// `JniGenBuilder::source`.
+    pub(crate) sources: crate::api::core::flat::FlatBuilder,
 }
 
 /// A mangler over a single name component (Rust short name, base, or fn ident).
@@ -391,9 +484,9 @@ fn type_short(ty: &syn::Type) -> String {
 }
 
 /// The indexed `syn::ItemEnum` for a declared enum type, by tail ident.
-fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
+fn enum_item<'r>(registry: &'r impl Conversions<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
     let ident = type_path_tail(ty)?;
-    registry.enums.get(&ident).map(|(e, _)| e)
+    registry.flat().enum_item(&ident)
 }
 
 /// Hard error when a `.tagged_union()`-declared enum is unit-only. The
@@ -414,7 +507,7 @@ fn assert_payload_enum(e: &syn::ItemEnum) {
 
 /// If `fty` is an opaque-pointer payload — `Box<T>` or `Option<Box<T>>` with
 /// `T` a path type — return `T`. The shape check only; whether `T` is a
-/// declared `opaque_ptr` is [`Cbindgen::mirror_field_wire`]'s call, and this
+/// declared `opaque_ptr` is [`CbindgenBuilder::mirror_field_wire`]'s call, and this
 /// is only reached for a field that already passed it.
 fn opaque_ptr_payload_inner(fty: &syn::Type) -> Option<syn::Type> {
     if is_option(fty) {
@@ -498,7 +591,7 @@ fn assert_unit_enum(e: &syn::ItemEnum) {
 /// PascalCase → snake_case (`ZKeyExpr` → `z_key_expr`).
 /// Convert a `PascalCase` / `camelCase` identifier to `snake_case` (a
 /// convention-free helper, re-exported as `prebindgen::lang::snake_case` for
-/// consumers composing their own [`Cbindgen::mangle_rust_type`] rules).
+/// consumers composing their own [`CbindgenBuilder::mangle_rust_type`] rules).
 /// Thin alias for the core spelling, which sum-variant leaf naming shares.
 pub fn snake_case(s: &str) -> String {
     crate::api::core::types_util::pascal_to_snake(s)
@@ -597,16 +690,6 @@ fn is_scalar(ty: &syn::Type) -> bool {
             )
         })
         .unwrap_or(false)
-}
-
-/// Whether an array-producing output appears anywhere in `ty` (including nested
-/// under `Result`/`Option`/references).
-fn type_contains_vec(ty: &syn::Type) -> bool {
-    is_vec(ty)
-        || cow_slice_elem(ty).is_some()
-        || crate::api::core::registry::immediate_subtype_positions(ty)
-            .iter()
-            .any(type_contains_vec)
 }
 
 /// If `ty` is `Cow<'_, [E]>` with scalar `E`, return `E`.

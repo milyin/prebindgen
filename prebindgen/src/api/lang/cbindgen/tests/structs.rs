@@ -22,14 +22,14 @@ fn opaque_owned_transmute_by_value() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(out_fn), loc.clone()),
         (syn::Item::Fn(in_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
         .base_name("z_payload_t")
@@ -117,14 +117,14 @@ fn opaque_data_no_gravestone_writeback() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(out_fn), loc.clone()),
         (syn::Item::Fn(in_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_data_struct(syn::parse_quote!(Stamp), syn::parse_quote!(z_stamp_t))
         .base_name("z_stamp_t")
@@ -196,16 +196,16 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(make_fn), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(cb_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -284,14 +284,14 @@ fn repr_c_struct_owned_inferred_field_nulls_without_default() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -337,13 +337,13 @@ fn repr_c_struct_plain_data_has_no_writeback() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(take_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -385,14 +385,14 @@ fn repr_c_struct_bare_box_field_keeps_full_gravestone() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -450,15 +450,15 @@ fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(upd_fn), loc.clone()),
         (syn::Item::Fn(into_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -517,7 +517,7 @@ fn repr_c_struct_restricted_validity_field_is_rejected() {
                     unimplemented!()
                 }
             );
-            let registry = Registry::<()>::from_items([
+            let registry = crate::api::test_util::reg_from_items(declare_referenced([
                 (syn::Item::Struct(st), loc.clone()),
                 (
                     syn::Item::Enum(syn::parse_quote!(
@@ -529,10 +529,10 @@ fn repr_c_struct_restricted_validity_field_is_rejected() {
                     loc.clone(),
                 ),
                 (syn::Item::Fn(take), loc.clone()),
-            ])
+            ]))
             .expect("index items");
 
-            let cbindgen = Cbindgen::new()
+            let cbindgen = CbindgenBuilder::new()
                 .source_module(syn::parse_quote!(zenoh_flat))
                 .mangle_type_name(|base| format!("{base}_t"))
                 .mangle_destructor(|base| format!("{base}_drop"))
@@ -569,13 +569,13 @@ fn repr_c_struct_restricted_validity_field_accepted_when_acknowledged() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(take), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
@@ -612,15 +612,15 @@ fn repr_c_struct_restricted_validity_field_audited_even_when_output_only() {
         }
     );
     let registry = || {
-        Registry::<()>::from_items([
+        crate::api::test_util::reg_from_items(declare_referenced([
             (syn::Item::Struct(st.clone()), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
-        ])
+        ]))
         .expect("index items")
     };
 
     let declare = |acknowledged: bool| {
-        let mut c = Cbindgen::new()
+        let mut c = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .mangle_type_name(|base| format!("{base}_t"))
             .mangle_destructor(|base| format!("{base}_drop"))

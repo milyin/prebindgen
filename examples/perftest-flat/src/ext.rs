@@ -22,7 +22,62 @@
 //!   milliseconds, with `Option<Duration>` using an invalid representation as
 //!   an allocation-free niche.
 
-pub use std::time::Duration;
+/// Marked, so `Duration` is a name the flat API declares rather than one it
+/// merely mentions.
+#[prebindgen]
+pub type Duration = std::time::Duration;
+
+/// The handle types this module's flat API exports.
+///
+/// Definitions live here and the flat API exports marked aliases to them, so
+/// each has a **name** every signature can resolve against without declaring
+/// its fields a boundary surface. See `lib.rs`'s `handles` for the same shape.
+mod handles {
+    use super::{Lookup, Reading, Stamp, Storage};
+
+    #[derive(Clone)]
+
+    pub struct Summary {
+        pub(super) count: i64,
+        pub(super) total: f64,
+    }
+
+    pub struct Archive {
+        pub(super) latest: Option<Summary>,
+        /// A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
+        /// — the return shape whose encoder must match on the value behind the
+        /// reference rather than moving it.
+        pub(super) reading: Reading,
+        /// The same, optional, for the `Option<&Reading>` shape.
+        pub(super) fallback: Option<Reading>,
+    }
+
+    pub struct Ledger {
+        pub(super) filed: Option<Report>,
+        pub(super) archived: Option<i64>,
+    }
+
+    #[derive(Clone)]
+    pub struct Report {
+        pub(super) summary: Summary,
+        pub(super) taken: Option<Stamp>,
+        pub(super) origin: Stamp,
+        pub(super) outcome: Lookup,
+        pub(super) label: String,
+    }
+
+    pub struct EscapeProbe {
+        pub(super) value: i64,
+    }
+
+    #[derive(Debug)]
+
+    pub struct StorageError {
+        pub(super) message: String,
+    }
+
+    pub struct StorageHandler(pub(super) Box<dyn Fn(Storage) + Send + Sync>);
+}
 
 use prebindgen_proc_macro::prebindgen;
 
@@ -86,7 +141,7 @@ pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
 /// single-payload tuple variant, a multi-field named variant, and a tuple
 /// variant whose payloads include a declared `enum_class`. The binding maps it
 /// to a Kotlin `sealed interface` with the variants nested inside
-/// (`lang::JniGen` `sealed_class!`).
+/// (`lang::JniGenBuilder` `sealed_class!`).
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Reading {
@@ -427,10 +482,8 @@ pub fn stamp_series(count: i64) -> Vec<Stamp> {
 /// Failure value for the fallible storage constructor. Never crosses as a
 /// value: the binding peels the `Result`, renders the message through
 /// [`storage_error_message`], and delivers it to the caller's `onError`.
-#[derive(Debug)]
-pub struct StorageError {
-    message: String,
-}
+#[prebindgen]
+pub type StorageError = handles::StorageError;
 
 /// Render a [`StorageError`] as its message (the error's flatten-output
 /// **accessor**, fed to `onError`).
@@ -497,11 +550,8 @@ pub fn storage_try_from_stamp(s: Stamp, tag: [u8; 2]) -> Result<Storage, Storage
 /// `Clone` because [`archive_latest`] returns it *borrowed* (`Option<&Summary>`)
 /// and the JVM binding's only sound lowering of a borrowed handle is a clone
 /// into a fresh owned handle.
-#[derive(Clone)]
-pub struct Summary {
-    count: i64,
-    total: f64,
-}
+#[prebindgen]
+pub type Summary = handles::Summary;
 
 /// Construct a [`Summary`] from its parts (declared a **constructor** /
 /// companion factory, and the build-from **variant** of the flatten-input).
@@ -654,6 +704,7 @@ pub fn storage_with_payload(payload: Payload) -> Storage {
 /// marking it would make the Kotlin emitter try to render this tuple struct as a
 /// data class.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Millis(pub u64);
 
 /// Sum two durations (exercises the custom wrapper on both a **parameter** and
@@ -678,6 +729,18 @@ pub const DURATION_MAX_MILLIS: u64 = 86_400_000;
 /// representation and range.
 #[prebindgen]
 pub fn duration_optional(value: Option<Duration>) -> Option<Duration> {
+    value
+}
+
+/// A transparent wrapper over a **`convert!`-declared** type, both directions.
+///
+/// `Duration` reaches its Rust value through a staged chain
+/// (`jlong -> u64 -> Duration`), and the transparent bridge used to call the
+/// inner converter's function directly and leave `pre_stages` empty — so the
+/// stages were skipped and the rebuild put `Box::new` around a `u64`. Not a
+/// silent wrong value: `E0308` in the generated crate (#309).
+#[prebindgen]
+pub fn boxed_duration_echo(value: Box<Duration>) -> Box<Duration> {
     value
 }
 
@@ -772,6 +835,7 @@ pub fn hold_policy_echo(p: HoldPolicy) -> HoldPolicy {
 /// A temperature. Crosses via its `From`/`Into` impls
 /// (`convert!(Celsius).input_from(ty!(i32)).output_into(ty!(i32))`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Celsius(pub i32);
 
 impl From<i32> for Celsius {
@@ -796,6 +860,7 @@ pub fn celsius_double(c: Celsius) -> Celsius {
 /// `TryFrom<i32>` on input (out-of-range i32 from the JVM → the caller's
 /// error handler) and an infallible `Into<i32>` on output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Percent(pub u8);
 
 impl TryFrom<i32> for Percent {
@@ -840,6 +905,7 @@ pub fn percent_invalid_output() -> Option<Percent> {
 /// crate** (`convert!(Label).input_with(ty!(String), path!(crate::label_in))…`)
 /// — no `#[prebindgen]` marking anywhere in the conversion.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[prebindgen]
 pub struct Label(pub String);
 
 /// Reverse a label's characters (exercises the binding-local conversion on
@@ -1210,12 +1276,13 @@ pub fn storage_shards_opt(count: i64, each: i64) -> Option<Vec<Storage>> {
 /// by value). Unlike [`PayloadHandler`] (whose arg is a flattened data class),
 /// the handle crosses as a raw pointer and the generated Kotlin proxy wraps it
 /// into a typed `Storage` and `close()`s it after `run` (close-unless-taken).
-pub struct StorageHandler(Box<dyn Fn(Storage) + Send + Sync>);
+#[prebindgen]
+pub type StorageHandler = handles::StorageHandler;
 
 /// Wrap a `Fn(Storage)` closure into a reusable [`StorageHandler`].
 #[prebindgen]
 pub fn storage_handler_new(f: impl Fn(Storage) + Send + Sync + 'static) -> StorageHandler {
-    StorageHandler(Box::new(f))
+    handles::StorageHandler(Box::new(f))
 }
 
 /// Build a synthetic storage of `n` payloads and hand **ownership** of it to
@@ -1233,15 +1300,8 @@ pub fn storage_emit(n: i64, h: &StorageHandler) {
 /// **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 /// zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 /// owned handle (the JVM keeps its handle past the call).
-pub struct Archive {
-    latest: Option<Summary>,
-    /// A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
-    /// — the return shape whose encoder must match on the value behind the
-    /// reference rather than moving it.
-    reading: Reading,
-    /// The same, optional, for the `Option<&Reading>` shape.
-    fallback: Option<Reading>,
-}
+#[prebindgen]
+pub type Archive = handles::Archive;
 
 impl Default for Archive {
     fn default() -> Self {
@@ -1365,9 +1425,8 @@ pub fn cover_tag_runtime() -> String {
 /// extern is mangled to an underscored method name — so its `freePtr`
 /// destructor and accessor symbols only resolve at runtime if the generator
 /// applies the JNI spec's `_1` escaping.
-pub struct EscapeProbe {
-    value: i64,
-}
+#[prebindgen]
+pub type EscapeProbe = handles::EscapeProbe;
 
 /// Construct an [`EscapeProbe`] (its covertest constructor).
 #[prebindgen]
@@ -1402,15 +1461,10 @@ pub fn escape_probe_value(p: &EscapeProbe) -> i64 {
 ///
 /// `Clone` because a CONSUMING value form reached through a BORROW has nothing
 /// to take and must clone first — see [`ledger_filed`]. Only the borrowed
-/// position needs it; an owned payload is moved.
-#[derive(Clone)]
-pub struct Report {
-    summary: Summary,
-    taken: Option<Stamp>,
-    origin: Stamp,
-    outcome: Lookup,
-    label: String,
-}
+/// position needs it; an owned payload is moved. The derive lives on the
+/// definition in `handles`, since this is only its name in the flat API.
+#[prebindgen]
+pub type Report = handles::Report;
 
 /// The value form of [`Report`]: its fields as data, handles staying handles.
 #[prebindgen]
@@ -1503,10 +1557,8 @@ pub fn report_each(n: i64, sink: impl Fn(Report) + Send + Sync + 'static) {
 /// value-form call — the borrowed one is passed through (and cloned by a
 /// by-value accessor), the owned one is moved into it — and only one of the two
 /// is exercised by any single accessor.
-pub struct Ledger {
-    filed: Option<Report>,
-    archived: Option<i64>,
-}
+#[prebindgen]
+pub type Ledger = handles::Ledger;
 
 /// Build a [`Ledger`]; `n` selects which of the two slots are filled (bit 0 =
 /// `filed`, bit 1 = `archived`), so a caller can drive every arm of the
@@ -1537,6 +1589,205 @@ pub fn ledger_filed(l: &Ledger) -> Option<&Report> {
 #[prebindgen]
 pub fn ledger_archived(l: &Ledger) -> Option<Report> {
     l.archived.map(ledger_report)
+}
+
+/// A **transparent wrapper**, and its unwrapped control.
+///
+/// The model erases `Box`, so `Box<Box<Option<String>>>` classifies `Optional`
+/// exactly as a bare `Option<String>` does — one thing to every destination
+/// language, two spellings to Rust. That gap is the whole of #270: the adapter
+/// used to decide what a type *was* by rebuilding a pattern from its spelling,
+/// so a wrapped `Option` reconstructed as `Box<_>`, matched nothing, and got no
+/// converter at all.
+///
+/// Declared here rather than only in a unit test because this crate's generated
+/// binding is `include!`d and **compiled**: a converter that named
+/// `Option<String>` for a `Box<Box<Option<String>>>` value, or bridged it with
+/// the wrong number of dereferences, fails to build. Nested deliberately — one
+/// dereference leaves a `Box<Option<String>>`, which still compiles as a
+/// *type* and would only fail here.
+///
+/// A `Cow` payload is the other half and cannot appear in a compiled fixture:
+/// it must be REFUSED, which only
+/// `a_transparent_wrapper_is_bridged_only_where_it_can_be` can assert.
+///
+/// The **parameter** is wrapped too, and that half is #273: nullability was
+/// decided by asking the spelling whether its last path segment read `Option`,
+/// so this rendered `note: String` while `plain_note_echo` rendered
+/// `note: String?`. A non-null Kotlin parameter for an optional value is a
+/// wrong contract rather than a cosmetic one — Kotlin rejects `null` at the
+/// call site, so the absent case becomes unexpressible. The two externs must
+/// come out **identical**.
+#[prebindgen]
+pub fn boxed_note_echo(note: Box<Option<String>>) -> Box<Box<Option<String>>> {
+    Box::new(note)
+}
+
+/// The same crossing with nothing wrapped — the control the wrapped form must
+/// match, since the model says the two signatures are the same type.
+#[prebindgen]
+pub fn plain_note_echo(note: Option<String>) -> Option<String> {
+    note
+}
+
+/// A transparent wrapper over a **decomposed** return — the shape `boxed_note_echo`
+/// does not reach.
+///
+/// `boxed_note_echo`'s return takes an output *converter*, which is selected for
+/// the spelling and therefore names `Box<Option<String>>` itself. This one has
+/// no converter at all: `Summary` carries a declared output expansion, so the
+/// extern **binds the returned value and matches it** to deliver the leaves to a
+/// builder. Match ergonomics does not see through a `Box`, so the emitter has to
+/// move the value out of the wrappers the classification erased before it can
+/// destructure — the defect #292's audit found, and one this crate compiles.
+///
+/// The unwrapped twin is [`archive_latest`], which crosses as the same
+/// `Summary?`.
+#[prebindgen]
+pub fn boxed_latest(a: &Archive) -> Box<Option<Summary>> {
+    Box::new(a.latest.clone())
+}
+
+/// An `Option<data class>` whose data class has a **required handle** field.
+///
+/// The shape that proves an optional node's field decodes stay **inside** its
+/// presence gate. When the Kotlin object is null every leaf carries an inert
+/// placeholder, and a handle leaf's placeholder is pointer `0` — which the
+/// direct-handle decode reads as a closed handle, signals a binding error for,
+/// and returns from. Hoisting the decodes out of the gate therefore turns
+/// `null` into an error instead of `None`, and no fixture whose fields all
+/// decode successfully can tell the difference.
+///
+/// `Summary` is consumed by value here, as a handle field is: the `Some` case
+/// hands over ownership, and the `None` case must never touch the slot.
+#[prebindgen]
+pub struct Holder {
+    pub tag: i64,
+    pub summary: Summary,
+}
+
+/// `tag` when the holder is present, `fallback` when it is absent — so the
+/// absent arm is observable as a **value** rather than as an error.
+#[prebindgen]
+pub fn holder_tag_or(h: Option<Holder>, fallback: i64) -> i64 {
+    match h {
+        Some(h) => h.tag + h.summary.count,
+        None => fallback,
+    }
+}
+
+/// A data class whose **fields** carry transparent wrappers.
+///
+/// This is what #289 changes and why it could not land alone. The field walk
+/// used to peel with `option_inner_type`, which reads the last path segment: a
+/// field spelled `Box<Option<i64>>` answered "not optional" and crossed as one
+/// boxed `java.lang.Long`. The model says `Optional`, so it now takes the
+/// decoupled `(present, value)` pair its bare twin does — and the emitter has to
+/// put the `Box` back when it rebuilds, or the migration turns a working boxed
+/// crossing into an `E0308`.
+///
+/// `plain` is the control: the two fields must produce the same wire, since the
+/// model says they are the same type.
+#[prebindgen]
+pub struct WrappedFields {
+    pub id: i64,
+    pub boxed: Box<Option<i64>>,
+    pub plain: Option<i64>,
+    /// The same pairing over a **terminal**, which is the shape that had no
+    /// outbound route at all: `Box<Option<_>>` above rides the `Optional` layer
+    /// arm, while `Box<Priority>` classifies as `Named` and no arm claims it
+    /// (#309). Both must present as `Priority` in Kotlin — the wrapper is
+    /// invisible there, which is why the model erases it.
+    pub boxed_enum: Box<Priority>,
+    pub plain_enum: Priority,
+}
+
+/// Round-trip a [`WrappedFields`] so both field spellings cross in one call.
+#[prebindgen]
+pub fn wrapped_fields_sum(w: WrappedFields) -> i64 {
+    w.id + w.boxed.unwrap_or(0)
+        + w.plain.unwrap_or(0)
+        + i64::from(priority_weight(*w.boxed_enum))
+        + i64::from(priority_weight(w.plain_enum))
+}
+
+/// Transparent wrappers on the **input** side, one per specialized lowering.
+///
+/// These lowerings do not *decode* their parameter, they **rebuild** it — a
+/// literal `Payload { .. }`, an `Option::Some(v)`, a `Vec<T>` pushed element by
+/// element — so the wrappers the classification erased have to go back on before
+/// the value reaches the signature. Rebuilding from the classification alone
+/// hands an `Option<Payload>` to a parameter spelled `Box<Option<Payload>>`:
+/// `E0308` (#292 item 3, which replaced #290's refusals).
+///
+/// Declared here rather than only in unit tests for the reason
+/// [`boxed_note_echo`] is: this crate's generated binding is `include!`d and
+/// **compiled**, so a missing or misplaced `Box::new` fails the build. Each has
+/// an unwrapped twin already declared — the surfaces must come out identical,
+/// since the model says the two spellings are one type.
+///
+/// The layers are covered separately because each is applied at a different
+/// point in the construction, and only a shape that exercises one can show it:
+/// the core wrap goes inside the present gate, and the optional wrap around it.
+///
+/// **`Box<&Payload>` is deliberately absent.** The flatten lowering could build
+/// it — it owns a local and `Box::new(&local)` is well-typed — but a declared
+/// parameter also needs a general converter entry, and a converter *produces* an
+/// owned value: there is nothing for a `Box<&T>` to borrow from that outlives
+/// the call (`E0106` on the generated signature). So the shape is refused at
+/// resolution, by the converter's nature rather than the wrapper's.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_payload_id(p: Box<Payload>) -> i64 {
+    p.id
+}
+
+/// The optional layer over the same rebuild — the wrap goes **around** the
+/// present gate, where the core wrap goes inside it.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_opt_payload_id(p: Box<Option<Payload>>) -> i64 {
+    p.as_ref().as_ref().map(|p| p.id).unwrap_or(-1)
+}
+
+/// The option-scalar lowering (`(present, value)` raw pair) under a wrapper —
+/// the rebuilt `Option` is re-wrapped before it reaches the signature.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_opt_priority_weight(p: Box<Option<Priority>>) -> i64 {
+    match *p {
+        Some(v) => priority_weight(v) as i64,
+        None => -1,
+    }
+}
+
+/// A wrapped **element** in the Vec-build path: the storage is `Vec<Box<Payload>>`
+/// and each push wraps its own literal.
+#[prebindgen]
+pub fn boxed_elem_id_sum(ps: Vec<Box<Payload>>) -> i64 {
+    ps.iter().map(|p| p.id).sum()
+}
+
+/// A wrapped **run**, by value: `mem::take` yields the owned `Vec`, so the
+/// `Box` costs nothing. The borrowed twin (`&Box<Vec<Payload>>`) is deliberately
+/// **not** declared — interposing a `Box` between the caller's Vec and the
+/// callee would require copying it, so that shape keeps the ordinary path.
+#[prebindgen]
+// A boxed parameter IS the point here — clippy is right that the `Box` buys
+// nothing, and that is what makes it a fixture: the binding must cross it as
+// the unwrapped type and put the wrapper back.
+#[allow(clippy::boxed_local)]
+pub fn boxed_run_id_sum(ps: Box<Vec<Payload>>) -> i64 {
+    ps.iter().map(|p| p.id).sum()
 }
 
 /// Deliver a [`Ledger`] to a callback, so both conditional decompositions cross

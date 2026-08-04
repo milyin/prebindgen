@@ -6,18 +6,135 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::api::core::registry::Registry;
+use crate::api::core::registry::{Registry, RegistryBuilder};
 
-/// Index a `Registry` from a list of Rust function sources.
-pub(crate) fn reg_with(fns: &[&str]) -> Registry<()> {
-    let items = fns
+/// Index a `Registry` from a list of Rust item sources.
+///
+/// Accepts any item, not just a fn, so a fixture can declare the types it names.
+/// Whatever it does *not* declare is supplied by [`declare_referenced`], because
+/// these fixtures exist to exercise plan shapes and a handle declaration is noise
+/// in them.
+pub(crate) fn reg_with<M>(sources: &[&str]) -> RegistryBuilder<M> {
+    let items = sources
         .iter()
         .map(|src| {
-            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
-            (syn::Item::Fn(f), crate::SourceLocation::default())
+            let item: syn::Item = syn::parse_str(src).expect("parse item");
+            (item, crate::SourceLocation::default())
         })
         .collect::<Vec<_>>();
-    Registry::from_items(items).expect("index")
+    reg_from_items(declare_referenced(items)).expect("index")
+}
+
+/// A **scanned** registry from item sources — for tests that drive `expand` /
+/// `unfold` directly and need the type tables populated, without going through
+/// a generator's conversion loop.
+pub(crate) fn scanned_with<M>(sources: &[&str]) -> Registry<M> {
+    reg_with(sources).scanned().expect("scan")
+}
+
+/// A type as a **build script** would declare it: real tokens, no source
+/// position. What
+/// [`RegistryBuilder::export_type`](crate::api::core::registry::RegistryBuilder::export_type)
+/// takes.
+pub(crate) fn declared_origin(ty: syn::Type) -> crate::core::flat::Origin<syn::Type> {
+    crate::core::flat::Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
+}
+
+/// One type as the **model** reads it, for a test that needs a `TypeRef` and has
+/// only a spelling.
+///
+/// Minting is sealed to `api::core` (#280), and rightly — a hand-assembled
+/// reading could pair a `kind` with a disagreeing `syntax`, which is the one
+/// thing holding a `TypeRef` is supposed to rule out. So this does not reach
+/// around the seal: it puts the spelling in a parameter position, runs the real
+/// parse, and hands back the reading the model produced. A spelling the grammar
+/// refuses panics here rather than yielding something weaker.
+pub(crate) fn reading(ty: syn::Type) -> crate::core::flat::TypeRef {
+    let item: syn::Item = syn::parse_quote!(
+        pub fn __probe(v: #ty) {
+            unimplemented!()
+        }
+    );
+    let flat = crate::core::Flat::builder()
+        .items(declare_referenced(vec![(
+            item,
+            crate::SourceLocation::default(),
+        )]))
+        .build()
+        .expect("the probe parses");
+    flat.function("__probe")
+        .expect("the probe is indexed")
+        .params[0]
+        .ty
+        .clone()
+}
+
+/// Build a `Registry` from an item stream, the way `Registry::from_items` used
+/// to before reading captured output became `FlatBuilder`'s job alone.
+///
+/// Test-only sugar: the two steps are one line each in a build script, but they
+/// appear in dozens of fixtures here.
+pub(crate) fn reg_from_items<M, I>(items: I) -> Result<RegistryBuilder<M>, crate::core::ScanError>
+where
+    I: IntoIterator<Item = (syn::Item, crate::SourceLocation)>,
+{
+    let flat = crate::core::Flat::builder().items(items).build()?;
+    Registry::builder(flat)
+}
+
+/// Append a marked type alias for every nominal type the stream names but never
+/// declares, so a fixture satisfies the flat API's self-sufficiency rule.
+///
+/// A fixture that is *about* a handle's treatment already declares it; this covers
+/// the ones where the handle is incidental — `reg_with(&["fn get(s: &Storage) -> Payload"])`
+/// is testing an unfold plan, not what `Storage` is. Declaring them as
+/// [`Extern`](crate::core::flat::Extern)s is exactly what a real source crate does
+/// for a foreign handle, and it is inert for the registry either way: a type alias
+/// lands in no registry map.
+///
+/// Runs to a fixed point, since a declaration can only ever resolve more references.
+/// It cannot help a **path-qualified** name (`std::time::Duration`), which no
+/// declaration can name — such a fixture has to spell the type bare and declare it.
+pub(crate) fn declare_referenced<I>(items: I) -> Vec<(syn::Item, crate::SourceLocation)>
+where
+    I: IntoIterator<Item = (syn::Item, crate::SourceLocation)>,
+{
+    use crate::api::core::flat::{Flat, ItemError};
+
+    let mut items: Vec<(syn::Item, crate::SourceLocation)> = items.into_iter().collect();
+
+    loop {
+        let flat = Flat::builder()
+            .items(items.iter().cloned())
+            .build()
+            .expect("fixture parses");
+        // A set: the same name is reported once per referencing item.
+        let missing: std::collections::BTreeSet<String> = flat
+            .unsupported()
+            .filter_map(|u| match &*u.error {
+                // Skip a name the stream already holds. Refusal is transitive, so a
+                // declared struct whose own field is undeclared reports as
+                // unresolved too — declaring an alias for it would collide. Adding
+                // the root name resolves it on the next round.
+                ItemError::UnresolvedType { name }
+                    if !name.contains("::") && flat.element(name).is_none() =>
+                {
+                    Some(name.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        if missing.is_empty() {
+            return items;
+        }
+        for name in missing {
+            let ident = quote::format_ident!("{name}");
+            let alias: syn::Item = syn::parse_quote!(
+                pub type #ident = __fixture::#ident;
+            );
+            items.push((alias, crate::SourceLocation::default()));
+        }
+    }
 }
 
 /// A process-unique temp directory for a test that writes files. Keyed by

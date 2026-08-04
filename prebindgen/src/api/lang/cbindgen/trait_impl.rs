@@ -1,11 +1,12 @@
 use super::{builder::callback_fn_type, *};
+use crate::api::core::registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 /// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
 /// otherwise); [`Prebindgen::on_input_type`] chains them in priority order
 /// before the wrapper shapes. The categories are mutually exclusive, so the
 /// chain's fall-through is equivalent to a sequential `if … return` block.
-impl Cbindgen {
+impl CbindgenBuilder {
     /// Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
     /// handle → message). The wire is the bare handle pointer `*mut #c_struct`.
     pub(crate) fn in_opaque_handle(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
@@ -45,7 +46,7 @@ impl Cbindgen {
     pub(crate) fn in_data_struct(
         &self,
         ty: &syn::Type,
-        r: &Registry<()>,
+        r: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.data.contains_key(&key) {
@@ -120,7 +121,7 @@ impl Cbindgen {
     /// invalid `Box`) forces the full `gravestone()` write.
     fn nullable_owned_ptr_fields(
         &self,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         ty: &syn::Type,
     ) -> Option<Vec<syn::Ident>> {
         let cfg = self.value_opaque.get(&TypeKey::from_type(ty))?;
@@ -151,7 +152,7 @@ impl Cbindgen {
     /// declared `kind` (its fields are an opaque blob the generator can't introspect).
     fn value_opaque_writeback(
         &self,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         ty: &syn::Type,
         slot: &syn::Ident,
     ) -> Option<TokenStream> {
@@ -213,7 +214,7 @@ impl Cbindgen {
     pub(crate) fn in_value_opaque(
         &self,
         ty: &syn::Type,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let opaque = self.value_opaque_ty(ty)?.clone();
         let name = Self::in_name(ty);
@@ -269,7 +270,11 @@ impl Cbindgen {
     /// no generator-side evaluation. An unmatched value is a binding error
     /// through the wrapper's error channel; no Rust enum is ever constructed
     /// from it.
-    pub(crate) fn in_enum(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_enum(
+        &self,
+        ty: &syn::Type,
+        r: &impl Conversions<()>,
+    ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.enums.contains_key(&key) {
             return None;
@@ -437,10 +442,10 @@ impl Cbindgen {
     }
 }
 
-/// Per-section [`Cbindgen::prerequisites`] emitters. Each returns the runtime-
+/// Per-section [`CbindgenBuilder::prerequisites`] emitters. Each returns the runtime-
 /// support items for one concern; the trait method concatenates them in order,
 /// so the emitted preamble is identical to the former single function.
-impl Cbindgen {
+impl CbindgenBuilder {
     /// C allocator extern + raw C-string allocator + the universal memory freer.
     /// Emitted when the layer hands `char*`/array memory to C. Panics if such
     /// memory is produced but no `.free_memory_function` is declared.
@@ -527,10 +532,16 @@ impl Cbindgen {
     fn prereq_opaque_handles(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.opaque) {
-            let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            // Keyed directly: this used to spell the key into tokens purely so
+            // `reading_of` could re-key them, twice (#291).
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
+            {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let c_struct = self.c_type_ident(&ty);
             // Opaque/incomplete C type: the handle is `#c_struct *`, which IS the
             // `Box::into_raw` pointer to the source value.
@@ -562,10 +573,14 @@ impl Cbindgen {
     fn prereq_data_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.data) {
-            let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
+            {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let Some(fields) = self.struct_fields(registry, &ty) else {
                 continue;
             };
@@ -604,10 +619,14 @@ impl Cbindgen {
         let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
         vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
         for (key, cfg) in vo {
-            let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
+            {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let src = self.src_ty(&ty);
             let opaque = &cfg.opaque;
             // `repr_c_struct`: the opaque counterpart is an auto-generated
@@ -787,7 +806,7 @@ impl Cbindgen {
     /// Deliberately NOT routed through the shared
     /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values).
     /// That helper resolves each variant to a concrete `i64`, which is what an
-    /// adapter needs when it must *know the number* — JniGen's `jint` decode
+    /// adapter needs when it must *know the number* — JniGenBuilder's `jint` decode
     /// and the Kotlin `value(N)` constants. This mirror needs no number: it is
     /// Rust source that cbindgen re-reads, so passing the expression through
     /// keeps every discriminant C already accepted — a `const` or `cfg`-driven
@@ -801,10 +820,14 @@ impl Cbindgen {
     fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
-            let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
+            {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
@@ -834,7 +857,7 @@ impl Cbindgen {
     /// the idiomatic C tagged union, with no hand-written header fragment.
     /// Variant shape is mirrored faithfully (named stays named, tuple stays
     /// tuple, unit stays unit); each payload field takes the wire chosen by
-    /// [`Cbindgen::payload_field_wire`].
+    /// [`CbindgenBuilder::payload_field_wire`].
     ///
     /// A union whose payload wires own memory also gets a typed
     /// `<base>_drop(t_t *)` that frees the **active arm** and nulls the freed
@@ -843,10 +866,14 @@ impl Cbindgen {
     fn prereq_tagged_unions(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
-            let ty = key.to_type();
-            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+            let Some(reading) = registry.reading(key) else {
+                continue;
+            };
+            if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none()
+            {
                 continue;
             }
+            let ty = reading.syntax().clone();
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
@@ -1049,13 +1076,13 @@ impl Cbindgen {
     /// read from the front as a plain `c_int` and range-checked against the
     /// variants (the mirror carries no explicit discriminants, so its tags are
     /// declaration order `0..N`). Only then is the value `assume_init`ed —
-    /// which is sound because [`Cbindgen::payload_field_wire`] makes every
+    /// which is sound because [`CbindgenBuilder::payload_field_wire`] makes every
     /// payload wire bit-pattern-agnostic, leaving the tag as the sole
     /// obligation.
     pub(crate) fn in_tagged_union(
         &self,
         ty: &syn::Type,
-        r: &Registry<()>,
+        r: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.tagged_unions.contains_key(&key) {
@@ -1074,7 +1101,11 @@ impl Cbindgen {
         // degrades to a passthrough and the generated code does not compile.
         for v in &e.variants {
             for f in &v.fields {
-                if self.payload_needs_converter(&f.ty) && r.input_entry(&f.ty).is_none() {
+                if self.payload_needs_converter(&f.ty)
+                    && r.reading_of(&f.ty)
+                        .and_then(|tr| r.input_entry(&tr))
+                        .is_none()
+                {
                     return None;
                 }
             }
@@ -1185,7 +1216,7 @@ impl Cbindgen {
     pub(crate) fn out_tagged_union(
         &self,
         ty: &syn::Type,
-        r: &Registry<()>,
+        r: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.tagged_unions.contains_key(&key) {
@@ -1199,7 +1230,11 @@ impl Cbindgen {
         // Deferral, as in `in_tagged_union` — the output counterpart.
         for v in &e.variants {
             for f in &v.fields {
-                if self.payload_needs_converter(&f.ty) && r.output_entry(&f.ty).is_none() {
+                if self.payload_needs_converter(&f.ty)
+                    && r.reading_of(&f.ty)
+                        .and_then(|tr| r.output_entry(&tr))
+                        .is_none()
+                {
                     return None;
                 }
             }
@@ -1255,7 +1290,7 @@ impl Cbindgen {
         &self,
         fty: &syn::Type,
         b: &syn::Ident,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> TokenStream {
         if is_string(fty) {
             return quote!(if #b.is_null() {
@@ -1270,6 +1305,36 @@ impl Cbindgen {
             // out-of-range one propagates out of the union's own converter.
             let conv = Self::in_name(fty);
             return quote!(#conv(#b)?);
+        }
+        // The same opaque-pointer arm the wire took, for a spelling with no
+        // `Box` in it: the C caller still hands over a `*mut handle_t` it gave
+        // up ownership of, so the pointer is reclaimed the same way — the value
+        // is just moved out of the box instead of kept in one. Conversion
+        // follows the SYNTAX; the C type followed `kind` + the declaration.
+        if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
+            let src_inner = self.src_ty(&inner);
+            let owned = quote!(*::std::boxed::Box::from_raw(#b as *mut #src_inner));
+            let null_msg = format!(
+                "null payload for `{}` (a non-optional handle payload cannot be NULL — the \
+                 union may already have been dropped)",
+                type_short(&inner)
+            );
+            return if is_option(fty) {
+                quote!(if #b.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(#owned)
+                })
+            } else {
+                quote!({
+                    if #b.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_msg),
+                        );
+                    }
+                    #owned
+                })
+            };
         }
         if let Some(inner) = opaque_ptr_payload_inner(fty) {
             let src_inner = self.src_ty(&inner);
@@ -1314,7 +1379,10 @@ impl Cbindgen {
         // came from that converter's destination, so the two cannot disagree.
         // A fallible one propagates with `?`, which the union's own `Result`
         // already provides.
-        match registry.input_entry(fty) {
+        match registry
+            .reading_of(fty)
+            .and_then(|tr| registry.input_entry(&tr))
+        {
             Some(entry) => {
                 let conv = &entry.function.sig.ident;
                 if returns_result(&entry.function.sig.output) {
@@ -1333,7 +1401,7 @@ impl Cbindgen {
         &self,
         fty: &syn::Type,
         b: &syn::Ident,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> TokenStream {
         if is_string(fty) {
             return quote!(__cbg_alloc_cstr(#b));
@@ -1341,6 +1409,21 @@ impl Cbindgen {
         if self.enums.contains_key(&TypeKey::from_type(fty)) {
             let conv = Self::out_name(fty);
             return quote!(::core::mem::MaybeUninit::new(#conv(#b)));
+        }
+        // The peer of the input arm above: an owned value the C side must later
+        // release, so it is boxed HERE rather than having arrived boxed.
+        if let Some(inner) = self.declared_opaque_payload_inner(fty, registry) {
+            let c = self.c_type_ident(&inner);
+            return if is_option(fty) {
+                quote!(match #b {
+                    ::core::option::Option::Some(__v) => {
+                        ::std::boxed::Box::into_raw(::std::boxed::Box::new(__v)) as *mut #c
+                    }
+                    ::core::option::Option::None => ::core::ptr::null_mut(),
+                })
+            } else {
+                quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#b)) as *mut #c)
+            };
         }
         if let Some(inner) = opaque_ptr_payload_inner(fty) {
             let c = self.c_type_ident(&inner);
@@ -1367,7 +1450,10 @@ impl Cbindgen {
         // including the refusal of a FALLIBLE output converter, which a union
         // cannot report through — is decided once in `payload_field_wire`, so
         // this site only emits the call.
-        match registry.output_entry(fty) {
+        match registry
+            .reading_of(fty)
+            .and_then(|tr| registry.output_entry(&tr))
+        {
             Some(entry) => {
                 let conv = entry.function.sig.ident.clone();
                 quote!(#conv(#b))
@@ -1383,16 +1469,21 @@ impl Cbindgen {
     /// context. Deterministic order by emitted name.
     fn prereq_callback_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
-        let mut cb_keys: Vec<&CallbackKey> = self.callbacks.keys().collect();
-        cb_keys.sort_by_key(|k| {
-            let args: Vec<syn::Type> = k.iter().map(|t| t.to_type()).collect();
-            self.callback_c_name(&args)
-        });
-        for key in cb_keys {
-            let args: Vec<syn::Type> = key.iter().map(|t| t.to_type()).collect();
+        // The declaration's own argument types. `CallbackKey` is a list of
+        // identities — what the map is keyed by — and the arguments it was
+        // declared with are beside it, so neither is rebuilt from the other
+        // (#291).
+        let mut cb_keys: Vec<(&CallbackKey, &CbCfg)> = self.callbacks.iter().collect();
+        cb_keys.sort_by_key(|(_, cfg)| self.callback_c_name(&cfg.args));
+        for (key, cfg) in cb_keys {
+            let args: Vec<syn::Type> = cfg.args.clone();
             // Emit only if the callback is required (its input resolved); skip a
             // declared-but-unused signature.
-            if registry.input_entry(&callback_fn_type(&args)).is_none() {
+            if registry
+                .reading_of(&callback_fn_type(&args))
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_none()
+            {
                 continue;
             }
             let takeable = &self.callbacks.get(key).expect("callback cfg").takeable;
@@ -1406,7 +1497,8 @@ impl Cbindgen {
                     continue;
                 }
                 let wire = registry
-                    .output_entry(a)
+                    .reading_of(a)
+                    .and_then(|tr| registry.output_entry(&tr))
                     .unwrap_or_else(|| {
                         panic!(
                             "Cbindgen: callback arg `{}` has no output converter (declare it \
@@ -1442,53 +1534,14 @@ impl Cbindgen {
     }
 }
 
-impl Prebindgen for Cbindgen {
-    type Metadata = ();
-
-    // Consts have no declaration mechanism here (`declared_consts` stays
-    // `None`), so every indexed const re-emits through the default
-    // `on_const` — a path-alias against this source module, keeping consts
-    // with non-portable initializers valid in the generated file. (cbindgen
-    // cannot evaluate a path initializer, so aliased consts don't surface
-    // as `#define`s in the C header.)
-    fn source_module(&self) -> Option<&syn::Path> {
-        self.source_module.as_ref()
-    }
-
-    // ── Structural type resolution ──────────────────────────────────────
-    // The adapter peels `ty` itself: a rank-0 terminal category, else a
-    // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`). See `in_wrappers`
-    // / `out_wrappers`.
-
-    fn on_input_type(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
-        self.select_input_type(ty, r)
-    }
-
-    fn on_output_type(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
-        self.select_output_type(ty, r)
-    }
-
-    fn declared_functions(&self) -> HashSet<syn::Ident> {
-        self.functions.keys().cloned().collect()
-    }
-
-    fn ignored_functions(&self) -> HashSet<syn::Ident> {
-        self.ignored_functions.clone()
-    }
-
-    fn helper_functions(&self) -> HashSet<syn::Ident> {
-        self.convert_decls
-            .iter()
-            .flat_map(|decl| decl.input.iter().chain(decl.output.iter()))
-            .filter_map(|spec| match spec {
-                ConvertSpec::PrebindgenFn(ident) => Some(ident.clone()),
-                ConvertSpec::Trait { .. } => None,
-            })
-            .filter(|ident| !self.functions.contains_key(ident))
-            .collect()
-    }
-
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+impl CbindgenBuilder {
+    /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
+    ///
+    /// Push, not pull: the build script calls this, and the registry never
+    /// calls back. cbindgen declares no consts (it has no const mechanism, so
+    /// every captured const re-emits verbatim) and no decompositions.
+    /// Binding-local fns declared by `convert!(..).local(..)`.
+    fn collect_local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         let mut result = Vec::new();
         let mut seen = HashMap::<syn::Ident, String>::new();
         for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| &decl.locals) {
@@ -1511,71 +1564,86 @@ impl Prebindgen for Cbindgen {
         result
     }
 
-    fn declared_types(&self) -> HashSet<TypeKey> {
-        self.opaque
-            .keys()
-            .chain(self.data.keys())
-            .chain(self.value_opaque.keys())
-            .chain(self.enums.keys())
-            .chain(self.tagged_unions.keys())
-            .cloned()
-            .collect()
+    /// State this binding into `registry`, then resolve it — see
+    /// `JniGenBuilder::build`.
+    /// Read the source, resolve every crossing, and hand back the binding —
+    /// see `JniGenBuilder::build`.
+    pub fn build(self) -> Result<Cbindgen, crate::core::WriteRustError> {
+        let flat = self
+            .sources
+            .clone()
+            .build()
+            .map_err(crate::core::ScanError::from)?;
+        let registry = crate::core::Registry::builder(flat)?;
+        self.build_with(registry)
     }
 
-    fn ignored_types(&self) -> HashSet<TypeKey> {
-        self.ignored_types.clone()
+    /// [`Self::build`] over a registry described elsewhere — the test seam.
+    pub(crate) fn build_with(
+        self,
+        registry: crate::api::core::registry::RegistryBuilder<()>,
+    ) -> Result<Cbindgen, crate::core::WriteRustError> {
+        let registry = self
+            .declare_into(registry)?
+            .validate_with(&self)?
+            .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
+            .build()?;
+        self.validate_resolved(&registry)
+            .map_err(|message| crate::core::ScanError::AdapterInvariant { message })?;
+        Ok(Cbindgen {
+            gen: self,
+            registry,
+        })
     }
 
-    fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
-        // C-string data memory (string returns + `String` fields of data structs)
-        // is malloc'd raw and freed by the single universal `free_memory_function`.
-        // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
-        // same function (per element through the `z_free_array` macro), so the
-        // allocator/freer prelude is needed for them too. Each section's emitter
-        // lives in the `impl Cbindgen` block above; order is significant.
-        let produces_array = self.produces_array(registry);
-        let mut items: Vec<syn::Item> = Vec::new();
-        items.extend(self.prereq_alloc_free(registry, produces_array));
-        items.extend(self.prereq_array_builder(produces_array));
-        items.extend(self.prereq_opaque_handles(registry));
-        items.extend(self.prereq_data_structs(registry));
-        items.extend(self.prereq_value_opaque(registry));
-        items.extend(self.prereq_enums(registry));
-        items.extend(self.prereq_tagged_unions(registry));
-        items.extend(self.prereq_callback_structs(registry));
-        items.extend(self.prereq_domain_constants(registry));
-        items
+    /// Build the conversion for one crossing — see `JniGenBuilder::convert_crossing`.
+    fn convert_crossing(
+        &self,
+        crossing: &Crossing,
+        built: &Building<'_, ()>,
+    ) -> Option<ConverterImpl<()>> {
+        let (dir, key) = crossing;
+        // The reading the scan already took for this crossing, fetched by the
+        // key the crossing IS — the same migration the jnigen twin made in #284,
+        // in place of `key -> to_type() -> spelling` (#291). Every crossing
+        // `convert_with` hands out comes from a type table, so it has a cell.
+        // The selectors still take the spelling: moving cbindgen's selector
+        // chain onto readings is its own change.
+        let ty = built.reading(key)?.syntax().clone();
+        match dir {
+            Direction::Input => self.select_input_type(&ty, built).or_else(|| {
+                let args = crate::api::core::flat::extract_fn_trait_args(&ty)?;
+                self.dispatch_fn_input(&args, built)
+            }),
+            Direction::Output => self.select_output_type(&ty, built),
+        }
     }
 
-    // ── Item emission ──────────────────────────────────────────────────
-
-    fn on_function(&self, f: &syn::ItemFn, registry: &Registry<()>) -> TokenStream {
-        self.emit_function_wrapper(f, registry)
+    pub fn declare_into(
+        &self,
+        mut registry: RegistryBuilder<()>,
+    ) -> Result<RegistryBuilder<()>, crate::core::ScanError> {
+        for (item_fn, origin) in self.collect_local_functions() {
+            registry = registry.local_function(item_fn, origin)?;
+        }
+        for ident in self.declared_functions() {
+            registry = registry.export(&ident);
+        }
+        for ident in self.helper_functions() {
+            registry = registry.reference(&ident);
+        }
+        for ty in self.declared_types().into_values() {
+            registry = registry.export_type(ty);
+        }
+        Ok(registry)
     }
+}
 
-    fn on_struct(&self, _s: &syn::ItemStruct, _registry: &Registry<()>) -> TokenStream {
-        // The `#[repr(C)]` mirror + converters come from prerequisites /
-        // on_output_type; the original (non-FFI-safe) struct is dropped.
-        TokenStream::new()
-    }
-
-    fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<()>) -> TokenStream {
-        TokenStream::new()
-    }
-
-    /// `impl Fn(Args...) + Send + Sync + 'static` callback input. The C wire is a
-    /// by-value closure struct (`{ void *context; call; drop }`, emitted in
-    /// `prerequisites`); the converter rebuilds a Rust closure that, on each
-    /// invocation, encodes its args through their **output** converters (the
-    /// args travel Rust→C when the callback fires — they're owned handles the C
-    /// `call` is responsible for dropping) and invokes the C function pointer.
-    /// An `Arc<Ctx>` carries the `void *context` + `drop`, releasing it (once,
-    /// `Send + Sync`) when the Rust closure is dropped. Only signatures declared
-    /// via [`Cbindgen::callback`] are handled.
+impl CbindgenBuilder {
     fn dispatch_fn_input(
         &self,
         args: &[syn::Type],
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
         if !self.callbacks.contains_key(&key) {
@@ -1608,7 +1676,9 @@ impl Prebindgen for Cbindgen {
                 call_args.push(quote!(#ai.len()));
                 continue;
             }
-            let entry = registry.output_entry(arg)?;
+            let entry = registry
+                .reading_of(arg)
+                .and_then(|tr| registry.output_entry(&tr))?;
             let conv = entry.function.sig.ident.clone();
             let opaque = entry.destination.clone();
             let fallible = matches!(
@@ -1684,13 +1754,112 @@ impl Prebindgen for Cbindgen {
     }
 }
 
+impl Prebindgen for CbindgenBuilder {
+    /// Report what this binding left unclaimed. Here because it is the
+    /// earliest generator-owned hook that sees the model, and it runs exactly
+    /// where the registry used to print these itself. Moves into
+    /// `CbindgenBuilder::generate` once that exists (prebindgen#251 phase E).
+    ///
+    /// `consts: None` — cbindgen has no const declaration mechanism, so every
+    /// captured const is re-emitted verbatim and none is ever a skip.
+    fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
+        let mut functions = self.declared_functions();
+        functions.extend(self.helper_functions());
+        crate::core::warn_unclaimed(
+            binding.flat(),
+            &crate::core::Claimed {
+                functions,
+                // The report asks what was *claimed*, which is a set of
+                // identities — the declarations' spellings are the scan's
+                // business, not this one's.
+                types: self.declared_types().into_keys().collect(),
+                consts: None,
+                ignored_functions: self.ignored_functions(),
+                ignored_types: self.ignored_types(),
+                ..Default::default()
+            },
+        );
+        Ok(())
+    }
+
+    type Metadata = ();
+
+    // Consts have no declaration mechanism here (`declared_consts` stays
+    // `None`), so every indexed const re-emits through the default
+    // `on_const` — a path-alias against this source module, keeping consts
+    // with non-portable initializers valid in the generated file. (cbindgen
+    // cannot evaluate a path initializer, so aliased consts don't surface
+    // as `#define`s in the C header.)
+    fn source_module(&self) -> Option<&syn::Path> {
+        self.source_module.as_ref()
+    }
+
+    // ── Structural type resolution ──────────────────────────────────────
+    // The adapter peels `ty` itself: a rank-0 terminal category, else a
+    // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`). See `in_wrappers`
+    // / `out_wrappers`.
+
+    fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        // C-string data memory (string returns + `String` fields of data structs)
+        // is malloc'd raw and freed by the single universal `free_memory_function`.
+        // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
+        // same function (per element through the `z_free_array` macro), so the
+        // allocator/freer prelude is needed for them too. Each section's emitter
+        // lives in the `impl CbindgenBuilder` block above; order is significant.
+        let produces_array = self.produces_array(registry);
+        let mut items: Vec<syn::Item> = Vec::new();
+        items.extend(self.prereq_alloc_free(registry, produces_array));
+        items.extend(self.prereq_array_builder(produces_array));
+        items.extend(self.prereq_opaque_handles(registry));
+        items.extend(self.prereq_data_structs(registry));
+        items.extend(self.prereq_value_opaque(registry));
+        items.extend(self.prereq_enums(registry));
+        items.extend(self.prereq_tagged_unions(registry));
+        items.extend(self.prereq_callback_structs(registry));
+        items.extend(self.prereq_domain_constants(registry));
+        items
+    }
+
+    // ── Item emission ──────────────────────────────────────────────────
+
+    fn on_function(
+        &self,
+        f: &crate::api::core::flat::Function,
+        registry: &Registry<()>,
+    ) -> TokenStream {
+        self.emit_function_wrapper(&f.origin.syntax, registry)
+    }
+
+    fn on_struct(
+        &self,
+        _s: &crate::api::core::flat::Struct,
+        _registry: &Registry<()>,
+    ) -> TokenStream {
+        // The `#[repr(C)]` mirror + converters come from prerequisites /
+        // on_output_type; the original (non-FFI-safe) struct is dropped.
+        TokenStream::new()
+    }
+
+    fn on_variant(
+        &self,
+        _v: &crate::api::core::flat::Variant,
+        _registry: &Registry<()>,
+    ) -> TokenStream {
+        TokenStream::new()
+    }
+
+    fn on_enum(&self, _e: &crate::api::core::flat::Enum, _registry: &Registry<()>) -> TokenStream {
+        TokenStream::new()
+    }
+}
+
 /// Output-direction terminal categories — the rank-0 chain, now an inherent
-/// helper called by the structural [`Prebindgen::on_output_type`].
-impl Cbindgen {
+/// helper called by [`CbindgenBuilder::select_output_type`].
+impl CbindgenBuilder {
     pub(crate) fn out_terminal(
         &self,
         ty: &syn::Type,
-        _r: &Registry<()>,
+        _r: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
@@ -1901,12 +2070,12 @@ impl Cbindgen {
 /// Structural wrapper-shape resolvers (the post-rank-machinery surface). Each
 /// peels `ty`'s outermost layer and composes the inner's converter; `subs`
 /// lists the immediate inner(s) it looked up.
-impl Cbindgen {
+impl CbindgenBuilder {
     /// `Option<X>` and reference (`&`/`&mut`/`&[E]`/`&str`) **input** shapes.
     pub(crate) fn in_wrappers(
         &self,
         ty: &syn::Type,
-        r: &Registry<()>,
+        r: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         // `Option<X>` input: a single nullable C param, NULL = `None`. The inner
         // `X` is reused wholesale (its own converter — e.g. an `&T` borrow — does
@@ -1914,7 +2083,7 @@ impl Cbindgen {
         // converter, never the owned one.
         if is_option(ty) {
             let inner = first_type_arg(ty)?;
-            let entry = r.input_entry(&inner)?;
+            let entry = r.reading_of(&inner).and_then(|tr| r.input_entry(&tr))?;
             let inner_wire = entry.destination.clone();
             let inner_conv = entry.function.sig.ident.clone();
             let (inner_ok, fallible): (syn::Type, bool) = match &entry.function.sig.output {
@@ -2225,12 +2394,12 @@ impl Cbindgen {
     pub(crate) fn out_wrappers(
         &self,
         ty: &syn::Type,
-        r: &Registry<()>,
+        r: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         // `Option<T>` / `Vec<T>` marker.
         if is_option(ty) || is_vec(ty) {
             let inner = first_type_arg(ty)?;
-            r.output_entry(&inner)?;
+            r.reading_of(&inner).and_then(|tr| r.output_entry(&tr))?;
             let kind = if is_option(ty) { "option" } else { "vec" };
             let name = format_ident!(
                 "__cbg_outmark_{}_{}",
@@ -2253,7 +2422,7 @@ impl Cbindgen {
         // `Cow<'_, [T]>` marker. The actual C ABI shape is structural in
         // `lower_shape`/`encode_value`, like `Vec<T>`.
         if let Some(inner) = cow_slice_elem(ty) {
-            r.output_entry(&inner)?;
+            r.reading_of(&inner).and_then(|tr| r.output_entry(&tr))?;
             let name = format_ident!(
                 "__cbg_outmark_cow_slice_{}",
                 sanitize(&TypeKey::from_type(&inner))
@@ -2281,7 +2450,7 @@ impl Cbindgen {
             .value_opaque_slice_elem(ty)
             .or_else(|| scalar_slice_elem(ty))
         {
-            r.output_entry(&elem)?;
+            r.reading_of(&elem).and_then(|tr| r.output_entry(&tr))?;
             let name = format_ident!(
                 "__cbg_outmark_slice_{}",
                 sanitize(&TypeKey::from_type(&elem))
@@ -2348,5 +2517,50 @@ impl Cbindgen {
             });
         }
         None
+    }
+}
+
+/// The declaration surface, stated once.
+///
+/// These were trait methods the registry called back into the adapter from
+/// inside `resolve`. They are the adapter's own business now, gathered into the
+/// one value the registry is constructed from.
+impl CbindgenBuilder {
+    pub(crate) fn declared_functions(&self) -> HashSet<syn::Ident> {
+        self.functions.keys().cloned().collect()
+    }
+    pub(crate) fn ignored_functions(&self) -> HashSet<syn::Ident> {
+        self.ignored_functions.clone()
+    }
+    pub(crate) fn helper_functions(&self) -> HashSet<syn::Ident> {
+        self.convert_decls
+            .iter()
+            .flat_map(|decl| decl.input.iter().chain(decl.output.iter()))
+            .filter_map(|spec| match spec {
+                ConvertSpec::PrebindgenFn(ident) => Some(ident.clone()),
+                ConvertSpec::Trait { .. } => None,
+            })
+            .filter(|ident| !self.functions.contains_key(ident))
+            .collect()
+    }
+    /// Each with the spelling its declarator was written with — the scan needs
+    /// real tokens to intern a type that is in no table yet (#291).
+    pub(crate) fn declared_types(&self) -> HashMap<TypeKey, Origin<syn::Type>> {
+        self.opaque
+            .iter()
+            .chain(self.data.iter())
+            .map(|(k, c)| (k, &c.rust_type))
+            .chain(self.value_opaque.iter().map(|(k, c)| (k, &c.cfg.rust_type)))
+            .chain(
+                self.enums
+                    .iter()
+                    .chain(self.tagged_unions.iter())
+                    .map(|(k, c)| (k, &c.rust_type)),
+            )
+            .map(|(k, t)| (k.clone(), t.clone()))
+            .collect()
+    }
+    pub(crate) fn ignored_types(&self) -> HashSet<TypeKey> {
+        self.ignored_types.clone()
     }
 }

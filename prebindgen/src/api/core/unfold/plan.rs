@@ -192,6 +192,15 @@ pub enum LeafSource {
     /// assigns it per `match` arm — so it has no path. Emitted once, ahead of
     /// the groups it selects between (see
     /// [`crate::api::core::unfold::apply_sum_returns`]).
+    ///
+    /// Its [`out_ty`](UnfoldLeaf::out_ty) is **the sum**, not the `i32` — it
+    /// carries *which* sum it chooses between, which is how the emitter finds
+    /// the enum to `match`. That type is **registered and not required** (#282):
+    /// it gets a table cell like every other leaf's, but no root, because a sum
+    /// has no whole-value output converter and demanding one would fail
+    /// resolution over a type that never crosses whole. The reading comes from
+    /// the declaration — [`Variant::type_ref`](crate::api::core::flat::Variant::type_ref)
+    /// — never from an adapter composing one out of a name.
     SumTag,
     /// A payload field of ONE alternative of a decomposed sum, reached through
     /// a **variant pattern** rather than an accessor chain or a field chain:
@@ -296,10 +305,19 @@ pub struct UnfoldLeaf {
     /// `[Call(f)]` = `f(&root)`; longer = nested records, M3). Steps of both
     /// kinds may mix — see [`PathStep`].
     pub path: Vec<PathStep>,
-    /// Type whose resolved **output** converter encodes this leaf — a
-    /// reference type for accessors (`&str`, `&F`), `&Source` for the identity
-    /// leaf (so the borrowed-opaque clone converter / projection is reused).
-    pub out_ty: syn::Type,
+    /// The **reading** of the type whose resolved output converter encodes this
+    /// leaf — a reference type for accessors (`&str`, `&F`), `&Source` for the
+    /// identity leaf (so the borrowed-opaque clone converter / projection is
+    /// reused). Spell it with `out_ty.origin.syntax`.
+    ///
+    /// A reading rather than a spelling because a consumer asking what this
+    /// leaf's type *means* had to hand the spelling back to the registry and
+    /// hope for a cell — the round trip #263 removed from `api/core`, surviving
+    /// in the plans, and answering "no layer" for a type it had never seen
+    /// (#275). The composed ones (`&Source`) are built by
+    /// [`TypeRef::borrowed`](crate::api::core::flat::TypeRef::borrowed), which
+    /// pairs the kind with its own spelling.
+    pub out_ty: crate::api::core::flat::TypeRef,
     /// `true` for the move/clone-the-value handle leaf, emitted **last** (after
     /// every reference leaf's JVM conversion has ended its borrow).
     pub identity: bool,
@@ -330,6 +348,14 @@ impl UnfoldLeaf {
     /// selector: it is assigned per `match` arm, never converted, so requiring
     /// a converter for it would make every sum depend on an unrelated `i32`
     /// crossing existing in the binding.
+    ///
+    /// **This is the root question, not the registration question.** Every
+    /// leaf's `out_ty` gets a table cell; this decides which of them the
+    /// binding additionally *demands* a converter for. A cell says the type
+    /// entered the pipeline, a root says the binding asked for it directly, and
+    /// an entry says one resolved — three separate claims, and a `SumTag` leaf
+    /// makes only the first (#282). See
+    /// [`Registry::reference_output`](crate::api::core::registry::Registry::reference_output).
     pub fn has_converter(&self) -> bool {
         self.source != LeafSource::SumTag
     }

@@ -1,5 +1,9 @@
 use super::*;
-use crate::{api::test_util::unique_test_dir, SourceLocation};
+pub(crate) use crate::api::test_util::declare_referenced;
+use crate::{
+    api::{core::registry::RegistryBuilder, test_util::unique_test_dir},
+    SourceLocation,
+};
 
 mod aliasing;
 mod boundary_invariants;
@@ -12,11 +16,11 @@ mod returns;
 mod structs;
 mod tagged_unions;
 
-fn write(cbindgen: Cbindgen, registry: Registry<()>, tag: &str) -> String {
+fn write(cbindgen: CbindgenBuilder, registry: RegistryBuilder<()>, tag: &str) -> String {
     let dir = unique_test_dir(&format!("cbindgen_{tag}"));
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join(format!("{tag}.rs"));
-    let gen = registry.resolve(cbindgen).expect("resolve");
+    let gen = cbindgen.build_with(registry).expect("resolve");
     let path = gen.write_rust(&out).expect("write_rust");
     std::fs::read_to_string(&path).unwrap()
 }

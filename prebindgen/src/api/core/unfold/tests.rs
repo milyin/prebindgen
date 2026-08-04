@@ -1,7 +1,26 @@
 use quote::ToTokens;
 
 use super::*;
-use crate::api::{core::types_util::ident, test_util::reg_with};
+use crate::api::{
+    core::{registry::Registry, types_util::ident},
+    test_util::scanned_with as reg_with,
+};
+
+/// A reading for a fixture type, lowered by the model.
+///
+/// Plan leaves carry `TypeRef`s, and these fixtures assert on plan STRUCTURE —
+/// so they need a reading for a type they name inline. Lowering it through an
+/// empty `Flat` gives the same classification the pipeline would, without
+/// standing up a source crate for it. Legitimate here and nowhere else: the
+/// `classify` guard exempts tests precisely because a fixture composing its own
+/// input is not a consumer reasoning from `origin`.
+fn tref(ty: syn::Type) -> crate::api::core::flat::TypeRef {
+    crate::api::core::flat::Flat::builder()
+        .build()
+        .expect("an empty model")
+        .classify(&ty)
+        .expect("a fixture type the language accepts")
+}
 
 /// A generous `.fun_accessor` set covering every function used as a
 /// deconstructor record across these tests (a superset is fine — `apply`
@@ -52,7 +71,7 @@ fn accessor_optional_primitive() {
     // M2: `z_sample_timestamp(&ZSample) -> Option<&ZTimestamp>` decomposed
     // into a single primitive leaf `z_timestamp_ntp64(&ZTimestamp) -> i64`
     // (no identity). Outer shape is `Optional(Decompose)`.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
         "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
     ]);
@@ -92,17 +111,21 @@ fn accessor_optional_primitive() {
         plan.leaves[0].path[0].ident().to_string(),
         "z_timestamp_ntp64"
     );
-    assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "i64");
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(i64))));
+    assert_eq!(
+        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
+        "i64"
+    );
+    assert!(
+        reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
+        "the leaf type must be a root"
+    );
 }
 
 #[test]
 fn accessor_plan_byref() {
     // `z_sample_key_expr(&ZSample) -> &ZKeyExpr` decomposed into the keyexpr
     // handle (identity) + its string form (`z_keyexpr_as_str`).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
@@ -147,7 +170,7 @@ fn accessor_plan_byref() {
     assert!(plan.leaves[0].identity);
     assert!(plan.leaves[0].path.is_empty());
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
         "& ZKeyExpr"
     );
     // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
@@ -157,13 +180,14 @@ fn accessor_plan_byref() {
         plan.leaves[1].path[0].ident().to_string(),
         "z_keyexpr_as_str"
     );
-    assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "& str");
+    assert_eq!(
+        plan.leaves[1].out_ty.syntax().to_token_stream().to_string(),
+        "& str"
+    );
 
     // Leaf out_tys registered as required outputs so the resolver builds
     // their converters.
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(&str))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
 }
 
 #[test]
@@ -171,7 +195,7 @@ fn root_identity_before_nested_identity_errors() {
     // Owned return: the root `.field_self()` MOVES the value, a nested
     // identity (spliced ZKeyExpr handle) borrows it — id-first is the
     // order that would generate non-compiling Rust, caught at apply time.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_take_query(q: &ZQuery) -> ZQuery { todo!() }",
         "fn z_query_key_expr(q: &ZQuery) -> &ZKeyExpr { todo!() }",
     ]);
@@ -205,7 +229,7 @@ fn root_identity_before_nested_identity_errors() {
     assert!(matches!(err, UnfoldError::RootIdentityBeforeNested { .. }));
 
     // Root identity LAST (the zenoh `Query` shape) is accepted.
-    let mut reg2 = reg_with(&[
+    let mut reg2: Registry<()> = reg_with(&[
         "fn z_take_query(q: &ZQuery) -> ZQuery { todo!() }",
         "fn z_query_key_expr(q: &ZQuery) -> &ZKeyExpr { todo!() }",
     ]);
@@ -238,7 +262,7 @@ fn root_identity_before_nested_identity_errors() {
 #[test]
 fn accessor_target_mismatch_errors() {
     // Accessor takes a different type than the accessor's target.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_foo() -> ZKeyExpr { todo!() }",
         "fn wrong(x: &ZSample) -> &str { todo!() }",
     ]);
@@ -263,7 +287,7 @@ fn accessor_target_mismatch_errors() {
 
 #[test]
 fn multiple_identity_errors() {
-    let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
+    let mut reg: Registry<()> = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
         target: syn::parse_quote!(ZKeyExpr),
@@ -284,7 +308,7 @@ fn multiple_identity_errors() {
 #[test]
 fn record_must_be_fun_accessor() {
     // A deconstructor record referencing a non-`.fun_accessor` fn errors.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_foo(s: &ZSample) -> &ZKeyExpr { todo!() }",
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
@@ -323,7 +347,7 @@ fn record_must_be_fun_accessor() {
 fn duplicate_leaf_name_errors() {
     // Two records of one deconstructor given the same literal name ⇒ hard
     // error (names are emitted verbatim; never auto-disambiguated).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_foo() -> ZSample { todo!() }",
         "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
         "fn z_sample_payload(s: &ZSample) -> Vec<u8> { todo!() }",
@@ -360,7 +384,7 @@ fn duplicate_leaf_name_errors() {
 #[test]
 fn reserved_separator_in_name_errors() {
     // A record name containing the reserved `"__"` chain separator ⇒ error.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_foo() -> ZSample { todo!() }",
         "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
     ]);
@@ -397,7 +421,7 @@ fn nested_accessor_flatten() {
     // accessor nests ZKeyExpr (handle+string), ZZBytes (bytes), and a
     // nullable ZTimestamp (Option<&ZTimestamp> → ntp64), plus a direct enum
     // leaf. Verifies path prefixes + nullable propagation.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
         "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
         "fn z_sample_payload(s: &ZSample) -> &ZZBytes { todo!() }",
@@ -503,7 +527,7 @@ fn nested_accessor_flatten() {
     assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
     assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
     assert_eq!(
-        plan.leaves[3].out_ty.to_token_stream().to_string(),
+        plan.leaves[3].out_ty.syntax().to_token_stream().to_string(),
         "SampleKind"
     );
     assert_eq!(
@@ -525,7 +549,7 @@ fn reply_product_double_option_flatten() {
     // `Option<ZZenohId>` Acc record with NO default child, which keeps
     // the full `Option<…>` as its leaf `out_ty` (its own `Option` is the
     // converter's business, not a nesting step ⇒ NOT nullable).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_recv_reply(q: &ZQuery) -> ZReply { todo!() }",
         "fn z_reply_replier_zid(r: &ZReply) -> Option<ZZenohId> { todo!() }",
         "fn z_reply_is_ok(r: &ZReply) -> bool { todo!() }",
@@ -641,7 +665,7 @@ fn reply_product_double_option_flatten() {
     // Acc leaf keeping its full `Option<…>` return — not a nesting step.
     assert_eq!(path(&plan.leaves[0]), "z_reply_replier_zid");
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
         "Option < ZZenohId >"
     );
     assert!(!plan.leaves[0].nullable && !plan.leaves[0].identity);
@@ -674,7 +698,7 @@ fn reply_product_double_option_flatten() {
 #[test]
 fn nested_cycle_errors() {
     // A → B → A nesting is rejected.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_foo() -> ZA { todo!() }",
         "fn a_to_b(a: &ZA) -> &ZB { todo!() }",
         "fn b_to_a(b: &ZB) -> &ZA { todo!() }",
@@ -716,7 +740,8 @@ fn iterable_whole_element_plan() {
     // each element delivered WHOLE (no accessor, no leaves): a per-fn
     // flatten with an empty record list on an element type that has no
     // deconstructor of its own.
-    let mut reg = reg_with(&["fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }"]);
+    let mut reg: Registry<()> =
+        reg_with(&["fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }"]);
     let mut acc = Deconstructors::default();
     acc.outputs.push(OutputDecl {
         func: ident("z_session_peers_zid"),
@@ -756,9 +781,7 @@ fn iterable_whole_element_plan() {
             .map(|t| t.to_token_stream().to_string()),
         Some("ZZenohId".to_string())
     );
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(ZZenohId))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(ZZenohId))].root);
 }
 
 #[test]
@@ -767,7 +790,7 @@ fn iterable_decomposed_plan() {
     // accessor → Iterable with per-element leaves: the string form + the
     // value itself via `record_id` (an identity leaf, owned at the
     // root since `Vec<ZZenohId>` owns its elements).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
         "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
     ]);
@@ -808,7 +831,7 @@ fn iterable_decomposed_plan() {
         "z_zenoh_id_to_string"
     );
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
         "String"
     );
     // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
@@ -816,7 +839,7 @@ fn iterable_decomposed_plan() {
     assert!(plan.leaves[1].identity);
     assert!(plan.leaves[1].path.is_empty());
     assert_eq!(
-        plan.leaves[1].out_ty.to_token_stream().to_string(),
+        plan.leaves[1].out_ty.syntax().to_token_stream().to_string(),
         "ZZenohId"
     );
 }
@@ -826,7 +849,7 @@ fn convert_output_single_value() {
     // `.converter(ZTimestamp, z_timestamp_ntp64)` + `.convert_output()` on
     // `z_sample_timestamp -> Option<&ZTimestamp>` ⇒ Return delivery, single
     // leaf, convert_out_ty = Option<i64>.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
         "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
     ]);
@@ -863,15 +886,13 @@ fn convert_output_single_value() {
         Some("Option < i64 >".to_string())
     );
     // The shaped convert type is registered as a required output.
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(Option<i64>))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(Option<i64>))].root);
 }
 
 #[test]
 fn multi_leaf_output_is_callback() {
     // A two-record deconstructor (handle + string) ⇒ Callback delivery (>1 leaf).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
@@ -907,7 +928,7 @@ fn multi_leaf_output_is_callback() {
 #[test]
 fn vec_output_is_iterable_callback() {
     // A `Vec` return ⇒ Iterable + Callback (a fold), never a single Return.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
         "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
     ]);
@@ -955,7 +976,7 @@ fn option_vec_output_is_optional_iterable_callback() {
     // a RECORD-BUILT `Optional(Iterable)` fold (issue #105): the auto-apply
     // peels the `Option` before probing the `Vec`, the elements decompose
     // into leaves (M5), and `None` skips the fold to deliver a null result.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }",
         "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
     ]);
@@ -998,7 +1019,7 @@ fn option_vec_single_leaf_stays_callback() {
     // single-Return reclassification is gated on "no Iterable at any layer",
     // not just a top-level `Iterable` (an `Option<Vec<T>>` fold has no single
     // value to return through `convert_out_ty`).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }",
         "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
     ]);
@@ -1029,7 +1050,7 @@ fn option_vec_whole_element_plan() {
     // M4 dual of the decomposed case: an `Option<Vec<T>>` return with an
     // inline EMPTY record list delivers each element whole through its own
     // output converter, wrapped in the `Optional` layer.
-    let mut reg =
+    let mut reg: Registry<()> =
         reg_with(&["fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }"]);
     let mut acc = Deconstructors::default();
     acc.outputs.push(OutputDecl {
@@ -1072,12 +1093,12 @@ fn value_struct_vec_is_fixed_iterable_fold() {
     // an Optional layer: the field leaves cross raw per element and the
     // foreign folder rebuilds + appends them (no Java object is built on the
     // Rust side); `None` ⇒ a null list. Closes the data_class→Vec milestone.
-    let mut reg =
+    let mut reg: Registry<()> =
         reg_with(&["fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> { todo!() }"]);
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
         path: vec![PathStep::field(ident(name), false)],
-        out_ty: ty,
+        out_ty: tref(ty),
         identity: false,
         nullable: false,
         source: LeafSource::Field,
@@ -1124,13 +1145,13 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     // `callback_arg_plans` entry keyed by the `&[Payload]` arg: the
     // trampoline folds each element's field leaves into a foreign list, the
     // user callback still sees the whole `List<Payload>`.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn storage_callback_vec(f: impl Fn(&[Payload]) + Send + Sync + 'static) { todo!() }",
     ]);
     let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
         name: name.to_string(),
         path: vec![PathStep::field(ident(name), false)],
-        out_ty: ty,
+        out_ty: tref(ty),
         identity: false,
         nullable: false,
         source: LeafSource::Field,
@@ -1164,7 +1185,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     assert_eq!(plan.leaves.len(), 2);
     assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
     // A scalar `&Payload` callback arg must stay a Base fixed builder.
-    let mut reg2 = reg_with(&[
+    let mut reg2: Registry<()> = reg_with(&[
         "fn storage_callback(f: impl Fn(&Payload) + Send + Sync + 'static) { todo!() }",
     ]);
     let vd2 = ValueDecon {
@@ -1187,7 +1208,7 @@ fn convert_error_decomposes_result_e() {
     // The ZError deconstructor (`z_error_message`) auto-applies to every fn
     // returning `Result<_, ZError>`, storing the plan in `error_plans`. Error
     // delivery is always Callback (its leaves are the `ze` callback args).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, ZError> { todo!() }",
         "fn z_error_message(e: &ZError) -> String { todo!() }",
         "fn z_infallible(s: &ZSample) -> bool { todo!() }",
@@ -1222,7 +1243,7 @@ fn convert_error_decomposes_result_e() {
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
         "String"
     );
     assert_eq!(plan.source.to_token_stream().to_string(), "ZError");
@@ -1238,7 +1259,7 @@ fn default_output_applies_to_owned_and_borrow_returns() {
     // Default-everywhere: the ZKeyExpr deconstructor auto-applies to BOTH a
     // `&ZKeyExpr` (borrow) and an owned `ZKeyExpr` return. (`Result<…>` returns
     // are excluded — they keep a handle — and `fun_accessor`s are skipped.)
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_borrow_keyexpr(s: &ZSession) -> &ZKeyExpr { todo!() }",
         "fn z_make_keyexpr(s: &ZSession) -> ZKeyExpr { todo!() }",
         "fn z_keyexpr_as_str(k: &ZKeyExpr) -> &str { todo!() }",
@@ -1283,7 +1304,7 @@ fn callback_arg_plan_derived() {
     // An `impl Fn(ZSample)` parameter of a declared fn gets a type-level
     // plan from ZSample's default deconstructor — same leaves a return of
     // ZSample would produce, but owned (`by_ref = false`).
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_declare_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) { todo!() }",
         "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
         "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
@@ -1342,7 +1363,7 @@ fn callback_arg_plan_derived() {
         "z_sample_key_expr"
     );
     assert_eq!(
-        plan.leaves[0].out_ty.to_token_stream().to_string(),
+        plan.leaves[0].out_ty.syntax().to_token_stream().to_string(),
         "& ZKeyExpr"
     );
     assert_eq!(
@@ -1350,16 +1371,12 @@ fn callback_arg_plan_derived() {
         "z_keyexpr_as_str"
     );
     assert_eq!(
-        plan.leaves[2].out_ty.to_token_stream().to_string(),
+        plan.leaves[2].out_ty.syntax().to_token_stream().to_string(),
         "SampleKind"
     );
     // Leaf out_tys registered so the resolver builds their converters.
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(&str))));
-    assert!(reg
-        .required_outputs_scan
-        .contains(&TypeKey::from_type(&syn::parse_quote!(SampleKind))));
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(SampleKind))].root);
     // No return-position plan was created for the declaring fn.
     assert!(reg.unfold_plans.is_empty());
 }
@@ -1370,7 +1387,7 @@ fn callback_arg_borrowed_decomposed() {
     // deconstructor as the by-value case, but with `by_ref = true` (leaves
     // read through the reference) and keyed under the actual `&ZSample` arg
     // type — so `callback_input`/`callback_iface_spec` find it.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_declare_sub(cb: impl Fn(&ZSample) + Send + Sync + 'static) { todo!() }",
         "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
         "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
@@ -1429,7 +1446,7 @@ fn callback_arg_borrowed_decomposed() {
         "z_sample_key_expr"
     );
     assert_eq!(
-        plan.leaves[2].out_ty.to_token_stream().to_string(),
+        plan.leaves[2].out_ty.syntax().to_token_stream().to_string(),
         "SampleKind"
     );
 }
@@ -1437,7 +1454,7 @@ fn callback_arg_borrowed_decomposed() {
 #[test]
 fn callback_arg_identity_fallback() {
     // No deconstructor for ZQuery ⇒ no plan: the arg is delivered whole.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_declare_queryable(cb: impl Fn(ZQuery) + Send + Sync + 'static) { todo!() }",
     ]);
     let acc = Deconstructors::default();
@@ -1449,7 +1466,7 @@ fn callback_arg_identity_fallback() {
 
 #[test]
 fn callback_zero_arg_no_plan() {
-    let mut reg =
+    let mut reg: Registry<()> =
         reg_with(&["fn z_with_close(on_close: impl Fn() + Send + Sync + 'static) { todo!() }"]);
     let acc = Deconstructors::default();
     let declared: std::collections::HashSet<syn::Ident> =
@@ -1462,7 +1479,7 @@ fn callback_zero_arg_no_plan() {
 fn callback_arg_nonbare_skipped() {
     // `impl Fn(Vec<ZSample>)`: the arg type key (`Vec<ZSample>`) matches no
     // deconstructor target ⇒ whole-value fallback, no plan.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_batched(cb: impl Fn(Vec<ZSample>) + Send + Sync + 'static) { todo!() }",
         "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
     ]);
@@ -1501,7 +1518,7 @@ fn leaf_vec_fold_synthesizes_whole_element_plans() {
     // `Vec<String>` / `Option<Vec<ZenohId>>` returns and an `impl Fn(&[String])`
     // callback arg synthesize FIXED **whole-element** folds (no decon, element
     // set, no leaves) — the single-leaf dual of the `data_class` Vec fold.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn hello_get_locators(h: &Hello) -> Vec<String> { todo!() }",
         "fn session_peers(s: &Session) -> Option<Vec<ZenohId>> { todo!() }",
         "fn on_strings(f: impl Fn(&[String]) + Send + Sync + 'static) { todo!() }",
@@ -1559,7 +1576,7 @@ fn leaf_vec_fold_synthesizes_whole_element_plans() {
 fn leaf_vec_fold_skips_unnominated_and_preexisting() {
     // An un-nominated element is left on the ArrayList path (no plan); a fn
     // that already has a plan is never overwritten.
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn other(x: &X) -> Vec<NotNominated> { todo!() }",
         "fn strings() -> Vec<String> { todo!() }",
     ]);
@@ -1600,7 +1617,7 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
 /// that stands on its own for any adapter.)
 #[test]
 fn unknown_accessor_errors() {
-    let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
+    let mut reg: Registry<()> = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
         target: syn::parse_quote!(ZKeyExpr),
@@ -1626,7 +1643,7 @@ fn unknown_accessor_errors() {
 /// delivery form.)
 #[test]
 fn duplicate_declarations_collected() {
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         "fn z_session_key(s: &ZSession) -> ZKeyExpr { todo!() }",
     ]);
@@ -1672,11 +1689,17 @@ fn duplicate_declarations_collected() {
 
 /// The tag + group leaves a sum decomposition is made of. Mirrors what the
 /// JNI adapter synthesizes: a selector followed by one group per alternative.
+///
+/// The selector's `out_ty` is **the sum**, as `synth_sum_leaves` stores it — it
+/// names *which* sum it chooses between, which is how the emitter finds the enum
+/// to `match`. It said `i32` here, the tag's wire type, which made the
+/// registration test prove only that *some* converter-free leaf gets a cell
+/// rather than that the selector registers the sum it names (#282).
 fn reading_sum_decon() -> SumDecon {
     let tag = UnfoldLeaf {
         name: "tag".to_string(),
         path: vec![],
-        out_ty: syn::parse_quote!(i32),
+        out_ty: tref(syn::parse_quote!(Reading)),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
@@ -1685,7 +1708,7 @@ fn reading_sum_decon() -> SumDecon {
     let field = |name: &str, variant: &str, idx: u32, ty: syn::Type, group: i32| UnfoldLeaf {
         name: name.to_string(),
         path: vec![],
-        out_ty: ty,
+        out_ty: tref(ty),
         identity: false,
         nullable: false,
         source: LeafSource::VariantField {
@@ -1713,7 +1736,7 @@ fn reading_sum_decon() -> SumDecon {
 /// would fail the resolve on a converter that must not exist.
 #[test]
 fn sum_return_is_a_fixed_builder_plan() {
-    let mut reg = reg_with(&["fn read_one(which: i32) -> Reading { todo!() }"]);
+    let mut reg: Registry<()> = reg_with(&["fn read_one(which: i32) -> Reading { todo!() }"]);
     let declared: std::collections::HashSet<syn::Ident> =
         ["read_one"].iter().map(|s| ident(s)).collect();
     apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
@@ -1739,11 +1762,26 @@ fn sum_return_is_a_fixed_builder_plan() {
     // requirement into a binding that has no `i32` crossing of its own.
     assert!(!plan.leaves[0].has_converter());
     assert!(plan.leaves[1].has_converter());
-    assert!(
-        !reg.required_outputs_scan
-            .contains(&TypeKey::from_type(&syn::parse_quote!(Reading))),
-        "a sum has no whole-value converter, so its return must not require one"
-    );
+    // #282's invariant, stated over the plan rather than over one type name:
+    // EVERY leaf's `out_ty` is registered, and only a converter-bearing leaf is
+    // a root. The assertion this replaced could state neither half — it read
+    // `!...is_some_and(|c| c.root)` on `Reading`, which is also true when the
+    // cell is ABSENT, and absent is what it was: this fixture's registry
+    // declares nothing, so it passed for the wrong reason.
+    for leaf in &plan.leaves {
+        let cell = reg
+            .output_types
+            .get(&leaf.out_ty.key())
+            .unwrap_or_else(|| panic!("leaf `{}` registers its out_ty", leaf.name));
+        assert_eq!(
+            cell.root,
+            leaf.has_converter(),
+            "leaf `{}`: a cell says the type entered the pipeline, a root says \
+             the binding demands its converter — the selector makes only the \
+             first, because a sum has no whole-value output converter",
+            leaf.name
+        );
+    }
 }
 
 /// `Option` and `Vec` layers ride the existing shape fold — a sum needs
@@ -1751,7 +1789,7 @@ fn sum_return_is_a_fixed_builder_plan() {
 /// dropped along with the bare type's.
 #[test]
 fn sum_return_layers_ride_the_shape_fold() {
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn read_maybe(w: i32) -> Option<Reading> { todo!() }",
         "fn read_all(n: i32) -> Vec<Reading> { todo!() }",
     ]);
@@ -1771,7 +1809,9 @@ fn sum_return_layers_ride_the_shape_fold() {
     for ty in ["Option<Reading>", "Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
         assert!(
-            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            !reg.output_types
+                .get(&TypeKey::from_type(&ty))
+                .is_some_and(|c| c.root),
             "no layer of a sum return may require a whole-value converter: {}",
             ty.to_token_stream()
         );
@@ -1791,12 +1831,14 @@ fn sum_return_layers_ride_the_shape_fold() {
 /// unrequire exists for.
 #[test]
 fn a_vec_only_sum_return_drops_the_bare_requirement() {
-    let mut reg = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
+    let mut reg: Registry<()> = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
     let bare: syn::Type = syn::parse_quote!(Reading);
-    reg.require_output(&bare, &crate::SourceLocation::default());
+    let bare_reading = reg
+        .intern(crate::api::core::registry::Direction::Output, &bare, true)
+        .expect("fixture type");
+    reg.require_output(&bare_reading);
     assert!(
-        reg.required_outputs_scan
-            .contains(&TypeKey::from_type(&bare)),
+        reg.output_types[&TypeKey::from_type(&bare)].root,
         "fixture precondition: the bare element starts out required"
     );
 
@@ -1807,7 +1849,9 @@ fn a_vec_only_sum_return_drops_the_bare_requirement() {
     for ty in ["Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
         assert!(
-            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            !reg.output_types
+                .get(&TypeKey::from_type(&ty))
+                .is_some_and(|c| c.root),
             "no layer of a sum return may require a whole-value converter: {}",
             ty.to_token_stream()
         );
@@ -1819,7 +1863,7 @@ fn a_vec_only_sum_return_drops_the_bare_requirement() {
 /// groups instead of a whole value built on the Rust side.
 #[test]
 fn sum_callback_arg_is_a_fixed_builder_plan() {
-    let mut reg = reg_with(&[
+    let mut reg: Registry<()> = reg_with(&[
         "fn read_each(n: i32, f: impl Fn(Reading) + Send + Sync + 'static) { todo!() }",
     ]);
     let declared: std::collections::HashSet<syn::Ident> =
@@ -1834,4 +1878,47 @@ fn sum_callback_arg_is_a_fixed_builder_plan() {
     assert!(plan.fixed_builder);
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.leaves[0].source, LeafSource::SumTag);
+}
+
+/// A `Vec<Option<T>>` return does not match a `T` decomposition.
+///
+/// The boundary accepts `Option<Vec<T>>` — an optional list — and the layer stack
+/// stops at any layer out of that order. So the optional inside a `Vec` belongs
+/// to the **element**, the return's core is `Option<Payload>` rather than
+/// `Payload`, and no fixed fold is installed.
+///
+/// This is the pairing that matters: the explicit decomposition path a few
+/// hundred lines up refuses `Vec<Option<…>>` outright as unsupported, so a
+/// silently-installed nested fold here would mean the two paths disagree about
+/// the same return type. An unbounded layer peel makes exactly that happen —
+/// verified by sabotage, not assumed.
+#[test]
+fn a_vec_of_optionals_installs_no_fixed_fold() {
+    let mut reg: Registry<()> =
+        reg_with(&["fn storage_get_vec(s: &Storage) -> Vec<Option<Payload>> { todo!() }"]);
+    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
+        name: name.to_string(),
+        path: vec![PathStep::field(ident(name), false)],
+        out_ty: tref(ty),
+        identity: false,
+        nullable: false,
+        source: LeafSource::Field,
+        group: None,
+    };
+    let vd = ValueDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+        source: syn::parse_quote!(Payload),
+        leaves: vec![
+            leaf("id", syn::parse_quote!(i64)),
+            leaf("seq", syn::parse_quote!(i32)),
+        ],
+    };
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["storage_get_vec"].iter().map(|s| ident(s)).collect();
+    apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
+
+    assert!(
+        !reg.unfold_plans.contains_key(&ident("storage_get_vec")),
+        "a Vec<Option<Payload>> return must not fold as a Payload decomposition"
+    );
 }

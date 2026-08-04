@@ -17,6 +17,7 @@
 //! parent's `fromParts`, a return's ride the hoisted builder singleton.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Leaf name of the synthesized selector. Distinct from every group slot by
 /// construction: a group slot always contains the `_` that separates its
@@ -40,36 +41,36 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 /// `variant!(V).name(...)` rename carries through to the builder's parameter
 /// names too.
 pub(crate) fn synth_sum_leaves(
-    ext: &JniGen,
+    ext: &Declarations,
     sum_cfg: &SumConfig,
-    item_enum: &syn::ItemEnum,
+    sum: &crate::api::core::flat::Variant,
 ) -> Vec<crate::api::core::unfold::UnfoldLeaf> {
-    use crate::api::core::{
-        types_util::SumSpec,
-        unfold::{LeafSource, UnfoldLeaf},
-    };
+    use crate::api::core::unfold::{LeafSource, UnfoldLeaf};
 
-    let spec = SumSpec::from_item_enum(item_enum);
     // The selector rides ahead of the groups it chooses between, and carries
     // **which sum** it selects over as its `out_ty` — that is how the emitter
     // finds the enum to `match` when the sum is a field rather than the whole
     // returned value. Nothing looks up a converter for it (`has_converter()` is
     // false for a `SumTag`): there is no value to convert, the emitter assigns
     // the tag literal per arm. Its wire is a `jint` by definition.
-    let enum_ident = &item_enum.ident;
     let mut leaves = vec![UnfoldLeaf {
         name: SUM_TAG_LEAF.to_string(),
         path: Vec::new(),
-        out_ty: syn::parse_quote!(#enum_ident),
+        // The tag names WHICH sum it selects over, and no source wrote that as
+        // a standalone type — so the DECLARATION answers, rather than this
+        // emitter minting a reading from the name. Nothing resolves a converter
+        // for it (`has_converter()` is false), but the emitter reads it back to
+        // find the enum to `match`.
+        out_ty: sum.type_ref().clone(),
         identity: false,
         nullable: false,
         source: LeafSource::SumTag,
         group: None,
     }];
-    for variant in &spec.variants {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &variant.ident);
-        for field in &variant.fields {
-            let prop = sum_field_prop_name(field);
+    for alt in &sum.alternatives {
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
+        for field in &alt.fields {
+            let prop = sum_field_prop_name(&field.member());
             leaves.push(UnfoldLeaf {
                 name: sum_slot_fragment(&kotlin_name, &prop),
                 path: Vec::new(),
@@ -77,10 +78,10 @@ pub(crate) fn synth_sum_leaves(
                 identity: false,
                 nullable: false,
                 source: LeafSource::VariantField {
-                    variant: variant.ident.clone(),
-                    member: field.member.clone(),
+                    variant: alt.name.clone(),
+                    member: field.member(),
                 },
-                group: Some(variant.tag),
+                group: Some(sum_tag(alt)),
             });
         }
     }
@@ -104,7 +105,7 @@ pub(crate) struct Slot {
 }
 
 pub(crate) fn leaf_slot(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> Slot {
     use crate::api::core::unfold::LeafSource;
@@ -161,8 +162,8 @@ pub(crate) fn is_sum_leaves(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> 
 /// is that a leaf here is not an independent expression — its slot exists in
 /// every arm and only one arm computes it.
 pub(crate) fn encode_sum_group(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
@@ -177,10 +178,21 @@ pub(crate) fn encode_sum_group(
         .iter()
         .find(|l| l.source == LeafSource::SumTag)
         .expect("a sum segment carries its selector leaf");
-    let ident = bare_path_ident(&tag_leaf.out_ty).unwrap_or_else(|| {
+    // The name off the reading — `TypeId` IS the name, so nothing takes a path
+    // apart to re-derive one.
+    let crate::api::core::flat::TypeKind::Named { id, .. } = tag_leaf.out_ty.unwrapped().kind()
+    else {
         panic!(
-            "jnigen sum unfold: selector type `{}` is not a path type",
-            TypeKey::from_type(&tag_leaf.out_ty)
+            "jnigen sum unfold: selector type `{}` is not a named type",
+            tag_leaf.out_ty.key()
+        )
+    };
+    // Raw-aware: a sum may legitimately be named `r#type`, and `Ident::new`
+    // rejects that spelling.
+    let ident = id.ident().unwrap_or_else(|| {
+        panic!(
+            "jnigen sum unfold: selector type `{}` is not a single identifier",
+            id.name
         )
     });
     let module = ext.fn_module(registry, &ident);
@@ -221,20 +233,23 @@ pub(crate) fn encode_sum_group(
         .expect("a sum plan carries its selector leaf");
     let tag_id = &obj_idents[tag_idx];
     // A unit variant contributes no leaf, so the arm list is driven by the
-    // enum's own variants, not by the grouped leaves.
-    let (item_enum, _) = registry.enums.get(&ident).unwrap_or_else(|| {
-        panic!("jnigen sum unfold: no indexed enum `{ident}` for the decomposed sum")
-    });
-    let spec = crate::api::core::types_util::SumSpec::from_item_enum(item_enum);
+    // enum's own alternatives, not by the grouped leaves. `enum_item` hands
+    // back only the `syn::ItemEnum`, deliberately — a consumer that acts on the
+    // Variant/Enum distinction asks `declared_type` (#289).
+    let Some(crate::api::core::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
+    else {
+        panic!("jnigen sum unfold: no indexed sum `{ident}` for the decomposed sum")
+    };
 
-    let arms: Vec<TokenStream> = spec
-        .variants
+    let arms: Vec<TokenStream> = sum
+        .alternatives
         .iter()
-        .map(|variant| {
+        .map(|alt| {
+            let tag = sum_tag(alt);
             let group: Vec<usize> = leaves
                 .iter()
                 .enumerate()
-                .filter(|(_, l)| l.group == Some(variant.tag))
+                .filter(|(_, l)| l.group == Some(tag))
                 .map(|(i, _)| i)
                 .collect();
             let binds: Vec<syn::Ident> = group
@@ -242,20 +257,21 @@ pub(crate) fn encode_sum_group(
                 .enumerate()
                 .map(|(k, _)| format_ident!("__sv{}", k))
                 .collect();
-            let vident = &variant.ident;
-            let pattern = match variant.fields.first().map(|f| &f.member) {
-                None => quote!(#source::#vident),
-                Some(syn::Member::Named(_)) => {
-                    let pairs = variant.fields.iter().zip(&binds).map(|(f, b)| {
-                        let syn::Member::Named(n) = &f.member else {
-                            unreachable!("variant field shapes are uniform")
-                        };
-                        quote!(#n: #b)
-                    });
-                    quote!(#source::#vident { #(#pairs),* })
-                }
-                Some(syn::Member::Unnamed(_)) => quote!(#source::#vident(#(#binds),*)),
-            };
+            let vident = &alt.name;
+            // The alternative's OWN delimiters, from the one place that chooses
+            // them — for match patterns and constructors alike. Branching on
+            // `fields.first()` could not answer this: an empty alternative has
+            // no first field, so `enum E { B() }` and `enum E { B {} }` both
+            // matched the `None` arm and emitted the bare `E::B`, which is
+            // E0533 in pattern position. Same shape as the empty struct that
+            // emitted `Unit {}` in #302.
+            let parts: Vec<TokenStream> = alt
+                .fields
+                .iter()
+                .zip(&binds)
+                .map(|(f, b)| f.bind(b))
+                .collect();
+            let pattern = alt.spell(quote!(#source::#vident), &parts);
             // The live group: convert each payload through its own output
             // converter, exactly as a struct field of the same type would be.
             let live: TokenStream = group
@@ -281,7 +297,7 @@ pub(crate) fn encode_sum_group(
                     quote! { #id = #d; }
                 })
                 .collect();
-            let tag_lit = proc_macro2::Literal::i32_unsuffixed(variant.tag);
+            let tag_lit = proc_macro2::Literal::i32_unsuffixed(tag);
             // A nullable selector rides an OBJECT slot (its absent case is JVM
             // null, which a raw `jint` has no room for), so the live tag boxes
             // like any other nullable primitive leaf.
@@ -320,7 +336,7 @@ pub(crate) fn encode_sum_group(
 /// payload and a struct field of the same type reach their converter the same
 /// way.
 fn encode_group_leaf(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
     obj_ident: &syn::Ident,
     prim: bool,
@@ -331,7 +347,7 @@ fn encode_group_leaf(
         panic!(
             "jnigen sum unfold: payload leaf `{}` (`{}`) has no registered output converter",
             leaf.name,
-            TypeKey::from_type(&leaf.out_ty)
+            TypeKey::from_type(leaf.out_ty.syntax())
         )
     });
     let wire = out_entry.destination.clone();

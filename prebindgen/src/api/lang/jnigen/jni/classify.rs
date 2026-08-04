@@ -1,8 +1,9 @@
 //! One-stop classification of how a bare Rust type is declared to this
 //! adapter — the single precedence every emitter agrees on instead of each
-//! re-deriving it from `TypeConfig` flags and `registry.structs` probes.
+//! re-deriving it from `TypeConfig` flags and `registry.flat()` type probes.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// The adapter-declared kind of a **bare** (already `Option`/`&`-stripped)
 /// Rust type: the declared [`DeclaredKind`] when the type is declared to this
@@ -24,8 +25,13 @@ pub(crate) enum TypeKind<'r, 'c> {
     Sum,
     /// A `#[prebindgen]` struct from the source crate that is none of the
     /// special kinds; flattens field-by-field when emitters support it.
+    ///
+    /// The **element**, not its `syn::ItemStruct`. A flattening emitter wants
+    /// each field's reading, and the model already decided one per field; going
+    /// through the syntax means asking some other authority for it again. An
+    /// emitter that only re-emits the struct reads `st.origin.syntax`.
     DataStruct {
-        st: &'r syn::ItemStruct,
+        st: &'r crate::api::core::flat::Struct,
         cfg: Option<&'c TypeConfig>,
     },
     /// Scalars, `String`, undeclared / non-path types.
@@ -41,13 +47,13 @@ impl TypeConfig {
     }
 }
 
-impl JniGen {
+impl Declarations {
     /// Classify `bare` against the declared-type table and the registry's
     /// captured structs. Callers strip `Option<_>` / `&_` layers first —
     /// wrapper folding is the resolver's business, not this table's.
     pub(crate) fn type_kind<'r, 'c>(
         &'c self,
-        registry: &'r Registry<KotlinMeta>,
+        registry: &'r impl Conversions<KotlinMeta>,
         bare: &syn::Type,
     ) -> TypeKind<'r, 'c> {
         let cfg = self.types.get(&TypeKey::from_type(bare));
@@ -58,12 +64,12 @@ impl JniGen {
                 DeclaredKind::Sealed(_) => return TypeKind::Sum,
                 // A data class is exactly a declared source struct — fall
                 // through to the registry probe below, which supplies the
-                // `syn::ItemStruct` its emitters flatten.
+                // element its emitters flatten.
                 DeclaredKind::Data => {}
             }
         }
         if let Some(name) = bare_path_ident(bare) {
-            if let Some((st, _)) = registry.structs.get(&name) {
+            if let Some(st) = registry.flat().struct_type(&name) {
                 return TypeKind::DataStruct { st, cfg };
             }
         }

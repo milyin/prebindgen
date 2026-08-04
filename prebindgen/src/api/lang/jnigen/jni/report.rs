@@ -1,4 +1,4 @@
-//! `Generation::<JniGen>::report()` — the resolved binding surface,
+//! `JniGen::report()` — the resolved binding surface,
 //! explained.
 //!
 //! Declarations act at a distance: one `expand_return!` / `convert!` /
@@ -11,22 +11,23 @@
 //! committed regen so a decl's effect is reviewable in a PR without
 //! reading generated Kotlin.
 //!
-//! The report is deliberately an inherent method of `Generation<JniGen>`
+//! The report is deliberately an inherent method of `JniGen`
 //! (the `write_kotlin` seam): the *pattern* — describe your resolved
 //! surface — is adapter-universal, but the *content* is intrinsically in
 //! the destination language's vocabulary, so each adapter implements its
 //! own.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
-impl crate::api::core::Generation<JniGen> {
+impl super::JniGen {
     /// Render the resolved binding surface as a deterministic markdown
     /// report: per package / class the final Kotlin signature of every
     /// wrapper (exactly as generated) with the expand/error plans that
     /// shaped it, then the type table (kind, Kotlin FQN, wire, conversion
     /// sources). Pure read over the resolved registry.
     pub fn report(&self) -> String {
-        let ext = self.adapter();
+        let ext = self.declarations();
         let registry = self.registry();
         let mut out = String::new();
         out.push_str("# JniGen binding report\n\n");
@@ -131,7 +132,8 @@ impl crate::api::core::Generation<JniGen> {
                 .kotlin_fqn(key)
                 .unwrap_or_else(|| key.as_str().to_string());
             let wire = registry
-                .output_entry(&key.to_type())
+                .reading(key)
+                .and_then(|tr| registry.output_entry(&tr))
                 .map(|e| e.wire_type().to_token_stream().to_string())
                 .unwrap_or_else(|| "?".to_string());
             out.push_str(&format!(
@@ -165,7 +167,7 @@ impl crate::api::core::Generation<JniGen> {
         // listed above with the other declared classes, not here.
         let mut boundary: Vec<String> = ext
             .rust_side_only_types()
-            .map(|k| format!("- `{}` (never materializes in Kotlin)\n", k.as_str()))
+            .map(|(k, _)| format!("- `{}` (never materializes in Kotlin)\n", k.as_str()))
             .collect();
         boundary.sort();
         if !boundary.is_empty() {
@@ -186,9 +188,9 @@ impl crate::api::core::Generation<JniGen> {
         kotlin_name: Option<&str>,
         receiver_key: Option<&TypeKey>,
     ) {
-        let ext = self.adapter();
+        let ext = self.declarations();
         let registry = self.registry();
-        let Some((item_fn, _)) = registry.functions.get(rust_ident) else {
+        let Some(item_fn) = registry.flat().function(&rust_ident) else {
             return;
         };
         let Some(f) = render_wrapper_fn(ext, item_fn, registry, kotlin_name, receiver_key) else {
@@ -199,7 +201,7 @@ impl crate::api::core::Generation<JniGen> {
         // Param expansions.
         let mut shaped: Vec<String> = Vec::new();
         let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry
-            .expansion_plans
+            .expansion_plans()
             .iter()
             .filter(|((func, _), _)| func == rust_ident)
             .map(|((_, param), plan)| (param, plan))
@@ -220,7 +222,7 @@ impl crate::api::core::Generation<JniGen> {
                 variants.join(", ")
             ));
         }
-        if let Some(plan) = registry.unfold_plans.get(rust_ident) {
+        if let Some(plan) = registry.unfold_plans().get(rust_ident) {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "return `{}` decomposed → [{}] ({:?} delivery)",
@@ -229,7 +231,7 @@ impl crate::api::core::Generation<JniGen> {
                 plan.delivery
             ));
         }
-        if let Some(plan) = registry.error_plans.get(rust_ident) {
+        if let Some(plan) = registry.error_plans().get(rust_ident) {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "domain error `{}` decomposed → onError [{}] (binding failures → onBindingError)",
@@ -243,7 +245,7 @@ impl crate::api::core::Generation<JniGen> {
     }
 }
 
-impl JniGen {
+impl Declarations {
     /// Human-readable class-kind name of a declared type (report use).
     pub(crate) fn class_kind_name(&self, key: &TypeKey) -> &'static str {
         let Some(cfg) = self.types.get(key) else {

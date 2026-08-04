@@ -1,20 +1,30 @@
 //! Declaration objects: one standalone, independently-constructible value
-//! type per kind of thing `JniGen` can be told about (a `ptr_class`, an
+//! type per kind of thing `Declarations` can be told about (a `ptr_class`, an
 //! `enum_class`, a function, a scalar wire mapping, …), plus the `PackageDecl`
 //! that aggregates the package-scoped ones. Each type is both its own
-//! "builder" and the final value `JniGen`/`PackageDecl` accepts — no separate
+//! "builder" and the final value `Declarations`/`PackageDecl` accepts — no separate
 //! `Builder`/`Decl` split, no terminal `.build()` call.
 //!
-//! `JniGen` itself only ever *accepts* fully-built values of these types
-//! (`JniGen::package`, `JniGen::expand`, `JniGen::convert`, in
+//! `Declarations` itself only ever *accepts* fully-built values of these types
+//! (`JniGenBuilder::package`, `JniGenBuilder::expand`, `JniGenBuilder::convert`, in
 //! `builder.rs`); none of them reach back
-//! into any `JniGen` state while being built.
+//! into any `Declarations` state while being built.
 
 use super::*;
 
+/// The origin of a type a **build script** wrote.
+///
+/// Real tokens, and deliberately no source position: `SourceLocation::default()`
+/// is the sanctioned placeless location for exactly this — a signature or type a
+/// build script authored was never in a captured file, and `has_position` already
+/// gates what a diagnostic prints for one.
+pub(crate) fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
+    Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Shared local accumulators (replayed into `Expansions`/`Deconstructors`
-// by the accept logic in `builder.rs` once a decl is handed to `JniGen`)
+// by the accept logic in `builder.rs` once a decl is handed to `Declarations`)
 // ──────────────────────────────────────────────────────────────────────
 
 /// One arm of an `expand_param!` `.variant*` list (type-level or per-fn).
@@ -325,7 +335,7 @@ macro_rules! fields {
 /// out.
 ///
 /// Build one with [`ptr_class!`](crate::ptr_class), add it to a
-/// [`PackageDecl`], and hand that to [`JniGen::package`].
+/// [`PackageDecl`], and hand that to [`JniGenBuilder::package`].
 ///
 /// A `PtrClassDecl` defines the **Kotlin class only** — its name
 /// ([`name`](Self::name)), its instance methods ([`method`](Self::method)), and its
@@ -333,7 +343,7 @@ macro_rules! fields {
 /// type crosses the FFI boundary by default — accepted as which parameter
 /// variants, returned as which field set — is declared separately with
 /// [`expand_param!`](crate::expand_param) / [`expand_return!`](crate::expand_return)
-/// handed to [`JniGen::expand`]; any single
+/// handed to [`JniGenBuilder::expand`]; any single
 /// function can override those defaults locally (see [`FunctionDecl`]).
 ///
 /// ```
@@ -349,6 +359,10 @@ macro_rules! fields {
 /// [`implements`](Self::implements).
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
     pub(crate) iface: IfaceOpts,
@@ -374,7 +388,7 @@ macro_rules! class_interface_methods {
         /// public instance surface, and make the class implement it (every
         /// class-body member gains the `override` modifier). The interface
         /// is named by [`interface_name`](Self::interface_name), else the
-        /// [`JniGen::set_interface_name_mangle`] hook over the final class
+        /// [`JniGenBuilder::set_interface_name_mangle`] hook over the final class
         /// name (default: append `"Api"`).
         ///
         /// This is the compiler-checked half of the integration hatch: a
@@ -390,7 +404,7 @@ macro_rules! class_interface_methods {
         }
 
         /// Name the generated interface literally (relative, no dots),
-        /// bypassing the [`JniGen::set_interface_name_mangle`] hook.
+        /// bypassing the [`JniGenBuilder::set_interface_name_mangle`] hook.
         /// Implies [`interface`](Self::interface).
         pub fn interface_name(mut self, name: impl Into<String>) -> Self {
             let name = name.into();
@@ -443,6 +457,7 @@ impl PtrClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             members: Vec::new(),
             iface: IfaceOpts::default(),
@@ -474,7 +489,7 @@ impl PtrClassDecl {
     }
 
     /// Rename the generated Kotlin class. By default it is named after the
-    /// Rust type (via the [`JniGen::set_ptr_class_name_mangle`] hook); `.name("Foo")`
+    /// Rust type (via the [`JniGenBuilder::set_ptr_class_name_mangle`] hook); `.name("Foo")`
     /// sets it literally instead. Relative name, no dots — the package comes
     /// from the enclosing [`PackageDecl`].
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -524,7 +539,7 @@ impl From<syn::Type> for PtrClassDecl {
 ///
 /// Build one with [`expand_param!`](crate::expand_param), add arms with
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
-/// it to [`JniGen::expand`].
+/// it to [`JniGenBuilder::expand`].
 ///
 /// **Generated shape** — at the wire tier this is a selector dispatch: with
 /// more than one arm the parameter crosses as a selector `Int` plus one
@@ -562,6 +577,10 @@ impl From<syn::Type> for PtrClassDecl {
 #[derive(Clone)]
 pub struct ExpandParamDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) variants: Vec<LocalVariant>,
     /// `.no_split()` — suppress the proactive splittability check for this
     /// variant set (it will only ever be used as the selector form). See
@@ -573,6 +592,7 @@ impl ExpandParamDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             variants: Vec::new(),
             no_split: false,
         }
@@ -642,7 +662,7 @@ impl ExpandParamDecl {
 ///
 /// Build one with [`expand_return!`](crate::expand_return), add fields with
 /// [`field`](Self::field) / [`field_self`](Self::field_self), and hand it to
-/// [`JniGen::expand`].
+/// [`JniGenBuilder::expand`].
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: every returned /
@@ -664,6 +684,10 @@ impl ExpandParamDecl {
 #[derive(Clone)]
 pub struct ExpandReturnDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) fields: Vec<LocalField>,
 }
 
@@ -671,6 +695,7 @@ impl ExpandReturnDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             fields: Vec::new(),
         }
     }
@@ -952,7 +977,7 @@ impl FieldsDecl {
     }
 }
 
-/// Unifies the two boundary decls into one type so [`JniGen::expand`] can
+/// Unifies the two boundary decls into one type so [`JniGenBuilder::expand`] can
 /// expose a single entry point — the boundary-decl peer of [`ClassDecl`].
 /// Deliberately **no** `impl From<syn::Type> for ExpandDecl` — a bare
 /// `syn::Type` alone doesn't say which direction it describes, so every
@@ -993,6 +1018,10 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// identity — a "method" on it is just a free function taking the enum.
 pub struct EnumClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) iface: IfaceOpts,
 }
@@ -1001,6 +1030,7 @@ impl EnumClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             iface: IfaceOpts::default(),
         }
@@ -1053,6 +1083,10 @@ impl From<syn::Type> for EnumClassDecl {
 /// taking it.
 pub struct SealedClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) variants: Vec<VariantDecl>,
     pub(crate) iface: IfaceOpts,
@@ -1062,6 +1096,7 @@ impl SealedClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             variants: Vec::new(),
             iface: IfaceOpts::default(),
@@ -1124,6 +1159,10 @@ impl VariantDecl {
 /// destructuring a data-class parameter gets), just rebased to `this`.
 pub struct DataClassDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) name_override: Option<String>,
     pub(crate) jobject_input: bool,
     pub(crate) iface: IfaceOpts,
@@ -1134,6 +1173,7 @@ impl DataClassDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             name_override: None,
             jobject_input: false,
             iface: IfaceOpts::default(),
@@ -1234,7 +1274,7 @@ impl From<DataClassDecl> for ClassDecl {
 /// [`name`](Self::name) to set its Kotlin name.
 /// [`expand_param`](Self::expand_param) / [`expand_return`](Self::expand_return)
 /// **override, for this one function**, the boundary defaults its
-/// parameter/return types declare at the generator level ([`JniGen::expand`])
+/// parameter/return types declare at the generator level ([`JniGenBuilder::expand`])
 /// — using the very same decl objects, so the complete-set rule is identical
 /// at both scopes.
 pub struct FunctionDecl {
@@ -1532,7 +1572,7 @@ impl ConstDecl {
     /// exactly when nothing flows in (a unary conversion source must be a
     /// named callable — see [`ConvertDecl`]). Fns referenced only inside
     /// expressions are undeclared to the registry — acknowledge them via
-    /// [`JniGen::ignore`] (+ [`matching`](crate::lang::matching)).
+    /// [`JniGenBuilder::ignore`] (+ [`matching`](crate::lang::matching)).
     pub fn expr(self, ty: syn::Type, expr: syn::Expr) -> Self {
         self.set_source(ConstSource::Expr { ty, expr })
     }
@@ -1554,7 +1594,7 @@ pub(crate) struct ConstExprDecl {
 /// Declares a `#[prebindgen]` item this binding deliberately does NOT
 /// bind: nothing is emitted for it and the registry's per-item "skipping
 /// undeclared" warning is suppressed. One acceptor
-/// ([`JniGen::ignore`]), the kind carried by what you built:
+/// ([`JniGenBuilder::ignore`]), the kind carried by what you built:
 ///
 /// ```rust,ignore
 /// .ignore(fun!(string_len))                                // a fn
@@ -1627,7 +1667,7 @@ where
 /// (`package!("session")`, or `package!()` for the base package), fill it
 /// with [`class`](Self::class) / [`fun`](Self::fun) /
 /// [`constant`](Self::constant), and hand it to
-/// [`JniGen::package`]. Reopening the same subpackage across several
+/// [`JniGenBuilder::package`]. Reopening the same subpackage across several
 /// `PackageDecl`s is fine — they merge.
 pub struct PackageDecl {
     pub(crate) name: String,
@@ -1638,7 +1678,7 @@ pub struct PackageDecl {
 
 impl PackageDecl {
     /// `name` is dot-separated, relative to the base package set by
-    /// [`JniGen::set_package_prefix`]; the empty string is the base
+    /// [`JniGenBuilder::set_package_prefix`]; the empty string is the base
     /// package itself. See [`crate::package!`] for the equivalent macro form
     /// (`package!("model")` / `package!()`).
     pub fn new(name: impl Into<String>) -> Self {
@@ -1718,7 +1758,7 @@ impl PackageDecl {
 /// an otherwise legal domain. A `try_` source's `Err`
 /// routes to the caller's error handler. Conversion fns may live in the flat
 /// crate or in a **helper crate** whose item stream is chained into the same
-/// [`crate::core::Registry::from_items`] call; generated calls qualify each
+/// [`crate::core::Flat::builder`] parse; generated calls qualify each
 /// function with its origin crate.
 ///
 /// Distinct from the [`expand_param!`](crate::expand_param) /
@@ -1880,11 +1920,15 @@ impl From<FunctionDecl> for ConvertSourceDecl {
 #[derive(Clone)]
 pub struct ConvertDecl {
     pub(crate) key: TypeKey,
+    /// The type this declaration was **written with** — the `X` the macro
+    /// received. Kept because the declaration is where it came from: recovering
+    /// it later *from* the key was reasoning backwards from an identity (#291).
+    pub(crate) rust_type: Origin<syn::Type>,
     pub(crate) input: Option<ConvertSpec>,
     pub(crate) output: Option<ConvertSpec>,
     pub(crate) domain: Option<crate::core::RepresentationDomain>,
     /// Binding-local fn sources declared on this convert (`fun!(crate::f)
-    /// .sig(…)`): drained into [`JniGen::local_fns`] at acceptance so the
+    /// .sig(…)`): drained into [`Declarations::local_fns`] at acceptance so the
     /// synthesis pre-pass covers them.
     pub(crate) locals: Vec<(syn::Ident, syn::Path, syn::Signature)>,
 }
@@ -1910,6 +1954,7 @@ impl ConvertDecl {
         reject_builtin_convert_type(&TypeKey::from_type(&rust_type));
         Self {
             key: TypeKey::from_type(&rust_type),
+            rust_type: declared_origin(rust_type),
             input: None,
             output: None,
             domain: None,

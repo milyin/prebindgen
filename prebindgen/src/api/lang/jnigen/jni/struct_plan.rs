@@ -16,6 +16,7 @@
 //! instead of by hand-synchronized parallel walks.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// The flattened `fromParts` bridge plan of one struct.
 pub(crate) struct StructPlan {
@@ -182,23 +183,22 @@ pub(crate) struct SumPlanField {
 /// name) — consistently for BOTH sides, where the former parallel walks
 /// could silently diverge on such edge cases.
 pub(crate) fn build_struct_plan(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    s: &syn::ItemStruct,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
+    s: &crate::api::core::flat::Struct,
     depth: usize,
 ) -> Option<StructPlan> {
     assert!(
         depth <= 16,
         "struct fromParts plan: recursion too deep at struct `{}` (cyclic data_class?)",
-        s.ident
+        s.name
     );
-    let syn::Fields::Named(named) = &s.fields else {
-        return None;
-    };
     let mut fields: Vec<PlanField> = Vec::new();
-    for field in &named.named {
-        let fname = field.ident.as_ref()?.clone();
-        let owner = format!("{}.{}", s.ident, fname);
+    for field in &s.fields {
+        // A tuple struct is an `Extern` in the model, never a `Struct`, so a
+        // nameless field cannot reach here.
+        let fname = field.name.as_ref()?.clone();
+        let owner = format!("{}.{}", s.name, fname);
         let kind = classify_field(ext, registry, &field.ty, &owner, depth)?;
         fields.push(PlanField { fname, kind });
     }
@@ -214,13 +214,18 @@ pub(crate) fn build_struct_plan(
 /// `owner` is the dotted path used in diagnostics (`Config.mode`,
 /// `Reading::Exact.v0`).
 pub(crate) fn classify_field(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    ty: &syn::Type,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
+    reading: &crate::api::core::flat::TypeRef,
     owner: &str,
     depth: usize,
 ) -> Option<PlanFieldKind> {
-    let effective_ty = ty.clone();
+    // The **reading**, not a spelling. Every layer question below is answered
+    // from `kind` and cannot fail: holding a `TypeRef` is proof the model
+    // classified this type. Taking a `syn::Type` meant asking the registry per
+    // question, and a type it had never seen answered "no layer" rather than
+    // saying so — which is the missing `?` of #273 waiting to happen again.
+    let effective_ty = reading.syntax().clone();
 
     // A sum is classified FIRST, because it is the one kind with no converter
     // of its own: it crosses as a tag plus one leaf group per variant, never
@@ -232,30 +237,31 @@ pub(crate) fn classify_field(
     // answers about a bare ident, so it reports `Vec<Reading>` as `Other` and
     // a rejection guarded on the unpeeled type could never fire. Peeling first
     // is what makes the `Vec<sum>` error reachable at all.
-    let bare = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-    let core = vec_inner_type(&bare).unwrap_or_else(|| bare.clone());
+    // Every layer question below is the MODEL's, asked once: a field spelled
+    // `Box<Option<T>>` is `Optional` and must classify, nest and render exactly
+    // as `Option<T>` does. Peeling by path segment answered "not optional" for
+    // it, and the seven peels in this function would then disagree with each
+    // other about the same field (#273).
+    let optional_inner = reading.optional_inner();
+    let bare_ref = optional_inner.unwrap_or(reading);
+    let bare = bare_ref.syntax().clone();
+    let seq_elem = bare_ref.sequence_elem();
+    let core = seq_elem.map_or_else(|| bare.clone(), |e| e.syntax().clone());
     if matches!(ext.type_kind(registry, &core), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
         // construction.
-        if vec_inner_type(&bare).is_some() {
+        if seq_elem.is_some() {
             panic!(
                 "fromParts bridge: `Vec<{}>` sealed-class field (`{owner}`) is not supported \
                  (variable arity)",
                 core.to_token_stream(),
             );
         }
-        return sum_plan_kind(
-            ext,
-            registry,
-            &bare,
-            owner,
-            option_inner_type(&effective_ty).is_some(),
-            depth,
-        );
+        return sum_plan_kind(ext, registry, &bare, owner, optional_inner.is_some(), depth);
     }
 
-    let field_entry = registry.output_entry(&effective_ty)?;
+    let field_entry = registry.output_entry(reading)?;
     let conv = ConvChain::of(field_entry);
 
     {
@@ -270,21 +276,32 @@ pub(crate) fn classify_field(
             let fqn = projection_leaf_kt(ext, &proj)?.to_string();
             return Some(PlanFieldKind::Projection { conv, proj, fqn });
         }
-        // Bare enum leaf.
-        if ext.is_kotlin_enum(&effective_ty) {
-            let kotlin = field_entry.metadata.kotlin_name.clone()?;
-            return Some(PlanFieldKind::Enum { conv, kotlin });
-        }
-        // `Option<enum>` leaf.
-        if let Some(inner) = option_inner_type(&effective_ty) {
-            if ext.is_kotlin_enum(&inner) {
-                let kotlin = registry
-                    .output_entry(&inner)?
-                    .metadata
-                    .kotlin_name
-                    .clone()?;
-                return Some(PlanFieldKind::OptionEnum { conv, kotlin });
-            }
+        // Enum leaf, bare or under `Option` — asked ONCE, of the model, and of
+        // the already-peeled reading beside us.
+        //
+        // It used to ask `is_kotlin_enum` twice, of two spellings. That answers
+        // about the WRAPPER: `builder.rs` documents `Box<Priority>` as `false`
+        // for it and `true` for the reading form, so a wrapped enum field fell
+        // through to the plain-leaf arm and rendered as its wire instead of the
+        // Kotlin enum class — the #273 family, output-side. `flat_input.rs` had
+        // already moved to the reading; this is the other half of the same
+        // question finally giving the same answer.
+        //
+        // Optionality stays the CALLER's fact rather than the probe's:
+        // `enum_probe` peels `Option` as well as borrows, so asking it about
+        // the unpeeled reading would make `Priority` and `Option<Priority>`
+        // indistinguishable and collapse the two arms into one.
+        if ext.is_kotlin_enum_reading(bare_ref) {
+            return match optional_inner {
+                None => {
+                    let kotlin = field_entry.metadata.kotlin_name.clone()?;
+                    Some(PlanFieldKind::Enum { conv, kotlin })
+                }
+                Some(inner) => {
+                    let kotlin = registry.output_entry(inner)?.metadata.kotlin_name.clone()?;
+                    Some(PlanFieldKind::OptionEnum { conv, kotlin })
+                }
+            };
         }
         // Nested plain data-class (optionally under `Option`).
         let inner_ty = bare.clone();
@@ -299,9 +316,9 @@ pub(crate) fn classify_field(
             let child_fqn = cfg
                 .and_then(|c| c.name_spec.as_ref())
                 .map(|s| ext.fqn_of(s));
-            let plan = build_struct_plan(ext, registry, &st.clone(), depth + 1)?;
+            let plan = build_struct_plan(ext, registry, st, depth + 1)?;
             return Some(PlanFieldKind::Nested {
-                optional: option_inner_type(&effective_ty).is_some(),
+                optional: optional_inner.is_some(),
                 child_fqn,
                 plan,
             });
@@ -316,10 +333,11 @@ pub(crate) fn classify_field(
             None => {
                 // Object-shaped wire with no fixed descriptor; the JVM slot
                 // must be the field's actual declared type (Option-stripped).
-                let slot_ty =
-                    option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
+                // Option-stripped off the MODEL: `optional_inner` is the
+                // layer's own reading, so there is nothing to re-look-up.
+                let slot = optional_inner.unwrap_or(reading);
                 let descriptor = registry
-                    .output_entry(&slot_ty)
+                    .output_entry(slot)
                     .and_then(|e| jni_field_access(&e.destination))
                     .and_then(|(sig, _, is_obj)| {
                         if is_obj {
@@ -334,13 +352,23 @@ pub(crate) fn classify_field(
                         }
                     })
                     .or_else(|| {
-                        bare_path_ident(&slot_ty).and_then(|name| {
+                        // The NAME off the classification, not off the last
+                        // path segment: `Box<T>` IS `T` here, and taking the
+                        // spelling apart would answer about the wrapper.
+                        match slot.unwrapped().kind() {
+                            crate::api::core::flat::TypeKind::Named { id, .. } => id.ident(),
+                            _ => None,
+                        }
+                        .and_then(|name| {
                             ext.kotlin_fqn(&TypeKey::from_ident(&name))
                                 .map(|v| format!("L{};", v.replace('.', "/")))
                         })
                     })
                     .or_else(|| {
-                        if pat_match_top(&slot_ty, "Vec") {
+                        // A run of values is what `kind` says it is.
+                        // `pat_match_top(.., "Vec")` compared the last path
+                        // segment, so a `Box<Vec<T>>` answered false.
+                        if slot.sequence_elem().is_some() {
                             Some("Ljava/util/List;".to_string())
                         } else {
                             // The wire table already names every reference wire's
@@ -352,7 +380,7 @@ pub(crate) fn classify_field(
                 (LeafForm::Object, descriptor)
             }
         };
-        let nullable = is_option_type(&effective_ty) && !is_jni_primitive(&wire);
+        let nullable = optional_inner.is_some() && !is_jni_primitive(&wire);
         Some(PlanFieldKind::Leaf {
             conv,
             wire: Box::new(wire),
@@ -463,15 +491,13 @@ impl PlanFieldKind {
 /// whenever a payload's converter happened to resolve later than this plan
 /// was first attempted.
 fn sum_plan_kind(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     ty: &syn::Type,
     owner: &str,
     optional: bool,
     depth: usize,
 ) -> Option<PlanFieldKind> {
-    use crate::api::core::types_util::SumSpec;
-
     // Sum expansion needs its OWN depth guard. A sum whose payload is a sum
     // never passes through `build_struct_plan`, so that function's assert —
     // the only one on this recursion before now — cannot see a chain made
@@ -488,9 +514,14 @@ fn sum_plan_kind(
     let ident = bare_path_ident(ty).unwrap_or_else(|| {
         panic!("fromParts bridge: sealed-class field `{owner}` is not a path type")
     });
-    let (item_enum, _) = registry.enums.get(&ident).unwrap_or_else(|| {
-        panic!("fromParts bridge: sealed-class field `{owner}` has no indexed enum `{ident}`")
-    });
+    // The sum as the MODEL holds it: its alternatives' payloads are `TypeRef`s
+    // already, so classifying one asks nothing and cannot be asked about a type
+    // the model never saw. One lookup, not two — the `enum_item` that used to
+    // sit beside this only fed a `SumSpec` of what the element already says.
+    let Some(crate::api::core::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
+    else {
+        panic!("fromParts bridge: sealed-class field `{owner}`: `{ident}` is not an indexed sum")
+    };
     let key = TypeKey::from_ident(&ident);
     let cfg = ext
         .types
@@ -505,26 +536,22 @@ fn sum_plan_kind(
         .map(|s| ext.fqn_of(s))
         .unwrap_or_else(|| panic!("fromParts bridge: sealed class `{ident}` has no Kotlin name"));
 
-    let spec = SumSpec::from_item_enum(item_enum);
     let mut variants: Vec<SumPlanVariant> = Vec::new();
-    for (v, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.ident);
+    for alt in &sum.alternatives {
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
         let mut fields: Vec<SumPlanField> = Vec::new();
-        for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
-            let prop = sum_field_prop_name(f);
+        for field in &alt.fields {
+            let member = field.member();
+            let prop = sum_field_prop_name(&member);
             let slot = sum_slot_fragment(&kotlin_name, &prop);
-            let owner = format!("{ident}::{}.{prop}", v.ident);
+            let owner = format!("{ident}::{}.{prop}", alt.name);
             // `?` — a payload whose converter has not resolved yet defers the
             // whole plan to the next iteration, it does not fail the build.
-            let kind = classify_field(ext, registry, &item_field.ty, &owner, depth + 1)?;
-            fields.push(SumPlanField {
-                member: f.member.clone(),
-                slot,
-                kind,
-            });
+            let kind = classify_field(ext, registry, &field.ty, &owner, depth + 1)?;
+            fields.push(SumPlanField { member, slot, kind });
         }
         variants.push(SumPlanVariant {
-            rust_ident: v.ident.clone(),
+            rust_ident: alt.name.clone(),
             kotlin_name,
             fields,
         });
@@ -544,11 +571,32 @@ fn sum_plan_kind(
 /// Kotlin property name of one sum payload field — a named field keeps its
 /// camelCased name, a tuple field becomes `v0`, `v1`. Must agree with the
 /// sealed-interface emitter, which is why both call this.
-pub(crate) fn sum_field_prop_name(field: &crate::api::core::types_util::SumField) -> String {
-    match &field.member {
+///
+/// Takes the **member**, which is the whole of what the name depends on: every
+/// caller holds a `flat::Field` and asks `Field::member()`. It took a
+/// `types_util::SumField` when a second description of a sum still existed
+/// beside the model's (#289).
+pub(crate) fn sum_field_prop_name(member: &syn::Member) -> String {
+    match member {
         syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
         syn::Member::Unnamed(i) => format!("v{}", i.index),
     }
+}
+
+/// The wire tag of one alternative: its declaration-order index, as the `jint`
+/// the selector leaf carries.
+///
+/// One place, because the tag has to agree in three: the leaf's `group`, the
+/// Kotlin `when` arm, and the Rust `match` arm. Three separate `as i32` casts
+/// agreed by coincidence rather than by construction.
+///
+/// Deliberately **not** a checked conversion. `usize` → `i32` can truncate in
+/// general, but not here: the index counts alternatives of one enum, and an
+/// enum with `i32::MAX` variants is not a thing rustc can be handed. A
+/// `try_from(..).expect(..)` would put a panic in the working path for a state
+/// the compiler cannot produce, which is the shape this crate avoids.
+pub(crate) fn sum_tag(alt: &crate::api::core::flat::Alternative) -> i32 {
+    alt.index as i32
 }
 
 /// Slot-name fragment for one variant field: `<variantCamel>_<prop>`. Keyed

@@ -14,7 +14,7 @@
 //! `run` with raw typed `jvalue`s: no per-leaf boxing upcalls, no erased
 //! `FunctionN`.
 //!
-//! Each identity's spec is derived ONCE, through the [`JniGen::iface_spec`]
+//! Each identity's spec is derived ONCE, through the [`Declarations::iface_spec`]
 //! memo keyed by [`SpecKey`], and shared by all three sites — the
 //! FQN/descriptor pair cannot drift between the artifact tiers (issue #107).
 //! The constructors stay deterministic over `(ext, registry)`; in debug
@@ -22,7 +22,10 @@
 //! determinism is a checked invariant rather than a convention.
 
 use super::*;
-use crate::api::core::unfold::{dedup_names, DeconId, LeafSource, UnfoldPlan};
+use crate::api::core::{
+    registry::Conversions,
+    unfold::{dedup_names, DeconId, LeafSource, UnfoldPlan},
+};
 
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
@@ -665,7 +668,7 @@ fn subject_short(ty: &syn::Type) -> String {
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
-fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
+fn subject_package(ext: &Declarations, subject: &syn::Type) -> String {
     let key = TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject));
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
@@ -675,8 +678,8 @@ fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
 /// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], typed + raw views per leaf.
 fn plan_leaf_params(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
 ) -> Option<Vec<IfaceParam>> {
     // Decomposition leaf names are author-supplied, literal, and unique by
@@ -695,8 +698,8 @@ fn plan_leaf_params(
 /// inert-group nullability rule below have to hold at every one of those sites,
 /// not just where the plan happens to be walked as a whole.
 fn plan_leaf_param(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     name: String,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> Option<IfaceParam> {
@@ -717,12 +720,12 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty);
+    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, leaf.out_ty.syntax());
     leaf_iface_param(
         ext,
         registry,
         name,
-        &leaf.out_ty,
+        leaf.out_ty.syntax(),
         leaf.nullable || inert_nullable,
         true,
     )
@@ -740,8 +743,8 @@ fn plan_leaf_param(
 ///   the close-unless-taken contract needs the native side to `close()` the
 ///   wrapped object after the invoke.
 fn leaf_iface_param(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     name: String,
     out_ty: &syn::Type,
     nullable: bool,
@@ -754,7 +757,11 @@ fn leaf_iface_param(
     // entry was never required.
     let mut out_ty = out_ty;
     let peeled: syn::Type;
-    if registry.output_entry(out_ty).is_none() {
+    if registry
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
+        .is_none()
+    {
         if let syn::Type::Reference(r) = out_ty {
             peeled = (*r.elem).clone();
             out_ty = &peeled;
@@ -763,7 +770,8 @@ fn leaf_iface_param(
     let (builder_kt, _wire_kt, _wrap, is_value_projection) =
         unfold_leaf_kt(ext, registry, out_ty, nullable, "x")?;
     let proj = registry
-        .output_entry(out_ty)
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
         .and_then(|e| e.metadata.projection.as_ref());
     let nullable_kt = |t: kt::KtType| {
         if builder_kt.is_nullable() {
@@ -852,13 +860,18 @@ fn leaf_iface_param(
 /// `run` (close-unless-taken). Replaces the former Rust-side `new_object` +
 /// post-invoke `close()`. `None` if the arg's projection FQN can't be resolved.
 pub(crate) fn owned_handle_iface_param(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     name: String,
     out_ty: &syn::Type,
     nullable: bool,
 ) -> Option<IfaceParam> {
-    let proj = registry.output_entry(out_ty)?.metadata.projection.clone()?;
+    let proj = registry
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))?
+        .metadata
+        .projection
+        .clone()?;
     let fqn = ext.kotlin_fqn(&proj.leaf_key)?.to_string();
     let typed = kt::KtType::cls(fqn.clone());
     let (typed, raw) = if nullable {
@@ -917,12 +930,12 @@ impl SpecKey {
 /// derivation ([`SpecKey::Folder`]'s typed groups) and the declaration
 /// emitter (the hoisted `fromParts`/appender singletons).
 pub(crate) fn fixed_decon_ids(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> std::collections::HashSet<DeconId> {
     let fixed: std::collections::HashSet<DeconId> = registry
-        .unfold_plans
+        .unfold_plans()
         .values()
-        .chain(registry.callback_arg_plans.values())
+        .chain(registry.callback_arg_plans().values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.decon.clone())
         .collect();
@@ -941,9 +954,9 @@ pub(crate) fn fixed_decon_ids(
     // wrapper that references an interface which no longer exists.
     debug_assert!(
         !registry
-            .unfold_plans
+            .unfold_plans()
             .values()
-            .chain(registry.callback_arg_plans.values())
+            .chain(registry.callback_arg_plans().values())
             .any(|p| !p.fixed_builder && p.decon.as_ref().is_some_and(|d| fixed.contains(d))),
         "fixed and non-fixed plans share one DeconId — the typed interface \
          cannot be shaped (or suppressed) for both"
@@ -958,9 +971,9 @@ pub(crate) fn fixed_leaf_element_keys(
     registry: &Registry<KotlinMeta>,
 ) -> std::collections::HashSet<TypeKey> {
     registry
-        .unfold_plans
+        .unfold_plans()
         .values()
-        .chain(registry.callback_arg_plans.values())
+        .chain(registry.callback_arg_plans().values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.element.as_ref())
         .map(TypeKey::from_type)
@@ -968,18 +981,35 @@ pub(crate) fn fixed_leaf_element_keys(
 }
 
 /// Derive the spec for one identity — the SINGLE construction point behind
-/// [`JniGen::iface_spec`]. Any `syn` context comes from the key's stored
-/// normalized type ([`TypeKey::to_type`] — a clone, not a reparse). A
-/// `Folder` derivation folds the fixed-builder typed-group view in per
-/// `DeconId` (see [`fixed_decon_ids`]).
+/// [`Declarations::iface_spec`]. Any `syn` context is **looked up**, never
+/// rebuilt from the key: `Registry::reading` answers from the type table, and a
+/// key it cannot answer for defers rather than producing tokens nothing
+/// classified (#291). A `Folder` derivation folds the fixed-builder
+/// typed-group view in per `DeconId` (see [`fixed_decon_ids`]).
 fn derive_iface_spec(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     key: &SpecKey,
 ) -> Option<IfaceSpec> {
     match key {
         SpecKey::Callback(arg_keys) => {
-            let args: Vec<syn::Type> = arg_keys.iter().map(TypeKey::to_type).collect();
+            // The one deliberate round trip in this file, and the memo forces
+            // it: `SpecKey` needs `Ord`, so it holds `TypeKey`s — a `TypeRef`
+            // could not go in one (its `Origin` carries a `SourceLocation`, so
+            // two identical readings from different files would compare
+            // unequal), and `derive_iface_spec` is contractually a pure
+            // function of the key.
+            //
+            // A LOOKUP, not a classification: `Registry::reading` has answered
+            // only from the type table since #267. `None` means the arg has
+            // not entered the pipeline yet, which is the same "not yet
+            // derivable" state `iface_spec` already documents and retries —
+            // so it defers rather than answering "not optional", which is what
+            // the accessor used to do here.
+            let args: Vec<crate::api::core::flat::TypeRef> = arg_keys
+                .iter()
+                .map(|k| registry.reading(k))
+                .collect::<Option<_>>()?;
             callback_iface_spec(ext, registry, &args)
         }
         SpecKey::Builder(d) => builder_iface_spec(ext, registry, d),
@@ -990,13 +1020,18 @@ fn derive_iface_spec(
             }
             Some(spec)
         }
-        SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(ext, registry, &el_key.to_type()),
+        // Same round trip, same reason, same answer as the `Callback` arm
+        // above: the memo key holds an identity, and the reading behind it is a
+        // lookup. `None` defers, exactly as it does there (#291).
+        SpecKey::WholeFolder(el_key) => {
+            whole_folder_iface_spec(ext, registry, registry.reading(el_key)?.syntax())
+        }
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
     }
 }
 
-impl JniGen {
+impl Declarations {
     /// The memoized spec for one interface identity: derived once per
     /// generator run and shared by every consumer — the resolve-time
     /// trampoline, the per-function plan, and the declaration emitter — so
@@ -1008,7 +1043,7 @@ impl JniGen {
     /// instead of shipping descriptor drift.
     pub(crate) fn iface_spec(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         key: &SpecKey,
     ) -> Option<std::sync::Arc<IfaceSpec>> {
         let hit = self.iface_specs.borrow().get(key).cloned();
@@ -1042,8 +1077,8 @@ impl JniGen {
 /// property types, not the wire — so it reassembles through the same inlined
 /// `when` over the tag that a sum-typed struct field gets.
 fn fixed_reassembly(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     source: &syn::Type,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
     class_fqn: &str,
@@ -1067,9 +1102,9 @@ fn fixed_reassembly(
 /// returning `Unit`. Named `<ArgShorts>Callback` (`Fn()` → `VoidCallback`),
 /// placed in the first arg type's package (root for `Fn()`).
 pub(crate) fn callback_iface_spec(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    cb_args: &[syn::Type],
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
+    cb_args: &[crate::api::core::flat::TypeRef],
 ) -> Option<IfaceSpec> {
     // Per-arg grouping over the flat raw leaves. A **fixed-builder** (by-value
     // `data_class`) arg crosses the wire as decoupled leaves but the user
@@ -1119,8 +1154,8 @@ pub(crate) fn callback_iface_spec(
         // params, no reassembly group). Only `Base`/accessor plans decompose the
         // arg into the callback's `run` params here.
         let plan = registry
-            .callback_arg_plans
-            .get(&TypeKey::from_type(t))
+            .callback_arg_plans()
+            .get(&t.key())
             .filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
             let leaf_names = plan_leaf_names(&plan.leaves);
@@ -1129,15 +1164,14 @@ pub(crate) fn callback_iface_spec(
             }
             if plan.fixed_builder {
                 any_fixed = true;
-                let core = match t {
-                    syn::Type::Reference(r) => (*r.elem).clone(),
-                    other => other.clone(),
-                };
+                // Peeled off the reading — `borrow_target` is the model's
+                // answer to "is this a borrow", not a syn match.
+                let core = t.borrow_target().unwrap_or(t).syntax().clone();
                 let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
                 let (reassemble, imports) =
                     fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
                 groups.push(GroupDesc {
-                    name: whole_value_name(t, i),
+                    name: whole_value_name(t.syntax(), i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
@@ -1163,11 +1197,11 @@ pub(crate) fn callback_iface_spec(
                     };
                     if leaf.source == LeafSource::SumTag {
                         any_fixed = true;
-                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(&leaf.out_ty))?;
+                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(leaf.out_ty.syntax()))?;
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
-                            &leaf.out_ty,
+                            leaf.out_ty.syntax(),
                             &plan.leaves[k..seg],
                             &fqn,
                         );
@@ -1214,13 +1248,13 @@ pub(crate) fn callback_iface_spec(
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
-                name: whole_value_name(t, i),
-                ty: t.clone(),
-                nullable: is_option_type(t),
+                name: whole_value_name(t.syntax(), i),
+                ty: t.syntax().clone(),
+                nullable: t.optional_inner().is_some(),
                 owned_handle,
             });
             groups.push(GroupDesc {
-                name: whole_value_name(t, i),
+                name: whole_value_name(t.syntax(), i),
                 typed: None,
                 reassemble: None,
                 imports: Vec::new(),
@@ -1277,14 +1311,14 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(subject_short)
+                .map(|t| subject_short(t.syntax()))
                 .collect::<Vec<_>>()
                 .join("")
         )
     };
     let package = cb_args
         .first()
-        .map(|t| subject_package(ext, t))
+        .map(|t| subject_package(ext, t.syntax()))
         .unwrap_or_else(|| ext.package.clone());
     Some(IfaceSpec {
         typed_groups,
@@ -1299,11 +1333,11 @@ pub(crate) fn callback_iface_spec(
 /// function's own plan. Named `<decl-base>Builder`, placed in the source
 /// type's package.
 pub(crate) fn builder_iface_spec(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans.get(decon)?;
+    let spec = registry.decon_plans().get(decon)?;
     let params = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Builder",
@@ -1325,11 +1359,11 @@ pub(crate) fn builder_iface_spec(
 /// the element's deconstructor declaration. Named `<decl-base>Folder`,
 /// placed in the element type's package.
 pub(crate) fn folder_iface_spec(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans.get(decon)?;
+    let spec = registry.decon_plans().get(decon)?;
     let mut params: Vec<IfaceParam> =
         vec![IfaceParam::same("acc".to_string(), kt::KtType::var_("A"))];
     params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
@@ -1351,8 +1385,8 @@ pub(crate) fn folder_iface_spec(
 /// without a deconstructor — no declaration involved):
 /// `run(acc: A, element): A`. One shape per element type by construction.
 pub(crate) fn whole_folder_iface_spec(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     element: &syn::Type,
 ) -> Option<IfaceSpec> {
     let mut params: Vec<IfaceParam> =
@@ -1383,12 +1417,12 @@ pub(crate) fn whole_folder_iface_spec(
 
 /// The folder spec for an `Iterable` plan: declaration-keyed when the
 /// element decomposes, whole-element otherwise. Thin KEY dispatch into the
-/// [`JniGen::iface_spec`] memo — the fixed-builder typed-group view is
+/// [`Declarations::iface_spec`] memo — the fixed-builder typed-group view is
 /// applied there per `DeconId` (the declaration identity the JVM resolves
 /// against), not per this plan's own `fixed_builder` flag.
 pub(crate) fn folder_iface_for_plan(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     plan: &UnfoldPlan,
 ) -> Option<std::sync::Arc<IfaceSpec>> {
     debug_assert!(
@@ -1412,11 +1446,11 @@ pub(crate) fn folder_iface_for_plan(
 /// emission (`write_iface_files`), keyed by the element's deconstructor so the
 /// two stay in lockstep.
 pub(crate) fn fixed_folder_typed_groups(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
-    let spec = registry.decon_plans.get(decon)?;
+    let spec = registry.decon_plans().get(decon)?;
     let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source))?;
     let (reassemble, imports) = fixed_reassembly(ext, registry, &spec.source, &spec.leaves, &fqn);
     Some(vec![
@@ -1446,11 +1480,11 @@ pub(crate) fn fixed_folder_typed_groups(
 /// Keyed by the error type's deconstructor declaration. Named
 /// `<decl-base>Handler`, placed in the error type's package.
 pub(crate) fn error_handler_iface_spec(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans.get(decon)?;
+    let spec = registry.decon_plans().get(decon)?;
     let params: Vec<IfaceParam> = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Handler",
@@ -1478,7 +1512,7 @@ pub(crate) fn error_handler_iface_spec(
 /// The shared infallible handler `JniErrorHandler<out R> { run(je: String?): R }`
 /// — every function without an error plan takes one; placed in the root
 /// package.
-pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
+pub(crate) fn jni_error_handler_iface_spec(ext: &Declarations) -> IfaceSpec {
     let params = vec![IfaceParam::same(
         "je".to_string(),
         kt::KtType::string().nullable(),
@@ -1518,16 +1552,16 @@ pub(crate) struct ErrorIfaces {
 /// The onError handler interfaces for a declared function — the always-present
 /// binding `JniErrorHandler` plus, for a fallible function, its
 /// declaration-keyed typed domain `<Src>Handler`. Thin KEY dispatch into the
-/// [`JniGen::iface_spec`] memo. `None` = the domain handler is underivable
+/// [`Declarations::iface_spec`] memo. `None` = the domain handler is underivable
 /// (the Rust emitter panics, the Kotlin renderer skips) — the binding channel
 /// alone always derives.
 pub(crate) fn onerror_iface_spec(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     fn_ident: &syn::Ident,
 ) -> Option<ErrorIfaces> {
     let binding = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;
-    let domain = match registry.error_plans.get(fn_ident) {
+    let domain = match registry.error_plans().get(fn_ident) {
         Some(plan) => {
             let decon = plan
                 .decon

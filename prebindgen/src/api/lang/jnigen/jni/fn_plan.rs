@@ -11,6 +11,7 @@
 //! plan to function granularity; the output side follows in a later stage.
 
 use super::*;
+use crate::api::core::{flat::TypeRef, registry::Conversions};
 
 /// The lowered plan for one bound function: one [`PlanParam`] per source
 /// `syn::Signature` parameter (non-`Typed`/non-`Ident` args — `self`,
@@ -30,7 +31,7 @@ pub(crate) struct JniFunctionPlan {
     /// The onError handler interfaces — the always-present binding
     /// `JniErrorHandler` plus, for a fallible function, its typed domain
     /// `<Err>Handler` (see [`ErrorIfaces`]). Shared from the
-    /// [`JniGen::iface_spec`] memo: one derivation per channel feeds the Rust
+    /// [`Declarations::iface_spec`] memo: one derivation per channel feeds the Rust
     /// `__SINK_*` statics, the Kotlin sink wiring, and the interface
     /// declarations, so the FQN/descriptor pairs of the cached `run` lookups
     /// cannot drift. `None` = the domain channel is underivable (the Rust
@@ -64,7 +65,10 @@ pub(crate) enum ParamForm {
 
 /// One classified effective parameter (a source param, or one expansion leaf).
 pub(crate) struct PlanLeaf {
-    pub ty: syn::Type,
+    /// The leaf's **reading** — classification and spelling in one value, so
+    /// the two cannot disagree and no consumer has to look the type up. Spell
+    /// with `reading.origin.syntax`.
+    pub reading: TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
     /// `external fun` declaration.
@@ -79,8 +83,14 @@ pub(crate) struct PlanLeaf {
     /// `JNINative` extern declares for pass-through leaves (for projections
     /// this is the erased wire name, not the typed surface).
     pub kt_meta: Option<kt::KtType>,
-    /// Raw `is_option_type(ty)` — each site applies its own nullability rule
-    /// (handles stay non-null `Long` on the extern but `T?` on the surface).
+    /// Whether the leaf crosses as optional, **per the model** — so a wrapped
+    /// spelling (`Box<Option<T>>`) answers exactly as the bare one does. Each
+    /// site applies its own nullability rule on top (handles stay non-null
+    /// `Long` on the extern but `T?` on the surface).
+    ///
+    /// This used to be `is_option_type(ty)`, which asks the *spelling* whether
+    /// its last path segment reads `Option` — and the model erases `Box` and
+    /// `Cow`, so an optional behind one lost its `?` (#273).
     pub optional: bool,
     /// `true` when the (probed-through `&`/`Option`) type is an
     /// `enum_class` enum: surface keeps the typed enum, the extern declares
@@ -100,7 +110,9 @@ pub(crate) enum InputKind {
     Callback { iface: Option<Arc<IfaceSpec>> },
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
-    VecBuild { elem: syn::Type, by_ref: bool },
+    /// The element as a **reading**: the vec-helper plan and the element key
+    /// are both taken from it, and generated Rust spells `elem.syntax()`.
+    VecBuild { elem: TypeRef, by_ref: bool },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
     OptionScalar(OptionScalarInputPlan),
@@ -149,7 +161,7 @@ pub(crate) struct UnfoldOutputPlan {
     /// The builder/folder `fun interface` spec the delivery calls into —
     /// [`folder_iface_for_plan`] for an iterable fold (incl. the fixed
     /// whole-element form), the memoized [`SpecKey::Builder`] spec
-    /// otherwise. Shared from the [`JniGen::iface_spec`] memo: one
+    /// otherwise. Shared from the [`Declarations::iface_spec`] memo: one
     /// derivation feeds the Rust upcall statics, every Kotlin surface read,
     /// and the interface declaration, so the cached `run` FQN/descriptor
     /// pair cannot drift. `None` = underivable (the Rust emitter keeps its
@@ -173,10 +185,10 @@ pub(crate) struct ValueOutputPlan {
     pub wire_ty: syn::Type,
     /// Kotlin surface classification over the **declared** return
     /// (`convert_out_ty` for a convert, else `f.sig.output` — not
-    /// `target_ty`: the Kotlin error peel rides `value_rust_key`).
+    /// `target_ty`: the Kotlin error peel rides `value_rust_type`).
     pub surface: ReturnSurface,
     /// `enum_class` / `Option<enum>` probes over the canonical
-    /// (`value_rust_key`-peeled) declared return. The extern decl uses them
+    /// (`value_rust_type`-peeled) declared return. The extern decl uses them
     /// raw; the wrapper surface masks them with `!is_convert` (the historical
     /// `unfold.is_none()` gate).
     pub is_enum: bool,
@@ -212,11 +224,32 @@ pub(crate) enum ReturnSurface {
 #[derive(Debug)]
 pub(crate) enum PlanError {
     /// `registry.input_entry` has no converter for a source param type.
-    Unresolved { ty: TypeKey },
+    ///
+    /// The **reading**, not a key: the registry knew the type well enough to
+    /// classify it — what it lacks is a converter — so the reading is in hand,
+    /// and it carries the source position [`Self::message`] points at.
+    ///
+    /// **Boxed**, and it has to be. A `TypeRef` holds a `syn::Type` inline and
+    /// runs to ~264 bytes; a `Result` is sized by its largest variant, so an
+    /// unboxed reading here would widen every `Result<_, PlanError>` on this
+    /// path — the *success* return included, which is the one that always
+    /// happens (`clippy::result_large_err`). An error is rare enough to afford
+    /// the allocation; the plans it returns beside are not.
+    Unresolved { ty: Box<TypeRef> },
     /// No converter for a constructor-expansion leaf type.
-    UnresolvedLeaf { ty: TypeKey, param: syn::Ident },
-    /// `registry.output_entry` has no converter for the output target type.
-    UnresolvedOutput { ty: TypeKey },
+    UnresolvedLeaf { ty: Box<TypeRef>, param: syn::Ident },
+    /// The output target type is known but `registry.output_entry` has no
+    /// converter for it — the failure `output_wrapper` fixes.
+    UnresolvedOutput { ty: Box<TypeRef> },
+    /// The output target type is not in the registry **at all**, so there is no
+    /// reading to hold and `output_wrapper` is not the answer.
+    ///
+    /// Split from [`Self::UnresolvedOutput`] because the two want opposite
+    /// advice: one type needs a converter written for it, the other needs to
+    /// reach the registry first. Collapsed together, the `output_wrapper`
+    /// message sent the reader to write a converter for a type the resolver
+    /// would still never ask about.
+    UnknownOutputType { ty: TypeKey },
     /// An unmarked declared data class could not produce a complete recursive
     /// input plan. Silent `JObject` fallback is forbidden.
     UnflattenableDataClass(FlatInputError),
@@ -226,25 +259,63 @@ pub(crate) enum PlanError {
 }
 
 impl PlanError {
+    /// Where the offending type was written, when a file wrote it — the
+    /// suffix [`Self::message`] appends.
+    ///
+    /// `has_position` gates it exactly as `resolve.rs` gates
+    /// `UnresolvedEntry::location`: a composed type and a test's hand-built
+    /// stream are lowered against `SourceLocation::default`, and printing
+    /// `:0:0` for them would make a fabricated position look like a real one.
+    fn location_suffix(&self) -> String {
+        let reading = match self {
+            PlanError::Unresolved { ty }
+            | PlanError::UnresolvedLeaf { ty, .. }
+            | PlanError::UnresolvedOutput { ty } => ty,
+            PlanError::UnknownOutputType { .. }
+            | PlanError::UnflattenableDataClass(_)
+            | PlanError::JvmParameterLimit { .. } => return String::new(),
+        };
+        let loc = reading.location();
+        if loc.has_position() {
+            format!(" (declared at {loc})")
+        } else {
+            String::new()
+        }
+    }
+
     /// The historical emission-panic message for this failure, shared by the
     /// validation boundary and the Rust emitter's backstop panics so the
     /// wording cannot drift.
+    ///
+    /// The base wording is unchanged; a source position is appended when the
+    /// reading has one, so a backstop that reaches the same failure without a
+    /// reading still prints a prefix of this.
     pub fn message(&self, fn_ident: &syn::Ident) -> String {
+        let at = self.location_suffix();
         match self {
             PlanError::Unresolved { ty } => format!(
-                "JniGen::on_function: input type `{}` for `{}` is unresolved",
-                ty, fn_ident,
+                "JniGen::on_function: input type `{}` for `{}` is unresolved{at}",
+                ty.key(),
+                fn_ident,
             ),
             PlanError::UnresolvedLeaf { ty, param } => format!(
-                "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-                ty, param,
+                "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved{at}",
+                ty.key(),
+                param,
             ),
             PlanError::UnresolvedOutput { ty } => format!(
                 "JniGen::on_function: return type `{}` of `{}` has no registered output \
-                 converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
+                 converter — register one via `Declarations::output_wrapper(pat, |…| Some((ty, exc, body)))` \
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
-                  to bind a domain exception)",
-                ty, fn_ident,
+                  to bind a domain exception){at}",
+                ty.key(),
+                fn_ident,
+            ),
+            PlanError::UnknownOutputType { ty } => format!(
+                "JniGen::on_function: return type `{}` of `{}` is not registered — the \
+                 resolver never saw this type, so no converter can be selected for it. \
+                 Declare the type (or the function that produces it) before binding `{}`",
+                ty, fn_ident, fn_ident,
             ),
             PlanError::UnflattenableDataClass(error) => {
                 format!("JniGen::on_function `{fn_ident}`: {}", error.message())
@@ -266,7 +337,7 @@ impl PlanError {
 ///
 /// [`Prebindgen::validate_resolved`]: crate::api::core::prebindgen::Prebindgen::validate_resolved
 pub(crate) fn validate_bindings(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
 ) -> Result<(), String> {
     let mut errors: Vec<String> = Vec::new();
@@ -296,33 +367,37 @@ pub(crate) fn validate_bindings(
     // Declared functions (incl. binding-local synthetics and fn-backed
     // constants), in deterministic ident order.
     let declared = ext.declared_functions();
-    let mut fn_idents: Vec<&syn::Ident> = registry.functions.keys().collect();
-    fn_idents.sort();
-    for ident in fn_idents {
+    // The elements themselves, not their names: looking a name back up would be
+    // a second hash and an infallible-lookup-that-is-not. `Ident: Ord` is the
+    // string order, so the sort is unchanged.
+    let mut fns: Vec<&crate::api::core::flat::Function> = registry.flat().functions().collect();
+    fns.sort_by(|a, b| a.name.cmp(&b.name));
+    for f in fns {
+        let ident = &f.name;
         if !declared.contains(ident) {
             continue;
         }
-        let (item_fn, _) = &registry.functions[ident];
-        match ext.fn_plan(registry, item_fn) {
+        match ext.fn_plan(registry, f) {
             Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
             Err(e) => errors.push(e.message(ident)),
         }
     }
 
     // Declared consts: their synthetic nullary getters run through the same
-    // plan machinery (`JniGen::on_const`).
+    // plan machinery (`Declarations::on_const`).
     if let Some(declared_consts) = ext.declared_consts() {
-        let mut const_idents: Vec<&syn::Ident> = registry.consts.keys().collect();
-        const_idents.sort();
-        for ident in const_idents {
-            if *ident == "_" || !declared_consts.contains(ident) {
+        let mut consts: Vec<&crate::api::core::flat::Constant> =
+            registry.flat().constants().collect();
+        consts.sort_by(|a, b| a.name.cmp(&b.name));
+        for c in consts {
+            let ident = &c.name;
+            if !declared_consts.contains(ident) {
                 continue;
             }
-            let (item_const, _) = &registry.consts[ident];
-            let getter = const_getter_fn(item_const);
+            let getter = const_getter_fn(c);
             match ext.fn_plan(registry, &getter) {
                 Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
-                Err(e) => errors.push(e.message(&getter.sig.ident)),
+                Err(e) => errors.push(e.message(&getter.name)),
             }
         }
     }
@@ -336,10 +411,10 @@ pub(crate) fn validate_bindings(
         .collect();
     expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
     for decl in expr_decls {
-        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
         match ext.fn_plan(registry, &getter) {
             Ok(plan) => record_symbol(&plan.native_symbol, decl.kotlin_name.clone(), &mut errors),
-            Err(e) => errors.push(e.message(&getter.sig.ident)),
+            Err(e) => errors.push(e.message(&getter.name)),
         }
     }
 
@@ -366,7 +441,7 @@ impl FnOutputPlan {
     }
 }
 
-impl JniGen {
+impl Declarations {
     /// The memoized lowered plan for one bound function — the "build the plan
     /// once and store it" stage [`JniFunctionPlan::build`] anticipated (issue
     /// #90). Keyed by the function's ident (bound functions live in one flat
@@ -376,57 +451,57 @@ impl JniGen {
     /// (an unresolved converter) is passed through — it only occurs at the
     /// validation phase, which reports it and fails `resolve` before any
     /// emitter runs. Same interior-mutable contract as
-    /// [`JniGen::iface_spec`]; drift is guarded externally by the byte-identity
+    /// [`Declarations::iface_spec`]; drift is guarded externally by the byte-identity
     /// regen check (a plan change alters generated code).
     pub(crate) fn fn_plan(
         &self,
         registry: &Registry<KotlinMeta>,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
     ) -> Result<std::rc::Rc<JniFunctionPlan>, PlanError> {
-        if let Some(hit) = self.fn_plans.borrow().get(&f.sig.ident).cloned() {
+        if let Some(hit) = self.fn_plans.borrow().get(&f.name).cloned() {
             return Ok(hit);
         }
         let plan = std::rc::Rc::new(JniFunctionPlan::build(self, registry, f)?);
         self.fn_plans
             .borrow_mut()
-            .insert(f.sig.ident.clone(), plan.clone());
+            .insert(f.name.clone(), plan.clone());
         Ok(plan)
     }
 }
 
 impl JniFunctionPlan {
     /// Lower `f`'s inputs. Deterministic over `(ext, registry, f)`. Emission
-    /// and validation go through the memo [`JniGen::fn_plan`], so the plan is
+    /// and validation go through the memo [`Declarations::fn_plan`], so the plan is
     /// built ONCE per function and shared; this is the underlying derivation.
     pub fn build(
-        ext: &JniGen,
+        ext: &Declarations,
         registry: &Registry<KotlinMeta>,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
     ) -> Result<Self, PlanError> {
-        let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.sig.ident.to_string()));
+        let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
         let native_symbol = ext.native_method_symbol(&jni_method);
-        let onerror_iface = onerror_iface_spec(ext, registry, &f.sig.ident);
+        let onerror_iface = onerror_iface_spec(ext, registry, &f.name);
         // Output first: the Rust emitter historically resolved the output
         // before the inputs, so an unresolved-output failure takes precedence
         // over an unresolved-input one.
         let output = build_output(ext, registry, f)?;
         let mut params = Vec::new();
-        for input in &f.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else {
-                continue;
-            };
-            let syn::Pat::Ident(pid) = &*pt.pat else {
-                continue;
-            };
-            let ident = pid.ident.clone();
-            let ty = (*pt.ty).clone();
+        // The element's parameters: each already a name and a `TypeRef`, so
+        // there is no `FnArg`/`Pat` destructuring and no position that could
+        // fail to yield a type.
+        for param in &f.params {
+            let ident = param.name.clone();
+            let ty = param.ty.syntax().clone();
 
             let form = if let Some(plan) = registry
-                .expansion_plans
-                .get(&(f.sig.ident.clone(), ident.clone()))
+                .expansion_plans()
+                .get(&(f.name.clone(), ident.clone()))
             {
                 let mut leaves = Vec::new();
                 for leaf in &plan.leaves {
+                    // The lookup that stood here is gone: the fold leaf carries
+                    // its own reading now, so there is nothing to fetch and
+                    // nothing that can miss.
                     leaves.push(classify_leaf(
                         ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
                     )?);
@@ -434,7 +509,7 @@ impl JniFunctionPlan {
                 ParamForm::Expanded(leaves)
             } else {
                 ParamForm::Single(Box::new(classify_leaf(
-                    ext, registry, &ident, &ty, /*expanded=*/ false, &ident,
+                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident,
                 )?))
             };
             params.push(PlanParam { ident, ty, form });
@@ -462,7 +537,11 @@ impl JniFunctionPlan {
         })
     }
 
-    fn jvm_parameter_slots(&self, registry: &Registry<KotlinMeta>, f: &syn::ItemFn) -> usize {
+    fn jvm_parameter_slots(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        f: &crate::api::core::flat::Function,
+    ) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
         // methods and the JVM counts the implicit receiver as one unit.
         let mut slots = 1usize;
@@ -477,7 +556,7 @@ impl JniFunctionPlan {
                 InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
                 InputKind::Callback { .. } => 1,
                 InputKind::Unsigned64 { .. } | InputKind::Plain => registry
-                    .input_entry(&leaf.ty)
+                    .input_entry(&leaf.reading)
                     .and_then(|entry| JniPrim::from_wire(&entry.destination))
                     .map_or(1, |prim| match prim {
                         JniPrim::Long | JniPrim::Double => 2,
@@ -491,7 +570,7 @@ impl JniFunctionPlan {
             FnOutputPlan::Value(_) => 0,
         };
         slots += 1; // binding-error sink
-        if registry.error_plans.contains_key(&f.sig.ident) {
+        if registry.error_plans().contains_key(&f.name) {
             slots += 1;
         }
         slots
@@ -510,27 +589,37 @@ fn kotlin_jvm_slots(ty: &str) -> usize {
 /// collection helper; recursive data-class leaves are valid in constructor
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
 fn classify_leaf(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     ident: &syn::Ident,
-    ty: &syn::Type,
+    reading: &TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
 ) -> Result<PlanLeaf, PlanError> {
-    let optional = is_option_type(ty);
-    let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(ty));
+    // Every question below is the model's now — the local spelling this function
+    // opened with has no users left.
+    let optional = reading.optional_inner().is_some();
+    // The enum probe off the reading — the layers it peels are the model's own
+    // (`&`, `Option`), so there is nothing to re-spell and nothing to look up.
+    let as_enum_value = ext.is_kotlin_enum_reading(reading);
     let kt_name = kt_param_name(&ident.to_string());
 
     // `impl Fn(args)` first: typed entirely from the interface spec — the
     // erased entry exists but its metadata carries no surface type.
-    if let Some(args) = extract_fn_trait_args(ty) {
-        let iface = ext.iface_spec(registry, &SpecKey::callback(&args));
+    if let Some(args) = reading.callback_args() {
+        // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
+        // spellings either way — but as each arg reading's OWN spelling now,
+        // rather than one re-extracted from the parameter's bounds.
+        // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax`
+        // pins that the two routes are one memo identity.
+        let arg_tys: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
+        let iface = ext.iface_spec(registry, &SpecKey::callback(&arg_tys));
         return Ok(PlanLeaf {
-            ty: ty.clone(),
+            reading: reading.clone(),
             kt_name,
             kt_public: None,
             kt_meta: registry
-                .input_entry(ty)
+                .input_entry(reading)
                 .and_then(|e| e.metadata.kotlin_name.clone()),
             optional,
             as_enum_value,
@@ -540,26 +629,30 @@ fn classify_leaf(
 
     // Every non-callback leaf requires a resolved input entry — the same
     // hard boundary the Rust emitter has always enforced.
-    let Some(entry) = registry.input_entry(ty) else {
-        let key = TypeKey::from_type(ty);
+    let Some(entry) = registry.input_entry(reading) else {
+        // The reading itself, so the diagnostic can say where the type was
+        // written. Reaching here means the type IS classified and merely has no
+        // converter, which is why there is something to carry.
         return Err(if expanded {
             PlanError::UnresolvedLeaf {
-                ty: key,
+                ty: Box::new(reading.clone()),
                 param: source_param.clone(),
             }
         } else {
-            PlanError::Unresolved { ty: key }
+            PlanError::Unresolved {
+                ty: Box::new(reading.clone()),
+            }
         });
     };
 
-    let flat_plan = build_flat_input_plan(ext, registry, ident, ty)
+    let flat_plan = build_flat_input_plan(ext, registry, ident, reading)
         .map_err(PlanError::UnflattenableDataClass)?;
     let kind = if let Some((elem, by_ref)) = (!expanded)
-        .then(|| vec_build_elem(ext, registry, ty))
+        .then(|| vec_build_elem(ext, registry, reading))
         .flatten()
     {
         InputKind::VecBuild { elem, by_ref }
-    } else if let Some(sp) = build_option_scalar_input_plan(ext, registry, ident, ty) {
+    } else if let Some(sp) = build_option_scalar_input_plan(ext, registry, ident, reading) {
         InputKind::OptionScalar(sp)
     } else if let Some(plan) = flat_plan {
         InputKind::FlattenStruct(plan)
@@ -570,7 +663,9 @@ fn classify_leaf(
             },
             Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
                 niche: entry.metadata.projection.as_ref().and_then(|p| {
-                    is_option_type(ty)
+                    reading
+                        .optional_inner()
+                        .is_some()
                         .then(|| p.niche_sentinels.first().cloned())
                         .flatten()
                 }),
@@ -588,7 +683,7 @@ fn classify_leaf(
     };
 
     Ok(PlanLeaf {
-        ty: ty.clone(),
+        reading: reading.clone(),
         kt_name,
         kt_public,
         kt_meta,
@@ -604,16 +699,16 @@ fn classify_leaf(
 /// declared-surface facts from `classify_return`'s inputs
 /// (render_extern_decl's `ret_decl` reconstruction).
 fn build_output(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
 ) -> Result<FnOutputPlan, PlanError> {
     use crate::api::core::{
         types_util::result_ok_type,
         unfold::{Delivery, UnfoldShape},
     };
-    let ident = &f.sig.ident;
-    let unfold_plan = registry.unfold_plans.get(ident);
+    let ident = &f.name;
+    let unfold_plan = registry.unfold_plans().get(ident);
 
     // Callback delivery: the return is decomposed to a foreign builder/fold
     // lambda; no output converter runs and the wire is the erased `JObject`.
@@ -655,11 +750,10 @@ fn build_output(
     // `Return` delivery, the `Result` Ok type when an error plan peels, else
     // the function's own return.
     let is_convert = unfold_plan.is_some();
-    let return_ty: syn::Type = match &f.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, ty) => (**ty).clone(),
-    };
-    let error_plan = registry.error_plans.get(ident);
+    // The element normalizes an elided return and a written `-> ()` to one
+    // `Unit` reading, so there is no `ReturnType` match here.
+    let return_ty: syn::Type = f.ret.syntax().clone();
+    let error_plan = registry.error_plans().get(ident);
     let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
     let target_ty = match unfold_plan {
         Some(p) => p
@@ -668,21 +762,32 @@ fn build_output(
             .expect("Return delivery carries convert_out_ty"),
         None => ok_ty.unwrap_or(return_ty),
     };
-    let Some(entry) = registry.output_entry(&target_ty) else {
-        return Err(PlanError::UnresolvedOutput {
+    // Two failures, told apart. `target_ty` is composed here (`convert_out_ty`,
+    // or the `Result` peeled to its `Ok`), so unlike the input side there may
+    // genuinely be no reading — and "not registered" wants different advice
+    // from "registered, no converter". Collapsed into one `and_then`, both got
+    // the `output_wrapper` message and the first one got it wrong.
+    let Some(target) = registry.reading_of(&target_ty) else {
+        return Err(PlanError::UnknownOutputType {
             ty: TypeKey::from_type(&target_ty),
+        });
+    };
+    let Some(entry) = registry.output_entry(&target) else {
+        return Err(PlanError::UnresolvedOutput {
+            ty: Box::new(target),
         });
     };
     let wire_ty = entry.destination.clone();
 
     // The Kotlin surface classifies the DECLARED return — `convert_out_ty`
     // for a convert, else the signature's own output. (Not `target_ty`: the
-    // Kotlin error peel rides the entry's `value_rust_key`, so the full
+    // Kotlin error peel rides the entry's `value_rust_type`, so the full
     // `Result<T, E>` type is looked up as written.)
     let ret_decl: syn::ReturnType = if is_convert {
         syn::parse_quote!(-> #target_ty)
     } else {
-        f.sig.output.clone()
+        let ret = f.ret.syntax();
+        syn::parse_quote!(-> #ret)
     };
     let (surface, canonical) = ReturnSurface::classify(ext, registry, &ret_decl);
     let is_enum = ext.is_kotlin_enum(&canonical);
@@ -702,27 +807,32 @@ fn build_output(
 
 impl ReturnSurface {
     /// Classify a declared return type. Returns the surface plus the
-    /// canonical (`value_rust_key`-peeled) type the enum probes run over —
+    /// canonical (`value_rust_type`-peeled) type the enum probes run over —
     /// the single peel that subsumed both `classify_return`'s inline peel
     /// and the former `canonical_return_ty`.
     pub fn classify(
-        ext: &JniGen,
-        registry: &Registry<KotlinMeta>,
+        ext: &Declarations,
+        registry: &impl Conversions<KotlinMeta>,
         output: &syn::ReturnType,
     ) -> (Self, syn::Type) {
         let ty = match output {
             syn::ReturnType::Default => return (Self::Unit, syn::parse_quote!(())),
             syn::ReturnType::Type(_, t) => &**t,
         };
-        let outer_meta = registry.output_entry(ty).map(|e| e.metadata.clone());
+        let outer_meta = registry
+            .reading_of(ty)
+            .and_then(|tr| registry.output_entry(&tr))
+            .map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
-        // `value_rust_key`) declare no Kotlin return type. The peeled type
-        // comes straight off the stored key — no reparse, no silent
-        // fallback.
+        // `value_rust_type`) declare no Kotlin return type. The peeled type is
+        // the one the converter's metadata stored — a canonical `syn::Type`,
+        // so nothing is rebuilt here. Falling back to the declared return is
+        // not a miss: `value_rust_type` is `None` exactly for plain values and
+        // arity-0 converters, which have no inner identity to peel to.
         let canonical: syn::Type = outer_meta
             .as_ref()
-            .and_then(|m| m.value_rust_key.as_ref())
-            .map(TypeKey::to_type)
+            .and_then(|m| m.value_rust_type.as_ref())
+            .cloned()
             .unwrap_or_else(|| ty.clone());
         if crate::api::lang::jnigen::util::is_unit(&canonical) {
             return (Self::Unit, canonical);

@@ -2,11 +2,16 @@
 //! params, and the expanded-param path.
 
 use super::*;
-use crate::api::core::types_util::result_ok_type;
+use crate::api::{
+    core::{registry::Conversions, types_util::result_ok_type},
+    lang::jnigen::jni::trait_impl::{
+        build_through_erased_wrappers, build_through_wrappers, read_through_erased_wrappers,
+    },
+};
 
 pub(crate) fn emit_jni_function_wrapper(
-    ext: &JniGen,
-    f: &syn::ItemFn,
+    ext: &Declarations,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> TokenStream {
     emit_jni_function_wrapper_with_callee(ext, f, registry, None)
@@ -14,25 +19,23 @@ pub(crate) fn emit_jni_function_wrapper(
 
 /// The synthetic nullary getter signature a declared const is emitted
 /// through: `pub fn const_get_<ident_lower>() -> <const ty>`. Both sides —
-/// the Rust extern ([`JniGen::on_const`] via
+/// the Rust extern ([`Declarations::on_const`] via
 /// [`emit_jni_function_wrapper_with_callee`]) and the Kotlin `val`
 /// initializer (`render_const_val`) — derive the extern symbol from this one
 /// ident, so they stay in sync by construction. The body is never used.
-pub(crate) fn const_getter_fn(c: &syn::ItemConst) -> syn::ItemFn {
-    let ident = format_ident!("const_get_{}", c.ident.to_string().to_lowercase());
-    let ty = &c.ty;
-    syn::parse_quote! {
-        pub fn #ident() -> #ty {
-            unimplemented!()
-        }
-    }
+pub(crate) fn const_getter_fn(
+    c: &crate::api::core::flat::Constant,
+) -> crate::api::core::flat::Function {
+    let ident = format_ident!("const_get_{}", c.name.to_string().to_lowercase());
+    // No lookup: a constant element carries its own `TypeRef`.
+    synthetic_getter(ident, c.ty.clone())
 }
 
 /// A const whose (peeled) type is a declared opaque handle is rejected: a
 /// shared closeable `val` is semantically wrong (whose `close()` is it?).
 /// Expose a factory function instead — the established idiom (e.g. zenoh's
 /// `encoding_const_*` companion factories).
-pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
+pub(crate) fn reject_handle_const(ext: &Declarations, c: &syn::ItemConst) {
     reject_handle_constant_type(ext, &c.ty, "const", &c.ident.to_string());
 }
 
@@ -40,7 +43,12 @@ pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
 /// `&`/`Option`/`Vec` layers off `ty` and reject if what remains is a
 /// declared opaque handle. `what`/`ident` shape the error message
 /// (`const MAX_LEN` / `constant fn encoding_const_x_str`).
-pub(crate) fn reject_handle_constant_type(ext: &JniGen, ty: &syn::Type, what: &str, name: &str) {
+pub(crate) fn reject_handle_constant_type(
+    ext: &Declarations,
+    ty: &syn::Type,
+    what: &str,
+    name: &str,
+) {
     let mut ty = ty.clone();
     loop {
         if let syn::Type::Reference(r) = &ty {
@@ -74,7 +82,7 @@ pub(crate) fn reject_handle_constant_type(ext: &JniGen, ty: &syn::Type, what: &s
 /// the `val` initializer's throwing `JniErrorHandler` only fits the
 /// infallible wrapper shape), and its return type must not peel to a
 /// declared opaque handle (same rationale as [`reject_handle_const`]).
-pub(crate) fn validate_constant_fn(ext: &JniGen, f: &syn::ItemFn) {
+pub(crate) fn validate_constant_fn(ext: &Declarations, f: &syn::ItemFn) {
     assert!(
         f.sig.inputs.is_empty(),
         "constant fn `{}`: takes {} parameter(s) — a function-backed constant must be nullary \
@@ -98,19 +106,60 @@ pub(crate) fn validate_constant_fn(ext: &JniGen, f: &syn::ItemFn) {
 /// `pub fn const_get_<val_name_lower>() -> <ty>` — the same convention as
 /// const-backed getters, so both sides derive the extern symbol from the one
 /// val name. The body is never used.
-pub(crate) fn const_expr_getter_fn(kotlin_name: &str, ty: &syn::Type) -> syn::ItemFn {
+pub(crate) fn const_expr_getter_fn(
+    kotlin_name: &str,
+    ty: &syn::Type,
+    registry: &impl Conversions<KotlinMeta>,
+) -> crate::api::core::flat::Function {
     let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
-    syn::parse_quote! {
-        pub fn #ident() -> #ty {
+    // The one lookup this path needs: the type is named by a build script, so
+    // no element carries it. A miss means the declared type never entered the
+    // pipeline, which is a binding error worth naming rather than a `None` to
+    // absorb.
+    let ret = registry.reading_of(ty).unwrap_or_else(|| {
+        panic!(
+            "constant_expr `{kotlin_name}`: type `{}` is not a type this binding crosses — \
+             declare it, or name one that is",
+            quote::ToTokens::to_token_stream(ty),
+        )
+    });
+    synthetic_getter(ident, ret)
+}
+/// A nullary getter as the MODEL would hold it — the one function no source
+/// wrote.
+///
+/// A declared constant crosses as a getter extern, and that getter goes through
+/// exactly the same emitter a real function does. So it needs a
+/// [`flat::Function`](crate::api::core::flat::Function), not a `syn::ItemFn`:
+/// the emitter classifies off `kind` now, and a synthesized item would have no
+/// reading to classify from.
+///
+/// `ret` is supplied by the caller because the two callers get it from
+/// different places — a declared const carries its own `TypeRef`, an
+/// expression constant names a type in the build script — and only the second
+/// has to look one up.
+pub(crate) fn synthetic_getter(
+    ident: syn::Ident,
+    ret: crate::api::core::flat::TypeRef,
+) -> crate::api::core::flat::Function {
+    let ret_syntax = ret.syntax();
+    let item: syn::ItemFn = syn::parse_quote! {
+        pub fn #ident() -> #ret_syntax {
             unimplemented!()
         }
+    };
+    crate::api::core::flat::Function {
+        name: ident,
+        params: Vec::new(),
+        origin: ret.origin_with(item),
+        ret,
     }
 }
 
 /// Validates an expression constant's declared value type (checked on both
 /// write paths): not a `Result` (a domain-fallible value is not a constant),
 /// not (peeled to) a declared opaque handle.
-pub(crate) fn validate_constant_expr(ext: &JniGen, kotlin_name: &str, ty: &syn::Type) {
+pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: &syn::Type) {
     assert!(
         result_ok_type(ty).is_none(),
         "constant expr `{kotlin_name}`: type is a `Result` — an expression constant must be \
@@ -122,16 +171,16 @@ pub(crate) fn validate_constant_expr(ext: &JniGen, kotlin_name: &str, ty: &syn::
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
 /// `None` = the ordinary `<origin module>::<fn ident>(args)` call; `Some(e)`
 /// splices `e` verbatim as the value the output phase converts. Used by the
-/// const getter emission (`JniGen::on_const`), whose synthetic nullary `f`
+/// const getter emission (`Declarations::on_const`), whose synthetic nullary `f`
 /// carries the signature while the value comes from
 /// `<origin module>::<CONST_IDENT>` — a path, not a call.
 pub(crate) fn emit_jni_function_wrapper_with_callee(
-    ext: &JniGen,
-    f: &syn::ItemFn,
+    ext: &Declarations,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     callee: Option<syn::Expr>,
 ) -> TokenStream {
-    let original_ident = &f.sig.ident;
+    let original_ident = &f.name;
 
     let mut wire_params: Vec<TokenStream> = Vec::new();
     // Each entry is a per-input decode statement. Fallible decodes are
@@ -163,13 +212,13 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     //     value is **returned** directly through its ordinary output
     //     converter — the wrapper behaves exactly like a normal function
     //     whose return type is `convert_out_ty`.
-    let unfold_plan = registry.unfold_plans.get(original_ident);
+    let unfold_plan = registry.unfold_plans().get(original_ident);
     // Error-position expansion: when the fn returns `Result<T, E>` and an error
     // plan is declared, the **`?`** is applied here — the extern peels the
     // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
     // typed DOMAIN handler), and the success path uses `T`'s converter (not the
     // `Result<T, E>` rank-2 wrapper).
-    let error_plan = registry.error_plans.get(original_ident);
+    let error_plan = registry.error_plans().get(original_ident);
     let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
     // The output converter entry (`None` for callback delivery). The lookup
     // was validated at plan build; re-resolving here keeps the plan free of
@@ -177,7 +226,8 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let output_entry = match &plan.output {
         FnOutputPlan::Value(v) => Some(
             registry
-                .output_entry(&v.target_ty)
+                .reading_of(&v.target_ty)
+                .and_then(|tr| registry.output_entry(&tr))
                 .expect("output entry validated at plan build"),
         ),
         FnOutputPlan::Unfold(_) => None,
@@ -307,6 +357,34 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // Decompose/Optional: a single `__builder` callback.
         let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
         builder_param = Some(unfold_builder_param(u.iterable_fold));
+        // The delivery **binds** the returned value and matches it against the
+        // canonical shape its `kind` names (`Option`, then a run). Conversion
+        // follows the SYNTAX, and this position takes no converter — nothing
+        // between the source call and the match re-spells anything — so the
+        // wrappers the classification erased have to come off here, at the
+        // emitter's own binding, or the match is an `E0308` on a spelling the
+        // model deliberately reads as optional (#292).
+        //
+        // The value delivered is the `Ok` side when the error plan applied the
+        // `?`, and the return itself otherwise — the wrappers questioned are
+        // those over whatever `call_expr` actually yields.
+        let delivered = match error_plan {
+            Some(_) => f.ret.fallible_parts().map_or(&f.ret, |(ok, _)| ok),
+            None => &f.ret,
+        };
+        let call_expr =
+            read_through_erased_wrappers(delivered, call_expr.clone()).unwrap_or_else(|| {
+                panic!(
+                    "`{original_ident}` returns `{}`, whose leaves are delivered to a builder: \
+                     the value has to be moved out of `{}` to be decomposed, and that wrapper \
+                     does not permit it (a `Cow` payload cannot be moved through `Deref`). \
+                     Reserved rather than refused for good: rebuilding through every \
+                     transparent wrapper is #292 item 3 — until then, spell the return \
+                     without it.",
+                    delivered.syntax().to_token_stream(),
+                    delivered.erased_wrappers().join("<"),
+                )
+            });
         emit_unfold_delivery(
             ext,
             registry,
@@ -428,7 +506,7 @@ fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
 /// site only renders each [`InputKind`]'s decode.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     original_ident: &syn::Ident,
     param: &PlanParam,
@@ -440,7 +518,7 @@ fn emit_input_param(
     let leaf = match &param.form {
         ParamForm::Expanded(leaves) => {
             let fold = registry
-                .expansion_plans
+                .expansion_plans()
                 .get(&(original_ident.clone(), param.ident.clone()))
                 .expect("ParamForm::Expanded ⇒ expansion plan present");
             return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err);
@@ -482,19 +560,30 @@ fn emit_input_param(
             wire_params.push(quote!(#vid: #vwire));
             let conv = &sp.inner_conv;
             let tmp = format_ident!("__{}_val", arg_ident);
+            // The rebuilt `Option`, then the wrappers the parameter's spelling
+            // adds over it — `Box<Option<T>>` gets its `Box` back here, because
+            // nothing between this and the source call re-spells the value.
+            // The plan only exists when the build resolves, so this cannot fail.
+            let built = build_through_wrappers(
+                &sp.arg_wrappers,
+                quote! {
+                    if #pid != 0u8 {
+                        let #tmp = match #conv(&mut env, &#vid) {
+                            ::core::result::Result::Ok(__v) => __v,
+                            ::core::result::Result::Err(__e) => {
+                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                                return #on_err;
+                            }
+                        };
+                        ::core::option::Option::Some(#tmp)
+                    } else {
+                        ::core::option::Option::None
+                    }
+                },
+            )
+            .expect("an option-scalar plan is built only for a buildable spelling");
             prelude.push(quote! {
-                let #arg_ident = if #pid != 0u8 {
-                    let #tmp = match #conv(&mut env, &#vid) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                            return #on_err;
-                        }
-                    };
-                    ::core::option::Option::Some(#tmp)
-                } else {
-                    ::core::option::Option::None
-                };
+                let #arg_ident = #built;
             });
             (wire_params, prelude, quote!(#arg_ident))
         }
@@ -508,18 +597,32 @@ fn emit_input_param(
         // Vec the Kotlin `finally` frees). Decode is infallible, like the
         // by-value-handle consume below.
         InputKind::VecBuild { elem, by_ref } => {
+            // Generated Rust spells the reading's own tokens.
+            let elem = elem.syntax();
             let handle_ident = format_ident!("{}_handle", arg_ident);
             wire_params.push(quote!(#handle_ident: jni::sys::jlong));
             if *by_ref {
+                // `vec_build_elem` refuses a wrapped run on this path, so the
+                // borrow is the parameter's own spelling and there is nothing
+                // to put back.
                 prelude.push(quote!(
                     let #arg_ident: &[#elem] =
                         unsafe { &*(#handle_ident as *const Vec<#elem>) };
                 ));
             } else {
-                prelude.push(quote!(
-                    let #arg_ident: Vec<#elem> =
-                        unsafe { ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>)) };
-                ));
+                // By value the local is owned, so the run's wrappers go back on
+                // for free — `Box<Vec<T>>` is `Box::new(mem::take(..))`. The
+                // ascription is dropped rather than restated: the wrapped
+                // spelling is what the expression now produces, and naming it
+                // here would be the same fact written twice.
+                let taken = build_through_erased_wrappers(
+                    &leaf.reading,
+                    quote!(unsafe {
+                        ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>))
+                    }),
+                )
+                .expect("vec_build_elem accepted this run spelling");
+                prelude.push(quote!(let #arg_ident = #taken;));
             }
             (wire_params, prelude, quote!(#arg_ident))
         }
@@ -537,7 +640,8 @@ fn emit_input_param(
         // the pre-lock guard — is rejected before any dereference.
         InputKind::Handle { direct: true } if !matches!(arg_ty, syn::Type::Reference(_)) => {
             let entry = registry
-                .input_entry(arg_ty)
+                .reading_of(arg_ty)
+                .and_then(|tr| registry.input_entry(&tr))
                 .expect("plan classified Handle ⇒ entry present");
             let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
                 format_ident!("{}_ptr", arg_ident)
@@ -564,11 +668,18 @@ fn emit_input_param(
         | InputKind::Handle { .. }
         | InputKind::Unsigned64 { .. }
         | InputKind::Plain => {
-            let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
+            // The leaf's reading — for `ParamForm::Single` it is the very
+            // reading `param.ty` was spelled from, so this is the same lookup
+            // without the round trip. The panic now CALLS the shared message
+            // instead of restating it, which is what `PlanError::message`'s doc
+            // has always claimed and hand-duplication did not deliver.
+            let entry = registry.input_entry(&leaf.reading).unwrap_or_else(|| {
                 panic!(
-                    "JniGen::on_function: input type `{}` for `{}` is unresolved",
-                    TypeKey::from_type(arg_ty),
-                    original_ident,
+                    "{}",
+                    PlanError::Unresolved {
+                        ty: Box::new(leaf.reading.clone())
+                    }
+                    .message(original_ident)
                 )
             });
             emit_plain_decode(entry, arg_ident, arg_ty, on_err)
@@ -697,7 +808,7 @@ fn emit_plain_decode(
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::expand::FoldPlan,
     leaves: &[PlanLeaf],
@@ -710,13 +821,19 @@ pub(crate) fn emit_expanded_param(
 
     debug_assert_eq!(plan.leaves.len(), leaves.len());
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
-        let leaf_ty = &leaf.ty;
+        let leaf_ty = leaf.ty.syntax();
         let lookup_entry = || {
-            registry.input_entry(leaf_ty).unwrap_or_else(|| {
+            // The leaf's own reading goes straight to the entry: spelling it and
+            // looking the same reading back up is the round trip #286 removed.
+            registry.input_entry(&leaf.ty).unwrap_or_else(|| {
+                // Shared wording, not restated — see the sibling backstop above.
                 panic!(
-                    "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-                    TypeKey::from_type(leaf_ty),
-                    orig_param,
+                    "{}",
+                    PlanError::UnresolvedLeaf {
+                        ty: Box::new(leaf.ty.clone()),
+                        param: orig_param.clone(),
+                    }
+                    .message(orig_param)
                 )
             })
         };
@@ -751,19 +868,31 @@ pub(crate) fn emit_expanded_param(
             let inner_conv = &sp.inner_conv;
             wire_params.push(quote!(#present_ident: jni::sys::jboolean));
             wire_params.push(quote!(#value_ident: #value_wire));
+            // The local is ascribed the leaf's own SPELLING (`leaf_ty`), so the
+            // rebuilt `Option` has to be wrapped back up to match it — the same
+            // rule as the parameter path above, and the reason the ascription
+            // can stay as written rather than being weakened to the stripped
+            // type.
+            let built = build_through_wrappers(
+                &sp.arg_wrappers,
+                quote! {
+                    if #present_ident != 0u8 {
+                        let __v = match #inner_conv(&mut env, &#value_ident) {
+                            ::core::result::Result::Ok(__v) => __v,
+                            ::core::result::Result::Err(__e) => {
+                                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
+                                return #on_err;
+                            }
+                        };
+                        ::core::option::Option::Some(__v)
+                    } else {
+                        ::core::option::Option::None
+                    }
+                },
+            )
+            .expect("an option-scalar plan is built only for a buildable spelling");
             prelude.push(quote!(
-                let #local: #leaf_ty = if #present_ident != 0u8 {
-                    let __v = match #inner_conv(&mut env, &#value_ident) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__e) => {
-                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
-                            return #on_err;
-                        }
-                    };
-                    ::core::option::Option::Some(__v)
-                } else {
-                    ::core::option::Option::None
-                };
+                let #local: #leaf_ty = #built;
             ));
             leaf_locals.push(local);
             continue;

@@ -5,6 +5,7 @@
 //! via `use super::*`.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 // ── Safe-wrapper emitters ──────────────────────────────────────────────
 
@@ -66,20 +67,14 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
 /// them), and the `fromParts` factory's raw-text class references carry their
 /// imports on the factory body `Code`.
 pub(crate) fn build_data_class(
-    ext: &JniGen,
+    ext: &Declarations,
     class_name: &str,
-    item_struct: &syn::ItemStruct,
+    item_struct: &crate::api::core::flat::Struct,
     registry: &Registry<KotlinMeta>,
 ) -> kt::KtClass {
-    let fields_named = match &item_struct.fields {
-        syn::Fields::Named(n) => &n.named,
-        _ => {
-            panic!(
-                "render_data_class_source: struct `{}` must use named fields to map onto Kotlin data class properties",
-                item_struct.ident
-            )
-        }
-    };
+    // A tuple struct is an `Extern` in the model, never a `Struct`, so every
+    // field here is named by construction.
+    let fields_named = &item_struct.fields;
 
     // The class declaration is derived from the SAME plan the `fromParts`
     // factory and the Rust encoder walk. Deriving it separately — a third
@@ -91,7 +86,7 @@ pub(crate) fn build_data_class(
              field needs a resolved OUTPUT converter (that direction declares the slot the \
              encoder fills) AND the Kotlin metadata that converter carries — a `kotlin_name`, \
              or a registered class for a projection leaf",
-            item_struct.ident
+            item_struct.name
         )
     });
 
@@ -104,14 +99,14 @@ pub(crate) fn build_data_class(
     let mut destructible_fields: Vec<(String, crate::api::lang::jnigen::jni::FoldStrategy)> =
         Vec::new();
     for (field, pf) in fields_named.iter().zip(&plan.fields) {
-        let field_ident = field.ident.as_ref().unwrap_or_else(|| {
+        let field_ident = field.name.as_ref().unwrap_or_else(|| {
             panic!(
                 "render_data_class_source: struct `{}` has an unnamed field in named-fields context",
-                item_struct.ident
+                item_struct.name
             )
         });
-        let kotlin_field_name = mangle_kotlin_ident(&kt_snake_to_camel(&field_ident.to_string()));
-        let owner = format!("{}.{}", item_struct.ident, field_ident);
+        let kotlin_field_name = kotlin_property_name(field_ident);
+        let owner = format!("{}.{}", item_struct.name, field_ident);
 
         // The declaration reads ONE direction — output — because that is the
         // direction that declares the `fromParts` slots the encoder fills, and
@@ -171,7 +166,8 @@ pub(crate) fn build_data_class(
     });
 
     let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
-    if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.attrs) {
+    if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.origin.syntax.attrs)
+    {
         class = class.kdoc(doc);
     }
     for p in ctor_params {
@@ -253,7 +249,7 @@ pub(crate) fn build_data_class(
 /// to the matching `Java_<pkg>_<class>_<mangled-freePtr>`
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     class_name: &str,
     rust_doc_name: &str,
@@ -309,7 +305,7 @@ pub(crate) fn build_typed_handle(
             .param(kt::KtParam::new("ptr", kt::KtType::long())),
     );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
-        if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
@@ -418,7 +414,7 @@ pub(crate) fn build_typed_handle(
     // (receiver bound to `this`), delegating to the same centralized
     // `JNINative` extern as a free wrapper would.
     for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-        if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+        if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
@@ -455,8 +451,8 @@ pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) ->
 /// `kt_return` (Unit is no return type). `None` if a param's converter isn't
 /// resolved. Full-FQN types throughout — no derivation-time shortening.
 pub(crate) fn render_extern_decl(
-    ext: &JniGen,
-    f: &syn::ItemFn,
+    ext: &Declarations,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<kt::KtFun> {
     // The name and wire params come straight off the lowered plan — the
@@ -541,7 +537,7 @@ pub(crate) fn render_extern_decl(
     // erased to `Any` (JObject) on the wire; the wrapper passes a capture for
     // each. A domain plan ⇒ `error_plans` has this fn.
     params.push(kt::KtParam::new("errorSink", kt::KtType::any()));
-    if registry.error_plans.contains_key(&f.sig.ident) {
+    if registry.error_plans().contains_key(&f.name) {
         params.push(kt::KtParam::new("domainSink", kt::KtType::any()));
     }
 
@@ -743,8 +739,8 @@ pub(crate) struct WrapperSurface {
 /// import set. Validation calls this directly and skips the body work
 /// (`build_native_call` / `render_body` / KDoc / opaque-lock collection).
 pub(crate) fn build_wrapper_surface(
-    ext: &JniGen,
-    f: &syn::ItemFn,
+    ext: &Declarations,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
@@ -757,7 +753,7 @@ pub(crate) fn build_wrapper_surface(
     // to hit the one extern that the Rust extern actually emits.
     let kt_name = match kotlin_name_override {
         Some(n) => n.to_string(),
-        None => kt_snake_to_camel(&f.sig.ident.to_string()),
+        None => kt_snake_to_camel(&f.name.to_string()),
     };
     let jni_call = fplan.jni_method.clone();
     let (params, receiver_idx) =
@@ -822,8 +818,8 @@ pub(crate) fn build_wrapper_surface(
 }
 
 pub(crate) fn render_wrapper_fn(
-    ext: &JniGen,
-    f: &syn::ItemFn,
+    ext: &Declarations,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
@@ -879,26 +875,26 @@ pub(crate) fn render_wrapper_fn(
 /// the ordinary output machinery — plus the public lazily-initialized `val`
 /// that calls it once, on first use (see [`render_val_over_helper`]).
 pub(crate) fn render_const_val(
-    ext: &JniGen,
+    ext: &Declarations,
     package: &str,
-    c: &syn::ItemConst,
+    c: &crate::api::core::flat::Constant,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
     let getter = const_getter_fn(c);
-    let default = kt_snake_to_camel(&getter.sig.ident.to_string());
+    let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
-        .unwrap_or_else(|| c.ident.to_string());
+        .unwrap_or_else(|| c.name.to_string());
     let framework_line = format!(
         "Mirrors the Rust `#[prebindgen]` const `{}` (read lazily, once, through \
          the generated JNI getter on first use).",
-        c.ident
+        c.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.attrs)
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.origin.syntax.attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -910,25 +906,25 @@ pub(crate) fn render_const_val(
 /// computed once, on first use, through the ordinary generated wrapper
 /// (one JNI call, exactly like a const getter).
 pub(crate) fn render_constant_fn_val(
-    ext: &JniGen,
+    ext: &Declarations,
     package: &str,
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
-    let default = kt_snake_to_camel(&f.sig.ident.to_string());
+    let default = kt_snake_to_camel(&f.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn(ext, f, registry, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
-        .unwrap_or_else(|| f.sig.ident.to_string());
+        .unwrap_or_else(|| f.name.to_string());
     let framework_line = format!(
         "Mirrors the Rust `#[prebindgen]` fn `{}()` (evaluated lazily, once, \
          through the generated JNI wrapper on first use).",
-        f.sig.ident
+        f.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.attrs)
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -940,14 +936,14 @@ pub(crate) fn render_constant_fn_val(
 /// is the binding-defined expression, evaluated once, on first use, through
 /// the generated getter.
 pub(crate) fn render_const_expr_val(
-    ext: &JniGen,
+    ext: &Declarations,
     package: &str,
     decl: &crate::api::lang::jnigen::jni::decl::ConstExprDecl,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
-    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
-    let default = kt_snake_to_camel(&getter.sig.ident.to_string());
+    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
+    let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
     let expr = decl.expr.to_token_stream();
@@ -973,7 +969,7 @@ pub(crate) fn render_const_expr_val(
 /// `error(...)` at first use). Lazy, not eager: a consts-heavy package must
 /// not fire one JNI call per `val` at class-load (issue #58).
 fn render_val_over_helper(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     mut helper: kt::KtFun,
     val_name: String,
@@ -1063,7 +1059,7 @@ struct DomainSink {
 /// instance-method receiver (the first param whose peeled type matches
 /// `receiver_key`), which is bound to `this` and dropped from the signature.
 fn classify_params(
-    ext: &JniGen,
+    ext: &Declarations,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1073,7 +1069,7 @@ fn classify_params(
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
         let mut name = leaf.kt_name.clone();
-        let arg_ty = &leaf.ty;
+        let arg_ty = leaf.reading.syntax();
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
@@ -1201,9 +1197,15 @@ fn classify_params(
                 // Handle → Borrow/Consume by Rust syntactic shape (locked);
                 // `Option<&T>` / by-value `Option<T>` mark the param nullable
                 // and the wrapper body branches on null before lock selection.
-                if is_option_ref(arg_ty) {
+                // Both read off the leaf's own reading — no lookup, and a
+                // wrapped spelling answers as the bare one does.
+                if leaf
+                    .reading
+                    .optional_inner()
+                    .is_some_and(|i| i.borrow_target().is_some())
+                {
                     ParamMode::BorrowNullable
-                } else if is_option_type(arg_ty) {
+                } else if leaf.reading.optional_inner().is_some() {
                     // by-value `Option<T>` opaque → nullable consume
                     ParamMode::ConsumeNullable
                 } else if matches!(arg_ty, syn::Type::Reference(_)) {
@@ -1253,13 +1255,13 @@ fn classify_params(
 /// with no such projection ⇒ the callback is passed directly (M1–M4
 /// unchanged).
 fn classify_output(
-    ext: &JniGen,
-    f: &syn::ItemFn,
+    ext: &Declarations,
+    f: &crate::api::core::flat::Function,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<OutputPlan> {
-    let unfold = registry.unfold_plans.get(&f.sig.ident);
+    let unfold = registry.unfold_plans().get(&f.name);
     // `builder_param` is the trailing **lambda** param (build / fold) as a
     // `(name, function-type)` pair. For the `Iterable` shape, the non-lambda
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
@@ -1425,7 +1427,7 @@ fn classify_output(
 /// deliberately deferred to [`build_success_return`], after the native error
 /// captures have been checked.
 fn build_native_call(
-    ext: &JniGen,
+    ext: &Declarations,
     jni_call: &str,
     params: &[Param],
     out: &OutputPlan,
@@ -1521,7 +1523,7 @@ fn build_native_call(
 /// This expression is emitted only after binding/domain captures have been
 /// checked, so a native failure placeholder can never reach an enum lookup,
 /// value projection, or erased-result cast.
-fn build_success_return(ext: &JniGen, out: &OutputPlan, raw: &str) -> String {
+fn build_success_return(ext: &Declarations, out: &OutputPlan, raw: &str) -> String {
     if let Some(p) = &out.projection {
         // Fold the wrap through the projection strategy. The wrap class is
         // the projection leaf's typed short name (a Handle's typed-handle
@@ -1603,7 +1605,7 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
 /// separate SAM param; the wrapper passes a per-thread capture to the extern,
 /// then after the native call redispatches to whichever channel fired.
 fn error_sink_parts(
-    f: &syn::ItemFn,
+    f: &crate::api::core::flat::Function,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1619,8 +1621,8 @@ fn error_sink_parts(
     // plan; when present, both the interface spec and the error plan are.
     let domain = if let Some(domain_spec) = &ifaces.domain {
         let error_plan = registry
-            .error_plans
-            .get(&f.sig.ident)
+            .error_plans()
+            .get(&f.name)
             .expect("domain handler ⇒ error plan");
         // Per ze leaf: (raw capture Kotlin type, raw→typed wrap). The CAPTURE
         // is the raw twin (what the native side calls); the user's handler is
@@ -1798,7 +1800,7 @@ fn render_value_stmt(bind: &str, body_expr: &str, opaques: &[Opaque]) -> kt::Cod
 /// statements are needed) so the caller can bind it to `__ret`, rethrow a
 /// captured sink error, then return.
 fn render_core_stmt(
-    ext: &JniGen,
+    ext: &Declarations,
     opaques: &[Opaque],
     body_expr: &str,
     imports: &mut BTreeSet<String>,
@@ -1903,7 +1905,7 @@ enum BodyReturn {
 }
 
 fn render_body(
-    ext: &JniGen,
+    ext: &Declarations,
     params: &[Param],
     opaques: &[Opaque],
     sink: &ErrorSink,
@@ -1998,14 +2000,15 @@ fn render_body(
 /// value projection that can't be built Rust-side).
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
 pub(crate) fn unfold_leaf_kt(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     out_ty: &syn::Type,
     nullable: bool,
     pk: &str,
 ) -> Option<(kt::KtType, String, String, bool)> {
     let proj = registry
-        .output_entry(out_ty)
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
         .and_then(|e| e.metadata.projection.clone());
     let is_value_projection = proj
         .as_ref()
@@ -2107,7 +2110,7 @@ pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
 /// Fall-back Kotlin type derived directly from the JNI wire type.
 /// Returns the **non-nullable** Kotlin base name — the use site adds
 /// a `?` suffix when the entry's Rust type is `Option<…>` (via
-/// [`is_option_type`]), so this helper must not double up.
+/// the model), so this helper must not double up.
 pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
     if let Some(p) = JniPrim::from_wire(wire) {
         return Some(kt::KtType::cls(p.kotlin_type()));
@@ -2136,9 +2139,9 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 ///   and pick the JNI extern's wire return (`Long` for `Handle`). `None` for
 ///   plain non-projection returns.
 pub(crate) fn classify_return(
-    ext: &JniGen,
+    ext: &Declarations,
     output: &syn::ReturnType,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(
     Option<kt::KtType>,
     Option<crate::api::lang::jnigen::jni::Projection>,
@@ -2191,6 +2194,23 @@ pub(crate) fn kt_type_short(ty: &kt::KtType) -> String {
     ty.render(&mut kt::ImportSet::new(""))
 }
 
+/// The Kotlin property name of one struct field — the single derivation, so the
+/// site that DECLARES a property and the sites that ACCESS it cannot disagree.
+///
+/// They did. `render_data_class_source` declared it through `kt_snake_to_camel`,
+/// while `flat_input`'s access expression and JVM-slot name went through
+/// `util::snake_to_camel`, which additionally lower-cases the first character.
+/// The two agree for a conventional lower-snake field and only for that: a field
+/// spelled `Xyz` was declared `Xyz` and read as `xyz`, and a JNI `GetFieldID`
+/// for a name that is not the declared one fails at runtime.
+///
+/// `kt_snake_to_camel` is the behaviour kept, because the declaration is what a
+/// Kotlin property actually gets called; `snake_to_camel` stays where it names
+/// PARAMETERS, which is a different namespace with no declaration to match.
+pub(crate) fn kotlin_property_name(field: &syn::Ident) -> String {
+    mangle_kotlin_ident(&kt_snake_to_camel(&field.to_string()))
+}
+
 pub(crate) fn kt_snake_to_camel(s: &str) -> String {
     let mut out = String::new();
     let mut upper = false;
@@ -2219,8 +2239,11 @@ pub(crate) fn kt_param_name(rust_ident: &str) -> String {
 /// documenting the REAL prototype after all expansions — one note per
 /// position a plan reshaped, phrased for the caller. `None` for an
 /// undocumented, unshaped fn.
-fn wrapper_kdoc(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
-    let prose = crate::api::lang::jnigen::util::doc_string(&f.attrs);
+fn wrapper_kdoc(
+    f: &crate::api::core::flat::Function,
+    registry: &Registry<KotlinMeta>,
+) -> Option<String> {
+    let prose = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs);
     let notes = shape_notes(f, registry);
     match (prose, notes) {
         (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
@@ -2235,12 +2258,15 @@ fn wrapper_kdoc(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Stri
 /// returns (what the builder/fold receives), and error decompositions
 /// (what `onError` receives). Reads the same resolved plan maps the C7
 /// report uses.
-fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
-    let fn_ident = &f.sig.ident;
+fn shape_notes(
+    f: &crate::api::core::flat::Function,
+    registry: &Registry<KotlinMeta>,
+) -> Option<String> {
+    let fn_ident = &f.name;
     let mut notes: Vec<String> = Vec::new();
 
     let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry
-        .expansion_plans
+        .expansion_plans()
         .iter()
         .filter(|((func, _), _)| func == fn_ident)
         .map(|((_, param), plan)| (param, plan))
@@ -2283,7 +2309,7 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
         ));
     }
 
-    if let Some(plan) = registry.unfold_plans.get(fn_ident) {
+    if let Some(plan) = registry.unfold_plans().get(fn_ident) {
         let source = plan.source.to_token_stream().to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
@@ -2303,7 +2329,7 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
         }
     }
 
-    if let Some(plan) = registry.error_plans.get(fn_ident) {
+    if let Some(plan) = registry.error_plans().get(fn_ident) {
         let source = plan.source.to_token_stream().to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         notes.push(format!(
@@ -2323,11 +2349,11 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
 /// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
 /// key, when the item is indexed (a re-exported foreign type has none).
 pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Option<String> {
-    let ident = bare_path_ident(&key.to_type())?;
+    let name = key.ident()?.to_string();
     let attrs = registry
-        .structs
-        .get(&ident)
-        .map(|(s, _)| s.attrs.as_slice())
-        .or_else(|| registry.enums.get(&ident).map(|(e, _)| e.attrs.as_slice()))?;
+        .flat()
+        .struct_type(&name)
+        .map(|s| s.origin.syntax.attrs.as_slice())
+        .or_else(|| registry.flat().enum_item(&name).map(|e| e.attrs.as_slice()))?;
     crate::api::lang::jnigen::util::doc_string(attrs)
 }

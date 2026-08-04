@@ -1,28 +1,28 @@
 //! Build script generating Kotlin/JNI bindings for `perftest-flat` using
-//! prebindgen's [`prebindgen::lang::JniGen`] adapter — exercising **every**
-//! JniGen feature so the hand-written `kotlin/.../Test.kt` can assert each one.
+//! prebindgen's [`prebindgen::lang::JniGenBuilder`] adapter — exercising **every**
+//! JniGenBuilder feature so the hand-written `kotlin/.../Test.kt` can assert each one.
 //!
 //! Unlike `examples/perftest-kotlin` (which maps only the lean perf surface in
 //! the performance-optimal shape), this binding maps the *same* flat library —
 //! including the coverage-only items in `perftest_flat::ext` — through the full
-//! adapter surface. `JniGen` accepts pre-built declaration objects (the
+//! adapter surface. `JniGenBuilder` accepts pre-built declaration objects (the
 //! `prebindgen::lang` decl types, built by the root decl macros) rather than a fluent typestate
 //! chain — each row below is a `PackageDecl`/`ConvertDecl`/etc. built
 //! independently and then handed to `jni.package(...)` / `jni.convert(...)`:
 //!
-//! | JniGen feature                       | Exercised by |
+//! | JniGenBuilder feature                       | Exercised by |
 //! |--------------------------------------|--------------|
 //! | default module (first stream origin)  | `perftest_flat` |
-//! | `JniGen::set_package_prefix`       | `io.prebindgen.covertest` |
-//! | `JniGen::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
-//! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
+//! | `JniGenBuilder::set_package_prefix`       | `io.prebindgen.covertest` |
+//! | `JniGenBuilder::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
+//! | `JniGenBuilder::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
 //! | `DataClassDecl`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
 //! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
-//! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
+//! | `.source_named(dir, "cov_helpers")`   | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | fallible conversion stages under `Option` | `Option<Percent>` ⇄ `Int?`; raw `TryFrom::Error` input and binding-local `String` output errors normalize to `JniErrorHandler` |
 //! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
@@ -37,7 +37,7 @@
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
 //! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
-//! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
+//! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
@@ -70,13 +70,13 @@
 //! | binding-error channel (`JniErrorHandler`) | wrong-length `[u8; 2]` (fixed-size array length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
-//! | `JniGen::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
-//! | `JniGen::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
+//! | `JniGenBuilder::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGenBuilder::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
 //!
 //! One feature is deliberately left at its default and documented rather than
 //! toggled, because it is mutually exclusive with a richer path this example
 //! prefers to keep covered:
-//!   * `JniGen::set_emit_handle_locks` — kept ENABLED (default). Toggling
+//!   * `JniGenBuilder::set_emit_handle_locks` — kept ENABLED (default). Toggling
 //!     it OFF would remove the `withSortedHandleLocks` codegen this example
 //!     asserts against; a single binding can only be in one lock mode, so we
 //!     keep the locked one. (The toggle is a verification aid, not an
@@ -98,9 +98,9 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen::{
-    constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    fields, from, fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig,
-    try_from, ty, variant,
+    constant, convert, data_class, enum_class, expand_param, expand_return, expr, fields, from,
+    fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig, try_from, ty,
+    variant,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -118,7 +118,9 @@ fn strip_flat_class_prefix(class: &str, name: &str) -> String {
 }
 
 fn main() {
-    let jni = JniGen::new()
+    let binding = JniGen::builder()
+        .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a
@@ -204,6 +206,17 @@ fn main() {
                     .method(fun!(payload_label_len)),
             ),
         )
+        // `Option<Holder>` where `Holder` has a REQUIRED handle field: the
+        // absent case passes pointer 0 for it, so the field decodes must stay
+        // inside the presence gate or `null` becomes a binding error instead of
+        // `None` (PR#294 review).
+        .package(package!().class(data_class!(Holder)))
+        // A data class whose FIELDS carry transparent wrappers (#289 + #292):
+        // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
+        // does — the decoupled `(present, value)` pair — with the `Box` put back
+        // on the Rust side. Peeling the field by path segment answered "not
+        // optional" and boxed it instead.
+        .package(package!().class(data_class!(WrappedFields)))
         // ── Subpackage `model`: enum + value class + nested data class ──────
         .package(
             package!("model")
@@ -513,6 +526,34 @@ fn main() {
                 // crossing covers the borrowed payload, the owned one, and the
                 // sum each report carries.
                 .fun(fun!(ledger_each))
+                // A transparent wrapper (`Box<Option<String>>`) in and out. The
+                // model erases the `Box`, so this must cross exactly as a
+                // `String?` — and because this crate compiles its generated
+                // binding, a converter that named the wrong type or bridged it
+                // with the wrong number of dereferences fails the build (#270).
+                .fun(fun!(boxed_note_echo))
+                .fun(fun!(plain_note_echo))
+                // Transparent wrappers on the INPUT side (#292 item 3), one per
+                // specialized lowering. These rebuild their parameter rather
+                // than decoding it, so the erased wrapper has to go back on
+                // before the value reaches the signature — and each layer is
+                // applied at a different point in the construction, which is why
+                // one shape cannot cover them all. Compiling this crate is the
+                // check: a missing `Box::new` is an `E0308`, invisible to any
+                // text assertion.
+                .fun(fun!(wrapped_fields_sum))
+                .fun(fun!(holder_tag_or))
+                .fun(fun!(boxed_payload_id))
+                .fun(fun!(boxed_opt_payload_id))
+                .fun(fun!(boxed_opt_priority_weight))
+                .fun(fun!(boxed_elem_id_sum))
+                .fun(fun!(boxed_run_id_sum))
+                // The same wrapper over a DECOMPOSED return (#292). `Summary`
+                // has an output expansion, so this return takes no converter to
+                // name the spelling for it — the extern binds the value and
+                // matches it, and a `Box` match ergonomics cannot see through
+                // is an `E0308` that only compiling this crate catches.
+                .fun(fun!(boxed_latest))
                 .fun(fun!(ledger_new))
                 .fun(fun!(archive_set_reading))
                 .fun(fun!(archive_reading))
@@ -536,6 +577,7 @@ fn main() {
                 .fun(fun!(blob_value_echo))
                 .fun(fun!(arrays_echo))
                 .fun(fun!(duration_optional))
+                .fun(fun!(boxed_duration_echo))
                 .fun(fun!(duration_boundary_echo))
                 // The converted analogue of `unsigned_emit`: a whole-value
                 // callback argument, which encodes on its own path rather than
@@ -700,20 +742,14 @@ fn main() {
     // so the stamp recorded at capture time (`covertest-helpers`) would not
     // resolve from this crate — `source_named` overrides it with the name this
     // crate actually uses, per directory.
-    let registry = Registry::builder()
-        .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
-        .build()
-        .expect("scan prebindgen items");
-
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let gen = registry.resolve(jni).expect("resolve failed");
-    let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
+    let jni = binding.build().expect("build failed");
+    let rust_path = jni.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()
@@ -725,7 +761,7 @@ fn main() {
         .join("generated");
     // The root is prebindgen-owned: `write_kotlin` replaces marked output,
     // so no consumer-side cleanup is needed.
-    for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
+    for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
 
@@ -735,7 +771,7 @@ fn main() {
         std::path::Path::new(&crate_dir)
             .join("kotlin")
             .join("REPORT.md"),
-        gen.report(),
+        jni.report(),
     )
     .expect("write REPORT.md");
 }

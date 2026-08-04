@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::core::registry::RegistryBuilder;
 
 /// Emit the Kotlin surface for a `sealed_class!`-declared sum, optionally
 /// with a per-variant rename, and return the single generated file's text.
@@ -31,22 +32,25 @@ fn sealed_kotlin(rename_labeled: Option<&str>) -> String {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let mut sealed = crate::sealed_class!(Reading);
     if let Some(n) = rename_labeled {
         sealed = sealed.variant(crate::variant!(Labeled).name(n));
     }
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::enum_class!(Priority))
-            .class(sealed),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(sealed),
+        );
 
     let dir = unique_test_dir("jnigen_sealed");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     paths
         .iter()
@@ -155,14 +159,15 @@ fn declarators_do_not_accept_each_others_shape() {
 
     let emit = |item: syn::Item, decl: crate::lang::ClassDecl, tag: &str| {
         let registry =
-            Registry::<KotlinMeta>::from_items(vec![(item, loc.clone())]).expect("index items");
-        let jni = JniGen::new()
+            crate::api::test_util::reg_from_items(declare_referenced(vec![(item, loc.clone())]))
+                .expect("index items");
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.build_with(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
 
@@ -187,7 +192,7 @@ fn declarators_do_not_accept_each_others_shape() {
 fn unknown_variant_is_an_error() {
     let loc = myflat_loc();
     let boom = || {
-        let registry = Registry::<KotlinMeta>::from_items(vec![(
+        let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![(
             syn::Item::Enum(syn::parse_quote!(
                 pub enum Reading {
                     Missing,
@@ -195,16 +200,18 @@ fn unknown_variant_is_an_error() {
                 }
             )),
             loc.clone(),
-        )])
+        )]))
         .expect("index items");
-        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-            crate::package!()
-                .class(crate::sealed_class!(Reading).variant(crate::variant!(Nope).name("X"))),
-        );
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::sealed_class!(Reading).variant(crate::variant!(Nope).name("X"))),
+            );
         let dir = unique_test_dir("sealed_unknown_variant");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.build_with(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).is_err());
@@ -216,7 +223,7 @@ fn unknown_variant_is_an_error() {
 #[test]
 fn reopened_sealed_class_merges_variant_names() {
     let loc = myflat_loc();
-    let registry = Registry::<KotlinMeta>::from_items(vec![(
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![(
         syn::Item::Enum(syn::parse_quote!(
             pub enum Reading {
                 Missing,
@@ -225,9 +232,9 @@ fn reopened_sealed_class_merges_variant_names() {
             }
         )),
         loc.clone(),
-    )])
+    )]))
     .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!().class(
@@ -244,7 +251,7 @@ fn reopened_sealed_class_merges_variant_names() {
     let dir = unique_test_dir("sealed_reopen");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let kt: String = paths
         .iter()
@@ -283,13 +290,16 @@ fn reopened_ptr_class_keeps_gc_managed() {
         )]
     };
     let gc_managed_of = |first: crate::lang::PtrClassDecl, second: crate::lang::PtrClassDecl| {
-        let registry = Registry::<KotlinMeta>::from_items(items()).expect("index items");
-        let jni = JniGen::new()
+        let registry: RegistryBuilder<KotlinMeta> =
+            crate::api::test_util::reg_from_items(declare_referenced(items()))
+                .expect("index items");
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(first).class(second));
         drop(registry);
         let key = TypeKey::from_type(&syn::parse_quote!(Session));
-        jni.types
+        jni.decls
+            .types
             .get(&key)
             .expect("declared")
             .opaque()
@@ -339,8 +349,10 @@ fn a_type_gets_one_class_declarator() {
         ]
     };
     let declare = |first: crate::lang::ClassDecl, second: crate::lang::ClassDecl| {
-        let registry = Registry::<KotlinMeta>::from_items(items()).expect("index items");
-        let _ = JniGen::new()
+        let registry: RegistryBuilder<KotlinMeta> =
+            crate::api::test_util::reg_from_items(declare_referenced(items()))
+                .expect("index items");
+        let _ = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(first).class(second));
         drop(registry);
@@ -440,13 +452,15 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
     // Resolve is where `validate_symbols` runs, so the error surfaces before
     // any artifact writer touches disk.
     let resolve_err = |decl: crate::lang::SealedClassDecl, item: syn::ItemEnum| -> String {
-        let registry =
-            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Enum(item), loc.clone())])
-                .expect("index items");
-        let jni = JniGen::new()
+        let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![(
+            syn::Item::Enum(item),
+            loc.clone(),
+        )]))
+        .expect("index items");
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
-        match registry.resolve(jni) {
+        match jni.build_with(registry) {
             Ok(_) => String::new(),
             Err(e) => e.to_string(),
         }
@@ -507,16 +521,18 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
 fn variant_named_companion_moves_the_companion_not_the_variant() {
     let loc = myflat_loc();
     let emit = |decl: crate::lang::SealedClassDecl, item: syn::ItemEnum, tag: &str| -> String {
-        let registry =
-            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Enum(item), loc.clone())])
-                .expect("index items");
-        let jni = JniGen::new()
+        let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![(
+            syn::Item::Enum(item),
+            loc.clone(),
+        )]))
+        .expect("index items");
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.build_with(registry).expect("resolve");
         gen.write_kotlin(&dir.join("kotlin"))
             .expect("write_kotlin")
             .iter()
@@ -579,7 +595,7 @@ fn variant_named_companion_moves_the_companion_not_the_variant() {
 fn payload_without_output_converter_is_an_error() {
     let loc = myflat_loc();
     let boom = || {
-        let registry = Registry::<KotlinMeta>::from_items(vec![(
+        let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![(
             syn::Item::Enum(syn::parse_quote!(
                 pub enum Reading {
                     Missing,
@@ -589,15 +605,15 @@ fn payload_without_output_converter_is_an_error() {
                 }
             )),
             loc.clone(),
-        )])
+        )]))
         .expect("index items");
-        let jni = JniGen::new()
+        let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(crate::sealed_class!(Reading)));
         let dir = unique_test_dir("sealed_unmapped_payload");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = registry.resolve(jni).expect("resolve");
+        let gen = jni.build_with(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).expect_err("must fail");
@@ -617,7 +633,7 @@ fn payload_without_output_converter_is_an_error() {
 #[test]
 fn sum_is_its_own_type_kind() {
     let loc = myflat_loc();
-    let registry = Registry::<KotlinMeta>::from_items(vec![(
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![(
         syn::Item::Enum(syn::parse_quote!(
             pub enum Reading {
                 Missing,
@@ -625,18 +641,99 @@ fn sum_is_its_own_type_kind() {
             }
         )),
         loc.clone(),
-    )])
+    )]))
     .expect("index items");
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().class(crate::sealed_class!(Reading)));
     let ty: syn::Type = syn::parse_quote!(Reading);
     assert!(matches!(
-        jni.type_kind(&registry, &ty),
+        jni.decls.type_kind(&registry, &ty),
         crate::api::lang::jnigen::jni::classify::TypeKind::Sum
     ));
-    let cfg = jni.types.get(&TypeKey::from_type(&ty)).expect("declared");
+    let cfg = jni
+        .decls
+        .types
+        .get(&TypeKey::from_type(&ty))
+        .expect("declared");
     assert!(cfg.special_decl());
+}
+
+/// What the registry holds for a `sealed_class!` sum, in all three parts (#282).
+///
+/// The `SumTag` selector's `out_ty` is the **sum**, not the `i32` — it names
+/// which sum it chooses between. That type is *registered* and *not required*,
+/// and those are separate claims a single predicate cannot state:
+///
+/// * a **cell** says the type entered the pipeline;
+/// * a **root** says the binding demands its converter — cleared here, because
+///   a sum crosses decomposed and has no whole-value output converter;
+/// * an **entry** says one resolved — present INPUT-side (`sum_input_body`
+///   decodes a whole `JObject`), absent OUTPUT-side, and that asymmetry is the
+///   design, not an accident.
+///
+/// Asserted against a real `Registry` rather than a hand-assembled one, because
+/// the claim is about what a *declaration* produces — and that is the limit of
+/// what it can claim. It does **not** pin #282: `sealed_class!(Reading)` creates
+/// the output cell through `export_type` whether or not the selector registers
+/// anything, so this passes against the filtered loop too. The selector's own
+/// half is pinned in `core::unfold`'s `sum_return_is_a_fixed_builder_plan`,
+/// whose fixture carries the sum as the tag's `out_ty` exactly so it can fail
+/// when the leaf stops registering it.
+#[test]
+fn a_sums_registry_cells_are_registered_but_not_required() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one() -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_one)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    let reg = gen.registry();
+    let key = TypeKey::from_type(&syn::parse_quote!(Reading));
+
+    let input = reg.input_types.get(&key).expect("input cell");
+    let output = reg.output_types.get(&key).expect("output cell");
+
+    // Registered both ways — the declaration put them there.
+    // Required neither way — `boundary_only_types` clears the root, because the
+    // sum crosses in pieces.
+    assert!(!input.root, "a declared sum crosses decomposed, not whole");
+    assert!(!output.root, "a declared sum crosses decomposed, not whole");
+
+    // The asymmetry: Kotlin → Rust decodes a whole `JObject`; Rust → Kotlin is
+    // always flattened, so there is nothing to resolve.
+    assert!(
+        input.entry.is_some(),
+        "the input direction has a whole-object decoder"
+    );
+    assert!(
+        output.entry.is_none(),
+        "the output direction has none — a sum crosses flattened, always"
+    );
 }
 
 /// A `Vec` of tag-gated groups has variable arity, so it cannot ride the
@@ -658,7 +755,7 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
                 unimplemented!()
             }
         );
-        let registry = Registry::<KotlinMeta>::from_items(vec![
+        let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![
             (
                 syn::Item::Enum(syn::parse_quote!(
                     pub enum Reading {
@@ -670,19 +767,21 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
             ),
             (syn::Item::Struct(st), loc.clone()),
             (syn::Item::Fn(f), loc.clone()),
-        ])
+        ]))
         .expect("index items");
-        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-            crate::package!()
-                .class(crate::sealed_class!(Reading))
-                .class(crate::data_class!(Holder))
-                .fun(crate::fun!(holder_new)),
-        );
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::sealed_class!(Reading))
+                    .class(crate::data_class!(Holder))
+                    .fun(crate::fun!(holder_new)),
+            );
         let dir = unique_test_dir("sealed_vec_field");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let _ = registry
-            .resolve(jni)
+        let _ = jni
+            .build_with(registry)
             .map(|g| g.write_rust(dir.join("g.rs")));
     };
 
@@ -726,24 +825,25 @@ fn recursive_sum_shapes_fail_deterministically() {
                 unimplemented!()
             }
         );
-        let registry = Registry::<KotlinMeta>::from_items(vec![
+        let registry = crate::api::test_util::reg_from_items(declare_referenced(vec![
             (syn::Item::Enum(e), loc.clone()),
             (syn::Item::Struct(st), loc.clone()),
             (syn::Item::Fn(f), loc.clone()),
-        ])
+        ]))
         .expect("index items");
-        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-            crate::package!()
-                .class(crate::sealed_class!(Node))
-                .class(crate::data_class!(Holder))
-                .fun(crate::fun!(holder_new)),
-        );
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::sealed_class!(Node))
+                    .class(crate::data_class!(Holder))
+                    .fun(crate::fun!(holder_new)),
+            );
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            registry
-                .resolve(jni)
+            jni.build_with(registry)
                 .map(|g| g.write_rust(dir.join("g.rs")))
                 .map(|_| ())
                 .map_err(|e| e.to_string())
@@ -871,26 +971,29 @@ fn sum_returns(tag: &str) -> (String, String) {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::enum_class!(Priority))
-            .class(crate::sealed_class!(Reading))
-            .class(crate::sealed_class!(Lookup))
-            .class(crate::ptr_class!(Probe))
-            .fun(crate::fun!(read_one))
-            .fun(crate::fun!(read_maybe))
-            .fun(crate::fun!(read_all))
-            .fun(crate::fun!(look_up))
-            .fun(crate::fun!(read_each))
-            .fun(crate::fun!(read_borrowed))
-            .fun(crate::fun!(read_borrowed_maybe)),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .class(crate::sealed_class!(Reading))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::ptr_class!(Probe))
+                .fun(crate::fun!(read_one))
+                .fun(crate::fun!(read_maybe))
+                .fun(crate::fun!(read_all))
+                .fun(crate::fun!(look_up))
+                .fun(crate::fun!(read_each))
+                .fun(crate::fun!(read_borrowed))
+                .fun(crate::fun!(read_borrowed_maybe)),
+        );
 
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let kotlin = gen
@@ -1187,18 +1290,21 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::ptr_class!(Probe))
-            .class(crate::sealed_class!(Lookup))
-            .class(crate::data_class!(Holder))
-            .fun(crate::fun!(holder_new)),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Probe))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::data_class!(Holder))
+                .fun(crate::fun!(holder_new)),
+        );
     let dir = unique_test_dir("jnigen_sum_handle_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     let kotlin = gen
@@ -1279,18 +1385,21 @@ fn two_sum_callback_args_keep_their_own_selectors() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .class(crate::sealed_class!(Lookup))
-            .class(crate::ptr_class!(Probe))
-            .fun(crate::fun!(read_pair)),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::ptr_class!(Probe))
+                .fun(crate::fun!(read_pair)),
+        );
     let dir = unique_test_dir("jnigen_two_sum_cb");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let kotlin = gen
         .write_kotlin(&dir.join("kotlin"))
         .expect("write_kotlin")
@@ -1358,15 +1467,18 @@ fn sum_in_result_ok_position_is_rejected_with_its_reason() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .class(crate::ptr_class!(Probe))
-            .fun(crate::fun!(read_try)),
-    );
-    let err = registry
-        .resolve(jni)
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .class(crate::ptr_class!(Probe))
+                .fun(crate::fun!(read_try)),
+        );
+    let err = jni
+        .build_with(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -1408,14 +1520,17 @@ fn undeclared_sum_in_result_error_position_is_rejected() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .fun(crate::fun!(read_try)),
-    );
-    let err = registry
-        .resolve(jni)
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_try)),
+        );
+    let err = jni
+        .build_with(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -1460,14 +1575,17 @@ fn the_diagnostic_names_the_whole_error_type_where_it_must() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .fun(crate::fun!(read_try)),
-    );
-    let err = registry
-        .resolve(jni)
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_try)),
+        );
+    let err = jni
+        .build_with(registry)
         .expect_err("must be rejected")
         .to_string();
     let compact: String = err.split_whitespace().collect();
@@ -1516,8 +1634,9 @@ fn declared_sum_in_result_error_position_resolves() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .expand(crate::expand_return!(Reading).field(crate::fun!(reading_code)))
         .package(
@@ -1525,8 +1644,7 @@ fn declared_sum_in_result_error_position_resolves() {
                 .class(crate::sealed_class!(Reading))
                 .fun(crate::fun!(read_try)),
         );
-    registry
-        .resolve(jni)
+    jni.build_with(registry)
         .expect("a declared error deconstructor is the supported shape");
 }
 
@@ -1560,14 +1678,17 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::sealed_class!(Reading))
-            .fun(crate::fun!(read_batch)),
-    );
-    let err = registry
-        .resolve(jni)
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_batch)),
+        );
+    let err = jni
+        .build_with(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -1577,5 +1698,158 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
     assert!(
         err.contains("impl Fn(Reading)") && err.contains("Vec<Reading>"),
         "…and point at the two shapes that do work: {err}"
+    );
+}
+
+/// A sum named with a **raw** identifier generates, rather than aborting — and
+/// specifically through the OUTPUT encoder, which is the site that broke.
+///
+/// `r#type` is a legal `#[prebindgen]` enum name, and `TypeId::name` stores it
+/// as the string `"r#type"`. The sum encoder rebuilds an ident from that name
+/// to spell the `match`'s path, and `Ident::new` *panics* on that spelling
+/// rather than erroring, so the whole generation aborted (#278 review).
+///
+/// The sum is a value-form FIELD here, not just a declared type: that is what
+/// puts it through `encode_sum_group`. A first version of this test declared
+/// the sum and a callback only — the raw name appeared in the generated file
+/// via the *input* converter, the assertion passed, and reverting the fix left
+/// it passing. A regression test that survives its own regression is worse than
+/// none, so this one asserts the output-side `match` path.
+#[test]
+fn a_raw_named_sum_generates() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum r#type {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThingStruct {
+                    pub reading: r#type,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_to_struct(t: &ZThing) -> ZThingStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_emit(cb: impl Fn(ZThing) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZThing))
+                .class(crate::sealed_class!(r#type))
+                .fun(crate::fun!(z_emit)),
+        )
+        .expand(crate::expand_return!(ZThing).fields(crate::fields!(z_thing_to_struct)));
+
+    let dir = unique_test_dir("jnigen_raw_sum");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+
+    // The output-side match, spelled with the raw name — this is what
+    // `encode_sum_group` emits, and what `Ident::new` could not produce.
+    assert!(
+        rust.contains("myflat::r#type::Missing") && rust.contains("myflat::r#type::Exact"),
+        "the sum encoder matches the raw-named enum by its real path:\n{rust}"
+    );
+}
+
+/// A payload-less alternative keeps its own delimiters in the output match.
+///
+/// The arm builder branched on `variant.fields.first()`, so an alternative with
+/// no fields took the `None` arm and was spelled bare — `myflat::Shape::Parens`
+/// for `Parens()`, which is **E0533**: a zero-field tuple or struct variant
+/// still needs its delimiters in pattern position. An empty alternative has no
+/// first field to branch on, exactly as the empty struct in #302 had no field to
+/// refuse.
+///
+/// `Alternative::spell` is the one place those delimiters are chosen — its own
+/// doc says "for match patterns and constructors alike, in either direction" —
+/// and this is the pattern half of that sentence.
+#[test]
+fn empty_sum_alternatives_keep_their_own_pattern_delimiters() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Shape {
+                    Bare,
+                    Parens(),
+                    Braces {},
+                    Full(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn make_shape() -> Shape {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Shape))
+                .fun(crate::fun!(make_shape)),
+        );
+
+    let dir = unique_test_dir("jnigen_empty_sum_alternatives");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+
+    // Each alternative is matched with the delimiters Rust demands for it.
+    assert!(
+        rc.contains("myflat::Shape::Bare=>"),
+        "a unit alternative is matched bare:\n{rust}"
+    );
+    assert!(
+        rc.contains("myflat::Shape::Parens()=>"),
+        "an empty TUPLE alternative keeps its parens:\n{rust}"
+    );
+    assert!(
+        rc.contains("myflat::Shape::Braces{}=>"),
+        "an empty STRUCT alternative keeps its braces:\n{rust}"
+    );
+    // And the bare spelling must not appear for the two that cannot take it.
+    assert!(
+        !rc.contains("myflat::Shape::Parens=>") && !rc.contains("myflat::Shape::Braces=>"),
+        "neither empty alternative may be matched bare:\n{rust}"
     );
 }

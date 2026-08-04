@@ -1,0 +1,71 @@
+# prebindgen source-syntax boundary ledger — issue #211.
+#
+# One line per file OUTSIDE `api/core/flat/`, counting how many times a
+# variant of a watched syn syntax enum is named in production code:
+#
+#     syn::Type::Reference(r) => ...        <- one site
+#     matches!(ty, syn::Expr::Lit(_))       <- one site
+#
+# Watched enums: syn::Type, syn::Expr. Test code is excluded.
+#
+# Every one of these is a place that independently decides what captured Rust
+# MEANS. #211 says only `core::flat` may do that, so this file freezes the
+# population: any change fails `cargo test -p prebindgen boundary_ledger`.
+#
+# This is the CLASSIFY half of the rule, and only that half. Spelling the source
+# — handing an element's `syntax` slice to `quote!` — names no variant and is
+# not counted, because re-emitting what the source wrote is what generated Rust
+# is for. Deciding what the source MEANT from that syntax is what it is not for.
+#
+# To change it deliberately:
+#
+#     UPDATE_BOUNDARY_LEDGER=1 cargo test -p prebindgen boundary_ledger
+#     git diff prebindgen/src/api/core/flat/boundary.ledger
+#
+# A count going DOWN is the goal (a classifier reads elements instead) and is
+# still a ledger edit, so the win shows up in the diff.
+#
+# KNOWN BLIND SPOTS — classification this check cannot see, because it never
+# writes a `syn::` path. Each is a candidate addition to WATCHED:
+#
+#   * token-string classification, e.g. `core/domain.rs` matching
+#     `ty.to_token_stream().to_string()` against "i8" / "f32";
+#   * ident-name classification, e.g. `seg.ident == "Option"`;
+#   * helper delegation — `jnigen/jni/classify.rs` is a whole classifier with
+#     zero watched sites;
+#   * syn enums outside WATCHED: Item, Fields, FnArg, ReturnType,
+#     GenericArgument, Pat, ...
+#
+# One listed gap is closed rather than still open: `types_util::match_pattern`
+# unified against `parse_quote!(_)` patterns, adding shape rules with no watched
+# site. It is deleted — the wildcard tables it served held a single entry,
+# `Result<_, _>`, which the model already names `TypeKind::Fallible`.
+#
+# A check that silently under-reports is worse than no check, which is why the
+# gaps are listed here rather than implied away.
+
+2	api/core/registry/scan.rs
+9	api/core/types_util.rs
+8	api/lang/cbindgen/builder.rs
+1	api/lang/cbindgen/convert.rs
+5	api/lang/cbindgen/emit.rs
+5	api/lang/cbindgen/mod.rs
+6	api/lang/cbindgen/trait_impl.rs
+4	api/lang/jnigen/jni/builder.rs
+4	api/lang/jnigen/jni/emit/convert.rs
+2	api/lang/jnigen/jni/emit/delivery.rs
+4	api/lang/jnigen/jni/emit/flat_input.rs
+16	api/lang/jnigen/jni/emit/names.rs
+11	api/lang/jnigen/jni/emit/wrapper.rs
+3	api/lang/jnigen/jni/fold.rs
+4	api/lang/jnigen/jni/iface.rs
+2	api/lang/jnigen/jni/overloads.rs
+1	api/lang/jnigen/jni/prim.rs
+3	api/lang/jnigen/jni/prim_array.rs
+8	api/lang/jnigen/jni/render.rs
+3	api/lang/jnigen/jni/selector.rs
+11	api/lang/jnigen/jni/trait_impl.rs
+2	api/lang/jnigen/jni/wire_access.rs
+2	api/lang/jnigen/util.rs
+
+# total: 116

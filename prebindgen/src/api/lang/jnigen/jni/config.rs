@@ -1,8 +1,8 @@
-//! Global settings of a [`JniGen`] instance — the target
+//! Global settings of a [`JniGenBuilder`] instance — the target
 //! package, name-mangling rules, native-init hook and handle-lock toggle.
 //!
 //! Every setter carries the `set_` prefix: unlike the declaration methods
-//! ([`JniGen::package`], [`JniGen::convert`], …) which each add
+//! ([`JniGenBuilder::package`], [`JniGenBuilder::convert`], …) which each add
 //! one item to the binding surface, a `set_` method changes how *all* other
 //! declarations are interpreted. Setters are **order-independent by
 //! construction**: the builder stores only raw inputs — settings here,
@@ -22,19 +22,19 @@
 //!
 //! | hook | names | input (the derived default) | default |
 //! |---|---|---|---|
-//! | [`set_harness_name_mangle`](JniGen::set_harness_name_mangle) | the centralized externs object | `"JNINative"` | identity |
-//! | [`set_fun_name_mangle`](JniGen::set_fun_name_mangle) | top-level package functions | package, camelCased Rust fn name (`put_publisher` → `"putPublisher"`) | identity |
-//! | [`set_ptr_class_name_mangle`](JniGen::set_ptr_class_name_mangle) | `ptr_class` Kotlin classes | package, Rust type short name (`"KeyExpr"`) | identity |
-//! | [`set_data_class_name_mangle`](JniGen::set_data_class_name_mangle) | `data_class` Kotlin classes | package, Rust type short name | identity |
-//! | [`set_enum_name_mangle`](JniGen::set_enum_name_mangle) | `enum_class` Kotlin classes | package, Rust type short name | identity |
-//! | [`set_method_name_mangle`](JniGen::set_method_name_mangle) | class methods/factories and JNI extern methods | package, final class name, full camelCase Rust fn name | identity |
+//! | [`set_harness_name_mangle`](JniGenBuilder::set_harness_name_mangle) | the centralized externs object | `"JNINative"` | identity |
+//! | [`set_fun_name_mangle`](JniGenBuilder::set_fun_name_mangle) | top-level package functions | package, camelCased Rust fn name (`put_publisher` → `"putPublisher"`) | identity |
+//! | [`set_ptr_class_name_mangle`](JniGenBuilder::set_ptr_class_name_mangle) | `ptr_class` Kotlin classes | package, Rust type short name (`"KeyExpr"`) | identity |
+//! | [`set_data_class_name_mangle`](JniGenBuilder::set_data_class_name_mangle) | `data_class` Kotlin classes | package, Rust type short name | identity |
+//! | [`set_enum_name_mangle`](JniGenBuilder::set_enum_name_mangle) | `enum_class` Kotlin classes | package, Rust type short name | identity |
+//! | [`set_method_name_mangle`](JniGenBuilder::set_method_name_mangle) | class methods/factories and JNI extern methods | package, final class name, full camelCase Rust fn name | identity |
 //!
 //! One further hook does NOT follow the identity rule, because its input and
 //! output are two names that must differ:
 //!
 //! | hook | names | input | default |
 //! |---|---|---|---|
-//! | [`set_interface_name_mangle`](JniGen::set_interface_name_mangle) | the generated `.interface()` interface | package, final **class** name (`"Storage"`) | append `"Api"` (`"StorageApi"`); identity is a hard error |
+//! | [`set_interface_name_mangle`](JniGenBuilder::set_interface_name_mangle) | the generated `.interface()` interface | package, final **class** name (`"Storage"`) | append `"Api"` (`"StorageApi"`); identity is a hard error |
 //!
 //! A per-decl `.name()` / `.interface_name()` override is always verbatim and
 //! **bypasses** the hooks entirely.
@@ -52,7 +52,7 @@ pub(crate) enum NameKind {
 
 /// Raw naming spec of one declared class type, stored in [`TypeConfig`] as
 /// declared and turned into a concrete Kotlin FQN only when read
-/// ([`JniGen::fqn_of`]), against whatever the settings are at that moment.
+/// ([`JniGenBuilder::fqn_of`]), against whatever the settings are at that moment.
 #[derive(Clone)]
 pub(crate) struct NameSpec {
     pub(crate) subpackage: String,
@@ -65,7 +65,7 @@ pub(crate) struct NameSpec {
     pub(crate) kind: NameKind,
 }
 
-impl JniGen {
+impl JniGenBuilder {
     /// Set the JVM/Kotlin **base** package (dot-separated, e.g.
     /// `"io.zenoh.jni"`). All derived forms (slash-separated `FindClass`
     /// paths, `_`-mangled JNI extern idents, Kotlin `package` declarations)
@@ -77,12 +77,12 @@ impl JniGen {
         // directly by many emitters, so mangling at this single storage
         // point keeps every reader consistent; warn here (the raw input is
         // only available now) when a segment was changed.
-        self.package = mangle_package(&trimmed);
-        if self.package != trimmed {
+        self.decls.package = mangle_package(&trimmed);
+        if self.decls.package != trimmed {
             println!(
                 "cargo:warning=prebindgen: package prefix `{trimmed}` sanitized to `{}` \
                  (invalid Kotlin package identifier)",
-                self.package
+                self.decls.package
             );
         }
         self
@@ -99,7 +99,7 @@ impl JniGen {
     /// keeps the generator free of any concrete loading logic. Unset = no
     /// init block.
     pub fn set_jni_native_init(mut self, code: impl Into<String>) -> Self {
-        self.jni_native_init = Some(code.into());
+        self.decls.jni_native_init = Some(code.into());
         self
     }
 
@@ -112,7 +112,7 @@ impl JniGen {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.harness_name_mangle = Some(Arc::new(f));
+        self.decls.harness_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -124,7 +124,7 @@ impl JniGen {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.fun_name_mangle = Some(Arc::new(f));
+        self.decls.fun_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -140,7 +140,7 @@ impl JniGen {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.interface_name_mangle = Some(Arc::new(f));
+        self.decls.interface_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -151,7 +151,7 @@ impl JniGen {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.ptr_class_name_mangle = Some(Arc::new(f));
+        self.decls.ptr_class_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -163,7 +163,7 @@ impl JniGen {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.data_class_name_mangle = Some(Arc::new(f));
+        self.decls.data_class_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -174,7 +174,7 @@ impl JniGen {
     where
         F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
-        self.enum_name_mangle = Some(Arc::new(f));
+        self.decls.enum_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -187,7 +187,7 @@ impl JniGen {
     where
         F: Fn(&str, &str, &str) -> String + Send + Sync + 'static,
     {
-        self.method_name_mangle = Some(Arc::new(f));
+        self.decls.method_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -204,12 +204,12 @@ impl JniGen {
     /// re-verified on your own workload — generate once with `false`,
     /// benchmark both, and keep the default — not as an optimization knob.
     pub fn set_emit_handle_locks(mut self, emit: bool) -> Self {
-        self.emit_handle_locks = emit;
+        self.decls.emit_handle_locks = emit;
         self
     }
 }
 
-impl JniGen {
+impl Declarations {
     /// Materialize a [`NameSpec`] into a concrete Kotlin FQN under the
     /// current settings. Precedence for a declared class: per-decl
     /// `name_override` (package-resolved, mangle-bypassed), then the mangle

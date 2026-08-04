@@ -4,21 +4,23 @@ use super::*;
 fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
-        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
-        "pub fn duration_to_millis(v: &std::time::Duration) -> u64 { unimplemented!() }",
-        "pub fn duration_echo(v: Option<std::time::Duration>) -> Option<std::time::Duration> { unimplemented!() }",
+        "#[prebindgen] pub type Duration = std::time::Duration;",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+        "pub fn duration_echo(v: Option<Duration>) -> Option<Duration> { unimplemented!() }",
     ]
     .into_iter()
     .map(|source| {
-        let function: syn::ItemFn = syn::parse_str(source).unwrap();
-        (syn::Item::Fn(function), loc.clone())
+        // `syn::Item`, not `ItemFn`: a fixture declares the types it names.
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
-    let jni = JniGen::new()
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            crate::convert!(std::time::Duration)
+            crate::convert!(Duration)
                 .input(crate::fun!(duration_from_millis))
                 .output(crate::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
@@ -27,7 +29,7 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let dir = unique_test_dir("jnigen_bounded_duration");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).unwrap();
+    let generation = jni.build_with(registry).unwrap();
     let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let paths = generation.write_kotlin(&dir.join("kotlin")).unwrap();
@@ -68,14 +70,14 @@ fn flattened_field_composes_bounded_conversion_stages() {
         (
             syn::Item::Struct(syn::parse_quote!(
                 pub struct Timed {
-                    pub delay: Option<std::time::Duration>,
+                    pub delay: Option<Duration>,
                 }
             )),
             loc.clone(),
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
-                pub fn duration_from_millis(v: u64) -> std::time::Duration {
+                pub fn duration_from_millis(v: u64) -> Duration {
                     unimplemented!()
                 }
             )),
@@ -83,7 +85,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
-                pub fn duration_to_millis(v: &std::time::Duration) -> u64 {
+                pub fn duration_to_millis(v: &Duration) -> u64 {
                     unimplemented!()
                 }
             )),
@@ -106,11 +108,12 @@ fn flattened_field_composes_bounded_conversion_stages() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            crate::convert!(std::time::Duration)
+            crate::convert!(Duration)
                 .input(crate::fun!(duration_from_millis))
                 .output(crate::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
@@ -124,7 +127,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
     let dir = unique_test_dir("jnigen_flat_staged_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.build_with(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -153,11 +156,11 @@ fn flattened_field_composes_bounded_conversion_stages() {
     assert!(rc.contains("jlong_to_u64"), "{rust}");
     assert!(rc.contains("u64_to_Duration"), "{rust}");
     assert!(
-        rc.contains("jlong_to_Option_std_time_Duration") && rc.contains("env,&__delay_raw)?"),
+        rc.contains("jlong_to_Option_Duration") && rc.contains("env,&__delay_raw)?"),
         "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
     );
     assert!(
-        rc.contains("let___delay:jni::sys::jlong=Option_std_time_Duration_to_jlong")
+        rc.contains("let___delay:jni::sys::jlong=Option_Duration_to_jlong")
             && rc.contains("\"(J)Lio/test/jni/Timed;\""),
         "whole-struct output must pass the niche as primitive jlong:\n{rust}"
     );
@@ -170,18 +173,22 @@ fn flattened_field_composes_bounded_conversion_stages() {
 
 #[test]
 fn duration_requires_an_explicit_conversion() {
-    let function: syn::ItemFn = syn::parse_str(
-        "pub fn duration_echo(v: std::time::Duration) -> std::time::Duration { unimplemented!() }",
-    )
-    .unwrap();
-    let registry = Registry::<KotlinMeta>::from_items([(syn::Item::Fn(function), myflat_loc())])
-        .expect("index items");
-    let jni = JniGen::new()
+    let alias: syn::Item =
+        syn::parse_str("#[prebindgen] pub type Duration = std::time::Duration;").unwrap();
+    let function: syn::ItemFn =
+        syn::parse_str("pub fn duration_echo(v: Duration) -> Duration { unimplemented!() }")
+            .unwrap();
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+        (alias, myflat_loc()),
+        (syn::Item::Fn(function), myflat_loc()),
+    ]))
+    .expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("time").fun(crate::fun!(duration_echo)));
 
-    let error = registry
-        .resolve(jni)
+    let error = jni
+        .build_with(registry)
         .expect_err("Duration must not have an implicit unchecked converter")
         .to_string();
     assert!(error.contains("Duration"), "{error}");
@@ -192,25 +199,26 @@ fn duration_requires_an_explicit_conversion() {
 fn conversion_domain_must_match_the_representation() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = [
-        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
-        "pub fn duration_use(v: std::time::Duration) { unimplemented!() }",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_use(v: Duration) { unimplemented!() }",
     ]
     .into_iter()
     .map(|source| {
-        let function: syn::ItemFn = syn::parse_str(source).unwrap();
-        (syn::Item::Fn(function), loc.clone())
+        // `syn::Item`, not `ItemFn`: a fixture declares the types it names.
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
     })
     .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
-    let jni = JniGen::new()
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let jni = JniGenBuilder::new()
         .convert(
-            crate::convert!(std::time::Duration)
+            crate::convert!(Duration)
                 .input(crate::fun!(duration_from_millis))
                 .valid_range(0i64..=1_000i64),
         )
         .package(crate::package!("time").fun(crate::fun!(duration_use)));
 
-    let _ = registry.resolve(jni);
+    let _ = jni.build_with(registry);
 }
 
 /// Phase 4: a bare `Option<primitive>` / `Option<enum>` **input** parameter
@@ -242,9 +250,10 @@ fn option_scalar_param_crosses_as_present_value_pair() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().class(crate::enum_class!(Mode)))
         .package(crate::package!("cfg").fun(crate::fun!(z_set_timeout)));
@@ -252,7 +261,7 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -339,19 +348,22 @@ fn vec_of_handle_output_folds_kotlin_side() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("thing")
-            .class(crate::ptr_class!(ZThing))
-            .fun(crate::fun!(thing_list))
-            .fun(crate::fun!(thing_list_opt)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing))
+                .fun(crate::fun!(thing_list))
+                .fun(crate::fun!(thing_list_opt)),
+        );
 
     let dir = unique_test_dir("jnigen_vec_handle_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -422,18 +434,21 @@ fn option_scalar_struct_field_flattens() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::data_class!(Opts))
-            .fun(crate::fun!(opts_put)),
-    );
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Opts))
+                .fun(crate::fun!(opts_put)),
+        );
 
     let dir = unique_test_dir("jnigen_optfield");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -537,9 +552,10 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
-    let jni = JniGen::new()
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("model")
@@ -556,7 +572,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let dir = unique_test_dir("jnigen_fromparts_optbox");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -653,19 +669,22 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::data_class!(FlatChild))
-            .class(crate::data_class!(ObjectChild).jobject_input())
-            .class(crate::data_class!(Hybrid))
-            .fun(crate::fun!(hybrid_use))
-            .fun(crate::fun!(hybrid_optional)),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(FlatChild))
+                .class(crate::data_class!(ObjectChild).jobject_input())
+                .class(crate::data_class!(Hybrid))
+                .fun(crate::fun!(hybrid_use))
+                .fun(crate::fun!(hybrid_optional)),
+        );
     let dir = unique_test_dir("jnigen_hybrid_jobject_input");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.build_with(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -694,6 +713,79 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
         "{rust}"
     );
     assert!(generation.report().contains("input `JObject` opt-in"));
+}
+
+/// A payload-less struct keeps its own delimiters through the `.jobject_input()`
+/// decoder.
+///
+/// The decoder walks `flat::Struct::fields`, and the element does not record
+/// whether the fields were named — that is spelling. So the braced initializer
+/// this used to hard-code emitted `myflat::Unit {}` for `struct Unit;`, which is
+/// not Rust. The `syn::Fields::Named` guard the walk replaced happened to refuse
+/// it by returning `None`; the per-field name check cannot, because an empty
+/// struct has no field to refuse.
+///
+/// A tuple struct is absent because it cannot reach here at all: the model
+/// reads one as an `Extern`, so `Flat::struct_type` answers `None` for it.
+///
+/// `Struct::spell` is the one place those delimiters are chosen — the dual of
+/// the `Alternative::spell` the sum decoder uses for `E::B()`.
+#[test]
+fn empty_structs_keep_their_own_constructor_delimiters() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Unit;
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct EmptyNamed {}
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn take_empties(a: Unit, c: EmptyNamed) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Unit).jobject_input())
+                .class(crate::data_class!(EmptyNamed).jobject_input())
+                .fun(crate::fun!(take_empties)),
+        );
+    let dir = unique_test_dir("jnigen_empty_struct_delimiters");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // Each shape gets the delimiters Rust demands for it, and none gets braces
+    // it cannot have.
+    assert!(
+        rc.contains("myflat::Unit)") || rc.contains("myflat::Unit}"),
+        "unit struct must be constructed bare, got:\n{rust}"
+    );
+    assert!(
+        !rc.contains("myflat::Unit{}"),
+        "unit struct must not take braces:\n{rust}"
+    );
+    assert!(
+        rc.contains("myflat::EmptyNamed{}"),
+        "empty named struct keeps its braces:\n{rust}"
+    );
 }
 
 #[test]
@@ -726,17 +818,20 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::ptr_class!(Token))
-            .class(crate::data_class!(Envelope))
-            .fun(crate::fun!(envelope_use)),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Token))
+                .class(crate::data_class!(Envelope))
+                .fun(crate::fun!(envelope_use)),
+        );
     let dir = unique_test_dir("jnigen_recursive_handles");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.build_with(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -782,18 +877,18 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
         }
     );
     let loc = myflat_loc();
-    let registry = Registry::<KotlinMeta>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(wide.clone()), loc.clone()),
         (syn::Item::Fn(use_wide.clone()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
-    let jni = JniGen::new().package(
+    let jni = JniGenBuilder::new().package(
         crate::package!()
             .class(crate::data_class!(Wide))
             .fun(crate::fun!(use_wide)),
     );
-    let error = registry
-        .resolve(jni)
+    let error = jni
+        .build_with(registry)
         .expect_err("256 JVM slots must fail")
         .to_string();
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
@@ -802,18 +897,18 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
     // The explicit object boundary keeps the same public Kotlin data class,
     // but the native method receives it in one slot and performs the legacy
     // whole-object field decode instead of producing an illegal signature.
-    let registry = Registry::<KotlinMeta>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(wide), loc.clone()),
         (syn::Item::Fn(use_wide), loc),
-    ])
+    ]))
     .expect("index marked items");
-    let jni = JniGen::new().package(
+    let jni = JniGenBuilder::new().package(
         crate::package!()
             .class(crate::data_class!(Wide).jobject_input())
             .fun(crate::fun!(use_wide)),
     );
-    let generation = registry
-        .resolve(jni)
+    let generation = jni
+        .build_with(registry)
         .expect("JObject boundary must bypass the flattened slot limit");
     assert!(generation.report().contains("input `JObject` opt-in"));
 }
@@ -837,16 +932,17 @@ fn output_only_convert_resolves_without_input_twin() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_convert");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry
-        .resolve(jni)
+    let gen = jni
+        .build_with(registry)
         .expect("an output-only convert type must not require an input twin");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
@@ -882,15 +978,16 @@ fn convert_fn_qualifies_with_origin_crate() {
         "my-helpers",
     )];
     let registry =
-        Registry::<KotlinMeta>::from_items(flat.into_iter().chain(helpers)).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(flat.into_iter().chain(helpers)))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_convert_origin");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -917,15 +1014,16 @@ fn convert_input_target_mismatch_rejected() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
         .convert(crate::convert!(Len).input(crate::fun!(from_long)))
         .package(crate::package!("len").fun(crate::fun!(use_len)));
     let dir = unique_test_dir("jnigen_convert_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry
-        .resolve(jni)
+    let _ = jni
+        .build_with(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -938,8 +1036,9 @@ fn convert_via_trait_impls() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn temp_double(c: Celsius) -> Celsius { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Celsius)
@@ -950,7 +1049,7 @@ fn convert_via_trait_impls() {
     let dir = unique_test_dir("jnigen_convert_trait");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -973,15 +1072,16 @@ fn convert_via_try_from_is_fallible() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn pct_use(p: Percent) -> i32 { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Percent).input(crate::try_from!(i32)))
         .package(crate::package!("m").fun(crate::fun!(pct_use)));
     let dir = unique_test_dir("jnigen_convert_tryfrom");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1007,8 +1107,9 @@ fn option_composition_normalizes_fallible_stage_errors() {
     )
     .unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Percent)
@@ -1022,7 +1123,7 @@ fn option_composition_normalizes_fallible_stage_errors() {
     let dir = unique_test_dir("jnigen_option_fallible_stages");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1044,8 +1145,9 @@ fn convert_via_local_fns() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Label)
@@ -1056,7 +1158,7 @@ fn convert_via_local_fns() {
     let dir = unique_test_dir("jnigen_convert_local");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1112,8 +1214,9 @@ fn convert_via_local_try_fn_is_fallible() {
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    let jni = JniGen::new()
+        crate::api::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
+            .expect("index items");
+    let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Label)
@@ -1127,7 +1230,7 @@ fn convert_via_local_try_fn_is_fallible() {
     let dir = unique_test_dir("jnigen_convert_local_try");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1169,18 +1272,21 @@ fn data_class_members_reenter_as_field_leaves() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!().class(
-            crate::data_class!(Point)
-                .method(crate::fun!(point_norm).name("norm"))
-                .constructor(crate::fun!(point_origin).name("origin")),
-        ),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!().class(
+                crate::data_class!(Point)
+                    .method(crate::fun!(point_norm).name("norm"))
+                    .constructor(crate::fun!(point_origin).name("origin")),
+            ),
+        );
     let dir = unique_test_dir("jnigen_data_members");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
+    let gen = jni.build_with(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 
     let kdir = dir.join("kotlin");
@@ -1268,19 +1374,22 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
             loc,
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::data_class!(Unsigned))
-            .fun(crate::fun!(unsigned_round_trip))
-            .fun(crate::fun!(unsigned_data_maybe))
-            .fun(crate::fun!(unsigned_callback))
-            .fun(crate::fun!(unsigned_result)),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Unsigned))
+                .fun(crate::fun!(unsigned_round_trip))
+                .fun(crate::fun!(unsigned_data_maybe))
+                .fun(crate::fun!(unsigned_callback))
+                .fun(crate::fun!(unsigned_result)),
+        );
     let dir = unique_test_dir("jnigen_unsigned");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.build_with(registry).expect("resolve");
     let rust_path = generation
         .write_rust(dir.join("gen.rs"))
         .expect("write_rust");
@@ -1396,21 +1505,24 @@ fn data_class_properties_match_their_from_parts_params() {
             loc.clone(),
         ),
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::ptr_class!(Handle))
-            .class(crate::data_class!(Child))
-            .class(crate::enum_class!(Level))
-            .class(crate::data_class!(Bag))
-            .fun(crate::fun!(bag_make))
-            .fun(crate::fun!(bag_take)),
-    );
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Handle))
+                .class(crate::data_class!(Child))
+                .class(crate::enum_class!(Level))
+                .class(crate::data_class!(Bag))
+                .fun(crate::fun!(bag_make))
+                .fun(crate::fun!(bag_take)),
+        );
 
     let dir = unique_test_dir("jnigen_data_class_props");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).expect("resolve");
+    let generation = jni.build_with(registry).expect("resolve");
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()
@@ -1440,7 +1552,7 @@ fn data_class_properties_match_their_from_parts_params() {
 /// and a `const fn` CALL — is qualified against its origin module, and that
 /// rewrite reaches ONLY the length, never a converter body's locals.
 ///
-/// None of the three owners is declared to JniGen: each is a compile-time
+/// None of the three owners is declared to JniGenBuilder: each is a compile-time
 /// namespace, not a boundary type, so qualification must not depend on a
 /// Kotlin class existing for it.
 ///
@@ -1476,35 +1588,10 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         )),
         loc.clone(),
     ));
-    // A type owning an ASSOCIATED const, used as the other length below. It is
-    // deliberately NEVER declared to JniGen: it is only the Rust namespace for
-    // a compile-time length, not a boundary type, so qualification must not
-    // require a Kotlin class to exist for it.
-    items.push((
-        syn::Item::Struct(syn::parse_quote!(
-            pub struct Holder {
-                pub marker: u8,
-            }
-        )),
-        loc.clone(),
-    ));
-    // A `const fn` whose CALL is a length. Also never declared: its result
-    // determines an array size, which is no reason to put it in the Kotlin
-    // surface.
-    items.push((
-        syn::Item::Fn(syn::parse_quote!(
-            pub const fn array_len() -> usize {
-                4
-            }
-        )),
-        loc.clone(),
-    ));
     items.push((
         syn::Item::Struct(syn::parse_quote!(
             pub struct Blob {
                 pub bytes: [u8; env],
-                pub assoc: [u8; Holder::N],
-                pub called: [u8; array_len()],
             }
         )),
         loc.clone(),
@@ -1517,16 +1604,18 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         )),
         loc.clone(),
     ));
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("blob")
-            .class(crate::data_class!(Blob))
-            .fun(crate::fun!(blob_echo)),
-    );
+    let registry = crate::api::test_util::reg_from_items(declare_referenced(items)).unwrap();
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("blob")
+                .class(crate::data_class!(Blob))
+                .fun(crate::fun!(blob_echo)),
+        );
     let dir = unique_test_dir(&format!("jnigen_array_len_const_{module}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).unwrap();
+    let generation = jni.build_with(registry).unwrap();
     let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1544,126 +1633,380 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     );
     assert!(!rc.contains(&format!("{module}::env,")), "{rust}");
     assert!(!rc.contains(&format!("&mut{module}::env")), "{rust}");
-
-    // An ASSOCIATED const qualifies its leading TYPE segment and leaves the
-    // rest of the path relative to it — `myflat::Holder::N`, never
-    // `myflat::Holder::myflat::N`. `Holder` is UNDECLARED, so this also pins
-    // that qualification reads the registry rather than the declared surface.
-    // Asserted at the two CODE positions (return type and param type); the bare
-    // spelling legitimately survives inside the decode's diagnostic string,
-    // which names the type as the source wrote it.
-    assert!(
-        rc.contains(&format!("Result<[u8;{module}::Holder::N]")),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(&format!("v:[u8;{module}::Holder::N]")),
-        "{rust}"
-    );
-    assert!(!rc.contains("Result<[u8;Holder::N]"), "{rust}");
-    assert!(!rc.contains("v:[u8;Holder::N]"), "{rust}");
-    // The leading segment is rewritten ONCE — the associated item stays
-    // relative to the type it belongs to.
-    assert!(
-        !rc.contains(&format!("{module}::Holder::{module}")),
-        "{rust}"
-    );
-
-    // A `const fn` CALL is a third shape a length can take, and its callee is
-    // an indexed item like the other two. Also undeclared.
-    assert!(
-        rc.contains(&format!("Result<[u8;{module}::array_len()]")),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(&format!("v:[u8;{module}::array_len()]")),
-        "{rust}"
-    );
-    assert!(!rc.contains("Result<[u8;array_len()]"), "{rust}");
-    assert!(!rc.contains("v:[u8;array_len()]"), "{rust}");
 }
 
-/// An array length whose expression form is not on the supported whitelist is
-/// REJECTED, not qualified.
+/// A borrowed **transparent wrapper** around a sequence is refused, not decoded as
+/// a bare `Vec`.
 ///
-/// An inline `const { … }` block may bind locals, and this generator qualifies
-/// a length's bare paths against their source module — so a local shadowing a
-/// source item would be rewritten into it (`array_len` the local becoming
-/// `myflat::array_len` the fn). Scope tracking is the general answer; the shape
-/// has no place in an FFI boundary type, so the whole family is refused with a
-/// message naming the type and the fix. Silently mis-qualifying is the
-/// alternative this exists to prevent.
+/// `Box<Vec<T>>` and `Cow<'_, [T]>` read as a run of values — correctly: no
+/// destination language can tell them from `Vec<T>`, which is why
+/// `sequence_elem` answers through the wrapper. But the generated glue **is** a
+/// destination artifact, and it is the one consumer that can tell: `&Vec<i32>`
+/// is not `&Box<Vec<i32>>`, which is why the wrapper is still standing in
+/// `kind` and in `TypeRef::origin` alike.
+///
+/// So the selector asks two questions, and only the first is `kind`'s: that this
+/// is a run of values makes the `Vec` shortcut a *candidate*, and the **spelling**
+/// says whether a decoded `Vec<T>` could actually be handed to the function.
+/// `&[T]` deref-coerces and `&Vec<T>` is the thing itself; a wrapper is neither.
+///
+/// **What this pins is the refusal.** A miscompile is not reachable today even
+/// without the spelling guard, because the scan requires every nested position and
+/// nothing converts `Box<Vec<i32>>` either — so the binding is rejected before
+/// anything is emitted, which is the right failure. The guard keeps the selector's
+/// reasoning honest for the day that over-approximation is relaxed; this test
+/// pins the behaviour a user sees now, and it is deliberately an assertion about
+/// *refusing*, not about generated text that no longer exists.
 #[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_inline_const_block_is_rejected() {
-    // A local bound by an inline const block, shadowing the indexed fn.
-    check_array_length_rejected(syn::parse_quote!(
-        [u8; const {
-            let array_len = 3;
-            array_len
-        }]
-    ));
-}
-
-/// `match` arms bind their patterns directly, with no `Expr::Block` node in
-/// between — which is how this form slipped past the first, blacklist-shaped
-/// attempt. The whitelist refuses it because `match` is simply not on the list.
-#[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_match_arm_binding_is_rejected() {
-    check_array_length_rejected(syn::parse_quote!(
-        [u8; match 3 {
-            array_len => array_len,
-        }]
-    ));
-}
-
-/// `if let` likewise binds without an intervening block node.
-#[test]
-#[should_panic(expected = "an unsupported expression form")]
-fn array_length_if_let_binding_is_rejected() {
-    check_array_length_rejected(syn::parse_quote!(
-        [u8; if let array_len = 3 { array_len } else { 0 }]
-    ));
-}
-
-fn check_array_length_rejected(field_ty: syn::Type) {
-    let loc = myflat_loc();
-    let mut items: Vec<(syn::Item, SourceLocation)> = Vec::new();
-    items.push((
+fn a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec() {
+    let loc = crate::SourceLocation::default();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
-            pub const fn array_len() -> usize {
-                4
+            pub fn z_take_boxed(v: &Box<Vec<i32>>) -> i64 {
+                v.len() as i64
             }
         )),
         loc.clone(),
+    )];
+    let decls = crate::package!("ops").fun(crate::lang::FunctionDecl::new(
+        syn::parse_str("z_take_boxed").unwrap(),
     ));
-    // The offending length; in each case its binding shadows `array_len`.
-    items.push((
-        syn::Item::Struct(syn::parse_quote!(
-            pub struct Blob {
-                pub local: #field_ty,
-            }
-        )),
-        loc.clone(),
-    ));
-    items.push((
-        syn::Item::Fn(syn::parse_quote!(
-            pub fn blob_echo(b: Blob) -> Blob {
-                unimplemented!()
-            }
-        )),
-        loc.clone(),
-    ));
-    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("blob")
-            .class(crate::data_class!(Blob))
-            .fun(crate::fun!(blob_echo)),
+    let registry = crate::api::test_util::reg_from_items(items).expect("index");
+    let err = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(decls)
+        .build_with(registry)
+        .expect_err("a borrowed transparent sequence wrapper has no conversion");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("Box < Vec < i32 > >"),
+        "the refusal must name the wrapper spelling the binding cannot convert:\n{msg}"
     );
-    let dir = unique_test_dir("jnigen_array_len_scope");
+}
+
+/// The enum probe answers about the **type**, not about the wrapper around it.
+///
+/// `is_kotlin_enum_reading` peels with [`enum_probe`], which walks the model's
+/// own layers, and then keys on `TypeKind::Named` — so every spelling of "a
+/// `Priority`, held some way" reaches the `enum_class!(Priority)` declaration.
+/// The spelling-keyed `is_kotlin_enum` cannot: `Box<Priority>` canonicalizes to
+/// `Box < Priority >`, which no declaration ever registered, and the answer is
+/// `false` about a type that IS a Kotlin enum. Both are asserted here, because
+/// the difference between them is the reason the reading-taking one exists.
+///
+/// A **run is not peeled**, and that is the half a `layer_stack`-based probe
+/// would get wrong: `Vec<Priority>` is a `List<Priority>` on the Kotlin side, so
+/// treating it as an enum would wire a list to a `.value` discriminant.
+///
+/// `Probe` is deliberately undeclared — jnigen is opt-in, so it emits nothing,
+/// and it exists only to give the model a field per spelling to classify.
+#[test]
+fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
+    use crate::api::core::flat;
+
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 1,
+                    High = 2,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    pub plain: Priority,
+                    pub borrowed: Box<Priority>,
+                    pub optional: Option<Priority>,
+                    pub boxed_optional: Box<Option<Priority>>,
+                    pub optional_borrow: Option<Box<Priority>>,
+                    pub run: Vec<Priority>,
+                    pub unrelated: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Priority)))
+        .build_with(registry)
+        .expect("resolve");
+    let (ext, registry) = (gen.declarations(), gen.registry());
+
+    let flat::Type::Struct(probe) = registry.flat().declared_type("Probe").expect("indexed") else {
+        panic!("Probe is a struct");
+    };
+    let field = |name: &str| {
+        &probe
+            .fields
+            .iter()
+            .find(|f| f.name.as_ref().is_some_and(|n| n == name))
+            .unwrap_or_else(|| panic!("field `{name}`"))
+            .ty
+    };
+
+    for name in [
+        "plain",
+        "borrowed",
+        "optional",
+        "boxed_optional",
+        "optional_borrow",
+    ] {
+        let reading = field(name);
+        assert!(
+            ext.is_kotlin_enum_reading(reading),
+            "`{name}` holds a declared Kotlin enum, however it is wrapped — the \
+             probe peels the model's layers, so it must say so"
+        );
+    }
+
+    for name in ["run", "unrelated"] {
+        assert!(
+            !ext.is_kotlin_enum_reading(field(name)),
+            "`{name}` is not an enum value: a run of enums is a `List`, and the \
+             probe must not peel the sequence layer to reach the element"
+        );
+    }
+
+    // The difference from the spelling-keyed probe, pinned: a transparent
+    // wrapper is invisible to the model and decisive for a canonical key.
+    assert!(
+        !ext.is_kotlin_enum(field("borrowed").syntax()),
+        "if the spelling key ever started seeing through `Box`, this test would \
+         stop distinguishing the two probes"
+    );
+    assert!(ext.is_kotlin_enum(field("plain").syntax()));
+}
+
+/// A **transparently-wrapped** parameter takes the same specialized lowering as
+/// its bare twin, and the emitter puts the wrapper back.
+///
+/// The model erases `Box`/`Cow` ([`TRANSPARENT_WRAPPERS`]), so
+/// `Box<Option<Mode>>` classifies as `Optional` exactly as `Option<Mode>` does.
+/// But `build_option_scalar_input_plan` does not *decode* the parameter, it
+/// **rebuilds** it: the emitter writes a literal `Option::Some(v)` /
+/// `Option::None` and hands that to the source function, and handing a bare
+/// `Option<Mode>` to a parameter spelled `Box<Option<Mode>>` is an `E0308`.
+///
+/// #290 closed that by **declining** the wrapped spelling. #292 item 3 replaced
+/// the refusal with the rebuild — `Box::new(..)` is exactly what the syntax
+/// asks for — so what this pins flipped: the wrapped parameter must now reach
+/// the decoupled `(present, value)` wire, *and* the Rust side must re-wrap.
+///
+/// Asserted on the **pair** in both artifacts so it cannot pass vacuously: the
+/// bare twin must take the same Kotlin surface (or the wrapped one proves
+/// nothing) and must **not** get a `Box::new` (or the wrap assertion would hold
+/// for an emitter that wrapped everything).
+#[test]
+fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Mode {
+                    A,
+                    B,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_bare(mode: Option<Mode>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_boxed(mode: Box<Option<Mode>>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Mode)))
+        .package(
+            crate::package!("cfg")
+                .fun(crate::fun!(z_bare))
+                .fun(crate::fun!(z_boxed)),
+        );
+
+    let dir = unique_test_dir("jnigen_wrapped_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = registry.resolve(jni).unwrap();
-    generation.write_rust(dir.join("gen.rs")).unwrap();
+
+    // The wrapped spelling may legitimately fail to resolve a converter of its
+    // own — that is a refusal too, and equally not an `E0308`. Only a build that
+    // SUCCEEDS can be asked what it emitted.
+    let Ok(gen) = jni.build_with(registry) else {
+        return;
+    };
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The control: the bare twin still takes the decoupled pair, so a refusal
+    // below is about the wrapper and not about the fixture failing to reach the
+    // specialized path at all.
+    assert!(
+        kc.contains("zBare(modePresent:Boolean,modeValue:Int"),
+        "the bare `Option<Mode>` must still cross as (present, value) — \
+         otherwise this test proves nothing about the wrapped one:\n{kotlin}"
+    );
+
+    // …and so does the wrapped one. The two spellings are one type to Kotlin,
+    // so an identical surface is the whole claim — a wrapper must not cost a
+    // parameter its lowering.
+    assert!(
+        kc.contains("zBoxed(modePresent:Boolean,modeValue:Int"),
+        "`Box<Option<Mode>>` must take the same present/value lowering as its \
+         bare twin — the model erases the `Box`, and the emitter puts it back \
+         rather than declining the shape:\n{kotlin}"
+    );
+
+    // The Rust half, which is what makes taking that lowering legal: the
+    // rebuilt `Option` is wrapped back up before it reaches the source fn.
+    // Without this the extern hands an `Option<Mode>` to a parameter spelled
+    // `Box<Option<Mode>>` — `E0308`, and no Kotlin assertion could see it.
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("letmode=::std::boxed::Box::new(if"),
+        "the rebuilt `Option` must be re-wrapped for the spelling:\n{rust}"
+    );
+    // The control on the Rust side too: exactly ONE of the two externs wraps,
+    // so the assertion above is about the spelling and not an unconditional
+    // `Box` the emitter adds to everything.
+    assert_eq!(
+        rc.matches("::std::boxed::Box::new(if").count(),
+        1,
+        "only the wrapped spelling gets a `Box::new`; the bare twin builds the \
+         `Option` and passes it as is:\n{rust}"
+    );
+}
+
+/// The transparent-wrapper guard runs **before** the model's layers are
+/// interpreted, not after.
+///
+/// A wrapper sits *outside* the layer it wraps, so `Box<&Vec<Foo>>` **reads** as
+/// a borrow — `unwrapped` peels the `Box` to answer, and it is the reading, not
+/// the kind, that the layers come off. A guard that takes that reading first
+/// and forgets the wrapper replaces the argument with the
+/// inner sequence reading, whose own spelling is a clean `Vec<Foo>`, and the
+/// outer wrapper is never seen: the Vec-build plan is selected, its emitter
+/// hands the source fn a `&[Foo]` built from the transient Rust-side `Vec`, and
+/// the parameter still spells `Box<&Vec<Foo>>`. That is the same `E0308` class
+/// [`a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt`]
+/// covers, reached by peeling in the wrong order.
+///
+/// So this pins the **ordering**, which the shape-by-shape tests cannot: every
+/// layer is checked on the way down, and the outermost is checked first.
+#[test]
+fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_bare(v: &[Foo]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_wrapped(v: Box<&Vec<Foo>>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(crate::fun!(put_bare))
+                .fun(crate::fun!(put_wrapped)),
+        );
+
+    let dir = unique_test_dir("jnigen_outer_wrapper_ref");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // The wrapped spelling may legitimately resolve no converter of its own —
+    // that is a refusal too, and equally not an `E0308`.
+    let Ok(gen) = jni.build_with(registry) else {
+        return;
+    };
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The control: the bare `&[Foo]` twin still takes the Vec-build handle path,
+    // so a refusal below is about the wrapper and not about the fixture failing
+    // to reach the specialized path at all.
+    assert!(
+        kc.contains("fooVecNew"),
+        "the bare `&[Foo]` must still take the Vec-build path — otherwise this \
+         test proves nothing about the wrapped one:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("val__vec_v=JNINative.fooVecNew(v.size)"),
+        "{kotlin}"
+    );
+
+    // The finding: `Box<&Vec<Foo>>` must not reach the Vec-build call site. Its
+    // wrapper is invisible to `kind` (which says `Ref`), so only a check made
+    // before the layers are read can catch it.
+    // Split on the WRAPPER, not on `externalfunputWrapped(` in `JNINative` —
+    // the extern block is followed by the shared `fooVecNew` declarations, so a
+    // looser split would read them as this function's body and pass falsely.
+    let wrapped_body = kc
+        .split("publicfunputWrapped(")
+        .nth(1)
+        .map(|s| s.split("publicfun").next().unwrap_or(s).to_string())
+        .unwrap_or_default();
+    assert!(
+        !wrapped_body.contains("fooVecNew"),
+        "`Box<&Vec<Foo>>` took the Vec-build path, which hands the source fn a \
+         `&[Foo]` built from a transient Vec while the parameter spells \
+         `Box<&Vec<Foo>>` — an E0308 in the generated crate:\n{kotlin}"
+    );
 }

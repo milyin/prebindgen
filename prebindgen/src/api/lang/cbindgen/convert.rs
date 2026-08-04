@@ -1,14 +1,15 @@
 use super::*;
+use crate::api::core::registry::Conversions;
 
-impl Cbindgen {
+impl CbindgenBuilder {
     pub(crate) fn prereq_domain_constants(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items = Vec::new();
         for decl in &self.convert_decls {
             let Some(domain) = &decl.domain else { continue };
             let demand = [Direction::Input, Direction::Output]
                 .into_iter()
-                .flat_map(|direction| registry.type_table(direction).keys())
-                .map(|candidate| option_depth(candidate, &decl.key))
+                .flat_map(|direction| registry.type_table(direction).values())
+                .map(|cell| option_depth(&cell.subject, &decl.key))
                 .max()
                 .unwrap_or(0);
             let ty = domain.ty();
@@ -17,7 +18,7 @@ impl Cbindgen {
                 .get(&decl.key)
                 .cloned()
                 .unwrap_or_else(|| {
-                    let short = type_short(&decl.key.to_type());
+                    let short = type_short(&decl.rust_type.syntax.clone());
                     self.mangle_rust_type
                         .as_ref()
                         .map(|m| m(&short))
@@ -51,7 +52,7 @@ impl Cbindgen {
     pub(crate) fn in_custom(
         &self,
         ty: &syn::Type,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
@@ -118,7 +119,7 @@ impl Cbindgen {
     pub(crate) fn out_custom(
         &self,
         ty: &syn::Type,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
@@ -187,16 +188,16 @@ impl Cbindgen {
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.key.to_type());
+        let target = self.src_ty(&decl.rust_type.syntax.clone());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
-                    .functions
-                    .get(f)
-                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f))
-                    .0;
+                    .flat()
+                    .function(&f)
+                    .map(|func| &func.origin.syntax)
+                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (repr, by_ref) = one_param(item);
                 let ret = fn_ret(item);
                 let (ok, fallible) = match result_parts(&ret) {
@@ -231,16 +232,16 @@ impl Cbindgen {
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.key.to_type());
+        let target = self.src_ty(&decl.rust_type.syntax.clone());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
-                    .functions
-                    .get(f)
-                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f))
-                    .0;
+                    .flat()
+                    .function(&f)
+                    .map(|func| &func.origin.syntax)
+                    .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);
                 assert_eq!(TypeKey::from_type(&param), decl.key);
                 let ret = fn_ret(item);
@@ -274,16 +275,27 @@ impl Cbindgen {
     fn c_domain_niches(
         &self,
         decl: &ConvertDecl,
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         direction: Direction,
     ) -> Niches {
         let Some(domain) = &decl.domain else {
             return Niches::empty();
         };
+        // A crossing with no reading contributes no demand, and that is an
+        // answer rather than a gap being swallowed: the niche allocator is
+        // reserving values no SIBLING CONVERSION can produce, and a crossing
+        // the registry never entered has no conversion to produce one. Spelled
+        // as an explicit `0` — the same answer jnigen's twin gives — so the
+        // reasoning is in the code instead of in a claim that a `filter_map`
+        // silently relied on.
         let demand = registry
-            .type_table(direction)
-            .keys()
-            .map(|candidate| option_depth(candidate, &decl.key))
+            .crossing_keys(direction)
+            .iter()
+            .map(|candidate| {
+                registry
+                    .reading(candidate)
+                    .map_or(0, |reading| option_depth(&reading, &decl.key))
+            })
             .max()
             .unwrap_or(0);
         Niches::from_slots(
@@ -310,7 +322,7 @@ impl Cbindgen {
         )
     }
 
-    fn conversion_fn_path(&self, registry: &Registry<()>, ident: &syn::Ident) -> syn::Path {
+    fn conversion_fn_path(&self, registry: &impl Conversions<()>, ident: &syn::Ident) -> syn::Path {
         let Some(mut module) = registry.origin_module(ident) else {
             return self.src_fn(ident);
         };
@@ -350,17 +362,21 @@ fn fn_ret(item: &syn::ItemFn) -> syn::Type {
     }
 }
 
-fn option_depth(candidate: &TypeKey, target: &TypeKey) -> usize {
-    let mut ty = candidate.to_type();
+/// How many `Option<…>` layers `candidate` puts over `target`, or 0 if it is
+/// not that type under any number of them.
+///
+/// Counted off the **reading**. The optional layers are already what the model
+/// says this type is — `TypeKind::Optional` is produced for exactly `Option<T>`
+/// — so peeling tokens to rediscover them was re-deriving the classification
+/// the registry stored (#291).
+fn option_depth(candidate: &crate::api::core::flat::TypeRef, target: &TypeKey) -> usize {
+    let mut reading = candidate;
     let mut depth = 0;
-    while is_option(&ty) {
-        let Some(inner) = first_type_arg(&ty) else {
-            return 0;
-        };
-        ty = inner;
+    while let Some(inner) = reading.optional_inner() {
+        reading = inner;
         depth += 1;
     }
-    if TypeKey::from_type(&ty) == *target {
+    if reading.key() == *target {
         depth
     } else {
         0

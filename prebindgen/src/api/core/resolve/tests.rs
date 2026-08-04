@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::core::registry::TypeEntry;
 
 /// Regression: when a required type is itself unresolved AND has fields
 /// that are also unresolved, the diagnostic must list both. Previously
@@ -9,31 +10,26 @@ use super::*;
 fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     use crate::api::core::registry::{Registry, TypeKey};
 
-    let mut reg: Registry<()> = Registry::default();
+    // A struct whose field type the build.rs forgot to declare. Registering
+    // `Outer` as a root walks into the field through the model, so `ZKeyExpr`
+    // gets a cell that is NOT a root — exactly the case the BFS is here to
+    // catch. Driven through the real scan rather than simulated, so the state
+    // under test is one the pipeline can actually produce.
+    let mut reg: Registry<()> =
+        crate::api::test_util::scanned_with(&["pub struct Outer { pub inner: ZKeyExpr }"]);
+    let outer = reg
+        .intern(
+            crate::api::core::registry::Direction::Input,
+            &syn::parse_quote!(Outer),
+            true,
+        )
+        .expect("fixture type");
+    reg.require_input(&outer);
 
-    // Index a struct `Outer { inner: ZKeyExpr }` so the BFS can walk
-    // into its field. `ZKeyExpr` itself stays *unindexed* (the user's
-    // build.rs forgot to declare it), but it does appear in the type
-    // tables because scan-recursion would have registered it as a field
-    // of `Outer`. Simulate the post-scan registry state directly.
-    let outer_struct: syn::ItemStruct = syn::parse_str("struct Outer { inner: ZKeyExpr }").unwrap();
-    reg.structs.insert(
-        outer_struct.ident.clone(),
-        (outer_struct, SourceLocation::default()),
-    );
-
-    // `Outer` is a required INPUT, unresolved (slot stays `None`).
-    let outer_key = TypeKey::parse("Outer").expect("test type");
-    reg.input_types.insert(outer_key.clone(), None);
-    reg.required_inputs_scan.insert(outer_key.clone());
-
-    // `ZKeyExpr` is also in the type table (scan recursed into the
-    // field) but unresolved and NOT marked required at scan time —
-    // exactly the case the BFS is here to catch.
     let zke_key = TypeKey::parse("ZKeyExpr").expect("test type");
-    reg.input_types.insert(zke_key.clone(), None);
+    assert!(!reg.input_types[&zke_key].root, "the field is not a root");
 
-    let err = final_invariant_check(&reg).expect_err("must surface unresolved");
+    let err = check_complete(&reg).expect_err("must surface unresolved");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();
@@ -55,32 +51,27 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
 /// that the resolved converter doesn't actually depend on.
 #[test]
 fn final_invariant_stops_at_resolved_nodes() {
-    use crate::{
-        api::core::registry::{Direction, Registry, TypeEntry, TypeKey},
-        SourceLocation as Loc,
-    };
+    use crate::api::core::registry::{Direction, Registry, TypeEntry};
 
-    let mut reg: Registry<()> = Registry::default();
-
-    let outer_struct: syn::ItemStruct = syn::parse_str("struct Outer { inner: Inner }").unwrap();
-    let inner_struct: syn::ItemStruct =
-        syn::parse_str("struct Inner { unused: Unrelated }").unwrap();
-    reg.structs
-        .insert(outer_struct.ident.clone(), (outer_struct, Loc::default()));
-    reg.structs
-        .insert(inner_struct.ident.clone(), (inner_struct, Loc::default()));
+    // Through the real scan, so the state under test is one the pipeline can
+    // actually produce: `Unrelated` is a field type nothing declares.
+    let mut reg: Registry<()> = crate::api::test_util::scanned_with(&[
+        "pub struct Outer { pub inner: Inner }",
+        "pub struct Inner { pub unused: Unrelated }",
+    ]);
 
     // `Outer` required & unresolved; `Inner` RESOLVED (with a dummy
     // entry); `Unrelated` unresolved but only reachable through Inner.
-    let outer_key = TypeKey::parse("Outer").expect("test type");
-    let inner_key = TypeKey::parse("Inner").expect("test type");
-    let unrelated_key = TypeKey::parse("Unrelated").expect("test type");
+    let outer_ty: syn::Type = syn::parse_quote!(Outer);
+    let inner_ty: syn::Type = syn::parse_quote!(Inner);
+    let unrelated_ty: syn::Type = syn::parse_quote!(Unrelated);
 
-    reg.input_types.insert(outer_key.clone(), None);
-    reg.required_inputs_scan.insert(outer_key.clone());
+    reg.insert_crossing(Direction::Input, &outer_ty, true, None);
 
-    reg.input_types.insert(
-        inner_key.clone(),
+    reg.insert_crossing(
+        Direction::Input,
+        &inner_ty,
+        false,
         Some(TypeEntry {
             destination: syn::parse_quote!(i64),
             function: syn::parse_quote!(
@@ -88,15 +79,14 @@ fn final_invariant_stops_at_resolved_nodes() {
             ),
             pre_stages: vec![],
             subs: vec![],
-            required: false,
             niches: crate::api::core::niches::Niches::empty(),
             metadata: (),
         }),
     );
 
-    reg.input_types.insert(unrelated_key.clone(), None);
+    reg.insert_crossing(Direction::Input, &unrelated_ty, false, None);
 
-    let err = final_invariant_check(&reg).expect_err("must surface Outer");
+    let err = check_complete(&reg).expect_err("must surface Outer");
     let ResolveError::Unresolved { entries } = err;
     let reported: std::collections::HashSet<String> =
         entries.iter().map(|e| e.key.to_string()).collect();
@@ -110,4 +100,45 @@ fn final_invariant_stops_at_resolved_nodes() {
         reported
     );
     let _ = Direction::Input; // keep import used
+}
+
+/// A type nothing declares directly, reached only through a resolved converter's
+/// `subs`, must still fail the build when it has no converter of its own.
+///
+/// This is the half of the old `required` flag that is derived rather than
+/// stored: `Mid` is not a root, and only `required_set`'s walk through `Outer`'s
+/// `subs` makes it something a converter must exist for.
+#[test]
+fn a_type_reachable_only_through_subs_must_still_resolve() {
+    use crate::api::core::registry::{Registry, TypeKey};
+
+    let mut reg: Registry<()> = Registry::empty();
+    let outer: syn::Type = syn::parse_quote!(Outer);
+    let mid: syn::Type = syn::parse_quote!(Mid);
+
+    // `Outer` is a root AND resolved — so it is not itself reportable — but its
+    // converter delegates to `Mid`.
+    reg.insert_crossing(
+        Direction::Input,
+        &outer,
+        true,
+        Some(TypeEntry {
+            destination: syn::parse_quote!(i64),
+            function: syn::parse_quote!(
+                fn __outer() {}
+            ),
+            pre_stages: vec![],
+            subs: vec![TypeKey::from_type(&mid)],
+            niches: crate::api::core::niches::Niches::empty(),
+            metadata: (),
+        }),
+    );
+    // `Mid` is present, unresolved, and NOT a root.
+    reg.insert_crossing(Direction::Input, &mid, false, None);
+
+    let err = check_complete(&reg).expect_err("Mid must be reported");
+    let ResolveError::Unresolved { entries } = err;
+    let reported: std::collections::HashSet<String> =
+        entries.iter().map(|e| e.key.to_string()).collect();
+    assert_eq!(reported, ["Mid".to_string()].into_iter().collect());
 }

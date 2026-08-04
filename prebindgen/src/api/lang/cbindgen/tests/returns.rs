@@ -10,13 +10,13 @@ fn result_unit_omits_out_param() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .data_struct(syn::parse_quote!(Error))
@@ -47,13 +47,13 @@ fn result_string_uses_owned_string_wire() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .data_struct(syn::parse_quote!(Error))
@@ -93,10 +93,13 @@ fn option_string_returns_pointer_null_for_none() {
             unimplemented!()
         }
     );
-    let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZEncoding))
@@ -136,13 +139,13 @@ fn result_option_uses_out_param() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZThing))
@@ -183,10 +186,13 @@ fn vec_string_returns_ptr_and_len() {
             unimplemented!()
         }
     );
-    let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZHello))
@@ -231,10 +237,13 @@ fn vec_u8_returns_scalar_array() {
             unimplemented!()
         }
     );
-    let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZZBytes))
@@ -259,10 +268,13 @@ fn cow_u8_returns_scalar_array() {
             unimplemented!()
         }
     );
-    let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZZBytes))
@@ -292,13 +304,13 @@ fn result_vec_uses_out_params() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZThing))
@@ -333,10 +345,13 @@ fn option_vec_uses_present_and_out() {
             unimplemented!()
         }
     );
-    let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZHello))
@@ -371,13 +386,13 @@ fn result_option_vec_full() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZThing))
@@ -412,13 +427,13 @@ fn result_pointer_returns_null_on_error() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))
@@ -450,10 +465,13 @@ fn borrowed_ref_output_is_const_non_owning() {
             unimplemented!()
         }
     );
-    let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_ptr(syn::parse_quote!(ZSample))
         .base_name("z_sample_t")
@@ -488,10 +506,13 @@ fn borrowed_option_ref_output_nullable() {
             unimplemented!()
         }
     );
-    let registry =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_ptr(syn::parse_quote!(ZSample))
         .base_name("z_sample_t")

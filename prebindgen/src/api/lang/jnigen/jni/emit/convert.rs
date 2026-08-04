@@ -1,7 +1,7 @@
 //! Scalar / `Option` / enum converter bodies and their wire probes.
 
 use super::*;
-use crate::api::core::registry::TypeEntry;
+use crate::api::core::registry::{Conversions, TypeEntry};
 
 /// Sentinel value to return through the wrapper signature when the inner
 /// closure errors. Must compile against any wire type we emit.
@@ -243,9 +243,11 @@ pub(crate) fn composed_inner_output(
 /// fails and the resolver falls through to other rank-1 attempts.
 pub(crate) fn option_input(
     t1: &syn::Type,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry.input_entry(t1)?;
+    let inner_entry = registry
+        .reading_of(t1)
+        .and_then(|tr| registry.input_entry(&tr))?;
     let inner_wire = inner_entry.destination.clone();
     let inner_decode = composed_inner_input(inner_entry, quote!(v));
 
@@ -309,9 +311,11 @@ pub(crate) fn option_input(
 /// Build `Option<T>`'s output converter — symmetric to [`option_input`].
 pub(crate) fn option_output(
     t1: &syn::Type,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry.output_entry(t1)?;
+    let inner_entry = registry
+        .reading_of(t1)
+        .and_then(|tr| registry.output_entry(&tr))?;
     let inner_wire = inner_entry.destination.clone();
     let inner_encode = composed_inner_output(inner_entry, quote!(value));
 
@@ -403,8 +407,8 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 /// upstream type a bare `<ident>` resolves to in their include-site
 /// `use` statements. Pairs with output body below.
 pub(crate) fn enum_input_body(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     e: &syn::ItemEnum,
 ) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
@@ -443,7 +447,7 @@ pub(crate) fn enum_input_body(
 /// upstream of the cast. The body works without naming the enum type
 /// at all — `v` is already typed via the wrapper signature, so the
 /// `as` cast picks up the right type by inference.
-pub(crate) fn enum_output_body(_ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
+pub(crate) fn enum_output_body(_ext: &Declarations, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let body: syn::Expr = syn::parse_quote!({ v as jni::sys::jint });
     (syn::parse_quote!(jni::sys::jint), body)
@@ -485,10 +489,11 @@ pub(crate) fn assert_only_unit_variants(e: &syn::ItemEnum) {
 pub(crate) fn nullable_kind_for(
     outer_wire: &syn::Type,
     inner_ty: &syn::Type,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry
-        .input_entry(inner_ty)
+        .reading_of(inner_ty)
+        .and_then(|tr| registry.input_entry(&tr))
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for: Option<_> input handler reached here only after option_input \
@@ -504,10 +509,11 @@ pub(crate) fn nullable_kind_for(
 pub(crate) fn nullable_kind_for_output(
     outer_wire: &syn::Type,
     inner_ty: &syn::Type,
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry
-        .output_entry(inner_ty)
+        .reading_of(inner_ty)
+        .and_then(|tr| registry.output_entry(&tr))
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for_output: Option<_> output handler reached here only after \

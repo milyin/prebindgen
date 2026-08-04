@@ -2,12 +2,12 @@
 //!
 //! `write_rust` collects every resolved input/output converter (each entry
 //! already carries its full `ItemFn`), every per-item `on_<kind>` output,
-//! and every passthrough item; concatenates them; and hands them to
+//! and every anonymous const; concatenates them; and hands them to
 //! `Destination::write` (which does prettyplease formatting and
 //! resolves the path against `OUT_DIR`).
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
@@ -23,9 +23,9 @@ use crate::api::{
 
 /// Errors surfaced by the file-emission phase.
 ///
-/// Binding validation is NOT here — it runs once in [`Registry::resolve`]
+/// Binding validation is NOT here — it runs once in [`Registry::finish`]
 /// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
-/// before a `Generation` exists and never reaches a writer.
+/// before a built generator exists and never reaches a writer.
 #[derive(Debug)]
 pub enum WriteError {
     /// A `TokenStream` produced by an `on_*` trait method failed to parse
@@ -61,7 +61,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     ext: &E,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
-    // Validation already ran ONCE in `Registry::resolve` — a `Generation`
+    // Validation already ran ONCE in the generator's `build` — a built generator
     // (the only source of a resolved registry) is valid by construction, so
     // this writer is a pure emission.
     let mut items: Vec<syn::Item> = Vec::new();
@@ -78,54 +78,71 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 
     // 2. Per-item Rust output from the adapter — only for items the adapter
     //    explicitly declared. Undeclared items were already announced
-    //    via `cargo:warning=` in `Registry::scan_declared`.
-    let declared_fns = ext.declared_functions();
-    let declared_types = ext.declared_types();
+    //    via `cargo:warning=` by the generator's own unclaimed-item report.
+    let declared = registry.declared();
+    let declared_fns = &declared.functions;
+    let declared_types = &declared.types;
+    let flat = registry.flat();
     items.extend(parse_items_from_tokens(
         "on_function",
-        sorted_items_by_ident(&registry.functions)
+        sorted_by_name(flat.functions().map(|f| (&f.name, f)))
             .into_iter()
             .filter(|(ident, _)| declared_fns.contains(*ident))
-            .map(|(_, (item, _))| ext.on_function(item, registry)),
+            .map(|(_, item)| ext.on_function(item, registry)),
     )?);
     items.extend(parse_items_from_tokens(
         "on_struct",
-        sorted_items_by_ident(&registry.structs)
-            .into_iter()
-            .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
-            .map(|(_, (item, _))| ext.on_struct(item, registry)),
+        sorted_by_name(flat.types().filter_map(|t| match t {
+            crate::api::core::flat::Type::Struct(s) => Some((&s.name, s)),
+            _ => None,
+        }))
+        .into_iter()
+        .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
+        .map(|(_, item)| ext.on_struct(item, registry)),
     )?);
+    // Both enum shapes emit through `on_enum` and sort together: they were one
+    // map here before they were two elements. They still SORT together — the
+    // emission order is one sequence — but they dispatch to their own methods
+    // now, because handing an adapter a `Type` it has to re-match is worse than
+    // handing it the element the model already decided on.
     items.extend(parse_items_from_tokens(
         "on_enum",
-        sorted_items_by_ident(&registry.enums)
-            .into_iter()
-            .filter(|(ident, _)| declared_types.contains(&TypeKey::from_ident(ident)))
-            .map(|(_, (item, _))| ext.on_enum(item, registry)),
+        sorted_by_name(flat.types().filter_map(|t| match t {
+            crate::api::core::flat::Type::Variant(v) => Some((&v.name, t)),
+            crate::api::core::flat::Type::Enum(e) => Some((&e.name, t)),
+            _ => None,
+        }))
+        .into_iter()
+        .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
+        .map(|(_, t)| match t {
+            crate::api::core::flat::Type::Variant(v) => ext.on_variant(v, registry),
+            crate::api::core::flat::Type::Enum(e) => ext.on_enum(e, registry),
+            _ => unreachable!("filtered to the two enum shapes above"),
+        }),
     )?);
     // Consts: an adapter WITH a const declaration mechanism
     // (`declared_consts() == Some(set)`) emits declared consts only,
     // symmetric with functions; an adapter without one (`None`) gets every
-    // const passed through verbatim via the default `on_const`. Unnamed
-    // consts (`const _`, e.g. the injected `konst::assertc_eq!` feature
-    // guard) are infrastructure, not declarable API — they bypass the gate
-    // and always emit.
-    let declared_consts = ext.declared_consts();
+    // const passed through verbatim via the default `on_const`. Prebindgen's
+    // own injected feature guards are not consts at all — see the guards loop.
+    let declared_consts = &declared.consts;
     items.extend(parse_items_from_tokens(
         "on_const",
-        sorted_items_by_ident(&registry.consts)
+        sorted_by_name(flat.constants().map(|c| (&c.name, c)))
             .into_iter()
             .filter(|(ident, _)| {
-                *ident == "_"
-                    || declared_consts
-                        .as_ref()
-                        .is_none_or(|set| set.contains(*ident))
+                declared_consts
+                    .as_ref()
+                    .is_none_or(|set| set.contains(*ident))
             })
-            .map(|(_, (item, _))| ext.on_const(item, registry)),
+            .map(|(_, item)| ext.on_const(item, registry)),
     )?);
 
-    // 3. Passthrough items verbatim.
-    for (item, _) in &registry.passthrough {
-        items.push(item.clone());
+    // 3. Anonymous consts, verbatim. Last, and in stream order. Ungated on
+    //    purpose: with no name there is nothing for an adapter to declare, so
+    //    the const gate above cannot apply to them.
+    for guard in flat.guards() {
+        items.push(syn::Item::Const(guard.origin.syntax.clone()));
     }
 
     // 4. Cross-cutting post-process pass. Adapters use this to qualify
@@ -162,20 +179,28 @@ pub fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, sy
 }
 
 fn walk_resolved<M, F: FnMut(&TypeKey, &TypeEntry<M>)>(
-    table: &std::collections::HashMap<TypeKey, Option<TypeEntry<M>>>,
+    table: &std::collections::HashMap<TypeKey, crate::api::core::registry::TypeCell<M>>,
     mut f: F,
 ) {
     let mut keys: Vec<&TypeKey> = table.keys().collect();
     keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
     for key in keys {
-        if let Some(Some(entry)) = table.get(key) {
+        if let Some(entry) = table.get(key).and_then(|c| c.entry.as_ref()) {
             f(key, entry);
         }
     }
 }
 
-fn sorted_items_by_ident<T>(map: &HashMap<syn::Ident, T>) -> Vec<(&syn::Ident, &T)> {
-    let mut items: Vec<(&syn::Ident, &T)> = map.iter().collect();
+/// Name-sorted, because emission order is part of the generated file and the
+/// model is in source order. Was `sorted_items_by_ident` over the registry's
+/// maps; same ordering, read from the one index.
+fn sorted_by_name<'a, T>(
+    items: impl Iterator<Item = (&'a syn::Ident, &'a T)>,
+) -> Vec<(&'a syn::Ident, &'a T)>
+where
+    T: 'a,
+{
+    let mut items: Vec<(&syn::Ident, &T)> = items.collect();
     items.sort_by_key(|(left, _)| left.to_string());
     items
 }

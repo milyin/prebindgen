@@ -1,6 +1,7 @@
 use quote::ToTokens;
 
 use super::*;
+pub(crate) use crate::api::test_util::declare_referenced;
 use crate::{
     api::{
         core::{
@@ -30,6 +31,7 @@ mod consts;
 mod cross_artifact;
 mod flatten;
 mod niches;
+mod phases;
 mod sealed;
 mod snapshots;
 mod symbols;
@@ -54,7 +56,6 @@ fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMe
         function: func,
         pre_stages: vec![],
         subs: vec![],
-        required: false,
         niches,
         metadata: KotlinMeta::default(),
     }
@@ -66,8 +67,8 @@ fn install_input(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    reg.input_types
-        .insert(TypeKey::parse(ty_str).expect("test type"), Some(e));
+    let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
+    reg.insert_crossing(Direction::Input, &ty, true, Some(e));
 }
 
 fn install_output(
@@ -76,6 +77,6 @@ fn install_output(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    reg.output_types
-        .insert(TypeKey::parse(ty_str).expect("test type"), Some(e));
+    let ty: syn::Type = syn::parse_str(ty_str).expect("test type");
+    reg.insert_crossing(Direction::Output, &ty, true, Some(e));
 }

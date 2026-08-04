@@ -1,7 +1,7 @@
 //! Build script generating C bindings for `example-flat` using prebindgen + cbindgen.
 //!
 //! This is a language-specific binding crate. It reads the `#[prebindgen]` items
-//! captured by `example-flat`, runs them through the `prebindgen::lang::Cbindgen`
+//! captured by `example-flat`, runs them through the `prebindgen::lang::CbindgenBuilder`
 //! adapter to produce a Rust file of `extern "C"` wrappers, then runs cbindgen on
 //! that file to produce a C header.
 //!
@@ -65,13 +65,14 @@ fn main() {
 }
 
 /// Generate the Rust FFI bindings from `example-flat`'s prebindgen output via the
-/// `lang::Cbindgen` adapter, and publish the result to `generated/example_flat.rs`.
+/// `lang::CbindgenBuilder` adapter, and publish the result to `generated/example_flat.rs`.
 fn generate_ffi_bindings() -> PathBuf {
     let unstable = std::env::var("CARGO_FEATURE_UNSTABLE").is_ok();
 
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name, so no per-item `.name(...)` is needed.
-    let mut cbindgen = prebindgen::lang::Cbindgen::new()
+    let mut cbindgen = prebindgen::lang::Cbindgen::builder()
+        .source(example_flat::PREBINDGEN_OUT_DIR)
         .source_module(pq!(example_flat))
         // Single universal freer for the `char*` data the layer hands out
         // (the `String` returns). Opaque handles keep their typed `*_drop`.
@@ -212,15 +213,11 @@ fn generate_ffi_bindings() -> PathBuf {
     }
 
     // Reads example-flat's `#[prebindgen]` output straight from its directory.
-    let registry = prebindgen::core::Registry::builder()
-        .source(example_flat::PREBINDGEN_OUT_DIR)
-        .build()
-        .expect("scan prebindgen items");
     // Always written to OUT_DIR under a stable name too, so the commented-out
     // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
-    let out_file = registry
-        .resolve(cbindgen)
-        .expect("resolve prebindgen items")
+    let out_file = cbindgen
+        .build()
+        .expect("build prebindgen items")
         .write_rust("example_flat.rs")
         .expect("write generated bindings");
 

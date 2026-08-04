@@ -1,30 +1,23 @@
-//! `Prebindgen` — the single extension point for the new pipeline.
+//! `Prebindgen` — what a generator still hands the emitter.
 //!
 //! One method per `#[prebindgen]` item kind (`on_function`, `on_struct`,
-//! `on_enum`, `on_const`) returning the wrapper Rust tokens to emit, plus a
-//! pair of structural converter methods split by direction:
+//! `on_enum`, `on_const`) returning the wrapper Rust tokens to emit, plus the
+//! items they depend on (`prerequisites`), a cross-cutting rewrite
+//! (`post_process_item`) and two invariant checks.
 //!
-//! * Input  (wire → rust): `on_input_type`
-//! * Output (rust → wire): `on_output_type`
+//! **Conversion is not here.** A generator builds those itself, against the
+//! demand `RegistryBuilder::crossings` hands it, and gives them back through
+//! `RegistryBuilder::convert_with` — so there is no `on_input_type`, no deferral, and no
+//! fixed-point loop retrying until it converges.
 //!
-//! Each converter method returns `Some(ConverterImpl)` if the adapter handles
-//! the type, or `None` to defer. Deferred types are retried by the fixed-point
-//! resolver and ultimately reported as "unresolved required type" errors if no
-//! converter can fill the cell.
-//!
-//! `ConverterImpl::function` is the **complete** Rust function for the
-//! converter — signature, body, attributes, lifetimes. The adapter owns
-//! 100% of the shape. Other code that wants to call this converter reads
-//! the name from `function.sig.ident`; the wire form from `destination`.
-
-use std::collections::HashSet;
+//! [`ConverterImpl::function`] is the **complete** Rust function for a
+//! converter — signature, body, attributes, lifetimes. The generator owns 100%
+//! of the shape. Callers read the name from `function.sig.ident` and the wire
+//! form from `destination`.
 
 use proc_macro2::TokenStream;
 
-use crate::api::core::{
-    niches::Niches,
-    registry::{Direction, Registry, TypeKey},
-};
+use crate::api::core::{niches::Niches, registry::Registry};
 
 /// A shared predicate over an item name, as used by
 /// [`Prebindgen::ignored_name_predicates`] (bulk ignores keyed on a naming
@@ -109,8 +102,8 @@ pub struct ConverterImpl<M = ()> {
     /// `input_entry`/`output_entry` the adapter looked up to build a wrapper
     /// (`Option<X>` → `[X]`, `Result<T,E>` → `[T, E]`, `&T` → `[&T]`). Empty
     /// for a terminal converter (scalar, opaque handle, string) and for
-    /// `dispatch_fn_input` (callback args are cross-direction — their
-    /// required-ness flows through `Registry::immediate_edges`, not here). The
+    /// a callback's own converter (callback args are cross-direction — their
+    /// required-ness flows through the registry's type-graph edges, not here). The
     /// resolver copies these into `TypeEntry::subs`, which `propagate_required`
     /// walks to mark reachable types required.
     pub subs: Vec<syn::Type>,
@@ -138,14 +131,20 @@ pub fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenS
 /// the language-agnostic [`Registry`] how that language represents Rust types
 /// on the wire and what wrapper code to emit.
 ///
-/// The trait has no language-specific concepts of its own. Two jobs:
-/// * **Type resolution.** The resolver asks `on_input_type` / `on_output_type`
-///   for the wire form of each required type and gets back a [`ConverterImpl`]
-///   (a generated converter fn + its wire type); these fill
-///   `Registry::input_types` / `output_types`.
-/// * **Per-item emission.** The file emitter calls `on_function` / `on_struct`
-///   / `on_enum` / `on_const` to produce the per-item wrapper code for the
-///   destination language.
+/// The trait has no language-specific concepts of its own, and — since the
+/// registry stopped asking it questions — one job left: **per-item emission**.
+/// The file emitter calls `on_function` / `on_struct` / `on_enum` / `on_const`
+/// to produce the per-item wrapper code, plus `prerequisites` and
+/// `post_process_item` around them and the two `validate` hooks for
+/// adapter invariants.
+///
+/// What used to be here and is not any more: which items to build, how
+/// composites decompose, and the wire form of each type. A generator states the
+/// first two into the builder (`RegistryBuilder::export`,
+/// `RegistryBuilder::decompose`)
+/// and answers the third by filling `RegistryBuilder::crossings` — so nothing in
+/// core calls back to ask. Moving emission out too is what would delete this
+/// trait entirely (prebindgen#251 phase E).
 ///
 /// Anything language-specific the rest of the pipeline must carry — a JNI
 /// adapter's Kotlin class names and exception info, a C adapter's header
@@ -174,269 +173,7 @@ pub trait Prebindgen {
         Vec::new()
     }
 
-    /// Constructor-expansion declarations for this adapter, or `None` if it
-    /// doesn't support expansion. Consulted by `write_rust` after scanning and
-    /// before resolution: each `.expand` is resolved into a
-    /// [`crate::api::core::expand::FoldPlan`] on the registry and its leaf
-    /// types are registered as required inputs.
-    ///
-    /// Returned by value so the adapter may assemble it on demand from its
-    /// raw declarations (keeping its builder free of stored derived state);
-    /// it is consulted exactly once per `write_rust`.
-    ///
-    /// Default: `None`.
-    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
-        None
-    }
-
-    /// Output-expansion (deconstructor / converter) declarations for this
-    /// adapter, or `None` if it doesn't support output expansion. Consulted by
-    /// `write_rust` after `expansions` and before resolution: each
-    /// `.deconstruct_output` / `.convert_output` is resolved into a
-    /// [`crate::api::core::unfold::UnfoldPlan`] on the registry and its leaf
-    /// types are registered as required outputs.
-    ///
-    /// Returned by value, same as [`Self::expansions`]. The registry is
-    /// available because a declaration may name a **value form** (an accessor
-    /// returning "this type's fields in one struct") whose fields have to be
-    /// read off the indexed struct to become records.
-    ///
-    /// Default: `None`.
-    fn deconstructors(
-        &self,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<crate::api::core::unfold::Deconstructors> {
-        let _ = registry;
-        None
-    }
-
-    /// Synthesized by-value `data_class` decompositions for this adapter. Each
-    /// names a value struct and its field-access leaves (the adapter knows the
-    /// per-field encoding — projections, enums, nested classes — so it builds
-    /// the leaves; the registry is available so field converters resolve).
-    /// Consulted by `write_rust` right after [`Self::deconstructors`]: each is
-    /// wired by [`crate::api::core::unfold::apply_value_structs`] into a
-    /// fixed-builder [`crate::api::core::unfold::UnfoldPlan`] for every function
-    /// that returns / callbacks the struct, so it crosses the boundary as
-    /// decoupled leaves (reassembled on the foreign side) instead of a Java
-    /// object built on the Rust side.
-    ///
-    /// Default: empty.
-    fn value_struct_decons(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Vec<crate::api::core::unfold::ValueDecon> {
-        Vec::new()
-    }
-
-    /// Synthesized **sum** decompositions for this adapter — the
-    /// selector-carrying sibling of [`Self::value_struct_decons`]. Each names a
-    /// data-carrying enum, its synthesized tag leaf and one leaf group per
-    /// alternative. Consulted by `write_rust` right after
-    /// [`Self::value_struct_decons`]: each is wired by
-    /// [`crate::api::core::unfold::apply_sum_returns`] into a fixed-builder
-    /// [`crate::api::core::unfold::UnfoldPlan`] for every function whose own
-    /// return (or callback argument) IS the sum, so the value crosses as a tag
-    /// plus tag-gated groups and the foreign side picks the live alternative.
-    ///
-    /// Default: empty.
-    fn sum_decons(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Vec<crate::api::core::unfold::SumDecon> {
-        Vec::new()
-    }
-
-    /// Element types the adapter nominates for a **whole-element leaf fold**: a
-    /// `Vec<T>` / `Option<Vec<T>>` return (or `impl Fn(&[T])` callback arg) whose
-    /// element `T` is a single boundary leaf (e.g. a String, a scalar, an
-    /// opaque handle) the foreign side can reassemble from one wire value. The
-    /// single-leaf analog of [`Self::value_struct_decons`]: consulted right after
-    /// it and wired by [`crate::api::core::unfold::apply_leaf_vec_folds`] so the
-    /// collection crosses as decoupled raw leaves folded into a foreign-built list
-    /// instead of a `java.util.ArrayList` built on the Rust side. Multi-field
-    /// `data_class` elements are excluded (they go through
-    /// [`Self::value_struct_decons`]).
-    ///
-    /// Default: empty.
-    fn leaf_vec_fold_elements(&self, _registry: &Registry<Self::Metadata>) -> Vec<syn::Type> {
-        Vec::new()
-    }
-
     // ── Declaration queries ────────────────────────────────────────
-
-    /// Idents of `#[prebindgen]` functions the adapter claims for emission.
-    /// Anything not in this set is left in the registry's `functions`
-    /// map but never scanned for type requirements and never emitted —
-    /// the build prints a `cargo:warning=` line per skip.
-    ///
-    /// Default: empty (strict allowlist; an adapter with no declarations
-    /// emits nothing for functions).
-    fn declared_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// Subset of [`Self::declared_functions`] declared as **read accessors**:
-    /// the parameter composer (constructor expansion) is never applied to them,
-    /// and a decomposer record may only reference one. Adapters without the
-    /// concept return empty (then no fn is treated as an accessor).
-    ///
-    /// Default: empty.
-    fn accessor_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// **Binding-local functions** to synthesize into the registry before
-    /// scanning: `(item, origin module path)` pairs built from
-    /// adapter-declared signatures (there is no `#[prebindgen]` item behind
-    /// them — the fn lives in the binding crate and the generated code calls
-    /// it qualified by `origin`). The item's body is never emitted; only its
-    /// signature is read. A synthesized ident colliding with a real
-    /// `#[prebindgen]` item is a hard resolve error. Adapters without the
-    /// concept return empty.
-    ///
-    /// Default: empty.
-    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
-        Vec::new()
-    }
-
-    /// `#[prebindgen]` functions declared as **methods** of a class, mapping the
-    /// fn ident to its class's canonical [`TypeKey`]. A method's first parameter
-    /// of that class type is the receiver and is excluded from input-flattening
-    /// (it is bound to `this`); the remaining parameters flatten normally.
-    /// Adapters without the concept return empty.
-    ///
-    /// Default: empty.
-    fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
-        std::collections::HashMap::new()
-    }
-
-    /// Idents of `#[prebindgen]` functions the adapter explicitly knows about but
-    /// intentionally does not emit. These suppress the registry's
-    /// "skipping undeclared" warning while still leaving the items out of the
-    /// scan and write pipelines.
-    ///
-    /// Default: empty.
-    fn ignored_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// Bulk form of the `ignored_*` sets: predicates over the item NAME —
-    /// every *undeclared* `#[prebindgen]` item (function, struct/enum, or
-    /// const) whose name matches any predicate is an acknowledged skip (no
-    /// "skipping undeclared" warning). Kind-agnostic by design: prebindgen
-    /// items live in one flat namespace, so a name filter needs no kind. A
-    /// declared item matching a predicate is unaffected (declaration wins),
-    /// and a predicate matching nothing is silent — it is a filter, not a
-    /// claim, so unlike an exact-name ignore there is no "not found"
-    /// warning.
-    ///
-    /// Default: empty.
-    fn ignored_name_predicates(&self) -> Vec<NamePredicate> {
-        Vec::new()
-    }
-
-    /// Idents of `#[prebindgen]` **helper** functions: called from the
-    /// adapter's generated converter bodies rather than exported. No
-    /// extern/wrapper is emitted for them and the "skipping undeclared"
-    /// warning is suppressed; the specific types a helper makes the adapter
-    /// depend on are registered via [`Self::extra_required_types`] (a full
-    /// signature scan would over-require — e.g. an output conversion fn's
-    /// `&T` parameter has no input-direction meaning).
-    ///
-    /// Default: empty.
-    fn helper_functions(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// Extra converter requirements the adapter derives from its own decls
-    /// **with registry access** (e.g. a `convert!` conversion fn's
-    /// other-side type, in the conversion's direction, read from the fn's
-    /// registry signature). Consulted by `write_rust` after the adapter's
-    /// plans are applied and before resolution.
-    ///
-    /// Default: none.
-    fn extra_required_types(
-        &self,
-        _registry: &Registry<Self::Metadata>,
-    ) -> Vec<(Direction, syn::Type)> {
-        Vec::new()
-    }
-
-    /// Idents of `#[prebindgen]` consts the adapter claims for emission.
-    ///
-    /// * `None` (default) — the adapter has **no const declaration
-    ///   mechanism**: every indexed const is re-emitted into the generated
-    ///   Rust via [`Self::on_const`] (a path-alias when
-    ///   [`Self::source_module`] is available, verbatim otherwise), none
-    ///   drives type resolution, and no skip warnings are printed.
-    /// * `Some(set)` — declared-only, symmetric with functions: a declared
-    ///   const's type is scanned as a required **output** type, only
-    ///   declared consts reach [`Self::on_const`], and undeclared ones get
-    ///   a `cargo:warning=` skip line (suppressed via
-    ///   [`Self::ignored_consts`]).
-    fn declared_consts(&self) -> Option<HashSet<syn::Ident>> {
-        None
-    }
-
-    /// Idents of `#[prebindgen]` consts the adapter explicitly knows about
-    /// but intentionally does not emit — suppresses the "skipping
-    /// undeclared" warning. Only meaningful when [`Self::declared_consts`]
-    /// returns `Some`.
-    ///
-    /// Default: empty.
-    fn ignored_consts(&self) -> HashSet<syn::Ident> {
-        HashSet::new()
-    }
-
-    /// Extra types the adapter requires in the **output** direction beyond
-    /// what scanning the declared items discovers — for adapter-synthesized
-    /// values that have no `#[prebindgen]` item to scan (e.g. the declared
-    /// value type of a binding-defined expression constant).
-    ///
-    /// Default: none.
-    fn required_output_types(&self) -> Vec<syn::Type> {
-        Vec::new()
-    }
-
-    /// Canonical keys of types (structs / enums) the adapter claims for
-    /// emission. Matched against `Registry::structs` and `Registry::enums`
-    /// by bare-ident lookup. Anything not in this set is left in the
-    /// registry but never scanned for body type requirements and never
-    /// emitted — the build prints a `cargo:warning=` line per skip.
-    ///
-    /// Default: empty (strict allowlist).
-    fn declared_types(&self) -> HashSet<TypeKey> {
-        HashSet::new()
-    }
-
-    /// Canonical keys of types the adapter explicitly knows about but
-    /// intentionally does not emit. These suppress the registry's
-    /// "skipping undeclared" warning while still leaving the items out of the
-    /// scan and write pipelines.
-    ///
-    /// Default: empty.
-    fn ignored_types(&self) -> HashSet<TypeKey> {
-        HashSet::new()
-    }
-
-    /// Canonical keys of the adapter's **boundary-only** (rust-side-only)
-    /// types: types the adapter converts exclusively through its
-    /// expansion/deconstruction plans — built from ingredients on input,
-    /// decomposed into fields on output — so the value itself never crosses
-    /// the boundary and has no destination-language representation.
-    ///
-    /// `write_rust` treats them as acknowledged (no "skipping undeclared"
-    /// warning) and, after the adapter's plans are applied, drops their
-    /// direct converter requirements in both directions
-    /// ([`crate::api::core::registry::Registry`]'s `unrequire_input` /
-    /// `unrequire_output`) — a direct converter for such a type is genuinely
-    /// not needed and typically cannot resolve.
-    ///
-    /// Default: empty.
-    fn boundary_only_types(&self) -> HashSet<TypeKey> {
-        HashSet::new()
-    }
 
     /// Final post-processing pass applied to every emitted item right
     /// before write. Default: no-op.
@@ -451,7 +188,7 @@ pub trait Prebindgen {
 
     /// Adapter-invariant checks that need registry **signatures** — the
     /// earliest they can run (decl objects are built before any source is
-    /// read). Called by `Registry::resolve` right after the declaration
+    /// read). Called by `RegistryBuilder::validate_with` right after the declaration
     /// scan (so a missing fn has already hard-errored; validate sees only
     /// indexed items) and before plan application. An `Err` aborts the
     /// resolve as `ScanError::AdapterInvariant` with the message verbatim
@@ -459,7 +196,10 @@ pub trait Prebindgen {
     /// receiver parameter of the class type.
     ///
     /// Default: no checks.
-    fn validate(&self, _registry: &Registry<Self::Metadata>) -> Result<(), String> {
+    fn validate(
+        &self,
+        _binding: &crate::api::core::registry::Building<'_, Self::Metadata>,
+    ) -> Result<(), String> {
         Ok(())
     }
 
@@ -488,81 +228,69 @@ pub trait Prebindgen {
     }
 
     // ── Item methods ───────────────────────────────────────────────
+    //
+    // Each takes the **element**, not the `syn` item it was parsed from.
+    //
+    // The element is the model's own node: its types are `TypeRef`s, already
+    // classified. An adapter handed one therefore cannot ask what a type means
+    // and be told "no reading" — the question a `&syn::ItemFn` forced it to ask
+    // the registry, and which answered wrongly for a type that never entered
+    // the pipeline (#275). What generated Rust must *spell* is still exactly
+    // available, on `origin.syntax`: classify off `kind`, spell off `syntax`.
 
     /// Wrap a `#[prebindgen]` fn into the destination-language wrapper
     /// (e.g. JNI `extern "C"` fn).
-    fn on_function(&self, f: &syn::ItemFn, registry: &Registry<Self::Metadata>) -> TokenStream;
+    fn on_function(
+        &self,
+        f: &crate::api::core::flat::Function,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
 
     /// Per-struct emission. Typically empty for languages that get
     /// everything they need from auto-generated converters.
-    fn on_struct(&self, s: &syn::ItemStruct, registry: &Registry<Self::Metadata>) -> TokenStream;
+    fn on_struct(
+        &self,
+        s: &crate::api::core::flat::Struct,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
 
-    /// Per-enum emission.
-    fn on_enum(&self, e: &syn::ItemEnum, registry: &Registry<Self::Metadata>) -> TokenStream;
+    /// Per-sum emission — an `enum` whose alternatives carry payloads.
+    ///
+    /// Separate from [`Self::on_enum`] because the model separates them: the
+    /// two are numbered differently and consumed as different constructs. An
+    /// adapter with nothing to say about one shape returns an empty stream, as
+    /// both in-tree adapters do for both.
+    fn on_variant(
+        &self,
+        v: &crate::api::core::flat::Variant,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
+
+    /// Per-enum emission — the fieldless shape, a named set of integers.
+    fn on_enum(
+        &self,
+        e: &crate::api::core::flat::Enum,
+        registry: &Registry<Self::Metadata>,
+    ) -> TokenStream;
 
     /// Per-const emission. Default: a named const re-emits as a path-alias
     /// (see [`const_path_alias`]) when [`Self::source_module`] is available —
     /// initializer tokens are never copied, so a const whose initializer
     /// references source-crate internals stays valid in the generated file.
-    /// Unnamed `const _` items (self-contained infrastructure guards, e.g.
-    /// the injected `konst::assertc_eq!` feature check) and adapters without
-    /// a source module pass through verbatim.
-    fn on_const(&self, c: &syn::ItemConst, _registry: &Registry<Self::Metadata>) -> TokenStream {
+    /// An adapter without a source module passes the const through verbatim.
+    ///
+    /// A const reaching here is always named: prebindgen's own injected feature
+    /// checks are [`Guard`](crate::api::core::flat::Guard)s, not consts, so this
+    /// never has to recognise one.
+    fn on_const(
+        &self,
+        c: &crate::api::core::flat::Constant,
+        _registry: &Registry<Self::Metadata>,
+    ) -> TokenStream {
         use quote::ToTokens;
         match self.source_module() {
-            Some(m) if c.ident != "_" => const_path_alias(c, m),
-            _ => c.to_token_stream(),
+            Some(m) => const_path_alias(&c.origin.syntax, m),
+            None => c.origin.syntax.to_token_stream(),
         }
-    }
-
-    // ── Structural type resolution (the converter-resolution surface) ──
-
-    /// Resolve the **input** (wire → rust) converter for `ty`. The adapter
-    /// inspects `ty`'s outermost structure itself (peeling with
-    /// `core::types_util` helpers) and returns either a *terminal* converter
-    /// (`ConverterImpl::subs` empty) or a *wrapper* that looked up inner
-    /// converters via [`Registry::input_entry`] (listing those inners in
-    /// `subs`). Return `None` to **defer** — when an inner isn't resolved yet
-    /// the resolver retries on a later fixed-point iteration.
-    fn on_input_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    /// Resolve the **output** (rust → wire) converter for `ty`. The dual of
-    /// [`Self::on_input_type`]; same terminal-vs-wrapper / `subs` / defer
-    /// contract, looking up inners via [`Registry::output_entry`].
-    fn on_output_type(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    /// Build the wrapper converter for an
-    /// `impl Fn(args...) + Send + Sync + 'static` parameter, given the
-    /// already-extracted arg types in declaration order. The resolver calls
-    /// this only after [`Self::on_input_type`] returns `None`, so wrappers that
-    /// need custom callback dispatch can intercept earlier and skip this path.
-    ///
-    /// `args` are the rust-side argument types as they appear in the source
-    /// signature. Note that callback args flow inverse to the callback
-    /// parameter itself: the callback parameter is *input*, but its args are
-    /// produced by the rust side and consumed by the foreign side, so they are
-    /// *output* direction for converter resolution. The framework handles this
-    /// direction-flip at registration time (`register_type_inner` in
-    /// `core::registry`), so implementations of this method should look up
-    /// already-registered *output* converters for each arg type. The returned
-    /// `ConverterImpl::subs` should be empty — the callback-arg required-ness
-    /// flows through that direction-flipped `immediate_edges`, not `subs`.
-    ///
-    /// Default: `None`. Adapters that support `impl Fn` callbacks override this.
-    fn dispatch_fn_input(
-        &self,
-        args: &[syn::Type],
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>> {
-        let _ = (args, registry);
-        None
     }
 }

@@ -10,9 +10,12 @@ fn function_name_renames_symbol() {
             unimplemented!()
         }
     );
-    let reg =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
-    let cb = Cbindgen::new()
+    let reg = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
+    let cb = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(rust_init))
         .base_name("z_init");
@@ -27,7 +30,7 @@ fn function_name_renames_symbol() {
 #[test]
 fn error_after_ptr_struct_panics() {
     assert!(catch(|| {
-        let _ = Cbindgen::new()
+        let _ = CbindgenBuilder::new()
             .opaque_ptr(syn::parse_quote!(ZKeyExpr))
             .error();
     }));
@@ -36,7 +39,7 @@ fn error_after_ptr_struct_panics() {
 #[test]
 fn panic_after_data_struct_panics() {
     assert!(catch(|| {
-        let _ = Cbindgen::new()
+        let _ = CbindgenBuilder::new()
             .data_struct(syn::parse_quote!(Error))
             .panic();
     }));
@@ -47,7 +50,7 @@ fn name_with_no_declaration_panics() {
     // `source_module` is a root modifier — it resets the current declaration,
     // so a trailing `.base_name()` has nothing to apply to.
     assert!(catch(|| {
-        let _ = Cbindgen::new()
+        let _ = CbindgenBuilder::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .base_name("x");
     }));
@@ -56,7 +59,7 @@ fn name_with_no_declaration_panics() {
 #[test]
 fn function_and_ignore_function_conflict_panics() {
     assert!(catch(|| {
-        let _ = Cbindgen::new()
+        let _ = CbindgenBuilder::new()
             .function(syn::parse_quote!(z_open))
             .ignore_function(syn::parse_quote!(z_open));
     }));
@@ -65,7 +68,7 @@ fn function_and_ignore_function_conflict_panics() {
 #[test]
 fn data_struct_and_ignore_type_conflict_panics() {
     assert!(catch(|| {
-        let _ = Cbindgen::new()
+        let _ = CbindgenBuilder::new()
             .data_struct(syn::parse_quote!(Error))
             .ignore_type(syn::parse_quote!(Error));
     }));
@@ -81,14 +84,14 @@ fn free_memory_function_required() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
     // String output (and an Error with a String field) but no free fn declared.
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .data_struct(syn::parse_quote!(Error))
         .base_name("z_error")
@@ -96,8 +99,8 @@ fn free_memory_function_required() {
         .function(syn::parse_quote!(z_describe));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = registry
-            .resolve(cbindgen)
+        let _ = cbindgen
+            .build_with(registry)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nofree.rs")));
     }));
     assert!(
@@ -122,13 +125,13 @@ fn manglers_generate_all_names() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .free_memory_function("z_free")
         // One base rule fixes the `KeyExpr`→`keyexpr` irregular in a single
@@ -211,9 +214,12 @@ fn qualified_signature_spelling_matches_bare_opaque_ptr() {
             unimplemented!()
         }
     );
-    let reg =
-        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
-    let cb = Cbindgen::new()
+    let reg = crate::api::test_util::reg_from_items(declare_referenced([(
+        syn::Item::Fn(func),
+        loc.clone(),
+    )]))
+    .expect("index items");
+    let cb = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .opaque_ptr(syn::parse_quote!(ZKeyExpr))
         .function(syn::parse_quote!(z_keyexpr_len))
@@ -244,13 +250,13 @@ fn enum_mirror_preserves_the_source_discriminant_domain() {
             unimplemented!()
         }
     );
-    let registry = Registry::<()>::from_items([
+    let registry = crate::api::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(e), loc.clone()),
         (syn::Item::Fn(f), loc.clone()),
-    ])
+    ]))
     .expect("index items");
 
-    let cbindgen = Cbindgen::new()
+    let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
         .mangle_type_name(|base| format!("{base}_t"))
         .enum_type(syn::parse_quote!(Wide))

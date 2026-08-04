@@ -1,6 +1,6 @@
-//! `KotlinExt` impl for [`JniGen`].
+//! `KotlinExt` impl for [`Declarations`].
 //!
-//! [`JniGen::write_kotlin`] is the single entry point for every Kotlin
+//! [`Declarations::write_kotlin`] is the single entry point for every Kotlin
 //! file the JNI back-end emits. Each per-kind emitter builds in-memory
 //! [`kt::KtFile`] *model fragments* (declarations, not strings — the
 //! generator module `api::gen::kotlin` owns formatting and imports):
@@ -23,18 +23,21 @@
 //! Every `#[prebindgen]` function must be assigned a Kotlin home — as a
 //! class member (`.method`/`.constructor` on a class decl) or a free function
 //! (`PackageDecl::fun`). Undeclared functions are skipped with a build
-//! warning (`Registry::scan_declared`); there is no "orphan" bucket.
+//! warning (the generator's unclaimed-item report); there is no "orphan" bucket.
 
 use super::*;
-use crate::api::gen::{
-    kotlin as kt,
-    kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
+use crate::api::{
+    core::registry::Conversions,
+    gen::{
+        kotlin as kt,
+        kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
+    },
 };
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
 ///
-/// Consumed by [`JniGen::write_typed_handles`] (and forwarded to
-/// [`JniGen::write_jni_wrappers`] so the same promotion list can carve
+/// Consumed by [`Declarations::write_typed_handles`] (and forwarded to
+/// [`Declarations::write_jni_wrappers`] so the same promotion list can carve
 /// the matching skip-list). Each entry says "this Kotlin class is the
 /// home for the named `#[prebindgen]` functions"; everything else stays
 /// in the catch-all `JNIWrappers` object.
@@ -51,7 +54,7 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
-impl crate::api::core::Generation<JniGen> {
+impl super::JniGen {
     /// Unified Kotlin emission — the JNI adapter's second artifact,
     /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
     /// builds in-memory [`kt::KtFile`] model fragments; they are merged
@@ -64,20 +67,21 @@ impl crate::api::core::Generation<JniGen> {
     /// `write_rust`. Returns every path written (one per non-empty
     /// package).
     pub fn write_kotlin(&self, kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        self.adapter().write_kotlin(self.registry(), kotlin_root)
+        self.declarations()
+            .write_kotlin(self.registry(), kotlin_root)
     }
 }
 
-impl JniGen {
+impl Declarations {
     /// Kotlin emission body — the public entry point is
-    /// `Generation::<JniGen>::write_kotlin`, which guarantees the registry
+    /// `JniGen::write_kotlin`, which guarantees the registry
     /// was resolved first.
     pub(crate) fn write_kotlin(
         &self,
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // Validation already ran once in `Registry::resolve` — this emitter
+        // Validation already ran once in `RegistryBuilder::build` — this emitter
         // is a pure consumer of the resolved, validated registry.
         let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
@@ -419,37 +423,6 @@ impl JniGen {
     }
 }
 
-/// Kotlin property name of one sum payload field: a named field keeps its
-/// (camelCased) name, a tuple field becomes `v0`, `v1`, …. Derived from the
-/// neutral [`SumField`](crate::api::core::types_util::SumField)'s `member`,
-/// so core's leaf naming and the Kotlin surface cannot drift apart.
-fn sum_field_property_name(field: &crate::api::core::types_util::SumField) -> String {
-    match &field.member {
-        syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
-        syn::Member::Unnamed(i) => format!("v{}", i.index),
-    }
-}
-
-/// Slot name of one variant field in the flattened `fromParts` signature:
-/// `<variantCamel>_<property>` (`periodicQueries_period`, `pair_v0`) — the
-/// existing nested-prefix convention, with `_` marking the variant boundary
-/// exactly as core's `<variant_snake>_<field>` leaf names do.
-///
-/// Keyed on the **Kotlin** variant class name, not the Rust ident, so a
-/// `variant!(V).name(...)` rename carries through to the slots and the
-/// emitted surface stays self-consistent.
-fn sum_slot_name(kotlin_variant: &str, property: &str) -> String {
-    // The variant class name is PascalCase; lower its first character so the
-    // slot reads as an ordinary Kotlin parameter (`PeriodicQueries` →
-    // `periodicQueries_period`).
-    let mut chars = kotlin_variant.chars();
-    let head: String = match chars.next() {
-        Some(c) => c.to_lowercase().collect(),
-        None => String::new(),
-    };
-    format!("{head}{}_{property}", chars.as_str())
-}
-
 /// Owned counterpart of [`TypedHandle`] — used internally so the
 /// `collect_typed_handles` helper doesn't have to hand out borrows of
 /// `self.types`.
@@ -459,7 +432,7 @@ pub(crate) struct OwnedTypedHandle {
     pub key: TypeKey,
 }
 
-impl JniGen {
+impl Declarations {
     /// Emit one Kotlin `enum class` file per `enum_class`-declared type.
     /// Variants render in declaration order using SCREAMING_SNAKE_CASE names; the
     /// constructor stores the Rust discriminant value (or the ordinal as
@@ -483,16 +456,11 @@ impl JniGen {
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
-            // Look up the syn::ItemEnum by the type-key's bare ident.
-            let ty = key.to_type();
-            let Some(ident) = (if let syn::Type::Path(tp) = &ty {
-                tp.path.segments.last().map(|s| s.ident.clone())
-            } else {
-                None
-            }) else {
+            // Look up the syn::ItemEnum by the type-key's own short name.
+            let Some(name) = key.short_name() else {
                 continue;
             };
-            let Some((item_enum, _)) = registry.enums.get(&ident) else {
+            let Some(item_enum) = registry.flat().enum_item(&name) else {
                 continue;
             };
             let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
@@ -514,8 +482,8 @@ impl JniGen {
     /// Emit one Kotlin `sealed interface` per `sealed_class`-declared type —
     /// the surface of a sum where the target language has sums natively.
     ///
-    /// The shape follows the neutral
-    /// [`SumSpec`](crate::api::core::types_util::SumSpec) directly: a variant
+    /// The shape follows the model's own
+    /// [`Variant`](crate::api::core::flat::Variant) directly: an alternative
     /// with an empty leaf group becomes a `data object`, one with a payload a
     /// `data class`, both **nested inside** the interface so variant names
     /// cannot collide package-wide. The `fromParts(tag, …slots)` companion is
@@ -530,8 +498,6 @@ impl JniGen {
         &self,
         registry: &Registry<KotlinMeta>,
     ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
-        use crate::api::core::types_util::{enum_shape, EnumShape, SumSpec};
-
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -544,15 +510,20 @@ impl JniGen {
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
-            let ty = key.to_type();
-            let Some(ident) = bare_path_ident(&ty) else {
+            let Some(ident) = key.ident() else {
                 continue;
             };
-            let Some((item_enum, _)) = registry.enums.get(&ident) else {
-                continue;
-            };
+            // The sum as the MODEL holds it: its alternatives' payloads are
+            // `TypeRef`s, so the Kotlin type of one asks nothing and cannot be
+            // asked about a type the model never saw.
+            //
+            // A FIELDLESS enum is `Type::Enum`, not `Type::Variant` — the model
+            // already draws the distinction this arm used to re-derive with
+            // `enum_shape`. It is a declaration error rather than a skip, so it
+            // keeps its diagnosis; only the source of the answer changed.
+            let declared = registry.flat().declared_type(&ident);
             assert!(
-                enum_shape(item_enum) == EnumShape::Sum,
+                matches!(declared, Some(crate::api::core::flat::Type::Variant(_))),
                 "`{}` has no payload variants: declare it with `enum_class!({})`, not \
                  `sealed_class!({})` — a fieldless enum crosses as a bare discriminant and \
                  needs no sealed hierarchy",
@@ -560,13 +531,15 @@ impl JniGen {
                 ident,
                 ident
             );
+            let Some(crate::api::core::flat::Type::Variant(sum)) = declared else {
+                unreachable!("asserted just above")
+            };
 
-            let spec = SumSpec::from_item_enum(item_enum);
             // Every declared `.variant(...)` must name a real variant —
             // a typo would otherwise silently do nothing.
             for declared in sum_cfg.variant_names.keys() {
                 assert!(
-                    spec.variants.iter().any(|v| v.ident == declared),
+                    sum.alternatives.iter().any(|a| a.name == *declared),
                     "sealed_class!({ident}): variant!({declared}) does not name a variant of \
                      `{ident}`"
                 );
@@ -576,8 +549,7 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            let mut class =
-                self.build_sealed_class(registry, &class_name, item_enum, &spec, sum_cfg);
+            let mut class = self.build_sealed_class(registry, &class_name, sum, sum_cfg);
             let mut file = kt::KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
@@ -598,10 +570,13 @@ impl JniGen {
         &self,
         registry: &Registry<KotlinMeta>,
         class_name: &str,
-        item_enum: &syn::ItemEnum,
-        spec: &crate::api::core::types_util::SumSpec,
+        sum: &crate::api::core::flat::Variant,
         sum_cfg: &SumConfig,
     ) -> KtClass {
+        // Everything below comes off the element: `alternatives` for the
+        // classes, `Field::member()` for the property names. The docs and the
+        // framework line are spelling, so they read `origin.syntax`.
+        let item_enum = &sum.origin.syntax;
         let framework_line = format!(
             "JVM-side surface for the native Rust `{}` sum: exactly one alternative is live.",
             item_enum.ident
@@ -615,28 +590,23 @@ impl JniGen {
             .kdoc(kdoc);
 
         // Nested variant classes, in declaration (tag) order.
-        for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
-            let mut vclass = if variant.is_unit() {
+        for alt in &sum.alternatives {
+            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
+            let mut vclass = if alt.is_empty() {
                 KtClass::new(ClassKind::DataObject, &vname)
             } else {
                 KtClass::new(ClassKind::Data, &vname)
             }
             .vis(Vis::Public)
             .supertype(KtType::cls(class_name), None);
-            if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_variant.attrs) {
+            if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&alt.origin.syntax.attrs)
+            {
                 vclass = vclass.kdoc(doc);
             }
             let mut vprops: Vec<(String, KtType)> = Vec::new();
-            for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
-                let prop = sum_field_property_name(field);
-                let ty = self.sum_payload_kt_type(
-                    registry,
-                    item_enum,
-                    &variant.ident,
-                    &prop,
-                    item_field,
-                );
+            for field in &alt.fields {
+                let prop = sum_field_prop_name(&field.member());
+                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
                 vprops.push((prop.clone(), ty.clone()));
                 vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
             }
@@ -659,35 +629,31 @@ impl JniGen {
             .annotation("JvmStatic")
             .param(KtParam::new("tag", KtType::int()))
             .returns(KtType::cls(class_name));
-        for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
-            for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
-                let prop = sum_field_property_name(field);
-                let ty = self.sum_payload_kt_type(
-                    registry,
-                    item_enum,
-                    &variant.ident,
-                    &prop,
-                    item_field,
-                );
-                factory = factory.param(KtParam::new(sum_slot_name(&vname, &prop), ty));
+        for alt in &sum.alternatives {
+            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
+            for field in &alt.fields {
+                let prop = sum_field_prop_name(&field.member());
+                let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
+                factory = factory.param(KtParam::new(sum_slot_fragment(&vname, &prop), ty));
             }
         }
         let mut body = Code::new();
         body = body.blk("when (tag) {", |mut w| {
-            for variant in &spec.variants {
-                let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
-                let args: Vec<String> = variant
+            for alt in &sum.alternatives {
+                let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
+                let args: Vec<String> = alt
                     .fields
                     .iter()
-                    .map(|f| sum_slot_name(&vname, &sum_field_property_name(f)))
+                    .map(|f| sum_slot_fragment(&vname, &sum_field_prop_name(&f.member())))
                     .collect();
-                let ctor = if variant.is_unit() {
+                let ctor = if alt.is_empty() {
                     vname
                 } else {
                     format!("{vname}({})", args.join(", "))
                 };
-                w = w.line(format!("{} -> {ctor}", variant.tag));
+                // The same tag the selector leaf carries — a `when` arm that
+                // disagreed with the wire value would simply never match.
+                w = w.line(format!("{} -> {ctor}", sum_tag(alt)));
             }
             w.line(format!(
                 "else -> throw IllegalArgumentException(\"{class_name}: invalid tag $tag\")"
@@ -776,24 +742,23 @@ impl JniGen {
     fn sum_payload_kt_type(
         &self,
         registry: &Registry<KotlinMeta>,
-        item_enum: &syn::ItemEnum,
+        sum_name: &syn::Ident,
         variant: &syn::Ident,
         prop: &str,
-        field: &syn::Field,
+        field: &crate::api::core::flat::Field,
     ) -> KtType {
-        let where_ = || {
-            format!(
-                "sealed_class!({}) payload `{variant}.{prop}`",
-                item_enum.ident
-            )
-        };
+        // The field's own reading: the nullability question below is answered
+        // from `kind`, so a wrapped spelling answers as the bare one does and
+        // nothing is looked up (#275).
+        let field_ty = field.ty.syntax();
+        let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
         let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
             panic!(
                 "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
                  cannot be derived — register converters for the payload type before \
                  declaring the sealed class",
                 where_(),
-                field.ty.to_token_stream(),
+                field_ty.to_token_stream(),
             )
         });
 
@@ -812,7 +777,7 @@ impl JniGen {
             panic!(
                 "{}: `{}` has no Kotlin type mapping on its output converter",
                 where_(),
-                field.ty.to_token_stream(),
+                field_ty.to_token_stream(),
             )
         });
         // The input side must agree on WHICH TYPE the property is — Kotlin
@@ -845,7 +810,7 @@ impl JniGen {
                      type (`{}` in, `{}` out) — a sealed class's properties are read by both \
                      directions, so they must map to one type",
                     where_(),
-                    field.ty.to_token_stream(),
+                    field_ty.to_token_stream(),
                     in_ty,
                     ty,
                 );
@@ -856,7 +821,7 @@ impl JniGen {
         // field — the Kotlin type must match that slot. Read from the same
         // entry the type came from.
         let primitive_wire = crate::api::lang::jnigen::jni::is_jni_primitive(&out.destination);
-        if is_option_type(&field.ty) && !primitive_wire {
+        if field.ty.optional_inner().is_some() && !primitive_wire {
             ty.nullable()
         } else {
             ty
@@ -885,15 +850,10 @@ impl JniGen {
                 continue;
             };
 
-            let ty = key.to_type();
-            let Some(ident) = (if let syn::Type::Path(tp) = &ty {
-                tp.path.segments.last().map(|s| s.ident.clone())
-            } else {
-                None
-            }) else {
+            let Some(name) = key.short_name() else {
                 continue;
             };
-            let Some((item_struct, _)) = registry.structs.get(&ident) else {
+            let Some(item_struct) = registry.flat().struct_type(&name) else {
                 continue;
             };
 
@@ -901,8 +861,8 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            if item_struct.ident != class_name {
-                aliases.push((item_struct.ident.to_string(), class_name.clone()));
+            if item_struct.name != class_name {
+                aliases.push((item_struct.name.to_string(), class_name.clone()));
             }
             let mut class = build_data_class(self, &class_name, item_struct, registry);
             // The data class is self-contained (property/factory types +
@@ -921,7 +881,7 @@ impl JniGen {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
             for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
-                if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
                         item_fn,
@@ -951,7 +911,7 @@ impl JniGen {
                     .map(|c| *c)
                     .unwrap_or_else(|| KtClass::companion_object().vis(Vis::Public));
                 for m in ctors {
-                    if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                    if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
                         if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                             self,
                             item_fn,
@@ -1038,7 +998,7 @@ impl JniGen {
         // A decomposition is a sum's when it carries the synthesized selector.
         let is_sum = |d: &DeconId| {
             registry
-                .decon_plans
+                .decon_plans()
                 .get(d)
                 .is_some_and(|p| is_sum_leaves(&p.leaves))
         };
@@ -1067,19 +1027,21 @@ impl JniGen {
             .collect();
         for ident in &declared_idents {
             {
-                let Some((item_fn, _loc)) = registry.functions.get(ident) else {
+                // The ELEMENT, so the callback params come off the model's own
+                // classification rather than a second walk of the bounds.
+                let Some(func) = registry.flat().function(&ident) else {
                     continue;
                 };
-                for input in &item_fn.sig.inputs {
-                    let syn::FnArg::Typed(pt) = input else {
-                        continue;
-                    };
-                    if let Some(cb_args) = extract_fn_trait_args(&pt.ty) {
-                        uses.insert(SpecKey::callback(&cb_args));
+                let item_fn = &func.origin.syntax;
+                for p in &func.params {
+                    if let Some(cb_args) = p.ty.callback_args() {
+                        let arg_tys: Vec<syn::Type> =
+                            cb_args.iter().map(|a| a.syntax().clone()).collect();
+                        uses.insert(SpecKey::callback(&arg_tys));
                     }
                 }
                 if let Some(plan) = registry
-                    .unfold_plans
+                    .unfold_plans()
                     .get(&item_fn.sig.ident)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
@@ -1097,7 +1059,7 @@ impl JniGen {
                         _ => {}
                     }
                 }
-                match registry.error_plans.get(&item_fn.sig.ident) {
+                match registry.error_plans().get(&item_fn.sig.ident) {
                     Some(ep) => {
                         let d = ep
                             .decon
@@ -1115,7 +1077,7 @@ impl JniGen {
         uses.into_iter()
             .filter_map(|u| {
                 // Every spec comes from the SAME memo the wrappers and the
-                // resolve-time trampoline read ([`JniGen::iface_spec`]) —
+                // resolve-time trampoline read ([`Declarations::iface_spec`]) —
                 // this site only classifies the extras: `is_error` ⇒ also
                 // emit the zero-alloc capture holder used by the generated
                 // wrappers' error channel; `fixed` carries a
@@ -1237,7 +1199,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let source = &registry.decon_plans[decon].source;
+        let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
@@ -1280,7 +1242,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let source = &registry.decon_plans[decon].source;
+        let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
@@ -1335,7 +1297,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let plan = &registry.decon_plans[decon];
+        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
@@ -1374,7 +1336,7 @@ impl JniGen {
         spec: &crate::api::lang::jnigen::jni::IfaceSpec,
         decon: &crate::api::core::unfold::DeconId,
     ) -> kt::KtDecl {
-        let plan = &registry.decon_plans[decon];
+        let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
@@ -1417,15 +1379,13 @@ impl JniGen {
     /// its variant-constructor argument by [`Self::sum_ctor_arg`].
     pub(crate) fn sum_reconstruct(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         source: &syn::Type,
         leaves: &[crate::api::core::unfold::UnfoldLeaf],
         params: &[crate::api::lang::jnigen::jni::IfaceParam],
         names: &[String],
         imports: &mut BTreeSet<String>,
     ) -> (String, String) {
-        use crate::api::core::types_util::SumSpec;
-
         let key = TypeKey::from_type(source);
         let iface_fqn = self
             .kotlin_fqn(&key)
@@ -1433,32 +1393,36 @@ impl JniGen {
         let iface_short = register_fqn(&iface_fqn, imports);
         let ident = bare_path_ident(source)
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
-        let (item_enum, _) = registry
-            .enums
-            .get(&ident)
-            .unwrap_or_else(|| panic!("sum builder: no indexed enum `{ident}`"));
+        let Some(crate::api::core::flat::Type::Variant(sum)) =
+            registry.flat().declared_type(&ident)
+        else {
+            panic!("sum builder: `{ident}` is not an indexed sum")
+        };
         let sum_cfg = self.types[&key]
             .sum()
             .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
-        let spec = SumSpec::from_item_enum(item_enum);
         let tag = &names[0];
 
         let mut arms: Vec<String> = Vec::new();
-        for variant in &spec.variants {
-            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+        for alt in &sum.alternatives {
+            let group = sum_tag(alt);
+            let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
             let args: Vec<String> = leaves
                 .iter()
                 .zip(params)
                 .zip(names)
-                .filter(|((l, _), _)| l.group == Some(variant.tag))
+                .filter(|((l, _), _)| l.group == Some(group))
                 .map(|((l, p), n)| self.sum_ctor_arg(registry, l, p, n, imports))
                 .collect();
+            // Kotlin has no `B()` / `B {}` distinction to keep: a payload-less
+            // alternative is a `data object`, named bare. The Rust side is where
+            // the delimiters matter, and `Alternative::spell` owns them there.
             let ctor = if args.is_empty() {
                 format!("{iface_short}.{vname}")
             } else {
                 format!("{iface_short}.{vname}({})", args.join(", "))
             };
-            arms.push(format!("{} -> {ctor}", variant.tag));
+            arms.push(format!("{group} -> {ctor}"));
         }
         // A NULLABLE selector carries the absent case of a conditional value
         // form: null in means null out. Without this arm the `when` would fall
@@ -1491,13 +1455,15 @@ impl JniGen {
     ///    verbatim.
     fn sum_ctor_arg(
         &self,
-        registry: &Registry<KotlinMeta>,
+        registry: &impl Conversions<KotlinMeta>,
         leaf: &crate::api::core::unfold::UnfoldLeaf,
         param: &crate::api::lang::jnigen::jni::IfaceParam,
         name: &str,
         imports: &mut BTreeSet<String>,
     ) -> String {
-        let optional = is_option_type(&leaf.out_ty);
+        // Off the leaf's own reading — no lookup, and a wrapped spelling
+        // answers as the bare one does.
+        let optional = leaf.out_ty.optional_inner().is_some();
         let arg = if param.raw.is_nullable() && !optional {
             format!("{name}!!")
         } else {
@@ -1507,10 +1473,12 @@ impl JniGen {
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        if self.is_kotlin_enum(&enum_probe_type(&leaf.out_ty)) {
-            let inner = option_inner_type(&leaf.out_ty).unwrap_or_else(|| leaf.out_ty.clone());
+        if self.is_kotlin_enum_reading(&leaf.out_ty) {
+            // The `Option` layer peeled off the model, so the entry lookup takes
+            // the layer's own reading instead of a spelling to look back up.
+            let inner = leaf.out_ty.optional_inner().unwrap_or(&leaf.out_ty);
             let name = registry
-                .output_entry(&inner)
+                .output_entry(inner)
                 .and_then(|e| e.metadata.kotlin_name.clone())
                 .and_then(|t| t.leaf_name().map(str::to_string))
                 .unwrap_or_else(|| {
@@ -1577,9 +1545,9 @@ impl JniGen {
         let mut file = kt::KtFile::new(&package);
         let mut imports: BTreeSet<String> = BTreeSet::new();
         for entry in &pkg_cfg.functions {
-            let (item_fn, _loc) = registry
-                .functions
-                .get(&entry.rust_ident)
+            let item_fn = &registry
+                .flat()
+                .function(&entry.rust_ident)
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: function `{}` registered via .function(...) is \
@@ -1601,15 +1569,18 @@ impl JniGen {
         // Declared consts: a private nullary helper + the public
         // lazily-initialized `val` (see `render_const_val`).
         for entry in &pkg_cfg.constants {
-            let (item_const, _loc) = registry.consts.get(&entry.rust_ident).unwrap_or_else(|| {
-                panic!(
-                    "write_jni_package: const `{}` registered via .constant(...) is \
+            let item_const = registry
+                .flat()
+                .constant(&entry.rust_ident)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "write_jni_package: const `{}` registered via .constant(...) is \
                      not in the prebindgen registry — check the spelling against the \
                      matching `#[prebindgen]` Rust const name.",
-                    entry.rust_ident,
-                )
-            });
-            reject_handle_const(self, item_const);
+                        entry.rust_ident,
+                    )
+                });
+            reject_handle_const(self, &item_const.origin.syntax);
             if let Some((helper, prop)) = render_const_val(
                 self,
                 &package,
@@ -1626,9 +1597,9 @@ impl JniGen {
         // `val` (see `render_constant_fn_val`). The JNINative extern and the
         // Rust wrapper are the plain declared-function ones.
         for entry in &pkg_cfg.constant_functions {
-            let (item_fn, _loc) = registry
-                .functions
-                .get(&entry.rust_ident)
+            let item_fn = &registry
+                .flat()
+                .function(&entry.rust_ident)
                 .unwrap_or_else(|| {
                     panic!(
                         "write_jni_package: constant fn `{}` registered via .constant_fun(...) \
@@ -1637,7 +1608,7 @@ impl JniGen {
                         entry.rust_ident,
                     )
                 });
-            validate_constant_fn(self, item_fn);
+            validate_constant_fn(self, &item_fn.origin.syntax);
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
                 &package,
@@ -1669,15 +1640,15 @@ impl JniGen {
     }
 
     /// Emit the centralized Native-object Kotlin file under `output_dir`
-    /// (class name from [`JniGen::jni_native_class_name`]). Holds one
+    /// (class name from [`Declarations::jni_native_class_name`]). Holds one
     /// `external fun` per `#[prebindgen]` function — names mangled as methods
-    /// via [`JniGen::set_method_name_mangle`], parameter and return types rendered at
+    /// via [`JniGenBuilder::set_method_name_mangle`], parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
     /// symbols generated under the spec-escaped
     /// `Java_<package>_<jni_native_class>_<name>` (see `symbol`, #86). Every generated native
     /// call routes through this object, so its static initializer is the
     /// single point at which native-library loading can be triggered: when
-    /// [`JniGen::jni_native_init`] is set, its Kotlin statement(s) are emitted
+    /// [`Declarations::jni_native_init`] is set, its Kotlin statement(s) are emitted
     /// inside an `init { … }` block here (e.g. a reference to the consumer's
     /// own loader object). Unset, the holder stays free of any loading logic
     /// and the wrapper layer is responsible for loading.
@@ -1689,14 +1660,13 @@ impl JniGen {
         // shortens types, collects imports, and wraps long signatures (no
         // derivation-time import set).
         let mut externs: Vec<kt::KtFun> = Vec::new();
-        let mut idents: Vec<&syn::Ident> = registry.functions.keys().collect();
-        idents.sort();
-        for ident in idents {
-            if !declared.contains(ident) {
+        let mut fns: Vec<&crate::api::core::flat::Function> = registry.flat().functions().collect();
+        fns.sort_by(|a, b| a.name.cmp(&b.name));
+        for f in fns {
+            if !declared.contains(&f.name) {
                 continue;
             }
-            let (item_fn, _loc) = &registry.functions[ident];
-            if let Some(fun) = render_extern_decl(self, item_fn, registry) {
+            if let Some(fun) = render_extern_decl(self, f, registry) {
                 externs.push(fun);
             }
         }
@@ -1712,7 +1682,7 @@ impl JniGen {
             .collect();
         const_idents.sort_by_key(|i| i.to_string());
         for ident in const_idents {
-            let Some((item_const, _loc)) = registry.consts.get(ident) else {
+            let Some(item_const) = registry.flat().constant(&ident) else {
                 continue; // missing decl already warned by the scan
             };
             let getter = crate::api::lang::jnigen::jni::const_getter_fn(item_const);
@@ -1730,7 +1700,7 @@ impl JniGen {
             .collect();
         expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
         for decl in expr_decls {
-            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
             if let Some(fun) = render_extern_decl(self, &getter, registry) {
                 externs.push(fun);
             }
@@ -1815,7 +1785,7 @@ impl JniGen {
     /// same `handles` slice to both methods.
     ///
     /// Each handle's `kotlin_fqn` must be registered via
-    /// [`JniGen::kotlin_fqn`] so the generator can map it back to its
+    /// [`Declarations::kotlin_fqn`] so the generator can map it back to its
     /// Rust type-key (which identifies the first param to drop in each
     /// promoted method's signature).
     pub(crate) fn write_typed_handles(

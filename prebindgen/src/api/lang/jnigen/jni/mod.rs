@@ -1,16 +1,16 @@
 //! JNI back-end for the Registry pipeline.
 //!
-//! [`JniGen`] implements [`crate::api::core::prebindgen::Prebindgen`]
+//! [`JniGenBuilder`] implements [`crate::api::core::prebindgen::Prebindgen`]
 //! (Rust-side conversion bodies) and provides an inherent
-//! [`JniGen::write_kotlin`] for emitting all Kotlin output
+//! [`JniGenBuilder::write_kotlin`] for emitting all Kotlin output
 //! (`NativeHandle.kt`, typed-handle classes, `JNIWrappers.kt`).
 //!
 //! The implementation is split across sibling submodules, all sharing this
 //! `jni` module's namespace via the `pub(crate) use …::*` glob re-exports
 //! below (each sibling needs only `use super::*;`):
-//!   * this file — type / metadata definitions ([`JniGen`], [`KotlinMeta`],
+//!   * this file — type / metadata definitions ([`JniGenBuilder`], [`KotlinMeta`],
 //!     [`Projection`], [`FoldStrategy`], the config structs) + the shared imports;
-//!   * `builder` — the [`JniGen`] builder API;
+//!   * `builder` — the [`JniGenBuilder`] builder API;
 //!   * `trait_impl` — the [`Prebindgen`] impl + its converter-selector helpers;
 //!   * `emit` — Rust-side `extern "C"` wrapper / converter-body emission;
 //!   * `prim` — JNI primitive (un)boxing tables;
@@ -50,12 +50,11 @@ pub(crate) use crate::api::gen::kotlin as kt;
 pub(crate) use crate::api::{
     core::{
         domain::ScalarValue,
+        flat::Origin,
         niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen, Stage},
-        registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
-        types_util::{
-            bare_path_ident, is_option_ref, is_option_type, option_inner_type, vec_inner_type,
-        },
+        registry::{Direction, Registry, TypeKey},
+        types_util::{bare_path_ident, option_inner_type, vec_inner_type},
     },
     gen::kotlin::WriteKotlinError,
     lang::jnigen::{
@@ -108,9 +107,9 @@ pub(crate) struct EnumConfig {}
 /// of [`DeclaredKind::Sealed`], which is what marks a `#[prebindgen]`
 /// **data-carrying** enum as mirrored by a
 /// Kotlin `sealed interface`. The tag/leaf-group structure itself is read
-/// from the source enum through the neutral
-/// [`SumSpec`](crate::api::core::types_util::SumSpec) — only what the
-/// declaration adds lives here.
+/// from the model's [`Variant`](crate::api::core::flat::Variant) — its
+/// `alternatives` in declaration order, indexed as they are tagged — and only
+/// what the declaration adds lives here.
 #[derive(Clone, Default)]
 pub(crate) struct SumConfig {
     /// Per-variant Kotlin class-name overrides, keyed by the Rust variant
@@ -126,7 +125,7 @@ pub(crate) struct SumConfig {
 pub struct FunctionEntry {
     /// Rust function ident — must match a `#[prebindgen]`-marked free
     /// function in the registered source module. Looked up by
-    /// `registry.functions[ident]`.
+    /// `registry.flat().function(ident)`.
     pub rust_ident: syn::Ident,
     /// Kotlin-side name override, set by chaining `.name("...")` after
     /// the entry's registration. `None` = derive from `rust_ident` via
@@ -152,7 +151,7 @@ impl FunctionEntry {
 ///
 /// Adding a sixth class kind is one variant here plus its emitter: there is
 /// no flag to add and no precedence chain to extend, because every consumer
-/// reads this one field (via [`TypeConfig`]'s accessors, [`JniGen::type_kind`],
+/// reads this one field (via [`TypeConfig`]'s accessors, [`JniGenBuilder::type_kind`],
 /// or a direct match).
 #[derive(Clone)]
 pub(crate) enum DeclaredKind {
@@ -180,19 +179,27 @@ pub(crate) enum DeclaredKind {
 #[derive(Clone)]
 pub(crate) struct TypeConfig {
     /// The class declarator this type is registered under, carrying that
-    /// kind's own options. Every entry in [`JniGen::types`] has one: entries
+    /// kind's own options. Every entry in [`JniGenBuilder::types`] has one: entries
     /// are created only by a class declarator (see
-    /// `JniGen::register_class`), which is why presence in the table *is*
+    /// `JniGenBuilder::register_class`), which is why presence in the table *is*
     /// "declared as a class" — declared classes are required in **both**
     /// directions at scan (their converters always resolve both ways),
     /// unlike a wrapper registration, which is required per **usage**
     /// direction.
     pub kind: DeclaredKind,
+    /// The type this declaration was **written with**, e.g. the `Foo` in
+    /// `ptr_class!(Foo)`.
+    ///
+    /// A class declarator receives a real `syn::Type` and used to keep only the
+    /// key derived from it, so every later site that needed the tokens back had
+    /// to ask the key for them. That is the wrong direction: the declaration is
+    /// where the type came from, and this is where it stays (#291).
+    pub rust_type: Origin<syn::Type>,
     /// Raw naming spec of the type as declared — verbatim Kotlin type or
     /// settings-derived class name. Required for any type emitted in
     /// Kotlin; the concrete FQN (`Sample` → `"io.zenoh.jni.Sample"`,
     /// `Vec<u8>` → `"ByteArray"`) is materialized only at read time via
-    /// [`JniGen::fqn_of`], which is what makes the `set_*` settings
+    /// [`JniGenBuilder::fqn_of`], which is what makes the `set_*` settings
     /// order-independent w.r.t. declarations.
     pub name_spec: Option<NameSpec>,
     /// Explicit opt-in for a `data_class` to cross Kotlin → Rust as one
@@ -217,9 +224,14 @@ impl TypeConfig {
     /// A freshly declared type: the declarator's kind and naming spec, every
     /// cross-kind option unset. Reopening the same declarator goes through
     /// [`DeclaredKind::merge`] instead.
-    pub(crate) fn new(kind: DeclaredKind, name_spec: NameSpec) -> Self {
+    pub(crate) fn new(
+        kind: DeclaredKind,
+        name_spec: NameSpec,
+        rust_type: Origin<syn::Type>,
+    ) -> Self {
         Self {
             kind,
+            rust_type,
             name_spec: Some(name_spec),
             jobject_input: false,
             interface_enabled: false,
@@ -261,7 +273,7 @@ impl TypeConfig {
 #[derive(Clone, Default)]
 pub(crate) struct PackageConfig {
     /// `#[prebindgen]` fns declared as free-standing wrappers under this
-    /// subpackage via [`JniGen::fun`].
+    /// subpackage via [`JniGenBuilder::fun`].
     pub functions: Vec<FunctionEntry>,
     /// `#[prebindgen]` consts declared under this subpackage via
     /// [`PackageDecl::constant`] — each surfaces as a top-level Kotlin `val`
@@ -306,10 +318,10 @@ pub(crate) enum MemberKind {
 /// JSONL).
 #[derive(Clone, Debug)]
 pub(crate) struct ClassMember {
-    /// Rust function ident (`registry.functions[ident]`).
+    /// Rust function ident (`registry.flat().function(ident)`).
     pub rust_ident: syn::Ident,
     /// Per-member `.name()` override, stored RAW — the effective Kotlin
-    /// name is derived at point of use by [`JniGen::class_method_kotlin_name`]
+    /// name is derived at point of use by [`JniGenBuilder::class_method_kotlin_name`]
     /// (override, else the package/class-aware method hook over the full
     /// camelCase ident), keeping `set_method_name_mangle` order-independent. An
     /// `expand_return!` `.field` referencing the same underlying function
@@ -319,39 +331,8 @@ pub(crate) struct ClassMember {
     /// Member kind (method / constructor).
     pub kind: MemberKind,
 }
-
-/// Boxed closure that builds a converter when applied to the wildcard
-/// substitutions. Returns `None` to defer (an inner converter the
-/// builder depends on isn't yet resolved; the resolver retries on the
-/// next phase), or `Some((ty, exc, body))` where:
-///
-/// * `ty` — the type the body produces. Auto-classified at lookup:
-///   a wire shape (or the self-converter case) ⇒ terminal converter
-///   with `destination = ty`; a rust type with its own converter ⇒
-///   composed as a value-inspecting stage onto that converter's chain.
-/// * `exc` — the bound domain error **as a Rust type**: the `E` peeled
-///   from a source `Result<T, E>`, matched by exact canonical-form
-///   equality (use the same full path the source signature uses, e.g.
-///   `parse_quote!(zenoh_flat::errors::ZError)` — no short-name
-///   matching). `Some(...)` ⇒ domain-fallible: the body evaluates to
-///   `Result<ty, exc>` and is emitted as-is; a failure routes to the
-///   wrapper's error sink (never a JVM throw). `None` ⇒ binding-fallible
-///   only: the body evaluates to a bare `ty` and the framework wraps it
-///   `Ok(body)` with `Result<ty, __JniErr>` (= `JniBindingError`).
-/// * `body` — the closure body. The decision between Ok-wrap vs
-///   verbatim is keyed on `exc` (see [`JniGen::build_input_fn`] /
-///   [`JniGen::build_output_fn`]).
-///
-/// Receives `&Registry<KotlinMeta>` so the closure can look up
-/// inner-type entries (`registry.output_entry(t)`).
-pub(crate) type WrapperFn = Arc<
-    dyn Fn(&[syn::Type], &Registry<KotlinMeta>) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
-        + Send
-        + Sync,
->;
-
 /// Closure that transforms a Kotlin short name with the fully-qualified
-/// package in which the named object is emitted. Installed via [`JniGen`]'s
+/// package in which the named object is emitted. Installed via [`JniGenBuilder`]'s
 /// per-kind `set_*_name_mangle` setters. Closure-unset = identity.
 pub(crate) type NameMangle = Arc<dyn Fn(&str, &str) -> String + Send + Sync>;
 
@@ -371,12 +352,12 @@ pub(crate) type MethodNameMangle = Arc<dyn Fn(&str, &str, &str) -> String + Send
 /// `set_*` methods; declarations are accepted as pre-built objects
 /// (`PackageDecl`, `ExpandParamDecl`, `ExpandReturnDecl`,
 /// `ConvertDecl` — see `decl.rs`) built
-/// independently of `JniGen` itself; there is no fluent typestate cursor.
+/// independently of `JniGenBuilder` itself; there is no fluent typestate cursor.
 ///
 /// ```
-/// use prebindgen::lang::JniGen;
+/// use prebindgen::lang::JniGenBuilder;
 ///
-/// let jni = JniGen::new()
+/// let jni = JniGenBuilder::new()
 ///     .set_package_prefix("io.test.jni")
 ///     .package(
 ///         prebindgen::package!("keyexpr")
@@ -393,15 +374,90 @@ pub(crate) type MethodNameMangle = Arc<dyn Fn(&str, &str, &str) -> String + Send
 ///     )
 ///     .expand(prebindgen::expand_return!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
 /// ```
-#[derive(Clone)]
+/// A resolved JNI binding: every crossing has a conversion, and the artifacts
+/// can be written.
+///
+/// Built by [`JniGenBuilder::build`]. Read-only — the registry inside it is
+/// complete, which is what lets every `write_*` be a pure emission that can run
+/// in any order, or not at all.
 pub struct JniGen {
+    /// What the binding declared. The emitters read it for names, classes and
+    /// decompositions.
+    ///
+    /// A [`Declarations`], not the [`JniGenBuilder`] it came from: the builder's
+    /// mutators would otherwise ride into the finished object, and "finished"
+    /// would be a comment rather than a type.
+    decls: Declarations,
+    /// Every crossing this binding needs, each with its conversion.
+    registry: crate::core::Registry<KotlinMeta>,
+}
+
+// Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
+impl std::fmt::Debug for JniGen {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("JniGen(..)")
+    }
+}
+
+impl JniGen {
+    /// Describe a JNI binding.
+    ///
+    /// The entry point: everything a binding states — its Kotlin surface, its
+    /// decompositions, and where its `#[prebindgen]` source lives — goes on the
+    /// builder, and [`JniGenBuilder::build`] turns it into a [`JniGen`].
+    pub fn builder() -> JniGenBuilder {
+        JniGenBuilder::new()
+    }
+
+    /// Write the generated Rust file — the JNI externs and the converters they
+    /// call. `out_path` may be relative (resolved against `OUT_DIR`) or
+    /// absolute; returns the path actually written.
+    pub fn write_rust(
+        &self,
+        out_path: impl AsRef<std::path::Path>,
+    ) -> Result<std::path::PathBuf, crate::core::WriteRustError> {
+        Ok(crate::api::core::write::write_rust(
+            &self.registry,
+            &self.decls,
+            out_path,
+        )?)
+    }
+
+    /// The resolved registry — conversions, decompositions, and the model.
+    pub fn registry(&self) -> &crate::core::Registry<KotlinMeta> {
+        &self.registry
+    }
+
+    /// What the binding declared.
+    pub fn declarations(&self) -> &Declarations {
+        &self.decls
+    }
+}
+
+/// Everything a binding **declared**, once it is done declaring.
+///
+/// The read-only half of what used to be one `JniGenBuilder`. Splitting it is what
+/// keeps the phase separation now that a generator owns its own registry: before
+/// [#253](https://github.com/milyin/prebindgen/pull/253) a build script held a
+/// `RegistryBuilder` and then a `Registry`, and that type split *was* the
+/// enforcement. Once `JniGen::builder().source(..).build()` moved both inside the
+/// generator, the built object was left holding the builder — mutators and all.
+///
+/// So the mutators live on [`JniGenBuilder`] and nothing else, and this type — the
+/// one a [`JniGen`] keeps and every emitter reads — **has no `&mut self` method at
+/// all**. Not "the obvious ones were removed": none, which
+/// `a_built_jnigen_exposes_no_mutation` checks by reading the source, because a
+/// one-line grep once missed a multi-line signature and let `Registry::supply`
+/// survive two commits that claimed it was gone.
+#[derive(Clone)]
+pub struct Declarations {
     /// Single source of truth for the JVM/Kotlin namespace this binding
     /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
     /// Every derived form — slash-separated for `FindClass`
-    /// (`JniGen::java_class_prefix()`), `_`-mangled for JNI extern idents
-    /// (`JniGen::jni_class_path()`), dot-separated for Kotlin `package`
-    /// declarations — is computed from this at the point of use.
-    /// `pub(crate)`: consumers go through [`JniGen::set_package_prefix`],
+    /// ([`Declarations::java_class_prefix`]), `_`-mangled for JNI extern idents,
+    /// dot-separated for Kotlin `package` declarations — is computed from this at
+    /// the point of use.
+    /// `pub(crate)`: consumers go through [`JniGenBuilder::set_package_prefix`],
     /// whose trimming a direct field write would bypass.
     pub(crate) package: String,
 
@@ -417,7 +473,7 @@ pub struct JniGen {
     /// Mangler for `EnumClassDecl`-declared C-like enum class
     /// names. Default = identity.
     pub(crate) enum_name_mangle: Option<NameMangle>,
-    /// Method-name mangle hook ([`JniGen::set_method_name_mangle`]) — applied
+    /// Method-name mangle hook ([`JniGenBuilder::set_method_name_mangle`]) — applied
     /// to the camelCase Rust function name of every class method/factory
     /// without a per-method `.name()`, with package and class context.
     pub(crate) method_name_mangle: Option<MethodNameMangle>,
@@ -432,38 +488,26 @@ pub struct JniGen {
 
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per declared class; populated when accepting a `ClassDecl`,
-    /// through the table's single writer `JniGen::register_class` — so
+    /// through the table's single writer `JniGenBuilder::register_class` — so
     /// presence here *is* "declared as a class", and each entry's
     /// [`TypeConfig::kind`] is the one representation of which declarator it
     /// came from. Also holds the raw [`NameSpec`] (Kotlin FQNs are
-    /// derived from it on read via [`JniGen::kotlin_fqn`] /
-    /// [`JniGen::fqn_of`]); the converter bodies themselves live in
-    /// [`Self::input_wrappers`] / [`Self::output_wrappers`]. The rank-0
-    /// dispatch order is opaque → enum → wrapper-table → primitive → struct.
+    /// derived from it on read via [`JniGenBuilder::kotlin_fqn`] /
+    /// [`JniGenBuilder::fqn_of`]). Terminal dispatch order is opaque → enum →
+    /// `convert!` → primitive → struct; see
+    /// [`JniGenBuilder::select_input_type`](crate::lang::JniGenBuilder)'s selector.
     pub(crate) types: HashMap<TypeKey, TypeConfig>,
 
     /// Free-standing package-level wrappers, keyed by subpackage path
     /// (relative to [`Self::package`], dot-separated; the empty key is the
-    /// base package itself). Populated by [`JniGen::package`], merging into
+    /// base package itself). Populated by [`JniGenBuilder::package`], merging into
     /// whatever the named subpackage already holds.
     pub(crate) packages: BTreeMap<String, PackageConfig>,
 
-    /// Per-rank input converters — index `n` holds rank-`n` registrations
-    /// keyed by the pattern's `TypeKey`. Rank 0 is non-wildcard (e.g.
-    /// `"i32"`); ranks 1..3 carry that many `_` slots (e.g. `"Vec < _ >"`).
-    /// Each [`WrapperFn`] closure carries the builder body AND the bound
-    /// exception (the closure returns `(ty, exc, body)`); terminal vs
-    /// composed is derived at lookup time, throwing vs non-throwing
-    /// from the closure's `Option<String>` middle slot.
-    pub(crate) input_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
-
-    /// Per-rank output converters. Same shape as [`Self::input_wrappers`].
-    pub(crate) output_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
-
     /// Canonical single-value conversions ([`ConvertDecl`], accepted by
-    /// [`JniGen::convert`]), stored raw — the rank-0 converter bodies derive
+    /// [`JniGenBuilder::convert`]), stored raw — the rank-0 converter bodies derive
     /// from the conversion fns' registry signatures at lookup time
-    /// ([`JniGen::convert_input_body`] / [`JniGen::convert_output_body`]),
+    /// ([`JniGenBuilder::convert_input_body`] / [`JniGenBuilder::convert_output_body`]),
     /// keeping declarations order-independent and origin-qualified.
     pub(crate) convert_decls: Vec<ConvertDecl>,
 
@@ -472,12 +516,12 @@ pub struct JniGen {
     /// scaffold (deadlock-safe N-ary monitor acquisition + atomic
     /// consume). When `false`, the scaffold is omitted — wrappers emit
     /// only the raw `ptr` read + closed-handle null-check + native call.
-    /// Toggled via [`JniGen::set_emit_handle_locks`].
+    /// Toggled via [`JniGenBuilder::set_emit_handle_locks`].
     pub(crate) emit_handle_locks: bool,
 
     /// Optional Kotlin statement(s) to place inside an `init { … }` block of
     /// the generated centralized externs object (`JNINative`). Set via
-    /// [`JniGen::set_jni_native_init`]. Every generated native call routes
+    /// [`JniGenBuilder::set_jni_native_init`]. Every generated native call routes
     /// through that object, so its `<clinit>` is the single point at which a
     /// consumer can trigger native-library loading (e.g.
     /// `"io.zenoh.jni.NativeLibrary.ensureLoaded()"`). `None` (default) emits no
@@ -485,12 +529,12 @@ pub struct JniGen {
     pub(crate) jni_native_init: Option<String>,
 
     /// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
-    /// [`JniGen::expand`]), stored raw — merged into the expansion set
+    /// [`JniGenBuilder::expand`]), stored raw — merged into the expansion set
     /// at the point of use so declarations stay order-independent.
     pub(crate) param_expand_decls: Vec<ExpandParamDecl>,
 
     /// Type-level default output boundaries ([`ExpandReturnDecl`], accepted
-    /// by [`JniGen::expand`]), stored raw — field names (member
+    /// by [`JniGenBuilder::expand`]), stored raw — field names (member
     /// inheritance) resolve at the point of use so declarations stay
     /// order-independent.
     pub(crate) return_expand_decls: Vec<ExpandReturnDecl>,
@@ -519,23 +563,23 @@ pub struct JniGen {
     pub(crate) class_members: HashMap<TypeKey, Vec<ClassMember>>,
 
     /// `#[prebindgen]` fns the binding deliberately does NOT wrap, declared
-    /// via [`JniGen::ignore`]. Backs [`Prebindgen::ignored_functions`]:
+    /// via [`JniGenBuilder::ignore`]. Backs [`Prebindgen::ignored_functions`]:
     /// suppresses the registry's per-item "skipping undeclared" warning
     /// without emitting anything.
     pub(crate) ignored_fns: std::collections::HashSet<syn::Ident>,
 
-    /// Bulk name-family ignore predicates, declared via [`JniGen::ignore`] +
+    /// Bulk name-family ignore predicates, declared via [`JniGenBuilder::ignore`] +
     /// [`matching`](crate::lang::matching). Backs
     /// [`Prebindgen::ignored_name_predicates`]: every undeclared item
     /// (fn/type/const) whose name matches is an acknowledged skip.
     pub(crate) ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
 
     /// `#[prebindgen]` types the binding deliberately does NOT declare,
-    /// via [`JniGen::ignore`]. Backs [`Prebindgen::ignored_types`].
+    /// via [`JniGenBuilder::ignore`]. Backs [`Prebindgen::ignored_types`].
     pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,
 
     /// `#[prebindgen]` consts the binding deliberately does NOT declare,
-    /// via [`JniGen::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
+    /// via [`JniGenBuilder::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
     pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
     /// Binding-local fns declared via path-built [`fun!`](crate::fun) +
     /// [`FunctionDecl::sig`]: `(fn ident = path last segment, declared path,
@@ -544,7 +588,7 @@ pub struct JniGen {
     pub(crate) local_fns: Vec<(syn::Ident, syn::Path, syn::Signature)>,
 
     /// Memoized callback-interface specs, one per [`SpecKey`] identity —
-    /// populated lazily via [`JniGen::iface_spec`] (first touch may be the
+    /// populated lazily via [`JniGenBuilder::iface_spec`] (first touch may be the
     /// resolve-time trampoline, which runs before any function plan exists)
     /// and shared by every later consumer, so the FQN/descriptor pair cannot
     /// drift between the Rust, Kotlin-wrapper, and interface-declaration
@@ -566,6 +610,30 @@ pub struct JniGen {
     pub(crate) fn_plans: std::cell::RefCell<HashMap<syn::Ident, std::rc::Rc<JniFunctionPlan>>>,
 }
 
+/// Describe a JNI binding: state the Kotlin surface, then [`build`](Self::build).
+///
+/// Holds the [`Declarations`] being filled and the sources to parse, and it is the
+/// only type with mutators. `build` consumes it, hands the declarations to the
+/// registry, and stores them in a [`JniGen`] — from where nothing can declare
+/// anything again, because this type is gone by then.
+#[derive(Clone, Default)]
+pub struct JniGenBuilder {
+    /// What has been declared so far. Moved out whole by [`Self::build`].
+    pub(crate) decls: Declarations,
+
+    /// Where the `#[prebindgen]` items come from.
+    ///
+    /// A [`FlatBuilder`](crate::core::flat::FlatBuilder), stated with the same
+    /// three feeders it has — so a build script says where the source is in the
+    /// vocabulary the model already uses, and never names a `Flat` or a
+    /// `Registry` itself.
+    ///
+    /// Not a declaration, which is why it stays here rather than moving across:
+    /// it is *input to* building, and keeping it out is what makes
+    /// [`Declarations`] mean one thing.
+    pub(crate) sources: crate::api::core::flat::FlatBuilder,
+}
+
 // ── Sibling submodules (carved from the former monolithic file) ─────────
 mod builder;
 mod classify;
@@ -579,7 +647,7 @@ mod prim_array;
 mod selector;
 #[cfg(test)]
 mod tests;
-mod trait_impl;
+pub(crate) mod trait_impl;
 
 mod fn_plan;
 mod fold;

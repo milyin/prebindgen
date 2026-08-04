@@ -34,7 +34,7 @@ use super::*;
 ///   names colliding in one package, including a collision the mangler
 ///   created.
 /// * **Warnings** — where the default mangler sanitized a Rust-derived name.
-pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) -> Vec<String> {
+pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMeta>) -> Vec<String> {
     let mut errors: Vec<String> = Vec::new();
     // (package, name) → origin, for top-level-unique Kotlin declarations.
     let mut top_level: BTreeMap<(String, String), String> = BTreeMap::new();
@@ -110,7 +110,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
         // name `Companion` is ours — an artifact of emitting a companion at
         // all, not a name Kotlin reserves — so when a variant wants it the
         // generator renames the companion instead of making the source crate
-        // rename a legitimate variant (`JniGen::sum_companion_name`).
+        // rename a legitimate variant (`Declarations::sum_companion_name`).
         //
         // The interface's own name is different: BOTH colliding names come
         // from the source crate (the enum's name and its variant's), so the
@@ -127,9 +127,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
                 short.to_string(),
                 format!("sealed class `{key}` itself (its variants' supertype)"),
             )]);
-            if let Some((item_enum, _)) =
-                bare_path_ident(&key.to_type()).and_then(|i| registry.enums.get(&i))
-            {
+            if let Some(item_enum) = key.ident().and_then(|i| registry.flat().enum_item(&i)) {
                 for v in &item_enum.variants {
                     let name = ext.sum_variant_class_name(sum_cfg, &v.ident);
                     let vorigin = format!("variant `{}` of sealed class `{key}`", v.ident);
@@ -172,7 +170,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             // surface signature (base + `.split_on_param` shells) comes from
             // the SAME `build_wrapper_surface` emission uses — a body-less
             // prototype, so the validator doesn't pay for body codegen.
-            if let Some((item_fn, _)) = registry.functions.get(&entry.rust_ident) {
+            if let Some(item_fn) = registry.flat().function(&entry.rust_ident) {
                 if let Some(s) = build_wrapper_surface(ext, item_fn, registry, Some(&name), None) {
                     for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
                         add_overload(&fn_scope, &ov, &origin, &mut errors);
@@ -213,7 +211,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
         for m in &ext.class_members[key] {
             let name = ext.effective_method_name(key, m);
             check_ident(&name, &format!("method `{}`", m.rust_ident), &mut errors);
-            let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) else {
+            let Some(item_fn) = registry.flat().function(&m.rust_ident) else {
                 continue;
             };
             let (scope, receiver) = match m.kind {
@@ -251,7 +249,7 @@ fn check_ident(name: &str, origin: &str, errors: &mut Vec<String>) {
 
 /// Emit a `cargo:warning` for each Rust struct field (data-class property) or
 /// enum variant whose Kotlin name the default mangler had to change.
-fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
+fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>) {
     let warn = |raw: &str, mangled: &str, what: &str, owner: &str| {
         if raw != mangled {
             println!(
@@ -268,11 +266,14 @@ fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
         .collect();
     class_keys.sort_by_key(|k| k.as_str().to_string());
     for key in class_keys {
-        let ident = match bare_path_ident(&key.to_type()) {
-            Some(i) => i,
-            None => continue,
+        let Some(ident) = key.ident() else {
+            continue;
         };
-        if let Some((s, _)) = registry.structs.get(&ident) {
+        if let Some(s) = registry
+            .flat()
+            .struct_type(&ident)
+            .map(|st| &st.origin.syntax)
+        {
             for f in &s.fields {
                 if let Some(fname) = &f.ident {
                     let camel = kt_snake_to_camel(&fname.to_string());
@@ -285,7 +286,7 @@ fn warn_derived_name_changes(ext: &JniGen, registry: &Registry<KotlinMeta>) {
                 }
             }
         }
-        if let Some((e, _)) = registry.enums.get(&ident) {
+        if let Some(e) = registry.flat().enum_item(&ident) {
             for v in &e.variants {
                 let screaming =
                     crate::api::lang::jnigen::util::camel_to_screaming_snake(&v.ident.to_string());

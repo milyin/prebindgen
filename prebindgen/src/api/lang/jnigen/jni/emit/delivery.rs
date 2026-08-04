@@ -1,7 +1,10 @@
 //! Output-expansion delivery: unfold plans and leaf encoding.
 
 use super::*;
-use crate::api::core::unfold::{steps_are_movable, PathStep};
+use crate::api::core::{
+    registry::Conversions,
+    unfold::{steps_are_movable, PathStep},
+};
 
 /// Emit the output-expansion delivery body (output phase) for a function
 /// marked `.expand_output()`. The return value (`__out`) is decomposed by the
@@ -27,7 +30,7 @@ use crate::api::core::unfold::{steps_are_movable, PathStep};
 /// [`UnfoldShape::Base`]: crate::api::core::unfold::UnfoldShape::Base
 /// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
-    ext: &JniGen,
+    ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     iface: Option<&IfaceSpec>,
@@ -139,12 +142,15 @@ pub(crate) fn emit_unfold_delivery(
             // a raw typed jvalue for a primitive-wire element, a JObject
             // otherwise (mirrors `leaf_is_prim`; the folder interface
             // declares the matching typed param).
-            let out_entry = registry.output_entry(element).unwrap_or_else(|| {
-                panic!(
-                    "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                    TypeKey::from_type(element)
-                )
-            });
+            let out_entry = registry
+                .reading_of(element)
+                .and_then(|tr| registry.output_entry(&tr))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "emit_unfold_delivery: Vec element `{}` has no registered output converter",
+                        TypeKey::from_type(element)
+                    )
+                });
             // The element's COMPLETE Rust -> wire chain. No `convert!` type is
             // known to reach THIS path today (a fold element is single-leaf and
             // whole, and the collection converters claim the shapes a converted
@@ -450,8 +456,16 @@ pub(crate) fn reach_leaf_flat(
     // somewhere to go. This derivation has none — it yields a plain Rust value,
     // not a `JObject` that could be null — so the shape is refused here rather
     // than composed into code that cannot type-check in the consumer's crate.
+    //
+    // Asked of the leaf's OWN path, not of `path`. The caller may hand a
+    // suffix: `wrapper.rs` rebases onto a hoisted local, and `Hoisted::innermost`
+    // strips the prefix that bound it — including any optional step inside it.
+    // Checking the parameter would therefore pass exactly when the hoist is the
+    // conditional one, which is the case that cannot compose (an `Option<T>`
+    // local with a field read hung off it). The full path is what the shape
+    // question is about.
     assert!(
-        !path.iter().rev().skip(1).any(PathStep::is_optional),
+        !leaf.path.iter().rev().skip(1).any(PathStep::is_optional),
         "jnigen unfold: leaf `{}` reaches through an optional step but is \
          delivered as a single return value, which has no `None` arm — this \
          shape needs callback delivery",
@@ -469,17 +483,21 @@ pub(crate) fn reach_leaf_flat(
     //   so ownership is the enclosing form's: only a consuming one gives its
     //   fields away.
     //
-    // A trailing `Option` step cannot arrive here at all: return delivery has
-    // no `None` arm for the absent case, so a nullable leaf is routed to
-    // callback delivery when the plan picks its `Delivery` — see
-    // `single_return` in `core/unfold.rs`. `is_plain_field` is what that rules
-    // out, and it stays as the local statement of the same fact.
+    // How to project that place is `steps_are_movable`'s question, and it is
+    // asked there rather than restated here. This used to spell it
+    // `all(is_plain_field)`, defending the restatement on the grounds that a
+    // trailing `Option` cannot reach return delivery anyway — true, and enforced
+    // in `single_return` (`core/unfold.rs`), which is precisely why a local
+    // restatement could disagree with the rule for as long as the invariant held
+    // somewhere else. `plan.rs` says two readings would drift and the
+    // disagreement would be a borrow handed to an owning converter; this is the
+    // second reading, removed.
     let reached_is_ours = if leaf.identity {
-        !matches!(leaf.out_ty, syn::Type::Reference(_))
+        !matches!(leaf.out_ty.syntax(), syn::Type::Reference(_))
     } else {
         consuming
     };
-    if reached_is_ours && path.iter().all(PathStep::is_plain_field) {
+    if reached_is_ours && steps_are_movable(path) {
         let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
         return quote!(#base #(.#segs)*);
     }
@@ -719,6 +737,33 @@ pub(crate) fn bind_hoists(
     out
 }
 
+/// Bind `e` so it can be destructured as an `Option` **whatever Rust
+/// representation the source used for it**.
+///
+/// `kind` says a position is optional; it deliberately does not say whether
+/// Rust spells that `Option<T>`, `Box<Option<T>>`, or something else — the flat
+/// model states the destination-language invariant, and the side interpreting
+/// it is the side that must accept any representation. Matching the reached
+/// place directly assumed one, which is `classify off kind, spell off syntax`
+/// broken in the direction nothing was watching: the classification was right
+/// and the *spelling* came from it too. `Box<Option<T>>` then produced
+/// `match &place { Some(..) => .. }` and `E0308` (#268).
+///
+/// A type-ascribed `let` is a coercion site, and deref coercion is transitive
+/// **and** a no-op when the types already match — so this one shape serves
+/// every representation, and the plain `Option<T>` case is unchanged in
+/// behaviour. The payload stays `_`: what it is, is the source's business.
+///
+/// `e` is expected to be a **reference** already — [`compose_step`] composes a
+/// field read as `&(e).f` — so nothing is borrowed here. Borrowing only: an
+/// owned position cannot be made representation-agnostic this way, because
+/// deref coercion applies to references and moving out of a wrapper is
+/// something only some of them permit (`Box` does, `Rc` cannot). A site that
+/// must MOVE the payload keeps its direct match; see `owned_place` below.
+pub(crate) fn bind_as_option(e: &TokenStream, bind: &syn::Ident) -> TokenStream {
+    quote! { let #bind: &::core::option::Option<_> = #e; }
+}
+
 /// Reach a leaf's input by folding its `path` over `base`, then hand the
 /// reached expression to `body` (which renders the encode and yields
 /// `JObject`). Every optional nesting step becomes a `match`: its `None` arm
@@ -762,10 +807,33 @@ fn reach_leaf(
                 depth + 1,
                 body,
             );
-            quote! {
-                match #opt_e {
-                    ::core::option::Option::Some(#nested) => { #inner }
-                    ::core::option::Option::None => jni::objects::JObject::null(),
+            // A FIELD read composes to a borrow (`&(e).f`), so it goes through
+            // a coercion site and the destructuring stops caring which
+            // representation the source spelled the optional as.
+            //
+            // A CALL composes to the accessor's own returned value, which is
+            // owned and whose payload downstream may move. Borrowing it to
+            // coerce would change that ownership, so it keeps its direct match
+            // — and an owned position could not be made representation-agnostic
+            // this way regardless (see [`bind_as_option`]).
+            if path[k].is_field() {
+                let opt_bind = format_ident!("__o{}", depth);
+                let coerce = bind_as_option(&opt_e, &opt_bind);
+                quote! {
+                    {
+                        #coerce
+                        match #opt_bind {
+                            ::core::option::Option::Some(#nested) => { #inner }
+                            ::core::option::Option::None => jni::objects::JObject::null(),
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    match #opt_e {
+                        ::core::option::Option::Some(#nested) => { #inner }
+                        ::core::option::Option::None => jni::objects::JObject::null(),
+                    }
                 }
             }
         }
@@ -785,8 +853,8 @@ fn reach_leaf(
 /// arm of fallible externs (whose `fail` falls back to a binding-error
 /// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     obj_idents: &[syn::Ident],
     value: &TokenStream,
@@ -929,7 +997,7 @@ pub(crate) fn encode_plan_leaves(
         let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
                 "jnigen unfold: leaf `{}` has no registered output converter",
-                TypeKey::from_type(&leaf.out_ty)
+                TypeKey::from_type(leaf.out_ty.syntax())
             )
         });
         let conv_fail = fail(quote!(__e.to_string()));
@@ -992,7 +1060,7 @@ pub(crate) fn encode_plan_leaves(
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
                      `.accessor_record_id()` requires a ptr_class type",
-                    TypeKey::from_type(&leaf.out_ty)
+                    TypeKey::from_type(leaf.out_ty.syntax())
                 )
             });
             // The place this handle lives, when it is OURS to give away — the
@@ -1008,7 +1076,9 @@ pub(crate) fn encode_plan_leaves(
             // `Option` through the nullable branch's `match`, which moves the
             // whole `Option` in rather than borrowing it.
             let owned_place: Option<TokenStream> =
-                if !matches!(leaf.out_ty, syn::Type::Reference(_)) && steps_are_movable(&path) {
+                if !matches!(leaf.out_ty.syntax(), syn::Type::Reference(_))
+                    && steps_are_movable(&path)
+                {
                     let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
                     Some(quote!(#value #(.#segs)*))
                 } else {
@@ -1302,7 +1372,7 @@ pub(crate) fn encode_plan_leaves(
 /// [`crate::api::lang::jnigen::jni::iface`] derives for the same leaf — a
 /// nullable primitive boxes (object chunk), object wires pass as objects.
 pub(crate) fn leaf_is_prim(
-    registry: &Registry<KotlinMeta>,
+    registry: &impl Conversions<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> bool {
     // The synthesized sum selector is a `jint` by definition — it is assigned,
@@ -1319,15 +1389,18 @@ pub(crate) fn leaf_is_prim(
     if leaf.nullable {
         return false;
     }
-    leaf_ty_is_prim(registry, &leaf.out_ty)
+    leaf_ty_is_prim(registry, leaf.out_ty.syntax())
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw
 /// primitive** slot? Split out so the interface derivation can ask the question
 /// about a leaf whose own `nullable` flag it is in the middle of computing (an
 /// inert sum group slot).
-pub(crate) fn leaf_ty_is_prim(registry: &Registry<KotlinMeta>, out_ty: &syn::Type) -> bool {
-    let Some(entry) = registry.output_entry(out_ty) else {
+pub(crate) fn leaf_ty_is_prim(registry: &impl Conversions<KotlinMeta>, out_ty: &syn::Type) -> bool {
+    let Some(entry) = registry
+        .reading_of(out_ty)
+        .and_then(|tr| registry.output_entry(&tr))
+    else {
         return false;
     };
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose
@@ -1340,4 +1413,143 @@ pub(crate) fn leaf_ty_is_prim(registry: &Registry<KotlinMeta>, out_ty: &syn::Typ
         Some(p) => matches!(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
     };
     proj_ok && matches!(jni_field_access(&entry.destination), Some((_, _, false)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::core::unfold::{LeafSource, UnfoldLeaf};
+    /// A `TypeRef` through the model. `Flat::classify` is sealed to `api::core`
+    /// (#280), so a test under `api::lang` asks the sanctioned probe helper
+    /// rather than reaching around the seal — which is the seal working.
+    use crate::api::test_util::reading as tref;
+
+    /// A leaf as the resolver builds one. `source` is not decoration: it
+    /// decides the terminal treatment (a `Field` leaf is CLONED out of the
+    /// place it reached), and production pairs it with the path shape —
+    /// `Accessor` for identity leaves and accessor chains (`unfold.rs`'s
+    /// `DeconRecord::Identity` arm), `Field` only for the synthesized
+    /// by-value `data_class` decomposition, whose paths are field idents and
+    /// never calls. A fixture that mixed them would exercise a leaf the
+    /// resolver cannot produce.
+    fn leaf(
+        out_ty: syn::Type,
+        path: Vec<PathStep>,
+        identity: bool,
+        source: LeafSource,
+    ) -> UnfoldLeaf {
+        UnfoldLeaf {
+            name: "probe".to_string(),
+            path,
+            out_ty: tref(out_ty),
+            identity,
+            nullable: false,
+            source,
+            group: None,
+        }
+    }
+
+    fn qualify(id: &syn::Ident) -> syn::Path {
+        syn::parse_quote!(myflat::#id)
+    }
+
+    /// `reach_leaf_flat` projects the place `steps_are_movable` says is movable
+    /// — the two are one rule, not two readings of one.
+    ///
+    /// The trailing-optional path is the case that discriminates: it IS movable
+    /// (a `None` arm still hands the whole `Option` over by value), and the
+    /// `all(is_plain_field)` restatement this replaced called it not-movable.
+    /// Where the plan had already granted an owned `out_ty` on the strength of
+    /// `steps_are_movable`, that disagreement is a borrow reaching an owning
+    /// converter — `plan.rs`'s stated hazard, and PR#221's P1.
+    #[test]
+    fn a_movable_place_is_projected_as_a_move() {
+        for path in [
+            vec![PathStep::field(syn::parse_quote!(a), false)],
+            vec![
+                PathStep::field(syn::parse_quote!(a), false),
+                PathStep::field(syn::parse_quote!(b), false),
+            ],
+            // Movable by `steps_are_movable`; NOT by `all(is_plain_field)`.
+            vec![
+                PathStep::field(syn::parse_quote!(a), false),
+                PathStep::field(syn::parse_quote!(b), true),
+            ],
+        ] {
+            assert!(steps_are_movable(&path), "fixture must be movable");
+            let l = leaf(
+                syn::parse_quote!(Owned),
+                path.clone(),
+                true,
+                LeafSource::Accessor,
+            );
+            let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+            assert!(
+                !got.contains('&') && !got.contains("clone"),
+                "a movable place is moved, not borrowed or cloned — got `{got}`"
+            );
+        }
+    }
+
+    /// A borrow stays a borrow: an identity leaf whose `out_ty` is a reference
+    /// did not own what it reached, whatever the path shape says.
+    #[test]
+    fn a_borrowed_out_ty_is_never_moved() {
+        let path = vec![PathStep::field(syn::parse_quote!(a), false)];
+        let l = leaf(
+            syn::parse_quote!(&Owned),
+            path.clone(),
+            true,
+            LeafSource::Accessor,
+        );
+        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        assert!(
+            got.contains('&'),
+            "a borrowed out_ty keeps its borrow — got `{got}`"
+        );
+    }
+
+    /// A `Field` leaf is cloned out of the place it reached, whatever the path
+    /// shape says — its converter takes the field type as written.
+    ///
+    /// The counterpart of the move above, and what keeps `source` load-bearing
+    /// in these fixtures rather than a value they all happen to share.
+    #[test]
+    fn a_field_leaf_is_cloned_out_of_its_place() {
+        let path = vec![
+            PathStep::field(syn::parse_quote!(a), false),
+            PathStep::field(syn::parse_quote!(b), false),
+        ];
+        let l = leaf(
+            syn::parse_quote!(Owned),
+            path.clone(),
+            false,
+            LeafSource::Field,
+        );
+        let got = reach_leaf_flat(&qualify, &l, &path, quote!(__src), false, false).to_string();
+        assert!(
+            got.contains("clone"),
+            "a non-consuming field leaf clones rather than moves — got `{got}`"
+        );
+    }
+
+    /// The optional-step guard asks the LEAF's path, not the caller's slice.
+    ///
+    /// `wrapper.rs` rebases onto a hoisted local and hands over the remaining
+    /// suffix, so checking the parameter would pass exactly when the hoist is
+    /// the conditional one — an `Option<T>` local with a field read hung off it,
+    /// which cannot compose. Passing the suffix here mimics that rebase.
+    #[test]
+    #[should_panic(expected = "which has no `None` arm")]
+    fn an_optional_step_in_a_stripped_prefix_is_still_refused() {
+        let full = vec![
+            PathStep::call(syn::parse_quote!(get_it), true, false),
+            PathStep::field(syn::parse_quote!(a), false),
+        ];
+        let l = leaf(syn::parse_quote!(Owned), full, false, LeafSource::Accessor);
+        // The suffix a rebase would hand over — the optional call is gone from
+        // it, and used to take the guard with it.
+        let rest = vec![PathStep::field(syn::parse_quote!(a), false)];
+        let _ = reach_leaf_flat(&qualify, &l, &rest, quote!(__vf0), false, false);
+    }
 }

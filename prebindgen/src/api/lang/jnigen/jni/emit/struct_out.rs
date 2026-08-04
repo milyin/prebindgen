@@ -2,6 +2,7 @@
 //! synthesis probe.
 
 use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Resolve the typed-handle Kotlin FQN for a handle-bearing struct field
 /// and assert its folded strategy is one the struct encode/decode bridge
@@ -9,7 +10,7 @@ use super::*;
 /// in `Nullable`) are encodable as a single `L<FQN>;` ctor arg; a
 /// collection layer (`Iterable`, i.e. `Vec<Handle>`) would need array
 /// codegen and is a loud build-time error until implemented.
-pub(crate) fn handle_field_fqn(ext: &JniGen, h: &Projection) -> String {
+pub(crate) fn handle_field_fqn(ext: &Declarations, h: &Projection) -> String {
     fn assert_scalar(s: &FoldStrategy) {
         match s {
             FoldStrategy::Base => {}
@@ -76,13 +77,13 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// data-class behind `Option` / `Vec`. (Those are handled by the slower
 /// [`struct_output_body`] until the synthesizer is widened to wrap them.)
 ///
-/// Classification reads only `ext.types` (`opaque`/`enum_cfg`) and
-/// `registry.structs` — both populated before `resolve` — never the output
-/// converter table (not yet built at this stage).
+/// Classification reads only `ext.types` (`opaque`/`enum_cfg`) and the parsed
+/// model (`registry.flat()`) — both populated before `resolve` — never the
+/// output converter table (not yet built at this stage).
 pub(crate) fn synth_value_struct_leaves(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    s: &syn::ItemStruct,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
+    s: &crate::api::core::flat::Struct,
     path_prefix: &[crate::api::core::unfold::PathStep],
     name_prefix: &str,
     depth: usize,
@@ -91,13 +92,11 @@ pub(crate) fn synth_value_struct_leaves(
     if depth > 16 {
         return None;
     }
-    let syn::Fields::Named(named) = &s.fields else {
-        return None;
-    };
+    // Named by construction — a tuple struct is an `Extern`, not a `Struct`.
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
-    for field in &named.named {
-        let fname = field.ident.as_ref()?.clone();
-        let effective_ty = field.ty.clone();
+    for field in &s.fields {
+        let fname = field.name.as_ref()?.clone();
+        let effective_ty = field.ty.syntax().clone();
         let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
         let leaf_name = if name_prefix.is_empty() {
             camel
@@ -147,7 +146,7 @@ pub(crate) fn synth_value_struct_leaves(
         leaves.push(UnfoldLeaf {
             name: leaf_name,
             path,
-            out_ty: effective_ty,
+            out_ty: field.ty.clone(),
             identity: false,
             nullable: false,
             source: LeafSource::Field,
@@ -170,9 +169,9 @@ pub(crate) fn synth_value_struct_leaves(
 /// plan `flatten_struct_factory` walks for the Kotlin side, so the slot
 /// order and JVM descriptors agree by construction.
 pub(crate) fn flatten_struct_encode(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    s: &syn::ItemStruct,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
+    s: &crate::api::core::flat::Struct,
     access: &TokenStream,
     prefix: &str,
     depth: usize,
@@ -333,16 +332,22 @@ fn encode_field(
                         child_slots.iter().map(|sl| sl.ident.clone()).collect();
                     let defaults: Vec<TokenStream> =
                         child_slots.iter().map(|sl| sl.default.clone()).collect();
+                    // Destructured through a coercion site: `kind` says this
+                    // field is optional, and how Rust spells that is the
+                    // source's business (#268).
+                    let obind = format_ident!("__on{}", depth);
+                    let coerce = bind_as_option(&quote!(&#value), &obind);
                     preludes.extend(quote! {
                         let #flag_id: jni::sys::jboolean;
                         #( let #outer_ids: #outer_tys; )*
-                        match &#value {
-                            Some(#cbind) => {
+                        #coerce
+                        match #obind {
+                            ::core::option::Option::Some(#cbind) => {
                                 #child_pre
                                 #flag_id = 1u8;
                                 #( #outer_ids = #inner_ids; )*
                             }
-                            None => {
+                            ::core::option::Option::None => {
                                 #flag_id = 0u8;
                                 #( #outer_ids = #defaults; )*
                             }
@@ -484,10 +489,16 @@ fn encode_field(
                     let sbind = format_ident!("__o{}", depth);
                     let inner_arms: Vec<TokenStream> =
                         arm_code.iter().map(|a| quote! { #a }).collect();
+                    // Destructured through a coercion site: `kind` says this
+                    // field is optional, and how Rust spells that is the
+                    // source's business (#268).
+                    let obind = format_ident!("__oc{}", depth);
+                    let coerce = bind_as_option(&quote!(&#value), &obind);
                     preludes.extend(quote! {
                         let #flag_id: jni::sys::jboolean;
                         #decls
-                        match &#value {
+                        #coerce
+                        match #obind {
                             ::core::option::Option::Some(#sbind) => {
                                 #flag_id = 1u8;
                                 match #sbind { #(#inner_arms)* }
@@ -574,16 +585,16 @@ fn encode_field(
 }
 
 pub(crate) fn struct_output_body(
-    ext: &JniGen,
-    s: &syn::ItemStruct,
-    registry: &Registry<KotlinMeta>,
+    ext: &Declarations,
+    s: &crate::api::core::flat::Struct,
+    registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
-    let struct_name = s.ident.to_string();
+    let struct_name = s.name.to_string();
     // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
     // mangle closure flows through; fall back to the bare struct ident
     // qualified with the package when no `data_class` /
     // `ptr_class` declaration exists for this Rust type.
-    let struct_ident = &s.ident;
+    let struct_ident = &s.name;
     let struct_ty: syn::Type = syn::parse_quote!(#struct_ident);
     let registered_fqn = ext
         .types
@@ -636,13 +647,15 @@ pub(crate) fn struct_output_body(
 }
 
 pub(crate) fn struct_module_path(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    s: &syn::ItemStruct,
+    ext: &Declarations,
+    registry: &impl Conversions<KotlinMeta>,
+    name: &syn::Ident,
 ) -> syn::Path {
     // The module the struct is reachable under from the generated file: its
-    // origin crate (multi-source registries) or the default module.
-    ext.fn_module(registry, &s.ident)
+    // origin crate (multi-source registries) or the default module. Takes the
+    // NAME, which is all it needs — so it serves a caller holding the element
+    // and one still holding the item.
+    ext.fn_module(registry, name)
 }
 
 // ──────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 //! Flat, FFI-friendly example library — a miniature in the style of `zenoh-flat`.
 //!
 //! Every public function is annotated with `#[prebindgen]`, so `prebindgen`
-//! captures this surface and a language adapter (here `prebindgen::lang::Cbindgen`,
+//! captures this surface and a language adapter (here `prebindgen::lang::CbindgenBuilder`,
 //! driven by `example-cbindgen`) generates the FFI layer — no hand-written
 //! `extern "C"` glue, and **no `#[repr(C)]`** in this crate.
 //!
@@ -31,6 +31,11 @@ pub const FEATURES: &str = features!();
 /// Boxed error type, mirroring zenoh-flat's `Error`. It is the `E` of every
 /// fallible `Result` and never crosses the FFI boundary as a value; the adapter
 /// marshals it to C as a `char*` message obtained from [`error_get_message`].
+///
+/// Marked, because that is how a type whose contents do not cross gets a name in
+/// the flat API: the alias declares `Error` as an opaque handle, which is what
+/// lets every `Result<_, Error>` below resolve.
+#[prebindgen]
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
 /// Render an error as its display string. Wired into the C adapter as the
@@ -61,7 +66,7 @@ pub enum Operation {
 /// with an **owning** payload (a `String`, which crosses to C as a malloc'd
 /// `char *`) beside a payload that is itself a declared enum. The C adapter
 /// lowers the whole thing to a `#[repr(C)]` enum, which cbindgen renders as the
-/// idiomatic tag + `union`. (`lang::Cbindgen` `.tagged_union`.)
+/// idiomatic tag + `union`. (`lang::CbindgenBuilder` `.tagged_union`.)
 #[prebindgen]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Shape {
@@ -286,10 +291,20 @@ pub fn drawing_get_shape(d: Drawing) -> Shape {
 
 /// A stateful accumulator. This is a plain Rust type used as an opaque handle:
 /// the binding holds it behind a pointer and frees it with `calculator_drop`.
-pub struct Calculator {
-    value: f64,
-    history: Vec<f64>,
+///
+/// The definition lives in a private module and the flat API exports a marked
+/// alias to it. That is how a handle whose contents never cross gets a name here
+/// — the same shape zenoh-flat uses for the Zenoh types it re-exports — and the
+/// alias is transparent, so everything below still says `Calculator`.
+mod calculator {
+    pub struct Calculator {
+        pub(super) value: f64,
+        pub(super) history: Vec<f64>,
+    }
 }
+
+#[prebindgen]
+pub type Calculator = calculator::Calculator;
 
 /// Build a fresh accumulator initialized to zero.
 #[prebindgen]
@@ -430,7 +445,7 @@ pub fn calculator_reset(c: &mut Calculator) {
 /// A fieldless enum whose **discriminants differ by target architecture**. The two
 /// definitions are mutually exclusive — the `#[prebindgen(cfg = ...)]` macro emits a
 /// matching real `#[cfg]`, so each target compiles exactly one and the generated C
-/// enum carries that target's values. (`lang::Cbindgen` `.enum_type`.)
+/// enum carries that target's values. (`lang::CbindgenBuilder` `.enum_type`.)
 #[prebindgen("structs", cfg = "target_arch = \"x86_64\"")]
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -449,7 +464,7 @@ pub enum InsideFoo {
 /// A by-value data struct whose **field set varies by target architecture and by
 /// feature**. `#[prebindgen]` records every `cfg`-gated field; the binding crate
 /// keeps only those matching the build target, so the generated `#[repr(C)] foo_t`
-/// differs per target. (`lang::Cbindgen` `.data_struct`.)
+/// differs per target. (`lang::CbindgenBuilder` `.data_struct`.)
 #[prebindgen("structs")]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Foo {

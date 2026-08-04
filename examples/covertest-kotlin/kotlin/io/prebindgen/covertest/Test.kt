@@ -44,9 +44,22 @@ import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.arraysEcho
 import io.prebindgen.covertest.model.blobValueEcho
+import io.prebindgen.covertest.Holder
+import io.prebindgen.covertest.WrappedFields
+import io.prebindgen.covertest.model.boxedElemIdSum
+import io.prebindgen.covertest.model.boxedLatest
+import io.prebindgen.covertest.model.boxedOptPayloadId
+import io.prebindgen.covertest.model.boxedOptPriorityWeight
+import io.prebindgen.covertest.model.boxedPayloadId
+import io.prebindgen.covertest.model.boxedRunIdSum
+import io.prebindgen.covertest.model.holderTagOr
+import io.prebindgen.covertest.model.wrappedFieldsSum
+import io.prebindgen.covertest.model.boxedNoteEcho
+import io.prebindgen.covertest.model.plainNoteEcho
 import io.prebindgen.covertest.model.blobValueNew
 import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
+import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.durationEmit
@@ -239,6 +252,13 @@ fun main() {
         check(durationOptional(null, boom) == null)
         check(durationOptional(0uL, boom) == 0uL)
         check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
+
+        // A `Box<Duration>` crosses as a bare `Duration` does — the wrapper is
+        // invisible to Kotlin, which is why the model erases it. Both
+        // directions run the full staged chain; skipping it put `Box::new`
+        // around a `u64` and did not compile (#309).
+        check(boxedDurationEcho(86_400_000uL, boom) == 86_400_000uL)
+        check(boxedDurationEcho(0uL, boom) == 0uL)
 
         // The data-class properties are semantic `ULong` / `ULong?`, while the
         // native output factory receives primitive Longs (the optional one
@@ -1423,6 +1443,70 @@ fun main() {
         check(fourth.count(boom) == 3L && fourth.total(boom) == 60.0)
         fourth.close()
         a.close()
+    }
+
+    // ── transparent wrappers: the spelling changes, the crossing must not ───
+    // The model erases `Box`/`Cow`, so a wrapped spelling and its unwrapped
+    // twin are ONE type to Kotlin. Compiling this crate already proves the
+    // generated Rust is well-typed; these assert the surfaces are the same and
+    // the values actually make the round trip.
+    section("transparent wrapper crossings") {
+        // Converted return: the converter is selected for the spelling, so it
+        // names `Box<Option<String>>` itself.
+        for (note in listOf("wrapped", null)) {
+            check(boxedNoteEcho(note, boom) == note)
+            check(plainNoteEcho(note, boom) == note)
+        }
+
+        // DECOMPOSED return: no converter names the spelling — the extern binds
+        // the value and matches it, so the `Box` has to come off first (#292).
+        // Same delivery as `archiveLatest`, one wrapper apart.
+        val a: SummaryVault = archiveNew(boom)
+        check(boxedLatest(a, boom) { count, total -> count to total } == null)
+        archiveStore(a, 0, 5L, 100.0, null, boom)
+        check(boxedLatest(a, boom) { count, total -> count to total } == 5L to 100.0)
+        a.close()
+
+        // INPUT side (#292 item 3). These lowerings REBUILD their parameter, so
+        // the wrapper has to go back on before the value reaches the signature.
+        // Every surface below is the unwrapped one — a wrapper must not cost a
+        // parameter its lowering, and must not show up in Kotlin either.
+        val p = payload(7L, 1, 2.0, true, "w")
+        check(boxedPayloadId(p, boom) == 7L)              // core wrap
+        check(boxedOptPayloadId(p, boom) == 7L)           // core + optional wrap
+        check(boxedOptPayloadId(null, boom) == -1L)       // …and the absent arm
+        check(boxedOptPriorityWeight(Priority.HIGH, boom) == 10L)  // option-scalar
+        check(boxedOptPriorityWeight(null, boom) == -1L)
+        val many = listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null))
+        check(boxedElemIdSum(many, boom) == 3L)           // wrapped element
+        check(boxedRunIdSum(many, boom) == 3L)            // wrapped run, by value
+
+        // FIELDS (#289). `boxed: Box<Option<Long>>` and `plain: Option<Long>`
+        // are one type to the model, so both cross as `Long?` on the decoupled
+        // `(present, value)` pair — the boxed one used to be read by path
+        // segment as "not optional" and crossed as one boxed object.
+        // `Priority.LOW` weighs 1, `HIGH` weighs 10 — see `priority_weight`.
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, 4L, Priority.LOW, Priority.LOW), boom) == 9L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, 4L, Priority.LOW, Priority.LOW), boom) == 7L)
+        check(wrappedFieldsSum(WrappedFields(1L, 2L, null, Priority.LOW, Priority.LOW), boom) == 5L)
+        check(wrappedFieldsSum(WrappedFields(1L, null, null, Priority.LOW, Priority.LOW), boom) == 3L)
+
+        // And over a TERMINAL (#309): `Box<Priority>` had no outbound route at
+        // all, where `Box<Option<Long>>` above rode the `Optional` layer arm.
+        // Both enum fields are declared `Priority` in Kotlin — the wrapper is
+        // invisible — and the pair differing only in spelling must weigh alike.
+        check(wrappedFieldsSum(WrappedFields(0L, null, null, Priority.HIGH, Priority.LOW), boom) == 11L)
+        check(wrappedFieldsSum(WrappedFields(0L, null, null, Priority.LOW, Priority.HIGH), boom) == 11L)
+
+        // An absent `Option<data class>` must deliver `None`, not an error. Its
+        // leaves are inert placeholders when the object is null, and a required
+        // HANDLE field's placeholder is pointer 0 — which the direct-handle
+        // decode reads as a closed handle. So this is the shape that proves the
+        // field decodes stay inside the presence gate; a fixture whose fields
+        // all decode successfully cannot tell the two orders apart.
+        check(holderTagOr(null, -9L, boom) == -9L)
+        val held = Summary.of(4L, 8.0, boom)
+        check(holderTagOr(Holder(3L, held), -9L, boom) == 7L)  // 3 + count(4)
     }
 
     // ── Vec<String> fold + Option<data-class> input + plain String return ────

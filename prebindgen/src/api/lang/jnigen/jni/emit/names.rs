@@ -5,8 +5,8 @@ use super::*;
 
 /// Last-segment ident of a `TypeKey` — e.g. `"Publisher<'static>"` →
 /// `"Publisher"`, `"AdvancedSubscriber<()>"` → `"AdvancedSubscriber"`. Used by
-/// the structured builders ([`JniGen::ptr_class`],
-/// [`JniGen::data_class`]) to derive a default Kotlin class name from
+/// the structured builders ([`Declarations::ptr_class`],
+/// [`Declarations::data_class`]) to derive a default Kotlin class name from
 /// the Rust type-key. Panics for non-path types (e.g. closures, references) —
 /// the per-kind `*_name_mangle` closures see only path-shaped
 /// shorts. For verbatim Kotlin expressions on non-path types, use a
@@ -23,17 +23,11 @@ pub(crate) fn rust_short_name(key: &TypeKey) -> String {
 
 /// Fallible variant of [`rust_short_name`] — returns `None` for
 /// non-path types instead of panicking. Used by
-/// [`JniGen::note_wrapper_registration`] which is called for rank-0
+/// [`Declarations::note_wrapper_registration`] which is called for rank-0
 /// wrapper patterns including non-path shapes like `()` where there
 /// is no Kotlin short name to derive.
 pub(crate) fn rust_short_name_opt(key: &TypeKey) -> Option<String> {
-    let ty = key.to_type();
-    if let syn::Type::Path(tp) = &ty {
-        if let Some(last) = tp.path.segments.last() {
-            return Some(last.ident.to_string());
-        }
-    }
-    None
+    key.short_name()
 }
 
 /// `VisitMut` that prefixes every bare single-segment `Type::Path` whose
@@ -236,9 +230,12 @@ pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn:
 // Helpers
 // ──────────────────────────────────────────────────────────────────────
 
-pub(crate) fn pat_match(ty: &syn::Type, pat: &str) -> bool {
-    ty.to_token_stream().to_string() == pat
-}
+// `pat_match` lived here — `ty.to_token_stream().to_string() == pat` — and was
+// how the converter selector decided what a type WAS: rebuild a wildcard
+// pattern from the spelling, render it to a string, compare. That made the
+// answer depend on how Rust happened to spell the type, so `Box<Option<T>>`
+// reconstructed as `Box<_>`, matched nothing, and got no converter at all
+// (#270). Dispatch reads `TypeKind` now; nothing needs it.
 
 /// `true` if `ty` is a path whose final segment is `name` (e.g. `Vec<_>` for
 /// `name = "Vec"`, `Option<&T>` for `name = "Option"`). Ignores generic args.

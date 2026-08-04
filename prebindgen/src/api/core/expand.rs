@@ -26,12 +26,12 @@
 
 use std::collections::HashSet;
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::api::core::{
     registry::{Registry, TypeKey},
-    types_util::{ident, option_inner_type, result_ok_type},
+    types_util::ident,
 };
 
 mod error;
@@ -166,7 +166,7 @@ fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
 /// claimed `#[prebindgen]` fn set — the domain over which `.default()`
 /// constructors auto-apply.
 ///
-/// Runs inside `write_rust` after `scan_declared` and before `resolve`, so
+/// Runs inside the builder's scan, before any conversion is built, so
 /// leaf converters resolve through the normal rank machinery.
 pub fn apply<M>(
     registry: &mut Registry<M>,
@@ -190,18 +190,8 @@ pub fn apply<M>(
         // (`Option`/`&`) type must equal the decl's declared type — the
         // typo guard for both coordinates of `.expand_param(name, decl)`.
         if let Some(declared) = &ed.declared_target {
-            let (item_fn, _) = registry
-                .functions
-                .get(&ed.func)
-                .cloned()
-                .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
-            let param_ty = find_param_type(&item_fn, &ed.param)
-                .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
-            let inner = option_inner_type(&param_ty).unwrap_or(param_ty);
-            let bare = match &inner {
-                syn::Type::Reference(r) => (*r.elem).clone(),
-                other => other.clone(),
-            };
+            let param_ty = param_reading(registry, &ed.func, &ed.param)?;
+            let bare = constructed_value(&param_ty);
             if TypeKey::from_type(&bare) != TypeKey::from_type(declared) {
                 return Err(ExpandError::ParamTypeMismatch {
                     func: ed.func.clone(),
@@ -237,19 +227,15 @@ pub fn apply<M>(
             if accessor_fns.contains(func) {
                 continue;
             }
-            let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+            let Some(params) = registry.flat().function(&func).map(|f| f.params.clone()) else {
                 continue;
             };
             // A method's receiver (first param of its class type) binds to `this`
             // and is never input-flattened; skip exactly that one param.
             let receiver_key = method_receivers.get(func);
             let mut receiver_skipped = false;
-            for (pname, pty) in fn_params(&item_fn) {
-                let core = option_inner_type(&pty).unwrap_or(pty);
-                let bare = match &core {
-                    syn::Type::Reference(r) => (*r.elem).clone(),
-                    other => other.clone(),
-                };
+            for (pname, pty) in params.iter().map(|p| (p.name.clone(), p.ty.clone())) {
+                let bare = constructed_value(&pty);
                 let bare_key = TypeKey::from_type(&bare);
                 if !receiver_skipped && receiver_key == Some(&bare_key) {
                     receiver_skipped = true;
@@ -278,19 +264,26 @@ pub fn apply<M>(
 }
 
 /// `(name, type)` of each typed parameter.
-fn fn_params(item_fn: &syn::ItemFn) -> Vec<(syn::Ident, syn::Type)> {
-    item_fn
-        .sig
-        .inputs
+/// The **reading** of a declared function's parameter.
+///
+/// `Param::ty` is a `TypeRef` computed at parse time. Reaching into the item's
+/// `origin.syntax` and digging the parameter out of `sig.inputs` — what these
+/// three sites used to do — re-derives a fact the model was already handing over,
+/// which is `origin` used for reasoning rather than for emission.
+fn param_reading<M>(
+    registry: &Registry<M>,
+    func: &syn::Ident,
+    param: &syn::Ident,
+) -> Result<crate::api::core::flat::TypeRef, ExpandError> {
+    registry
+        .flat()
+        .function(&func)
+        .ok_or_else(|| ExpandError::UnknownFunction(func.clone()))?
+        .params
         .iter()
-        .filter_map(|input| match input {
-            syn::FnArg::Typed(pt) => match &*pt.pat {
-                syn::Pat::Ident(pi) => Some((pi.ident.clone(), (*pt.ty).clone())),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect()
+        .find(|p| &p.name == param)
+        .map(|p| p.ty.clone())
+        .ok_or_else(|| ExpandError::UnknownParam(func.clone(), param.clone()))
 }
 
 /// Build + store the fold plan for one `.construct` declaration.
@@ -299,26 +292,12 @@ fn process_expand<M>(
     exp: &Expansions,
     ed: &ExpandDecl,
 ) -> Result<(), ExpandError> {
-    let (item_fn, loc) = registry
-        .functions
-        .get(&ed.func)
-        .cloned()
-        .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
+    let param_ty = param_reading(registry, &ed.func, &ed.param)?;
 
-    let param_ty = find_param_type(&item_fn, &ed.param)
-        .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
-
-    // Peel `Option<…>` (whole param optional) then a leading `&` (borrow):
-    // `Option<&T>` → optional + by_ref, `Option<T>` → optional, `&T` → by_ref.
-    let (optional, inner) = match option_inner_type(&param_ty) {
-        Some(i) => (true, i),
-        None => (false, param_ty.clone()),
-    };
-    let (by_ref, target) = match &inner {
-        syn::Type::Reference(r) => (true, (*r.elem).clone()),
-        other => (false, other.clone()),
-    };
-    let target_key = TypeKey::from_type(&target);
+    // The boundary layers: `Option<&T>` → optional + by_ref, `Option<T>` →
+    // optional, `&T` → by_ref, and `target` is what is left under them.
+    let (optional, by_ref, target) = constructed_value_layers(&param_ty);
+    let target_key = target.key();
 
     let variants = resolve_constructor(exp, registry, &target_key, ed)?;
     let mut visited: HashSet<TypeKey> = HashSet::new();
@@ -334,7 +313,7 @@ fn process_expand<M>(
     )?;
 
     for leaf in &plan.leaves {
-        registry.require_input(&leaf.ty, &loc);
+        registry.require_input(&leaf.ty);
     }
     registry
         .expansion_plans
@@ -370,28 +349,24 @@ fn resolve_constructor<M>(
 /// Constructor signature: parameter `(name, type)` pairs, the produced
 /// (`Ok`) target type, and whether it is fallible (`-> Result<_, _>`).
 fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSig, ExpandError> {
-    let (item_fn, _) = registry
-        .functions
-        .get(func)
+    // Read off the element rather than re-walked from the signature: `params`
+    // and `ret` are the same facts, already decided once — including that an
+    // elided return and a written `-> ()` are one thing.
+    let f = registry
+        .flat()
+        .function(&func)
         .ok_or_else(|| ExpandError::UnknownConstructor(func.clone()))?;
 
-    let mut params: Vec<(syn::Ident, syn::Type)> = Vec::new();
-    for input in &item_fn.sig.inputs {
-        if let syn::FnArg::Typed(pt) = input {
-            let name = match &*pt.pat {
-                syn::Pat::Ident(pi) => pi.ident.clone(),
-                _ => syn::Ident::new("arg", Span::call_site()),
-            };
-            params.push((name, (*pt.ty).clone()));
-        }
-    }
-    let ret: syn::Type = match &item_fn.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, t) => (**t).clone(),
-    };
-    let (target, fallible) = match result_ok_type(&ret) {
-        Some(ok) => (ok, true),
-        None => (ret, false),
+    let params: Vec<(syn::Ident, crate::api::core::flat::TypeRef)> = f
+        .params
+        .iter()
+        .map(|p| (p.name.clone(), p.ty.clone()))
+        .collect();
+    // The model already read this return; `fallible_parts` is that reading, not a
+    // second look at the spelling.
+    let (target, fallible) = match f.ret.fallible_parts() {
+        Some((ok, _)) => (ok.syntax().clone(), true),
+        None => (f.ret.syntax().clone(), false),
     };
     Ok(CtorSig {
         params,
@@ -401,7 +376,9 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
 }
 
 struct CtorSig {
-    params: Vec<(syn::Ident, syn::Type)>,
+    /// Readings, not spellings: they come off `Function::params`, and a consumer
+    /// that needs the spelling takes it at the point it stores one.
+    params: Vec<(syn::Ident, crate::api::core::flat::TypeRef)>,
     target: syn::Type,
     fallible: bool,
 }
@@ -417,7 +394,7 @@ fn build_plan<M>(
     ed: &ExpandDecl,
     optional: bool,
     by_ref: bool,
-    target: &syn::Type,
+    target: &crate::api::core::flat::TypeRef,
     variants: &[Variant],
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldPlan, ExpandError> {
@@ -437,7 +414,7 @@ fn build_plan<M>(
     if optional {
         let [Variant::Ctor(func)] = variants else {
             // Combined-selector dispatch under `Optional`.
-            visited.insert(TypeKey::from_type(target));
+            visited.insert(target.key());
             let prefix = param.to_string();
             let (selector, fold_variants) = build_core(
                 exp,
@@ -450,9 +427,9 @@ fn build_plan<M>(
                 &mut leaves,
                 visited,
             )?;
-            visited.remove(&TypeKey::from_type(target));
+            visited.remove(&target.key());
             return Ok(FoldPlan {
-                target: target.clone(),
+                target: target.syntax().clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -462,15 +439,15 @@ fn build_plan<M>(
             });
         };
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target)?;
+        check_target(func, &sig.target, target.syntax())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
                 name: param.clone(),
-                ty: opt(pty),
+                ty: pty.optional(),
             });
             return Ok(FoldPlan {
-                target: target.clone(),
+                target: target.syntax().clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -487,7 +464,8 @@ fn build_plan<M>(
         // Multi-arg: presence flag (leaf 0) + one flat leaf per ctor arg.
         leaves.push(FoldLeaf {
             name: ident(&format!("{}_present", param)),
-            ty: syn::parse_quote!(bool),
+            // A presence flag no source wrote — placeless by construction.
+            ty: crate::api::core::flat::TypeRef::scalar(crate::api::core::flat::ScalarKind::Bool),
         });
         let prefix = param.to_string();
         let mut inputs = Vec::new();
@@ -513,7 +491,7 @@ fn build_plan<M>(
             inputs.push(arg);
         }
         return Ok(FoldPlan {
-            target: target.clone(),
+            target: target.syntax().clone(),
             by_ref,
             shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
             leaves,
@@ -530,7 +508,7 @@ fn build_plan<M>(
 
     // Non-optional: build the (possibly recursive) construct core. The target is
     // on the cycle chain so a constructor parameter of the same type is rejected.
-    visited.insert(TypeKey::from_type(target));
+    visited.insert(target.key());
     let prefix = param.to_string();
     let (selector, fold_variants) = build_core(
         exp,
@@ -543,9 +521,9 @@ fn build_plan<M>(
         &mut leaves,
         visited,
     )?;
-    visited.remove(&TypeKey::from_type(target));
+    visited.remove(&target.key());
     Ok(FoldPlan {
-        target: target.clone(),
+        target: target.syntax().clone(),
         by_ref,
         shape: FoldShape::Base,
         leaves,
@@ -565,7 +543,7 @@ fn build_core<M>(
     exp: &Expansions,
     registry: &Registry<M>,
     ed: &ExpandDecl,
-    target: &syn::Type,
+    target: &crate::api::core::flat::TypeRef,
     variants: &[Variant],
     by_ref: bool,
     prefix: &str,
@@ -575,7 +553,7 @@ fn build_core<M>(
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target)?;
+        check_target(func, &sig.target, target.syntax())?;
         let np = sig.params.len();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
@@ -602,14 +580,15 @@ fn build_core<M>(
         let sel_idx = leaves.len();
         leaves.push(FoldLeaf {
             name: ident(&format!("{}_sel", prefix)),
-            ty: syn::parse_quote!(i32),
+            // The selector, likewise composed and placeless.
+            ty: crate::api::core::flat::TypeRef::scalar(crate::api::core::flat::ScalarKind::I32),
         });
         let mut fold_variants: Vec<FoldVariant> = Vec::new();
         for (vi, v) in variants.iter().enumerate() {
             match v {
                 Variant::Ctor(func) => {
                     let sig = ctor_signature(registry, func)?;
-                    check_target(func, &sig.target, target)?;
+                    check_target(func, &sig.target, target.syntax())?;
                     let np = sig.params.len();
                     let mut args = Vec::new();
                     for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
@@ -635,9 +614,9 @@ fn build_core<M>(
                 Variant::Identity => {
                     let idx = leaves.len();
                     let leaf_ty = if by_ref {
-                        opt(&syn::parse_quote!(&#target))
+                        target.borrowed().optional()
                     } else {
-                        opt(target)
+                        target.optional()
                     };
                     leaves.push(FoldLeaf {
                         name: ident(&format!("{}_{}", prefix, vi)),
@@ -664,22 +643,15 @@ fn build_arg<M>(
     exp: &Expansions,
     registry: &Registry<M>,
     ed: &ExpandDecl,
-    pty: &syn::Type,
+    pty: &crate::api::core::flat::TypeRef,
     name: syn::Ident,
     dispatched: bool,
     leaves: &mut Vec<FoldLeaf>,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldArg, ExpandError> {
-    // Peel `Option<…>` then a leading `&` to reach the parameter's core type.
-    let (popt, core) = match option_inner_type(pty) {
-        Some(i) => (true, i),
-        None => (false, pty.clone()),
-    };
-    let (pby_ref, bare) = match &core {
-        syn::Type::Reference(r) => (true, (*r.elem).clone()),
-        other => (false, other.clone()),
-    };
-    let key = TypeKey::from_type(&bare);
+    // The boundary layers down to the parameter's core type.
+    let (popt, pby_ref, bare) = constructed_value_layers(pty);
+    let key = bare.key();
     // A default constructor for the parameter's type ⇒ recursive nested build.
     let canon = exp
         .constructors
@@ -717,7 +689,7 @@ fn build_arg<M>(
         )?;
         visited.remove(&key);
         Ok(FoldArg::Build(Box::new(FoldBuild {
-            target: bare,
+            target: bare.syntax().clone(),
             by_ref: pby_ref,
             selector,
             variants: vars,
@@ -733,7 +705,7 @@ fn build_arg<M>(
         leaves.push(FoldLeaf {
             name,
             ty: if dispatched && !passthrough {
-                opt(pty)
+                pty.optional()
             } else {
                 pty.clone()
             },
@@ -1089,22 +1061,51 @@ fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: 
 // Small helpers
 // ──────────────────────────────────────────────────────────────────────
 
-fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Type> {
-    for input in &item_fn.sig.inputs {
-        if let syn::FnArg::Typed(pt) = input {
-            if let syn::Pat::Ident(pi) = &*pt.pat {
-                if &pi.ident == param {
-                    return Some((*pt.ty).clone());
-                }
-            }
-        }
-    }
-    None
+/// The value a constructor builds: `Option` off, then the borrow, and **nothing
+/// else** — read off the model's classification rather than by taking the
+/// spelling apart.
+///
+/// `Option<&T>`, `&T` and `T` all answer `T`, which is what every caller here
+/// wants: they are matching a declared target, and a declaration names the type,
+/// not the way a particular parameter happens to wrap it.
+///
+/// **`Vec<T>` answers `Vec<T>`, deliberately.** Expansion builds one value —
+/// `FoldPlan`'s shape is `Base` or `Optional(Base)`, with no iterable arm — so
+/// peeling a `Sequence` here would let a `Vec<T>` parameter match a `T`
+/// constructor and emit a wrapper that reconstructs a single `T` and hands it to
+/// a parameter expecting the collection. Leaving the `Sequence` on the core is
+/// what makes that a non-match instead of a miscompile, and it is the reason this
+/// is not [`TypeRef::layers`], which peels all three.
+///
+/// A type the grammar cannot express answers itself — the identity, not a
+/// fallback classifier. Nothing reaching here can be one: every signature in play
+/// was accepted by the frontend before the scan registered it.
+fn constructed_value(reading: &crate::api::core::flat::TypeRef) -> syn::Type {
+    let after_opt = reading.optional_inner().unwrap_or(reading);
+    after_opt
+        .borrow_target()
+        .unwrap_or(after_opt)
+        .syntax()
+        .clone()
 }
 
-fn opt(ty: &syn::Type) -> syn::Type {
-    syn::parse_quote!(Option<#ty>)
+/// [`constructed_value`], plus which of the two layers were there.
+fn constructed_value_layers(
+    reading: &crate::api::core::flat::TypeRef,
+) -> (bool, bool, crate::api::core::flat::TypeRef) {
+    let optional = reading.optional_inner().is_some();
+    let after_opt = reading.optional_inner().unwrap_or(reading);
+    let by_ref = after_opt.borrow_target().is_some();
+    let core = after_opt.borrow_target().unwrap_or(after_opt);
+    // The core READING, not its spelling: the plan composes `Option<&T>` over
+    // it, and composing from a reading keeps the kind and the syntax paired.
+    (optional, by_ref, core.clone())
 }
+
+// `opt` lived here — `parse_quote!(Option<#ty>)` — and built a spelling with no
+// classification beside it, so every consumer had to hand it back to the
+// registry to learn it was an optional. `TypeRef::optional` composes both at
+// once (#275).
 
 #[cfg(test)]
 mod tests;
