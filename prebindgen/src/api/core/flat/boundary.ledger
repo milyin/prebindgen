@@ -150,7 +150,6 @@
 2	api/core/registry/scan.rs
 1	api/core/write.rs
 2	api/lang/cbindgen/convert.rs
-1	api/lang/cbindgen/emit.rs
 1	api/lang/cbindgen/mod.rs
 5	api/lang/cbindgen/trait_impl.rs
 2	api/lang/jnigen/jni/builder.rs
@@ -158,4 +157,4 @@
 3	api/lang/jnigen/jni/symbols.rs
 2	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 22
+# total escapes: items: 21
