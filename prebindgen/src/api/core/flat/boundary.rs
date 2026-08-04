@@ -153,8 +153,11 @@ const HEADER: &str = "\
 #
 # It reads more than functions, because more than a function can hand out a
 # node: a public field, a trait method and its impl, and an alias that hides the
-# name (`use syn::Type as SynType` is resolved; `use syn as syntax` and
-# `type Node = syn::Type` are reported, since flat names syn types in full).
+# name (`use syn::Type as SynType` is resolved; a crate rename, a local
+# `type Node = syn::Type` and an associated `type Target = syn::Type` are
+# reported, since flat names syn types in full). An alias is reported whatever
+# its own visibility is: an alias is transparent, so a private one still lets a
+# public signature hand out the node.
 #
 # The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
 # item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
@@ -783,11 +786,16 @@ fn scanner_recognizes_the_shapes_that_matter() {
 /// **Externally visible is not just a function** (#313 review). A public field
 /// reopens exactly the capability an accessor closes; a trait method is as
 /// visible as its trait, and its impl carries no visibility of its own; and an
-/// alias — `use syn as syntax`, `type Node = syn::Type` — puts a node behind a
-/// name no check of `syn::` paths can follow. All four are doors here, and the
-/// alias forms are reported rather than resolved: `flat` names `syn::` types in
-/// full, everywhere, so following aliases to a fixed point would be machinery
-/// for a spelling the model does not use.
+/// alias — `use syn as syntax`, `type Node = syn::Type`, or an associated
+/// `type Target = syn::Type` reached through `Self::` — puts a node behind a
+/// name no check of `syn::` paths can follow. All are doors here.
+///
+/// The alias forms are **reported rather than resolved**: `flat` names `syn::`
+/// types in full, everywhere, so following aliases to a fixed point would be
+/// machinery for a spelling the model does not use. And an alias is reported
+/// whatever its own visibility is, because an alias is transparent — a private
+/// `type Node = syn::Type` still lets a public signature hand out the node, and
+/// the caller never has to name `Node` to use it.
 ///
 /// Three of the four entries were found this way rather than by design:
 /// `stripped_syntax`, `to_syn` and `enum_item` predate the seal and hand out a
@@ -976,14 +984,27 @@ fn collect_doors(
             }
             // A crate rename or a local alias puts a node behind a name this
             // check cannot follow, so the name itself is reported.
+            //
+            // **Whatever the alias's own visibility is.** An alias is
+            // transparent: a private `type Node = syn::Type` still makes
+            // `pub fn leak(&self) -> &Node` hand out a `syn::Type`, and the
+            // caller never has to name `Node` to use it (#313 review).
             syn::Item::Type(t)
-                if escapes_flat(&t.vis)
-                    && names_a_node(quote::ToTokens::to_token_stream(&t.ty), aliases) =>
+                if names_a_node(quote::ToTokens::to_token_stream(&t.ty), aliases) =>
             {
                 out.push((format!("type {}", t.ident), at.to_string()));
             }
             syn::Item::Impl(im) => {
                 for it in &im.items {
+                    // An associated type is an alias reached through `Self::`,
+                    // so a signature that names it names no node — which is how
+                    // `impl Deref for TypeRef { type Target = syn::Type; }`
+                    // hands the node to `&*ty` with nothing to count.
+                    if let syn::ImplItem::Type(t) = it {
+                        if names_a_node(quote::ToTokens::to_token_stream(&t.ty), aliases) {
+                            out.push((format!("type {}", t.ident), at.to_string()));
+                        }
+                    }
                     if let syn::ImplItem::Fn(f) = it {
                         // A trait impl's method carries no visibility of its
                         // own: it is reachable wherever the trait is, so the
@@ -1003,6 +1024,15 @@ fn collect_doors(
             }
             syn::Item::Trait(tr) if escapes_flat(&tr.vis) => {
                 for it in &tr.items {
+                    // An associated type's default is the same alias, declared
+                    // one level up.
+                    if let syn::TraitItem::Type(t) = it {
+                        if t.default.as_ref().is_some_and(|(_, ty)| {
+                            names_a_node(quote::ToTokens::to_token_stream(ty), aliases)
+                        }) {
+                            out.push((format!("{}::{}", tr.ident, t.ident), at.to_string()));
+                        }
+                    }
                     if let syn::TraitItem::Fn(f) = it {
                         // A trait method is as visible as its trait.
                         if is_door(&tr.vis, &f.sig) {
@@ -1164,6 +1194,35 @@ fn a_door_is_the_default_and_a_transformer_is_the_exception() {
     );
     // A leaf alias is not a door: there is still no shape to match on.
     assert!(doors("pub type Name = syn::Ident;").is_empty());
+    // An alias is TRANSPARENT, so its own visibility says nothing: a private
+    // one still makes `pub fn leak(&self) -> &Node` hand out a `syn::Type`,
+    // and the caller never has to name `Node` to use it.
+    assert_eq!(
+        doors("type Node = syn::Type;\nimpl S { pub fn leak(&self) -> &Node { self.as_syn() } }"),
+        ["type Node"]
+    );
+
+    // An associated type is an alias reached through `Self::`, so the signature
+    // that returns it names no node at all. `&*ty` then hands out the node with
+    // nothing to count.
+    assert_eq!(
+        doors(
+            "impl std::ops::Deref for TypeRef {\n\
+             type Target = syn::Type;\n\
+             fn deref(&self) -> &Self::Target { self.as_syn() }\n\
+             }"
+        ),
+        ["type Target"]
+    );
+    assert_eq!(
+        doors("pub trait Leak { type Node = syn::Type; }"),
+        ["Leak::Node"],
+        "an associated type's default is the same alias, one level up"
+    );
+    assert!(
+        doors("impl Deref for S { type Target = syn::Ident; }").is_empty(),
+        "a leaf is a leaf however it is reached"
+    );
 
     // Test code is not the model's surface.
     assert!(doors("#[cfg(test)]\nmod t { pub struct S { pub node: syn::Type } }").is_empty());
