@@ -100,6 +100,22 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
 /// Inverting it makes the failure mode "a legitimate length is refused", which
 /// is loud and trivially worked around by hoisting the value into a named
 /// `const`.
+///
+/// # The whitelist is the model's
+///
+/// It listed eight forms — adding `Binary`, `Unary`, `Paren`, `Group`, `Cast`
+/// and `Call` "const arithmetic over those" — and six of them could never
+/// arrive. [`lower_array_len`](crate::api::core::flat) accepts an integer
+/// literal or a **bare single-segment name of a marked const**, and nothing
+/// else: `[u8; A + 1]`, `[u8; A as usize]` and `[u8; array_len()]` are all
+/// `ArrayLenReason::NotLiteralOrName`, so the type never becomes a
+/// `TypeKind::Array` and never reaches an emitter at all
+/// (`an_extent_is_a_literal_or_a_marked_const_and_nothing_else` pins it).
+///
+/// So the two forms below are the two the language accepts, restated where the
+/// qualifier needs them. Narrowing a whitelist to what upstream already
+/// enforces cannot open a hole — it closes the gap between the two lists, which
+/// is the only way they could have disagreed.
 fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
     // Rendered before the mutable walk below borrows the length.
     let rendered = quote::ToTokens::to_token_stream(&*arr).to_string();
@@ -108,21 +124,13 @@ fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
     // feature this crate does not enable, and the walk mutates nothing.
     impl syn::visit_mut::VisitMut for Check {
         fn visit_expr_mut(&mut self, e: &mut syn::Expr) {
+            // The two forms the language accepts — see the note above.
             let ok = matches!(
                 e,
                 // A literal length, `[u8; 4]`.
                 syn::Expr::Lit(_)
-                    // The names this pass exists to qualify: `MAX`,
-                    // `Holder::N`, and the callee of `array_len()`.
+                    // The name this pass exists to qualify: a marked const.
                     | syn::Expr::Path(_)
-                    // Const arithmetic over those: `A + 1`, `-1`, `(A) * 2`,
-                    // `A as usize`, `array_len()`.
-                    | syn::Expr::Binary(_)
-                    | syn::Expr::Unary(_)
-                    | syn::Expr::Paren(_)
-                    | syn::Expr::Group(_)
-                    | syn::Expr::Cast(_)
-                    | syn::Expr::Call(_)
             );
             if !ok && self.0.is_none() {
                 self.0 = Some("an unsupported expression form");
@@ -134,8 +142,8 @@ fn reject_unsupported_array_length(arr: &mut syn::TypeArray) {
     syn::visit_mut::VisitMut::visit_expr_mut(&mut check, &mut arr.len);
     if let Some(what) = check.0 {
         panic!(
-            "fixed-size array `{rendered}`: the length uses {what}. Only a literal, a path, a \
-             call, and const arithmetic over those are supported — anything that can bind a name \
+            "fixed-size array `{rendered}`: the length uses {what}. Only a literal and the name \
+             of a `#[prebindgen]` const are supported — anything that can bind a name \
              (`const {{ … }}`, `match`, `if let`, a closure, a loop) would let a LOCAL be \
              mistaken for a source item, because this generator qualifies the length's paths \
              against their source module. Hoist the value into a named `const` and use that as \

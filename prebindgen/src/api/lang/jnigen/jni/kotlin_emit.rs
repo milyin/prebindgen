@@ -1605,7 +1605,7 @@ impl Declarations {
                         entry.rust_ident,
                     )
                 });
-            validate_constant_fn(self, item_fn.origin.as_syn());
+            validate_constant_fn(self, item_fn);
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
                 &package,

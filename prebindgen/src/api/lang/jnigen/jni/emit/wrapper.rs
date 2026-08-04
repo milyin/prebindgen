@@ -52,27 +52,26 @@ pub(crate) fn reject_handle_const(ext: &Declarations, c: &crate::api::core::flat
 /// (`const MAX_LEN` / `constant fn encoding_const_x_str`).
 pub(crate) fn reject_handle_constant_type(
     ext: &Declarations,
-    ty: &syn::Type,
+    ty: &crate::api::core::flat::TypeRef,
     what: &str,
     name: &str,
 ) {
-    let mut ty = ty.clone();
+    // The same three layers, off the classification. The node loop peeled a
+    // `Type::Reference` and then re-read the last path segment's ident twice
+    // (`option_inner_type`, `vec_inner_type`) to decide what it had.
+    let mut ty = ty;
     loop {
-        if let syn::Type::Reference(r) = &ty {
-            ty = (*r.elem).clone();
-            continue;
-        }
-        if let Some(inner) = option_inner_type(&ty) {
-            ty = inner;
-            continue;
-        }
-        if let Some(inner) = vec_inner_type(&ty) {
+        if let Some(inner) = ty
+            .borrow_target()
+            .or_else(|| ty.optional_inner())
+            .or_else(|| ty.sequence_elem())
+        {
             ty = inner;
             continue;
         }
         break;
     }
-    reject_handle_key(ext, &TypeKey::from_type(&ty), what, name);
+    reject_handle_key(ext, &ty.key(), what, name);
 }
 
 /// The refusal itself, once: a declared opaque handle cannot be a shared
@@ -99,23 +98,26 @@ fn reject_handle_key(ext: &Declarations, key: &TypeKey, what: &str, name: &str) 
 /// the `val` initializer's throwing `JniErrorHandler` only fits the
 /// infallible wrapper shape), and its return type must not peel to a
 /// declared opaque handle (same rationale as [`reject_handle_const`]).
-pub(crate) fn validate_constant_fn(ext: &Declarations, f: &syn::ItemFn) {
+pub(crate) fn validate_constant_fn(ext: &Declarations, f: &crate::api::core::flat::Function) {
+    // The ELEMENT: a signature is a parameter list and a return, both already
+    // classified. This walked `sig.inputs` for the arity, matched
+    // `ReturnType::Type` for the return — an elided one the element already
+    // normalizes to `Unit` — and ran `result_ok_type` over a path to re-derive
+    // the fallibility `TypeKind::Fallible` states.
     assert!(
-        f.sig.inputs.is_empty(),
+        f.params.is_empty(),
         "constant fn `{}`: takes {} parameter(s) — a function-backed constant must be nullary \
          (declare it with `.fun(...)` instead if it is a real function)",
-        f.sig.ident,
-        f.sig.inputs.len()
+        f.name,
+        f.params.len()
     );
-    if let syn::ReturnType::Type(_, ty) = &f.sig.output {
-        assert!(
-            result_ok_type(ty).is_none(),
-            "constant fn `{}`: returns a `Result` — a function-backed constant must be \
-             infallible (declare it with `.fun(...)` instead if it can fail)",
-            f.sig.ident
-        );
-        reject_handle_constant_type(ext, ty, "constant fn", &f.sig.ident.to_string());
-    }
+    assert!(
+        f.ret.fallible_parts().is_none(),
+        "constant fn `{}`: returns a `Result` — a function-backed constant must be \
+         infallible (declare it with `.fun(...)` instead if it can fail)",
+        f.name
+    );
+    reject_handle_constant_type(ext, &f.ret, "constant fn", &f.name.to_string());
 }
 
 /// The synthetic nullary getter signature an **expression constant**
@@ -182,7 +184,24 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
         "constant expr `{kotlin_name}`: type is a `Result` — an expression constant must be \
          infallible (declare a real function with `.fun(...)` instead if it can fail)"
     );
-    reject_handle_constant_type(ext, ty, "constant expr", kotlin_name);
+    // The peel, on the SPELLING. Unlike the fn path above there is no reading
+    // to ask: a `const_expr!` type is written by the BUILD SCRIPT and names no
+    // captured item, so the model never classified it (#280) — the ledger's
+    // documented adapter-owned category, and the reason this one node walk
+    // stays where its peer's could go.
+    let mut ty = ty.clone();
+    loop {
+        if let syn::Type::Reference(r) = &ty {
+            ty = (*r.elem).clone();
+            continue;
+        }
+        if let Some(inner) = option_inner_type(&ty).or_else(|| vec_inner_type(&ty)) {
+            ty = inner;
+            continue;
+        }
+        break;
+    }
+    reject_handle_key(ext, &TypeKey::from_type(&ty), "constant expr", kotlin_name);
 }
 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
