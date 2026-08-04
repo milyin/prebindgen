@@ -143,12 +143,12 @@ pub(crate) fn emit_unfold_delivery(
             // otherwise (mirrors `leaf_is_prim`; the folder interface
             // declares the matching typed param).
             let out_entry = registry
-                .reading_of(element.as_syn())
+                .reading(&element.key())
                 .and_then(|tr| registry.output_entry(&tr))
                 .unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                        TypeKey::from_type(element.as_syn())
+                        element.key()
                     )
                 });
             // The element's COMPLETE Rust -> wire chain. No `convert!` type is
@@ -493,7 +493,10 @@ pub(crate) fn reach_leaf_flat(
     // disagreement would be a borrow handed to an owning converter; this is the
     // second reading, removed.
     let reached_is_ours = if leaf.identity {
-        !matches!(leaf.out_ty.as_syn(), syn::Type::Reference(_))
+        !matches!(
+            leaf.out_ty.kind(),
+            crate::api::core::flat::TypeKind::Ref { .. }
+        )
     } else {
         consuming
     };
@@ -997,7 +1000,7 @@ pub(crate) fn encode_plan_leaves(
         let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
             panic!(
                 "jnigen unfold: leaf `{}` has no registered output converter",
-                TypeKey::from_type(leaf.out_ty.as_syn())
+                leaf.out_ty.key()
             )
         });
         let conv_fail = fail(quote!(__e.to_string()));
@@ -1060,7 +1063,7 @@ pub(crate) fn encode_plan_leaves(
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
                      `.accessor_record_id()` requires a ptr_class type",
-                    TypeKey::from_type(leaf.out_ty.as_syn())
+                    leaf.out_ty.key()
                 )
             });
             // The place this handle lives, when it is OURS to give away — the
@@ -1075,15 +1078,16 @@ pub(crate) fn encode_plan_leaves(
             // how to project it — a plain-field run directly, a trailing
             // `Option` through the nullable branch's `match`, which moves the
             // whole `Option` in rather than borrowing it.
-            let owned_place: Option<TokenStream> =
-                if !matches!(leaf.out_ty.as_syn(), syn::Type::Reference(_))
-                    && steps_are_movable(&path)
-                {
-                    let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
-                    Some(quote!(#value #(.#segs)*))
-                } else {
-                    None
-                };
+            let owned_place: Option<TokenStream> = if !matches!(
+                leaf.out_ty.kind(),
+                crate::api::core::flat::TypeKind::Ref { .. }
+            ) && steps_are_movable(&path)
+            {
+                let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
+                Some(quote!(#value #(.#segs)*))
+            } else {
+                None
+            };
             match proj.kind {
                 ProjectionKind::Handle => {
                     let handle_ident = format_ident!("__h{}", idx);

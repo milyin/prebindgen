@@ -5,35 +5,36 @@ use crate::api::core::registry::Conversions;
 
 /// Whether a decoded `Vec<T>` local can be borrowed where `referent` is expected.
 ///
-/// A **spelling** question, deliberately: it decides what the generated Rust must
-/// be able to say, and Rust distinguishes forms the boundary classification does
-/// not. `[T]` is reached by deref coercion from `&Vec<T>` and `Vec<T>` is the
-/// thing itself; a transparent wrapper such as `Box<Vec<T>>` or `Cow<'_, [T]>`
-/// classifies identically and cannot be reconstructed from the decoded local.
-fn decoded_vec_satisfies(referent: &syn::Type) -> bool {
-    match referent {
-        syn::Type::Slice(_) => true,
-        syn::Type::Path(tp) => tp
-            .path
-            .segments
-            .last()
-            .is_some_and(|s| s.ident == "Vec" && tp.path.segments.len() == 1),
-        _ => false,
-    }
+/// A question about the **form**, and it always was: `[T]` is reached by deref
+/// coercion from `&Vec<T>` and `Vec<T>` is the thing itself, while a transparent
+/// wrapper — `Box<Vec<T>>`, `Cow<'_, [T]>` — cannot be rebuilt from the decoded
+/// local.
+///
+/// It asked the spelling because it had to. This doc used to say so: *"Rust
+/// distinguishes forms the boundary classification does not"*, and that was true
+/// when `Vec<T>` and `[T]` were one `Sequence` and a `Box` was erased. `TypeKind`
+/// **is** the accepted syntax now, so the kind draws every distinction this needs
+/// — `Vec`, `Slice`, `Boxed` and `Cow` are four kinds — and the question is
+/// answered by the model instead of by a `match` on `syn`.
+fn decoded_vec_satisfies(referent: &crate::api::core::flat::TypeRef) -> bool {
+    matches!(
+        referent.kind(),
+        crate::api::core::flat::TypeKind::Slice(_) | crate::api::core::flat::TypeKind::Vec(_)
+    )
 }
 
-/// Whether a spelling has no size, so no by-value converter can name it.
+/// Whether a type has no size, so no by-value converter can name it.
 ///
-/// A **spelling** question, like [`decoded_vec_satisfies`]: `[T]` and `Vec<T>`
-/// are one concept to the model — both `Sequence` — and Rust can return only
-/// one of them. A bare slice is reached exclusively through a borrow, whose own
-/// arm handles it; claiming it here would generate `fn f(..) -> [T]`.
+/// The peer of [`decoded_vec_satisfies`], and it stopped being a *spelling*
+/// question for the same reason: `[T]` and `Vec<T>` were one concept once and
+/// are two kinds now. A bare slice is reached exclusively through a borrow,
+/// whose own arm handles it; claiming it here would generate `fn f(..) -> [T]`.
 ///
 /// `str` is the same shape of fact and is handled the same way, one layer up:
 /// its terminal arm resolves it to the borrowed `&str` converter rather than
-/// pretending an owned `str` exists.
-fn is_unsized_spelling(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Slice(_))
+/// pretending an owned `str` exists — which is why `Str` is not an arm here.
+fn is_unsized_spelling(ty: &crate::api::core::flat::TypeRef) -> bool {
+    matches!(ty.kind(), crate::api::core::flat::TypeKind::Slice(_))
 }
 
 impl Declarations {
@@ -97,7 +98,7 @@ impl Declarations {
             }
             return None;
         }
-        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
+        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
@@ -130,7 +131,7 @@ impl Declarations {
             // NOT: passing `&Vec<T>` there does not compile. Those fall through to
             // the plain borrow arm below, which hands the whole spelling on as the
             // sub, exactly as the old syntactic slice check did.
-            if !*mutable && decoded_vec_satisfies(inner.as_syn()) {
+            if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
                     let elem_ty = elem.as_syn().clone();
                     // The one place `produced` is NOT the crossing's spelling:
@@ -210,7 +211,7 @@ impl Declarations {
             }
             return None;
         }
-        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(syntax)) {
+        if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
@@ -227,7 +228,7 @@ impl Declarations {
             // input branch, and the same split: `kind` says it is a borrow of a
             // run of values; whether the generated Rust can iterate the borrow
             // directly is a question about the SPELLING.
-            if !*mutable && decoded_vec_satisfies(inner.as_syn()) {
+            if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
                     return self.output_slice(elem.as_syn(), registry);
                 }
