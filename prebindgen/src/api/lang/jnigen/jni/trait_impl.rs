@@ -1746,21 +1746,15 @@ impl Prebindgen for Declarations {
                     continue;
                 };
                 for arg in args {
-                    let after_ref = match arg.as_syn() {
-                        syn::Type::Reference(r) => (*r.elem).clone(),
-                        other => other.clone(),
-                    };
-                    let syn::Type::Slice(s) = &after_ref else {
+                    // The same walk `build_leaf_vec_fold_elements` makes over a
+                    // callback argument, off the same helper: one borrow, a
+                    // slice, one borrow off its element.
+                    let crate::api::core::flat::TypeKind::Slice(elem) = peel_one_borrow(arg).kind()
+                    else {
                         continue;
                     };
-                    let elem = match &*s.elem {
-                        syn::Type::Reference(r) => (*r.elem).clone(),
-                        other => other.clone(),
-                    };
-                    if matches!(
-                        self.type_kind(binding, &TypeKey::from_type(&elem)),
-                        TypeKind::Sum
-                    ) {
+                    let elem = peel_one_borrow(elem);
+                    if matches!(self.type_kind(binding, &elem.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
                              is not supported as a callback argument. A sum crosses as a tag \
@@ -1768,10 +1762,10 @@ impl Prebindgen for Declarations {
                              those into the foreign list needs the element folder a `Vec<{}>` \
                              RETURN provides; declare the callback over one value \
                              (`impl Fn({})`) or return `Vec<{}>` instead",
-                            elem.to_token_stream(),
-                            elem.to_token_stream(),
-                            elem.to_token_stream(),
-                            elem.to_token_stream(),
+                            elem.spell(),
+                            elem.spell(),
+                            elem.spell(),
+                            elem.spell(),
                         ));
                     }
                 }
