@@ -2186,7 +2186,7 @@ impl Declarations {
             #inner_call
         });
         Some(ConverterImpl {
-            subs: vec![stripped],
+            subs: vec![TypeKey::from_type(&stripped)],
             pre_stages: vec![],
             function: self.build_output_fn(produced, &wire, &body, None),
             destination: wire,
@@ -2264,7 +2264,7 @@ impl Declarations {
             #built
         });
         Some(ConverterImpl {
-            subs: vec![stripped],
+            subs: vec![TypeKey::from_type(&stripped)],
             pre_stages: vec![],
             function: self.build_input_fn(produced, &wire, &body, None),
             destination: wire,
@@ -2706,7 +2706,7 @@ impl Declarations {
         });
         let niches = default_niches_for_wire(&wire);
         Some(ConverterImpl {
-            subs: vec![elem.clone()],
+            subs: vec![TypeKey::from_type(elem)],
             pre_stages: vec![],
             function: self.build_output_fn(&outer_ty, &wire, &body, None),
             destination: wire,

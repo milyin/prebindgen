@@ -57,7 +57,7 @@ impl CbindgenBuilder {
         let c_struct = self.c_type_ident(ty);
         let src = self.src_ty(ty);
         let mut inits: Vec<TokenStream> = Vec::new();
-        let mut subs: Vec<syn::Type> = Vec::new();
+        let mut subs: Vec<TypeKey> = Vec::new();
         let mut fallible = false;
         for (fname, fty) in &fields {
             if is_string(fty) {
@@ -71,7 +71,7 @@ impl CbindgenBuilder {
                 // validates the tag and rebuilds the live arm, which is what
                 // makes this whole decode fallible.
                 let conv = Self::in_name(fty);
-                subs.push(fty.clone());
+                subs.push(TypeKey::from_type(fty));
                 fallible = true;
                 inits.push(quote!(#fname: #conv(v.#fname)?));
             } else if is_bool(fty) {
@@ -1110,7 +1110,7 @@ impl CbindgenBuilder {
                 }
             }
         }
-        let mut subs: Vec<syn::Type> = Vec::new();
+        let mut subs: Vec<TypeKey> = Vec::new();
         let arms: Vec<TokenStream> = e
             .variants
             .iter()
@@ -1132,7 +1132,7 @@ impl CbindgenBuilder {
                         // emitted. Without it the payload silently falls back to
                         // a passthrough and the generated code does not compile.
                         if self.payload_needs_converter(&f.ty) {
-                            subs.push(f.ty.clone());
+                            subs.push(TypeKey::from_type(&f.ty));
                         }
                         self.payload_in_expr(&f.ty, b, r)
                     })
@@ -1239,7 +1239,7 @@ impl CbindgenBuilder {
                 }
             }
         }
-        let mut subs: Vec<syn::Type> = Vec::new();
+        let mut subs: Vec<TypeKey> = Vec::new();
         let arms: Vec<TokenStream> = e
             .variants
             .iter()
@@ -1255,7 +1255,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| {
                         if self.payload_needs_converter(&f.ty) {
-                            subs.push(f.ty.clone());
+                            subs.push(TypeKey::from_type(&f.ty));
                         }
                         self.payload_out_expr(&f.ty, b, r)
                     })
@@ -1976,13 +1976,13 @@ impl CbindgenBuilder {
             let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let mut inits: Vec<TokenStream> = Vec::new();
-            let mut subs: Vec<syn::Type> = Vec::new();
+            let mut subs: Vec<TypeKey> = Vec::new();
             for (fname, fty) in &fields {
                 if is_string(fty) {
                     inits.push(quote!(#fname: __cbg_alloc_cstr(v.#fname)));
                 } else if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
                     let conv = Self::out_name(fty);
-                    subs.push(fty.clone());
+                    subs.push(TypeKey::from_type(fty));
                     inits.push(quote!(#fname: #conv(v.#fname)));
                 } else if is_bool(fty) {
                     let wrap = bool_out_expr(quote!(v.#fname));
@@ -2129,7 +2129,7 @@ impl CbindgenBuilder {
                     )
                 };
                 return Some(ConverterImpl {
-                    subs: vec![inner],
+                    subs: vec![TypeKey::from_type(&inner)],
                     destination: inner_wire,
                     function,
                     pre_stages: vec![],
@@ -2182,7 +2182,7 @@ impl CbindgenBuilder {
                 )
             };
             return Some(ConverterImpl {
-                subs: vec![inner],
+                subs: vec![TypeKey::from_type(&inner)],
                 destination: wire,
                 function,
                 pre_stages: vec![],
@@ -2228,7 +2228,7 @@ impl CbindgenBuilder {
                         pub(crate) fn #name() {}
                     );
                     return Some(ConverterImpl {
-                        subs: vec![e.clone()],
+                        subs: vec![TypeKey::from_type(&e)],
                         destination: syn::parse_quote!(*const #e),
                         function,
                         pre_stages: vec![],
@@ -2245,7 +2245,7 @@ impl CbindgenBuilder {
                         pub(crate) fn #name() {}
                     );
                     return Some(ConverterImpl {
-                        subs: vec![e],
+                        subs: vec![TypeKey::from_type(&e)],
                         destination: syn::parse_quote!(*const #counterpart),
                         function,
                         pre_stages: vec![],
@@ -2277,7 +2277,7 @@ impl CbindgenBuilder {
                 }
             );
             return Some(ConverterImpl {
-                subs: vec![elem],
+                subs: vec![TypeKey::from_type(&elem)],
                 destination: syn::parse_quote!(*const ::core::ffi::c_char),
                 function,
                 pre_stages: vec![],
@@ -2311,7 +2311,7 @@ impl CbindgenBuilder {
                     }
                 );
                 return Some(ConverterImpl {
-                    subs: vec![inner],
+                    subs: vec![TypeKey::from_type(&inner)],
                     destination: syn::parse_quote!(*mut #op),
                     function,
                     pre_stages: vec![],
@@ -2346,7 +2346,7 @@ impl CbindgenBuilder {
                 }
             );
             return Some(ConverterImpl {
-                subs: vec![elem],
+                subs: vec![TypeKey::from_type(&elem)],
                 destination: syn::parse_quote!(*mut #wire_ty),
                 function,
                 pre_stages: vec![],
@@ -2378,7 +2378,7 @@ impl CbindgenBuilder {
             }
         );
         Some(ConverterImpl {
-            subs: vec![elem],
+            subs: vec![TypeKey::from_type(&elem)],
             destination: syn::parse_quote!(*const #wire_ty),
             function,
             pre_stages: vec![],
@@ -2411,7 +2411,7 @@ impl CbindgenBuilder {
                 pub(crate) fn #name() {}
             );
             return Some(ConverterImpl {
-                subs: vec![inner],
+                subs: vec![TypeKey::from_type(&inner)],
                 destination: syn::parse_quote!(()),
                 function,
                 pre_stages: vec![],
@@ -2432,7 +2432,7 @@ impl CbindgenBuilder {
                 pub(crate) fn #name() {}
             );
             return Some(ConverterImpl {
-                subs: vec![inner],
+                subs: vec![TypeKey::from_type(&inner)],
                 destination: syn::parse_quote!(()),
                 function,
                 pre_stages: vec![],
@@ -2460,7 +2460,7 @@ impl CbindgenBuilder {
                 pub(crate) fn #name() {}
             );
             return Some(ConverterImpl {
-                subs: vec![elem],
+                subs: vec![TypeKey::from_type(&elem)],
                 destination: syn::parse_quote!(()),
                 function,
                 pre_stages: vec![],
@@ -2488,7 +2488,7 @@ impl CbindgenBuilder {
                     }
                 );
                 return Some(ConverterImpl {
-                    subs: vec![elem],
+                    subs: vec![TypeKey::from_type(&elem)],
                     destination: syn::parse_quote!(*const #wire_ty),
                     function,
                     pre_stages: vec![],
@@ -2508,7 +2508,7 @@ impl CbindgenBuilder {
                 pub(crate) fn #name() {}
             );
             return Some(ConverterImpl {
-                subs: vec![ok, err],
+                subs: vec![TypeKey::from_type(&ok), TypeKey::from_type(&err)],
                 destination: syn::parse_quote!(()),
                 function,
                 pre_stages: vec![],

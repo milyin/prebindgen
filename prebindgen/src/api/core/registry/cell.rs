@@ -77,7 +77,7 @@ impl<M> TypeEntry<M> {
             destination: c.destination,
             function: c.function,
             pre_stages: c.pre_stages,
-            subs: c.subs.iter().map(TypeKey::from_type).collect(),
+            subs: c.subs.clone(),
             niches: c.niches,
             metadata: c.metadata,
         }

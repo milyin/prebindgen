@@ -150,11 +150,11 @@
 8	api/lang/jnigen/jni/kotlin_emit.rs
 2	api/lang/jnigen/jni/overloads.rs
 2	api/lang/jnigen/jni/render.rs
-15	api/lang/jnigen/jni/selector.rs
+8	api/lang/jnigen/jni/selector.rs
 3	api/lang/jnigen/jni/struct_plan.rs
 17	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 114
+# total escapes: types: 107
 
 ## escapes: items
 1	api/core/prebindgen.rs

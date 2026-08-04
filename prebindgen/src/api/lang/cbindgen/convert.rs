@@ -107,7 +107,7 @@ impl CbindgenBuilder {
         };
         let niches = self.c_domain_niches(decl, registry, Direction::Input);
         Some(ConverterImpl {
-            subs: vec![repr],
+            subs: vec![TypeKey::from_type(&repr)],
             destination: wire,
             function,
             pre_stages: vec![],
@@ -175,7 +175,7 @@ impl CbindgenBuilder {
         };
         let niches = self.c_domain_niches(decl, registry, Direction::Output);
         Some(ConverterImpl {
-            subs: vec![repr],
+            subs: vec![TypeKey::from_type(&repr)],
             destination: wire,
             function,
             pre_stages: vec![],
