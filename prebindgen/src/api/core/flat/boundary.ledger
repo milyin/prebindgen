@@ -141,9 +141,9 @@
 3	api/lang/jnigen/jni/overloads.rs
 1	api/lang/jnigen/jni/render.rs
 6	api/lang/jnigen/jni/selector.rs
-13	api/lang/jnigen/jni/trait_impl.rs
+7	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 47
+# total escapes: types: 41
 
 ## escapes: items
 1	api/core/prebindgen.rs

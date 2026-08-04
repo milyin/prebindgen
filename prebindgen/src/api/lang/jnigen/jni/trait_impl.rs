@@ -259,7 +259,7 @@ impl Declarations {
             // an `OwnedObject::from_raw` failure as the framework
             // `JniBindingError`, so the throws fields point at the
             // framework exception.
-            metadata: self.opaque_leaf_meta(ty),
+            metadata: self.opaque_leaf_meta(TypeKey::from_type(ty)),
         }
     }
 
@@ -267,10 +267,10 @@ impl Declarations {
     /// plus the [`Projection`] that folds outward through wrappers (owned,
     /// [`FoldStrategy::Base`]). The single seam where a Rust type is
     /// first marked a closeable native handle.
-    fn opaque_leaf_meta(&self, ty: &syn::Type) -> KotlinMeta {
+    fn opaque_leaf_meta(&self, key: TypeKey) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
-                leaf_key: TypeKey::from_type(ty),
+                leaf_key: key,
                 owned: true,
                 strategy: FoldStrategy::Base,
                 kind: ProjectionKind::Handle,
@@ -437,7 +437,7 @@ impl Declarations {
             // [`Self::opaque_leaf_meta`]. Framework throws because the
             // wrapper's emitted match-arm still has a `JniBindingError`
             // branch reachable via the chain.
-            metadata: self.opaque_leaf_meta(ty),
+            metadata: self.opaque_leaf_meta(TypeKey::from_type(ty)),
         }
     }
 }
@@ -871,9 +871,11 @@ impl Declarations {
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions; the
-        // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.as_syn();
+        // `t1`'s spelling, for the parts that ask spelling questions — the
+        // canonical form a produced spelling is compared against, and the
+        // type ascriptions the generated body writes. Everything else takes
+        // the READING itself (#284).
+        let t1_ty = t1.spell();
         let WrapperShape::Borrow { mutable } = shape else {
             return None;
         };
@@ -930,9 +932,11 @@ impl Declarations {
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions; the
-        // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.as_syn();
+        // `t1`'s spelling, for the parts that ask spelling questions — the
+        // canonical form a produced spelling is compared against, and the
+        // type ascriptions the generated body writes. Everything else takes
+        // the READING itself (#284).
+        let t1_ty = t1.spell();
         let WrapperShape::OptionRef { mutable } = shape else {
             return None;
         };
@@ -1001,14 +1005,16 @@ impl Declarations {
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions; the
-        // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.as_syn();
+        // `t1`'s spelling, for the parts that ask spelling questions — the
+        // canonical form a produced spelling is compared against, and the
+        // type ascriptions the generated body writes. Everything else takes
+        // the READING itself (#284).
+        let t1_ty = t1.spell();
         if shape != WrapperShape::Sequence {
             return None;
         }
         let inner = registry.input_entry(t1)?;
-        reject_vec_of_handle(&inner.metadata.projection, t1_ty);
+        reject_vec_of_handle(&inner.metadata.projection, t1);
         let inner_wire = inner.destination.clone();
         if !is_jobject_shaped_wire(&inner_wire) {
             return None;
@@ -1072,9 +1078,11 @@ impl Declarations {
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions; the
-        // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.as_syn();
+        // `t1`'s spelling, for the parts that ask spelling questions — the
+        // canonical form a produced spelling is compared against, and the
+        // type ascriptions the generated body writes. Everything else takes
+        // the READING itself (#284).
+        let t1_ty = t1.spell();
         if shape == WrapperShape::Optional {
             let inner = registry.input_entry(t1)?;
             if inner.metadata.is_direct_handle() {
@@ -1137,7 +1145,7 @@ impl Declarations {
             let outer_ty = produced.clone();
             let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
             let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1_ty, registry)?;
+            let (wire, inner_body, niches) = option_input(t1, registry)?;
             // `option_input` yields the canonical `Option<T>`; the converter
             // yields the spelling.
             let body: syn::Expr = syn::parse_quote!({
@@ -1155,7 +1163,7 @@ impl Declarations {
             // an inner niche, the wire stays identical to the inner's
             // destination and `None` is the niche slot sentinel; the boxed
             // fallback widens the wire to `JObject`.
-            let nullable_kind = nullable_kind_for(&wire, t1_ty, registry);
+            let nullable_kind = nullable_kind_for(&wire, t1, registry);
             let projection = registry
                 .input_entry(t1)
                 .and_then(|e| e.metadata.projection.clone())
@@ -1557,8 +1565,7 @@ impl Declarations {
         args: &[crate::api::core::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let spellings: Vec<syn::Type> = args.iter().map(|a| a.as_syn().clone()).collect();
-        let outer_ty = build_fn_type(&spellings);
+        let outer_ty = build_fn_type(args);
         let (wire, body) = callback_input(self, args, registry)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
@@ -2516,9 +2523,11 @@ impl Declarations {
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions; the
-        // READING stays in `t1` for the lookups (#284).
-        let t1_ty = t1.as_syn();
+        // `t1`'s spelling, for the parts that ask spelling questions — the
+        // canonical form a produced spelling is compared against, and the
+        // type ascriptions the generated body writes. Everything else takes
+        // the READING itself (#284).
+        let t1_ty = t1.spell();
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
         // return *borrowed* handles for the C tier's zero-copy borrows, but
@@ -2529,14 +2538,9 @@ impl Declarations {
         // arm below (it looks up this `&T` entry as its inner). Matched
         // structurally so the lifetime variant `&'static _` is covered too.
         if let syn::Type::Reference(r) = produced {
-            if r.mutability.is_none()
-                && self
-                    .types
-                    .get(&TypeKey::from_type(t1_ty))
-                    .is_some_and(|c| c.is_opaque())
-            {
+            if r.mutability.is_none() && self.types.get(&t1.key()).is_some_and(|c| c.is_opaque()) {
                 let mut ref_ty = r.clone();
-                *ref_ty.elem = t1_ty.clone();
+                *ref_ty.elem = syn::parse_quote!(#t1_ty);
                 let outer_ty = syn::Type::Reference(ref_ty);
                 let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
                 let body: syn::Expr = syn::parse_quote!(std::boxed::Box::into_raw(
@@ -2548,7 +2552,7 @@ impl Declarations {
                     destination: wire,
                     pre_stages: vec![],
                     niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
-                    metadata: self.opaque_leaf_meta(t1_ty),
+                    metadata: self.opaque_leaf_meta(t1.key()),
                 });
             }
         }
@@ -2558,7 +2562,7 @@ impl Declarations {
         // intermediate owned `String`). The unsized `str` sub resolves via the
         // rank-0 arm to the same fn (see [`Self::str_ref_output`]).
         if let syn::Type::Reference(r) = produced {
-            if r.mutability.is_none() && TypeKey::from_type(t1_ty).as_str() == "str" {
+            if r.mutability.is_none() && t1.key().as_str() == "str" {
                 return Some(self.str_ref_output());
             }
         }
@@ -2571,7 +2575,7 @@ impl Declarations {
             // Bridgeable first: an unsupported representation must not resolve
             // and then emit code the consumer cannot compile.
             let read = read_as_canonical(produced, &canonical)?;
-            let (wire, inner_body, niches) = option_output(t1_ty, registry)?;
+            let (wire, inner_body, niches) = option_output(t1, registry)?;
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
                 #inner_body
@@ -2585,7 +2589,7 @@ impl Declarations {
             // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
             // and treats the slot value as `None`; boxed widens to `JObject`
             // and uses JVM null.
-            let nullable_kind = nullable_kind_for_output(&wire, t1_ty, registry);
+            let nullable_kind = nullable_kind_for_output(&wire, t1, registry);
             let projection = registry
                 .output_entry(t1)
                 .and_then(|e| e.metadata.projection.clone())
