@@ -1844,7 +1844,7 @@ impl Prebindgen for CbindgenBuilder {
         f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
     ) -> TokenStream {
-        self.emit_function_wrapper(f.origin.as_syn(), registry)
+        self.emit_function_wrapper(f, registry)
     }
 
     fn on_struct(

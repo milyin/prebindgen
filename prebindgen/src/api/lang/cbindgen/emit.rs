@@ -484,25 +484,21 @@ impl CbindgenBuilder {
     /// Assemble the `#[no_mangle] extern "C"` wrapper for one declared fn.
     pub(super) fn emit_function_wrapper(
         &self,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
     ) -> TokenStream {
-        let orig = &f.sig.ident;
+        let orig = &f.name;
         let call_path = self.src_fn(orig);
         let sym = self.fn_symbol(orig);
 
-        let return_ty: syn::Type = match &f.sig.output {
-            syn::ReturnType::Default => syn::parse_quote!(()),
-            syn::ReturnType::Type(_, ty) => (**ty).clone(),
-        };
+        // The ELEMENT: a signature is a parameter list and a return, both
+        // already classified. An elided return is `TypeKind::Unit`, which is
+        // the `ReturnType::Default` arm this used to write.
+        let return_ty: syn::Type = spelled(&f.ret);
 
-        let has_fallible_input = f.sig.inputs.iter().any(|input| {
-            let syn::FnArg::Typed(pt) = input else {
-                return false;
-            };
+        let has_fallible_input = f.params.iter().any(|p| {
             registry
-                .reading_of(&pt.ty)
-                .and_then(|tr| registry.input_entry(&tr))
+                .input_entry(&p.ty)
                 .map(|e| returns_result(&e.function.sig.output))
                 .unwrap_or(false)
         });
@@ -959,33 +955,35 @@ impl CbindgenBuilder {
     /// handle pointer, and comparing the syntactic parameter type instead would
     /// miss `f(x: ZThing, y: Option<ZThing>)` called with the same handle
     /// twice.
-    fn alias_slot(&self, ty: &syn::Type) -> Option<(TypeKey, AliasAccess)> {
-        let inner = if is_option(ty) {
-            first_type_arg(ty)?
-        } else {
-            ty.clone()
-        };
+    /// [`Self::alias_slot`] off the classification: the optional peel, the
+    /// borrow and its mutability, and the `MaybeUninit` under a `&mut` are all
+    /// what `TypeKind` states — where this walked `Option`'s type argument, a
+    /// `syn::Type::Reference` and its `mutability` field.
+    fn alias_slot_of(&self, ty: &TypeRef) -> Option<(TypeKey, AliasAccess)> {
+        let inner = ty.optional_inner().unwrap_or(ty);
         let declared =
             |key: &TypeKey| self.opaque.contains_key(key) || self.value_opaque.contains_key(key);
-        if let syn::Type::Reference(r) = &inner {
+        if let TypeKind::Ref { mutable, inner, .. } = inner.kind() {
             // `&mut MaybeUninit<T>` borrows T's slot exclusively just as
             // `&mut T` does; the wire is the same pointer.
-            let elem = (*r.elem).clone();
-            let elem = maybe_uninit_inner(&elem).unwrap_or(elem);
-            let key = TypeKey::from_type(&elem);
+            let elem = match inner.kind() {
+                TypeKind::Uninit(t) => t,
+                _ => inner,
+            };
+            let key = elem.key();
             if !declared(&key) {
                 return None;
             }
             return Some((
                 key,
-                if r.mutability.is_some() {
+                if *mutable {
                     AliasAccess::Exclusive
                 } else {
                     AliasAccess::Shared
                 },
             ));
         }
-        let key = TypeKey::from_type(&inner);
+        let key = inner.key();
         declared(&key).then_some((key, AliasAccess::Consume))
     }
 
@@ -1012,17 +1010,15 @@ impl CbindgenBuilder {
     ///
     /// Shared/shared is *not* rejected: two `&T` to one resource is legal Rust
     /// and legal C.
-    pub(super) fn alias_preflight(&self, f: &syn::ItemFn, route: &ErrRoute) -> Option<TokenStream> {
+    pub(super) fn alias_preflight(
+        &self,
+        f: &crate::api::core::flat::Function,
+        route: &ErrRoute,
+    ) -> Option<TokenStream> {
         let mut slots: Vec<(syn::Ident, TypeKey, AliasAccess)> = Vec::new();
-        for input in &f.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else {
-                continue;
-            };
-            let syn::Pat::Ident(pat_id) = &*pt.pat else {
-                continue;
-            };
-            if let Some((key, access)) = self.alias_slot(&pt.ty) {
-                slots.push((pat_id.ident.clone(), key, access));
+        for p in &f.params {
+            if let Some((key, access)) = self.alias_slot_of(&p.ty) {
+                slots.push((p.name.clone(), key, access));
             }
         }
 
@@ -1066,7 +1062,7 @@ impl CbindgenBuilder {
     pub(super) fn emit_inputs(
         &self,
         orig: &syn::Ident,
-        f: &syn::ItemFn,
+        f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
         route: &ErrRoute,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
@@ -1077,15 +1073,10 @@ impl CbindgenBuilder {
         let mut decodes: Vec<TokenStream> = self.alias_preflight(f, route).into_iter().collect();
         let mut call_args = Vec::new();
 
-        for input in &f.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else {
-                continue;
-            };
-            let syn::Pat::Ident(pat_id) = &*pt.pat else {
-                continue;
-            };
-            let ident = &pat_id.ident;
-            let arg_ty = &*pt.ty;
+        for param in &f.params {
+            let ident = &param.name;
+            let arg_reading = &param.ty;
+            let arg_ty = &spelled(arg_reading);
 
             // `&[E]` slice (scalar `E`): two wire params (`*const E`, `usize`),
             // decoded zero-copy. NULL pointer ⇒ empty slice (not an error).
