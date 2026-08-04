@@ -1887,13 +1887,13 @@ impl Declarations {
     ///
     pub(crate) fn lookup_input(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // A `convert!`-declared conversion is the only thing that answers here.
         // There was a wildcard-pattern table beside it; nothing ever wrote to
         // the input half, so every lookup through it returned `None`.
-        let key = TypeKey::from_type(outer);
+        let key = outer.key();
         let (ty, exc_ty, body) = self.convert_input_body(&key, registry)?;
         // The closure's middle slot carries the `Result`'s raw Rust error
         // type (or `None` for the framework `__JniErr`); it feeds the
@@ -1905,7 +1905,11 @@ impl Declarations {
         // distinguishes a rust continue-type (compose) from a wire
         // (terminal) without forcing `()` either way. A non-wire `ty` that
         // isn't yet resolved defers.
-        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(outer);
+        let outer_node: syn::Type = {
+            let spelled = outer.spell();
+            syn::parse_quote!(#spelled)
+        };
+        let is_self = TypeKey::from_type(&ty) == outer.key();
         let inner = if is_self {
             None
         } else {
@@ -1926,7 +1930,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn(outer, &ty, &body, exc),
+                    function: self.build_input_fn_of(outer, &ty, &body, exc),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -1948,7 +1952,10 @@ impl Declarations {
                 // yields `outer`, i.e. the same shape an output converter
                 // has — so it's built with `build_output_fn`.
                 let stage = Stage {
-                    function: self.build_output_fn(&ty, outer, &body, exc),
+                    // `outer` sits in the WIRE slot here: the stage yields it
+                    // from `ty`, so it is spelled into the signature rather
+                    // than classified.
+                    function: self.build_output_fn(&ty, &outer_node, &body, exc),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];
@@ -1992,10 +1999,10 @@ impl Declarations {
     ///   (`None`) if `ty`'s converter isn't resolved yet.
     pub(crate) fn lookup_output(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let key = TypeKey::from_type(outer);
+        let key = outer.key();
         let (ty, exc_ty, body) = self.convert_output_body(&key, registry)?;
         self.build_output_converter(outer, None, ty, exc_ty, body, registry)
     }
@@ -2009,7 +2016,7 @@ impl Declarations {
     /// engine expressed one fact the frontend states outright.
     pub(crate) fn result_peel(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         ok: &syn::Type,
         err: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
@@ -2031,19 +2038,19 @@ impl Declarations {
     /// tested.
     fn build_output_converter(
         &self,
-        outer: &syn::Type,
+        outer: &crate::api::core::flat::TypeRef,
         arg0: Option<&syn::Type>,
         ty: syn::Type,
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let key = TypeKey::from_type(outer);
+        let key = outer.key();
         // The middle slot carries the `Result`'s raw Rust error type (or `None`
         // for the framework `__JniErr`).
         let exc = exc_ty.as_ref();
         // Terminal vs composed — see [`Self::lookup_input`] for the rule.
-        let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(outer);
+        let is_self = TypeKey::from_type(&ty) == key;
         let inner = if is_self {
             None
         } else {
@@ -2081,7 +2088,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -2098,7 +2105,7 @@ impl Declarations {
             Some(inner) => {
                 // Composed: `ty` is the continue rust type; chain its converter.
                 let stage = Stage {
-                    function: self.build_output_fn(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];

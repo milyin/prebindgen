@@ -194,7 +194,7 @@ impl Declarations {
         //    `result_parts` covers a `Result` the adapter composed itself, which
         //    the frontend never read.
         if let Some((ok, err)) = fallible_parts(ty) {
-            if let Some(c) = self.result_peel(syntax, &ok, &err, registry) {
+            if let Some(c) = self.result_peel(ty, &ok, &err, registry) {
                 return Some(c);
             }
         }

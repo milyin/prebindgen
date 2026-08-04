@@ -249,8 +249,8 @@ pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn:
 /// `impl Fn(...)` lambda converters — the legacy
 /// `process_kotlin_<Name>_callback` naming is gone with the fun-interface
 /// subsystem).
-pub(crate) fn input_name(rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
-    let rust_id = sanitize_for_ident(&rust.to_token_stream().to_string());
+pub(crate) fn input_name(rust: &TokenStream, wire: &syn::Type) -> syn::Ident {
+    let rust_id = sanitize_for_ident(&rust.to_string());
     let wire_id = wire_short(wire);
     let h = hash_pair(rust, wire);
     let s = format!("{}_to_{}_{:08x}", wire_id, rust_id, h & 0xffff_ffff);
@@ -258,8 +258,8 @@ pub(crate) fn input_name(rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
 }
 
 /// OUTPUT: rust → wire. Format `<rust_id>_to_<wire_id>_<hash>`.
-pub(crate) fn output_name(rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
-    let rust_id = sanitize_for_ident(&rust.to_token_stream().to_string());
+pub(crate) fn output_name(rust: &TokenStream, wire: &syn::Type) -> syn::Ident {
+    let rust_id = sanitize_for_ident(&rust.to_string());
     let wire_id = wire_short(wire);
     let h = hash_pair(rust, wire);
     let s = format!("{}_to_{}_{:08x}", rust_id, wire_id, h & 0xffff_ffff);
@@ -307,13 +307,13 @@ pub(crate) fn wire_short(wire: &syn::Type) -> String {
     sanitize_for_ident(&wire.to_token_stream().to_string())
 }
 
-pub(crate) fn hash_pair(rust: &syn::Type, wire: &syn::Type) -> u64 {
+pub(crate) fn hash_pair(rust: &TokenStream, wire: &syn::Type) -> u64 {
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
     };
     let mut h = DefaultHasher::new();
-    rust.to_token_stream().to_string().hash(&mut h);
+    rust.to_string().hash(&mut h);
     "::".hash(&mut h);
     wire.to_token_stream().to_string().hash(&mut h);
     h.finish()
