@@ -367,8 +367,8 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
     // The model already read this return; `fallible_parts` is that reading, not a
     // second look at the spelling.
     let (target, fallible) = match f.ret.fallible_parts() {
-        Some((ok, _)) => (ok.as_syn().clone(), true),
-        None => (f.ret.as_syn().clone(), false),
+        Some((ok, _)) => (ok.key(), true),
+        None => (f.ret.key(), false),
     };
     Ok(CtorSig {
         params,
@@ -381,7 +381,9 @@ struct CtorSig {
     /// Readings, not spellings: they come off `Function::params`, and a consumer
     /// that needs the spelling takes it at the point it stores one.
     params: Vec<(syn::Ident, crate::api::core::flat::TypeRef)>,
-    target: syn::Type,
+    /// The type the constructor produces, as an **identity**: every use of it
+    /// is `check_target`, which keyed both sides.
+    target: TypeKey,
     fallible: bool,
 }
 
@@ -441,7 +443,7 @@ fn build_plan<M>(
             });
         };
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target.as_syn())?;
+        check_target(func, &sig.target, &target.key())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
@@ -555,7 +557,7 @@ fn build_core<M>(
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
         let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, target.as_syn())?;
+        check_target(func, &sig.target, &target.key())?;
         let np = sig.params.len();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
@@ -590,7 +592,7 @@ fn build_core<M>(
             match v {
                 Variant::Ctor(func) => {
                     let sig = ctor_signature(registry, func)?;
-                    check_target(func, &sig.target, target.as_syn())?;
+                    check_target(func, &sig.target, &target.key())?;
                     let np = sig.params.len();
                     let mut args = Vec::new();
                     for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
@@ -718,16 +720,16 @@ fn build_arg<M>(
 
 fn check_target(
     func: &syn::Ident,
-    produces: &syn::Type,
-    expected: &syn::Type,
+    produces: &TypeKey,
+    expected: &TypeKey,
 ) -> Result<(), ExpandError> {
-    if TypeKey::from_type(produces) == TypeKey::from_type(expected) {
+    if produces == expected {
         Ok(())
     } else {
         Err(ExpandError::TargetMismatch {
             ctor: func.to_string(),
-            produces: TypeKey::from_type(produces).to_string(),
-            expected: TypeKey::from_type(expected).to_string(),
+            produces: produces.to_string(),
+            expected: expected.to_string(),
         })
     }
 }
