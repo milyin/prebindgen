@@ -494,7 +494,7 @@ fn enum_item<'r>(registry: &'r impl Conversions<()>, ty: &syn::Type) -> Option<&
 }
 
 /// Hard error when a `.tagged_union()`-declared enum is unit-only. The
-/// counterpart of [`assert_unit_enum`]: a fieldless enum is exactly a
+/// counterpart of [`unit_enum`]: a fieldless enum is exactly a
 /// discriminant, so it belongs to `.enum_type()` — declaring it here would
 /// emit a `union` with no bodies and a needlessly indirect C surface. Neither
 /// declarator silently accepts the other's shape.
@@ -577,18 +577,34 @@ fn variant_ctor(
 /// is [`EnumShape::Unit`]; a data-carrying enum crosses as a tag plus a
 /// `union` and is reached through a different declarator, so this names
 /// that declarator rather than asserting on `syn::Fields`.
-fn assert_unit_enum(e: &syn::ItemEnum) {
-    use crate::api::core::types_util::{enum_shape, first_payload_variant, EnumShape};
-    if enum_shape(e) == EnumShape::Sum {
-        let offender = first_payload_variant(e)
-            .map(|v| v.ident.to_string())
-            .unwrap_or_default();
-        panic!(
-            "Cbindgen: `{}` is a data-carrying enum (variant `{}` has fields): \
-             declare it with `.tagged_union()`, not `.enum_type()` — a C `enum` \
-             is a bare discriminant and has no room for a payload",
-            e.ident, offender
-        );
+/// The declared **fieldless** enum under `ty`'s name, or a panic naming the
+/// right declarator when it is a sum.
+///
+/// The lookup and the check are the same act: the model decided which of the
+/// two shapes an item is at parse time, and expresses it as two elements. This
+/// was `enum_item` + `assert_unit_enum`, the second running `enum_shape` over a
+/// `syn::ItemEnum` to re-derive what the first had already thrown away.
+fn unit_enum<'r>(
+    registry: &'r impl Conversions<()>,
+    key: &TypeKey,
+) -> Option<&'r crate::api::core::flat::Enum> {
+    match registry.flat().declared_type(&key.ident()?)? {
+        crate::api::core::flat::Type::Enum(e) => Some(e),
+        crate::api::core::flat::Type::Variant(v) => {
+            let offender = v
+                .alternatives
+                .iter()
+                .find(|a| !a.is_empty())
+                .map(|a| a.name.to_string())
+                .unwrap_or_default();
+            panic!(
+                "Cbindgen: `{}` is a data-carrying enum (variant `{offender}` has fields): \
+                 declare it with `.tagged_union()`, not `.enum_type()` — a C `enum` is a bare \
+                 discriminant and has no room for a payload",
+                v.name
+            )
+        }
+        _ => None,
     }
 }
 

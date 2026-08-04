@@ -187,14 +187,5 @@ pub fn enum_shape(e: &syn::ItemEnum) -> EnumShape {
     }
 }
 
-/// The first payload-carrying variant of an enum, if any — the offender an
-/// adapter names when rejecting a [`Sum`](EnumShape::Sum) where only a
-/// [`Unit`](EnumShape::Unit) enum is accepted.
-pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
-    e.variants
-        .iter()
-        .find(|v| !matches!(v.fields, syn::Fields::Unit))
-}
-
 #[cfg(test)]
 mod tests;

@@ -9,7 +9,6 @@ use super::*;
 fn enum_shape_classifies_unit_and_payload() {
     let unit: syn::ItemEnum = syn::parse_quote! { enum E { A, B = 7, C } };
     assert_eq!(enum_shape(&unit), EnumShape::Unit);
-    assert!(first_payload_variant(&unit).is_none());
     // An empty enum has no payload variant, so it is the degenerate unit
     // case — not a sum.
     let empty: syn::ItemEnum = syn::parse_quote! { enum E {} };
@@ -26,19 +25,7 @@ fn enum_shape_classifies_unit_and_payload() {
     ] {
         let e: syn::ItemEnum = syn::parse_quote!(#src);
         assert_eq!(enum_shape(&e), EnumShape::Sum, "for `{src}`");
-        assert!(first_payload_variant(&e).is_some(), "for `{src}`");
     }
-}
-
-/// The offending variant an adapter names in its rejection message is the
-/// **first** payload one, in declaration order.
-#[test]
-fn first_payload_variant_is_the_first_in_declaration_order() {
-    let e: syn::ItemEnum = syn::parse_quote! { enum E { A, B(u32), C { x: u8 } } };
-    assert_eq!(
-        first_payload_variant(&e).expect("payload variant").ident,
-        "B"
-    );
 }
 
 #[test]
