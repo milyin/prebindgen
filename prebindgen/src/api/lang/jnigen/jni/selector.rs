@@ -70,7 +70,7 @@ impl Declarations {
                     target,
                     registry,
                 ) {
-                    c.subs = vec![target.as_syn().clone()];
+                    c.subs = vec![target.key()];
                     return Some(c);
                 }
             }
@@ -92,7 +92,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
             {
-                c.subs = vec![inner.as_syn().clone()];
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
             return None;
@@ -101,7 +101,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
-                c.subs = vec![elem.as_syn().clone()];
+                c.subs = vec![elem.key()];
                 return Some(c);
             }
             return None;
@@ -149,7 +149,7 @@ impl Declarations {
                     if let Some(mut c) =
                         self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
                     {
-                        c.subs = vec![elem_ty];
+                        c.subs = vec![TypeKey::from_type(&elem_ty)];
                         return Some(c);
                     }
                     return None;
@@ -159,7 +159,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
-                c.subs = vec![inner.as_syn().clone()];
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
         }
@@ -205,7 +205,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
             {
-                c.subs = vec![inner.as_syn().clone()];
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
             return None;
@@ -214,7 +214,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
-                c.subs = vec![elem.as_syn().clone()];
+                c.subs = vec![elem.key()];
                 return Some(c);
             }
             return None;
@@ -236,7 +236,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
-                c.subs = vec![inner.as_syn().clone()];
+                c.subs = vec![inner.key()];
                 return Some(c);
             }
         }
