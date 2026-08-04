@@ -2002,13 +2002,12 @@ fn render_body(
 pub(crate) fn unfold_leaf_kt(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    out_ty: &syn::Type,
+    out_ty: &crate::api::core::flat::TypeRef,
     nullable: bool,
     pk: &str,
 ) -> Option<(kt::KtType, String, String, bool)> {
     let proj = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
+        .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.clone());
     let is_value_projection = proj
         .as_ref()
@@ -2021,10 +2020,14 @@ pub(crate) fn unfold_leaf_kt(
         .unwrap_or(false);
     // builder_kt: enum → Int; otherwise the normal classified type
     // (handle class / String / ByteArray / Long …).
-    let builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+    let builder_kt = if ext.is_kotlin_enum_reading(out_ty) {
         kt::KtType::int()
     } else {
-        let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
+        // `classify_return` still takes a signature fragment, so the reading is
+        // spelled here — the source's own tokens, as generated Rust always
+        // spells.
+        let spelled = out_ty.spell();
+        let rt: syn::ReturnType = syn::parse_quote!(-> #spelled);
         classify_return(ext, &rt, registry)?.0?
     };
     let (mut wire_kt, wrap) = if is_value_projection {

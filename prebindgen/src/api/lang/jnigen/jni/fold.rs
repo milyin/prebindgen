@@ -31,29 +31,6 @@ pub(crate) fn enum_probe(reading: &TypeRef) -> &TypeRef {
     cur
 }
 
-/// [`enum_probe`] over a bare spelling, for the one caller that does not have a
-/// reading to peel: [`unfold_leaf_kt`](super::render::unfold_leaf_kt), whose
-/// `out_ty` arrives as `syn::Type` through `leaf_iface_param` from
-/// `UnfoldPlan::element` and `LeafDesc::Whole`. Both must become `TypeRef`s
-/// before this can go — an element-walking change, not a helper swap.
-///
-/// It answers about the WRAPPER where the model answers about the type:
-/// `Box<Priority>` probes as `Box<Priority>` here and as `Priority` there.
-/// Prefer [`enum_probe`] wherever a reading is in hand.
-pub(crate) fn enum_probe_type(ty: &syn::Type) -> syn::Type {
-    let stripped = match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    match crate::api::lang::jnigen::jni::option_inner_type(&stripped) {
-        Some(inner) => match inner {
-            syn::Type::Reference(r) => (*r.elem).clone(),
-            other => other,
-        },
-        None => stripped,
-    }
-}
-
 // The bottom-up layer fold is the shared `crate::api::core::shape::fold_shape`
 // (its `on_optional` receives the layer's `&NullableKind` + the wrapped
 // `&FoldStrategy`, so callers can special-case e.g. a `Niche` layer sitting

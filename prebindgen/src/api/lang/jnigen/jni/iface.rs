@@ -719,7 +719,7 @@ fn plan_leaf_param(
         ext,
         registry,
         name,
-        leaf.out_ty.as_syn(),
+        &leaf.out_ty,
         leaf.nullable || inert_nullable,
         true,
     )
@@ -740,7 +740,7 @@ fn leaf_iface_param(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
-    out_ty: &syn::Type,
+    out_ty: &crate::api::core::flat::TypeRef,
     nullable: bool,
     raw_handle: bool,
 ) -> Option<IfaceParam> {
@@ -749,23 +749,22 @@ fn leaf_iface_param(
     // OWNED resolved only `T`'s output entry. Both classify to the same
     // projection/class, so fall back to the peeled form when the borrowed
     // entry was never required.
+    //
+    // `TypeKind::Ref` and NOT `borrow_target`: this peels the spelling's own
+    // outermost borrow, where `borrow_target` reaches the target *through* the
+    // erased wrappers. `Box<&T>` has a borrow target and is deliberately not
+    // servable here (`a_wrapped_borrow_callback_arg_declines`) — peeling it
+    // would resolve a shape the wrapper arms own.
     let mut out_ty = out_ty;
-    let peeled: syn::Type;
-    if registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
-        .is_none()
-    {
-        if let syn::Type::Reference(r) = out_ty {
-            peeled = (*r.elem).clone();
-            out_ty = &peeled;
+    if registry.output_entry(out_ty).is_none() {
+        if let crate::api::core::flat::TypeKind::Ref { inner, .. } = out_ty.kind() {
+            out_ty = inner;
         }
     }
     let (builder_kt, _wire_kt, _wrap, is_value_projection) =
         unfold_leaf_kt(ext, registry, out_ty, nullable, "x")?;
     let proj = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
+        .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.as_ref());
     let nullable_kt = |t: kt::KtType| {
         if builder_kt.is_nullable() {
@@ -825,7 +824,7 @@ fn leaf_iface_param(
     // no `asRaw` proxy is generated.
     if let kt::KtType::Named { fqn: bk_fqn, .. } = &builder_kt {
         if !bk_fqn.contains('.') {
-            if let Some(reg_fqn) = ext.kotlin_fqn(&TypeKey::from_type(out_ty)) {
+            if let Some(reg_fqn) = ext.kotlin_fqn(&out_ty.key()) {
                 let reg_short = reg_fqn.rsplit('.').next().unwrap_or(&reg_fqn);
                 if reg_fqn.contains('.') && reg_short == bk_fqn {
                     let raw = kt::KtType::cls(reg_fqn.to_string());
@@ -857,15 +856,10 @@ pub(crate) fn owned_handle_iface_param(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
-    out_ty: &syn::Type,
+    out_ty: &crate::api::core::flat::TypeRef,
     nullable: bool,
 ) -> Option<IfaceParam> {
-    let proj = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))?
-        .metadata
-        .projection
-        .clone()?;
+    let proj = registry.output_entry(out_ty)?.metadata.projection.clone()?;
     let fqn = ext.kotlin_fqn(&proj.leaf_key)?.to_string();
     let typed = kt::KtType::cls(fqn.clone());
     let (typed, raw) = if nullable {
@@ -1128,7 +1122,7 @@ pub(crate) fn callback_iface_spec(
         Plan(String, crate::api::core::unfold::UnfoldLeaf),
         Whole {
             name: String,
-            ty: syn::Type,
+            ty: crate::api::core::flat::TypeRef,
             nullable: bool,
             owned_handle: bool,
         },
@@ -1247,7 +1241,7 @@ pub(crate) fn callback_iface_spec(
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
                 name: whole_value_name(t, i),
-                ty: t.as_syn().clone(),
+                ty: (*t).clone(),
                 nullable: t.optional_inner().is_some(),
                 owned_handle,
             });
@@ -1398,9 +1392,7 @@ pub(crate) fn whole_folder_iface_spec(
         ext,
         registry,
         "element".to_string(),
-        // `leaf_iface_param` still takes a node, and it is also handed
-        // adapter-composed types — migrating it is its own step.
-        element.as_syn(),
+        element,
         false,
         true,
     )?);

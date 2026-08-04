@@ -127,9 +127,9 @@ mod spelling_census {
         // vec_build.rs is absent, and off the boundary ledger too: its element
         // peel reads `sequence_elem`/`borrow_target` off the model now.
         //
-        // fold.rs's one call is inside `enum_probe_type`, the spelling twin of
-        // `enum_probe` kept for `unfold_leaf_kt`'s `syn::Type` callers.
-        ("jni/fold.rs", 1),
+        // fold.rs is off the census: `enum_probe_type`, the spelling twin kept
+        // for `unfold_leaf_kt`'s `syn::Type` callers, is deleted — that caller
+        // takes a reading and asks `is_kotlin_enum_reading`.
         // iface.rs is off the census: `subject_short` / `subject_package` peel
         // `&`/`Option`/`Vec` off the KIND now, which is the same grammar the
         // spelling was — see `util::head_type`.
