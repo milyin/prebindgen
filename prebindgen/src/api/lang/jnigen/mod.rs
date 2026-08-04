@@ -119,7 +119,9 @@ mod spelling_census {
         // `.jobject_input()` decoders — struct, then sum. Every layer question
         // in that file now asks a `TypeRef`, and its walks take `flat::Struct`
         // and `flat::Variant` rather than the items they were parsed from.
-        ("jni/emit/struct_out.rs", 2),
+        // struct_out.rs is off the census: both layer questions ask the field's
+        // own reading — `optional_inner` to look through, the `Vec` kind to
+        // defer.
         ("jni/emit/wrapper.rs", 2),
         //
         // vec_build.rs is absent, and off the boundary ledger too: its element
