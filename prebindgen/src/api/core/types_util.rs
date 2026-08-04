@@ -45,27 +45,10 @@ fn path_tail_is(ty: &syn::Type, name: &str) -> bool {
     path_tail_ident(ty).is_some_and(|i| i == name)
 }
 
-/// True when `ty` is `Option<…>` (by last path segment).
-pub fn is_option_type(ty: &syn::Type) -> bool {
-    path_tail_is(ty, "Option")
-}
-
-/// True when `ty` is `Vec<…>` (by last path segment).
-#[cfg(feature = "unstable-cbindgen")]
-pub fn is_vec_type(ty: &syn::Type) -> bool {
-    path_tail_is(ty, "Vec")
-}
-
 /// True when `ty` is `Result<…>` (by last path segment).
 #[cfg(feature = "unstable-cbindgen")]
 pub fn is_result_type(ty: &syn::Type) -> bool {
     path_tail_is(ty, "Result")
-}
-
-/// True when `ty` is the unit type `()`.
-#[cfg(feature = "unstable-cbindgen")]
-pub fn is_unit(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }
 
 /// If `ty` is `Result<T, E>` (by last path segment), return `(T, E)`.

@@ -494,7 +494,6 @@ impl CbindgenBuilder {
         // The ELEMENT: a signature is a parameter list and a return, both
         // already classified. An elided return is `TypeKind::Unit`, which is
         // the `ReturnType::Default` arm this used to write.
-        let return_ty: syn::Type = spelled(&f.ret);
 
         let has_fallible_input = f.params.iter().any(|p| {
             registry
@@ -504,11 +503,15 @@ impl CbindgenBuilder {
         });
 
         // Peel an outer `Result<_, E>`; `value_ty` is the success/return value.
-        let (value_ty, err_ty): (syn::Type, Option<syn::Type>) = match result_parts(&return_ty) {
+        // Off `TypeKind::Fallible`, where `result_parts` found the `Result` in a
+        // path first — and both sides come back as readings, so everything
+        // downstream of here reads too.
+        let (value_ty, err_reading) = match f.ret.fallible_parts() {
             Some((ok, e)) => (ok, Some(e)),
-            None => (return_ty.clone(), None),
+            None => (&f.ret, None),
         };
-        let has_fallible_output = Self::output_is_fallible(&value_ty, registry);
+        let err_ty: Option<syn::Type> = err_reading.map(spelled);
+        let has_fallible_output = Self::output_is_fallible(value_ty, registry);
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -555,7 +558,7 @@ impl CbindgenBuilder {
         //   * Result + a free pointer niche  → NULL marks `Err` (value in-band);
         //   * Result without a free niche     → `bool` status, value to out-params;
         //   * no Result                       → field 0 is the C return, rest out.
-        let shape = self.lower_shape(&value_ty, registry);
+        let shape = self.lower_shape(value_ty, registry);
         let result_slot = shape.niches.clone().carve().map(|(slot, _)| slot);
         let result_in_band = err_ty.is_some() && result_slot.is_some();
         let field0_is_return = result_in_band || err_ty.is_none();
@@ -635,7 +638,7 @@ impl CbindgenBuilder {
             (None, _) => {
                 if let Some(field0_wire) = field0_wire.as_ref() {
                     let enc =
-                        self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
+                        self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
                     quote!(
                         #(#decodes)*
                         let __v = #call;
@@ -655,7 +658,7 @@ impl CbindgenBuilder {
                     .expect("in-band result has a niche")
                     .value;
                 let enc =
-                    self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
+                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -670,7 +673,7 @@ impl CbindgenBuilder {
             // `Result` without a free niche: `bool` status, value to out-params.
             (Some((_, e_conv, _)), false) => {
                 let enc =
-                    self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
+                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -702,8 +705,8 @@ impl CbindgenBuilder {
     /// available for enclosing `Option`/`Result` layers. Mirrors the
     /// niche-stacking model in `core::niches`.
     #[allow(clippy::only_used_in_recursion)]
-    pub(super) fn lower_shape(&self, ty: &syn::Type, registry: &Registry<()>) -> ValueShape {
-        if is_unit(ty) {
+    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &Registry<()>) -> ValueShape {
+        if matches!(ty.kind(), TypeKind::Unit) {
             return ValueShape {
                 fields: vec![],
                 niches: Niches::empty(),
@@ -711,23 +714,24 @@ impl CbindgenBuilder {
         }
         // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
         // value (one converter); a composite element is unsupported.
-        if is_vec(ty) {
-            let elem = first_type_arg(ty).expect("Vec<T> has a type argument");
+        // `TypeKind::Vec` and not `sequence_elem`: that reading peels the
+        // erased wrappers first, so a `Cow<'_, [u8]>` would answer here and
+        // take the `Vec` lowering instead of its own arm below.
+        if let TypeKind::Vec(elem) = ty.kind() {
             assert!(
-                !is_option(&elem) && !is_vec(&elem) && !is_result(&elem),
+                elem.optional_inner().is_none()
+                    && elem.sequence_elem().is_none()
+                    && elem.fallible_parts().is_none(),
                 "Cbindgen: `Vec<{}>` element must be a single-value type \
                  (scalar, data struct, String, or handle), not a composite",
-                TypeKey::from_type(&elem),
+                elem.key(),
             );
-            let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen: `Vec` element `{}` has no output converter",
-                        TypeKey::from_type(&elem)
-                    )
-                });
+            let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen: `Vec` element `{}` has no output converter",
+                    elem.key()
+                )
+            });
             let elem_wire = entry.destination.clone();
             return ValueShape {
                 fields: vec![
@@ -745,16 +749,13 @@ impl CbindgenBuilder {
         }
         // `Cow<'_, [T]>` → `T_wire* + size_t`. The C side receives an owned
         // malloc'd copy, just like `Vec<T>` outputs.
-        if let Some(elem) = cow_slice_elem(ty) {
-            let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen: `Cow` slice element `{}` has no output converter",
-                        TypeKey::from_type(&elem)
-                    )
-                });
+        if let Some(elem) = r_cow_slice_elem(ty) {
+            let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen: `Cow` slice element `{}` has no output converter",
+                    elem.key()
+                )
+            });
             let elem_wire = entry.destination.clone();
             return ValueShape {
                 fields: vec![
@@ -773,9 +774,8 @@ impl CbindgenBuilder {
         // `Option<T>` consumes one available inner niche. This includes NULL
         // pointers and invalid scalar values declared by `convert!`; without a
         // niche it prepends an explicit `present: bool`.
-        if is_option(ty) {
-            let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
-            let inner = self.lower_shape(&inner_ty, registry);
+        if let Some(inner_ty) = ty.optional_inner() {
+            let inner = self.lower_shape(inner_ty, registry);
             if let Some((_slot, rest)) = inner.niches.clone().carve() {
                 return ValueShape {
                     fields: inner.fields,
@@ -795,15 +795,12 @@ impl CbindgenBuilder {
         // Base value: one wire component from its rank-0/1 converter. Custom
         // conversions may declare scalar niches; otherwise a pointer wire
         // (String, opaque handle, `&'static`) carries a free NULL niche.
-        let entry = registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
-            .unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen::on_function: type `{}` has no output converter",
-                    TypeKey::from_type(ty)
-                )
-            });
+        let entry = registry.output_entry(ty).unwrap_or_else(|| {
+            panic!(
+                "Cbindgen::on_function: type `{}` has no output converter",
+                ty.key()
+            )
+        });
         let wire = entry.destination.clone();
         let niches = if entry.niches.is_empty() && matches!(wire, syn::Type::Ptr(_)) {
             let null = null_for(&wire);
@@ -821,21 +818,17 @@ impl CbindgenBuilder {
     /// `targets` lvalues (one per field of `lower_shape(ty)`, in order).
     pub(super) fn encode_value(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         val: TokenStream,
         targets: &[TokenStream],
         registry: &Registry<()>,
         route: &ErrRoute,
     ) -> TokenStream {
-        if is_unit(ty) {
+        if matches!(ty.kind(), TypeKind::Unit) {
             return quote!();
         }
-        if is_vec(ty) {
-            let elem = first_type_arg(ty).expect("Vec<T> has a type argument");
-            let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
-                .expect("Vec element converter");
+        if let TypeKind::Vec(elem) = ty.kind() {
+            let entry = registry.output_entry(elem).expect("Vec element converter");
             let elem_conv = entry.function.sig.ident.clone();
             let elem_wire = entry.destination.clone();
             let t_ptr = &targets[0];
@@ -861,10 +854,9 @@ impl CbindgenBuilder {
                 );
             }
         }
-        if let Some(elem) = cow_slice_elem(ty) {
+        if let Some(elem) = r_cow_slice_elem(ty) {
             let entry = registry
-                .reading_of(&elem)
-                .and_then(|tr| registry.output_entry(&tr))
+                .output_entry(elem)
                 .expect("Cow slice element converter");
             let elem_conv = entry.function.sig.ident.clone();
             let elem_wire = entry.destination.clone();
@@ -891,12 +883,11 @@ impl CbindgenBuilder {
                 );
             }
         }
-        if is_option(ty) {
-            let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
-            let inner = self.lower_shape(&inner_ty, registry);
+        if let Some(inner_ty) = ty.optional_inner() {
+            let inner = self.lower_shape(inner_ty, registry);
             if let Some((slot, _rest)) = inner.niches.clone().carve() {
                 // None reuses the next inner niche; Some encodes inline.
-                let inner_enc = self.encode_value(&inner_ty, quote!(__x), targets, registry, route);
+                let inner_enc = self.encode_value(inner_ty, quote!(__x), targets, registry, route);
                 let null = &slot.value;
                 let t0 = &targets[0];
                 return quote!(
@@ -909,7 +900,7 @@ impl CbindgenBuilder {
             // Explicit `present` flag in targets[0]; inner value follows.
             let present = &targets[0];
             let inner_enc =
-                self.encode_value(&inner_ty, quote!(__x), &targets[1..], registry, route);
+                self.encode_value(inner_ty, quote!(__x), &targets[1..], registry, route);
             return quote!(
                 match #val {
                     ::core::option::Option::Some(__x) => { #present = true; #inner_enc }
@@ -918,10 +909,7 @@ impl CbindgenBuilder {
             );
         }
         // Base value: run its output converter into the single target.
-        let entry = registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
-            .expect("base value converter");
+        let entry = registry.output_entry(ty).expect("base value converter");
         let conv = entry.function.sig.ident.clone();
         let t0 = &targets[0];
         if returns_result(&entry.function.sig.output) {
@@ -932,17 +920,20 @@ impl CbindgenBuilder {
         }
     }
 
-    fn output_is_fallible(ty: &syn::Type, registry: &Registry<()>) -> bool {
-        if is_option(ty) || is_vec(ty) {
-            return first_type_arg(ty)
-                .is_some_and(|inner| Self::output_is_fallible(&inner, registry));
-        }
-        if let Some(inner) = cow_slice_elem(ty) {
-            return Self::output_is_fallible(&inner, registry);
+    fn output_is_fallible(ty: &TypeRef, registry: &Registry<()>) -> bool {
+        let vec_elem = match ty.kind() {
+            TypeKind::Vec(e) => Some(&**e),
+            _ => None,
+        };
+        if let Some(inner) = ty
+            .optional_inner()
+            .or(vec_elem)
+            .or_else(|| r_cow_slice_elem(ty))
+        {
+            return Self::output_is_fallible(inner, registry);
         }
         registry
-            .reading_of(ty)
-            .and_then(|tr| registry.output_entry(&tr))
+            .output_entry(ty)
             .is_some_and(|entry| returns_result(&entry.function.sig.output))
     }
 
