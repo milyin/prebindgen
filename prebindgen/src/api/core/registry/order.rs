@@ -61,13 +61,13 @@ impl<M> Registry<M> {
         }
         let (dir, key) = node.clone();
         // Every node this walk reaches has a cell: the roots are the table's own
-        // keys, and each edge below is filtered by `contains_key`. So the
-        // spelling `plan_edges` needs is the reading the registry already
-        // stored — not one re-derived from the key (#291).
+        // keys, and each edge below is filtered by `contains_key`. So what
+        // `plan_edges` needs is the reading the registry already stored — not
+        // one re-derived from the key (#291).
         let plan_edges = self
             .type_table(dir)
             .get(&key)
-            .map(|cell| self.plan_edges(dir, cell.subject.as_syn()))
+            .map(|cell| self.plan_edges(dir, &cell.subject))
             .unwrap_or_default();
         let mut edges: Vec<Crossing> = self
             .immediate_edges(dir, &key)
@@ -75,11 +75,7 @@ impl<M> Registry<M> {
             // The structural edges arrive as readings, so the key is the
             // model's own answer rather than one re-derived from a spelling.
             .map(|(d, t)| (d, t.key()))
-            .chain(
-                plan_edges
-                    .into_iter()
-                    .map(|(d, t)| (d, TypeKey::from_type(&t))),
-            )
+            .chain(plan_edges)
             .chain(
                 self.declared
                     .edges
@@ -109,18 +105,26 @@ impl<M> Registry<M> {
     /// by the argument's syntax. Without this the order would be structurally
     /// correct and still wrong, which is exactly the kind of gap the old
     /// fixed-point loop papered over by retrying.
-    pub(super) fn plan_edges(&self, dir: Direction, ty: &syn::Type) -> Vec<(Direction, syn::Type)> {
+    /// Crossings, not spellings: every edge here is a table lookup, and the
+    /// model names both ends. `callback_args` is the classification
+    /// `extract_fn_trait_args` re-derived from the parameter's bounds, and a
+    /// leaf's `out_ty` is a reading whose key is its own.
+    pub(super) fn plan_edges(
+        &self,
+        dir: Direction,
+        ty: &crate::api::core::flat::TypeRef,
+    ) -> Vec<Crossing> {
         if dir != Direction::Input {
             return Vec::new();
         }
-        let Some(args) = crate::api::core::flat::extract_fn_trait_args(ty) else {
+        let Some(args) = ty.callback_args() else {
             return Vec::new();
         };
         let mut out = Vec::new();
         for arg in args {
-            if let Some(plan) = self.callback_arg_plans.get(&TypeKey::from_type(&arg)) {
+            if let Some(plan) = self.callback_arg_plans.get(&arg.key()) {
                 for leaf in &plan.leaves {
-                    out.push((Direction::Output, leaf.out_ty.as_syn().clone()));
+                    out.push((Direction::Output, leaf.out_ty.key()));
                 }
             }
         }
