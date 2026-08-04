@@ -933,8 +933,9 @@ struct Layered {
     shape: UnfoldShape,
     /// Every type on the way down, outermost first — what a registration walks.
     layer_types: Vec<crate::api::core::flat::TypeRef>,
-    /// Past the borrow too: what actually crosses.
-    core: syn::Type,
+    /// Past the borrow too: what actually crosses — as an **identity**, which
+    /// is all its one consumer ever asked of it.
+    core: TypeKey,
     /// Whether the core is reached through a borrow.
     by_ref: bool,
 }
@@ -952,7 +953,7 @@ fn peel(ty: &crate::api::core::flat::TypeRef) -> Layered {
     Layered {
         shape,
         layer_types: ty.layer_types().into_iter().cloned().collect(),
-        core: borrowed.unwrap_or(layered).as_syn().clone(),
+        core: borrowed.unwrap_or(layered).key(),
         by_ref: borrowed.is_some(),
     }
 }
@@ -975,7 +976,7 @@ fn peel_borrow(ty: &crate::api::core::flat::TypeRef) -> (bool, &crate::api::core
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
 fn returns_type(ret: &crate::api::core::flat::TypeRef, key: &TypeKey) -> bool {
-    TypeKey::from_type(&peel(ret).core) == *key
+    peel(ret).core == *key
 }
 
 /// Build one output/error plan for `ed` and store it in the right registry map.
@@ -1416,7 +1417,7 @@ fn flatten<M>(
                 // call, so the whole record shares a single `Call` step and the
                 // emitter can hoist it.
                 let (takes, _ret) = accessor_signature(registry, func)?;
-                check_takes(func, &takes, source.as_syn())?;
+                check_takes(func, &takes, &source.key())?;
                 // The declarator states whether the value is given away; the
                 // signature has to agree, or the emitted call would not compile
                 // in the consumer's crate. Checked rather than inferred so that
@@ -1603,7 +1604,7 @@ fn flatten<M>(
                     DeconRecord::Identity | DeconRecord::Fields { .. } => unreachable!(),
                 };
                 let (takes, ret) = accessor_signature(registry, &func)?;
-                check_takes(&func, &takes, source.as_syn())?;
+                check_takes(&func, &takes, &source.key())?;
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
@@ -1740,7 +1741,7 @@ pub fn dedup_names(names: &mut [String]) {
 fn accessor_signature<M>(
     registry: &Registry<M>,
     func: &syn::Ident,
-) -> Result<(syn::Type, crate::api::core::flat::TypeRef), UnfoldError> {
+) -> Result<(TypeKey, crate::api::core::flat::TypeRef), UnfoldError> {
     let f = registry
         .flat()
         .function(&func)
@@ -1753,9 +1754,11 @@ fn accessor_signature<M>(
         .params
         .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
+    // The receiver's identity: `accessor_signature`'s one caller compares it,
+    // and `check_takes` keyed both sides to do so.
     let takes = match first.ty.borrow_target() {
-        Some(inner) => inner.as_syn().clone(),
-        None => first.ty.as_syn().clone(),
+        Some(inner) => inner.key(),
+        None => first.ty.key(),
     };
     Ok((takes, f.ret.clone()))
 }
@@ -1794,18 +1797,14 @@ fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
         .is_some_and(|p| p.ty.borrow_target().is_none())
 }
 
-fn check_takes(
-    func: &syn::Ident,
-    takes: &syn::Type,
-    expected: &syn::Type,
-) -> Result<(), UnfoldError> {
-    if TypeKey::from_type(takes) == TypeKey::from_type(expected) {
+fn check_takes(func: &syn::Ident, takes: &TypeKey, expected: &TypeKey) -> Result<(), UnfoldError> {
+    if takes == expected {
         Ok(())
     } else {
         Err(UnfoldError::AccessorTargetMismatch {
             accessor: func.to_string(),
-            takes: TypeKey::from_type(takes).to_string(),
-            expected: TypeKey::from_type(expected).to_string(),
+            takes: takes.to_string(),
+            expected: expected.to_string(),
         })
     }
 }
