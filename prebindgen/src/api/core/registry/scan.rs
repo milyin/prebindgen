@@ -106,12 +106,8 @@ impl<M> Registry<M> {
 
         // Scan declared functions.
         for ident in &declared.functions {
-            if let Some(item_fn) = self
-                .flat
-                .function(&ident)
-                .map(|f| f.origin.as_syn().clone())
-            {
-                self.scan_fn_signature(&item_fn)?;
+            if let Some(func) = self.flat.function(&ident).cloned() {
+                self.scan_fn_signature(&func)?;
             } else {
                 missing.push(("function", ident.to_string()));
             }
@@ -130,12 +126,10 @@ impl<M> Registry<M> {
         // Scan declared consts: a const is a nullary source of its type, so
         // the type is required in the output direction only.
         for ident in declared.consts.iter().flatten() {
-            if let Some(item_const) = self
-                .flat
-                .constant(&ident)
-                .map(|c| c.origin.as_syn().clone())
-            {
-                self.intern(Direction::Output, &item_const.ty, true)?;
+            // The const's own TYPE, which the element carries. This cloned the
+            // whole `syn::ItemConst` to reach `.ty`.
+            if let Some(ty) = self.flat.constant(&ident).map(|c| c.ty.clone()) {
+                self.intern_reading(Direction::Output, &ty, true);
             } else {
                 missing.push(("constant", ident.to_string()));
             }
@@ -199,30 +193,32 @@ impl<M> Registry<M> {
         Ok(())
     }
 
-    pub(super) fn scan_fn_signature(&mut self, f: &syn::ItemFn) -> Result<(), ScanError> {
+    pub(super) fn scan_fn_signature(
+        &mut self,
+        f: &crate::api::core::flat::Function,
+    ) -> Result<(), ScanError> {
         // Mechanical: register every fn-signature type as the user wrote it.
         // No semantic transformations (no &T→T strip, no ZResult<T>→T strip,
         // no skip for () / ZResult<()>). The adapter handles structural
         // wrappers; propagation through `subs` then marks transitive deps
         // (e.g. &Foo's `&_` converter returns subs=[Foo], so Foo becomes
         // required).
+        //
+        // The ELEMENT. A signature is a parameter list and a return, both
+        // already classified — so the readings here are the ones `flat`
+        // produced, not ones re-derived by interning a spelling. Two arms this
+        // used to carry are gone with the node: `FnArg::Receiver`, which the
+        // comment below says can never arrive, and `ReturnType::Default`, which
+        // the element normalizes to `TypeKind::Unit`.
+        //
         // No receiver or non-ident pattern can reach here: a captured item was
         // refused by the frontend and `from_flat` failed before indexing it, and
         // a binding-local fn was checked against the same grammar
         // (`Flat::lower_signature`) when `resolve` synthesized it.
-        for input in &f.sig.inputs {
-            match input {
-                syn::FnArg::Receiver(_) => continue,
-                syn::FnArg::Typed(pt) => {
-                    self.intern_recursive(Direction::Input, &pt.ty, true)?;
-                }
-            }
+        for p in &f.params {
+            self.intern_recursive_reading(Direction::Input, &p.ty, true);
         }
-        let ret_ty: syn::Type = match &f.sig.output {
-            syn::ReturnType::Default => syn::parse_quote!(()),
-            syn::ReturnType::Type(_, ty) => (**ty).clone(),
-        };
-        self.intern_recursive(Direction::Output, &ret_ty, true)?;
+        self.intern_recursive_reading(Direction::Output, &f.ret, true);
         Ok(())
     }
 
@@ -406,23 +402,6 @@ impl<M> Registry<M> {
             })?;
         self.ensure_entry(dir, &reading, root);
         Ok(reading)
-    }
-
-    /// [`intern`](Self::intern), then register every nested position — the
-    /// recursive door, for a spelling whose children must become crossings too
-    /// (a parameter, a return, a declared field).
-    ///
-    /// Only the top type is classified: the walk below it takes each child's
-    /// reading off the parent's, so nothing under here is re-derived.
-    pub(super) fn intern_recursive(
-        &mut self,
-        dir: Direction,
-        ty: &syn::Type,
-        root: bool,
-    ) -> Result<(), ScanError> {
-        let reading = self.intern(dir, ty, root)?;
-        self.register_type_recursive(dir, &reading, root);
-        Ok(())
     }
 
     /// [`Self::intern`] for a caller that **already holds the reading**.
