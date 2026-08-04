@@ -714,7 +714,7 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, leaf.out_ty.as_syn());
+    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty);
     leaf_iface_param(
         ext,
         registry,
@@ -1073,7 +1073,7 @@ impl Declarations {
 fn fixed_reassembly(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    source: &syn::Type,
+    source: &TypeKey,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
     class_fqn: &str,
 ) -> (String, Vec<String>) {
@@ -1163,7 +1163,7 @@ pub(crate) fn callback_iface_spec(
                 let core = t.borrow_target().unwrap_or(t);
                 let fqn = ext.kotlin_fqn(&core.key())?;
                 let (reassemble, imports) =
-                    fixed_reassembly(ext, registry, core.as_syn(), &plan.leaves, &fqn);
+                    fixed_reassembly(ext, registry, &core.key(), &plan.leaves, &fqn);
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
@@ -1195,7 +1195,7 @@ pub(crate) fn callback_iface_spec(
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
-                            leaf.out_ty.as_syn(),
+                            &leaf.out_ty.key(),
                             &plan.leaves[k..seg],
                             &fqn,
                         );
@@ -1449,7 +1449,7 @@ pub(crate) fn fixed_folder_typed_groups(
     let spec = registry.decon_plans().get(decon)?;
     let fqn = ext.kotlin_fqn(&spec.source.key())?;
     let (reassemble, imports) =
-        fixed_reassembly(ext, registry, spec.source.as_syn(), &spec.leaves, &fqn);
+        fixed_reassembly(ext, registry, &spec.source.key(), &spec.leaves, &fqn);
     Some(vec![
         TypedGroup {
             name: "acc".to_string(),

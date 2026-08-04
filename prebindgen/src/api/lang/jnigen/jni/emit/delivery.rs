@@ -1393,18 +1393,18 @@ pub(crate) fn leaf_is_prim(
     if leaf.nullable {
         return false;
     }
-    leaf_ty_is_prim(registry, leaf.out_ty.as_syn())
+    leaf_ty_is_prim(registry, &leaf.out_ty)
 }
 
 /// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw
 /// primitive** slot? Split out so the interface derivation can ask the question
 /// about a leaf whose own `nullable` flag it is in the middle of computing (an
 /// inert sum group slot).
-pub(crate) fn leaf_ty_is_prim(registry: &impl Conversions<KotlinMeta>, out_ty: &syn::Type) -> bool {
-    let Some(entry) = registry
-        .reading_of(out_ty)
-        .and_then(|tr| registry.output_entry(&tr))
-    else {
+pub(crate) fn leaf_ty_is_prim(
+    registry: &impl Conversions<KotlinMeta>,
+    out_ty: &crate::api::core::flat::TypeRef,
+) -> bool {
+    let Some(entry) = registry.output_entry(out_ty) else {
         return false;
     };
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose
