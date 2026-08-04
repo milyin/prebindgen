@@ -64,7 +64,9 @@ pub enum Variant {
 /// of the `variants` vector.
 #[derive(Clone)]
 pub struct ConstructorDecl {
-    pub target: syn::Type,
+    /// The type being built, as an **identity**. Every use keyed it; none
+    /// spelled it.
+    pub target: TypeKey,
     pub variants: Vec<Variant>,
     /// Auto-`construct` every matching param of every declared fn. Always
     /// `true` for type-level default (`expand_param!` `.variant*`) declarations.
@@ -95,7 +97,7 @@ pub struct ExpandDecl {
     /// cross-checked against the named param's peeled type in [`apply`].
     /// `None` for the internal `TopLevel` form (the type comes from the
     /// param itself).
-    pub declared_target: Option<syn::Type>,
+    pub declared_target: Option<TypeKey>,
     pub sel: ExpandSel,
 }
 
@@ -126,7 +128,7 @@ fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
     let mut entries: Vec<ExpandDeclError> = Vec::new();
     let mut ctor_targets: HashSet<String> = HashSet::new();
     for c in &exp.constructors {
-        let target = TypeKey::from_type(&c.target).as_str().to_string();
+        let target = c.target.as_str().to_string();
         if c.variants.is_empty() {
             entries.push(ExpandDeclError::EmptyConstructor {
                 target: target.clone(),
@@ -192,11 +194,11 @@ pub fn apply<M>(
         if let Some(declared) = &ed.declared_target {
             let param_ty = param_reading(registry, &ed.func, &ed.param)?;
             let bare = constructed_value(&param_ty);
-            if TypeKey::from_type(&bare) != TypeKey::from_type(declared) {
+            if TypeKey::from_type(&bare) != *declared {
                 return Err(ExpandError::ParamTypeMismatch {
                     func: ed.func.clone(),
                     param: ed.param.clone(),
-                    declared: TypeKey::from_type(declared).as_str().to_string(),
+                    declared: declared.as_str().to_string(),
                     actual: TypeKey::from_type(&bare).as_str().to_string(),
                 });
             }
@@ -221,7 +223,7 @@ pub fn apply<M>(
         if !c.default {
             continue;
         }
-        let ckey = TypeKey::from_type(&c.target);
+        let ckey = c.target.clone();
         for func in declared_fns {
             // Read accessors are excluded from the composer.
             if accessor_fns.contains(func) {
@@ -336,7 +338,7 @@ fn resolve_constructor<M>(
         ExpandSel::TopLevel => exp
             .constructors
             .iter()
-            .find(|c| TypeKey::from_type(&c.target) == *target_key)
+            .find(|c| c.target == *target_key)
             .map(|c| c.variants.clone())
             .ok_or_else(|| ExpandError::NoConstructor {
                 func: ed.func.clone(),
@@ -429,7 +431,7 @@ fn build_plan<M>(
             )?;
             visited.remove(&target.key());
             return Ok(FoldPlan {
-                target: target.as_syn().clone(),
+                target: target.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -447,7 +449,7 @@ fn build_plan<M>(
                 ty: pty.optional(),
             });
             return Ok(FoldPlan {
-                target: target.as_syn().clone(),
+                target: target.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
@@ -491,7 +493,7 @@ fn build_plan<M>(
             inputs.push(arg);
         }
         return Ok(FoldPlan {
-            target: target.as_syn().clone(),
+            target: target.clone(),
             by_ref,
             shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
             leaves,
@@ -523,7 +525,7 @@ fn build_plan<M>(
     )?;
     visited.remove(&target.key());
     Ok(FoldPlan {
-        target: target.as_syn().clone(),
+        target: target.clone(),
         by_ref,
         shape: FoldShape::Base,
         leaves,
@@ -656,7 +658,7 @@ fn build_arg<M>(
     let canon = exp
         .constructors
         .iter()
-        .find(|c| TypeKey::from_type(&c.target) == key && !c.variants.is_empty());
+        .find(|c| c.target == key && !c.variants.is_empty());
     if let Some(c) = canon {
         if dispatched {
             return Err(ExpandError::UnsupportedRecursive {
@@ -689,7 +691,7 @@ fn build_arg<M>(
         )?;
         visited.remove(&key);
         Ok(FoldArg::Build(Box::new(FoldBuild {
-            target: bare.as_syn().clone(),
+            target: bare.clone(),
             by_ref: pby_ref,
             selector,
             variants: vars,

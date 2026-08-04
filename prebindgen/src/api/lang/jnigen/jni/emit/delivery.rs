@@ -143,12 +143,12 @@ pub(crate) fn emit_unfold_delivery(
             // otherwise (mirrors `leaf_is_prim`; the folder interface
             // declares the matching typed param).
             let out_entry = registry
-                .reading_of(element)
+                .reading_of(element.as_syn())
                 .and_then(|tr| registry.output_entry(&tr))
                 .unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                        TypeKey::from_type(element)
+                        TypeKey::from_type(element.as_syn())
                     )
                 });
             // The element's COMPLETE Rust -> wire chain. No `convert!` type is

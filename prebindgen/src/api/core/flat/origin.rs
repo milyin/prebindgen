@@ -109,6 +109,20 @@ impl<S> Origin<S> {
     }
 }
 
+impl Origin<syn::Type> {
+    /// This type's identity as a table key — the same answer
+    /// [`TypeRef::key`](super::TypeRef::key) gives for a reading.
+    ///
+    /// Here because a **declaration** is an `Origin<syn::Type>`: the type a
+    /// build script wrote, carried with a placeless location. Asking it for its
+    /// identity is not reaching for the node, and it should not have to be
+    /// spelled as one — every `TypeKey::from_type(decl.as_syn())` was a keying
+    /// operation wearing an escape's clothes.
+    pub fn key(&self) -> crate::api::core::registry::TypeKey {
+        crate::api::core::registry::TypeKey::from_type(&self.syntax)
+    }
+}
+
 impl<S: ToTokens> Origin<S> {
     /// The node's tokens, for generated Rust to spell.
     ///

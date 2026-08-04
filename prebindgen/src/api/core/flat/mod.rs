@@ -1362,6 +1362,7 @@ fn lower_struct(
         syn::Fields::Unit => Vec::new(),
     };
     Ok(Type::Struct(Struct {
+        reading: TypeRef::named(&s.ident),
         name: s.ident.clone(),
         fields,
         origin: Origin::new(s.clone(), Rc::clone(at)),

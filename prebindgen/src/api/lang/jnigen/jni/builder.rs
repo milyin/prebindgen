@@ -786,7 +786,7 @@ impl Declarations {
             }
             exp.constructors
                 .push(crate::api::core::expand::ConstructorDecl {
-                    target: decl.rust_type.as_syn().clone(),
+                    target: decl.rust_type.key(),
                     variants: decl.variants.iter().map(lower).collect(),
                     default: true,
                 });
@@ -809,7 +809,7 @@ impl Declarations {
             exp.expands.push(ExpandDecl {
                 func: func.clone(),
                 param: syn::Ident::new(param, Span::call_site()),
-                declared_target: Some(decl.rust_type.as_syn().clone()),
+                declared_target: Some(decl.rust_type.key()),
                 sel: ExpandSel::Subset(decl.variants.iter().map(lower).collect()),
             });
         }
@@ -1172,7 +1172,7 @@ impl Declarations {
                 k = decl.key.as_str()
             );
             dec.deconstructors.push(DeconstructorDecl {
-                target: decl.rust_type.as_syn().clone(),
+                target: decl.rust_type.key(),
                 records: self.lower_fields(registry, &decl.key, &decl.fields),
                 default: Some((DeconTarget::Output, Delivery::Callback)),
             });
@@ -1197,7 +1197,7 @@ impl Declarations {
                 sel: DeconSel::Inline(self.lower_fields(registry, &decl.key, &decl.fields)),
                 target: DeconTarget::Output,
                 delivery: Delivery::Callback,
-                declared_source: Some(decl.rust_type.as_syn().clone()),
+                declared_source: Some(decl.rust_type.key()),
             });
         }
         dec

@@ -1,6 +1,12 @@
 use quote::ToTokens;
 
 use super::*;
+
+/// A fixture declaration's identity. A declaration is a key, not a spelling —
+/// see `ConstructorDecl::target`.
+fn key(s: &str) -> crate::api::core::registry::TypeKey {
+    crate::api::core::registry::TypeKey::parse(s).expect("a fixture type")
+}
 use crate::api::{
     core::{registry::Registry, types_util::ident},
     test_util::scanned_with as reg_with,
@@ -77,7 +83,7 @@ fn accessor_optional_primitive() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZTimestamp),
+        target: key("ZTimestamp"),
         records: vec![DeconRecord::Acc {
             func: ident("z_timestamp_ntp64"),
             name: "z_timestamp_ntp64".into(),
@@ -100,7 +106,7 @@ fn accessor_optional_primitive() {
         .get(&ident("z_sample_timestamp"))
         .expect("plan");
     assert!(plan.by_ref, "inner was &ZTimestamp");
-    assert_eq!(plan.source.to_token_stream().to_string(), "ZTimestamp");
+    assert_eq!(plan.source.spell().to_string(), "ZTimestamp");
     assert!(
         matches!(&plan.shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)),
         "outer shape is Optional(Decompose)"
@@ -128,7 +134,7 @@ fn accessor_plan_byref() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -159,7 +165,7 @@ fn accessor_plan_byref() {
         .get(&ident("z_sample_key_expr"))
         .expect("plan");
     assert!(plan.by_ref, "return was &ZKeyExpr");
-    assert_eq!(plan.source.to_token_stream().to_string(), "ZKeyExpr");
+    assert_eq!(plan.source.spell().to_string(), "ZKeyExpr");
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.leaves.len(), 2);
 
@@ -194,12 +200,12 @@ fn root_identity_before_nested_identity_errors() {
         ["z_query_key_expr"].iter().map(|s| ident(s)).collect();
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![DeconRecord::Identity],
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZQuery),
+        target: key("ZQuery"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -226,12 +232,12 @@ fn root_identity_before_nested_identity_errors() {
     ]);
     let mut acc2 = Deconstructors::default();
     acc2.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![DeconRecord::Identity],
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc2.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZQuery),
+        target: key("ZQuery"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_query_key_expr"),
@@ -259,7 +265,7 @@ fn accessor_target_mismatch_errors() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![DeconRecord::Acc {
             func: ident("wrong"),
             name: "wrong".into(),
@@ -281,7 +287,7 @@ fn multiple_identity_errors() {
     let mut reg: Registry<()> = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![DeconRecord::Identity, DeconRecord::Identity],
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
@@ -305,7 +311,7 @@ fn record_must_be_fun_accessor() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -345,7 +351,7 @@ fn duplicate_leaf_name_errors() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_sample_key_expr"),
@@ -381,7 +387,7 @@ fn reserved_separator_in_name_errors() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         records: vec![DeconRecord::Acc {
             func: ident("z_sample_key_expr"),
             name: "key__expr".into(),
@@ -425,7 +431,7 @@ fn nested_accessor_flatten() {
     let mut acc = Deconstructors::default();
     // Child accessors (reused via nesting).
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -436,7 +442,7 @@ fn nested_accessor_flatten() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZZBytes),
+        target: key("ZZBytes"),
         records: vec![DeconRecord::Acc {
             func: ident("z_zbytes_to_bytes"),
             name: "z_zbytes_to_bytes".into(),
@@ -444,7 +450,7 @@ fn nested_accessor_flatten() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZTimestamp),
+        target: key("ZTimestamp"),
         records: vec![DeconRecord::Acc {
             func: ident("z_timestamp_ntp64"),
             name: "z_timestamp_ntp64".into(),
@@ -454,7 +460,7 @@ fn nested_accessor_flatten() {
     // Parent accessor with nested + direct records.
     // Parent accessor with nested + direct records.
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_sample_key_expr"),
@@ -499,7 +505,7 @@ fn nested_accessor_flatten() {
         .get(&ident("z_reply_sample"))
         .expect("plan");
     assert!(plan.by_ref);
-    assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
+    assert_eq!(plan.source.spell().to_string(), "ZSample");
     assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
 
     let path = |l: &UnfoldLeaf| {
@@ -552,7 +558,7 @@ fn reply_product_double_option_flatten() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -563,7 +569,7 @@ fn reply_product_double_option_flatten() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZTimestamp),
+        target: key("ZTimestamp"),
         records: vec![DeconRecord::Acc {
             func: ident("z_timestamp_ntp64"),
             name: "z_timestamp_ntp64".into(),
@@ -571,7 +577,7 @@ fn reply_product_double_option_flatten() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZZBytes),
+        target: key("ZZBytes"),
         records: vec![DeconRecord::Acc {
             func: ident("z_zbytes_to_bytes"),
             name: "z_zbytes_to_bytes".into(),
@@ -579,7 +585,7 @@ fn reply_product_double_option_flatten() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_sample_key_expr"),
@@ -593,7 +599,7 @@ fn reply_product_double_option_flatten() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZReplyError),
+        target: key("ZReplyError"),
         records: vec![DeconRecord::Acc {
             func: ident("z_reply_error_payload"),
             name: "z_reply_error_payload".into(),
@@ -601,7 +607,7 @@ fn reply_product_double_option_flatten() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZReply),
+        target: key("ZReply"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_reply_replier_zid"),
@@ -638,7 +644,7 @@ fn reply_product_double_option_flatten() {
     .expect("apply");
     let plan = reg.unfold_plans.get(&ident("z_recv_reply")).expect("plan");
     assert!(!plan.by_ref, "owned ZReply return");
-    assert_eq!(plan.source.to_token_stream().to_string(), "ZReply");
+    assert_eq!(plan.source.spell().to_string(), "ZReply");
     assert!(matches!(&plan.shape, UnfoldShape::Base));
     assert!(matches!(plan.delivery, Delivery::Callback));
 
@@ -693,7 +699,7 @@ fn nested_cycle_errors() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZA),
+        target: key("ZA"),
         records: vec![DeconRecord::Acc {
             func: ident("a_to_b"),
             name: "a_to_b".into(),
@@ -701,7 +707,7 @@ fn nested_cycle_errors() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZB),
+        target: key("ZB"),
         records: vec![DeconRecord::Acc {
             func: ident("b_to_a"),
             name: "b_to_a".into(),
@@ -736,7 +742,7 @@ fn iterable_whole_element_plan() {
         sel: DeconSel::Inline(vec![]),
         target: DeconTarget::Output,
         delivery: Delivery::Callback,
-        declared_source: Some(syn::parse_quote!(ZZenohId)),
+        declared_source: Some(key("ZZenohId")),
     });
     // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
     // accessor → Iterable with per-element leaves: the string form + the
@@ -764,9 +770,7 @@ fn iterable_whole_element_plan() {
         "whole-element: no decomposed leaves"
     );
     assert_eq!(
-        plan.element
-            .as_ref()
-            .map(|t| t.to_token_stream().to_string()),
+        plan.element.as_ref().map(|t| t.spell().to_string()),
         Some("ZZenohId".to_string())
     );
     assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(ZZenohId))].root);
@@ -784,7 +788,7 @@ fn iterable_decomposed_plan() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZZenohId),
+        target: key("ZZenohId"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_zenoh_id_to_string"),
@@ -837,7 +841,7 @@ fn convert_output_single_value() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZTimestamp),
+        target: key("ZTimestamp"),
         records: vec![DeconRecord::Acc {
             func: ident("z_timestamp_ntp64"),
             name: "z_timestamp_ntp64".into(),
@@ -862,9 +866,7 @@ fn convert_output_single_value() {
     assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(
-        plan.convert_out_ty
-            .as_ref()
-            .map(|t| t.to_token_stream().to_string()),
+        plan.convert_out_ty.as_ref().map(|t| t.spell().to_string()),
         Some("Option < i64 >".to_string())
     );
     // The shaped convert type is registered as a required output.
@@ -880,7 +882,7 @@ fn multi_leaf_output_is_callback() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -916,7 +918,7 @@ fn vec_output_is_iterable_callback() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZZenohId),
+        target: key("ZZenohId"),
         records: vec![DeconRecord::Acc {
             func: ident("z_zenoh_id_to_string"),
             name: "z_zenoh_id_to_string".into(),
@@ -964,7 +966,7 @@ fn option_vec_output_is_optional_iterable_callback() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZZenohId),
+        target: key("ZZenohId"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_zenoh_id_to_string"),
@@ -1007,7 +1009,7 @@ fn option_vec_single_leaf_stays_callback() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZZenohId),
+        target: key("ZZenohId"),
         records: vec![DeconRecord::Acc {
             func: ident("z_zenoh_id_to_string"),
             name: "z_zenoh_id_to_string".into(),
@@ -1040,7 +1042,7 @@ fn option_vec_whole_element_plan() {
         sel: DeconSel::Inline(vec![]),
         target: DeconTarget::Output,
         delivery: Delivery::Callback,
-        declared_source: Some(syn::parse_quote!(ZZenohId)),
+        declared_source: Some(key("ZZenohId")),
     });
     apply(
         &mut reg,
@@ -1061,9 +1063,7 @@ fn option_vec_whole_element_plan() {
         "whole-element: no decomposed leaves"
     );
     assert_eq!(
-        plan.element
-            .as_ref()
-            .map(|t| t.to_token_stream().to_string()),
+        plan.element.as_ref().map(|t| t.spell().to_string()),
         Some("ZZenohId".to_string())
     );
 }
@@ -1088,7 +1088,7 @@ fn value_struct_vec_is_fixed_iterable_fold() {
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: syn::parse_quote!(Payload),
+        source: tref(syn::parse_quote!(Payload)),
         leaves: vec![
             leaf("id", syn::parse_quote!(i64)),
             leaf("seq", syn::parse_quote!(i32)),
@@ -1141,7 +1141,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: syn::parse_quote!(Payload),
+        source: tref(syn::parse_quote!(Payload)),
         leaves: vec![
             leaf("id", syn::parse_quote!(i64)),
             leaf("seq", syn::parse_quote!(i32)),
@@ -1172,7 +1172,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     ]);
     let vd2 = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: syn::parse_quote!(Payload),
+        source: tref(syn::parse_quote!(Payload)),
         leaves: vec![leaf("id", syn::parse_quote!(i64))],
     };
     let declared2: std::collections::HashSet<syn::Ident> =
@@ -1197,7 +1197,7 @@ fn convert_error_decomposes_result_e() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZError),
+        target: key("ZError"),
         records: vec![DeconRecord::Acc {
             func: ident("z_error_message"),
             name: "z_error_message".into(),
@@ -1225,7 +1225,7 @@ fn convert_error_decomposes_result_e() {
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 1);
     assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "String");
-    assert_eq!(plan.source.to_token_stream().to_string(), "ZError");
+    assert_eq!(plan.source.spell().to_string(), "ZError");
     // The infallible fn gets no error plan.
     assert!(!reg.error_plans.contains_key(&ident("z_infallible")));
     // No output plans created (no ZKeyExpr return among the declared fns; the
@@ -1245,7 +1245,7 @@ fn default_output_applies_to_owned_and_borrow_returns() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -1291,7 +1291,7 @@ fn callback_arg_plan_derived() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -1302,7 +1302,7 @@ fn callback_arg_plan_derived() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_sample_key_expr"),
@@ -1331,7 +1331,7 @@ fn callback_arg_plan_derived() {
         .get(&TypeKey::from_type(&syn::parse_quote!(ZSample)))
         .expect("callback-arg plan for ZSample");
     assert!(!plan.by_ref, "the trampoline owns the callback arg");
-    assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
+    assert_eq!(plan.source.spell().to_string(), "ZSample");
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 3);
@@ -1368,7 +1368,7 @@ fn callback_arg_borrowed_decomposed() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![
             DeconRecord::Identity,
             DeconRecord::Acc {
@@ -1379,7 +1379,7 @@ fn callback_arg_borrowed_decomposed() {
         default: Some((DeconTarget::Output, Delivery::Callback)),
     });
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         records: vec![
             DeconRecord::Acc {
                 func: ident("z_sample_key_expr"),
@@ -1409,7 +1409,7 @@ fn callback_arg_borrowed_decomposed() {
         .get(&TypeKey::from_type(&syn::parse_quote!(&ZSample)))
         .expect("callback-arg plan for &ZSample");
     assert!(plan.by_ref, "the callback only borrows the delivered value");
-    assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
+    assert_eq!(plan.source.spell().to_string(), "ZSample");
     assert!(matches!(plan.shape, UnfoldShape::Base));
     assert_eq!(plan.delivery, Delivery::Callback);
     assert_eq!(plan.leaves.len(), 3);
@@ -1455,7 +1455,7 @@ fn callback_arg_nonbare_skipped() {
     ]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         records: vec![DeconRecord::Acc {
             func: ident("z_sample_kind"),
             name: "z_sample_kind".into(),
@@ -1512,7 +1512,7 @@ fn leaf_vec_fold_synthesizes_whole_element_plans() {
     assert!(p.decon.is_none(), "whole-element fold carries no decon");
     assert!(p.leaves.is_empty(), "no decomposed leaves");
     assert_eq!(
-        p.element.as_ref().map(|t| t.to_token_stream().to_string()),
+        p.element.as_ref().map(|t| t.spell().to_string()),
         Some("String".to_string())
     );
 
@@ -1526,7 +1526,7 @@ fn leaf_vec_fold_synthesizes_whole_element_plans() {
             UnfoldShape::Optional((), inner)
                 if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))));
     assert_eq!(
-        p2.element.as_ref().map(|t| t.to_token_stream().to_string()),
+        p2.element.as_ref().map(|t| t.spell().to_string()),
         Some("ZenohId".to_string())
     );
 
@@ -1554,7 +1554,7 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
         ["other", "strings"].iter().map(|s| ident(s)).collect();
     // Pre-seed `strings` with a sentinel plan to prove it is preserved.
     let sentinel = UnfoldPlan {
-        source: syn::parse_quote!(String),
+        source: tref(syn::parse_quote!(String)),
         decon: None,
         by_ref: false,
         shape: UnfoldShape::Base,
@@ -1590,7 +1590,7 @@ fn unknown_accessor_errors() {
     let mut reg: Registry<()> = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
     let mut acc = Deconstructors::default();
     acc.deconstructors.push(DeconstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         records: vec![DeconRecord::Acc {
             func: ident("z_keyexpr_as_str_typo"),
             name: "as_str".into(),
@@ -1620,7 +1620,7 @@ fn duplicate_declarations_collected() {
     let mut acc = Deconstructors::default();
     for _ in 0..2 {
         acc.deconstructors.push(DeconstructorDecl {
-            target: syn::parse_quote!(ZKeyExpr),
+            target: key("ZKeyExpr"),
             records: vec![DeconRecord::Acc {
                 func: ident("z_keyexpr_as_str"),
                 name: "asStr".into(),
@@ -1632,7 +1632,7 @@ fn duplicate_declarations_collected() {
             sel: DeconSel::Inline(vec![DeconRecord::Identity]),
             target: DeconTarget::Output,
             delivery: Delivery::Callback,
-            declared_source: Some(syn::parse_quote!(ZKeyExpr)),
+            declared_source: Some(key("ZKeyExpr")),
         });
     }
     let err = apply(
@@ -1689,7 +1689,7 @@ fn reading_sum_decon() -> SumDecon {
     };
     SumDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Reading)),
-        source: syn::parse_quote!(Reading),
+        source: tref(syn::parse_quote!(Reading)),
         leaves: vec![
             tag,
             // group 0 (`Missing`) is empty — a unit variant contributes only
@@ -1877,7 +1877,7 @@ fn a_vec_of_optionals_installs_no_fixed_fold() {
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: syn::parse_quote!(Payload),
+        source: tref(syn::parse_quote!(Payload)),
         leaves: vec![
             leaf("id", syn::parse_quote!(i64)),
             leaf("seq", syn::parse_quote!(i32)),

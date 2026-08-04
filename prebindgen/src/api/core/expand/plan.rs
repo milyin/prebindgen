@@ -17,8 +17,9 @@ pub use crate::api::core::shape::Shape as FoldShape;
 #[derive(Clone)]
 pub struct FoldPlan {
     /// Owned type the core construct produces — what the underlying call needs
-    /// (before any [`Self::shape`] wrapping).
-    pub target: syn::Type,
+    /// (before any [`Self::shape`] wrapping). A **reading**: `target.spell()`
+    /// for generated Rust, `target.key()` for a lookup.
+    pub target: crate::api::core::flat::TypeRef,
     /// True when the original parameter was `&T` / `Option<&T>`: the call
     /// receives `&folded` (or `folded.as_ref()` when also optional). A
     /// call-site concern (the resolver's `&_` handler shares the inner
@@ -118,7 +119,7 @@ pub enum FoldArg {
 #[derive(Clone)]
 pub struct FoldBuild {
     /// Owned type this nested build produces (the constructor parameter type).
-    pub target: syn::Type,
+    pub target: crate::api::core::flat::TypeRef,
     /// `true` when the consuming parameter is `&T` (the built value is borrowed
     /// at the call site).
     pub by_ref: bool,

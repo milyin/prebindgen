@@ -458,7 +458,7 @@ pub(crate) fn render_param_overloads(
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
                     let ctor = s.plan.variants[s.arms[ai].0].ctor.as_ref();
-                    arm_erased_sig(ext, registry, &s.plan.target, ctor)
+                    arm_erased_sig(ext, registry, s.plan.target.as_syn(), ctor)
                 })
                 .collect()
         })
