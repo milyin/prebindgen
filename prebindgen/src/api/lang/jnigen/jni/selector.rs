@@ -133,7 +133,7 @@ impl Declarations {
             // sub, exactly as the old syntactic slice check did.
             if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
-                    let elem_ty = elem.as_syn().clone();
+                    let elem_ty = elem.spell();
                     // The one place `produced` is NOT the crossing's spelling:
                     // there is no owned `[T]` to decode into, so the converter
                     // yields an owned `Vec<T>` and the call site borrows it.
@@ -150,7 +150,7 @@ impl Declarations {
                     if let Some(mut c) =
                         self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
                     {
-                        c.subs = vec![TypeKey::from_type(&elem_ty)];
+                        c.subs = vec![elem.key()];
                         return Some(c);
                     }
                     return None;
@@ -193,7 +193,7 @@ impl Declarations {
         //    Read off the model, which calls this shape `TypeKind::Fallible`.
         //    `result_parts` covers a `Result` the adapter composed itself, which
         //    the frontend never read.
-        if let Some((ok, err)) = fallible_parts(syntax, registry) {
+        if let Some((ok, err)) = fallible_parts(ty) {
             if let Some(c) = self.result_peel(syntax, &ok, &err, registry) {
                 return Some(c);
             }
@@ -230,7 +230,7 @@ impl Declarations {
             // directly is a question about the SPELLING.
             if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
-                    return self.output_slice(elem.as_syn(), registry);
+                    return self.output_slice(elem, registry);
                 }
             }
             let mutable = ty.is_exclusive_borrow();
@@ -249,28 +249,20 @@ impl Declarations {
     }
 }
 
-/// The `Ok`/`Err` of a `Result`, preferring the frontend's reading.
+/// The `Ok`/`Err` of a `Result`, spelled.
 ///
-/// The model classifies a `Result` as [`TypeKind::Fallible`]; the syntactic
-/// fallback is for a `Result` the adapter composed itself, which no captured
-/// item spells and the frontend therefore never read.
+/// The model classifies a `Result` as [`TypeKind::Fallible`], so a reading
+/// answers this directly — no lookup, and no syntactic fallback.
 ///
-/// **Measured: the fallback never fires in-tree** — zero occurrences across
-/// covertest-kotlin and perftest-kotlin, because #246 indexes a binding-local
-/// fn's types, so even a `sig!((..) -> Result<Summary, String>)` has a reading.
-/// It is kept rather than made a hard error because an out-of-tree consumer may
-/// compose a `Result` the model never sees, and it costs nothing: `result_parts`
-/// already exists and already has six other callers.
-fn fallible_parts(
-    ty: &syn::Type,
-    registry: &impl Conversions<KotlinMeta>,
-) -> Option<(syn::Type, syn::Type)> {
-    if let Some((ok, err)) = registry
-        .flat()
-        .type_ref(ty)
-        .and_then(|t| t.fallible_parts())
-    {
-        return Some((ok.as_syn().clone(), err.as_syn().clone()));
-    }
-    crate::api::core::types_util::result_parts(ty)
+/// The fallback there used to be (`types_util::result_parts` over the node)
+/// existed because the caller held only a **spelling**: a `Result` the adapter
+/// composed itself would have no entry in `flat`, so the reading lookup could
+/// miss. A caller holding a `TypeRef` cannot be in that position — #280 sealed
+/// minting to the model, so every reading reaching here was classified, and
+/// `kind` is what says whether it is a `Result`. The fallback was measured
+/// never to fire in-tree; it is now unreachable by construction.
+fn fallible_parts(ty: &crate::api::core::flat::TypeRef) -> Option<(syn::Type, syn::Type)> {
+    let (ok, err) = ty.fallible_parts()?;
+    let (ok, err) = (ok.spell(), err.spell());
+    Some((syn::parse_quote!(#ok), syn::parse_quote!(#err)))
 }
