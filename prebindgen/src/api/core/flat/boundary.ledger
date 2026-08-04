@@ -33,14 +33,32 @@
 # has a node to take apart.
 #
 #   ## escapes: types   `as_syn()`, `stripped_syntax()`, `to_syn()`,
-#                       `type_from_ident()`   — MUST reach zero
+#                       `type_from_ident()`   — ZERO, and must STAY zero: a new
+#                       row is a consumer taking a node the model can answer
+#                       for, and the fix is to ask the model
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
 #                                             — expected to persist
 #
-# A type escape is a source type the model should have been able to answer for;
-# the classification sites above are the subset that visibly does classify. An
-# item escape is a captured item's own node, which an emitter re-stating a whole
-# item legitimately needs until items grow modelled accessors.
+# A type escape is a source type the model should have been able to answer for.
+# There are none: every consumer outside `core::flat` reads `kind`, spells
+# `spell()`, or looks up a `TypeKey`. An item escape is a captured item's own
+# node, which an emitter re-stating a whole item legitimately needs.
+#
+# So the classification sites above are a DIFFERENT POPULATION — one this
+# transition never had to remove, because it was never the model's to answer
+# for. That claim is CHECKED rather than asserted: `FLOOR` in `boundary.rs`
+# names, per file, which of four things its sites read — a WIRE the adapter
+# composed, a build-script DECLARATION, a GENERATED SIGNATURE, or the
+# array-length whitelist — and `the_classification_floor_is_accounted_for` fails
+# if a file classifies with no entry, or holds an entry and no longer
+# classifies. A new classifier has to say which population it joins, in the
+# commit that adds it; if it is none of them, it is reading source syntax.
+#
+# (S8 claimed `api/core` held zero type escapes and it held seven, for
+# twenty-five stages, because nothing checked it. An unchecked claim drifts —
+# which is also why THIS text lives in `boundary.rs`'s `HEADER`, the file the
+# ledger is generated from. Editing the generated `.ledger` instead is undone by
+# the next `UPDATE_BOUNDARY_LEDGER=1`.)
 #
 # The scan counts FIVE doors — `as_syn`, `stripped_syntax`, `to_syn`,
 # `enum_item`, `type_from_ident` — each by NAME rather than by call shape, so UFCS

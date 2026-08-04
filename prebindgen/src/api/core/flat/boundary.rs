@@ -129,14 +129,32 @@ const HEADER: &str = "\
 # has a node to take apart.
 #
 #   ## escapes: types   `as_syn()`, `stripped_syntax()`, `to_syn()`,
-#                       `type_from_ident()`   — MUST reach zero
+#                       `type_from_ident()`   — ZERO, and must STAY zero: a new
+#                       row is a consumer taking a node the model can answer
+#                       for, and the fix is to ask the model
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
 #                                             — expected to persist
 #
-# A type escape is a source type the model should have been able to answer for;
-# the classification sites above are the subset that visibly does classify. An
-# item escape is a captured item's own node, which an emitter re-stating a whole
-# item legitimately needs until items grow modelled accessors.
+# A type escape is a source type the model should have been able to answer for.
+# There are none: every consumer outside `core::flat` reads `kind`, spells
+# `spell()`, or looks up a `TypeKey`. An item escape is a captured item's own
+# node, which an emitter re-stating a whole item legitimately needs.
+#
+# So the classification sites above are a DIFFERENT POPULATION — one this
+# transition never had to remove, because it was never the model's to answer
+# for. That claim is CHECKED rather than asserted: `FLOOR` in `boundary.rs`
+# names, per file, which of four things its sites read — a WIRE the adapter
+# composed, a build-script DECLARATION, a GENERATED SIGNATURE, or the
+# array-length whitelist — and `the_classification_floor_is_accounted_for` fails
+# if a file classifies with no entry, or holds an entry and no longer
+# classifies. A new classifier has to say which population it joins, in the
+# commit that adds it; if it is none of them, it is reading source syntax.
+#
+# (S8 claimed `api/core` held zero type escapes and it held seven, for
+# twenty-five stages, because nothing checked it. An unchecked claim drifts —
+# which is also why THIS text lives in `boundary.rs`'s `HEADER`, the file the
+# ledger is generated from. Editing the generated `.ledger` instead is undone by
+# the next `UPDATE_BOUNDARY_LEDGER=1`.)
 #
 # The scan counts FIVE doors — `as_syn`, `stripped_syntax`, `to_syn`,
 # `enum_item`, `type_from_ident` — each by NAME rather than by call shape, so UFCS
@@ -658,6 +676,97 @@ fn parse(text: &str) -> BTreeMap<String, Counts> {
 
 fn src_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+}
+
+/// Why each file still has classification sites, now that none of them read
+/// **source** syntax.
+///
+/// `escapes: types` reached zero at S38, so nothing outside `core::flat` can
+/// reach a source type node at all. What the first census still counts is
+/// therefore something else, and this says which of four things it is per file.
+/// All four are legitimate — none was ever the model's to answer for — but a
+/// claim the ledger does not check is a claim that drifts, which is how S8's
+/// "`api/core` is zero" survived twenty-five stages while being false.
+///
+/// So the floor is DATA, and [`the_classification_floor_is_accounted_for`]
+/// fails when a file has sites and no entry here. Adding a classifier means
+/// choosing which population it joins, in the same commit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Floor {
+    /// A **wire**: the type an adapter chose for the boundary — `jni::sys::jlong`,
+    /// `*mut t_t`, `JObject`. It is composed by the adapter, is not a Rust type
+    /// any source crate wrote, and the model never classified it. Asking
+    /// `matches!(wire, syn::Type::Ptr(_))` is asking about the adapter's own
+    /// output.
+    Wire,
+    /// A type a **build script** wrote in a declaration — `const_expr!(…)`'s
+    /// value type, a `.callback(…)` argument, `LocalField::Local`'s signature.
+    /// #280 seals minting to the model, so there is no reading to ask: the
+    /// declaration is the only thing that can say.
+    Declaration,
+    /// A **generated converter's own signature** — `entry.function.sig.output`.
+    /// This adapter built that `fn` a moment ago; reading its return is reading
+    /// its own note to itself.
+    GeneratedSignature,
+    /// The **acceptance whitelist** for an array length, narrowed at S29 to the
+    /// two `syn::Expr` forms `flat::lower_array_len` accepts. It guards a
+    /// path-qualifying rewrite, so it must name expression forms.
+    AcceptedLength,
+}
+
+/// The account. Every file with a nonzero classification count appears here.
+const FLOOR: &[(&str, Floor)] = &[
+    ("api/core/registry/scan.rs", Floor::Declaration),
+    ("api/core/types_util.rs", Floor::Declaration),
+    ("api/lang/cbindgen/builder.rs", Floor::Declaration),
+    ("api/lang/cbindgen/emit.rs", Floor::Wire),
+    ("api/lang/cbindgen/mod.rs", Floor::Wire),
+    ("api/lang/cbindgen/trait_impl.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/builder.rs", Floor::Declaration),
+    ("api/lang/jnigen/jni/emit/convert.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/emit/flat_input.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/emit/names.rs", Floor::AcceptedLength),
+    ("api/lang/jnigen/jni/emit/wrapper.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/fold.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/prim.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/render.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/trait_impl.rs", Floor::Wire),
+    ("api/lang/jnigen/jni/wire_access.rs", Floor::Wire),
+    ("api/lang/jnigen/util.rs", Floor::GeneratedSignature),
+];
+
+/// Every file that still classifies is accounted for in [`FLOOR`], and every
+/// entry there still classifies.
+///
+/// The second half matters as much as the first: a stale entry is a file whose
+/// sites were removed, and leaving it would let a NEW classifier land in that
+/// file silently inheriting an account written for something else.
+#[test]
+fn the_classification_floor_is_accounted_for() {
+    let found = scan_tree(&src_root());
+    let accounted: std::collections::BTreeMap<&str, Floor> = FLOOR.iter().copied().collect();
+
+    let unaccounted: Vec<&String> = found
+        .iter()
+        .filter(|(path, c)| c.classify > 0 && !accounted.contains_key(path.as_str()))
+        .map(|(path, _)| path)
+        .collect();
+    let stale: Vec<&&str> = accounted
+        .keys()
+        .filter(|p| found.get(**p).is_none_or(|c| c.classify == 0))
+        .collect();
+
+    assert!(
+        unaccounted.is_empty() && stale.is_empty(),
+        "CLASSIFICATION FLOOR DRIFT\n\
+         \x20 unaccounted (classifies, no `FLOOR` entry): {unaccounted:?}\n\
+         \x20 stale (`FLOOR` entry, no longer classifies): {stale:?}\n\n\
+         `escapes: types` is zero, so a classification site outside `core::flat` \
+         reads a WIRE, a build-script DECLARATION, a GENERATED SIGNATURE, or the \
+         array-length whitelist — never source syntax. Say which in `FLOOR`, in \
+         this commit; if it is none of them, it is reading source syntax and the \
+         fix is to ask the model instead.\n"
+    );
 }
 
 #[test]
