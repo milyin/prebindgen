@@ -33,18 +33,12 @@
 # has a node to take apart.
 #
 #   ## escapes: types   `as_syn()`, `stripped_syntax()`, `to_syn()`,
-#                       `type_from_ident()`   — ZERO, as of #351. It must STAY
-#                       zero: a new row here is a consumer taking a node the
-#                       model can answer for, and the fix is to ask the model
+#                       `type_from_ident()`   — MUST reach zero
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
 #                                             — expected to persist
 #
-# A type escape is a source type the model should have been able to answer for.
-# There are none: every consumer outside `core::flat` now reads `kind`, spells
-# `spell()`, or looks up a `TypeKey`. The classification sites above are what
-# remains, and they are a different population — a wire type this adapter
-# COMPOSED (`matches!(wire, syn::Type::Ptr(_))`, the JNI lifetime splices), which
-# never was the model's to answer for. An
+# A type escape is a source type the model should have been able to answer for;
+# the classification sites above are the subset that visibly does classify. An
 # item escape is a captured item's own node, which an emitter re-stating a whole
 # item legitimately needs until items grow modelled accessors.
 #
@@ -111,7 +105,7 @@
 6	api/core/types_util.rs
 8	api/lang/cbindgen/builder.rs
 1	api/lang/cbindgen/convert.rs
-5	api/lang/cbindgen/emit.rs
+4	api/lang/cbindgen/emit.rs
 5	api/lang/cbindgen/mod.rs
 2	api/lang/cbindgen/trait_impl.rs
 4	api/lang/jnigen/jni/builder.rs
@@ -126,7 +120,7 @@
 2	api/lang/jnigen/jni/wire_access.rs
 1	api/lang/jnigen/util.rs
 
-# total classification sites: 61
+# total classification sites: 60
 
 ## escapes: types
 
@@ -137,10 +131,10 @@
 2	api/core/registry/scan.rs
 1	api/core/write.rs
 2	api/lang/cbindgen/convert.rs
-2	api/lang/cbindgen/trait_impl.rs
+1	api/lang/cbindgen/trait_impl.rs
 2	api/lang/jnigen/jni/builder.rs
 1	api/lang/jnigen/jni/kotlin_emit.rs
 3	api/lang/jnigen/jni/symbols.rs
 1	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 15
+# total escapes: items: 14
