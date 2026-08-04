@@ -51,10 +51,10 @@ impl CbindgenBuilder {
 
     pub(crate) fn in_custom(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
-        let key = TypeKey::from_type(ty);
+        let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
         let spec = decl.input.as_ref()?;
         let (repr, conversion, fallible) = self.input_conversion(decl, spec, registry);
@@ -69,9 +69,9 @@ impl CbindgenBuilder {
                 "Cbindgen conversion domain type does not match its input representation"
             );
         }
-        let src = self.src_ty(ty);
+        let src = self.src_ty_of(&key);
         let wire = repr.clone();
-        let name = Self::in_name(ty);
+        let name = Self::in_name_of(&key);
         let valid = decl
             .domain
             .as_ref()
@@ -118,10 +118,10 @@ impl CbindgenBuilder {
 
     pub(crate) fn out_custom(
         &self,
-        ty: &syn::Type,
+        ty: &TypeRef,
         registry: &impl Conversions<()>,
     ) -> Option<ConverterImpl<()>> {
-        let key = TypeKey::from_type(ty);
+        let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
         let spec = decl.output.as_ref()?;
         let (repr, conversion, fallible) = self.output_conversion(decl, spec, registry);
@@ -136,9 +136,9 @@ impl CbindgenBuilder {
                 "Cbindgen conversion domain type does not match its output representation"
             );
         }
-        let src = self.src_ty(ty);
+        let src = self.src_ty_of(&key);
         let wire = repr.clone();
-        let name = Self::out_name(ty);
+        let name = Self::out_name_of(&key);
         let valid = decl
             .domain
             .as_ref()

@@ -672,10 +672,34 @@ impl CbindgenBuilder {
         scalar_slice_elem(ty).map(|elem| (elem.clone(), elem))
     }
 
+    /// [`Self::callback_slice_elem_wire`] off the classification, for the
+    /// resolver side — the declaration side keeps the node peer above, because
+    /// a `.callback(...)` argument is written by the build script and the model
+    /// may never have interned it.
+    pub(super) fn callback_slice_elem_wire_of(
+        &self,
+        ty: &TypeRef,
+    ) -> Option<(syn::Type, syn::Type)> {
+        let elem = super::r_shared_slice_elem(ty)?;
+        let key = elem.key();
+        if let Some(wire) = self.value_opaque_ty_of(&key) {
+            return Some((self.src_ty_of(&key), wire.clone()));
+        }
+        super::r_is_scalar(elem).then(|| {
+            let s = super::spelled(elem);
+            (s.clone(), s)
+        })
+    }
+
     /// Like [`Self::src_ty`], but recurses into reference and slice element types so
     /// `&ZSample` becomes `&zenoh_flat::ZSample` and `&[Payload]` becomes
     /// `&[perftest_flat::Payload]` (needed so a callback's `Fn(&[E])` closure type
     /// names the qualified element).
+    /// [`Self::src_ty_deep`] off a reading — the source's own tokens, requalified.
+    pub(super) fn src_ty_deep_of(&self, ty: &TypeRef) -> syn::Type {
+        self.src_ty_deep(&super::spelled(ty))
+    }
+
     pub(super) fn src_ty_deep(&self, ty: &syn::Type) -> syn::Type {
         match ty {
             syn::Type::Reference(r) => {
@@ -690,14 +714,6 @@ impl CbindgenBuilder {
             }
             _ => self.src_ty(ty),
         }
-    }
-
-    pub(super) fn in_name(ty: &syn::Type) -> syn::Ident {
-        Self::in_name_of(&TypeKey::from_type(ty))
-    }
-
-    pub(super) fn out_name(ty: &syn::Type) -> syn::Ident {
-        Self::out_name_of(&TypeKey::from_type(ty))
     }
 
     /// [`Self::in_name`] off the **identity**, for a caller holding a reading
@@ -723,9 +739,18 @@ impl CbindgenBuilder {
 
     /// The opaque counterpart type of a declared inline-opaque type, if any.
     pub(super) fn value_opaque_ty(&self, ty: &syn::Type) -> Option<&syn::Type> {
-        self.value_opaque
-            .get(&TypeKey::from_type(ty))
-            .map(|c| &c.opaque)
+        self.value_opaque_ty_of(&TypeKey::from_type(ty))
+    }
+
+    /// [`Self::value_opaque_ty`] off the **identity**, for a caller holding a
+    /// reading — which is the whole selector chain.
+    pub(super) fn value_opaque_ty_of(&self, key: &TypeKey) -> Option<&syn::Type> {
+        self.value_opaque.get(key).map(|c| &c.opaque)
+    }
+
+    /// [`Self::value_opaque_slice_elem`] off the classification.
+    pub(super) fn r_value_opaque_slice_elem<'t>(&self, t: &'t TypeRef) -> Option<&'t TypeRef> {
+        super::r_shared_slice_elem(t).filter(|e| self.value_opaque.contains_key(&e.key()))
     }
 
     /// Type keys used as a takeable callback parameter (any `.takeable_param(idx)`
@@ -799,17 +824,13 @@ impl CbindgenBuilder {
     /// else the args' derived bases — or, with no mangler, a generic default
     /// (`closure` for zero bases, `closure_<base0>_<base1>…` otherwise). The
     /// adapter's own default carries no target-language naming convention.
-    pub(super) fn callback_c_name(&self, args: &[syn::Type]) -> String {
-        let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
-        let base_override = self.callbacks.get(&key).and_then(|c| c.base.clone());
+    pub(super) fn callback_c_name(&self, key: &CallbackKey) -> String {
+        let base_override = self.callbacks.get(key).and_then(|c| c.base.clone());
         if let Some(f) = &self.mangle_callback {
             // The override (when set) is the sole base; otherwise the args' bases.
             let bases: Vec<String> = match &base_override {
                 Some(b) => vec![b.clone()],
-                None => args
-                    .iter()
-                    .map(|a| self.rust_base(&TypeKey::from_type(a)))
-                    .collect(),
+                None => key.iter().map(|k| self.rust_base(k)).collect(),
             };
             return f(&bases);
         }
@@ -818,21 +839,18 @@ impl CbindgenBuilder {
         if let Some(b) = base_override {
             return b;
         }
-        if args.is_empty() {
+        if key.is_empty() {
             "closure".to_string()
         } else {
-            let parts: Vec<String> = args
-                .iter()
-                .map(|a| self.rust_base(&TypeKey::from_type(a)))
-                .collect();
+            let parts: Vec<String> = key.iter().map(|k| self.rust_base(k)).collect();
             format!("closure_{}", parts.join("_"))
         }
     }
 
     /// C struct identifier for a callback's closure type (see
     /// [`Self::callback_c_name`]).
-    pub(super) fn callback_c_ident(&self, args: &[syn::Type]) -> syn::Ident {
-        format_ident!("{}", self.callback_c_name(args))
+    pub(super) fn callback_c_ident(&self, key: &CallbackKey) -> syn::Ident {
+        format_ident!("{}", self.callback_c_name(key))
     }
 }
 
