@@ -128,8 +128,8 @@ const HEADER: &str = "\
 # below count what the first section can only measure — every place that still
 # has a node to take apart.
 #
-#   ## escapes: types   `ty.as_syn()`, `stripped_syntax()`, `to_syn()`
-#                                             — MUST reach zero
+#   ## escapes: types   `as_syn()`, `stripped_syntax()`, `to_syn()`,
+#                       `type_from_ident()`   — MUST reach zero
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
 #                                             — expected to persist
 #
@@ -138,14 +138,16 @@ const HEADER: &str = "\
 # item escape is a captured item's own node, which an emitter re-stating a whole
 # item legitimately needs until items grow modelled accessors.
 #
-# The scan counts FOUR doors — `as_syn`, `stripped_syntax`, `to_syn`,
-# `enum_item` — and counts each by NAME rather than by call shape, so UFCS
+# The scan counts FIVE doors — `as_syn`, `stripped_syntax`, `to_syn`,
+# `enum_item`, `type_from_ident` — each by NAME rather than by call shape, so UFCS
 # (`TypeRef::as_syn(&ty)`) and a function item (`let read = TypeRef::as_syn;`)
 # are counted like a method call. A shape-matched rule missed both, which is a
 # ratchet that can be stepped around. `escape_surface_is_closed` keeps the list
 # honest: it reads the model's own surface and fails if a public method hands
-# out a structural syn node under a name the scan does not count — which is how
-# three of the four doors were found.
+# out a non-leaf syn node under a name the scan does not count — which is how
+# four of the five doors were found. It asks the question the safe way round:
+# every syn return is a door unless the type is on a small LEAF allowlist, and
+# unless the function was already handed a node to transform.
 #
 # The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
 # item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
@@ -337,28 +339,25 @@ impl Counts {
 /// | `stripped_syntax` | `syn::Type` | the spelling under a transparent wrapper |
 /// | `to_syn` | `syn::Type` | the round-trip that checks the lowering |
 /// | `enum_item` | `&syn::ItemEnum` | a declared enum's own item |
-const ESCAPES: &[&str] = &["as_syn", "stripped_syntax", "to_syn", "enum_item"];
-
-/// The syn types a consumer can **take apart**. An ident, a lifetime or a member
-/// is a leaf: there is no shape to match on, so handing one out is not a door.
-const STRUCTURAL: &[&str] = &[
-    "Type",
-    "Expr",
-    "Item",
-    "ItemEnum",
-    "ItemStruct",
-    "ItemFn",
-    "ItemConst",
-    "Fields",
-    "Variant",
-    "Field",
-    "Path",
-    "Signature",
-    "FnArg",
-    "ReturnType",
-    "Pat",
-    "GenericArgument",
+/// | `type_from_ident` | `syn::Type` | a spelling built from a name |
+const ESCAPES: &[&str] = &[
+    "as_syn",
+    "stripped_syntax",
+    "to_syn",
+    "enum_item",
+    "type_from_ident",
 ];
+
+/// The syn types that are **leaves**: a name, a lifetime, a field address.
+/// There is no shape to match on, so handing one out is not a door.
+///
+/// An allowlist, and deliberately the small side of the question. It began as
+/// the opposite — a list of the structural types that *are* doors — and that is
+/// a list of what someone thought of: a method returning `&[syn::Attribute]`
+/// was invisible because `Attribute` was not on it (#313 review). Inverted, a
+/// syn type nobody considered is a door until someone argues it is a leaf, and
+/// that argument is a diff on this line.
+const LEAF: &[&str] = &["Ident", "Lifetime", "Member", "Index"];
 
 /// Which bucket an escape belongs to — by name, then by **receiver**.
 ///
@@ -717,7 +716,7 @@ fn scanner_recognizes_the_shapes_that_matter() {
 ///
 /// The escape scan counts [`ESCAPES`] by name. That is a list, and a list is a
 /// thing someone forgets to add to — so this reads the model's own surface and
-/// fails if a public function in `core/flat` hands out a [`STRUCTURAL`] `syn`
+/// fails if a public function in `core/flat` hands out a non-[`LEAF`] `syn`
 /// node under a name the scan does not count.
 ///
 /// Three of the four entries were found this way rather than by design:
@@ -763,18 +762,28 @@ fn escape_surface_is_closed() {
     );
 }
 
-/// Public **methods** whose return type names a [`STRUCTURAL`] `syn` type.
+/// Public functions that hand out a non-[`LEAF`] `syn` node.
 ///
-/// Two conditions, and each rules out a whole class of false positive:
+/// **A door is the default; being a transformer is what earns the exemption.**
+/// The rule was a `self` receiver once, on the reasoning that a function without
+/// one holds no model state — and an associated function does not need a
+/// receiver to be handed the model (#313 review):
 ///
-/// * **a `self` receiver.** A door hands out a node the *model holds*; a free
-///   function has no model state, so whatever it returns it built from what the
-///   caller passed in. `canonical_type(&syn::Type) -> syn::Type` cannot give a
-///   consumer a node it could not already reach, and neither can
-///   `extract_fn_trait_args` or `type_from_ident`.
-/// * **visibility past `flat`.** A `pub(super)` method cannot be called from
-///   outside the model, so it is the model reading itself. Everything wider is a
-///   door.
+/// ```ignore
+/// impl TypeRef {
+///     pub fn leak(this: &Self) -> &syn::Type { this.as_syn() }
+/// }
+/// ```
+///
+/// `TypeRef::leak(&ty)` hands out the held node, and a rule keyed on the
+/// receiver waves it through. So the exemption is stated as what it actually
+/// is: a function is exempt only when it **already receives** a non-leaf syn
+/// node and takes no receiver — then everything it hands back, the caller could
+/// reach without it. That is `canonical_type`, `extract_fn_trait_args` and
+/// `peel_transparent`, and nothing else.
+///
+/// Visibility still applies: `pub(super)` cannot be called from outside the
+/// model, so it is the model reading itself.
 fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>) {
     fn escapes_flat(vis: &syn::Visibility) -> bool {
         match vis {
@@ -787,30 +796,45 @@ fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>)
         let syn::ReturnType::Type(_, ty) = ret else {
             return false;
         };
-        // `syn :: <structural>` anywhere in the return type. Qualified because
-        // `-> Option<&Type>` is *flat's own* `Type`, which is the model, not a node.
         names_a_node(quote::ToTokens::to_token_stream(ty))
     }
-    // Through groups: `Option<(&'static str, syn::Type)>` nests the mention
-    // inside a parenthesised token group.
+    /// A non-[`LEAF`] `syn::` type named anywhere in a signature position.
+    ///
+    /// Qualified, because `-> Option<&Type>` is *flat's own* `Type` — the model,
+    /// not a node. Through groups, because `Option<(&'static str, syn::Type)>`
+    /// nests the mention inside a parenthesised token group.
     fn names_a_node(stream: TokenStream) -> bool {
         let toks: Vec<TokenTree> = stream.into_iter().collect();
         (0..toks.len()).any(|i| {
             (matches!(&toks[i], TokenTree::Ident(id) if id == "syn")
                 && is_sep(&toks, i + 1)
                 && matches!(toks.get(i + 3), Some(TokenTree::Ident(id))
-                    if STRUCTURAL.contains(&id.to_string().as_str())))
+                    if !LEAF.contains(&id.to_string().as_str())))
                 || matches!(&toks[i], TokenTree::Group(g) if names_a_node(g.stream()))
         })
     }
+    /// A function the caller could have written itself: no receiver, and a
+    /// non-leaf node already among its inputs.
+    fn is_transformer(sig: &syn::Signature) -> bool {
+        let has_receiver = matches!(sig.inputs.first(), Some(syn::FnArg::Receiver(_)));
+        let takes_a_node = sig.inputs.iter().any(|arg| match arg {
+            syn::FnArg::Typed(pt) => names_a_node(quote::ToTokens::to_token_stream(&pt.ty)),
+            syn::FnArg::Receiver(_) => false,
+        });
+        !has_receiver && takes_a_node
+    }
+    let is_door = |vis: &syn::Visibility, sig: &syn::Signature| {
+        escapes_flat(vis) && hands_out_a_node(&sig.output) && !is_transformer(sig)
+    };
     for item in items {
         match item {
+            syn::Item::Fn(f) if is_door(&f.vis, &f.sig) => {
+                out.push((f.sig.ident.to_string(), at.to_string()));
+            }
             syn::Item::Impl(im) => {
                 for it in &im.items {
                     if let syn::ImplItem::Fn(f) = it {
-                        let is_method =
-                            matches!(f.sig.inputs.first(), Some(syn::FnArg::Receiver(_)));
-                        if is_method && escapes_flat(&f.vis) && hands_out_a_node(&f.sig.output) {
+                        if is_door(&f.vis, &f.sig) {
                             out.push((f.sig.ident.to_string(), at.to_string()));
                         }
                     }
@@ -824,6 +848,52 @@ fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>)
             _ => {}
         }
     }
+}
+
+/// The **guard's own** rules, on shapes the tree does not currently contain —
+/// which is the point: it is what stops one from being added quietly.
+#[test]
+fn a_door_is_the_default_and_a_transformer_is_the_exception() {
+    let doors = |src: &str| {
+        let file: syn::File = syn::parse_str(src).expect("test source parses");
+        let mut out = Vec::new();
+        collect_doors(&file.items, "test", &mut out);
+        out.into_iter().map(|(name, _)| name).collect::<Vec<_>>()
+    };
+
+    // The #313 review's case: an associated function needs no receiver to be
+    // handed the model, so a rule keyed on the receiver waved this through.
+    assert_eq!(
+        doors("impl TypeRef { pub fn leak(this: &Self) -> &syn::Type { this.as_syn() } }"),
+        ["leak"]
+    );
+    // Neither does a free function, given the model by value.
+    assert_eq!(
+        doors("pub fn leak(t: &TypeRef) -> &syn::Type { t.as_syn() }"),
+        ["leak"]
+    );
+    // And a syn type nobody put on a list is a door, not an oversight.
+    assert_eq!(
+        doors(
+            "impl S { pub fn attrs(&self) -> &[syn::Attribute] { &self.origin.as_syn().attrs } }"
+        ),
+        ["attrs"]
+    );
+
+    // A transformer is exempt: it was handed a node, so it can give back only
+    // what the caller could already reach.
+    assert!(doors("pub fn canonical_type(ty: &syn::Type) -> syn::Type { ty.clone() }").is_empty());
+    assert!(
+        doors("pub fn peel(ty: &syn::Type) -> Option<(&'static str, syn::Type)> { None }")
+            .is_empty(),
+        "the mention nests inside a token group, and must still be seen"
+    );
+    // A leaf is not a node: there is no shape to match on.
+    assert!(doors("impl S { pub fn name(&self) -> &syn::Ident { &self.name } }").is_empty());
+    // The model reading itself is not a door.
+    assert!(doors("impl S { pub(super) fn syntax(&self) -> &syn::Type { &self.ty } }").is_empty());
+    // Nor is flat's OWN `Type`, which is the model and not a node.
+    assert!(doors("impl F { pub fn declared_type(&self) -> Option<&Type> { None } }").is_empty());
 }
 
 /// The escape scan: what it counts, which bucket it lands in, and what it must
@@ -903,6 +973,7 @@ fn escapes_are_counted_by_their_receiver() {
         1,
         "an item, whatever the receiver is called"
     );
+    assert_eq!(c("fn f() { let t = type_from_ident(&n); }").escape_type, 1);
 
     // The two populations are independent: classifying through an escape counts
     // in both, which is the intended double entry — one says a node was taken,

@@ -636,11 +636,14 @@ growing back.
       must reach zero) and **escapes: items** (28, expected until items grow
       modelled accessors). `ToTokens` is gone from `Origin` on purpose — it would
       have handed every consumer `to_token_stream().to_string()` back.
-      The census counts **four doors** (`as_syn`, `stripped_syntax`, `to_syn`,
-      `enum_item`) by NAME rather than by call shape, so UFCS and a function item
-      count like a method call — and `escape_surface_is_closed` reads the model's
-      own surface so a fifth cannot appear quietly, which is how three of the
-      four were found
+      The census counts **five doors** (`as_syn`, `stripped_syntax`, `to_syn`,
+      `enum_item`, `type_from_ident`) by NAME rather than by call shape, so UFCS
+      and a function item count like a method call — and
+      `escape_surface_is_closed` reads the model's own surface so a sixth cannot
+      appear quietly, which is how four of the five were found. It asks the
+      question the safe way round: every `syn` return is a door unless its type
+      is a leaf (`Ident`, `Lifetime`, `Member`, `Index`) and unless the function
+      was already handed a node to transform
 - [ ] Drive **escapes: types** to zero. The population is three kinds, and only
       the first is classification: taking a node apart (what the ledger's first
       section already sees), keying by spelling (`TypeKey::from_type` where
