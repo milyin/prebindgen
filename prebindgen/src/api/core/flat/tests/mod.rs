@@ -16,6 +16,32 @@ use super::*;
 mod acceptance;
 mod roundtrip;
 
+/// Lower one type by putting it in a struct field, and report what the language
+/// made of it. The field path is used because a field is the position every
+/// consumer already agrees is a boundary surface.
+fn lower(ty: proc_macro2::TokenStream) -> Result<TypeRef, UnsupportedType> {
+    let item: syn::Item = syn::parse_quote!(
+        pub struct S {
+            pub f: #ty,
+        }
+    );
+    // The fixture types stand in for a declared type wherever the grammar needs
+    // a nominal one, so references resolve and the test is about the grammar.
+    let mut items = fixture_types();
+    items.push(tag_len_const());
+    items.push(opaque("Sample"));
+    let n = items.len();
+    items.push(item);
+    match parse(items).remove(n) {
+        Element::Type(Type::Struct(s)) => Ok(s.fields[0].ty.clone()),
+        Element::Unsupported(u) => match *u.error {
+            ItemError::FieldType { source, .. } => Err(source),
+            other => panic!("expected a field-type diagnosis, got {other}"),
+        },
+        other => panic!("expected a struct, got {}", describe(&other)),
+    }
+}
+
 /// Parse one item, stamped with an origin crate so array extents can name
 /// `#[prebindgen]` consts from "their own" crate.
 ///

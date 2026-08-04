@@ -393,11 +393,10 @@ impl<M> Registry<M> {
     ///
     /// The children come from [`TypeKind`], not from taking the syntax apart, and
     /// the difference is load-bearing rather than cosmetic. `&mut MaybeUninit<T>`
-    /// is `Ref { mode: Out, inner: T }` — the model absorbed the `MaybeUninit`, so
-    /// the edge lands on `T` directly instead of on an intermediate
-    /// `MaybeUninit<T>` that no source ever wrote and no adapter can convert.
-    /// Each edge is still *spelled* from the child's own `origin.syntax`, which is
-    /// what the caller keys the table by.
+    /// yields `T` — [`borrow_target`](crate::api::core::flat::TypeRef::borrow_target)
+    /// sees past the slot — instead of an intermediate `MaybeUninit<T>` that no
+    /// adapter can convert and no table holds. Each edge is still *spelled* from
+    /// the child's own `origin.syntax`, which is what the caller keys the table by.
     ///
     /// The reading comes from **this registry's own table**, where `ensure_entry`
     /// put it before the walk reached this type — so a spelling the binding composed
@@ -414,21 +413,38 @@ impl<M> Registry<M> {
         let mut out: Vec<(Direction, crate::api::core::flat::TypeRef)> = Vec::new();
         if let Some(reading) = self.type_table(dir).get(key).map(|c| &c.subject) {
             let (children, child_dir): (Vec<&crate::api::core::flat::TypeRef>, Direction) =
-                match reading.kind() {
+                match reading.unwrapped().kind() {
+                    // Through the accessor, not the field: it sees past an
+                    // out-parameter's `MaybeUninit` slot, which is storage rather
+                    // than a type any converter is keyed by.
+                    // `expect`, not a fallible collect: a `Ref` kind always has a
+                    // target, so an empty child list here would mean the accessor
+                    // and the kind disagree — and it would silently truncate the
+                    // graph walk instead of saying so.
+                    TypeKind::Ref { .. } => (
+                        vec![reading
+                            .borrow_target()
+                            .expect("a `Ref` kind has a borrow target")],
+                        dir,
+                    ),
                     TypeKind::Optional(t)
-                    | TypeKind::Sequence(t)
-                    | TypeKind::Ref { inner: t, .. } => (vec![t], dir),
+                    | TypeKind::Vec(t)
+                    | TypeKind::Slice(t)
+                    | TypeKind::Uninit(t) => (vec![t], dir),
                     TypeKind::Array { elem, .. } => (vec![elem], dir),
                     TypeKind::Fallible { ok, err } => (vec![ok, err], dir),
                     TypeKind::Callback { args } => (args.iter().collect(), dir.flip()),
-                    // A name is a leaf in the type graph: its generic arguments are
-                    // lowered but not retained, because no declaration takes type
-                    // parameters. Its *fields* are the edges, and they come off the
-                    // element below.
+                    // A name is a leaf in the type graph: its generic arguments
+                    // belong to the reference, not to a declaration, because no
+                    // declaration takes type parameters. Its *fields* are the
+                    // edges, and they come off the element below.
                     TypeKind::Named { .. }
                     | TypeKind::Scalar(_)
                     | TypeKind::Str
+                    | TypeKind::String
                     | TypeKind::Unit => (Vec::new(), dir),
+                    // `unwrapped` peeled these off.
+                    TypeKind::Boxed(_) | TypeKind::Cow { .. } => (Vec::new(), dir),
                 };
             // The child reading itself, not its spelling: it has already been
             // classified — by the model, or by whoever composed the parent — so
@@ -472,13 +488,13 @@ impl<M> Registry<M> {
         // `Named { id: Node }` — `Box<T>` **is** `T` in this language — so it
         // reaches `Node`'s fields, where asking the syntax for a bare ident would
         // have answered `None` and dead-ended the walk.
-        if let Some(name) = self
-            .type_table(dir)
-            .get(key)
-            .and_then(|c| match c.subject.kind() {
-                TypeKind::Named { id } => Some(id.name.clone()),
-                _ => None,
-            })
+        if let Some(name) =
+            self.type_table(dir)
+                .get(key)
+                .and_then(|c| match c.subject.unwrapped().kind() {
+                    TypeKind::Named { id, .. } => Some(id.name.clone()),
+                    _ => None,
+                })
         {
             use crate::api::core::flat::{Field, Type};
             let fields: Vec<&Field> = match self.flat.declared_type(name.as_str()) {

@@ -173,8 +173,8 @@ pub(crate) fn struct_input_body(
             // The NAME off the classification, not off the last path segment:
             // `Box<T>` IS `T` here, and taking the spelling apart would answer
             // about the wrapper.
-            if let Some(fqn) = match inner.kind() {
-                flat::TypeKind::Named { id } => id.ident(),
+            if let Some(fqn) = match inner.unwrapped().kind() {
+                flat::TypeKind::Named { id, .. } => id.ident(),
                 _ => None,
             }
             .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
@@ -253,8 +253,8 @@ pub(crate) fn struct_input_body(
                     .or_else(|| {
                         // The NAME off the classification, not off the last
                         // path segment.
-                        match inner.kind() {
-                            flat::TypeKind::Named { id } => id.ident(),
+                        match inner.unwrapped().kind() {
+                            flat::TypeKind::Named { id, .. } => id.ident(),
                             _ => None,
                         }
                         .and_then(|name| {
@@ -494,8 +494,8 @@ fn read_kotlin_property(
     // distinction for data-class fields; this is that logic for a property.
     if ext.is_kotlin_enum_reading(inner) {
         // The NAME off the classification, not off the last path segment.
-        let fqn = match inner.kind() {
-            flat::TypeKind::Named { id } => id.ident(),
+        let fqn = match inner.unwrapped().kind() {
+            flat::TypeKind::Named { id, .. } => id.ident(),
             _ => None,
         }
         .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
@@ -562,10 +562,10 @@ fn read_kotlin_property(
             // class, another sum, a `List`): the slot's descriptor is the
             // registered Kotlin class and the value decodes through its own
             // converter — the same delegation the data-class path uses.
-            let sig = match inner.kind() {
+            let sig = match inner.unwrapped().kind() {
                 // The NAME off the classification, not off the last path
                 // segment: `Box<T>` IS `T` here.
-                flat::TypeKind::Named { id } => id.ident(),
+                flat::TypeKind::Named { id, .. } => id.ident(),
                 _ => None,
             }
             .and_then(|name| ext.kotlin_fqn(&TypeKey::from_ident(&name)))
@@ -1063,8 +1063,8 @@ fn build_flat_sum_field(
     // The NAME off the classification, and then the ELEMENT — `enum_item`
     // hands back only the `syn::ItemEnum`, deliberately, so a consumer that
     // acts on the Variant/Enum distinction asks `declared_type` (#289).
-    let ident = match sum_reading.kind() {
-        flat::TypeKind::Named { id } => id.ident(),
+    let ident = match sum_reading.unwrapped().kind() {
+        flat::TypeKind::Named { id, .. } => id.ident(),
         _ => None,
     }?;
     let flat::Type::Variant(sum) = registry.flat().declared_type(&ident)? else {
@@ -1322,7 +1322,7 @@ pub(crate) fn build_flat_input_plan(
     // every caller — see the sibling helper's doc.
     // The name off the classification, not off the last path segment: `Box<S>`
     // IS `S` here, and taking the spelling apart would answer about the wrapper.
-    let flat::TypeKind::Named { id } = inner.kind() else {
+    let flat::TypeKind::Named { id, .. } = inner.unwrapped().kind() else {
         return Ok(None);
     };
     let Some(name) = id.ident() else {

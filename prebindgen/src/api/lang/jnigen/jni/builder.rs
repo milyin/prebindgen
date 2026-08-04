@@ -127,7 +127,7 @@ impl Declarations {
     /// `Box<Option<&Priority>>` reaches the same declaration `Priority` does,
     /// where taking the spelling apart finds `Box` and answers about it.
     pub(crate) fn is_kotlin_enum_reading(&self, reading: &TypeRef) -> bool {
-        let flat::TypeKind::Named { id } = enum_probe(reading).kind() else {
+        let flat::TypeKind::Named { id, .. } = enum_probe(reading).unwrapped().kind() else {
             return false;
         };
         id.ident()
@@ -899,7 +899,7 @@ impl Declarations {
         // model already normalized them.
         let ret = accessor.ret.borrow_target().unwrap_or(&accessor.ret);
         assert!(
-            !matches!(ret.kind(), flat::TypeKind::Unit),
+            !matches!(ret.unwrapped().kind(), flat::TypeKind::Unit),
             "expand_return!({}).fields(fields!({func})): `{func}` returns nothing — a \
              value form returns the struct holding this type's fields",
             key.as_str(),
@@ -1100,7 +1100,7 @@ impl Declarations {
                     );
                     // The name is the reading's, not a path taken apart to
                     // re-derive one.
-                    let flat::TypeKind::Named { id } = probe.kind() else {
+                    let flat::TypeKind::Named { id, .. } = probe.unwrapped().kind() else {
                         panic!("a sum type is a named type")
                     };
                     let flat::Type::Variant(sum) = registry

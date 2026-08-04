@@ -6,7 +6,7 @@ use super::*;
 // classifier (reached through `use super::*`), and an explicit import would win
 // over the glob and silently retarget it.
 use crate::api::{
-    core::flat::{self, RefMode, TypeRef},
+    core::flat::{self, TypeRef},
     lang::jnigen::jni::trait_impl::build_through_erased_wrappers,
 };
 
@@ -16,7 +16,7 @@ use crate::api::{
 // where a `Box<Vec<T>>` answers as `Vec<T>` does instead of failing a
 // last-path-segment test. Its one non-structural rule — `&mut [T]` is refused,
 // because mutate-back semantics keep the `input_vec` path — survives as the
-// `RefMode::Shared` guard on that match.
+// `mutable: false` guard on that match.
 
 /// `Some((element_type, by_ref))` when `arg_ty` is a slice/`Vec` input whose
 /// element is a **flattenable `data_class`** — i.e. it decomposes into the
@@ -35,7 +35,8 @@ pub(crate) fn vec_build_elem(
 ) -> Option<(TypeRef, bool)> {
     // The run and its element off the MODEL. `&mut [T]` is still refused —
     // mutate-back semantics keep the `input_vec` path — and that is the one
-    // fact the layer accessors do not carry, so `RefMode` is read directly.
+    // fact the layer accessors do not carry, so the borrow's mutability is read
+    // off the kind directly.
     //
     // The conversion follows the SYNTAX, and must: this path builds a Rust-side
     // `Vec<T>` and hands the source fn a borrow of it (or `mem::take`s it), so
@@ -51,8 +52,12 @@ pub(crate) fn vec_build_elem(
     // sequence — whose spelling is a clean `Vec<T>` — and let the outer `Box`
     // through unseen. Every layer is checked on the way down, the way
     // `rebuildable_target` does it.
-    let (run, by_ref) = match arg.kind() {
-        flat::TypeKind::Ref { mode, inner } if *mode == RefMode::Shared => (&**inner, true),
+    let (run, by_ref) = match arg.unwrapped().kind() {
+        flat::TypeKind::Ref {
+            mutable: false,
+            inner,
+            ..
+        } => (&**inner, true),
         _ => (arg, false),
     };
     // A wrapper over the RUN is buildable only on the by-value path, and the

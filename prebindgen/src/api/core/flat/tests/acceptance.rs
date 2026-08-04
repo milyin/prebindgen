@@ -5,32 +5,6 @@
 
 use super::*;
 
-/// Lower one type by putting it in a struct field, and report what the language
-/// made of it. The field path is used because a field is the position every
-/// consumer already agrees is a boundary surface.
-fn lower(ty: proc_macro2::TokenStream) -> Result<TypeRef, UnsupportedType> {
-    let item: syn::Item = syn::parse_quote!(
-        pub struct S {
-            pub f: #ty,
-        }
-    );
-    // The fixture types stand in for a declared type wherever the grammar needs
-    // a nominal one, so references resolve and the test is about the grammar.
-    let mut items = fixture_types();
-    items.push(tag_len_const());
-    items.push(opaque("Sample"));
-    let n = items.len();
-    items.push(item);
-    match parse(items).remove(n) {
-        Element::Type(Type::Struct(s)) => Ok(s.fields[0].ty.clone()),
-        Element::Unsupported(u) => match *u.error {
-            ItemError::FieldType { source, .. } => Err(source),
-            other => panic!("expected a field-type diagnosis, got {other}"),
-        },
-        other => panic!("expected a struct, got {}", describe(&other)),
-    }
-}
-
 fn kind(ty: proc_macro2::TokenStream) -> TypeKind {
     lower(ty).expect("in the language").kind
 }
@@ -55,23 +29,27 @@ fn scalars_and_strings() {
         kind(quote::quote!(f64)),
         TypeKind::Scalar(ScalarKind::F64)
     ));
-    assert!(matches!(kind(quote::quote!(String)), TypeKind::Str));
+    assert!(matches!(kind(quote::quote!(String)), TypeKind::String));
     assert!(matches!(kind(quote::quote!(())), TypeKind::Unit));
 }
 
-/// `String` and `str` are one concept, and the borrow is the `Ref` layer's
-/// fact. Every adapter already treats `&str` as a borrowed string by hand;
-/// classifying `str` as a nominal type would send them all looking for an item
-/// named `str` to resolve.
+/// `str` and `String` are two Rust types, so they are two kinds. That they are
+/// one *string* to every destination language is a destination's reading, and
+/// the adapters make it — the model reports what the source wrote.
+///
+/// Neither is a nominal type: both are in the grammar, so no adapter goes
+/// looking for a declared item named `str` to resolve.
 #[test]
-fn a_string_is_a_string_however_it_is_spelled() {
+fn the_two_string_types_stay_two() {
     assert!(matches!(kind(quote::quote!(str)), TypeKind::Str));
-    for spelling in [quote::quote!(&str), quote::quote!(&String)] {
-        let TypeKind::Ref { mode, inner } = kind(spelling) else {
+    assert!(matches!(kind(quote::quote!(String)), TypeKind::String));
+    for (spelling, owned) in [(quote::quote!(&str), false), (quote::quote!(&String), true)] {
+        let TypeKind::Ref { mutable, inner, .. } = kind(spelling) else {
             panic!("a borrow");
         };
-        assert_eq!(mode, RefMode::Shared);
-        assert!(matches!(inner.kind, TypeKind::Str));
+        assert!(!mutable);
+        assert_eq!(matches!(inner.kind, TypeKind::String), owned);
+        assert_eq!(matches!(inner.kind, TypeKind::Str), !owned);
     }
 }
 
@@ -81,32 +59,34 @@ fn the_builtin_generics() {
         kind(quote::quote!(Option<u8>)),
         TypeKind::Optional(_)
     ));
-    assert!(matches!(
-        kind(quote::quote!(Vec<u8>)),
-        TypeKind::Sequence(_)
-    ));
+    assert!(matches!(kind(quote::quote!(Vec<u8>)), TypeKind::Vec(_)));
     assert!(matches!(
         kind(quote::quote!(Result<u8, Error>)),
         TypeKind::Fallible { .. }
     ));
 }
 
-/// `Box<T>` **is** `T` — an owned value either way, and no destination language
-/// can tell them apart, so it carries no kind of its own. The `Box` survives
-/// where it matters: in the syntax generated Rust spells.
+/// A `Box<T>` **is a `Box<T>`** in the model. That no destination language can
+/// tell it from `T` is true and is the adapters' to act on: `unwrapped` is where
+/// that reading is taken, and it is taken on purpose, at a call site.
 #[test]
-fn a_box_classifies_as_what_it_wraps() {
+fn a_box_is_a_box_until_a_consumer_unwraps_it() {
     let ty = lower(quote::quote!(Box<String>)).expect("in the language");
-    assert!(matches!(ty.kind, TypeKind::Str));
+    let TypeKind::Boxed(inner) = &ty.kind else {
+        panic!("a box");
+    };
+    assert!(matches!(inner.kind, TypeKind::String));
     assert_eq!(tokens(&ty.origin.syntax), "Box < String >");
+    // The reading a destination takes.
+    assert!(matches!(ty.unwrapped().kind(), TypeKind::String));
 
     // And it composes: the nullable heap string of a `#[repr(C)]` struct field
-    // is an optional string, spelled with its `Box`.
+    // is an optional string, spelled with its `Box`. `optional_inner` reads
+    // through the wrapper, so the layer accessors answer as they always did.
     let ty = lower(quote::quote!(Option<Box<String>>)).expect("in the language");
-    let TypeKind::Optional(inner) = &ty.kind else {
-        panic!("an option");
-    };
-    assert!(matches!(inner.kind, TypeKind::Str));
+    let inner = ty.optional_inner().expect("an option");
+    assert!(matches!(inner.kind, TypeKind::Boxed(_)));
+    assert!(matches!(inner.unwrapped().kind(), TypeKind::String));
     assert_eq!(tokens(&inner.origin.syntax), "Box < String >");
 }
 
@@ -114,11 +94,11 @@ fn a_box_classifies_as_what_it_wraps() {
 /// off, and what is left under it.
 ///
 /// The invariant is not "the loop peels until it stops" — it is that
-/// [`TypeRef::stripped_syntax`] is *the spelling whose own lowering yields
-/// exactly this type's `kind`*. That is what makes it a safe base for a
+/// [`TypeRef::stripped_syntax`] is *the spelling whose own lowering yields the
+/// kind [`TypeRef::unwrapped`] reaches*. That is what makes it a safe base for a
 /// reconstruction, and it is why the peel must run to a **fixed point**:
-/// `Box<Box<T>>` classifies as `T`, so one strip leaves a `Box<T>` that does
-/// not match.
+/// `Box<Box<T>>` unwraps to `T`, so one strip leaves a `Box<T>` that does not
+/// match.
 #[test]
 fn the_stripped_spelling_is_the_one_that_lowers_to_this_kind() {
     // The property, asserted as a property: strip, lower again, get the same
@@ -137,7 +117,7 @@ fn the_stripped_spelling_is_the_one_that_lowers_to_this_kind() {
         let stripped = ty.stripped_syntax();
         assert_eq!(
             format!("{:?}", kind(quote::quote!(#stripped))),
-            format!("{:?}", ty.kind),
+            format!("{:?}", ty.unwrapped().kind()),
             "`{}` strips to `{}`, which must classify identically",
             tokens(&ty.origin.syntax),
             tokens(&stripped),
@@ -206,11 +186,11 @@ fn a_wrapper_is_found_only_at_the_layer_that_spells_it() {
     // alone is enough: the difference between them lives in a spelling, and the
     // classification is exactly the thing it is missing from.
     for ty in [&outside, &inside] {
-        let TypeKind::Ref { mode, inner } = &ty.kind else {
+        let TypeKind::Ref { mutable, inner, .. } = ty.unwrapped().kind() else {
             panic!("a borrow");
         };
-        assert_eq!(*mode, RefMode::Shared);
-        let TypeKind::Sequence(elem) = &inner.kind else {
+        assert!(!mutable);
+        let TypeKind::Vec(elem) = inner.unwrapped().kind() else {
             panic!("a run");
         };
         assert!(matches!(elem.kind, TypeKind::Named { .. }));
@@ -268,15 +248,18 @@ fn the_prelude_reaches_every_builtin_by_either_spelling() {
     ));
     assert!(matches!(
         kind(quote::quote!(alloc::string::String)),
-        TypeKind::Str
+        TypeKind::String
     ));
 
     // The bug: qualified `MaybeUninit` used to fall through to an unresolvable
     // nominal type, so an out-parameter worked only if the source `use`d it.
-    let TypeKind::Ref { mode, .. } = kind(quote::quote!(&mut std::mem::MaybeUninit<Sample>)) else {
+    let TypeKind::Ref { mutable, inner, .. } =
+        kind(quote::quote!(&mut std::mem::MaybeUninit<Sample>))
+    else {
         panic!("a borrow");
     };
-    assert_eq!(mode, RefMode::Out);
+    assert!(mutable);
+    assert!(matches!(inner.kind, TypeKind::Uninit(_)));
 }
 
 /// A `#[prebindgen] pub type` is a **one-way road**: it brings a foreign type into
@@ -307,10 +290,8 @@ fn an_alias_is_a_declaration_not_an_equivalence() {
 
     // The declared name works.
     let f = flat.function("by_name").expect("declared");
-    let TypeKind::Ref { inner, .. } = &f.params[0].ty.kind else {
-        panic!("a borrow");
-    };
-    let TypeKind::Named { id } = &inner.kind else {
+    let inner = f.params[0].ty.borrow_target().expect("a borrow");
+    let TypeKind::Named { id, .. } = &inner.kind else {
         panic!("a nominal type");
     };
     assert_eq!(id.name, "Session");
@@ -391,7 +372,7 @@ fn an_alias_never_retypes_a_spelling() {
     // unrelated alias happens to target.
     for f in ["strings", "bytes"] {
         assert!(
-            matches!(param(f), TypeKind::Sequence(_)),
+            matches!(param(f), TypeKind::Vec(_)),
             "`{f}`: the grammar's spelling stays canonical"
         );
     }
@@ -399,7 +380,7 @@ fn an_alias_never_retypes_a_spelling() {
     // Each alias is usable by its own name, and they cannot collide: a bare path is
     // never reduced, so the name IS the identity.
     for (f, expected) in [("by_name", "Bytes"), ("small", "Small"), ("big", "Big")] {
-        let TypeKind::Named { id } = param(f) else {
+        let TypeKind::Named { id, .. } = param(f) else {
             panic!("{f}: a nominal type");
         };
         assert_eq!(id.name, expected, "{f}");
@@ -439,66 +420,94 @@ fn a_qualified_builtin_is_a_named_type() {
 fn references() {
     assert!(matches!(
         kind(quote::quote!(&Sample)),
-        TypeKind::Ref {
-            mode: RefMode::Shared,
-            ..
-        }
+        TypeKind::Ref { mutable: false, .. }
     ));
     assert!(matches!(
         kind(quote::quote!(&mut Sample)),
-        TypeKind::Ref {
-            mode: RefMode::Exclusive,
-            ..
-        }
+        TypeKind::Ref { mutable: true, .. }
     ));
+    // The lifetime is part of the type, so the model keeps it.
+    let TypeKind::Ref { lifetime, .. } = kind(quote::quote!(&'a Sample)) else {
+        panic!("a borrow");
+    };
+    assert_eq!(lifetime.expect("a lifetime").ident, "a");
 }
 
-/// `Vec<T>` and `[T]` are one concept — a run of `T` — and ownership is the
-/// `Ref` layer's fact, not a second variant. That is already how the pipeline
-/// behaves: one `Shape::Iterable` covers both, and jnigen rewrites a `&[T]`
-/// input into the `Vec<_>` pattern outright.
+/// `Vec<T>` and `[T]` are two Rust forms, so two kinds — and one *run of values*
+/// to a consumer, which is what [`TypeRef::sequence_elem`] answers. That reading
+/// is what the pipeline is built on (one `Shape::Iterable` covers both, and
+/// jnigen rewrites a `&[T]` input into the `Vec<_>` pattern outright); the model
+/// no longer has to lose the difference to provide it.
 #[test]
-fn a_sequence_is_a_sequence_borrowed_or_owned() {
-    assert!(matches!(
-        kind(quote::quote!(Vec<u8>)),
-        TypeKind::Sequence(_)
-    ));
+fn a_run_of_values_is_read_through_either_spelling() {
+    assert!(matches!(kind(quote::quote!(Vec<u8>)), TypeKind::Vec(_)));
     // Bare, as a callback argument is written: `impl Fn([T])`.
-    assert!(matches!(kind(quote::quote!([u8])), TypeKind::Sequence(_)));
+    assert!(matches!(kind(quote::quote!([u8])), TypeKind::Slice(_)));
     let TypeKind::Ref { inner, .. } = kind(quote::quote!(&[u8])) else {
         panic!("a reference");
     };
-    assert!(matches!(inner.kind, TypeKind::Sequence(_)));
+    assert!(matches!(inner.kind, TypeKind::Slice(_)));
+
+    // One reading over both, plus a wrapper over either.
+    for spelling in [
+        quote::quote!(Vec<u8>),
+        quote::quote!([u8]),
+        quote::quote!(Box<Vec<u8>>),
+        quote::quote!(Cow<'_, [u8]>),
+    ] {
+        let ty = lower(spelling).expect("in the language");
+        assert!(
+            matches!(
+                ty.sequence_elem().expect("a run").kind(),
+                TypeKind::Scalar(ScalarKind::U8)
+            ),
+            "`{}` is a run of `u8`",
+            tokens(&ty.origin.syntax)
+        );
+    }
 }
 
-/// `Cow<'_, T>` **is** `T`, the same treatment `Box<T>` gets: borrowed or owned, and
-/// no destination language can tell.
+/// A `Cow<'_, T>` keeps its own kind, its lifetime included, and reads as the
+/// `T` it borrows — the same treatment `Box<T>` gets, taken at the consumer
+/// rather than during lowering.
 ///
-/// Both adapters already behave that way — cbindgen lowers `Cow<'_, [T]>` "just like
+/// Both adapters act on that reading — cbindgen lowers `Cow<'_, [T]>` "just like
 /// `Vec<T>` outputs", and jnigen's converter is `byte_array_from_slice(&v)`, which
-/// works by deref and is identical to the `Vec<u8>` one — so this classification
-/// predicts their behaviour rather than leaving it a special case.
+/// works by deref and is identical to the `Vec<u8>` one — and now both can also
+/// see the `Cow` they are seeing through.
 #[test]
-fn a_cow_is_what_it_borrows() {
-    // The property the whole treatment rests on: indistinguishable from the owned
-    // spelling of the same thing.
+fn a_cow_reads_as_what_it_borrows() {
+    // The reading the whole treatment rests on: indistinguishable from the owned
+    // spelling of the same thing, once a consumer says it does not care.
+    let cow = lower(quote::quote!(Cow<'_, [u8]>)).expect("in the language");
     assert_eq!(
-        format!("{:?}", kind(quote::quote!(Cow<'_, [u8]>))),
-        format!("{:?}", kind(quote::quote!(Vec<u8>))),
-        "a byte Cow classifies exactly as a byte Vec"
+        format!("{:?}", cow.unwrapped().kind()),
+        format!("{:?}", kind(quote::quote!([u8]))),
+        "a byte Cow reads exactly as the byte slice it borrows"
     );
-    assert!(matches!(kind(quote::quote!(Cow<'_, str>)), TypeKind::Str));
+    let TypeKind::Cow { lifetime, .. } = &cow.kind else {
+        panic!("a cow");
+    };
+    assert_eq!(lifetime.ident, "_");
+    assert!(matches!(
+        lower(quote::quote!(Cow<'_, str>))
+            .expect("in the language")
+            .unwrapped()
+            .kind(),
+        TypeKind::Str
+    ));
 
     // The `Cow` survives where codegen reads it: a generated signature must spell
     // `Cow<'_, [u8]>`, which is not interchangeable with `Vec<u8>` in Rust.
-    let ty = lower(quote::quote!(Cow<'_, [u8]>)).expect("in the language");
-    assert_eq!(tokens(&ty.origin.syntax), "Cow < '_ , [u8] >");
+    assert_eq!(tokens(&cow.origin.syntax), "Cow < '_ , [u8] >");
 
     // Transparent for any target, as `Box` is: whether it can actually cross is the
     // adapter's call, and both already restrict which elements they accept.
-    let TypeKind::Sequence(elem) = kind(quote::quote!(Cow<'_, [Sample]>)) else {
-        panic!("a sequence");
-    };
+    let elem = lower(quote::quote!(Cow<'_, [Sample]>))
+        .expect("in the language")
+        .sequence_elem()
+        .expect("a run")
+        .clone();
     assert!(matches!(elem.kind, TypeKind::Named { .. }));
 
     // A lifetime argument is expected on `Cow` alone. On any other builtin it is
@@ -518,6 +527,48 @@ fn a_cow_is_what_it_borrows() {
         as_unsupported(&element),
         ItemError::UnresolvedType { name } if name == "Vec"
     ));
+}
+
+/// `Cow` is the one builtin whose signature carries a lifetime, so it is the one
+/// whose **whole argument list** is checked rather than its type-argument count.
+///
+/// Counting types alone accepts three spellings that are not `Cow`s: the review
+/// case `Cow<u8, 'a>`, a second lifetime, and no lifetime at all. Each has
+/// exactly one type argument, so each passed — and then reconstructed as
+/// `Cow<'a, u8>`, quietly breaking the property
+/// [`syntax_is_recoverable_from_kind`] asserts. A model that keeps only the
+/// first lifetime cannot spell any of them back, which is the reason to refuse
+/// them rather than the consequence of doing so.
+#[test]
+fn a_cow_takes_a_lifetime_and_a_type_in_that_order() {
+    // The accepted shape, either way the lifetime is written.
+    for spelling in [quote::quote!(Cow<'_, [u8]>), quote::quote!(Cow<'a, str>)] {
+        let ty = lower(spelling).expect("in the language");
+        assert!(matches!(ty.kind, TypeKind::Cow { .. }));
+        // And it spells back, which is what the refusals below protect.
+        assert_eq!(tokens(&ty.kind().to_syn()), tokens(ty.syntax()));
+    }
+
+    // Everything else is refused by shape, and named as such.
+    for spelling in [
+        // No lifetime: `Cow<T>` is not Rust, so no source crate compiles it.
+        quote::quote!(Cow<u8>),
+        // The review case: the arguments are there, in the wrong order.
+        quote::quote!(Cow<u8, 'a>),
+        // Two lifetimes, where `Cow` takes one.
+        quote::quote!(Cow<'a, 'b, u8>),
+        // Two types.
+        quote::quote!(Cow<'a, u8, u8>),
+    ] {
+        let rendered = spelling.to_string();
+        assert_eq!(
+            reason(spelling),
+            UnsupportedTypeReason::WrongGenericArguments {
+                expected: "Cow<'a, T>"
+            },
+            "`{rendered}` is not a `Cow`"
+        );
+    }
 }
 
 /// The signature that motivated this: zenoh-flat's `zbytes_to_bytes`. It was refused
@@ -543,7 +594,8 @@ fn a_cow_returning_accessor_resolves() {
 
     assert_eq!(flat.unsupported().count(), 0, "no longer refused");
     let f = flat.function("zbytes_to_bytes").expect("survives");
-    assert!(matches!(f.ret.kind, TypeKind::Sequence(_)));
+    assert!(matches!(f.ret.kind, TypeKind::Cow { .. }));
+    assert!(f.ret.sequence_elem().is_some(), "and it reads as a run");
     // And the return still spells its `Cow`, so an adapter can emit the signature.
     assert_eq!(tokens(&f.ret.origin.syntax), "Cow < '_ , [u8] >");
 }
@@ -573,7 +625,7 @@ fn a_raw_pointer_is_not_in_the_language() {
 #[test]
 fn generic_arguments_are_spelling_only() {
     let ty = lower(quote::quote!(Foo<'a, u8>)).expect("in the language");
-    let TypeKind::Named { id } = &ty.kind else {
+    let TypeKind::Named { id, .. } = &ty.kind else {
         panic!("a named type");
     };
     assert_eq!(id.name, "Foo");
@@ -1472,37 +1524,47 @@ fn an_undeclared_reference_refuses_the_referencing_item() {
     }
 }
 
-/// An out-parameter is a **mode of borrowing**, not a type. `&mut MaybeUninit<T>`
-/// says the caller supplies the slot and the callee fills it; the `MaybeUninit` is
-/// absorbed into the mode, so `inner` is the value's own type.
+/// An out-parameter is `&mut MaybeUninit<T>` — the two forms the source wrote,
+/// each with its own kind. What it *means* (the caller supplies the slot, the
+/// callee fills it) is a reading, and the model provides the two that consumers
+/// need: [`TypeRef::borrow_target`] sees past the slot to the `T` that actually
+/// crosses, and [`TypeRef::is_exclusive_borrow`] is false for it, because a
+/// callee may not read the slot first.
 ///
-/// Uninitialized storage anywhere else promises nothing a destination language can
-/// use, so the combinations that mean nothing cannot be written down.
+/// Uninitialized storage anywhere else promises nothing a destination language
+/// can use, so it is refused — an acceptance rule about a **position**, which is
+/// the one thing a variant set cannot state.
 #[test]
-fn an_out_parameter_is_a_borrow_mode() {
-    let TypeKind::Ref { mode, inner } = kind(quote::quote!(&mut MaybeUninit<Sample>)) else {
+fn an_out_parameter_is_a_mutable_borrow_of_a_slot() {
+    let out = lower(quote::quote!(&mut MaybeUninit<Sample>)).expect("in the language");
+    let TypeKind::Ref { mutable, inner, .. } = &out.kind else {
         panic!("a borrow");
     };
-    assert_eq!(mode, RefMode::Out);
-    // The `MaybeUninit` is gone from the type: it described the borrow.
-    let TypeKind::Named { id, .. } = &inner.kind else {
+    assert!(mutable);
+    let TypeKind::Uninit(slot) = &inner.kind else {
+        panic!("the slot the source wrote");
+    };
+    let TypeKind::Named { id, .. } = &slot.kind else {
         panic!("the value's own type");
     };
     assert_eq!(id.name, "Sample");
 
-    // The three modes are one axis.
-    assert_eq!(
-        [
-            quote::quote!(&Sample),
-            quote::quote!(&mut Sample),
-            quote::quote!(&mut MaybeUninit<Sample>),
-        ]
-        .map(|t| match kind(t) {
-            TypeKind::Ref { mode, .. } => mode,
-            other => panic!("a borrow, got {other:?}"),
-        }),
-        [RefMode::Shared, RefMode::Exclusive, RefMode::Out]
-    );
+    // The readings: the target is the value, and it is not an exclusive borrow.
+    let target = out.borrow_target().expect("a borrow");
+    assert!(matches!(&target.kind, TypeKind::Named { id, .. } if id.name == "Sample"));
+    assert!(!out.is_exclusive_borrow());
+
+    // Against the other two borrows, which differ only where they should.
+    for (spelling, exclusive) in [
+        (quote::quote!(&Sample), false),
+        (quote::quote!(&mut Sample), true),
+    ] {
+        let ty = lower(spelling).expect("in the language");
+        assert_eq!(ty.is_exclusive_borrow(), exclusive);
+        assert!(
+            matches!(&ty.borrow_target().expect("a borrow").kind, TypeKind::Named { id, .. } if id.name == "Sample")
+        );
+    }
 
     // Owned, or shared-borrowed, it means nothing.
     assert_eq!(
@@ -1956,7 +2018,7 @@ fn a_raw_identifier_survives_typeid() {
     assert_eq!(raw.to_string(), "r#type", "the hash is part of the name");
 
     let t = TypeRef::named(&raw);
-    let TypeKind::Named { id } = &t.kind else {
+    let TypeKind::Named { id, .. } = &t.kind else {
         panic!("named")
     };
     // Recovered, and it spells itself back the way it was written.

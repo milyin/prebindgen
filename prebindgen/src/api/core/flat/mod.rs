@@ -19,9 +19,9 @@
 //!
 //! Two things at once, and that pairing is the whole design:
 //!
-//! * a **closed classification** — [`TypeKind`], the field list, which of the two
-//!   enum shapes an item is — that says what the source *means*, in terms every
-//!   destination language shares;
+//! * a **closed model** — [`TypeKind`], the field list, which of the two enum
+//!   shapes an item is — where the type grammar is the accepted Rust syntax and
+//!   the element structure is the concept above it;
 //! * one [`Origin`], carrying the **exact syntax** the node was built from and
 //!   the source it arrived in.
 //!
@@ -44,22 +44,34 @@
 //!
 //! # What earns a variant
 //!
-//! A concept, not a Rust spelling. The test is whether a *destination* language
-//! would act on the distinction; if only Rust can see it, it is spelling, and
-//! the slice already carries it:
+//! For a **type**, a Rust form — and nothing else. [`TypeKind`] is the accepted
+//! subset of `syn::Type`, so two spellings are two variants even when every
+//! destination language would treat them alike. Deciding that `&str` and
+//! `String` are both "a string" is a destination's decision, taken in an
+//! adapter, on a reading the model provides:
+//!
+//! | Rust writes | The model says | The reading, where a consumer wants one |
+//! |---|---|---|
+//! | `String`, `str` | [`String`](TypeKind::String), [`Str`](TypeKind::Str) | the adapter's, at its own site |
+//! | `Vec<T>`, `[T]` | [`Vec`](TypeKind::Vec), [`Slice`](TypeKind::Slice) | [`TypeRef::sequence_elem`] — one run of `T` |
+//! | `Box<T>`, `Cow<'_, T>` | [`Boxed`](TypeKind::Boxed), [`Cow`](TypeKind::Cow) | [`TypeRef::unwrapped`] — a `T` either way |
+//! | `&mut MaybeUninit<T>` | `Ref` over [`Uninit`](TypeKind::Uninit) | [`TypeRef::borrow_target`] — the value, not its slot |
+//! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
+//! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
+//!
+//! It buys one property: the syntax is **recoverable from the kind**
+//! ([`TypeKind::to_syn`], checked over the whole acceptance corpus). Which is
+//! the difference between a slice that rides along because it is exact, and one
+//! the model cannot do without.
+//!
+//! An **element** is not a type, and there the rule is still the concept:
 //!
 //! | Rust writes | The model says | Because |
 //! |---|---|---|
-//! | `String`, `str` | [`TypeKind::Str`] | one concept, two Rust types |
-//! | `Vec<T>`, `[T]` | [`TypeKind::Sequence`] | a run of `T`; owned vs borrowed is the [`Ref`](TypeKind::Ref) layer's fact |
-//! | `Box<T>` | whatever `T` is | an owned `T` either way |
 //! | `struct S;`, `struct S {}` | zero fields | the delimiters are spelling |
 //! | `enum E { A(u8) }` | [`Variant`] | a sum, identified by position |
 //! | `enum E { A = 7 }` | [`Enum`] | a named integer, identified by its value |
 //! | `type X = ..`, `struct X(..)` | [`Extern`] | named here; contents not modelled |
-//! | `&mut MaybeUninit<T>` | [`RefMode::Out`] | an out-param slot the caller supplies |
-//! | no `->`, `-> ()` | [`TypeKind::Unit`] | the same function |
-//! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
 //!
 //! The two enum shapes are the clearest case of a *concept* splitting where Rust
 //! has one spelling. Both are `enum` and both keep a `syn::ItemEnum`, but a sum's
@@ -84,17 +96,24 @@
 //!
 //! The generated Rust glue is itself a destination artifact, and the only one
 //! that needs syntax fidelity: `B()` must not be re-spelled `B`, `= 0x07` must
-//! not become `= 7`, `Foo<'a>` is not `Foo`. A model that carries no syntax has
-//! to become *lossless* to serve it — which is how a language-neutral IR turns
-//! back into a second `syn`. Carrying the original slice costs nothing and lets
-//! the classification stay small: a lifetime, a delimiter and a literal's base
-//! are simply not modelled facts.
+//! not become `= 7`. Carrying the source's own slice is how it gets that —
+//! exactly, and at no modelling cost, so a delimiter and a literal's base need
+//! never become fields.
+//!
+//! For a **type** the slice is no longer where facts go to survive:
+//! [`TypeKind`] keeps the lifetime, the wrapper and the argument it once
+//! dropped, and [`TypeKind::to_syn`] is the round-trip that says so. What is
+//! left is the reason a slice beats a reconstruction anywhere — it is what the
+//! source wrote, and it is already there.
 //!
 //! # Where acceptance is enforced
 //!
 //! Lowering is **total over the accepted grammar**: a form with no variant in
 //! [`TypeKind`] is a form the language does not accept, so there is no second
-//! acceptance list to drift from it.
+//! acceptance list to drift from it. One rule cannot be stated that way and is
+//! stated in the lowering instead: [`Uninit`](TypeKind::Uninit) is accepted only
+//! directly under a `&mut`, which is a fact about a **position** and not about a
+//! form.
 //!
 //! **Parsing diagnoses; ingestion raises.** Those are two different points, and
 //! the split is what lets one model serve both.
@@ -182,7 +201,7 @@ pub use self::{
     origin::Origin,
     spelling::{canonical_spelling, canonical_type, type_from_ident},
     ty::{
-        peel_transparent, RefMode, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType,
+        peel_transparent, GenericArg, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType,
         UnsupportedTypeReason, TRANSPARENT_WRAPPERS,
     },
 };

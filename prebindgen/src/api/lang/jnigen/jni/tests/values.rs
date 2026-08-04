@@ -1638,11 +1638,12 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
 /// A borrowed **transparent wrapper** around a sequence is refused, not decoded as
 /// a bare `Vec`.
 ///
-/// `Box<Vec<T>>` and `Cow<'_, [T]>` classify as `TypeKind::Sequence` — correctly:
-/// no destination language can tell them from `Vec<T>`, which is exactly why the
-/// model folds them together. But the generated glue **is** a destination
-/// artifact, and it is the one consumer that can tell: `&Vec<i32>` is not
-/// `&Box<Vec<i32>>`, and `TypeRef::origin` exists to carry precisely that.
+/// `Box<Vec<T>>` and `Cow<'_, [T]>` read as a run of values — correctly: no
+/// destination language can tell them from `Vec<T>`, which is why
+/// `sequence_elem` answers through the wrapper. But the generated glue **is** a
+/// destination artifact, and it is the one consumer that can tell: `&Vec<i32>`
+/// is not `&Box<Vec<i32>>`, which is why the wrapper is still standing in
+/// `kind` and in `TypeRef::origin` alike.
 ///
 /// So the selector asks two questions, and only the first is `kind`'s: that this
 /// is a run of values makes the `Vec` shortcut a *candidate*, and the **spelling**
@@ -1907,9 +1908,10 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
 /// The transparent-wrapper guard runs **before** the model's layers are
 /// interpreted, not after.
 ///
-/// An erasure sits *outside* the layer it wraps, so `Box<&Vec<Foo>>` classifies
-/// as `TypeKind::Ref` — the `Box` is gone from `kind` and survives only in the
-/// spelling. A guard that reads `kind` first replaces the argument with the
+/// A wrapper sits *outside* the layer it wraps, so `Box<&Vec<Foo>>` **reads** as
+/// a borrow — `unwrapped` peels the `Box` to answer, and it is the reading, not
+/// the kind, that the layers come off. A guard that takes that reading first
+/// and forgets the wrapper replaces the argument with the
 /// inner sequence reading, whose own spelling is a clean `Vec<Foo>`, and the
 /// outer wrapper is never seen: the Vec-build plan is selected, its emitter
 /// hands the source fn a `&[Foo]` built from the transient Rust-side `Vec`, and

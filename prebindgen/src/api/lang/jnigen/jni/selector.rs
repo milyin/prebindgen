@@ -44,8 +44,6 @@ impl Declarations {
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        use crate::api::core::flat::RefMode;
-
         // What the type IS comes from `kind`; what generated Rust must SPELL it
         // comes from here. The converter yields this spelling, so a
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
@@ -65,13 +63,7 @@ impl Declarations {
             // `Option<OwnedObject<T>>`) before the shallow `Optional`; the shape
             // that resolves correctly wins.
             if let Some(target) = inner.borrow_target() {
-                let mutable = matches!(
-                    inner.kind(),
-                    crate::api::core::flat::TypeKind::Ref {
-                        mode: RefMode::Exclusive,
-                        ..
-                    }
-                );
+                let mutable = inner.is_exclusive_borrow();
                 if let Some(mut c) = self.input_wrapper_shape(
                     WrapperShape::OptionRef { mutable },
                     syntax,
@@ -114,7 +106,10 @@ impl Declarations {
             }
             return None;
         }
-        if let crate::api::core::flat::TypeKind::Ref { mode, inner } = ty.kind() {
+        if let crate::api::core::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
+            // The target through the accessor: an out-parameter's `MaybeUninit`
+            // is the slot a `T` goes in, and it is the `T` that converts.
+            let inner = ty.borrow_target().expect("a borrow");
             // `&[T]` shared slice borrow: there is no owned `[T]` to decode, so
             // reuse the `Vec<_>` shape — decode the Java `List<T>` into an owned
             // `Vec<T>`; the call site borrows it (`&Vec<T>` deref-coerces to
@@ -135,7 +130,7 @@ impl Declarations {
             // NOT: passing `&Vec<T>` there does not compile. Those fall through to
             // the plain borrow arm below, which hands the whole spelling on as the
             // sub, exactly as the old syntactic slice check did.
-            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(inner.syntax()) {
+            if !*mutable && decoded_vec_satisfies(inner.syntax()) {
                 if let Some(elem) = inner.sequence_elem() {
                     let elem_ty = elem.syntax().clone();
                     // The one place `produced` is NOT the crossing's spelling:
@@ -160,7 +155,7 @@ impl Declarations {
                     return None;
                 }
             }
-            let mutable = matches!(mode, RefMode::Exclusive);
+            let mutable = ty.is_exclusive_borrow();
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
@@ -181,8 +176,6 @@ impl Declarations {
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        use crate::api::core::flat::RefMode;
-
         // What the type IS comes from `kind`; the spelling is what generated
         // Rust must say. This direction used to be handed only the spelling —
         // `convert_crossing` fetched the reading and threw it away — so it
@@ -226,18 +219,20 @@ impl Declarations {
             }
             return None;
         }
-        if let crate::api::core::flat::TypeKind::Ref { mode, inner } = ty.kind() {
+        if let crate::api::core::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
+            // The target through the accessor, as on the input side.
+            let inner = ty.borrow_target().expect("a borrow");
             // `&[T]` shared slice (a callback argument crossing native→JVM):
             // build a `List<T>` from the borrowed slice. Dual of the `&[T]`
             // input branch, and the same split: `kind` says it is a borrow of a
             // run of values; whether the generated Rust can iterate the borrow
             // directly is a question about the SPELLING.
-            if matches!(mode, RefMode::Shared) && decoded_vec_satisfies(inner.syntax()) {
+            if !*mutable && decoded_vec_satisfies(inner.syntax()) {
                 if let Some(elem) = inner.sequence_elem() {
                     return self.output_slice(elem.syntax(), registry);
                 }
             }
-            let mutable = matches!(mode, RefMode::Exclusive);
+            let mutable = ty.is_exclusive_borrow();
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
@@ -269,8 +264,11 @@ fn fallible_parts(
     ty: &syn::Type,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Type)> {
-    use crate::api::core::flat::TypeKind;
-    if let Some(TypeKind::Fallible { ok, err }) = registry.flat().type_ref(ty).map(|t| t.kind()) {
+    if let Some((ok, err)) = registry
+        .flat()
+        .type_ref(ty)
+        .and_then(|t| t.fallible_parts())
+    {
         return Some((ok.syntax().clone(), err.syntax().clone()));
     }
     crate::api::core::types_util::result_parts(ty)

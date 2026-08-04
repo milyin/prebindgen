@@ -20,9 +20,10 @@ Source(s) ──items──> Flat ──Elements──> Registry ──> adapter
 
 An `Element` is two things at once, and the pairing is the whole point:
 
-* a **closed classification** — `TypeKind`, the field list, which of the two enum
-  shapes an item is — that says what the source *means*, in terms every
-  destination language shares;
+* a **closed model** — `TypeKind`, the field list, which of the two enum shapes
+  an item is. For a **type** that model is the accepted subset of `syn::Type`
+  and nothing more (see *A type is its syntax* below); above the type level it
+  is the concept — a field list, a sum's alternatives;
 * one `Origin`, carrying the **exact syntax** the node was built from and the
   source it arrived in. Every node has one, at every level — item, parameter,
   field, alternative, type, array extent.
@@ -40,6 +41,65 @@ and consumed as different constructs:
 pub struct Variant { pub name: syn::Ident, pub alternatives: Vec<Alternative>, .. }  // a sum
 pub struct Enum    { pub name: syn::Ident, pub values: Vec<EnumValue>, .. }          // C-style
 ```
+
+### A type is its syntax
+
+`TypeKind` began as a **destination-neutral classification**: one variant per
+concept a target language would act on, several Rust spellings folding into
+each. `String` and `str` were one `Str`; `Vec<T>` and `[T]` one `Sequence`;
+`Box<T>` and `Cow<'_, T>` disappeared into whatever they wrapped.
+
+It leaked, and the leak was not at the edges:
+
+* `&T` earned a layer of its own while `Box<T>` was declared transparent — two
+  wrappers, opposite treatments, on no principle either adapter shared;
+* `Cbindgen` picked its C type off the Rust spelling regardless, so the
+  neutrality the kind claimed was not what any adapter used;
+* every fold had to be *undone* somewhere. `erased_wrappers()` and
+  `stripped_syntax()` exist because the model dropped something a consumer
+  needed back.
+
+So `TypeKind` is now the **subset of `syn::Type` the flat API accepts**, and
+nothing else. One variant per accepted form: `Str` and `String`, `Vec` and
+`Slice`, `Boxed`, `Cow`, `Uninit`, `Ref { lifetime, mutable }`, `Named { id,
+args }`. A lifetime and a generic argument are kept, because they are what the
+source wrote.
+
+**The folds did not disappear — they moved to where they are decided**, and are
+one shared reading each rather than a property of the classification:
+
+| The reading | Answers | Replaces |
+|---|---|---|
+| `TypeRef::unwrapped()` | `Box`/`Cow` peeled to the value | the erasure in `lower_path` |
+| `TypeRef::sequence_elem()` | the element of `Vec<T>`, `[T]`, or either behind a wrapper | `TypeKind::Sequence` |
+| `TypeRef::borrow_target()` | what a borrow points at, past an out-parameter's slot | `RefMode::Out`'s absorption |
+| `TypeRef::is_exclusive_borrow()` | `&mut T`, and not `&mut MaybeUninit<T>` | `RefMode::Exclusive` |
+
+What this buys is one property, and it is the point:
+
+> **The syntax is recoverable from the kind.** `TypeKind::to_syn()`, checked
+> against `TypeRef::origin.syntax` over the whole acceptance corpus
+> (`syntax_is_recoverable_from_kind`), with two named exemptions: a callback's
+> bound *order*, and a `Group`/`Paren` the lowering sees through.
+
+The slice still rides along and generated Rust still spells it — it is exact and
+free. It is no longer *load-bearing*, and that is the difference: a fact missing
+from `kind` used to be invisible, because the syntax was there to cover for it.
+
+**Recoverability is an acceptance rule, not just a property.** A spelling the
+model could not give back is refused where it is read, rather than accepted and
+reconstructed as something else:
+
+* a generic argument on any but the last path segment (`a::B<T>::C`) —
+  `Named` holds the last segment's arguments;
+* a `Cow` whose argument list is not `['a, T]` — `Cow<u8>` (not Rust at all),
+  `Cow<u8, 'a>`, `Cow<'a, 'b, u8>`. Checking the *type-argument count* alone
+  accepted all three, and each then spelled back as `Cow<'a, u8>`. `Cow` is the
+  one builtin with a lifetime in its own signature, so it is the one whose whole
+  list has to be checked — which is also what lets its `lifetime` be a
+  `syn::Lifetime` and not an `Option`.
+
+**Did not move**: every generated artifact byte-identical.
 
 ### Why the syntax rides along
 
@@ -65,7 +125,7 @@ classification stays small and genuinely neutral:
 | `Foo<'a, T>` | `TypeRef::origin.syntax` | generated Rust only |
 | "it is a `Foo`" | `TypeKind::Named` | every adapter |
 | `[u8; TAG_LEN]` — spelling / number / const identity | `TypeRef::origin.syntax` / `ArrayExtent::value` / `ExtentSource::Const` | C header / Kotlin / both |
-| the `Box` in `Box<Option<T>>`, and the `Option<T>` under it | `TypeRef::erased_wrappers()` / `stripped_syntax()` — derived from the syntax, not stored | an emitter that **rebuilds or destructures** a Rust value |
+| the `Box` in `Box<Option<T>>`, and the `Option<T>` under it | `TypeKind::Boxed` — kept, and read through by `TypeRef::unwrapped()` / `erased_wrappers()` | everyone: a classifier unwraps, an emitter that **rebuilds or destructures** puts it back |
 | where an item came from | `Origin::location` — **absent for a synthesized one** | diagnostics |
 
 ### The rule
@@ -91,13 +151,13 @@ The weaker-sounding half is the important one. It is tempting to write "same
 
 | Rust | `kind` | Kotlin type | wire |
 |---|---|---|---|
-| `&[Payload]` | `Sequence` | `List<Payload>` | `Long` — a jlong handle to a Rust-side `Vec` |
-| `Vec<Box<Payload>>` | `Sequence` | `List<Payload>` | `List<Payload>` — a `JObject` |
+| `&[Payload]` | `Ref(Slice)` | `List<Payload>` | `Long` — a jlong handle to a Rust-side `Vec` |
+| `Vec<Box<Payload>>` | `Vec(Boxed)` | `List<Payload>` | `List<Payload>` — a `JObject` |
 
 Two wires, one surface. Choosing a wire is exactly the generator's job, and the
 destination-language wrapper absorbs the difference; a caller cannot tell. What
-a caller *can* tell — and what the model's erasure promises will not happen — is
-the **type** changing because the source spelled a `Box`.
+a caller *can* tell — and what the shared `unwrapped()` reading is there to
+prevent — is the **type** changing because the source spelled a `Box`.
 
 The rule scopes to **converted** positions, which is where a converter stands
 between the Rust value and the destination and is free to bridge. It cannot apply
@@ -208,18 +268,19 @@ a model, and takes two bullets off L1 in the process.
       `Element::Unsupported` with `ItemError::UnresolvedType` — so a dangling name
       is reported here, by name, instead of surfacing downstream as an unresolved
       *converter* from whichever adapter looked first
-- [x] `&mut MaybeUninit<T>` becomes `RefMode::Out` — an out-parameter is a
-      property of the **borrow**, not a wrapper type, and it is a boundary concept
-      every destination language has (C's `T *out`)
+- [x] `&mut MaybeUninit<T>` is modelled — first as `RefMode::Out`, then (see
+      *A type is its syntax*) as the two forms the source wrote, with
+      `borrow_target()` as the reading that sees past the slot
 - [x] The example flat APIs are closed, and covertest-kotlin's build script
       asserts they stay closed across both its sources
 - [x] **Did not move**: every generated artifact byte-identical
 
-`Cow<'_, T>` needed neither an alias nor a grammar addition in the end: it is
-transparent, exactly like `Box<T>`, so it lowers to whatever `T` is
-([#236](https://github.com/milyin/prebindgen/pull/236)). Both adapters already
-treated it as `Vec<T>`, which is what made the transparency the honest reading
-rather than a convenience.
+`Cow<'_, T>` needed neither an alias nor a grammar addition in the end: both
+adapters already treat it as the `Vec<T>` it borrows
+([#236](https://github.com/milyin/prebindgen/pull/236)). It first landed *as*
+that reading — lowered to whatever `T` is — and is now a `TypeKind::Cow` that
+`unwrapped()` reads through, which is the same behaviour with the fold moved to
+where it is decided.
 
 **Still open**: `zenoh-flat` and its two consumers are separate repos. Their
 unmarked types — the 26 zenoh aliases, plus `Duration`, which is not in the
@@ -494,22 +555,26 @@ The long pole — 97 sites, down from 106 because #248 took `jni/builder` from 1
 
 #### What L4 taught: an erasure sits outside the layer it wraps
 
-The model erases `Box` and `Cow`, and that erasure is right — `Box<Option<T>>`
-is one optional to every destination. But **conversion follows the syntax**, and
-the two facts a rebuild needs were not on the model: what was taken off, and what
-is left under it. #292 added them as derived readings, `TypeRef::erased_wrappers()`
+Reading through `Box` and `Cow` is right — `Box<Option<T>>` is one optional to
+every destination. But **conversion follows the syntax**, and the two facts a
+rebuild needs were not on the model at the time: what was taken off, and what is
+left under it. #292 added them as derived readings, `TypeRef::erased_wrappers()`
 and `stripped_syntax()`, defined by an invariant rather than by a loop — the
-stripped spelling is *the one whose own lowering yields exactly this `kind`*, so
-the peel runs to a fixed point (`Box<Box<T>>` classifies as `T`, and one strip
-leaves a `Box<T>` that does not match).
+stripped spelling is *the one whose own lowering yields the kind `unwrapped()`
+reaches*, so the peel runs to a fixed point (`Box<Box<T>>` unwraps to `T`, and
+one strip leaves a `Box<T>` that does not match).
+
+Both readings survived *A type is its syntax* unchanged, computed off the kind
+rather than off the spelling. The lesson below is the reason the fold had to
+become a reading in the first place.
 
 The rule, which outlives the stage:
 
-> **`kind` is precisely the thing the wrapper is missing from, so interpreting
-> `kind` before checking for a wrapper always discards one.**
+> **The unwrapped reading is precisely the thing the wrapper is missing from, so
+> taking it before checking for a wrapper always discards one.**
 
-`Box<&Vec<T>>` classifies as `Ref`; peel that first and the wrapper is gone from
-everywhere a consumer will look. `&Box<Vec<T>>` hides it on the referent, where a
+`Box<&Vec<T>>` *reads* as a `Ref`; take that reading first and the wrapper is
+gone from everywhere a consumer will look. `&Box<Vec<T>>` hides it on the referent, where a
 question asked of the outer `syn::Type::Reference` cannot see it. Neither check
 subsumes the other, so a walk must ask at **every layer, on the way down** —
 which is also why the wrapper is a *list*, gathered as the walk descends.
