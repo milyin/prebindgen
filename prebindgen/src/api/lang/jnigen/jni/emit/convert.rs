@@ -242,12 +242,11 @@ pub(crate) fn composed_inner_output(
 /// If neither path applies (non-primitive wire, no niche), the wrap
 /// fails and the resolver falls through to other rank-1 attempts.
 pub(crate) fn option_input(
-    t1: &syn::Type,
+    t1: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry
-        .reading_of(t1)
-        .and_then(|tr| registry.input_entry(&tr))?;
+    let inner_entry = registry.input_entry(t1)?;
+    let t1_spelled = t1.spell();
     let inner_wire = inner_entry.destination.clone();
     let inner_decode = composed_inner_input(inner_entry, quote!(v));
 
@@ -267,7 +266,7 @@ pub(crate) fn option_input(
                 if #pred {
                     None
                 } else {
-                    Some(unsafe { OwnedObject::from_raw(*v as *const #t1).clone() })
+                    Some(unsafe { OwnedObject::from_raw(*v as *const #t1_spelled).clone() })
                 }
             })
         } else {
@@ -310,12 +309,10 @@ pub(crate) fn option_input(
 
 /// Build `Option<T>`'s output converter — symmetric to [`option_input`].
 pub(crate) fn option_output(
-    t1: &syn::Type,
+    t1: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
-    let inner_entry = registry
-        .reading_of(t1)
-        .and_then(|tr| registry.output_entry(&tr))?;
+    let inner_entry = registry.output_entry(t1)?;
     let inner_wire = inner_entry.destination.clone();
     let inner_encode = composed_inner_output(inner_entry, quote!(value));
 
@@ -476,12 +473,11 @@ pub(crate) fn enum_output_body(
 /// they consult — the comparison is identical.
 pub(crate) fn nullable_kind_for(
     outer_wire: &syn::Type,
-    inner_ty: &syn::Type,
+    inner_ty: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry
-        .reading_of(inner_ty)
-        .and_then(|tr| registry.input_entry(&tr))
+        .input_entry(inner_ty)
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for: Option<_> input handler reached here only after option_input \
@@ -496,12 +492,11 @@ pub(crate) fn nullable_kind_for(
 
 pub(crate) fn nullable_kind_for_output(
     outer_wire: &syn::Type,
-    inner_ty: &syn::Type,
+    inner_ty: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry
-        .reading_of(inner_ty)
-        .and_then(|tr| registry.output_entry(&tr))
+        .output_entry(inner_ty)
         .map(|e| e.destination.clone())
         .expect(
             "nullable_kind_for_output: Option<_> output handler reached here only after \
