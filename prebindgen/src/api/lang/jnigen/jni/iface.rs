@@ -647,29 +647,23 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
 /// surfaces as `List<E>`) gets a `List` suffix — `<E>List` — so it yields a valid,
 /// distinct interface name (`<E>ListCallback`) instead of the bracketed `[E]` and
 /// without colliding with the scalar `&E` callback (`<E>Callback`).
-fn subject_short(ty: &syn::Type) -> String {
-    let no_ref = match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    if let syn::Type::Slice(s) = &no_ref {
-        return format!("{}List", subject_short(&s.elem));
+fn subject_short(ty: &crate::api::core::flat::TypeRef) -> String {
+    use crate::api::lang::jnigen::util::{head_name, head_type};
+    // One `&` off, then a slice — the `List` suffix is decided before the
+    // general peel, exactly as it was, because `&[E]` and `Vec<E>` must not
+    // collapse to the same interface name.
+    let no_ref = ty.borrow_target().unwrap_or(ty);
+    if let crate::api::core::flat::TypeKind::Slice(elem) = no_ref.kind() {
+        return format!("{}List", subject_short(elem));
     }
-    let peeled = crate::api::core::types_util::peel_ref_option_vec(ty);
-    if let syn::Type::Path(tp) = &peeled {
-        if let Some(seg) = tp.path.segments.last() {
-            return seg.ident.to_string();
-        }
-    }
-    TypeKey::from_type(&peeled)
-        .to_string()
-        .replace([' ', ':', '<', '>'], "")
+    let peeled = head_type(ty);
+    head_name(peeled).unwrap_or_else(|| peeled.key().to_string().replace([' ', ':', '<', '>'], ""))
 }
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
-fn subject_package(ext: &Declarations, subject: &syn::Type) -> String {
-    let key = TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject));
+fn subject_package(ext: &Declarations, subject: &crate::api::core::flat::TypeRef) -> String {
+    let key = crate::api::lang::jnigen::util::head_type(subject).key();
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
         .unwrap_or_else(|| ext.package.clone())
@@ -1024,7 +1018,7 @@ fn derive_iface_spec(
         // above: the memo key holds an identity, and the reading behind it is a
         // lookup. `None` defers, exactly as it does there (#291).
         SpecKey::WholeFolder(el_key) => {
-            whole_folder_iface_spec(ext, registry, registry.reading(el_key)?.as_syn())
+            whole_folder_iface_spec(ext, registry, &registry.reading(el_key)?)
         }
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
@@ -1171,7 +1165,7 @@ pub(crate) fn callback_iface_spec(
                 let (reassemble, imports) =
                     fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
                 groups.push(GroupDesc {
-                    name: whole_value_name(t.as_syn(), i),
+                    name: whole_value_name(t, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
@@ -1248,13 +1242,13 @@ pub(crate) fn callback_iface_spec(
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
-                name: whole_value_name(t.as_syn(), i),
+                name: whole_value_name(t, i),
                 ty: t.as_syn().clone(),
                 nullable: t.optional_inner().is_some(),
                 owned_handle,
             });
             groups.push(GroupDesc {
-                name: whole_value_name(t.as_syn(), i),
+                name: whole_value_name(t, i),
                 typed: None,
                 reassemble: None,
                 imports: Vec::new(),
@@ -1311,14 +1305,14 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(|t| subject_short(t.as_syn()))
+                .map(subject_short)
                 .collect::<Vec<_>>()
                 .join("")
         )
     };
     let package = cb_args
         .first()
-        .map(|t| subject_package(ext, t.as_syn()))
+        .map(|t| subject_package(ext, t))
         .unwrap_or_else(|| ext.package.clone());
     Some(IfaceSpec {
         typed_groups,
@@ -1341,9 +1335,9 @@ pub(crate) fn builder_iface_spec(
     let params = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Builder",
-        decon_base_name(&subject_short(spec.source.as_syn()), Some(decon))
+        decon_base_name(&subject_short(&spec.source), Some(decon))
     );
-    let package = subject_package(ext, spec.source.as_syn());
+    let package = subject_package(ext, &spec.source);
     Some(IfaceSpec::assemble(
         package,
         name,
@@ -1369,9 +1363,9 @@ pub(crate) fn folder_iface_spec(
     params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
     let name = format!(
         "{}Folder",
-        decon_base_name(&subject_short(spec.source.as_syn()), Some(decon))
+        decon_base_name(&subject_short(&spec.source), Some(decon))
     );
-    let package = subject_package(ext, spec.source.as_syn());
+    let package = subject_package(ext, &spec.source);
     Some(IfaceSpec::assemble(
         package,
         name,
@@ -1387,7 +1381,7 @@ pub(crate) fn folder_iface_spec(
 pub(crate) fn whole_folder_iface_spec(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    element: &syn::Type,
+    element: &crate::api::core::flat::TypeRef,
 ) -> Option<IfaceSpec> {
     let mut params: Vec<IfaceParam> =
         vec![IfaceParam::same("acc".to_string(), kt::KtType::var_("A"))];
@@ -1400,7 +1394,9 @@ pub(crate) fn whole_folder_iface_spec(
         ext,
         registry,
         "element".to_string(),
-        element,
+        // `leaf_iface_param` still takes a node, and it is also handed
+        // adapter-composed types — migrating it is its own step.
+        element.as_syn(),
         false,
         true,
     )?);
@@ -1489,10 +1485,10 @@ pub(crate) fn error_handler_iface_spec(
     let params: Vec<IfaceParam> = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Handler",
-        decon_base_name(&subject_short(spec.source.as_syn()), Some(decon))
+        decon_base_name(&subject_short(&spec.source), Some(decon))
     );
-    let package = subject_package(ext, spec.source.as_syn());
-    let source_short = subject_short(spec.source.as_syn());
+    let package = subject_package(ext, &spec.source);
+    let source_short = subject_short(&spec.source);
     let mut iface = IfaceSpec::assemble(
         package,
         name,
