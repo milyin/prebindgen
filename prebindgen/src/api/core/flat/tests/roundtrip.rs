@@ -559,3 +559,26 @@ fn the_two_forms_that_do_not_spell_back_verbatim() {
         "the slice is the inner node's"
     );
 }
+
+/// An element answers for the prose the source wrote, sanitized for a block
+/// comment — the fact every destination that emits documentation needs, and the
+/// last common reason an emitter reached for a captured item's node.
+#[test]
+fn an_element_answers_for_its_docs() {
+    let element = parse_one(syn::parse_quote!(
+        /// Puts a payload.
+        ///
+        /// Second paragraph with */ inside.
+        pub fn put(payload: u8) {}
+    ));
+    assert_eq!(
+        as_fn(&element).docs().expect("docs present"),
+        "Puts a payload.\n\nSecond paragraph with *\u{200B}/ inside.",
+        "one leading space off each line, joined, and `*/` defanged"
+    );
+
+    let bare = parse_one(syn::parse_quote!(
+        pub fn g() {}
+    ));
+    assert_eq!(as_fn(&bare).docs(), None);
+}
