@@ -157,7 +157,7 @@ impl<M> RegistryBuilder<M> {
         self.registry
             .declared
             .types
-            .entry(TypeKey::from_type(&ty.syntax))
+            .entry(TypeKey::from_type(ty.as_syn()))
             .or_insert(ty);
         self
     }

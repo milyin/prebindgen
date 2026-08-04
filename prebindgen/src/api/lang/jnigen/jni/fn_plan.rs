@@ -67,7 +67,7 @@ pub(crate) enum ParamForm {
 pub(crate) struct PlanLeaf {
     /// The leaf's **reading** — classification and spelling in one value, so
     /// the two cannot disagree and no consumer has to look the type up. Spell
-    /// with `reading.origin.syntax`.
+    /// with `reading.spell()`.
     pub reading: TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
@@ -111,7 +111,7 @@ pub(crate) enum InputKind {
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
     /// The element as a **reading**: the vec-helper plan and the element key
-    /// are both taken from it, and generated Rust spells `elem.syntax()`.
+    /// are both taken from it, and generated Rust spells `elem.spell()`.
     VecBuild { elem: TypeRef, by_ref: bool },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
@@ -491,7 +491,7 @@ impl JniFunctionPlan {
         // fail to yield a type.
         for param in &f.params {
             let ident = param.name.clone();
-            let ty = param.ty.syntax().clone();
+            let ty = param.ty.as_syn().clone();
 
             let form = if let Some(plan) = registry
                 .expansion_plans()
@@ -612,7 +612,7 @@ fn classify_leaf(
         // rather than one re-extracted from the parameter's bounds.
         // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax`
         // pins that the two routes are one memo identity.
-        let arg_tys: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
+        let arg_tys: Vec<syn::Type> = args.iter().map(|a| a.as_syn().clone()).collect();
         let iface = ext.iface_spec(registry, &SpecKey::callback(&arg_tys));
         return Ok(PlanLeaf {
             reading: reading.clone(),
@@ -752,7 +752,7 @@ fn build_output(
     let is_convert = unfold_plan.is_some();
     // The element normalizes an elided return and a written `-> ()` to one
     // `Unit` reading, so there is no `ReturnType` match here.
-    let return_ty: syn::Type = f.ret.syntax().clone();
+    let return_ty: syn::Type = f.ret.as_syn().clone();
     let error_plan = registry.error_plans().get(ident);
     let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
     let target_ty = match unfold_plan {
@@ -786,7 +786,7 @@ fn build_output(
     let ret_decl: syn::ReturnType = if is_convert {
         syn::parse_quote!(-> #target_ty)
     } else {
-        let ret = f.ret.syntax();
+        let ret = f.ret.spell();
         syn::parse_quote!(-> #ret)
     };
     let (surface, canonical) = ReturnSurface::classify(ext, registry, &ret_decl);

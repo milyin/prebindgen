@@ -18,7 +18,7 @@ impl CbindgenBuilder {
                 .get(&decl.key)
                 .cloned()
                 .unwrap_or_else(|| {
-                    let short = type_short(&decl.rust_type.syntax.clone());
+                    let short = type_short(&decl.rust_type.as_syn().clone());
                     self.mangle_rust_type
                         .as_ref()
                         .map(|m| m(&short))
@@ -190,13 +190,13 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.rust_type.syntax.clone());
+        let target = self.src_ty(&decl.rust_type.as_syn().clone());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
                     .flat()
                     .function(&f)
-                    .map(|func| &func.origin.syntax)
+                    .map(|func| func.origin.as_syn())
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (repr, by_ref) = one_param(item);
                 let ret = fn_ret(item);
@@ -234,13 +234,13 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.rust_type.syntax.clone());
+        let target = self.src_ty(&decl.rust_type.as_syn().clone());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
                     .flat()
                     .function(&f)
-                    .map(|func| &func.origin.syntax)
+                    .map(|func| func.origin.as_syn())
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);
                 assert_eq!(TypeKey::from_type(&param), decl.key);

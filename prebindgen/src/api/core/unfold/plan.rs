@@ -308,7 +308,7 @@ pub struct UnfoldLeaf {
     /// The **reading** of the type whose resolved output converter encodes this
     /// leaf — a reference type for accessors (`&str`, `&F`), `&Source` for the
     /// identity leaf (so the borrowed-opaque clone converter / projection is
-    /// reused). Spell it with `out_ty.origin.syntax`.
+    /// reused). Spell it with `out_ty.spell()`.
     ///
     /// A reading rather than a spelling because a consumer asking what this
     /// leaf's type *means* had to hand the spelling back to the registry and

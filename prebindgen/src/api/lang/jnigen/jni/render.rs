@@ -166,7 +166,8 @@ pub(crate) fn build_data_class(
     });
 
     let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
-    if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.origin.syntax.attrs)
+    if let Some(doc) =
+        crate::api::lang::jnigen::util::doc_string(&item_struct.origin.as_syn().attrs)
     {
         class = class.kdoc(doc);
     }
@@ -894,7 +895,7 @@ pub(crate) fn render_const_val(
          the generated JNI getter on first use).",
         c.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.origin.syntax.attrs)
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.origin.as_syn().attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -924,7 +925,7 @@ pub(crate) fn render_constant_fn_val(
          through the generated JNI wrapper on first use).",
         f.name
     );
-    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs)
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.origin.as_syn().attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
@@ -1069,7 +1070,7 @@ fn classify_params(
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
         let mut name = leaf.kt_name.clone();
-        let arg_ty = leaf.reading.syntax();
+        let arg_ty = leaf.reading.as_syn();
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
@@ -2243,7 +2244,7 @@ fn wrapper_kdoc(
     f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<String> {
-    let prose = crate::api::lang::jnigen::util::doc_string(&f.origin.syntax.attrs);
+    let prose = crate::api::lang::jnigen::util::doc_string(&f.origin.as_syn().attrs);
     let notes = shape_notes(f, registry);
     match (prose, notes) {
         (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
@@ -2353,7 +2354,7 @@ pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Optio
     let attrs = registry
         .flat()
         .struct_type(&name)
-        .map(|s| s.origin.syntax.attrs.as_slice())
+        .map(|s| s.origin.as_syn().attrs.as_slice())
         .or_else(|| registry.flat().enum_item(&name).map(|e| e.attrs.as_slice()))?;
     crate::api::lang::jnigen::util::doc_string(attrs)
 }

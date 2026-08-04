@@ -786,7 +786,7 @@ impl Declarations {
             }
             exp.constructors
                 .push(crate::api::core::expand::ConstructorDecl {
-                    target: decl.rust_type.syntax.clone(),
+                    target: decl.rust_type.as_syn().clone(),
                     variants: decl.variants.iter().map(lower).collect(),
                     default: true,
                 });
@@ -809,7 +809,7 @@ impl Declarations {
             exp.expands.push(ExpandDecl {
                 func: func.clone(),
                 param: syn::Ident::new(param, Span::call_site()),
-                declared_target: Some(decl.rust_type.syntax.clone()),
+                declared_target: Some(decl.rust_type.as_syn().clone()),
                 sel: ExpandSel::Subset(decl.variants.iter().map(lower).collect()),
             });
         }
@@ -904,12 +904,12 @@ impl Declarations {
              value form returns the struct holding this type's fields",
             key.as_str(),
         );
-        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, ret.syntax()) else {
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, ret.as_syn()) else {
             panic!(
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
                 key.as_str(),
-                ret.syntax().to_token_stream(),
+                ret.spell(),
             )
         };
         let st = st.clone();
@@ -1048,7 +1048,7 @@ impl Declarations {
             // must decompose into its selector and groups wherever it appears.
             let bare = field.ty.optional_inner().unwrap_or(&field.ty);
             let probe = bare.sequence_elem().unwrap_or(bare);
-            match self.type_kind(registry, probe.syntax()) {
+            match self.type_kind(registry, probe.as_syn()) {
                 TypeKind::DataStruct { st, cfg: Some(_) }
                     if field.ty.optional_inner().is_none()
                         && field.ty.sequence_elem().is_none() =>
@@ -1082,7 +1082,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.syntax().to_token_stream(),
+                        probe.spell(),
                     );
                     assert!(
                         field.ty.optional_inner().is_none(),
@@ -1095,7 +1095,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.syntax().to_token_stream(),
+                        probe.spell(),
                         dotted,
                     );
                     // The name is the reading's, not a path taken apart to
@@ -1172,7 +1172,7 @@ impl Declarations {
                 k = decl.key.as_str()
             );
             dec.deconstructors.push(DeconstructorDecl {
-                target: decl.rust_type.syntax.clone(),
+                target: decl.rust_type.as_syn().clone(),
                 records: self.lower_fields(registry, &decl.key, &decl.fields),
                 default: Some((DeconTarget::Output, Delivery::Callback)),
             });
@@ -1197,7 +1197,7 @@ impl Declarations {
                 sel: DeconSel::Inline(self.lower_fields(registry, &decl.key, &decl.fields)),
                 target: DeconTarget::Output,
                 delivery: Delivery::Callback,
-                declared_source: Some(decl.rust_type.syntax.clone()),
+                declared_source: Some(decl.rust_type.as_syn().clone()),
             });
         }
         dec
@@ -1488,13 +1488,13 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.syntax.clone();
+        let target = decl.rust_type.spell();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry
                     .flat()
                     .function(&f)
-                    .map(|func| &func.origin.syntax)
+                    .map(|func| func.origin.as_syn())
                     .unwrap_or_else(|| {
                         panic!(
                             "convert!({}).input({f}): function not found among #[prebindgen] items",
@@ -1566,13 +1566,13 @@ impl Declarations {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.syntax.clone();
+        let target = decl.rust_type.spell();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
                 let item_fn = registry
                     .flat()
                     .function(&g)
-                    .map(|func| &func.origin.syntax)
+                    .map(|func| func.origin.as_syn())
                     .unwrap_or_else(|| {
                         panic!(
                         "convert!({}).output({g}): function not found among #[prebindgen] items",

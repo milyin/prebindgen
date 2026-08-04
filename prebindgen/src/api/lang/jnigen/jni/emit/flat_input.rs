@@ -75,7 +75,7 @@ pub(crate) fn struct_input_body(
                     // converter would yield `OwnedObject<T>`, which can't
                     // populate an owned field. `Option<_>` handle fields keep
                     // the niche-aware converter (jlong 0 ⇒ `None`).
-                    let field_ty = field.ty.syntax();
+                    let field_ty = field.ty.spell();
                     let decode = if field_optional {
                         quote! { let #fname_ident = #field_conv; }
                     } else {
@@ -424,7 +424,7 @@ fn read_kotlin_property(
     // segment, so a payload spelled `Box<Option<T>>` answered "not optional"
     // four separate times here (#289).
     let entry = registry.input_entry(reading)?;
-    let ty = reading.syntax();
+    let ty = reading.spell();
     let optional = reading.optional_inner().is_some();
     let inner = reading.optional_inner().unwrap_or(reading);
     let wire = entry.destination.clone();
@@ -1058,7 +1058,7 @@ fn build_flat_sum_field(
     field_reading: &TypeRef,
     leaves: &mut Vec<FlatLeaf>,
 ) -> Option<FlatFieldNode> {
-    let rust_ty = field_reading.syntax();
+    let rust_ty = field_reading.as_syn();
 
     // The NAME off the classification, and then the ELEMENT — `enum_item`
     // hands back only the `syn::ItemEnum`, deliberately, so a consumer that
@@ -1473,7 +1473,7 @@ fn build_flat_struct_node(
         // could (#273).
         let field_optional = field.ty.optional_inner().is_some();
         let nested = field.ty.optional_inner().unwrap_or(&field.ty);
-        let nested_ty = nested.syntax().clone();
+        let nested_ty = nested.as_syn().clone();
         // A data-carrying enum flattens into a tag plus one group per variant.
         // `None` means some payload is not leaf-shaped — fall through and let
         // it cross as one object through its own converter.
@@ -1567,7 +1567,7 @@ fn build_flat_struct_node(
                                 present_leaf: Some(present_index),
                                 direct_handle: None,
                                 optional_handle: false,
-                                rust_ty: Box::new(field.ty.syntax().clone()),
+                                rust_ty: Box::new(field.ty.as_syn().clone()),
                                 wrappers: field.ty.erased_wrappers(),
                             });
                             continue;
@@ -1617,7 +1617,7 @@ fn build_flat_struct_node(
                             present_leaf: Some(present_index),
                             direct_handle: None,
                             optional_handle: false,
-                            rust_ty: Box::new(field.ty.syntax().clone()),
+                            rust_ty: Box::new(field.ty.as_syn().clone()),
                             wrappers: field.ty.erased_wrappers(),
                         });
                         continue;
@@ -1645,9 +1645,9 @@ fn build_flat_struct_node(
                         field: fident,
                         value_leaf: value_index,
                         present_leaf: None,
-                        direct_handle: Some(Box::new(nested.syntax().clone())),
+                        direct_handle: Some(Box::new(nested.as_syn().clone())),
                         optional_handle,
-                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        rust_ty: Box::new(field.ty.as_syn().clone()),
                         wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
@@ -1678,7 +1678,7 @@ fn build_flat_struct_node(
                         present_leaf: None,
                         direct_handle: None,
                         optional_handle: false,
-                        rust_ty: Box::new(field.ty.syntax().clone()),
+                        rust_ty: Box::new(field.ty.as_syn().clone()),
                         wrappers: field.ty.erased_wrappers(),
                     });
                     continue;
@@ -1725,7 +1725,7 @@ fn build_flat_struct_node(
             present_leaf: None,
             direct_handle: None,
             optional_handle: false,
-            rust_ty: Box::new(field.ty.syntax().clone()),
+            rust_ty: Box::new(field.ty.as_syn().clone()),
             wrappers: field.ty.erased_wrappers(),
         });
     }

@@ -587,7 +587,7 @@ fn fn_plan_memo_shares_one_derivation() {
 /// `SourceLocation`, so two identical readings from different files would
 /// compare unequal). That means the args reach `SpecKey::callback` as
 /// spellings, and #275's last part changes *which* spelling: from
-/// `extract_fn_trait_args(&pt.ty)` to each arg `TypeRef`'s `origin.syntax`.
+/// `extract_fn_trait_args(&pt.ty)` to each arg `TypeRef`'s `spell()`.
 ///
 /// If those two disagreed, the memo would split one interface identity into
 /// two — an extra generated `fun interface` and a descriptor mismatch. Nothing
@@ -632,11 +632,11 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
     let from_reading = SpecKey::callback(
         &arg_readings
             .iter()
-            .map(|a| a.syntax().clone())
+            .map(|a| a.as_syn().clone())
             .collect::<Vec<_>>(),
     );
     let from_syntax = SpecKey::callback(
-        &crate::api::core::registry::extract_fn_trait_args(param.ty.syntax())
+        &crate::api::core::registry::extract_fn_trait_args(param.ty.as_syn())
             .expect("the param is an impl Fn"),
     );
 

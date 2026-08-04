@@ -21,7 +21,7 @@ use crate::api::core::flat::TypeRef;
 /// Borrowing rather than composing is not a shortcut: every layer of a reading
 /// already holds the next as a `TypeRef` of its own, so there is nothing to
 /// mint — which is also why this needs no registry. What it returns spells
-/// itself (`origin.syntax`) and classifies itself (`kind`), and the two cannot
+/// itself (`spell()`) and classifies itself (`kind`), and the two cannot
 /// disagree.
 pub(crate) fn enum_probe(reading: &TypeRef) -> &TypeRef {
     let mut cur = reading;

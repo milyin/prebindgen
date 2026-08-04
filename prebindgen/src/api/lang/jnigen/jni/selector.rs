@@ -48,7 +48,7 @@ impl Declarations {
         // comes from here. The converter yields this spelling, so a
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
         // is dispatched as no longer decides what it is called.
-        let syntax = ty.syntax();
+        let syntax = ty.as_syn();
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.input_terminal(ty, registry) {
@@ -70,7 +70,7 @@ impl Declarations {
                     target,
                     registry,
                 ) {
-                    c.subs = vec![target.syntax().clone()];
+                    c.subs = vec![target.as_syn().clone()];
                     return Some(c);
                 }
             }
@@ -82,7 +82,7 @@ impl Declarations {
             // wrapped optional borrow stops here rather than resolving wrong.
             if inner.borrow_target().is_some() {
                 let canonical: syn::Type = {
-                    let b = inner.syntax();
+                    let b = inner.spell();
                     syn::parse_quote!(Option<#b>)
                 };
                 if syntax.to_token_stream().to_string() != canonical.to_token_stream().to_string() {
@@ -92,7 +92,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
             {
-                c.subs = vec![inner.syntax().clone()];
+                c.subs = vec![inner.as_syn().clone()];
                 return Some(c);
             }
             return None;
@@ -101,7 +101,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
-                c.subs = vec![elem.syntax().clone()];
+                c.subs = vec![elem.as_syn().clone()];
                 return Some(c);
             }
             return None;
@@ -130,9 +130,9 @@ impl Declarations {
             // NOT: passing `&Vec<T>` there does not compile. Those fall through to
             // the plain borrow arm below, which hands the whole spelling on as the
             // sub, exactly as the old syntactic slice check did.
-            if !*mutable && decoded_vec_satisfies(inner.syntax()) {
+            if !*mutable && decoded_vec_satisfies(inner.as_syn()) {
                 if let Some(elem) = inner.sequence_elem() {
-                    let elem_ty = elem.syntax().clone();
+                    let elem_ty = elem.as_syn().clone();
                     // The one place `produced` is NOT the crossing's spelling:
                     // there is no owned `[T]` to decode into, so the converter
                     // yields an owned `Vec<T>` and the call site borrows it.
@@ -159,7 +159,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
-                c.subs = vec![inner.syntax().clone()];
+                c.subs = vec![inner.as_syn().clone()];
                 return Some(c);
             }
         }
@@ -182,7 +182,7 @@ impl Declarations {
         // detected its layers with `option_inner_type`/`vec_inner_type`, which
         // read the last path segment's ident. A `Box<Option<T>>` answered
         // "neither", and got no converter at all (#270).
-        let syntax = ty.syntax();
+        let syntax = ty.as_syn();
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.output_terminal(ty, registry) {
@@ -205,7 +205,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
             {
-                c.subs = vec![inner.syntax().clone()];
+                c.subs = vec![inner.as_syn().clone()];
                 return Some(c);
             }
             return None;
@@ -214,7 +214,7 @@ impl Declarations {
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
             {
-                c.subs = vec![elem.syntax().clone()];
+                c.subs = vec![elem.as_syn().clone()];
                 return Some(c);
             }
             return None;
@@ -227,16 +227,16 @@ impl Declarations {
             // input branch, and the same split: `kind` says it is a borrow of a
             // run of values; whether the generated Rust can iterate the borrow
             // directly is a question about the SPELLING.
-            if !*mutable && decoded_vec_satisfies(inner.syntax()) {
+            if !*mutable && decoded_vec_satisfies(inner.as_syn()) {
                 if let Some(elem) = inner.sequence_elem() {
-                    return self.output_slice(elem.syntax(), registry);
+                    return self.output_slice(elem.as_syn(), registry);
                 }
             }
             let mutable = ty.is_exclusive_borrow();
             if let Some(mut c) =
                 self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
             {
-                c.subs = vec![inner.syntax().clone()];
+                c.subs = vec![inner.as_syn().clone()];
                 return Some(c);
             }
         }
@@ -269,7 +269,7 @@ fn fallible_parts(
         .type_ref(ty)
         .and_then(|t| t.fallible_parts())
     {
-        return Some((ok.syntax().clone(), err.syntax().clone()));
+        return Some((ok.as_syn().clone(), err.as_syn().clone()));
     }
     crate::api::core::types_util::result_parts(ty)
 }

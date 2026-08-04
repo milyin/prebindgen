@@ -29,7 +29,7 @@ pub(crate) enum TypeKind<'r, 'c> {
     /// The **element**, not its `syn::ItemStruct`. A flattening emitter wants
     /// each field's reading, and the model already decided one per field; going
     /// through the syntax means asking some other authority for it again. An
-    /// emitter that only re-emits the struct reads `st.origin.syntax`.
+    /// emitter that only re-emits the struct reads `st.origin.as_syn()`.
     DataStruct {
         st: &'r crate::api::core::flat::Struct,
         cfg: Option<&'c TypeConfig>,

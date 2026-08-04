@@ -142,7 +142,7 @@ pub(crate) fn synthetic_getter(
     ident: syn::Ident,
     ret: crate::api::core::flat::TypeRef,
 ) -> crate::api::core::flat::Function {
-    let ret_syntax = ret.syntax();
+    let ret_syntax = ret.spell();
     let item: syn::ItemFn = syn::parse_quote! {
         pub fn #ident() -> #ret_syntax {
             unimplemented!()
@@ -381,7 +381,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                      Reserved rather than refused for good: rebuilding through every \
                      transparent wrapper is #292 item 3 — until then, spell the return \
                      without it.",
-                    delivered.syntax().to_token_stream(),
+                    delivered.spell(),
                     delivered.erased_wrappers().join("<"),
                 )
             });
@@ -598,7 +598,7 @@ fn emit_input_param(
         // by-value-handle consume below.
         InputKind::VecBuild { elem, by_ref } => {
             // Generated Rust spells the reading's own tokens.
-            let elem = elem.syntax();
+            let elem = elem.spell();
             let handle_ident = format_ident!("{}_handle", arg_ident);
             wire_params.push(quote!(#handle_ident: jni::sys::jlong));
             if *by_ref {
@@ -821,7 +821,7 @@ pub(crate) fn emit_expanded_param(
 
     debug_assert_eq!(plan.leaves.len(), leaves.len());
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
-        let leaf_ty = leaf.ty.syntax();
+        let leaf_ty = leaf.ty.as_syn();
         let lookup_entry = || {
             // The leaf's own reading goes straight to the entry: spelling it and
             // looking the same reading back up is the round trip #286 removed.

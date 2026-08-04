@@ -236,7 +236,7 @@ pub trait Prebindgen {
     // and be told "no reading" — the question a `&syn::ItemFn` forced it to ask
     // the registry, and which answered wrongly for a type that never entered
     // the pipeline (#275). What generated Rust must *spell* is still exactly
-    // available, on `origin.syntax`: classify off `kind`, spell off `syntax`.
+    // available, through `spell()`: classify off `kind`, spell with `spell()`.
 
     /// Wrap a `#[prebindgen]` fn into the destination-language wrapper
     /// (e.g. JNI `extern "C"` fn).
@@ -287,10 +287,9 @@ pub trait Prebindgen {
         c: &crate::api::core::flat::Constant,
         _registry: &Registry<Self::Metadata>,
     ) -> TokenStream {
-        use quote::ToTokens;
         match self.source_module() {
-            Some(m) => const_path_alias(&c.origin.syntax, m),
-            None => c.origin.syntax.to_token_stream(),
+            Some(m) => const_path_alias(c.origin.as_syn(), m),
+            None => c.origin.spell(),
         }
     }
 }

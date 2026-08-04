@@ -234,9 +234,9 @@ pub(crate) fn build_vec_build_helper_items(
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for elem_reading in collect_vec_build_elem_types(ext, registry) {
-        // Generated Rust spells `origin.syntax`; the reading is what the plan
+        // Generated Rust spells `spell()`; the reading is what the plan
         // and the key are taken from.
-        let elem = elem_reading.syntax();
+        let elem = elem_reading.spell();
         let Some(h) = vec_build_helpers(ext, registry, &elem_reading) else {
             continue;
         };

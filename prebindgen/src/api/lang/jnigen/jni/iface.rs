@@ -720,12 +720,12 @@ fn plan_leaf_param(
     // here and re-asserted (`!!`) inside its own live arm — the same rule
     // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
     // slots take their `0`/`false` default and stay unboxed.
-    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, leaf.out_ty.syntax());
+    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, leaf.out_ty.as_syn());
     leaf_iface_param(
         ext,
         registry,
         name,
-        leaf.out_ty.syntax(),
+        leaf.out_ty.as_syn(),
         leaf.nullable || inert_nullable,
         true,
     )
@@ -1024,7 +1024,7 @@ fn derive_iface_spec(
         // above: the memo key holds an identity, and the reading behind it is a
         // lookup. `None` defers, exactly as it does there (#291).
         SpecKey::WholeFolder(el_key) => {
-            whole_folder_iface_spec(ext, registry, registry.reading(el_key)?.syntax())
+            whole_folder_iface_spec(ext, registry, registry.reading(el_key)?.as_syn())
         }
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
@@ -1166,12 +1166,12 @@ pub(crate) fn callback_iface_spec(
                 any_fixed = true;
                 // Peeled off the reading — `borrow_target` is the model's
                 // answer to "is this a borrow", not a syn match.
-                let core = t.borrow_target().unwrap_or(t).syntax().clone();
+                let core = t.borrow_target().unwrap_or(t).as_syn().clone();
                 let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
                 let (reassemble, imports) =
                     fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
                 groups.push(GroupDesc {
-                    name: whole_value_name(t.syntax(), i),
+                    name: whole_value_name(t.as_syn(), i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
                     reassemble: Some(reassemble),
                     imports,
@@ -1197,11 +1197,11 @@ pub(crate) fn callback_iface_spec(
                     };
                     if leaf.source == LeafSource::SumTag {
                         any_fixed = true;
-                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(leaf.out_ty.syntax()))?;
+                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(leaf.out_ty.as_syn()))?;
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
-                            leaf.out_ty.syntax(),
+                            leaf.out_ty.as_syn(),
                             &plan.leaves[k..seg],
                             &fqn,
                         );
@@ -1248,13 +1248,13 @@ pub(crate) fn callback_iface_spec(
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
             leaf_tys.push(LeafDesc::Whole {
-                name: whole_value_name(t.syntax(), i),
-                ty: t.syntax().clone(),
+                name: whole_value_name(t.as_syn(), i),
+                ty: t.as_syn().clone(),
                 nullable: t.optional_inner().is_some(),
                 owned_handle,
             });
             groups.push(GroupDesc {
-                name: whole_value_name(t.syntax(), i),
+                name: whole_value_name(t.as_syn(), i),
                 typed: None,
                 reassemble: None,
                 imports: Vec::new(),
@@ -1311,14 +1311,14 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(|t| subject_short(t.syntax()))
+                .map(|t| subject_short(t.as_syn()))
                 .collect::<Vec<_>>()
                 .join("")
         )
     };
     let package = cb_args
         .first()
-        .map(|t| subject_package(ext, t.syntax()))
+        .map(|t| subject_package(ext, t.as_syn()))
         .unwrap_or_else(|| ext.package.clone());
     Some(IfaceSpec {
         typed_groups,

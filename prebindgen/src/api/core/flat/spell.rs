@@ -1,6 +1,6 @@
 //! Spelling an element back as Rust: the one place the model turns into tokens.
 //!
-//! The other half of **classify off `kind`, spell off `syntax`**. Every helper
+//! The other half of **classify off `kind`, spell with `spell()`**. Every helper
 //! here reads an element's retained syntax and emits Rust; none of them decides
 //! what anything *means*. Keeping them out of [`element`](super::element) is
 //! what lets that module describe structure alone — a `Field` is a name, a
@@ -37,7 +37,7 @@ pub fn fields(shape: &syn::Fields, head: TokenStream, parts: &[TokenStream]) -> 
 impl Alternative {
     /// [`fields`] over this alternative's own delimiters.
     pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.origin.syntax.fields, head, parts)
+        fields(&self.origin.as_syn().fields, head, parts)
     }
 }
 
@@ -49,7 +49,7 @@ impl EnumValue {
     /// named. `parts` is therefore always empty — the signature matches
     /// [`Alternative::spell`] so one caller can spell either.
     pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.origin.syntax.fields, head, parts)
+        fields(&self.origin.as_syn().fields, head, parts)
     }
 }
 
@@ -57,7 +57,7 @@ impl Struct {
     /// [`fields`] over this struct's own delimiters — the dual of
     /// [`Variant::spell`], and the reason neither needs a modelled shape.
     pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.origin.syntax.fields, head, parts)
+        fields(&self.origin.as_syn().fields, head, parts)
     }
 }
 

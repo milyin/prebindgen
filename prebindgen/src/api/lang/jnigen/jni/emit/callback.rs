@@ -49,7 +49,7 @@ pub(crate) fn callback_input(
     let arg_pat_ty: Vec<TokenStream> = args
         .iter()
         .map(|t| {
-            let t = t.syntax();
+            let t = t.spell();
             quote!(#t)
         })
         .collect();
@@ -312,10 +312,10 @@ pub(crate) fn callback_input(
     // memoized spec (`SpecKey::Callback`) the wrapper surface and the
     // interface declaration read, so it cannot drift from the jvalues above.
     // The memo key is spellings — `SpecKey` needs `Ord`, which a `TypeRef`
-    // cannot give. Keyed off each arg's own `origin.syntax`, which
+    // cannot give. Keyed off each arg's own `spell()`, which
     // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax` pins as
     // the SAME identity the signature-derived key produces.
-    let arg_spellings: Vec<syn::Type> = args.iter().map(|a| a.syntax().clone()).collect();
+    let arg_spellings: Vec<syn::Type> = args.iter().map(|a| a.as_syn().clone()).collect();
     let spec = ext.iface_spec(registry, &SpecKey::callback(&arg_spellings))?;
     let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
     // Local-frame capacity: roughly an encoded wire + a wrapped object per
