@@ -641,9 +641,11 @@ growing back.
       and a function item count like a method call — and
       `escape_surface_is_closed` reads the model's own surface so a sixth cannot
       appear quietly, which is how four of the five were found. It asks the
-      question the safe way round: every `syn` return is a door unless its type
+      question the safe way round — every `syn` return is a door unless its type
       is a leaf (`Ident`, `Lifetime`, `Member`, `Index`) and unless the function
-      was already handed a node to transform
+      is one of three named transformers — and it reads more than functions,
+      because more than a function can hand out a node: a public field, a trait
+      method and its impl, and an alias that hides the name
 - [ ] Drive **escapes: types** to zero. The population is three kinds, and only
       the first is classification: taking a node apart (what the ledger's first
       section already sees), keying by spelling (`TypeKey::from_type` where

@@ -149,8 +149,12 @@ const HEADER: &str = "\
 # every syn return is a door unless the type is on a small LEAF allowlist, and
 # unless the function is one of three NAMED transformers that take a node and
 # nothing else. Both allowlists are the exception side, where being wrong is a
-# false alarm rather than a silent hole, and an import alias (`use syn::Type as
-# SynType`) is read as the syn type it binds.
+# false alarm rather than a silent hole.
+#
+# It reads more than functions, because more than a function can hand out a
+# node: a public field, a trait method and its impl, and an alias that hides the
+# name (`use syn::Type as SynType` is resolved; `use syn as syntax` and
+# `type Node = syn::Type` are reported, since flat names syn types in full).
 #
 # The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
 # item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
@@ -276,6 +280,16 @@ fn syn_imports(stream: TokenStream) -> Vec<(String, String)> {
         }
         let mut i = 1;
         while i < run.len() {
+            // `use syn as syntax;` renames the crate, so `syntax::Type` is a
+            // node under a name no uppercase check finds. Reported rather than
+            // resolved — see `RENAMED_SYN`.
+            if run[i] == "as" {
+                if let Some(alias) = run.get(i + 1) {
+                    out.push((alias.clone(), RENAMED_SYN.to_string()));
+                }
+                i += 2;
+                continue;
+            }
             let is_type = run[i].starts_with(char::is_uppercase);
             if is_type {
                 let renamed = run.get(i + 1).map(String::as_str) == Some("as");
@@ -396,6 +410,15 @@ const TRANSFORMERS: &[&str] = &[
     "extract_fn_trait_args",
     "peel_transparent",
 ];
+
+/// The "original" recorded for `use syn as <name>` — a rename of the crate
+/// itself, which puts every node behind a path no uppercase check finds.
+///
+/// **Rejected rather than resolved**, and so is a local `type Node = syn::Type`.
+/// Resolving either means following aliases to a fixed point, for a spelling
+/// `flat` has no reason to write: the model names `syn::` types in full,
+/// everywhere, today. If that ever has to change, this is the line that says so.
+const RENAMED_SYN: &str = "<syn itself>";
 
 /// Which bucket an escape belongs to — by name, then by **receiver**.
 ///
@@ -754,8 +777,17 @@ fn scanner_recognizes_the_shapes_that_matter() {
 ///
 /// The escape scan counts [`ESCAPES`] by name. That is a list, and a list is a
 /// thing someone forgets to add to — so this reads the model's own surface and
-/// fails if a public function in `core/flat` hands out a non-[`LEAF`] `syn`
-/// node under a name the scan does not count.
+/// fails if anything externally visible in `core/flat` hands out a non-[`LEAF`]
+/// `syn` node under a name the scan does not count.
+///
+/// **Externally visible is not just a function** (#313 review). A public field
+/// reopens exactly the capability an accessor closes; a trait method is as
+/// visible as its trait, and its impl carries no visibility of its own; and an
+/// alias — `use syn as syntax`, `type Node = syn::Type` — puts a node behind a
+/// name no check of `syn::` paths can follow. All four are doors here, and the
+/// alias forms are reported rather than resolved: `flat` names `syn::` types in
+/// full, everywhere, so following aliases to a fixed point would be machinery
+/// for a spelling the model does not use.
 ///
 /// Three of the four entries were found this way rather than by design:
 /// `stripped_syntax`, `to_syn` and `enum_item` predate the seal and hand out a
@@ -770,10 +802,18 @@ fn escape_surface_is_closed() {
         for entry in fs::read_dir(&dir).expect("flat/ is readable") {
             let path = entry.expect("readable dir entry").path();
             if path.is_dir() {
+                // Test code is not the model's surface, and the same exclusion
+                // the ledger scan makes: a `pub type` inside a `parse_quote!`
+                // fixture is test *data*, not a declaration.
+                if path.file_name().is_some_and(|n| n == "tests") {
+                    continue;
+                }
                 stack.push(path);
                 continue;
             }
-            if path.extension().is_none_or(|e| e != "rs") {
+            if path.extension().is_none_or(|e| e != "rs")
+                || path.file_name().is_some_and(|n| n == "tests.rs")
+            {
                 continue;
             }
             let text = fs::read_to_string(&path).expect("source file is UTF-8");
@@ -899,18 +939,85 @@ fn collect_doors(
             && hands_out_a_node(&sig.output, aliases)
             && !is_transformer(&sig.ident.to_string(), sig, aliases)
     };
+    // A field is sealed when its type IS an `Origin`, whatever that origin holds:
+    // `pub origin: Origin<syn::ItemFn>` names a node and hands out none.
+    // `always_public` is what an enum variant's fields are: they carry no
+    // visibility of their own and are reachable wherever the enum is.
+    let field_is_door = |f: &syn::Field, always_public: bool| {
+        let toks: Vec<TokenTree> = quote::ToTokens::to_token_stream(&f.ty)
+            .into_iter()
+            .collect();
+        let sealed = matches!(toks.first(), Some(TokenTree::Ident(id)) if id == "Origin");
+        (always_public || escapes_flat(&f.vis))
+            && !sealed
+            && names_a_node(quote::ToTokens::to_token_stream(&f.ty), aliases)
+    };
+    let fields_of = |fields: &syn::Fields,
+                     ty_name: &syn::Ident,
+                     always_public: bool,
+                     out: &mut Vec<(String, String)>| {
+        for f in fields {
+            if field_is_door(f, always_public) {
+                let field = f
+                    .ident
+                    .as_ref()
+                    .map_or_else(|| "0".to_string(), ToString::to_string);
+                out.push((format!("{ty_name}::{field}"), at.to_string()));
+            }
+        }
+    };
     for item in items {
+        if is_cfg_test_item(&item_attrs(item)) {
+            continue;
+        }
         match item {
             syn::Item::Fn(f) if is_door(&f.vis, &f.sig) => {
                 out.push((f.sig.ident.to_string(), at.to_string()));
             }
+            // A crate rename or a local alias puts a node behind a name this
+            // check cannot follow, so the name itself is reported.
+            syn::Item::Type(t)
+                if escapes_flat(&t.vis)
+                    && names_a_node(quote::ToTokens::to_token_stream(&t.ty), aliases) =>
+            {
+                out.push((format!("type {}", t.ident), at.to_string()));
+            }
             syn::Item::Impl(im) => {
                 for it in &im.items {
                     if let syn::ImplItem::Fn(f) = it {
-                        if is_door(&f.vis, &f.sig) {
+                        // A trait impl's method carries no visibility of its
+                        // own: it is reachable wherever the trait is, so the
+                        // trait's own declaration cannot be the only thing
+                        // checked. Treated as public here, and again on the
+                        // trait below — the same door twice is fine, a door
+                        // missed is not.
+                        let vis = match im.trait_ {
+                            Some(_) => &syn::Visibility::Public(syn::token::Pub::default()),
+                            None => &f.vis,
+                        };
+                        if is_door(vis, &f.sig) {
                             out.push((f.sig.ident.to_string(), at.to_string()));
                         }
                     }
+                }
+            }
+            syn::Item::Trait(tr) if escapes_flat(&tr.vis) => {
+                for it in &tr.items {
+                    if let syn::TraitItem::Fn(f) = it {
+                        // A trait method is as visible as its trait.
+                        if is_door(&tr.vis, &f.sig) {
+                            out.push((format!("{}::{}", tr.ident, f.sig.ident), at.to_string()));
+                        }
+                    }
+                }
+            }
+            // A public field reopens exactly the capability an accessor closes.
+            syn::Item::Struct(st) if escapes_flat(&st.vis) => {
+                fields_of(&st.fields, &st.ident, false, out);
+            }
+            syn::Item::Enum(en) if escapes_flat(&en.vis) => {
+                for v in &en.variants {
+                    fields_of(&v.fields, &en.ident, true, out);
                 }
             }
             syn::Item::Mod(m) => {
@@ -921,6 +1028,31 @@ fn collect_doors(
             _ => {}
         }
     }
+}
+
+/// An item's attributes, for the `#[cfg(test)]` skip the ledger scan also makes.
+fn item_attrs(item: &syn::Item) -> Vec<syn::Attribute> {
+    match item {
+        syn::Item::Fn(i) => i.attrs.clone(),
+        syn::Item::Impl(i) => i.attrs.clone(),
+        syn::Item::Trait(i) => i.attrs.clone(),
+        syn::Item::Struct(i) => i.attrs.clone(),
+        syn::Item::Enum(i) => i.attrs.clone(),
+        syn::Item::Type(i) => i.attrs.clone(),
+        syn::Item::Mod(i) => i.attrs.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn is_cfg_test_item(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        a.path().is_ident("cfg")
+            && is_cfg_test(
+                quote::ToTokens::to_token_stream(&a.meta)
+                    .into_iter()
+                    .collect(),
+            )
+    })
 }
 
 /// The **guard's own** rules, on shapes the tree does not currently contain —
@@ -998,6 +1130,43 @@ fn a_door_is_the_default_and_a_transformer_is_the_exception() {
     assert!(doors("impl S { pub(super) fn syntax(&self) -> &syn::Type { &self.ty } }").is_empty());
     // Nor is flat's OWN `Type`, which is the model and not a node.
     assert!(doors("impl F { pub fn declared_type(&self) -> Option<&Type> { None } }").is_empty());
+
+    // ── Shapes that are not a function at all (#313 review) ───────────────
+
+    // A public field reopens exactly the capability an accessor closes.
+    assert_eq!(doors("pub struct S { pub node: syn::Type }"), ["S::node"]);
+    // ...but a field whose type IS an `Origin` is sealed by the origin itself,
+    // whatever it holds. Most of the model's public fields are this shape.
+    assert!(doors("pub struct S { pub origin: Origin<syn::ItemFn> }").is_empty());
+    assert!(doors("pub struct S { pub name: syn::Ident }").is_empty());
+    // An enum's payload is a field too.
+    assert_eq!(doors("pub enum E { A(syn::Type) }"), ["E::0"]);
+
+    // A trait method is as visible as its trait, and its impl carries no
+    // visibility of its own — so both halves are counted.
+    assert_eq!(
+        doors("pub trait Leak { fn leak(&self) -> &syn::Type; }"),
+        ["Leak::leak"]
+    );
+    assert_eq!(
+        doors("impl Leak for TypeRef { fn leak(&self) -> &syn::Type { self.as_syn() } }"),
+        ["leak"],
+        "an impl of a trait declared elsewhere is still reachable"
+    );
+
+    // An alias hides the node behind a name this check cannot follow, so the
+    // ALIAS is reported — fix that, and the door it hid becomes visible.
+    assert_eq!(doors("pub type Node = syn::Type;"), ["type Node"]);
+    assert_eq!(
+        doors("use syn as syntax;\npub type Node = syntax::Type;"),
+        ["type Node"],
+        "a renamed crate is followed as far as the alias that uses it"
+    );
+    // A leaf alias is not a door: there is still no shape to match on.
+    assert!(doors("pub type Name = syn::Ident;").is_empty());
+
+    // Test code is not the model's surface.
+    assert!(doors("#[cfg(test)]\nmod t { pub struct S { pub node: syn::Type } }").is_empty());
 }
 
 /// The escape scan: what it counts, which bucket it lands in, and what it must
