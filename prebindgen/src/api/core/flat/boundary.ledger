@@ -71,6 +71,14 @@
 # `syn::Type` field is not classification either. Both are follow-ups the count
 # names rather than hides.
 #
+# A NODE CACHE is why the type count can go UP for a good change. A field typed
+# `syn::Type` holds a node permanently: it costs ONE escape where it is filled
+# and none at all where it is read, so N consumers read a node for free and the
+# census sees 1. Replacing that field with a `TypeRef` removes the one and
+# reveals the N — the reads were always there. A rising count after a field is
+# de-cached is the measure becoming true, not the boundary getting worse; a
+# rising count with no field removed is the thing this ledger exists to catch.
+#
 # KNOWN BLIND SPOTS — classification neither half sees:
 #
 #   * token-string classification, e.g. `core/domain.rs` matching
@@ -121,32 +129,32 @@
 
 ## escapes: types
 1	api/core/diagnostics.rs
-11	api/core/expand.rs
+6	api/core/expand.rs
 1	api/core/registry/declare.rs
 1	api/core/registry/key.rs
 2	api/core/registry/order.rs
 4	api/core/registry/scan.rs
-15	api/core/unfold.rs
+5	api/core/unfold.rs
 3	api/lang/cbindgen/convert.rs
 3	api/lang/cbindgen/emit.rs
 6	api/lang/cbindgen/trait_impl.rs
-6	api/lang/jnigen/jni/builder.rs
+2	api/lang/jnigen/jni/builder.rs
 1	api/lang/jnigen/jni/emit/callback.rs
-5	api/lang/jnigen/jni/emit/delivery.rs
+7	api/lang/jnigen/jni/emit/delivery.rs
 8	api/lang/jnigen/jni/emit/flat_input.rs
 1	api/lang/jnigen/jni/emit/struct_out.rs
 1	api/lang/jnigen/jni/emit/sum_out.rs
 1	api/lang/jnigen/jni/emit/wrapper.rs
-3	api/lang/jnigen/jni/fn_plan.rs
-12	api/lang/jnigen/jni/iface.rs
-1	api/lang/jnigen/jni/kotlin_emit.rs
-1	api/lang/jnigen/jni/overloads.rs
-1	api/lang/jnigen/jni/render.rs
+4	api/lang/jnigen/jni/fn_plan.rs
+22	api/lang/jnigen/jni/iface.rs
+8	api/lang/jnigen/jni/kotlin_emit.rs
+2	api/lang/jnigen/jni/overloads.rs
+2	api/lang/jnigen/jni/render.rs
 15	api/lang/jnigen/jni/selector.rs
 3	api/lang/jnigen/jni/struct_plan.rs
-16	api/lang/jnigen/jni/trait_impl.rs
+17	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 122
+# total escapes: types: 126
 
 ## escapes: items
 1	api/core/prebindgen.rs

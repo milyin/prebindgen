@@ -167,6 +167,14 @@ const HEADER: &str = "\
 # `syn::Type` field is not classification either. Both are follow-ups the count
 # names rather than hides.
 #
+# A NODE CACHE is why the type count can go UP for a good change. A field typed
+# `syn::Type` holds a node permanently: it costs ONE escape where it is filled
+# and none at all where it is read, so N consumers read a node for free and the
+# census sees 1. Replacing that field with a `TypeRef` removes the one and
+# reveals the N — the reads were always there. A rising count after a field is
+# de-cached is the measure becoming true, not the boundary getting worse; a
+# rising count with no field removed is the thing this ledger exists to catch.
+#
 # KNOWN BLIND SPOTS — classification neither half sees:
 #
 #   * token-string classification, e.g. `core/domain.rs` matching

@@ -1405,16 +1405,18 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
     ) -> Vec<crate::api::core::unfold::ValueDecon> {
         let mut out = Vec::new();
-        for (ident, item_struct) in registry.flat().types().filter_map(|t| match t {
-            crate::api::core::flat::Type::Struct(s) => Some((&s.name, s)),
+        for item_struct in registry.flat().types().filter_map(|t| match t {
+            crate::api::core::flat::Type::Struct(s) => Some(s),
             _ => None,
         }) {
-            let source: syn::Type = syn::parse_quote!(#ident);
-            let key = TypeKey::from_type(&source);
+            // The declaration's own reading, and its key off that — neither
+            // composed from the ident, which an adapter cannot do anyway.
+            let reading = item_struct.type_ref();
+            let key = reading.key();
             // A `data_class` is a registered type that is neither an opaque
             // handle nor an enum.
             let is_data_class = matches!(
-                self.type_kind(registry, &source),
+                self.type_kind(registry, reading.as_syn()),
                 TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
             );
             if !is_data_class {
@@ -1431,7 +1433,7 @@ impl Declarations {
                 if !leaves.is_empty() {
                     out.push(crate::api::core::unfold::ValueDecon {
                         key,
-                        source,
+                        source: reading.clone(),
                         leaves,
                     });
                 }
@@ -1466,7 +1468,10 @@ impl Declarations {
             };
             out.push(crate::api::core::unfold::SumDecon {
                 key: key.clone(),
-                source,
+                // The sum's own reading, which the declaration answers with —
+                // `Variant::type_ref` exists for exactly this, and it works in
+                // the declare phase where a `reading()` lookup could not.
+                source: sum.type_ref().clone(),
                 leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, sum),
             });
         }

@@ -2,6 +2,12 @@ use quote::ToTokens;
 
 use super::*;
 
+/// A fixture declaration's identity. A declaration is a key, not a spelling —
+/// see `ConstructorDecl::target`.
+fn key(s: &str) -> crate::api::core::registry::TypeKey {
+    crate::api::core::registry::TypeKey::parse(s).expect("a fixture type")
+}
+
 /// A reading for a fixture type — see the twin in `core/unfold/tests.rs`.
 /// Plan leaves carry `TypeRef`s, and a fixture naming a type inline needs one.
 fn tref(ty: syn::Type) -> crate::api::core::flat::TypeRef {
@@ -29,7 +35,7 @@ fn single_constructor_plan_and_fold() {
     exp.expands.push(ExpandDecl {
         func: ident("z_keyexpr_intersects"),
         param: ident("a"),
-        declared_target: Some(syn::parse_quote!(ZKeyExpr)),
+        declared_target: Some(key("ZKeyExpr")),
         sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
     });
 
@@ -69,7 +75,7 @@ fn constructor_plan_and_fold() {
     exp.expands.push(ExpandDecl {
         func: ident("z_keyexpr_intersects"),
         param: ident("a"),
-        declared_target: Some(syn::parse_quote!(ZKeyExpr)),
+        declared_target: Some(key("ZKeyExpr")),
         sel: ExpandSel::Subset(vec![
             Variant::Ctor(ident("z_keyexpr_try_from")),
             Variant::Identity,
@@ -132,7 +138,7 @@ fn optional_byvalue_single_ctor() {
     exp.expands.push(ExpandDecl {
         func: ident("z_session_delete"),
         param: ident("attachment"),
-        declared_target: Some(syn::parse_quote!(ZZBytes)),
+        declared_target: Some(key("ZZBytes")),
         sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_zbytes_from_vec"))]),
     });
     // nullable leaf wrapping the ctor param
@@ -185,7 +191,7 @@ fn optional_byref_single_ctor() {
     exp.expands.push(ExpandDecl {
         func: ident("z_session_put"),
         param: ident("encoding"),
-        declared_target: Some(syn::parse_quote!(ZEncoding)),
+        declared_target: Some(key("ZEncoding")),
         sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_encoding_from_string"))]),
     });
     // `encoding: Option<&ZEncoding>` built from a TWO-arg, infallible
@@ -209,7 +215,7 @@ fn optional_byref_single_ctor() {
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
     assert_eq!(plan.leaves[0].ty.spell().to_string(), "Option < String >");
     assert_eq!(
-        plan.target.to_token_stream().to_string(),
+        plan.target.spell().to_string(),
         "ZEncoding",
         "target peeled through Option<&_>"
     );
@@ -228,7 +234,7 @@ fn optional_byref_multi_arg_ctor() {
     exp.expands.push(ExpandDecl {
         func: ident("z_session_put"),
         param: ident("encoding"),
-        declared_target: Some(syn::parse_quote!(ZEncoding)),
+        declared_target: Some(key("ZEncoding")),
         sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_encoding_from_id"))]),
     });
     // leaf 0 = present:bool, leaf 1 = id:i32, leaf 2 = schema:Option<String>
@@ -297,7 +303,7 @@ fn optional_combined_selector_encodes_absence() {
     exp.expands.push(ExpandDecl {
         func: ident("z_session_put"),
         param: ident("encoding"),
-        declared_target: Some(syn::parse_quote!(ZEncoding)),
+        declared_target: Some(key("ZEncoding")),
         sel: ExpandSel::Subset(vec![
             Variant::Ctor(ident("z_encoding_from_id")),
             Variant::Identity,
@@ -379,7 +385,7 @@ fn iterable_emit_shape() {
     // plan must produce the `into_iter().map(...).collect::<Result<Vec<_>,_>>()`
     // form, with the inner single-arg ctor applied per element.
     let plan = FoldPlan {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: tref(syn::parse_quote!(ZKeyExpr)),
         by_ref: false,
         shape: FoldShape::Iterable(Box::new(FoldShape::Base)),
         leaves: vec![FoldLeaf {
@@ -420,7 +426,7 @@ fn default_constructor_auto_applies_and_skips() {
     ]);
     let mut exp = Expansions::default();
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
         default: true,
     });
@@ -473,7 +479,7 @@ fn default_constructor_skips_accessor_and_explicit_construct_errors() {
     // `.default()` skips the accessor's `ke`, constructs the consumer's a/b.
     let mut exp = Expansions::default();
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
         default: true,
     });
@@ -494,7 +500,7 @@ fn default_constructor_skips_accessor_and_explicit_construct_errors() {
     exp2.expands.push(ExpandDecl {
         func: ident("z_keyexpr_clone"),
         param: ident("ke"),
-        declared_target: Some(syn::parse_quote!(ZKeyExpr)),
+        declared_target: Some(key("ZKeyExpr")),
         sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
     });
     let err = apply(&mut reg2, &exp2, &declared, &accessor, &Default::default()).unwrap_err();
@@ -517,12 +523,12 @@ fn recursive_input_nests_param_constructors() {
     // Default inputs for ZSample (single), ZKeyExpr (combined: try_from|id),
     // ZZBytes (single).
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(ZSample),
+        target: key("ZSample"),
         variants: vec![Variant::Ctor(ident("z_sample_new"))],
         default: true,
     });
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         variants: vec![
             Variant::Ctor(ident("z_keyexpr_try_from")),
             Variant::Identity,
@@ -530,7 +536,7 @@ fn recursive_input_nests_param_constructors() {
         default: true,
     });
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(ZZBytes),
+        target: key("ZZBytes"),
         variants: vec![Variant::Ctor(ident("z_zbytes_from_vec"))],
         default: true,
     });
@@ -604,12 +610,12 @@ fn recursive_input_cycle_errors() {
     ]);
     let mut exp = Expansions::default();
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(A),
+        target: key("A"),
         variants: vec![Variant::Ctor(ident("make_a"))],
         default: true,
     });
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(B),
+        target: key("B"),
         variants: vec![Variant::Ctor(ident("make_b"))],
         default: true,
     });
@@ -641,7 +647,7 @@ fn unknown_constructor_errors() {
     exp.expands.push(ExpandDecl {
         func: ident("z_keyexpr_intersects"),
         param: ident("a"),
-        declared_target: Some(syn::parse_quote!(ZKeyExpr)),
+        declared_target: Some(key("ZKeyExpr")),
         sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from_typo"))]),
     });
     // C5 validation map: a variant ctor that exists but does not produce the
@@ -672,7 +678,7 @@ fn constructor_target_mismatch_errors() {
     exp.expands.push(ExpandDecl {
         func: ident("z_keyexpr_intersects"),
         param: ident("a"),
-        declared_target: Some(syn::parse_quote!(ZKeyExpr)),
+        declared_target: Some(key("ZKeyExpr")),
         sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_sample_new"))]),
     });
     let err = apply(
@@ -700,14 +706,14 @@ fn invalid_declarations_collected() {
     // Duplicate constructor target (two records, same TypeKey).
     for _ in 0..2 {
         exp.constructors.push(ConstructorDecl {
-            target: syn::parse_quote!(ZKeyExpr),
+            target: key("ZKeyExpr"),
             variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
             default: true,
         });
     }
     // Empty constructor variant list.
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(ZEmpty),
+        target: key("ZEmpty"),
         variants: vec![],
         default: true,
     });
@@ -719,7 +725,7 @@ fn invalid_declarations_collected() {
         exp.expands.push(ExpandDecl {
             func: ident("z_session_get"),
             param: ident("k"),
-            declared_target: Some(syn::parse_quote!(ZKeyExpr)),
+            declared_target: Some(key("ZKeyExpr")),
             sel,
         });
     }
@@ -777,7 +783,7 @@ fn a_vec_param_does_not_match_its_elements_constructor() {
     // The type-level default: every `ZKeyExpr` parameter may be built from a
     // `String`. `parts` is a `Vec<ZKeyExpr>`, so it is not one of them.
     exp.constructors.push(ConstructorDecl {
-        target: syn::parse_quote!(ZKeyExpr),
+        target: key("ZKeyExpr"),
         variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
         default: true,
     });

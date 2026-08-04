@@ -756,10 +756,15 @@ fn build_output(
     let error_plan = registry.error_plans().get(ident);
     let ok_ty = error_plan.and_then(|_| result_ok_type(&return_ty));
     let target_ty = match unfold_plan {
+        // The other arm composes a type this adapter built, so the two meet as
+        // spellings: the plan's reading is unwrapped here rather than the whole
+        // local becoming a reading it cannot be.
         Some(p) => p
             .convert_out_ty
-            .clone()
-            .expect("Return delivery carries convert_out_ty"),
+            .as_ref()
+            .expect("Return delivery carries convert_out_ty")
+            .as_syn()
+            .clone(),
         None => ok_ty.unwrap_or(return_ty),
     };
     // Two failures, told apart. `target_ty` is composed here (`convert_out_ty`,

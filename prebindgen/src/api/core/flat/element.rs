@@ -215,6 +215,24 @@ pub struct Struct {
     pub name: syn::Ident,
     pub fields: Vec<Field>,
     pub origin: Origin<syn::ItemStruct>,
+    /// This struct **as a type**, taken at parse time — the twin of
+    /// [`Variant::reading`], stored and `pub(super)` for the same two reasons.
+    pub(super) reading: TypeRef,
+}
+
+impl Struct {
+    /// This struct as a type reference — what the **declaration** answers when
+    /// something needs a reading naming it.
+    ///
+    /// The alternative is composing one from the name at the call site, which
+    /// an adapter cannot do (minting is sealed to `api::core`) and which would
+    /// be phase-dependent if routed through the registry instead: a
+    /// decomposition is declared before anything is interned. The declaration
+    /// is the one thing that can always say. Same reasoning as
+    /// [`Variant::type_ref`].
+    pub fn type_ref(&self) -> &TypeRef {
+        &self.reading
+    }
 }
 
 /// A `#[prebindgen]` enum whose alternatives carry payloads — a sum type.

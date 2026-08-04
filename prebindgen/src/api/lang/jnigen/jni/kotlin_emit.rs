@@ -1049,7 +1049,7 @@ impl Declarations {
                     let iterable = is_iterable_fold(&plan.shape);
                     match (iterable, &plan.element, &plan.decon) {
                         (true, Some(el), _) => {
-                            uses.insert(SpecKey::whole_folder(el));
+                            uses.insert(SpecKey::whole_folder(el.as_syn()));
                         }
                         (true, None, Some(d)) => {
                             uses.insert(SpecKey::Folder(d.clone()));
@@ -1202,11 +1202,11 @@ impl Declarations {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source))
+            .kotlin_fqn(&TypeKey::from_type(source.as_syn()))
             .unwrap_or_else(|| {
                 panic!(
                     "value-struct builder: no Kotlin FQN for {}",
-                    TypeKey::from_type(source)
+                    TypeKey::from_type(source.as_syn())
                 )
             });
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
@@ -1245,11 +1245,11 @@ impl Declarations {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source))
+            .kotlin_fqn(&TypeKey::from_type(source.as_syn()))
             .unwrap_or_else(|| {
                 panic!(
                     "value-struct folder: no Kotlin FQN for {}",
-                    TypeKey::from_type(source)
+                    TypeKey::from_type(source.as_syn())
                 )
             });
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
@@ -1303,7 +1303,7 @@ impl Declarations {
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
             registry,
-            &plan.source,
+            plan.source.as_syn(),
             &plan.leaves,
             &spec.params,
             &names,
@@ -1342,7 +1342,7 @@ impl Declarations {
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let (iface_short, when) = self.sum_reconstruct(
             registry,
-            &plan.source,
+            plan.source.as_syn(),
             &plan.leaves,
             &spec.params[1..],
             &names[1..],

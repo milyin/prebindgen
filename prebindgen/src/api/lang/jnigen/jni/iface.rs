@@ -976,7 +976,7 @@ pub(crate) fn fixed_leaf_element_keys(
         .chain(registry.callback_arg_plans().values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.element.as_ref())
-        .map(TypeKey::from_type)
+        .map(|el| el.key())
         .collect()
 }
 
@@ -1341,9 +1341,9 @@ pub(crate) fn builder_iface_spec(
     let params = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Builder",
-        decon_base_name(&subject_short(&spec.source), Some(decon))
+        decon_base_name(&subject_short(spec.source.as_syn()), Some(decon))
     );
-    let package = subject_package(ext, &spec.source);
+    let package = subject_package(ext, spec.source.as_syn());
     Some(IfaceSpec::assemble(
         package,
         name,
@@ -1369,9 +1369,9 @@ pub(crate) fn folder_iface_spec(
     params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
     let name = format!(
         "{}Folder",
-        decon_base_name(&subject_short(&spec.source), Some(decon))
+        decon_base_name(&subject_short(spec.source.as_syn()), Some(decon))
     );
-    let package = subject_package(ext, &spec.source);
+    let package = subject_package(ext, spec.source.as_syn());
     Some(IfaceSpec::assemble(
         package,
         name,
@@ -1430,7 +1430,7 @@ pub(crate) fn folder_iface_for_plan(
         "folder_iface_for_plan requires an Iterable (or Option<Iterable>) plan"
     );
     match (&plan.element, &plan.decon) {
-        (Some(el), _) => ext.iface_spec(registry, &SpecKey::whole_folder(el)),
+        (Some(el), _) => ext.iface_spec(registry, &SpecKey::whole_folder(el.as_syn())),
         (None, Some(d)) => ext.iface_spec(registry, &SpecKey::Folder(d.clone())),
         (None, None) => None,
     }
@@ -1451,8 +1451,9 @@ pub(crate) fn fixed_folder_typed_groups(
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans().get(decon)?;
-    let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source))?;
-    let (reassemble, imports) = fixed_reassembly(ext, registry, &spec.source, &spec.leaves, &fqn);
+    let fqn = ext.kotlin_fqn(&TypeKey::from_type(spec.source.as_syn()))?;
+    let (reassemble, imports) =
+        fixed_reassembly(ext, registry, spec.source.as_syn(), &spec.leaves, &fqn);
     Some(vec![
         TypedGroup {
             name: "acc".to_string(),
@@ -1488,10 +1489,10 @@ pub(crate) fn error_handler_iface_spec(
     let params: Vec<IfaceParam> = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Handler",
-        decon_base_name(&subject_short(&spec.source), Some(decon))
+        decon_base_name(&subject_short(spec.source.as_syn()), Some(decon))
     );
-    let package = subject_package(ext, &spec.source);
-    let source_short = subject_short(&spec.source);
+    let package = subject_package(ext, spec.source.as_syn());
+    let source_short = subject_short(spec.source.as_syn());
     let mut iface = IfaceSpec::assemble(
         package,
         name,

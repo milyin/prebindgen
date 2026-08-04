@@ -153,7 +153,9 @@ impl DeconRecord {
 /// the leaf order is the declaration order of the `records` vector.
 #[derive(Clone)]
 pub struct DeconstructorDecl {
-    pub target: syn::Type,
+    /// The type being decomposed, as an **identity** — see
+    /// [`ConstructorDecl::target`](crate::api::core::expand::ConstructorDecl::target).
+    pub target: TypeKey,
     pub records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
     /// carries the inferred `(target-position, delivery)` to use). Always
@@ -209,7 +211,7 @@ pub struct OutputDecl {
     /// cross-checked against the fn's peeled return type in [`apply`].
     /// `None` for internally-synthesized decls (the type comes from the
     /// return itself).
-    pub declared_source: Option<syn::Type>,
+    pub declared_source: Option<TypeKey>,
 }
 
 /// Deconstructor / output-expansion declarations gathered from a language
@@ -240,7 +242,7 @@ fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
     let mut entries: Vec<UnfoldDeclError> = Vec::new();
     let mut decon_targets: std::collections::HashSet<String> = std::collections::HashSet::new();
     for d in &acc.deconstructors {
-        let target = TypeKey::from_type(&d.target).as_str().to_string();
+        let target = d.target.as_str().to_string();
         if !decon_targets.insert(target.clone()) {
             entries.push(UnfoldDeclError::DuplicateDeconstructor { target });
         }
@@ -307,10 +309,10 @@ pub fn apply<M>(
                 .function(&ed.func)
                 .map(|f| f.ret.clone())
                 .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
-            if !returns_type(&ret, &TypeKey::from_type(declared)) {
+            if !returns_type(&ret, declared) {
                 return Err(UnfoldError::ReturnTypeMismatch {
                     func: ed.func.clone(),
-                    declared: TypeKey::from_type(declared).as_str().to_string(),
+                    declared: declared.as_str().to_string(),
                     actual: {
                         let s = ret.spell();
                         quote::quote!(#s).to_string()
@@ -341,7 +343,7 @@ pub fn apply<M>(
         if d.default.is_none() {
             continue;
         }
-        let dkey = TypeKey::from_type(&d.target);
+        let dkey = d.target.clone();
         let sel = DeconSel::TopLevel;
         for func in declared_fns {
             // Read accessors are never output-decomposed (they ARE the records).
@@ -434,7 +436,7 @@ pub fn apply<M>(
                 let Some(d) = acc
                     .deconstructors
                     .iter()
-                    .find(|d| d.default.is_some() && TypeKey::from_type(&d.target) == core_key)
+                    .find(|d| d.default.is_some() && d.target == core_key)
                 else {
                     continue;
                 };
@@ -481,7 +483,7 @@ pub struct ValueDecon {
     /// Canonical key of the value struct (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The struct type (owned) the leaves decompose.
-    pub source: syn::Type,
+    pub source: crate::api::core::flat::TypeRef,
     /// Field-access leaves in foreign-signature / `fromParts` order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -537,7 +539,7 @@ pub struct SumDecon {
     /// Canonical key of the sum type (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The enum type (owned) the leaves decompose.
-    pub source: syn::Type,
+    pub source: crate::api::core::flat::TypeRef,
     /// The tag leaf followed by every variant's group, in tag order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -609,7 +611,7 @@ pub fn apply_sum_returns<M>(
 fn wire_fixed_decon<M>(
     registry: &mut Registry<M>,
     key: &TypeKey,
-    source: &syn::Type,
+    source: &crate::api::core::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<DeconId, UnfoldError> {
     let decon = DeconId::Default(key.to_string());
@@ -857,12 +859,12 @@ fn whole_leaf_fold_plan(
     shape: UnfoldShape,
 ) -> UnfoldPlan {
     UnfoldPlan {
-        source: vec_elem.as_syn().clone(),
+        source: vec_elem.clone(),
         decon: None,
         by_ref: peel_borrow(vec_elem).0,
         shape,
         leaves: vec![],
-        element: Some(vec_elem.as_syn().clone()),
+        element: Some(vec_elem.clone()),
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
@@ -1071,12 +1073,12 @@ fn process_decl<M>(
                 let by_ref = peel_borrow(inner).0;
                 registry.require_output(inner);
                 UnfoldPlan {
-                    source: inner.as_syn().clone(),
+                    source: inner.clone(),
                     decon: None,
                     by_ref,
                     shape,
                     leaves: vec![],
-                    element: Some(inner.as_syn().clone()),
+                    element: Some(inner.clone()),
                     delivery: ed.delivery,
                     convert_out_ty: None,
                     fixed_builder: false,
@@ -1146,7 +1148,7 @@ fn process_decl<M>(
             registry.require_output(&cv);
             UnfoldPlan {
                 delivery: Delivery::Return,
-                convert_out_ty: Some(cv.as_syn().clone()),
+                convert_out_ty: Some(cv.clone()),
                 ..plan
             }
         } else {
@@ -1200,11 +1202,11 @@ fn register_decon_spec<M>(
         // derived from it, never emitted code — so its hoists are discarded.
         &mut Vec::new(),
     )?;
-    require_unique_leaf_names(source.as_syn(), &leaves)?;
+    require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
         DeconSpec {
-            source: source.as_syn().clone(),
+            source: source.clone(),
             leaves,
         },
     );
@@ -1239,9 +1241,7 @@ fn find_deconstructor_by_type<'a>(
     acc: &'a Deconstructors,
     type_key: &TypeKey,
 ) -> Option<&'a DeconstructorDecl> {
-    acc.deconstructors
-        .iter()
-        .find(|c| TypeKey::from_type(&c.target) == *type_key)
+    acc.deconstructors.iter().find(|c| c.target == *type_key)
 }
 
 /// Build the [`UnfoldPlan`] for a chosen accessor. `shape` is the outer
@@ -1277,11 +1277,11 @@ fn build_plan<M>(
         &mut leaves,
         &mut hoists,
     )?;
-    require_unique_leaf_names(source.as_syn(), &leaves)?;
-    require_root_identity_last(by_ref, source.as_syn(), &leaves)?;
+    require_unique_leaf_names(source, &leaves)?;
+    require_root_identity_last(by_ref, source, &leaves)?;
 
     Ok(UnfoldPlan {
-        source: source.as_syn().clone(),
+        source: source.clone(),
         decon: Some(decon),
         by_ref,
         shape,
@@ -1303,7 +1303,7 @@ fn build_plan<M>(
 /// decompositions clone the root identity, so any order is fine.)
 fn require_root_identity_last(
     by_ref: bool,
-    source: &syn::Type,
+    source: &crate::api::core::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     if by_ref {
@@ -1316,7 +1316,7 @@ fn require_root_identity_last(
     if let (Some(root), Some(nested)) = (root_at, last_nested_at) {
         if root < nested {
             return Err(UnfoldError::RootIdentityBeforeNested {
-                target: TypeKey::from_type(source).to_string(),
+                target: source.key().to_string(),
             });
         }
     }
@@ -1702,12 +1702,15 @@ fn flatten<M>(
 /// Error if two leaves of one flattened deconstructor share a name. Author leaf
 /// names are explicit and emitted literally, so a collision is a declaration
 /// bug — never auto-resolved.
-fn require_unique_leaf_names(source: &syn::Type, leaves: &[UnfoldLeaf]) -> Result<(), UnfoldError> {
+fn require_unique_leaf_names(
+    source: &crate::api::core::flat::TypeRef,
+    leaves: &[UnfoldLeaf],
+) -> Result<(), UnfoldError> {
     let mut seen: HashSet<&str> = HashSet::new();
     for l in leaves {
         if !seen.insert(l.name.as_str()) {
             return Err(UnfoldError::DuplicateLeafName {
-                target: TypeKey::from_type(source).to_string(),
+                target: source.key().to_string(),
                 name: l.name.clone(),
             });
         }
