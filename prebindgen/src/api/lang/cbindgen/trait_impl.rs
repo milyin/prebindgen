@@ -1356,7 +1356,7 @@ impl CbindgenBuilder {
             };
         }
         if let Some(inner) = r_boxed_inner(fty) {
-            let src_inner = self.src_ty(&spelled(inner));
+            let src_inner = self.src_ty_of(&inner.key());
             let boxed = quote!(::std::boxed::Box::from_raw(#b as *mut #src_inner));
             return if fty.optional_inner().is_some() {
                 quote!(if #b.is_null() {

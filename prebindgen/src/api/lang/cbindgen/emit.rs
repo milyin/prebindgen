@@ -1071,7 +1071,7 @@ impl CbindgenBuilder {
 
             // `&[E]` slice (scalar `E`): two wire params (`*const E`, `usize`),
             // decoded zero-copy. NULL pointer ⇒ empty slice (not an error).
-            if let Some(elem) = scalar_slice_elem(arg_ty) {
+            if let Some(elem) = r_scalar_slice_elem(arg_reading).map(spelled) {
                 let len_id = format_ident!("{}_len", ident);
                 params.push(quote!(#ident: *const #elem));
                 params.push(quote!(#len_id: usize));
@@ -1092,7 +1092,7 @@ impl CbindgenBuilder {
             // by a generated `const _`), so the whole block transmutes in one shot —
             // the slice analogue of the single-`&E` `__cbg_in_*` converter. NULL ⇒
             // empty slice.
-            if let Some(elem) = self.value_opaque_slice_elem(arg_ty) {
+            if let Some(elem) = self.r_value_opaque_slice_elem(arg_reading).map(spelled) {
                 // The C wire element is the inline-opaque counterpart (e.g. the
                 // generated `payload_t` mirror), layout-identical to the Rust value.
                 let elem_wire = self
