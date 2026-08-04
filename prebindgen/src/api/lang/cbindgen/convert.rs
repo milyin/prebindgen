@@ -190,7 +190,7 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.rust_type.as_syn().clone());
+        let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
@@ -234,7 +234,7 @@ impl CbindgenBuilder {
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty(&decl.rust_type.as_syn().clone());
+        let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = &registry
