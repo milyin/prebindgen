@@ -1498,7 +1498,7 @@ fn leaf_vec_fold_synthesizes_whole_element_plans() {
             .iter()
             .map(|s| ident(s))
             .collect();
-    let elements = vec![syn::parse_quote!(String), syn::parse_quote!(ZenohId)];
+    let elements = vec![key("String"), key("ZenohId")];
     apply_leaf_vec_folds(&mut reg, elements, &declared).expect("apply_leaf_vec_folds");
 
     // `Vec<String>` return ⇒ Iterable(Base), whole element.
@@ -1566,8 +1566,7 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
         hoists: Vec::new(),
     };
     reg.unfold_plans.insert(ident("strings"), sentinel);
-    apply_leaf_vec_folds(&mut reg, vec![syn::parse_quote!(String)], &declared)
-        .expect("apply_leaf_vec_folds");
+    apply_leaf_vec_folds(&mut reg, vec![key("String")], &declared).expect("apply_leaf_vec_folds");
     assert!(
         !reg.unfold_plans.contains_key(&ident("other")),
         "un-nominated `NotNominated` element ⇒ no fold plan"

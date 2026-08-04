@@ -133,7 +133,7 @@ mod spelling_census {
         // spelling was — see `util::head_type`.
         // kotlin_emit.rs is off the census: `sum_ctor_arg`'s enum payload peels
         // its `Option` off the leaf's own reading.
-        ("jni/trait_impl.rs", 4),
+        ("jni/trait_impl.rs", 2),
         // Down from 2: the nullability decisions now ask the model. The one
         // left probes for an enum through its layers.
         ("jni/fn_plan.rs", 1),

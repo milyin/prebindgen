@@ -361,7 +361,7 @@ pub struct Decompositions {
     /// alternative.
     pub sums: Vec<crate::api::core::unfold::SumDecon>,
     /// Element types of a `Vec<T>`/`&[T]` delivered element-by-element.
-    pub leaf_vec_elements: Vec<syn::Type>,
+    pub leaf_vec_elements: Vec<TypeKey>,
     /// The whole-value crossings these decompositions make unnecessary.
     ///
     /// Stated **with** the decompositions rather than beside them: a type
