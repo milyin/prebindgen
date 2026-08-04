@@ -35,8 +35,15 @@ pub(crate) fn const_getter_fn(
 /// shared closeable `val` is semantically wrong (whose `close()` is it?).
 /// Expose a factory function instead — the established idiom (e.g. zenoh's
 /// `encoding_const_*` companion factories).
-pub(crate) fn reject_handle_const(ext: &Declarations, c: &syn::ItemConst) {
-    reject_handle_constant_type(ext, &c.ty, "const", &c.ident.to_string());
+pub(crate) fn reject_handle_const(ext: &Declarations, c: &crate::api::core::flat::Constant) {
+    // Off the element: a constant's type is a reading, so the peel is the
+    // model's (`util::head_type`) and no node is fetched to reach it.
+    reject_handle_key(
+        ext,
+        &crate::api::lang::jnigen::util::head_type(&c.ty).key(),
+        "const",
+        &c.name.to_string(),
+    );
 }
 
 /// The constant-value handle check shared by both constant kinds: peel
@@ -65,8 +72,18 @@ pub(crate) fn reject_handle_constant_type(
         }
         break;
     }
-    let key = TypeKey::from_type(&ty);
-    let is_handle = ext.types.get(&key).is_some_and(|cfg| cfg.is_opaque());
+    reject_handle_key(ext, &TypeKey::from_type(&ty), what, name);
+}
+
+/// The refusal itself, once: a declared opaque handle cannot be a shared
+/// closeable Kotlin `val`.
+///
+/// Split from the peel because the two callers peel differently — an element's
+/// type is a reading and peels off the kind, while a **build-script-supplied**
+/// expression type has no reading until something interns it and peels off the
+/// spelling. One assertion, two ways to reach it.
+fn reject_handle_key(ext: &Declarations, key: &TypeKey, what: &str, name: &str) {
+    let is_handle = ext.types.get(key).is_some_and(|cfg| cfg.is_opaque());
     assert!(
         !is_handle,
         "{what} `{name}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \
@@ -839,7 +856,9 @@ pub(crate) fn emit_expanded_param(
 
     debug_assert_eq!(plan.leaves.len(), leaves.len());
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
-        let leaf_ty = leaf.ty.as_syn();
+        let leaf_ty = &leaf.ty;
+        // The ascription generated Rust writes for this leaf's local.
+        let leaf_ty_tokens = leaf_ty.spell();
         let lookup_entry = || {
             // The leaf's own reading goes straight to the entry: spelling it and
             // looking the same reading back up is the round trip #286 removed.
@@ -910,7 +929,7 @@ pub(crate) fn emit_expanded_param(
             )
             .expect("an option-scalar plan is built only for a buildable spelling");
             prelude.push(quote!(
-                let #local: #leaf_ty = #built;
+                let #local: #leaf_ty_tokens = #built;
             ));
             leaf_locals.push(local);
             continue;
@@ -920,7 +939,7 @@ pub(crate) fn emit_expanded_param(
         // jlong handle inline, mirroring the normal by-value-handle path —
         // including its null/tagged (closed) pointer guard.
         let is_consume = matches!(classified.kind, InputKind::Handle { direct: true })
-            && !matches!(leaf_ty, syn::Type::Reference(_));
+            && !matches!(leaf_ty.kind(), crate::api::core::flat::TypeKind::Ref { .. });
         if is_consume {
             let wire_ident = format_ident!("{}_ptr", leaf.name);
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
@@ -929,8 +948,8 @@ pub(crate) fn emit_expanded_param(
                     signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
                     return #on_err;
                 }
-                let #local: #leaf_ty = unsafe {
-                    *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty)
+                let #local: #leaf_ty_tokens = unsafe {
+                    *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty_tokens)
                 };
             ));
             leaf_locals.push(local);
