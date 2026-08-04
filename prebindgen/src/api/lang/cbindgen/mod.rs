@@ -102,9 +102,13 @@ use quote::{format_ident, quote, ToTokens};
 // Shared `syn::Type` shape predicates live in `core::types_util`; re-exported
 // here under this back-end's historical names so the submodules (`use super::*`)
 // keep their call sites. `pub(crate) use` so the glob re-export reaches them.
+//
+// Down from seven: the shape questions this back-end asks are asked of a
+// `TypeRef` now, so what is left here serves the two node populations that
+// remain — a build-script declaration, and a converter's own generated
+// signature.
 pub(crate) use crate::api::core::types_util::{
-    first_type_arg, is_option_type as is_option, is_result_type as is_result, is_unit,
-    is_vec_type as is_vec, path_tail_ident as type_path_tail, result_parts,
+    first_type_arg, is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
 };
 use crate::api::{
     core::{
@@ -723,25 +727,6 @@ fn r_cow_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
 /// [`scalar_slice_elem`] off the classification.
 fn r_scalar_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
     r_shared_slice_elem(t).filter(|e| r_is_scalar(e))
-}
-
-/// If `ty` is `Cow<'_, [E]>` with scalar `E`, return `E`.
-fn cow_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else {
-        return None;
-    };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Cow" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-        return None;
-    };
-    let elem = args.args.iter().find_map(|arg| match arg {
-        syn::GenericArgument::Type(syn::Type::Slice(slice)) => Some((*slice.elem).clone()),
-        _ => None,
-    })?;
-    is_scalar(&elem).then_some(elem)
 }
 
 /// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.
