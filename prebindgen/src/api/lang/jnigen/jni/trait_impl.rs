@@ -1576,12 +1576,13 @@ impl Declarations {
             let Some(sum_cfg) = self.types[key].sum() else {
                 continue;
             };
-            // The `sealed_class!` declaration's own spelling. This runs during
+            // The `sealed_class!` declaration's own IDENTITY. This runs during
             // the declare phase, where a `reading()` would legitimately answer
             // `None` for a type nothing has interned yet — the declaration is
-            // the only thing that can say (#291).
-            let source = self.types[key].rust_type.as_syn().clone();
-            let Some(ident) = bare_path_ident(&source) else {
+            // the only thing that can say (#291), and `Origin::key` is what it
+            // says it with. This took the declaration's node and ran
+            // `bare_path_ident` over it to reach the same ident.
+            let Some(ident) = self.types[key].rust_type.key().ident() else {
                 continue;
             };
             let Some(crate::api::core::flat::Type::Variant(sum)) =
