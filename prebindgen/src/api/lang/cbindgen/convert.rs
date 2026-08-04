@@ -193,18 +193,20 @@ impl CbindgenBuilder {
         let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
-                let item = &registry
+                let item = registry
                     .flat()
                     .function(&f)
-                    .map(|func| func.origin.as_syn())
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
-                let (repr, by_ref) = one_param(item);
-                let ret = fn_ret(item);
-                let (ok, fallible) = match result_parts(&ret) {
+                let (repr_reading, by_ref) = one_param(item);
+                let repr = spelled(repr_reading);
+                // The element normalizes an elided return to `Unit`, and
+                // `TypeKind::Fallible` is the `Result` `result_parts` looked for
+                // in a path.
+                let (ok, fallible) = match item.ret.fallible_parts() {
                     Some((ok, _)) => (ok, true),
-                    None => (ret, false),
+                    None => (&item.ret, false),
                 };
-                assert_eq!(TypeKey::from_type(&ok), decl.key);
+                assert_eq!(ok.key(), decl.key);
                 let path = self.conversion_fn_path(registry, f);
                 let expr = if by_ref {
                     syn::parse_quote!(#path(&v))
@@ -237,17 +239,15 @@ impl CbindgenBuilder {
         let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
-                let item = &registry
+                let item = registry
                     .flat()
                     .function(&f)
-                    .map(|func| func.origin.as_syn())
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);
-                assert_eq!(TypeKey::from_type(&param), decl.key);
-                let ret = fn_ret(item);
-                let (repr, fallible) = match result_parts(&ret) {
-                    Some((ok, _)) => (ok, true),
-                    None => (ret, false),
+                assert_eq!(param.key(), decl.key);
+                let (repr, fallible) = match item.ret.fallible_parts() {
+                    Some((ok, _)) => (spelled(ok), true),
+                    None => (spelled(&item.ret), false),
                 };
                 let path = self.conversion_fn_path(registry, f);
                 let expr = if by_ref {
@@ -331,34 +331,21 @@ impl CbindgenBuilder {
     }
 }
 
-fn one_param(item: &syn::ItemFn) -> (syn::Type, bool) {
-    let params: Vec<_> = item
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|p| {
-            if let syn::FnArg::Typed(p) = p {
-                Some(&*p.ty)
-            } else {
-                None
-            }
-        })
-        .collect();
+/// The single parameter of a conversion fn, peeled of a leading `&`.
+///
+/// Off the ELEMENT: a signature is a parameter list, and the borrow is
+/// `TypeKind::Ref` — where this filtered `syn::FnArg::Typed` and matched
+/// `syn::Type::Reference` to reach the same two facts.
+fn one_param(f: &crate::api::core::flat::Function) -> (&TypeRef, bool) {
     assert_eq!(
-        params.len(),
+        f.params.len(),
         1,
         "conversion functions take exactly one parameter"
     );
-    match params[0] {
-        syn::Type::Reference(r) => ((*r.elem).clone(), true),
-        ty => (ty.clone(), false),
-    }
-}
-
-fn fn_ret(item: &syn::ItemFn) -> syn::Type {
-    match &item.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, ty) => (**ty).clone(),
+    let ty = &f.params[0].ty;
+    match ty.kind() {
+        TypeKind::Ref { inner, .. } => (inner, true),
+        _ => (ty, false),
     }
 }
 

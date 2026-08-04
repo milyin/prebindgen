@@ -1491,29 +1491,21 @@ impl Declarations {
         let target = decl.rust_type.spell();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
-                let item_fn = registry
-                    .flat()
-                    .function(&f)
-                    .map(|func| func.origin.as_syn())
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "convert!({}).input({f}): function not found among #[prebindgen] items",
-                            key.as_str()
-                        )
-                    });
-                let (param_ty, by_ref) = convert_single_param(key, f, item_fn, "input");
+                let item_fn = registry.flat().function(&f).unwrap_or_else(|| {
+                    panic!(
+                        "convert!({}).input({f}): function not found among #[prebindgen] items",
+                        key.as_str()
+                    )
+                });
+                let (param_reading, by_ref) = convert_single_param(key, f, item_fn, "input");
+                let param_ty = spelled_ty(param_reading);
                 // Return: `T` (infallible) or `Result<T, E>` (fallible — E
                 // routes to the caller's error handler via the exc slot).
-                let ret = fn_return_type(item_fn);
-                let (ok_ty, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
-                    Some(ok) => (
-                        ok,
-                        Some(
-                            crate::api::core::types_util::result_err_type(&ret)
-                                .expect("result_ok_type implies result_err_type"),
-                        ),
-                    ),
-                    None => (ret, None),
+                // Off `TypeKind::Fallible`, where `result_ok_type` /
+                // `result_err_type` each found the `Result` in a path.
+                let (ok_ty, exc) = match item_fn.ret.fallible_parts() {
+                    Some((ok, err)) => (spelled_ty(ok), Some(spelled_ty(err))),
+                    None => (spelled_ty(&item_fn.ret), None),
                 };
                 assert!(
                     TypeKey::from_type(&ok_ty) == *key,
@@ -1569,33 +1561,22 @@ impl Declarations {
         let target = decl.rust_type.spell();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
-                let item_fn = registry
-                    .flat()
-                    .function(&g)
-                    .map(|func| func.origin.as_syn())
-                    .unwrap_or_else(|| {
-                        panic!(
+                let item_fn = registry.flat().function(&g).unwrap_or_else(|| {
+                    panic!(
                         "convert!({}).output({g}): function not found among #[prebindgen] items",
                         key.as_str()
                     )
-                    });
-                let (param_ty, by_ref) = convert_single_param_any(g, item_fn);
+                });
+                let (param_reading, by_ref) = convert_single_param_any(g, item_fn);
                 assert!(
-                    TypeKey::from_type(&param_ty) == *key,
+                    param_reading.key() == *key,
                     "convert!({k}).output({g}): the function takes `{got}`, not `{k}`",
                     k = key.as_str(),
-                    got = TypeKey::from_type(&param_ty).as_str()
+                    got = param_reading.key().as_str()
                 );
-                let ret = fn_return_type(item_fn);
-                let (repr, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
-                    Some(ok) => (
-                        ok,
-                        Some(
-                            crate::api::core::types_util::result_err_type(&ret)
-                                .expect("result_ok_type implies result_err_type"),
-                        ),
-                    ),
-                    None => (ret, None),
+                let (repr, exc) = match item_fn.ret.fallible_parts() {
+                    Some((ok, err)) => (spelled_ty(ok), Some(spelled_ty(err))),
+                    None => (spelled_ty(&item_fn.ret), None),
                 };
                 assert!(
                     TypeKey::from_type(&repr) != *key,
@@ -1736,49 +1717,42 @@ impl Declarations {
 
 /// The single typed parameter of a conversion fn, peeled of a leading `&`;
 /// asserts arity 1. Returns `(peeled_type, was_by_ref)`.
-fn convert_single_param_any(f: &syn::Ident, item_fn: &syn::ItemFn) -> (syn::Type, bool) {
-    let params: Vec<&syn::PatType> = item_fn
-        .sig
-        .inputs
-        .iter()
-        .filter_map(|i| match i {
-            syn::FnArg::Typed(pt) => Some(pt),
-            _ => None,
-        })
-        .collect();
+fn convert_single_param_any<'f>(
+    f: &syn::Ident,
+    item_fn: &'f crate::api::core::flat::Function,
+) -> (&'f TypeRef, bool) {
     assert!(
-        params.len() == 1,
+        item_fn.params.len() == 1,
         "convert fn `{f}` must take exactly one parameter, it takes {}",
-        params.len()
+        item_fn.params.len()
     );
-    match &*params[0].ty {
-        syn::Type::Reference(r) => ((*r.elem).clone(), true),
-        other => (other.clone(), false),
+    let ty = &item_fn.params[0].ty;
+    match ty.kind() {
+        flat::TypeKind::Ref { inner, .. } => (inner, true),
+        _ => (ty, false),
     }
 }
 
 /// [`convert_single_param_any`] + the direction-specific error context.
-fn convert_single_param(
+fn convert_single_param<'f>(
     key: &TypeKey,
     f: &syn::Ident,
-    item_fn: &syn::ItemFn,
+    item_fn: &'f crate::api::core::flat::Function,
     dir: &str,
-) -> (syn::Type, bool) {
+) -> (&'f TypeRef, bool) {
     let (ty, by_ref) = convert_single_param_any(f, item_fn);
     assert!(
-        TypeKey::from_type(&ty) != *key,
+        ty.key() != *key,
         "convert!({k}).{dir}({f}): the function must take the converted form, not `{k}` itself",
         k = key.as_str()
     );
     (ty, by_ref)
 }
 
-/// A fn's return type (`()` for none).
-fn fn_return_type(item_fn: &syn::ItemFn) -> syn::Type {
-    match &item_fn.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, t) => (**t).clone(),
-    }
+/// A reading spelled back as a `syn::Type` — the source's own tokens, re-parsed.
+fn spelled_ty(t: &TypeRef) -> syn::Type {
+    let toks = t.spell();
+    syn::parse_quote!(#toks)
 }
 
 impl Declarations {

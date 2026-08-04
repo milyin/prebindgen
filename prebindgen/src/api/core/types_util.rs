@@ -75,11 +75,6 @@ pub fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {
     result_parts(ty).map(|(ok, _)| ok)
 }
 
-/// If `ty` is `Result<T, E>`, return `E`.
-pub fn result_err_type(ty: &syn::Type) -> Option<syn::Type> {
-    result_parts(ty).map(|(_, err)| err)
-}
-
 /// First angle-bracketed **type** argument of a path type (`T` of `Option<T>`
 /// / `Vec<T>` / `Result<T, _>`), skipping lifetime/const args. `None` when
 /// there is no type argument.
