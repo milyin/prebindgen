@@ -52,7 +52,7 @@ impl CbindgenBuilder {
         if !self.data.contains_key(&key) {
             return None;
         }
-        let fields = self.struct_fields(r, ty)?;
+        let fields = self.struct_fields(r, &TypeKey::from_type(ty))?;
         let name = Self::in_name(ty);
         let c_struct = self.c_type_ident(&TypeKey::from_type(ty));
         let src = self.src_ty(ty);
@@ -129,7 +129,7 @@ impl CbindgenBuilder {
             return None;
         }
         let mut idents = Vec::new();
-        for (fname, fty) in self.struct_fields(registry, ty)? {
+        for (fname, fty) in self.struct_fields(registry, &TypeKey::from_type(ty))? {
             // An owned-pointer field is one whose mirror wire is a raw pointer
             // (`Option<Box<T>>` / `Box<T>` → `*mut t_t`); scalars/enums are not.
             if matches!(self.mirror_field_wire(&fty), Some(syn::Type::Ptr(_))) {
@@ -581,7 +581,7 @@ impl CbindgenBuilder {
                 continue;
             }
             let ty = reading.as_syn().clone();
-            let Some(fields) = self.struct_fields(registry, &ty) else {
+            let Some(fields) = self.struct_fields(registry, &TypeKey::from_type(&ty)) else {
                 continue;
             };
             let c_struct = self.c_type_ident(&reading.key());
@@ -636,12 +636,14 @@ impl CbindgenBuilder {
             // assert below then proves the whole-struct reinterpret sound.
             if cfg.generate_mirror {
                 let mirror_ident = self.c_type_ident(&reading.key());
-                let fields = self.struct_fields(registry, &ty).unwrap_or_else(|| {
-                    panic!(
-                        "Cbindgen::repr_c_struct: `{}` is not a named struct",
-                        type_short(&reading.key())
-                    )
-                });
+                let fields = self
+                    .struct_fields(registry, &TypeKey::from_type(&ty))
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Cbindgen::repr_c_struct: `{}` is not a named struct",
+                            type_short(&reading.key())
+                        )
+                    });
                 // Restricted-validity audit (#170 instance 3, #158 instance 3):
                 // a mirror is reinterpreted whole, so a field whose Rust type
                 // rejects some bit patterns is UB the moment C writes one and
@@ -1971,7 +1973,7 @@ impl CbindgenBuilder {
         // Data struct output: encode each field into its C wire (`String` →
         // malloc'd `char*` raw block, freed by the `free_memory_function`).
         if self.data.contains_key(&key) {
-            let fields = self.struct_fields(_r, ty)?;
+            let fields = self.struct_fields(_r, &TypeKey::from_type(ty))?;
             let name = Self::out_name(ty);
             let c_struct = self.c_type_ident(&TypeKey::from_type(ty));
             let src = self.src_ty(ty);

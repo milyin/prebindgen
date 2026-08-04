@@ -52,7 +52,7 @@ impl CbindgenBuilder {
             let ty = reading.as_syn().clone();
             registry.output_entry(&reading).is_some()
                 && self
-                    .struct_fields(registry, &ty)
+                    .struct_fields(registry, &TypeKey::from_type(&ty))
                     .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
                     .unwrap_or(false)
         })
@@ -301,7 +301,7 @@ impl CbindgenBuilder {
         if !self.data.contains_key(&TypeKey::from_type(fty)) {
             return Vec::new();
         }
-        self.struct_fields(registry, fty)
+        self.struct_fields(registry, &TypeKey::from_type(fty))
             .unwrap_or_default()
             .into_iter()
             .filter(|(_, fty)| self.data_field_owns(fty, registry))
@@ -374,24 +374,18 @@ impl CbindgenBuilder {
     pub(super) fn struct_fields(
         &self,
         registry: &impl Conversions<()>,
-        ty: &syn::Type,
+        key: &TypeKey,
     ) -> Option<Vec<(syn::Ident, syn::Type)>> {
-        let ident = type_path_tail(ty)?;
-        let item = registry
-            .flat()
-            .struct_type(&ident)
-            .map(|st| st.origin.as_syn())?;
-        if let syn::Fields::Named(named) = &item.fields {
-            Some(
-                named
-                    .named
-                    .iter()
-                    .map(|f| (f.ident.clone().unwrap(), f.ty.clone()))
-                    .collect(),
-            )
-        } else {
-            None
-        }
+        // The element, not its item. A `Struct` holds the field list the
+        // `syn::Fields::Named` match used to dig out, each field's name beside
+        // the reading of its type — so the name lookup is the key's own ident
+        // and the positional case is `f.name` being `None` rather than a
+        // `Fields` variant.
+        let st = registry.flat().struct_type(&key.ident()?)?;
+        st.fields
+            .iter()
+            .map(|f| Some((f.name.clone()?, f.ty.as_syn().clone())))
+            .collect()
     }
 
     /// Wire type of a `repr_c_struct` field in the generated **visible** mirror: a
@@ -467,7 +461,7 @@ impl CbindgenBuilder {
         registry: &Registry<()>,
         ty: &syn::Type,
     ) -> Vec<(syn::Ident, &'static str)> {
-        self.struct_fields(registry, ty)
+        self.struct_fields(registry, &TypeKey::from_type(ty))
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(fname, fty)| {
