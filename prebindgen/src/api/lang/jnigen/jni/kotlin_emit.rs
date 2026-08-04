@@ -1041,9 +1041,7 @@ impl Declarations {
                 let item_fn = func.origin.as_syn();
                 for p in &func.params {
                     if let Some(cb_args) = p.ty.callback_args() {
-                        let arg_tys: Vec<syn::Type> =
-                            cb_args.iter().map(|a| a.as_syn().clone()).collect();
-                        uses.insert(SpecKey::callback(&arg_tys));
+                        uses.insert(SpecKey::callback(cb_args));
                     }
                 }
                 if let Some(plan) = registry

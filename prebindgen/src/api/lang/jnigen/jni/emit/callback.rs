@@ -311,12 +311,11 @@ pub(crate) fn callback_input(
     // Typed `run` descriptor of the generated callback interface — the SAME
     // memoized spec (`SpecKey::Callback`) the wrapper surface and the
     // interface declaration read, so it cannot drift from the jvalues above.
-    // The memo key is spellings — `SpecKey` needs `Ord`, which a `TypeRef`
-    // cannot give. Keyed off each arg's own `spell()`, which
+    // The memo key holds `TypeKey`s — `SpecKey` needs `Ord`, which a `TypeRef`
+    // cannot give — so it is keyed off each arg's own identity, which
     // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax` pins as
     // the SAME identity the signature-derived key produces.
-    let arg_spellings: Vec<syn::Type> = args.iter().map(|a| a.as_syn().clone()).collect();
-    let spec = ext.iface_spec(registry, &SpecKey::callback(&arg_spellings))?;
+    let spec = ext.iface_spec(registry, &SpecKey::callback(args))?;
     let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
     // Local-frame capacity: roughly an encoded wire + a wrapped object per
     // delivered leaf, plus call temporaries.

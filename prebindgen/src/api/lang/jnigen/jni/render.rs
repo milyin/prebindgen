@@ -677,27 +677,17 @@ struct Opaque {
 /// Peel `&` / `Option<…>` / `Option<&…>` layers and return the inner type's
 /// [`TypeKey`] — used to match an accessor's receiver parameter against its
 /// owning class key in [`render_wrapper_fn`].
-pub(crate) fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
-    let core = match ty {
-        syn::Type::Reference(r) => &*r.elem,
-        other => other,
-    };
-    if let syn::Type::Path(tp) = core {
-        if let Some(seg) = tp.path.segments.last() {
-            if seg.ident == "Option" {
-                if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
-                        let inner_core = match inner {
-                            syn::Type::Reference(r) => &*r.elem,
-                            other => other,
-                        };
-                        return TypeKey::from_type(inner_core);
-                    }
-                }
-            }
-        }
+///
+/// Off the model. This walked a node four levels deep — a `Type::Reference`,
+/// a `Type::Path`'s last segment compared against the *name* `"Option"`, its
+/// `AngleBracketed` arguments, and a second `Type::Reference` — to reach a
+/// question `borrow_target` / `optional_inner` / `key` answer directly.
+pub(crate) fn peel_receiver_key(ty: &crate::api::core::flat::TypeRef) -> TypeKey {
+    let core = ty.borrow_target().unwrap_or(ty);
+    match core.optional_inner() {
+        Some(inner) => inner.borrow_target().unwrap_or(inner).key(),
+        None => core.key(),
     }
-    TypeKey::from_type(core)
 }
 
 /// Build a single top-level (free-function) wrapper as a [`kt::KtFun`].
@@ -1082,7 +1072,6 @@ fn classify_params(
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
         let mut name = leaf.kt_name.clone();
-        let arg_ty = leaf.reading.as_syn();
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
@@ -1090,7 +1079,7 @@ fn classify_params(
         // from the rendered signature.
         if receiver_idx.is_none() {
             if let Some(rk) = receiver_key {
-                if &peel_receiver_key(arg_ty) == rk {
+                if &peel_receiver_key(&leaf.reading) == rk {
                     receiver_idx = Some(params.len());
                     name = "this".to_string();
                 }
@@ -1221,7 +1210,7 @@ fn classify_params(
                 } else if leaf.reading.optional_inner().is_some() {
                     // by-value `Option<T>` opaque → nullable consume
                     ParamMode::ConsumeNullable
-                } else if matches!(arg_ty, syn::Type::Reference(_)) {
+                } else if leaf.reading.borrow_target().is_some() {
                     ParamMode::Borrow
                 } else {
                     ParamMode::Consume

@@ -907,8 +907,12 @@ pub(crate) enum SpecKey {
 
 impl SpecKey {
     /// The impl-Fn identity for a callback's arg types.
-    pub fn callback(args: &[syn::Type]) -> Self {
-        SpecKey::Callback(args.iter().map(TypeKey::from_type).collect())
+    ///
+    /// Off the readings, like its [`whole_folder`](Self::whole_folder) peer:
+    /// the key IS a `Vec<TypeKey>`, and every caller was spelling each arg into
+    /// a throwaway `Vec<syn::Type>` for `TypeKey::from_type` to read back.
+    pub fn callback(args: &[crate::api::core::flat::TypeRef]) -> Self {
+        SpecKey::Callback(args.iter().map(|a| a.key()).collect())
     }
 
     /// The whole-element fold identity for an element type.

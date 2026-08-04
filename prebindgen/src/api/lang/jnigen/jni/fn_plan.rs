@@ -612,12 +612,10 @@ fn classify_leaf(
     // erased entry exists but its metadata carries no surface type.
     if let Some(args) = reading.callback_args() {
         // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
-        // spellings either way — but as each arg reading's OWN spelling now,
-        // rather than one re-extracted from the parameter's bounds.
+        // each arg reading's own identity.
         // `a_callback_identity_is_the_same_from_the_reading_or_the_syntax`
-        // pins that the two routes are one memo identity.
-        let arg_tys: Vec<syn::Type> = args.iter().map(|a| a.as_syn().clone()).collect();
-        let iface = ext.iface_spec(registry, &SpecKey::callback(&arg_tys));
+        // pins that this is the same identity the signature-derived key gives.
+        let iface = ext.iface_spec(registry, &SpecKey::callback(args));
         return Ok(PlanLeaf {
             reading: reading.clone(),
             kt_name,
