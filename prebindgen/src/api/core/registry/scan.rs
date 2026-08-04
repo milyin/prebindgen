@@ -145,17 +145,24 @@ impl<M> Registry<M> {
             let ty = crate::api::core::flat::canonical_type(declared_ty.as_syn());
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
-                if let Some(s) = self
-                    .flat
-                    .struct_type(&ident)
-                    .map(|s| s.origin.as_syn().clone())
-                {
-                    self.scan_struct(&s)?;
+                if let Some(s) = self.flat.struct_type(&ident).cloned() {
+                    self.scan_struct(&s);
                     self.intern(Direction::Input, &ty, true)?;
                     self.intern(Direction::Output, &ty, true)?;
                     matched = true;
-                } else if let Some(e) = self.flat.enum_item(&ident).cloned() {
-                    self.scan_enum(&e)?;
+                } else if let Some(e) = self
+                    .flat
+                    .declared_type(&ident)
+                    .filter(|t| {
+                        matches!(
+                            t,
+                            crate::api::core::flat::Type::Enum(_)
+                                | crate::api::core::flat::Type::Variant(_)
+                        )
+                    })
+                    .cloned()
+                {
+                    self.scan_enum(&e);
                     self.intern(Direction::Input, &ty, true)?;
                     self.intern(Direction::Output, &ty, true)?;
                     matched = true;
@@ -201,33 +208,49 @@ impl<M> Registry<M> {
         Ok(())
     }
 
-    pub(super) fn scan_struct(&mut self, s: &syn::ItemStruct) -> Result<(), ScanError> {
+    /// Register a declared struct and every one of its field types.
+    ///
+    /// Takes the **element**: the struct's own type is `Struct::type_ref` — the
+    /// reading the declaration carries — and each field already holds one, so
+    /// nothing here is spelled, keyed or classified on the way in. It used to
+    /// take a `syn::ItemStruct`, rebuild the type from the ident, and walk
+    /// `syn::Fields::Named` to reach types the element had all along.
+    pub(super) fn scan_struct(&mut self, s: &crate::api::core::flat::Struct) {
         // The struct itself can appear in either direction.
-        let ty: syn::Type = crate::api::core::flat::type_from_ident(&s.ident);
-        self.intern(Direction::Input, &ty, false)?;
-        self.intern(Direction::Output, &ty, false)?;
+        self.intern_reading(Direction::Input, s.type_ref(), false);
+        self.intern_reading(Direction::Output, s.type_ref(), false);
 
-        if let syn::Fields::Named(named) = &s.fields {
-            for field in &named.named {
-                self.intern_recursive(Direction::Input, &field.ty, false)?;
-                self.intern_recursive(Direction::Output, &field.ty, false)?;
-            }
+        for field in &s.fields {
+            self.intern_recursive_reading(Direction::Input, &field.ty, false);
+            self.intern_recursive_reading(Direction::Output, &field.ty, false);
         }
-        Ok(())
     }
 
-    pub(super) fn scan_enum(&mut self, e: &syn::ItemEnum) -> Result<(), ScanError> {
-        let ty: syn::Type = crate::api::core::flat::type_from_ident(&e.ident);
-        self.intern(Direction::Input, &ty, false)?;
-        self.intern(Direction::Output, &ty, false)?;
+    /// Register a declared enum and every payload type its alternatives carry.
+    ///
+    /// The [`Struct`](crate::api::core::flat::Struct) twin, and it takes the
+    /// model's split seriously: a fieldless [`Enum`](crate::api::core::flat::Enum)
+    /// has no payload to reach, and a [`Variant`](crate::api::core::flat::Variant)
+    /// carries its alternatives' fields as readings. Walking `syn`'s `variants`
+    /// could not tell the two apart and had to look at every field to find out.
+    pub(super) fn scan_enum(&mut self, e: &crate::api::core::flat::Type) {
+        use crate::api::core::flat::Type;
+        let reading = match e {
+            Type::Enum(en) => en.type_ref(),
+            Type::Variant(v) => v.type_ref(),
+            _ => return,
+        };
+        self.intern_reading(Direction::Input, reading, false);
+        self.intern_reading(Direction::Output, reading, false);
 
-        for variant in &e.variants {
-            for field in &variant.fields {
-                self.intern_recursive(Direction::Input, &field.ty, false)?;
-                self.intern_recursive(Direction::Output, &field.ty, false)?;
+        if let Type::Variant(v) = e {
+            for alt in &v.alternatives {
+                for field in &alt.fields {
+                    self.intern_recursive_reading(Direction::Input, &field.ty, false);
+                    self.intern_recursive_reading(Direction::Output, &field.ty, false);
+                }
             }
         }
-        Ok(())
     }
 
     /// Register `ty` as a cell in the given direction, then recurse into every
@@ -382,6 +405,38 @@ impl<M> Registry<M> {
         let reading = self.intern(dir, ty, root)?;
         self.register_type_recursive(dir, &reading, root);
         Ok(())
+    }
+
+    /// [`Self::intern`] for a caller that **already holds the reading**.
+    ///
+    /// `intern` exists to turn a spelling into one: it keys the type, looks for
+    /// a cell, and classifies when there is none. A caller with a reading in
+    /// hand needs none of that — the model already answered, and re-deriving
+    /// would be the "two answers that never meet" shape `intern`'s own comment
+    /// warns about, arriving from the other side.
+    pub(in crate::api::core) fn intern_reading(
+        &mut self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+        root: bool,
+    ) {
+        let known = self
+            .input_types
+            .get(&reading.key())
+            .or_else(|| self.output_types.get(&reading.key()))
+            .map(|c| (*c.subject).clone());
+        self.ensure_entry(dir, known.as_ref().unwrap_or(reading), root);
+    }
+
+    /// [`Self::intern_recursive`] for a caller that already holds the reading.
+    pub(super) fn intern_recursive_reading(
+        &mut self,
+        dir: Direction,
+        reading: &crate::api::core::flat::TypeRef,
+        root: bool,
+    ) {
+        self.intern_reading(dir, reading, root);
+        self.register_type_recursive(dir, reading, root);
     }
 
     /// Enumerate the immediate type-graph edges out of `(dir, key)`: the model's

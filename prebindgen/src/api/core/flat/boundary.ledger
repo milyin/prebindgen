@@ -130,7 +130,7 @@
 1	api/core/expand.rs
 1	api/core/registry/key.rs
 2	api/core/registry/order.rs
-4	api/core/registry/scan.rs
+2	api/core/registry/scan.rs
 2	api/lang/cbindgen/convert.rs
 4	api/lang/cbindgen/emit.rs
 6	api/lang/cbindgen/trait_impl.rs
@@ -147,11 +147,11 @@
 3	api/lang/jnigen/jni/struct_plan.rs
 13	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: types: 58
+# total escapes: types: 56
 
 ## escapes: items
 1	api/core/prebindgen.rs
-4	api/core/registry/scan.rs
+2	api/core/registry/scan.rs
 1	api/core/write.rs
 2	api/lang/cbindgen/convert.rs
 1	api/lang/cbindgen/emit.rs
@@ -164,4 +164,4 @@
 3	api/lang/jnigen/jni/symbols.rs
 5	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 41
+# total escapes: items: 39

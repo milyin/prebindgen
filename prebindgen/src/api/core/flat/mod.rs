@@ -1461,6 +1461,7 @@ fn lower_c_enum(e: &syn::ItemEnum, at: &Rc<SourceLocation>) -> Enum {
         });
     }
     Enum {
+        reading: TypeRef::named(&e.ident),
         name: e.ident.clone(),
         values,
         origin: Origin::new(e.clone(), Rc::clone(at)),
