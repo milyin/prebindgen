@@ -50,16 +50,18 @@ pub(crate) struct PrimArray {
 /// `None` for everything else, including `[T; N]` of a declared class or enum —
 /// those keep resolving as unsupported, so an unhandled shape is a clear
 /// resolve error rather than silently wrong code.
-pub(crate) fn prim_array_of(ty: &syn::Type) -> Option<PrimArray> {
-    let syn::Type::Array(arr) = ty else {
+pub(crate) fn prim_array_of(ty: &crate::api::core::flat::TypeRef) -> Option<PrimArray> {
+    use crate::api::core::flat::{ScalarKind, TypeKind};
+    let TypeKind::Array { elem, .. } = ty.kind() else {
         return None;
     };
-    let syn::Type::Path(tp) = &*arr.elem else {
+    let &TypeKind::Scalar(elem) = elem.kind() else {
         return None;
     };
-    let elem = tp.path.segments.last()?.ident.to_string();
     // `usize`/`isize` are deliberately absent: their width is platform
-    // dependent, so there is no stable JNI element type to pick.
+    // dependent, so there is no stable JNI element type to pick. Reaching them
+    // by name is the ScalarKind's own spelling, so the set below is still the
+    // set Rust writes — a kind that is not on it falls through as before.
     let (letter, jni_elem) = match elem.as_str() {
         "u8" | "i8" => ("byte", "jbyte"),
         "u16" | "i16" => ("short", "jshort"),
@@ -80,8 +82,8 @@ pub(crate) fn prim_array_of(ty: &syn::Type) -> Option<PrimArray> {
         new_fn: format_ident!("new_{}_array", letter),
         set_region: format_ident!("set_{}_array_region", letter),
         get_region: format_ident!("get_{}_array_region", letter),
-        is_bool: elem == "bool",
-        is_u8: elem == "u8",
+        is_bool: elem == ScalarKind::Bool,
+        is_u8: elem == ScalarKind::U8,
     })
 }
 
@@ -128,8 +130,17 @@ pub(crate) fn output_body(spec: &PrimArray) -> syn::Expr {
 ///
 /// The length check is the `try_into`: a JVM array of the wrong size becomes a
 /// binding error naming the type, never a panic or a partially-filled array.
-pub(crate) fn input_body(ty: &syn::Type, spec: &PrimArray) -> syn::Expr {
-    let key = TypeKey::from_type(ty);
+pub(crate) fn input_body(ty: &crate::api::core::flat::TypeRef, spec: &PrimArray) -> syn::Expr {
+    let key = ty.key();
+    // The element spelled from the model's own `Array`, so the local's type
+    // ascription cannot disagree with what `prim_array_of` matched.
+    let elem_ty = match ty.kind() {
+        crate::api::core::flat::TypeKind::Array { elem, .. } => elem.spell(),
+        _ => unreachable!("prim_array_of matched a non-array"),
+    };
+    // The ascription the decoded array is checked against — spelled from the
+    // reading, as generated Rust always spells.
+    let ty = ty.spell();
     let len_err = format!("fixed-size array decode: `{key}` expects a different length");
     if spec.is_u8 {
         return syn::parse_quote!({
@@ -147,10 +158,6 @@ pub(crate) fn input_body(ty: &syn::Type, spec: &PrimArray) -> syn::Expr {
     }
     let elem_wire = &spec.elem_wire;
     let get_region = &spec.get_region;
-    let elem_ty = match ty {
-        syn::Type::Array(a) => (*a.elem).clone(),
-        _ => unreachable!("prim_array_of matched a non-array"),
-    };
     // A `jboolean` is a `u8`: normalize it, never reinterpret it — an out-of-
     // range byte read back as a Rust `bool` would be undefined behavior.
     let from_wire: syn::Expr = if spec.is_bool {

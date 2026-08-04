@@ -1971,8 +1971,8 @@ impl Declarations {
         // Fixed-size array of JNI primitives — dual of the output branch.
         // The `try_into` IS the length check: a JVM array of the wrong size
         // becomes a binding error naming the type, never a panic.
-        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(ty) {
-            let body = crate::api::lang::jnigen::jni::prim_array::input_body(ty, &spec);
+        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(reading) {
+            let body = crate::api::lang::jnigen::jni::prim_array::input_body(reading, &spec);
             let wire = spec.wire.clone();
             let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
@@ -2358,7 +2358,7 @@ impl Declarations {
         // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
         // `[i64; N]` -> `LongArray`, ... Bulk-copied, nothing boxed. See
         // [`prim_array`]; this replaced the raw-memory value blob.
-        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(ty) {
+        if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(reading) {
             let body = crate::api::lang::jnigen::jni::prim_array::output_body(&spec);
             let wire = spec.wire.clone();
             let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
