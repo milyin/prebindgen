@@ -1508,6 +1508,20 @@ impl Declarations {
     }
 }
 
+/// `&` / `Option` / `Vec` off, to a fixed point — `peel_ref_option_vec` over a
+/// reading, and off `kind()` for the reason [`peel_one_borrow`] gives.
+fn peel_ref_option_vec_reading(
+    t: &crate::api::core::flat::TypeRef,
+) -> &crate::api::core::flat::TypeRef {
+    use crate::api::core::flat::TypeKind;
+    match t.kind() {
+        TypeKind::Ref { inner, .. } | TypeKind::Optional(inner) | TypeKind::Vec(inner) => {
+            peel_ref_option_vec_reading(inner)
+        }
+        _ => t,
+    }
+}
+
 /// One `&` off, and nothing else — the model's own `borrow_target` would also
 /// see through a `Box`/`Cow`, which `peel_leading_ref` did not.
 fn peel_one_borrow(t: &crate::api::core::flat::TypeRef) -> &crate::api::core::flat::TypeRef {
@@ -1647,19 +1661,18 @@ impl Prebindgen for Declarations {
             let Some(func) = binding.flat().function(&ident) else {
                 continue;
             };
-            let item_fn = func.origin.as_syn();
             // (1) A sum in the `Ok` position of a fallible return. A sum is
             // delivered DECOMPOSED through a builder callback, and the
             // `Result` lane has no builder: a `Result` return deliberately
             // keeps its whole-value converter so a fallible factory still
             // yields a handle (see `unfold::returns_type`).
-            if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
-                if let Some(ok) = crate::api::core::types_util::result_ok_type(ret) {
-                    let core = crate::api::core::types_util::peel_ref_option_vec(&ok);
-                    if matches!(
-                        self.type_kind(binding, &TypeKey::from_type(&core)),
-                        TypeKind::Sum
-                    ) {
+            // Off the model's return, not the item's `sig.output`: the reading
+            // says it is fallible and hands over both sides, where re-reading
+            // the signature had to find the `Result` in a path first.
+            if let Some((ok, _)) = func.ret.fallible_parts() {
+                {
+                    let core = peel_ref_option_vec_reading(ok);
+                    if matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
                              supported in the success position of a fallible return. A sum \
@@ -1669,8 +1682,8 @@ impl Prebindgen for Declarations {
                              factory can still hand back a handle. Return `{}` directly and \
                              report failure through the error channel, or model the failure \
                              as one of the sum's own variants",
-                            ok.to_token_stream(),
-                            ok.to_token_stream(),
+                            ok.spell(),
+                            ok.spell(),
                         ));
                     }
                 }
@@ -1690,19 +1703,14 @@ impl Prebindgen for Declarations {
             // `.expand_return(...)` always targets the Output position. So the
             // declaration set is the whole story, and this stays a pre-resolve
             // check.
-            if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
-                if let Some(err_ty) = crate::api::core::types_util::result_err_type(ret) {
-                    let core = crate::api::core::types_util::peel_ref_option_vec(&err_ty);
+            if let Some((_, err_ty)) = func.ret.fallible_parts() {
+                {
+                    let core = peel_ref_option_vec_reading(err_ty);
                     let declared = self
                         .return_expand_decls
                         .iter()
-                        .any(|d| d.key == TypeKey::from_type(&err_ty));
-                    if !declared
-                        && matches!(
-                            self.type_kind(binding, &TypeKey::from_type(&core)),
-                            TypeKind::Sum
-                        )
-                    {
+                        .any(|d| d.key == err_ty.key());
+                    if !declared && matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
                              but nothing decomposes it in the error position, so it would be \
@@ -1721,10 +1729,10 @@ impl Prebindgen for Declarations {
                             // peeled sum, since that is what carries the
                             // declaration. Identical for a bare `E`; they
                             // diverge once it is wrapped.
-                            err_ty.to_token_stream(),
-                            core.to_token_stream(),
-                            err_ty.to_token_stream(),
-                            err_ty.to_token_stream(),
+                            err_ty.spell(),
+                            core.spell(),
+                            err_ty.spell(),
+                            err_ty.spell(),
                         ));
                     }
                 }

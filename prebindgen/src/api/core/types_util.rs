@@ -130,23 +130,6 @@ pub fn bare_path_ident(ty: &syn::Type) -> Option<syn::Ident> {
     Some(seg.ident.clone())
 }
 
-/// Strip any nesting of `&` / `Option<…>` / `Vec<…>` layers down to the core
-/// type (`Option<&Vec<ZThing>>` → `ZThing`).
-pub fn peel_ref_option_vec(ty: &syn::Type) -> syn::Type {
-    let mut t = ty.clone();
-    loop {
-        if let syn::Type::Reference(r) = &t {
-            t = (*r.elem).clone();
-            continue;
-        }
-        if let Some(inner) = option_inner_type(&t).or_else(|| vec_inner_type(&t)) {
-            t = inner;
-            continue;
-        }
-        return t;
-    }
-}
-
 /// Build an identifier at call-site span.
 pub(crate) fn ident(s: &str) -> syn::Ident {
     syn::Ident::new(s, Span::call_site())
