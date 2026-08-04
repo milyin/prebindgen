@@ -488,7 +488,7 @@ fn a_cow_reads_as_what_it_borrows() {
     let TypeKind::Cow { lifetime, .. } = &cow.kind else {
         panic!("a cow");
     };
-    assert_eq!(lifetime.as_ref().expect("a lifetime").ident, "_");
+    assert_eq!(lifetime.ident, "_");
     assert!(matches!(
         lower(quote::quote!(Cow<'_, str>))
             .expect("in the language")
@@ -527,6 +527,48 @@ fn a_cow_reads_as_what_it_borrows() {
         as_unsupported(&element),
         ItemError::UnresolvedType { name } if name == "Vec"
     ));
+}
+
+/// `Cow` is the one builtin whose signature carries a lifetime, so it is the one
+/// whose **whole argument list** is checked rather than its type-argument count.
+///
+/// Counting types alone accepts three spellings that are not `Cow`s: the review
+/// case `Cow<u8, 'a>`, a second lifetime, and no lifetime at all. Each has
+/// exactly one type argument, so each passed — and then reconstructed as
+/// `Cow<'a, u8>`, quietly breaking the property
+/// [`syntax_is_recoverable_from_kind`] asserts. A model that keeps only the
+/// first lifetime cannot spell any of them back, which is the reason to refuse
+/// them rather than the consequence of doing so.
+#[test]
+fn a_cow_takes_a_lifetime_and_a_type_in_that_order() {
+    // The accepted shape, either way the lifetime is written.
+    for spelling in [quote::quote!(Cow<'_, [u8]>), quote::quote!(Cow<'a, str>)] {
+        let ty = lower(spelling).expect("in the language");
+        assert!(matches!(ty.kind, TypeKind::Cow { .. }));
+        // And it spells back, which is what the refusals below protect.
+        assert_eq!(tokens(&ty.kind().to_syn()), tokens(ty.syntax()));
+    }
+
+    // Everything else is refused by shape, and named as such.
+    for spelling in [
+        // No lifetime: `Cow<T>` is not Rust, so no source crate compiles it.
+        quote::quote!(Cow<u8>),
+        // The review case: the arguments are there, in the wrong order.
+        quote::quote!(Cow<u8, 'a>),
+        // Two lifetimes, where `Cow` takes one.
+        quote::quote!(Cow<'a, 'b, u8>),
+        // Two types.
+        quote::quote!(Cow<'a, u8, u8>),
+    ] {
+        let rendered = spelling.to_string();
+        assert_eq!(
+            reason(spelling),
+            UnsupportedTypeReason::WrongGenericArguments {
+                expected: "Cow<'a, T>"
+            },
+            "`{rendered}` is not a `Cow`"
+        );
+    }
 }
 
 /// The signature that motivated this: zenoh-flat's `zbytes_to_bytes`. It was refused

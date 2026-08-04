@@ -417,7 +417,16 @@ impl<M> Registry<M> {
                     // Through the accessor, not the field: it sees past an
                     // out-parameter's `MaybeUninit` slot, which is storage rather
                     // than a type any converter is keyed by.
-                    TypeKind::Ref { .. } => (reading.borrow_target().into_iter().collect(), dir),
+                    // `expect`, not a fallible collect: a `Ref` kind always has a
+                    // target, so an empty child list here would mean the accessor
+                    // and the kind disagree — and it would silently truncate the
+                    // graph walk instead of saying so.
+                    TypeKind::Ref { .. } => (
+                        vec![reading
+                            .borrow_target()
+                            .expect("a `Ref` kind has a borrow target")],
+                        dir,
+                    ),
                     TypeKind::Optional(t)
                     | TypeKind::Vec(t)
                     | TypeKind::Slice(t)

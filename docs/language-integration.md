@@ -86,6 +86,19 @@ The slice still rides along and generated Rust still spells it — it is exact a
 free. It is no longer *load-bearing*, and that is the difference: a fact missing
 from `kind` used to be invisible, because the syntax was there to cover for it.
 
+**Recoverability is an acceptance rule, not just a property.** A spelling the
+model could not give back is refused where it is read, rather than accepted and
+reconstructed as something else:
+
+* a generic argument on any but the last path segment (`a::B<T>::C`) —
+  `Named` holds the last segment's arguments;
+* a `Cow` whose argument list is not `['a, T]` — `Cow<u8>` (not Rust at all),
+  `Cow<u8, 'a>`, `Cow<'a, 'b, u8>`. Checking the *type-argument count* alone
+  accepted all three, and each then spelled back as `Cow<'a, u8>`. `Cow` is the
+  one builtin with a lifetime in its own signature, so it is the one whose whole
+  list has to be checked — which is also what lets its `lifetime` be a
+  `syn::Lifetime` and not an `Option`.
+
 **Did not move**: every generated artifact byte-identical.
 
 ### Why the syntax rides along

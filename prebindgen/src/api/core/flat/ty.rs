@@ -749,8 +749,14 @@ pub enum TypeKind {
     /// adapter's call to make: [`TypeRef::unwrapped`] makes it, on demand.
     Boxed(Box<TypeRef>),
     /// `Cow<'a, T>`.
+    ///
+    /// The lifetime is **not** optional: `Cow` has one in its own signature, so
+    /// a `Cow<T>` is not Rust and no source crate can compile it. Lowering
+    /// refuses the shape ([`WrongGenericArguments`](UnsupportedTypeReason::WrongGenericArguments))
+    /// rather than modelling an absence that would then have to be spelled back
+    /// as something the source did not write.
     Cow {
-        lifetime: Option<syn::Lifetime>,
+        lifetime: syn::Lifetime,
         inner: Box<TypeRef>,
     },
     /// `MaybeUninit<T>`.
@@ -829,13 +835,8 @@ impl TypeKind {
                 syn::parse_quote!(MaybeUninit<#inner>)
             }
             Self::Cow { lifetime, inner } => {
-                let lt = opt_lifetime(lifetime);
                 let inner = inner.kind.to_syn();
-                if lt.is_empty() {
-                    syn::parse_quote!(Cow<#inner>)
-                } else {
-                    syn::parse_quote!(Cow<#lt, #inner>)
-                }
+                syn::parse_quote!(Cow<#lifetime, #inner>)
             }
             Self::Fallible { ok, err } => {
                 let (ok, err) = (ok.kind.to_syn(), err.kind.to_syn());
@@ -1010,7 +1011,22 @@ pub enum UnsupportedTypeReason {
     DisallowedImplTrait,
     /// A generic that takes a fixed arity and did not get it — `Option` with no
     /// argument, `Result` with one.
+    ///
+    /// Counts **type** arguments, which is the whole question for every builtin
+    /// but one: a lifetime on `Option`, `Vec`, `Box` or `Result` is not a shape
+    /// this language has, and such a spelling is a nominal type nobody declared
+    /// rather than a builtin with a bad argument. `Cow` is the exception and has
+    /// its own reason, [`WrongGenericArguments`](Self::WrongGenericArguments).
     WrongGenericArity { expected: usize },
+    /// A builtin whose whole argument list is not the shape it takes —
+    /// `Cow<u8>` (no lifetime), `Cow<u8, 'a>` (wrong order), `Cow<'a, 'b, u8>`
+    /// (two lifetimes).
+    ///
+    /// Separate from [`WrongGenericArity`](Self::WrongGenericArity) because it
+    /// is about the list and not its type-argument count: each of those three
+    /// has exactly one type argument, and refusing them is what keeps
+    /// [`TypeKind::to_syn`] able to spell every accepted form back.
+    WrongGenericArguments { expected: &'static str },
     /// A non-empty tuple. Only `()` is in the language: no adapter has ever
     /// lowered a tuple, so accepting one would defer the failure to a late
     /// "unresolved type" instead of naming it here.
@@ -1059,6 +1075,12 @@ impl fmt::Display for UnsupportedType {
             UnsupportedTypeReason::WrongGenericArity { expected } => write!(
                 f,
                 "type `{}` needs exactly {expected} type argument(s)",
+                self.offending
+            ),
+            UnsupportedTypeReason::WrongGenericArguments { expected } => write!(
+                f,
+                "type `{}` is not the shape `{expected}` \u{2014} its arguments are the ones \
+                 that type takes, in the order it takes them",
                 self.offending
             ),
             UnsupportedTypeReason::UnsupportedTuple => write!(
@@ -1328,14 +1350,21 @@ fn lower_path(
                     arity(1)?;
                     return Ok(TypeKind::Boxed(Box::new(types.remove(0))));
                 }
+                // The one builtin whose signature has a lifetime, so it is the
+                // one whose WHOLE argument list has to be checked: counting type
+                // arguments alone accepts `Cow<u8, 'a>` and `Cow<'a, 'b, u8>`,
+                // which are not `Cow`s at all, and a model that then kept only
+                // the first lifetime could not spell either one back.
                 "Cow" => {
-                    arity(1)?;
+                    let [GenericArg::Lifetime(lifetime), GenericArg::Type(inner)] = &args[..]
+                    else {
+                        return Err(fail(UnsupportedTypeReason::WrongGenericArguments {
+                            expected: "Cow<'a, T>",
+                        }));
+                    };
                     return Ok(TypeKind::Cow {
-                        lifetime: args.iter().find_map(|a| match a {
-                            GenericArg::Lifetime(l) => Some(l.clone()),
-                            _ => None,
-                        }),
-                        inner: Box::new(types.remove(0)),
+                        lifetime: lifetime.clone(),
+                        inner: inner.clone(),
                     });
                 }
                 // Reached here it is not directly under a `&mut`, and that is the
