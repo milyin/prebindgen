@@ -31,36 +31,36 @@ impl Prebindgen for IdentityExt {
         &self,
         f: &crate::api::core::flat::Function,
         _registry: &Registry<Self::Metadata>,
-        _emit: &crate::api::core::emit::Emit,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        f.origin.spell()
+        emit.verbatim_fn(f)
     }
 
     fn on_struct(
         &self,
         s: &crate::api::core::flat::Struct,
         _registry: &Registry<Self::Metadata>,
-        _emit: &crate::api::core::emit::Emit,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        s.origin.spell()
+        emit.verbatim_struct(s)
     }
 
     fn on_variant(
         &self,
         v: &crate::api::core::flat::Variant,
         _registry: &Registry<Self::Metadata>,
-        _emit: &crate::api::core::emit::Emit,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        v.origin.spell()
+        emit.verbatim_variant(v)
     }
 
     fn on_enum(
         &self,
         e: &crate::api::core::flat::Enum,
         _registry: &Registry<Self::Metadata>,
-        _emit: &crate::api::core::emit::Emit,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        e.origin.spell()
+        emit.verbatim_enum(e)
     }
 }
 

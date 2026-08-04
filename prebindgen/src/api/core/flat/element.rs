@@ -79,7 +79,7 @@ impl Element {
     /// keeps the item kind it was parsed as. That makes it the natural route for
     /// an emitter re-stating a whole item, and the ledger's **item** bucket is
     /// where those land.
-    pub fn as_syn(&self) -> syn::Item {
+    pub(in crate::api::core) fn as_syn(&self) -> syn::Item {
         match self {
             Element::Function(f) => syn::Item::Fn(f.origin.as_syn().clone()),
             Element::Type(t) => t.as_syn(),
@@ -130,7 +130,7 @@ impl Type {
     }
 
     /// The whole item as `syn` — **the escape**. See [`Element::as_syn`].
-    pub fn as_syn(&self) -> syn::Item {
+    pub(in crate::api::core) fn as_syn(&self) -> syn::Item {
         match self {
             Type::Struct(s) => syn::Item::Struct(s.origin.as_syn().clone()),
             Type::Variant(v) => syn::Item::Enum(v.origin.as_syn().clone()),

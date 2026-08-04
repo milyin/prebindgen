@@ -28,11 +28,32 @@
 //!
 //! [`Prebindgen::on_function`](super::prebindgen::Prebindgen::on_function) and
 //! its four peers, [`prerequisites`](super::prebindgen::Prebindgen::prerequisites),
-//! [`post_process_item`](super::prebindgen::Prebindgen::post_process_item), and
-//! the closure [`RegistryBuilder::convert_with`](super::registry::RegistryBuilder::convert_with)
-//! calls. Nothing else. If a helper needs an `&Emit`, that is the helper saying
-//! it emits; if threading one to it feels wrong, it is probably deciding
-//! something and wants the model instead.
+//! and [`post_process_item`](super::prebindgen::Prebindgen::post_process_item).
+//! Nothing else *yet*: the converter path — `RegistryBuilder::convert_with`'s
+//! closure, and the selector chains under it — still receives only
+//! `(&Crossing, &Building)`, and threading `&Emit` there is C3's job, together
+//! with moving [`TypeRef::spell`](super::flat::TypeRef::spell) behind this type.
+//!
+//! If a helper needs an `&Emit`, that is the helper saying it emits; if
+//! threading one to it feels wrong, it is probably deciding something and wants
+//! the model instead.
+//!
+//! # What is closed, and what is not
+//!
+//! **Closed as of this stage: every route to a captured *item*.**
+//! `Element::as_syn`, `Type::as_syn` and `Origin::as_syn` are
+//! `pub(in crate::api::core)`, and so is `Origin::spell` — whose tokens
+//! re-parse to the item, which is the same door under another name. The
+//! `compile_fail` examples on [`Emit`] check each of those from outside the
+//! crate, which is where a doctest runs and where the census could never look.
+//!
+//! **Open until C3: type spellings.** [`TypeRef::spell`](super::flat::TypeRef::spell)
+//! is still public and has 71 adapter call sites;
+//! [`Origin::declared_spelling`](super::flat::Origin::declared_spelling) is
+//! public for the two sites that spell a *build-script declaration*, which was
+//! never captured syntax. Until those move, an adapter can still reach a type's
+//! tokens — so this stage closes the item half of the boundary and says so
+//! rather than claiming both.
 //!
 //! # The residual
 //!
@@ -59,6 +80,49 @@ use super::flat::{Element, EnumValue, Field, Struct, Type, TypeRef};
 /// answers ([`TypeRef::kind`], [`TypeRef::key`], the layer readings) need no
 /// capability precisely because they cannot be misused into re-deriving a
 /// classification.
+///
+/// # The seal, as compiled assertions
+///
+/// A doctest builds as its **own crate** against the published API, so these
+/// check the property the token census structurally could not: what an
+/// out-of-crate adapter can reach. Each names a route that used to be open.
+///
+/// An element's item (`E0624` — the method is private):
+///
+/// ```compile_fail
+/// # use prebindgen::core::{Element, flat};
+/// fn leak(e: &Element) -> syn::Item { e.as_syn() }
+/// ```
+///
+/// A declared type's item:
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(t: &flat::Type) -> syn::Item { t.as_syn() }
+/// ```
+///
+/// A captured function's own node, through its `Origin`:
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(f: &flat::Function) -> &syn::ItemFn { f.origin.as_syn() }
+/// ```
+///
+/// …and its tokens, which re-parse to the same item — the door under another
+/// name, and the one a reviewer found still open when this type was introduced:
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(f: &flat::Function) -> proc_macro2::TokenStream { f.origin.spell() }
+/// ```
+///
+/// Minting one is not available either — the field is private and `new` is
+/// `pub(in crate::api::core)`:
+///
+/// ```compile_fail
+/// # use prebindgen::core::Emit;
+/// let forged = Emit { _seal: () };
+/// ```
 #[derive(Debug)]
 pub struct Emit {
     _seal: (),
@@ -73,7 +137,7 @@ impl Emit {
 
     /// The type as the **source spelled it** — what generated Rust must say.
     ///
-    /// Not [`TypeKind::to_syn`](super::flat::TypeKind), which reconstructs a
+    /// Not [`TypeKind::to_syn`](super::flat::TypeKind::to_syn), which reconstructs a
     /// canonical form to check the lowering against: this is the crate's own
     /// tokens, so a generated signature names the type the way the source crate
     /// does and compiles in its scope.
@@ -114,6 +178,32 @@ impl Emit {
     /// A declared type's item, verbatim. The [`Type`] peer of [`Self::item`].
     pub fn type_item(&self, t: &Type) -> syn::Item {
         t.as_syn()
+    }
+
+    /// A captured function's tokens, as written.
+    ///
+    /// One of four per-shape peers of [`Self::item`], for the callback that
+    /// already holds the specific element rather than an [`Element`]. An
+    /// adapter that re-emits its input unchanged is the whole use — both
+    /// in-tree adapters build wrappers instead, so this is what a
+    /// pass-through generator would call.
+    pub fn verbatim_fn(&self, f: &super::flat::Function) -> TokenStream {
+        f.origin.spell()
+    }
+
+    /// A captured struct's tokens, as written. See [`Self::verbatim_fn`].
+    pub fn verbatim_struct(&self, s: &Struct) -> TokenStream {
+        s.origin.spell()
+    }
+
+    /// A captured sum's tokens, as written. See [`Self::verbatim_fn`].
+    pub fn verbatim_variant(&self, v: &super::flat::Variant) -> TokenStream {
+        v.origin.spell()
+    }
+
+    /// A captured fieldless enum's tokens, as written. See [`Self::verbatim_fn`].
+    pub fn verbatim_enum(&self, e: &super::flat::Enum) -> TokenStream {
+        e.origin.spell()
     }
 
     /// A constant re-emitted as an alias into `source_module`, so the

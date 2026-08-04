@@ -305,9 +305,10 @@ macro_rules! ident {
 /// [`lang::JniGenBuilder`]. The C / cbindgen proof of concept is available separately
 /// with the `unstable-cbindgen` feature.
 pub mod core {
-    /// [`Flat`] and [`Element`] sit here too, next to [`Registry`]: they are what
-    /// a build script names, and the rest of the model stays in [`mod@flat`]
-    /// where an adapter reaches for it.
+    /// The capability to render captured Rust syntax — handed to an adapter's
+    /// emission callbacks and nowhere else, so code that decides cannot reach
+    /// what code that emits must spell. An out-of-crate adapter implements
+    /// [`Prebindgen`] and therefore has to name this type.
     pub use crate::api::core::emit::Emit;
     /// The **flat API**: the parser from captured `#[prebindgen]` records to the
     /// [`flat::Element`]s that make up one flat namespace, and the model itself.

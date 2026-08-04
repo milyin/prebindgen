@@ -37,9 +37,9 @@
 #                       row is a consumer taking a node the model can answer
 #                       for, and the fix is to ask the model
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
-#                                             — ZERO as of the capability: the
-#                       verbatim re-statements moved onto `Emit`, which is
-#                       where a door is supposed to be
+#                                             — ZERO, and now SEALED: the item
+#                       routes are `pub(in crate::api::core)`, so this count
+#                       cannot rise from outside the model at all
 #
 # A type escape is a source type the model should have been able to answer for.
 # There are none: every consumer outside `core::flat` reads `kind`, spells
@@ -48,9 +48,17 @@
 # An item escape is a captured item's own node, which an emitter re-stating a
 # whole item verbatim legitimately needs. Those re-statements are now methods on
 # `core::emit::Emit` — the capability a consumer must be HANDED to reach any
-# syntax at all — so this count is zero for the same reason the type count is:
-# not because the need went away, but because the need is served from a place
-# the census deliberately does not scan, and a consumer cannot get there.
+# syntax at all — and, unlike a count, that is enforced by the compiler:
+# `Element::as_syn`, `Type::as_syn`, `Origin::as_syn` and `Origin::spell` are
+# `pub(in crate::api::core)`. An out-of-crate adapter cannot call them, which is
+# a population this census never scanned. The `compile_fail` examples on `Emit`
+# check exactly that, from where a doctest runs — outside the crate.
+#
+# The TYPE half is not sealed yet. `TypeRef::spell` is still public (71 adapter
+# call sites) and `Origin::declared_spelling` is public for a build-script
+# declaration's own type, which was never captured syntax. So `escapes: types`
+# staying zero is still a claim this census makes rather than one the compiler
+# does — until C3 moves those behind `Emit` too.
 #
 # So the classification sites above are a DIFFERENT POPULATION — one this
 # transition never had to remove, because it was never the model's to answer
