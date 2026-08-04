@@ -1160,10 +1160,10 @@ pub(crate) fn callback_iface_spec(
                 any_fixed = true;
                 // Peeled off the reading — `borrow_target` is the model's
                 // answer to "is this a borrow", not a syn match.
-                let core = t.borrow_target().unwrap_or(t).as_syn().clone();
-                let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
+                let core = t.borrow_target().unwrap_or(t);
+                let fqn = ext.kotlin_fqn(&core.key())?;
                 let (reassemble, imports) =
-                    fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
+                    fixed_reassembly(ext, registry, core.as_syn(), &plan.leaves, &fqn);
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
