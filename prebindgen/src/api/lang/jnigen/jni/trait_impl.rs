@@ -2198,7 +2198,11 @@ impl Declarations {
             return None;
         }
         let produced = reading.as_syn();
-        let stripped = reading.stripped_syntax();
+        // The identity under every wrapper. This spelled the stripped type into
+        // a node purely so `reading_of` could key off it and `subs` could key
+        // off it again — `stripped_key` is that key, and the model already
+        // holds it.
+        let stripped = reading.stripped_key();
         // A wrapper over a **borrow** is refused here too, and outbound the
         // reason is its own: a borrow's output route is the clone-into-a-fresh-
         // handle arm, which hands back a wire built from a reference — there is
@@ -2212,7 +2216,7 @@ impl Declarations {
         }
         // It has to be a type this binding already crosses; if it is not, the
         // ordinary "unresolved" diagnostic names it, which is the better error.
-        let inner = registry.reading_of(&stripped)?;
+        let inner = registry.reading(&stripped)?;
         let entry = registry.output_entry(&inner)?;
         let wire = entry.destination.clone();
         // Take the wrappers off what the caller handed us. `None` is `Cow`'s
@@ -2229,7 +2233,7 @@ impl Declarations {
             #inner_call
         });
         Some(ConverterImpl {
-            subs: vec![TypeKey::from_type(&stripped)],
+            subs: vec![stripped],
             pre_stages: vec![],
             function: self.build_output_fn(produced, &wire, &body, None),
             destination: wire,
@@ -2269,9 +2273,10 @@ impl Declarations {
             return None;
         }
         let produced = reading.as_syn();
-        // The spelling under every wrapper — by the model's own definition, the
-        // one whose lowering yields this `kind`.
-        let stripped = reading.stripped_syntax();
+        // The identity under every wrapper — by the model's own definition, the
+        // key of the type whose lowering yields this `kind`. See the outbound
+        // peer for why this is a key rather than a spelling.
+        let stripped = reading.stripped_key();
         // A wrapper over a **borrow** is not bridgeable here, and the reason is
         // the converter's own shape rather than the wrapper's: this produces an
         // owned value, and there is nothing for a `Box<&T>` to borrow *from* —
@@ -2287,7 +2292,7 @@ impl Declarations {
         }
         // It has to be a type this binding already crosses; if it is not, the
         // ordinary "unresolved" diagnostic names it, which is the better error.
-        let inner = registry.reading_of(&stripped)?;
+        let inner = registry.reading(&stripped)?;
         let entry = registry.input_entry(&inner)?;
         let wire = entry.destination.clone();
         // Wrap what the inner converter produced. `None` here is `Cow`'s policy
@@ -2307,7 +2312,7 @@ impl Declarations {
             #built
         });
         Some(ConverterImpl {
-            subs: vec![TypeKey::from_type(&stripped)],
+            subs: vec![stripped],
             pre_stages: vec![],
             function: self.build_input_fn(produced, &wire, &body, None),
             destination: wire,
@@ -2703,12 +2708,14 @@ impl Declarations {
     /// (struct / String / …) — scalar slices are not handled here.
     pub(crate) fn output_slice(
         &self,
-        elem: &syn::Type,
+        elem: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let inner = registry
-            .reading_of(elem)
-            .and_then(|tr| registry.output_entry(&tr))?;
+        let inner = registry.output_entry(elem)?;
+        let elem_key = elem.key();
+        // The element as the source spelled it — the slice type this converter
+        // yields is re-emitted, never re-derived.
+        let elem = elem.spell();
         // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf
         // fold (typed-handle wrap), bypassing this whole-`ArrayList` converter; a
         // handle's `jlong` wire isn't JObject-shaped, so it returns `None` here.
@@ -2746,7 +2753,7 @@ impl Declarations {
         });
         let niches = default_niches_for_wire(&wire);
         Some(ConverterImpl {
-            subs: vec![TypeKey::from_type(elem)],
+            subs: vec![elem_key],
             pre_stages: vec![],
             function: self.build_output_fn(&outer_ty, &wire, &body, None),
             destination: wire,
