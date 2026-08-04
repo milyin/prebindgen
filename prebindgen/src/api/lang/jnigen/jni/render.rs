@@ -2023,12 +2023,7 @@ pub(crate) fn unfold_leaf_kt(
     let builder_kt = if ext.is_kotlin_enum_reading(out_ty) {
         kt::KtType::int()
     } else {
-        // `classify_return` still takes a signature fragment, so the reading is
-        // spelled here — the source's own tokens, as generated Rust always
-        // spells.
-        let spelled = out_ty.spell();
-        let rt: syn::ReturnType = syn::parse_quote!(-> #spelled);
-        classify_return(ext, &rt, registry)?.0?
+        classify_return(ext, out_ty, registry)?.0?
     };
     let (mut wire_kt, wrap) = if is_value_projection {
         let p = proj.as_ref().unwrap();
@@ -2135,7 +2130,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 ///   plain non-projection returns.
 pub(crate) fn classify_return(
     ext: &Declarations,
-    output: &syn::ReturnType,
+    output: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(
     Option<kt::KtType>,

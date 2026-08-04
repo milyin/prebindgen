@@ -44,10 +44,20 @@ fn generated_converter_attr() -> syn::Attribute {
 // ──────────────────────────────────────────────────────────────────────
 
 impl Declarations {
-    /// Build the standard JNI input-converter `fn`. Body assumes in-scope
-    /// `env: &mut JNIEnv` and `v: &<wire>` (or `v: <wire>` for raw-pointer
-    /// wires); produces a value of `rust`. Returned function has its name
-    /// already set per the JNI plugin's naming convention.
+    /// Build the standard JNI input-converter `fn` for a Rust type this
+    /// **adapter composed**. Body assumes in-scope `env: &mut JNIEnv` and
+    /// `v: &<wire>` (or `v: <wire>` for raw-pointer wires); produces a value of
+    /// `rust`. Returned function has its name already set per the JNI plugin's
+    /// naming convention.
+    ///
+    /// There are three composed types: `impl Fn(..)` for a callback, `String`
+    /// for the `str` terminal (which yields an owned value the call site
+    /// borrows), and `Vec<T>` for the `&[T]` parameter, likewise. None is a
+    /// borrow, which is why this spells its input verbatim — there is no `&_`
+    /// to splice `'env` into. [`Self::build_input_fn_of`] is the door that
+    /// annotates, and it does so off `TypeKind::Ref`, where
+    /// `annotate_borrow_with_lifetime` matched a `syn::Type::Reference` and
+    /// rebuilt it.
     ///
     /// `exc` ties the body convention to the `Result`'s Rust error type:
     /// * `None` → signature `Result<rust, __JniErr>` and the body is
@@ -55,7 +65,7 @@ impl Declarations {
     /// * `Some(E)` → signature `Result<rust, E>` and the body is emitted
     ///   as-is — `<body>` already evaluates to that `Result`, so no `Ok`
     ///   wrap. `E` is the raw error type peeled from a `Result<T, E>`.
-    pub(crate) fn build_input_fn(
+    pub(crate) fn build_input_fn_composed(
         &self,
         rust: &syn::Type,
         wire: &syn::Type,
@@ -63,8 +73,7 @@ impl Declarations {
         exc: Option<&syn::Type>,
     ) -> syn::ItemFn {
         let spelled = rust.to_token_stream();
-        let rust_with_lifetime = annotate_borrow_with_lifetime(rust, "env").to_token_stream();
-        self.build_input_fn_parts(&spelled, &rust_with_lifetime, wire, body, exc)
+        self.build_input_fn_parts(&spelled, &spelled, wire, body, exc)
     }
 
     /// [`Self::build_input_fn`] for a caller holding the **reading** of the Rust
@@ -865,7 +874,7 @@ impl Declarations {
     ) -> syn::ItemFn {
         match produced {
             Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc),
-            Produced::Composed(t) => self.build_input_fn(t, wire, body, exc),
+            Produced::Composed(t) => self.build_input_fn_composed(t, wire, body, exc),
         }
     }
 
@@ -1704,7 +1713,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: self.build_input_fn(&outer_ty, &wire, &body, None),
+            function: self.build_input_fn_composed(&outer_ty, &wire, &body, None),
             destination: wire,
             niches,
             metadata: self.framework_meta(Some(kt::KtType::any())),
@@ -2171,7 +2180,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn(&rust_ty, &wire, &body, None),
+                function: self.build_input_fn_composed(&rust_ty, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
