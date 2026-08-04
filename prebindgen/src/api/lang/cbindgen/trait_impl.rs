@@ -279,14 +279,13 @@ impl CbindgenBuilder {
         if !self.enums.contains_key(&key) {
             return None;
         }
-        let e = enum_item(r, ty)?;
-        assert_unit_enum(e);
+        let e = unit_enum(r, &TypeKey::from_type(ty))?;
         let name = Self::in_name(ty);
         let cname = self.c_type_ident(&TypeKey::from_type(ty));
         let src = self.src_ty(ty);
         let cname_str = cname.to_string();
-        let arms = e.variants.iter().map(|v| {
-            let id = &v.ident;
+        let arms = e.values.iter().map(|v| {
+            let id = &v.name;
             quote!(
                 if __raw == #cname::#id as ::core::ffi::c_int {
                     return ::core::result::Result::Ok(#src::#id);
@@ -829,15 +828,16 @@ impl CbindgenBuilder {
             {
                 continue;
             }
-            let ty = reading.as_syn().clone();
-            let Some(e) = enum_item(registry, &ty) else {
+            let Some(e) = unit_enum(registry, &reading.key()) else {
                 continue;
             };
-            assert_unit_enum(e);
             let cname = self.c_type_ident(&reading.key());
-            let variants = e.variants.iter().map(|v| {
-                let id = &v.ident;
-                match &v.discriminant {
+            // The C mirror re-states the discriminant **as written** — `= 0x07`
+            // stays `0x07` — which is the one consumer `EnumValue`'s retained
+            // syntax exists for, and the model's own docs name it.
+            let variants = e.values.iter().map(|v| {
+                let id = &v.name;
+                match &v.origin.as_syn().discriminant {
                     Some((_, expr)) => quote!(#id = #expr),
                     None => quote!(#id),
                 }
@@ -2034,13 +2034,12 @@ impl CbindgenBuilder {
 
         // Enum output: `match` the source enum to the C enum.
         if self.enums.contains_key(&key) {
-            let e = enum_item(_r, ty)?;
-            assert_unit_enum(e);
+            let e = unit_enum(_r, &TypeKey::from_type(ty))?;
             let name = Self::out_name(ty);
             let cname = self.c_type_ident(&TypeKey::from_type(ty));
             let src = self.src_ty(ty);
-            let arms = e.variants.iter().map(|v| {
-                let id = &v.ident;
+            let arms = e.values.iter().map(|v| {
+                let id = &v.name;
                 quote!(#src::#id => #cname::#id,)
             });
             let function: syn::ItemFn = syn::parse_quote!(
