@@ -1049,7 +1049,7 @@ impl Declarations {
                     let iterable = is_iterable_fold(&plan.shape);
                     match (iterable, &plan.element, &plan.decon) {
                         (true, Some(el), _) => {
-                            uses.insert(SpecKey::whole_folder(el.as_syn()));
+                            uses.insert(SpecKey::whole_folder(el));
                         }
                         (true, None, Some(d)) => {
                             uses.insert(SpecKey::Folder(d.clone()));
@@ -1202,13 +1202,8 @@ impl Declarations {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source.as_syn()))
-            .unwrap_or_else(|| {
-                panic!(
-                    "value-struct builder: no Kotlin FQN for {}",
-                    TypeKey::from_type(source.as_syn())
-                )
-            });
+            .kotlin_fqn(&source.key())
+            .unwrap_or_else(|| panic!("value-struct builder: no Kotlin FQN for {}", source.key()));
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run` (== the typed interface
         // when the builder needs no twin — synthesized data classes are
@@ -1245,13 +1240,8 @@ impl Declarations {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source.as_syn()))
-            .unwrap_or_else(|| {
-                panic!(
-                    "value-struct folder: no Kotlin FQN for {}",
-                    TypeKey::from_type(source.as_syn())
-                )
-            });
+            .kotlin_fqn(&source.key())
+            .unwrap_or_else(|| panic!("value-struct folder: no Kotlin FQN for {}", source.key()));
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run(acc, leaves…)`; `acc` is the
         // accumulator list and the remaining params are the element leaves.

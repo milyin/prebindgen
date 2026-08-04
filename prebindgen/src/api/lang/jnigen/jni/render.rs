@@ -1313,9 +1313,7 @@ fn classify_output(
             let spec = u.iface.as_deref()?;
             spec.params[1].typed.clone()
         } else {
-            let class_fqn = ext
-                .kotlin_fqn(&TypeKey::from_type(plan.source.as_syn()))
-                .map(|s| s.to_string())?;
+            let class_fqn = ext.kotlin_fqn(&plan.source.key()).map(|s| s.to_string())?;
             kt::KtType::cls(class_fqn)
         };
         let class_short = kt_type_short(&class_ty);

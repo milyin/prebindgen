@@ -912,8 +912,8 @@ impl SpecKey {
     }
 
     /// The whole-element fold identity for an element type.
-    pub fn whole_folder(element: &syn::Type) -> Self {
-        SpecKey::WholeFolder(TypeKey::from_type(element))
+    pub fn whole_folder(element: &crate::api::core::flat::TypeRef) -> Self {
+        SpecKey::WholeFolder(element.key())
     }
 }
 
@@ -1191,7 +1191,7 @@ pub(crate) fn callback_iface_spec(
                     };
                     if leaf.source == LeafSource::SumTag {
                         any_fixed = true;
-                        let fqn = ext.kotlin_fqn(&TypeKey::from_type(leaf.out_ty.as_syn()))?;
+                        let fqn = ext.kotlin_fqn(&leaf.out_ty.key())?;
                         let (reassemble, imports) = fixed_reassembly(
                             ext,
                             registry,
@@ -1426,7 +1426,7 @@ pub(crate) fn folder_iface_for_plan(
         "folder_iface_for_plan requires an Iterable (or Option<Iterable>) plan"
     );
     match (&plan.element, &plan.decon) {
-        (Some(el), _) => ext.iface_spec(registry, &SpecKey::whole_folder(el.as_syn())),
+        (Some(el), _) => ext.iface_spec(registry, &SpecKey::whole_folder(el)),
         (None, Some(d)) => ext.iface_spec(registry, &SpecKey::Folder(d.clone())),
         (None, None) => None,
     }
@@ -1447,7 +1447,7 @@ pub(crate) fn fixed_folder_typed_groups(
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans().get(decon)?;
-    let fqn = ext.kotlin_fqn(&TypeKey::from_type(spec.source.as_syn()))?;
+    let fqn = ext.kotlin_fqn(&spec.source.key())?;
     let (reassemble, imports) =
         fixed_reassembly(ext, registry, spec.source.as_syn(), &spec.leaves, &fqn);
     Some(vec![
