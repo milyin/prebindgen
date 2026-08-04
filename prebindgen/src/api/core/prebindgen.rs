@@ -122,7 +122,10 @@ pub struct ConverterImpl<M = ()> {
 /// by [`Prebindgen::on_const`] implementations so consts whose initializers
 /// reference source-crate internals (private helpers, upstream constants)
 /// still compile in the generated file.
-pub fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStream {
+pub(in crate::api::core) fn const_path_alias(
+    c: &syn::ItemConst,
+    source_module: &syn::Path,
+) -> TokenStream {
     let attrs = &c.attrs;
     let vis = &c.vis;
     let ident = &c.ident;
@@ -176,7 +179,11 @@ pub trait Prebindgen {
     /// (feature-aware) scan actually contains — e.g. emitting a
     /// per-opaque-handle item only for handles a scanned `#[prebindgen]`
     /// fn references.
-    fn prerequisites(&self, _registry: &Registry<Self::Metadata>) -> Vec<syn::Item> {
+    fn prerequisites(
+        &self,
+        _registry: &Registry<Self::Metadata>,
+        _emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         Vec::new()
     }
 
@@ -191,7 +198,13 @@ pub trait Prebindgen {
     /// converter bodies compile in the binding crate's scope. Walks the
     /// entire AST, not just signatures, so type ascriptions and casts
     /// inside function bodies are covered.
-    fn post_process_item(&self, _item: &mut syn::Item, _registry: &Registry<Self::Metadata>) {}
+    fn post_process_item(
+        &self,
+        _item: &mut syn::Item,
+        _registry: &Registry<Self::Metadata>,
+        _emit: &crate::api::core::emit::Emit,
+    ) {
+    }
 
     /// Adapter-invariant checks that need registry **signatures** — the
     /// earliest they can run (decl objects are built before any source is
@@ -251,6 +264,7 @@ pub trait Prebindgen {
         &self,
         f: &crate::api::core::flat::Function,
         registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream;
 
     /// Per-struct emission. Typically empty for languages that get
@@ -259,6 +273,7 @@ pub trait Prebindgen {
         &self,
         s: &crate::api::core::flat::Struct,
         registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream;
 
     /// Per-sum emission — an `enum` whose alternatives carry payloads.
@@ -271,6 +286,7 @@ pub trait Prebindgen {
         &self,
         v: &crate::api::core::flat::Variant,
         registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream;
 
     /// Per-enum emission — the fieldless shape, a named set of integers.
@@ -278,6 +294,7 @@ pub trait Prebindgen {
         &self,
         e: &crate::api::core::flat::Enum,
         registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream;
 
     /// Per-const emission. Default: a named const re-emits as a path-alias
@@ -293,10 +310,11 @@ pub trait Prebindgen {
         &self,
         c: &crate::api::core::flat::Constant,
         _registry: &Registry<Self::Metadata>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         match self.source_module() {
-            Some(m) => const_path_alias(c.origin.as_syn(), m),
-            None => c.origin.spell(),
+            Some(m) => emit.const_alias(c, m),
+            None => emit.const_verbatim(c),
         }
     }
 }

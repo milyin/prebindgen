@@ -133,23 +133,20 @@ const HEADER: &str = "\
 #                       row is a consumer taking a node the model can answer
 #                       for, and the fix is to ask the model
 #   ## escapes: items   `f.origin.as_syn()`, `enum_item()`
-#                                             — persists, and is ACCOUNTED:
-#                       an emitter re-stating a whole item verbatim, nothing
-#                       else
+#                                             — ZERO as of the capability: the
+#                       verbatim re-statements moved onto `Emit`, which is
+#                       where a door is supposed to be
 #
 # A type escape is a source type the model should have been able to answer for.
 # There are none: every consumer outside `core::flat` reads `kind`, spells
 # `spell()`, or looks up a `TypeKey`.
 #
 # An item escape is a captured item's own node, which an emitter re-stating a
-# whole item verbatim legitimately needs — and that is the ONLY reason it is
-# legitimate. Taking an item to read a FACT off it (a name, a type, a signature)
-# is a missing accessor. `ITEM_FLOOR` says per file which of the two it is, and
-# `the_item_floor_is_accounted_for` fails on an unaccounted file or a stale
-# entry, exactly as `FLOOR` does below. Two `registry/scan.rs` sites sat in this
-# count for forty-five stages reading a signature and a const's type: the header
-# called the whole population `expected to persist` and nothing checked which
-# sites had earned it (S46).
+# whole item verbatim legitimately needs. Those re-statements are now methods on
+# `core::emit::Emit` — the capability a consumer must be HANDED to reach any
+# syntax at all — so this count is zero for the same reason the type count is:
+# not because the need went away, but because the need is served from a place
+# the census deliberately does not scan, and a consumer cannot get there.
 #
 # So the classification sites above are a DIFFERENT POPULATION — one this
 # transition never had to remove, because it was never the model's to answer
@@ -253,7 +250,13 @@ fn scan_tree(src_root: &Path) -> BTreeMap<String, Counts> {
                 continue;
             }
             let rel = rel_key(src_root, &path);
-            if rel.starts_with("api/core/flat/") {
+            // `flat` is where classification is *supposed* to live, and
+            // `core::emit` is where spelling is — the capability module holds
+            // every door on purpose, so counting it would say "the doors
+            // exist", which is the design rather than a drift. What the two
+            // sections below still measure is CONSUMERS, and the point of the
+            // capability is that a consumer cannot reach a door at all.
+            if rel.starts_with("api/core/flat/") || rel == "api/core/emit.rs" {
                 continue;
             }
             let text = fs::read_to_string(&path).expect("source file is UTF-8");
@@ -759,24 +762,7 @@ const FLOOR: &[(&str, Floor)] = &[
 /// re-states a **whole captured item verbatim**, tokens and all. Anything that
 /// takes an item to read one field off it is a missing accessor, and belongs in
 /// the model instead.
-const ITEM_FLOOR: &[(&str, &str)] = &[
-    (
-        "api/core/prebindgen.rs",
-        "`const_path_alias` re-emits a captured `const` as an alias — attrs,          vis, ident and type spliced verbatim",
-    ),
-    (
-        "api/core/write.rs",
-        "a `Guard`'s `const _` is spliced into the generated file as written",
-    ),
-    (
-        "api/lang/cbindgen/trait_impl.rs",
-        "the C mirror re-states an `EnumValue`'s discriminant AS WRITTEN          (`= 0x07` stays `0x07`) — the one consumer `EnumValue::origin` exists          for, and its own doc says so",
-    ),
-    (
-        "api/lang/jnigen/jni/trait_impl.rs",
-        "`const_path_alias` again, on the JNI side",
-    ),
-];
+const ITEM_FLOOR: &[(&str, &str)] = &[];
 
 /// Every file that still takes an item node is accounted for in [`ITEM_FLOOR`],
 /// and every entry there still takes one.

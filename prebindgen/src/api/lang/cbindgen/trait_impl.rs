@@ -816,7 +816,11 @@ impl CbindgenBuilder {
     /// The two adapters therefore agree on the *rule* (Rust's own assignment
     /// order, which the shared helper encodes) while differing on what they
     /// need from it — a number versus a spelling.
-    fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_enums(
+        &self,
+        registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
             let Some(reading) = registry.reading(key) else {
@@ -835,8 +839,8 @@ impl CbindgenBuilder {
             // syntax exists for, and the model's own docs name it.
             let variants = e.values.iter().map(|v| {
                 let id = &v.name;
-                match &v.origin.as_syn().discriminant {
-                    Some((_, expr)) => quote!(#id = #expr),
+                match emit.discriminant(v) {
+                    Some(expr) => quote!(#id = #expr),
                     None => quote!(#id),
                 }
             });
@@ -1816,7 +1820,11 @@ impl Prebindgen for CbindgenBuilder {
     // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`). See `in_wrappers`
     // / `out_wrappers`.
 
-    fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prerequisites(
+        &self,
+        registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         // C-string data memory (string returns + `String` fields of data structs)
         // is malloc'd raw and freed by the single universal `free_memory_function`.
         // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
@@ -1830,7 +1838,7 @@ impl Prebindgen for CbindgenBuilder {
         items.extend(self.prereq_opaque_handles(registry));
         items.extend(self.prereq_data_structs(registry));
         items.extend(self.prereq_value_opaque(registry));
-        items.extend(self.prereq_enums(registry));
+        items.extend(self.prereq_enums(registry, emit));
         items.extend(self.prereq_tagged_unions(registry));
         items.extend(self.prereq_callback_structs(registry));
         items.extend(self.prereq_domain_constants(registry));
@@ -1843,6 +1851,7 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         self.emit_function_wrapper(f, registry)
     }
@@ -1851,6 +1860,7 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         _s: &crate::api::core::flat::Struct,
         _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
         // on_output_type; the original (non-FFI-safe) struct is dropped.
@@ -1861,11 +1871,17 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         _v: &crate::api::core::flat::Variant,
         _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
 
-    fn on_enum(&self, _e: &crate::api::core::flat::Enum, _registry: &Registry<()>) -> TokenStream {
+    fn on_enum(
+        &self,
+        _e: &crate::api::core::flat::Enum,
+        _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
+    ) -> TokenStream {
         TokenStream::new()
     }
 }

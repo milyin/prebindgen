@@ -305,6 +305,10 @@ macro_rules! ident {
 /// [`lang::JniGenBuilder`]. The C / cbindgen proof of concept is available separately
 /// with the `unstable-cbindgen` feature.
 pub mod core {
+    /// [`Flat`] and [`Element`] sit here too, next to [`Registry`]: they are what
+    /// a build script names, and the rest of the model stays in [`mod@flat`]
+    /// where an adapter reaches for it.
+    pub use crate::api::core::emit::Emit;
     /// The **flat API**: the parser from captured `#[prebindgen]` records to the
     /// [`flat::Element`]s that make up one flat namespace, and the model itself.
     /// Not to be confused with [`crate::lang`], the *destination* adapters.
@@ -314,9 +318,6 @@ pub mod core {
     /// *produces* it ([`flat::TypeRef::layer_stack`]) and the plan engines and
     /// adapters consume it, so it is part of what a generator has to speak.
     pub use crate::api::core::shape;
-    /// [`Flat`] and [`Element`] sit here too, next to [`Registry`]: they are what
-    /// a build script names, and the rest of the model stays in [`mod@flat`]
-    /// where an adapter reaches for it.
     pub use crate::api::core::{
         warn_unclaimed, Building, Claimed, Conversions, ConverterImpl, Crossing, Decompositions,
         Direction, DomainScalar, DuplicateNameError, Element, Flat, Gravestone, NicheSlot, Niches,

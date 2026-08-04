@@ -19,6 +19,7 @@
 
 pub mod diagnostics;
 pub mod domain;
+pub mod emit;
 pub mod expand;
 pub mod flat;
 pub mod gravestone;
@@ -37,7 +38,7 @@ pub use self::{
     flat::{Element, Flat},
     gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
-    prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
+    prebindgen::{ConverterImpl, Prebindgen, Stage},
     registry::{
         Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
         NotExpressibleEntry, Registry, ScanError, TypeEntry, TypeKey, TypeKeyParseError,

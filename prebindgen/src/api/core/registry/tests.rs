@@ -102,6 +102,7 @@ impl Prebindgen for StubExt {
         &self,
         _f: &crate::api::core::flat::Function,
         _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -109,6 +110,7 @@ impl Prebindgen for StubExt {
         &self,
         _s: &crate::api::core::flat::Struct,
         _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -116,10 +118,16 @@ impl Prebindgen for StubExt {
         &self,
         _v: &crate::api::core::flat::Variant,
         _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
-    fn on_enum(&self, _e: &crate::api::core::flat::Enum, _registry: &Registry<()>) -> TokenStream {
+    fn on_enum(
+        &self,
+        _e: &crate::api::core::flat::Enum,
+        _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
+    ) -> TokenStream {
         TokenStream::new()
     }
 }
@@ -421,17 +429,33 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             f: &crate::api::core::flat::Function,
             r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
         ) -> TokenStream {
-            self.0.on_function(f, r)
+            self.0.on_function(f, r, _emit)
         }
-        fn on_struct(&self, s: &crate::api::core::flat::Struct, r: &Registry<()>) -> TokenStream {
-            self.0.on_struct(s, r)
+        fn on_struct(
+            &self,
+            s: &crate::api::core::flat::Struct,
+            r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
+            self.0.on_struct(s, r, _emit)
         }
-        fn on_variant(&self, v: &crate::api::core::flat::Variant, r: &Registry<()>) -> TokenStream {
-            self.0.on_variant(v, r)
+        fn on_variant(
+            &self,
+            v: &crate::api::core::flat::Variant,
+            r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
+            self.0.on_variant(v, r, _emit)
         }
-        fn on_enum(&self, e: &crate::api::core::flat::Enum, r: &Registry<()>) -> TokenStream {
-            self.0.on_enum(e, r)
+        fn on_enum(
+            &self,
+            e: &crate::api::core::flat::Enum,
+            r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
+            self.0.on_enum(e, r, _emit)
         }
     }
     let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
@@ -1460,17 +1484,33 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             f: &crate::api::core::flat::Function,
             r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
         ) -> TokenStream {
-            self.0.on_function(f, r)
+            self.0.on_function(f, r, _emit)
         }
-        fn on_struct(&self, st: &crate::api::core::flat::Struct, r: &Registry<()>) -> TokenStream {
-            self.0.on_struct(st, r)
+        fn on_struct(
+            &self,
+            st: &crate::api::core::flat::Struct,
+            r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
+            self.0.on_struct(st, r, _emit)
         }
-        fn on_variant(&self, v: &crate::api::core::flat::Variant, r: &Registry<()>) -> TokenStream {
-            self.0.on_variant(v, r)
+        fn on_variant(
+            &self,
+            v: &crate::api::core::flat::Variant,
+            r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
+            self.0.on_variant(v, r, _emit)
         }
-        fn on_enum(&self, e: &crate::api::core::flat::Enum, r: &Registry<()>) -> TokenStream {
-            self.0.on_enum(e, r)
+        fn on_enum(
+            &self,
+            e: &crate::api::core::flat::Enum,
+            r: &Registry<()>,
+            _emit: &crate::api::core::emit::Emit,
+        ) -> TokenStream {
+            self.0.on_enum(e, r, _emit)
         }
     }
 
