@@ -14,27 +14,38 @@ use crate::api::core::registry::Conversions;
 /// `val value: Int`, plus a `fromInt(value: Int)` companion. Mirrors
 /// the hand-written `io.zenoh.qos.Priority` shape so adapter code that
 /// already speaks the `.value` / `.fromInt(...)` idiom keeps working.
-pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> kt::KtClass {
+pub(crate) fn build_enum_class(
+    class_name: &str,
+    item_enum: &crate::api::core::flat::Enum,
+) -> kt::KtClass {
     // Same discriminant source of truth the Rust `jint → variant` decode
-    // uses, so Kotlin `value(N)` and the generated decode agree.
-    let entries: Vec<kt::KtEnumEntry> =
-        crate::api::core::types_util::enum_discriminant_values(item_enum)
-            .into_iter()
-            .map(|(ident, value)| {
-                kt::KtEnumEntry::legacy_args(
-                    mangle_kotlin_ident(&crate::api::lang::jnigen::util::camel_to_screaming_snake(
-                        &ident.to_string(),
-                    )),
-                    value.to_string(),
-                )
-            })
-            .collect();
+    // uses, so Kotlin `value(N)` and the generated decode agree — and it is the
+    // model's, which is where "same" stops needing to be maintained.
+    let entries: Vec<kt::KtEnumEntry> = item_enum
+        .discriminant_values()
+        .unwrap_or_else(|name| {
+            panic!(
+                "enum `{}` variant `{name}` has a non-literal discriminant; use a literal \
+                 integer value (e.g. `= 1`) or an implicit discriminant",
+                item_enum.name
+            )
+        })
+        .into_iter()
+        .map(|(ident, value)| {
+            kt::KtEnumEntry::legacy_args(
+                mangle_kotlin_ident(&crate::api::lang::jnigen::util::camel_to_screaming_snake(
+                    &ident.to_string(),
+                )),
+                value.to_string(),
+            )
+        })
+        .collect();
 
     let framework_line = format!(
         "JVM-side surface for the native Rust `{}` enum.",
-        item_enum.ident
+        item_enum.name
     );
-    let enum_kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.attrs)
+    let enum_kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.origin.as_syn().attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
     kt::KtClass::new(kt::ClassKind::Enum(entries), class_name)

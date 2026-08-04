@@ -460,7 +460,12 @@ impl Declarations {
             let Some(name) = key.short_name() else {
                 continue;
             };
-            let Some(item_enum) = registry.flat().enum_item(&name) else {
+            // The element: a fieldless `Enum`, which is what an `enum_class!`
+            // declares. A sum under the same name is a `Variant` and is not one
+            // of these — the model's own distinction, made at parse time.
+            let Some(crate::api::core::flat::Type::Enum(item_enum)) =
+                registry.flat().declared_type(&name)
+            else {
                 continue;
             };
             let (package, class_name) = match kotlin_fqn.rsplit_once('.') {

@@ -196,58 +196,5 @@ pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
         .find(|v| !matches!(v.fields, syn::Fields::Unit))
 }
 
-/// Resolve each enum variant to its discriminant value following Rust's own
-/// assignment rule: an explicit `= N` sets the value, an implicit variant
-/// takes the previous value plus one (starting at 0).
-///
-/// The single source of truth for every int↔variant mapping in the
-/// pipeline — the Kotlin `value(N)` constants, the generated `jint →
-/// variant` decode, and the `#[repr(C)]` mirror `CbindgenBuilder` emits — keeping
-/// them from drifting and removing the need for a hand-written
-/// `TryFrom<i32>` on the source enum. Non-literal discriminants are
-/// rejected because prebindgen cannot reliably evaluate arbitrary
-/// expressions at codegen time.
-///
-/// This describes the **unit** enum's wire numbering. A payload enum's
-/// alternatives are identified by
-/// [`Alternative::index`](crate::api::core::flat::Alternative::index) —
-/// declaration order — never by a discriminant.
-pub fn enum_discriminant_values(e: &syn::ItemEnum) -> Vec<(syn::Ident, i64)> {
-    let mut out = Vec::with_capacity(e.variants.len());
-    let mut next: i64 = 0;
-    for variant in &e.variants {
-        let value = match variant.discriminant.as_ref() {
-            Some((_, expr)) => extract_int_literal(expr).unwrap_or_else(|| {
-                panic!(
-                    "enum `{}` variant `{}` has a non-literal discriminant; use a literal integer value (e.g. `= 1`) or an implicit discriminant",
-                    e.ident,
-                    variant.ident
-                )
-            }),
-            None => next,
-        };
-        out.push((variant.ident.clone(), value));
-        next = value + 1;
-    }
-    out
-}
-
-/// Pull a signed integer out of a `syn::Expr` literal (`5`, `-3`, `0x07`).
-/// Returns `None` for anything else (constants, paths, arithmetic).
-fn extract_int_literal(expr: &syn::Expr) -> Option<i64> {
-    match expr {
-        syn::Expr::Lit(lit) => match &lit.lit {
-            syn::Lit::Int(int) => int.base10_parse::<i64>().ok(),
-            _ => None,
-        },
-        syn::Expr::Unary(syn::ExprUnary {
-            op: syn::UnOp::Neg(_),
-            expr,
-            ..
-        }) => extract_int_literal(expr).map(|v| -v),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests;
