@@ -904,7 +904,7 @@ impl Declarations {
              value form returns the struct holding this type's fields",
             key.as_str(),
         );
-        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, ret.as_syn()) else {
+        let TypeKind::DataStruct { st, .. } = self.type_kind(registry, &ret.key()) else {
             panic!(
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
@@ -1048,7 +1048,7 @@ impl Declarations {
             // must decompose into its selector and groups wherever it appears.
             let bare = field.ty.optional_inner().unwrap_or(&field.ty);
             let probe = bare.sequence_elem().unwrap_or(bare);
-            match self.type_kind(registry, probe.as_syn()) {
+            match self.type_kind(registry, &probe.key()) {
                 TypeKind::DataStruct { st, cfg: Some(_) }
                     if field.ty.optional_inner().is_none()
                         && field.ty.sequence_elem().is_none() =>

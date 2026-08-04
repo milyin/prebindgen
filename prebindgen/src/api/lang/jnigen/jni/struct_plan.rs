@@ -247,7 +247,10 @@ pub(crate) fn classify_field(
     let bare = bare_ref.as_syn().clone();
     let seq_elem = bare_ref.sequence_elem();
     let core = seq_elem.map_or_else(|| bare.clone(), |e| e.as_syn().clone());
-    if matches!(ext.type_kind(registry, &core), TypeKind::Sum) {
+    if matches!(
+        ext.type_kind(registry, &TypeKey::from_type(&core)),
+        TypeKind::Sum
+    ) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
         // construction.
@@ -305,7 +308,9 @@ pub(crate) fn classify_field(
         }
         // Nested plain data-class (optionally under `Option`).
         let inner_ty = bare.clone();
-        if let TypeKind::DataStruct { st, cfg } = ext.type_kind(registry, &inner_ty) {
+        if let TypeKind::DataStruct { st, cfg } =
+            ext.type_kind(registry, &TypeKey::from_type(&inner_ty))
+        {
             if pat_match_top(&effective_ty, "Vec") {
                 panic!(
                     "fromParts bridge: `Vec<{}>` data-class field (`{owner}`) is not supported \
