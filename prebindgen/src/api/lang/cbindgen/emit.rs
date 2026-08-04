@@ -32,14 +32,13 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            let ty = reading.as_syn().clone();
             registry.output_entry(&reading).is_some()
                 && self
-                    .enum_variants(registry, &ty)
-                    .map(|vs| {
-                        vs.iter()
-                            .flat_map(|v| v.fields.iter())
-                            .any(|f| is_string(&f.ty))
+                    .enum_alternatives(registry, key)
+                    .map(|alts| {
+                        alts.iter().flat_map(|a| a.fields.iter()).any(|f| {
+                            matches!(f.ty.kind(), crate::api::core::flat::TypeKind::String)
+                        })
                     })
                     .unwrap_or(false)
         }) {
@@ -49,25 +48,29 @@ impl CbindgenBuilder {
             let Some(reading) = registry.reading(key) else {
                 return false;
             };
-            let ty = reading.as_syn().clone();
             registry.output_entry(&reading).is_some()
                 && self
-                    .struct_fields(registry, &TypeKey::from_type(&ty))
+                    .struct_fields(registry, key)
                     .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
                     .unwrap_or(false)
         })
     }
 
-    /// Variants of a declared enum, looked up from the registry's indexed
-    /// enums. `None` if the type isn't an indexed enum.
-    pub(super) fn enum_variants(
+    /// The alternatives of a declared sum, by **identity**.
+    ///
+    /// Off the element: an `Alternative` holds its fields already classified,
+    /// so the callers that ask "does any payload own memory" read a `TypeRef`
+    /// per field instead of a `syn::Field`. This took a node, took its last
+    /// path segment, and fetched the `syn::ItemEnum` to reach the same list.
+    pub(super) fn enum_alternatives<'r>(
         &self,
-        registry: &Registry<()>,
-        ty: &syn::Type,
-    ) -> Option<Vec<syn::Variant>> {
-        let ident = type_path_tail(ty)?;
-        let item = registry.flat().enum_item(&ident)?;
-        Some(item.variants.iter().cloned().collect())
+        registry: &'r Registry<()>,
+        key: &TypeKey,
+    ) -> Option<&'r [crate::api::core::flat::Alternative]> {
+        match registry.flat().declared_type(&key.ident()?)? {
+            crate::api::core::flat::Type::Variant(v) => Some(&v.alternatives),
+            _ => None,
+        }
     }
 
     /// The declared `opaque_ptr` under a union payload's spelling, when there is
@@ -336,15 +339,15 @@ impl CbindgenBuilder {
         {
             return false;
         }
-        self.enum_variants(registry, fty)
+        self.enum_alternatives(registry, &TypeKey::from_type(fty))
             .unwrap_or_default()
             .iter()
-            .flat_map(|v| v.fields.iter())
-            .any(|f| match self.payload_field_wire(&f.ty, registry) {
+            .flat_map(|a| a.fields.iter())
+            .any(|f| match self.payload_field_wire(f.ty.as_syn(), registry) {
                 // A rejected payload is reported from the emission site, which
                 // panics before any of this matters.
                 Err(_) => false,
-                Ok(wire) => self.payload_wire_owns(&f.ty, &wire, registry),
+                Ok(wire) => self.payload_wire_owns(f.ty.as_syn(), &wire, registry),
             })
     }
 
