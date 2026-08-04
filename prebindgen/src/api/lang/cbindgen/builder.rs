@@ -695,24 +695,32 @@ impl CbindgenBuilder {
     /// `&ZSample` becomes `&zenoh_flat::ZSample` and `&[Payload]` becomes
     /// `&[perftest_flat::Payload]` (needed so a callback's `Fn(&[E])` closure type
     /// names the qualified element).
-    /// [`Self::src_ty_deep`] off a reading — the source's own tokens, requalified.
+    /// [`Self::src_ty`], recursing into a borrow's and a slice's element — off
+    /// the classification. `&ZSample` becomes `&zenoh_flat::ZSample` and
+    /// `&[Payload]` becomes `&[perftest_flat::Payload]`, so a callback's
+    /// `Fn(&[E])` closure type names the qualified element.
+    ///
+    /// The two recursing forms are `TypeKind::Ref` and `TypeKind::Slice`, which
+    /// is what the `syn::Type::Reference` / `syn::Type::Slice` match this
+    /// replaces was reading — and the borrow's lifetime and mutability are on
+    /// the kind, so the rebuilt spelling says what the source said.
     pub(super) fn src_ty_deep_of(&self, ty: &TypeRef) -> syn::Type {
-        self.src_ty_deep(&super::spelled(ty))
-    }
-
-    pub(super) fn src_ty_deep(&self, ty: &syn::Type) -> syn::Type {
-        match ty {
-            syn::Type::Reference(r) => {
-                let mut out = r.clone();
-                out.elem = Box::new(self.src_ty_deep(&r.elem));
-                syn::Type::Reference(out)
+        match ty.kind() {
+            TypeKind::Ref {
+                lifetime,
+                mutable,
+                inner,
+            } => {
+                let inner = self.src_ty_deep_of(inner);
+                let lt = lifetime.as_ref().map(|l| quote!(#l)).unwrap_or_default();
+                let m = if *mutable { quote!(mut) } else { quote!() };
+                syn::parse_quote!(& #lt #m #inner)
             }
-            syn::Type::Slice(s) => {
-                let mut out = s.clone();
-                out.elem = Box::new(self.src_ty_deep(&s.elem));
-                syn::Type::Slice(out)
+            TypeKind::Slice(elem) => {
+                let elem = self.src_ty_deep_of(elem);
+                syn::parse_quote!([#elem])
             }
-            _ => self.src_ty(ty),
+            _ => self.src_ty_of(&ty.key()),
         }
     }
 
