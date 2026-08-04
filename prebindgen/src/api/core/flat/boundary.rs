@@ -147,7 +147,10 @@ const HEADER: &str = "\
 # out a non-leaf syn node under a name the scan does not count — which is how
 # four of the five doors were found. It asks the question the safe way round:
 # every syn return is a door unless the type is on a small LEAF allowlist, and
-# unless the function was already handed a node to transform.
+# unless the function is one of three NAMED transformers that take a node and
+# nothing else. Both allowlists are the exception side, where being wrong is a
+# false alarm rather than a silent hole, and an import alias (`use syn::Type as
+# SynType`) is read as the syn type it binds.
 #
 # The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
 # item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
@@ -244,6 +247,27 @@ fn scan_file(text: &str) -> Counts {
 /// `imports_granularity=Crate` makes such an import more likely over time, not
 /// less. No file does this today; the point is that none can start.
 fn collect_aliases(stream: TokenStream) -> Vec<String> {
+    syn_imports(stream)
+        .into_iter()
+        .filter(|(_, original)| WATCHED.contains(&original.as_str()))
+        .map(|(bound, _)| bound)
+        .collect()
+}
+
+/// Every syn **type** a file imports, as `(bound name, original name)` —
+/// `use syn::{Expr, Type as T}` yields `[("Expr", "Expr"), ("T", "Type")]`.
+///
+/// One walk for both halves of the check. The classification scan wants the
+/// names bound to a [`WATCHED`] enum; the surface guard wants the names bound to
+/// anything that is not a [`LEAF`], because `use syn::Type as SynType` makes
+/// `-> &SynType` a door that a literal `syn::` match cannot see (#313 review).
+///
+/// A run is flattened, so `use syn::{punctuated::Punctuated, Type}` reads as
+/// `["syn", "punctuated", "Punctuated", "Type"]` and a module segment is
+/// indistinguishable from an item — except by case, which in Rust is not a
+/// coincidence: modules are `snake_case`, types are `CamelCase`. An import that
+/// defeats that convention defeats this, and would be the only one in the tree.
+fn syn_imports(stream: TokenStream) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for run in use_runs(stream) {
         // `use syn::...` only; `use crate::Type` binds something else entirely.
@@ -252,15 +276,16 @@ fn collect_aliases(stream: TokenStream) -> Vec<String> {
         }
         let mut i = 1;
         while i < run.len() {
-            if WATCHED.contains(&run[i].as_str()) {
+            let is_type = run[i].starts_with(char::is_uppercase);
+            if is_type {
                 let renamed = run.get(i + 1).map(String::as_str) == Some("as");
                 match (renamed, run.get(i + 2)) {
                     (true, Some(alias)) => {
-                        out.push(alias.clone());
+                        out.push((alias.clone(), run[i].clone()));
                         i += 3;
                         continue;
                     }
-                    _ => out.push(run[i].clone()),
+                    _ => out.push((run[i].clone(), run[i].clone())),
                 }
             }
             i += 1;
@@ -358,6 +383,19 @@ const ESCAPES: &[&str] = &[
 /// syn type nobody considered is a door until someone argues it is a leaf, and
 /// that argument is a diff on this line.
 const LEAF: &[&str] = &["Ident", "Lifetime", "Member", "Index"];
+
+/// The functions that hand back a node they were **given**, so the caller could
+/// have reached it without them.
+///
+/// An allowlist because a structural test cannot prove provenance: a function
+/// can take a node *and* the model, and return the model's. Three names, each
+/// still checked for the shape that makes the claim true — see
+/// [`collect_doors`]. Adding a fourth is a deliberate line in this file.
+const TRANSFORMERS: &[&str] = &[
+    "canonical_type",
+    "extract_fn_trait_args",
+    "peel_transparent",
+];
 
 /// Which bucket an escape belongs to — by name, then by **receiver**.
 ///
@@ -740,7 +778,17 @@ fn escape_surface_is_closed() {
             }
             let text = fs::read_to_string(&path).expect("source file is UTF-8");
             let file: syn::File = syn::parse_str(&text).expect("flat source parses");
-            collect_doors(&file.items, &rel_key(&src_root(), &path), &mut doors);
+            let aliases: Vec<String> = syn_imports(TokenStream::from_str(&text).expect("tokens"))
+                .into_iter()
+                .filter(|(_, original)| !LEAF.contains(&original.as_str()))
+                .map(|(bound, _)| bound)
+                .collect();
+            collect_doors(
+                &file.items,
+                &rel_key(&src_root(), &path),
+                &aliases,
+                &mut doors,
+            );
         }
     }
     let uncounted: Vec<_> = doors
@@ -784,7 +832,12 @@ fn escape_surface_is_closed() {
 ///
 /// Visibility still applies: `pub(super)` cannot be called from outside the
 /// model, so it is the model reading itself.
-fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>) {
+fn collect_doors(
+    items: &[syn::Item],
+    at: &str,
+    aliases: &[String],
+    out: &mut Vec<(String, String)>,
+) {
     fn escapes_flat(vis: &syn::Visibility) -> bool {
         match vis {
             syn::Visibility::Public(_) => true,
@@ -792,39 +845,59 @@ fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>)
             syn::Visibility::Inherited => false,
         }
     }
-    fn hands_out_a_node(ret: &syn::ReturnType) -> bool {
+    fn hands_out_a_node(ret: &syn::ReturnType, aliases: &[String]) -> bool {
         let syn::ReturnType::Type(_, ty) = ret else {
             return false;
         };
-        names_a_node(quote::ToTokens::to_token_stream(ty))
+        names_a_node(quote::ToTokens::to_token_stream(ty), aliases)
     }
     /// A non-[`LEAF`] `syn::` type named anywhere in a signature position.
     ///
     /// Qualified, because `-> Option<&Type>` is *flat's own* `Type` — the model,
     /// not a node. Through groups, because `Option<(&'static str, syn::Type)>`
     /// nests the mention inside a parenthesised token group.
-    fn names_a_node(stream: TokenStream) -> bool {
+    fn names_a_node(stream: TokenStream, aliases: &[String]) -> bool {
         let toks: Vec<TokenTree> = stream.into_iter().collect();
         (0..toks.len()).any(|i| {
             (matches!(&toks[i], TokenTree::Ident(id) if id == "syn")
                 && is_sep(&toks, i + 1)
                 && matches!(toks.get(i + 3), Some(TokenTree::Ident(id))
                     if !LEAF.contains(&id.to_string().as_str())))
-                || matches!(&toks[i], TokenTree::Group(g) if names_a_node(g.stream()))
+                // A name the file imported from syn — `use syn::Type as SynType`
+                // makes `-> &SynType` the same door under another spelling.
+                || matches!(&toks[i], TokenTree::Ident(id) if aliases.contains(&id.to_string()))
+                || matches!(&toks[i], TokenTree::Group(g) if names_a_node(g.stream(), aliases))
         })
     }
-    /// A function the caller could have written itself: no receiver, and a
-    /// non-leaf node already among its inputs.
-    fn is_transformer(sig: &syn::Signature) -> bool {
-        let has_receiver = matches!(sig.inputs.first(), Some(syn::FnArg::Receiver(_)));
-        let takes_a_node = sig.inputs.iter().any(|arg| match arg {
-            syn::FnArg::Typed(pt) => names_a_node(quote::ToTokens::to_token_stream(&pt.ty)),
-            syn::FnArg::Receiver(_) => false,
-        });
-        !has_receiver && takes_a_node
+    /// A function the caller could have written itself. **Named**, and then
+    /// checked, because the structural test alone does not establish where the
+    /// return came from (#313 review):
+    ///
+    /// ```ignore
+    /// pub fn leak<'a>(model: &'a TypeRef, _decoy: &syn::Type) -> &'a syn::Type {
+    ///     model.as_syn()
+    /// }
+    /// ```
+    ///
+    /// A node among the inputs says only that *a* node was passed, not that the
+    /// returned one came from it — and any other parameter may carry the model.
+    /// So the exemption is an allowlist of three, each of which must still take
+    /// **exactly one** parameter, and that parameter must be the node. The decoy
+    /// above cannot be exempted even by name.
+    fn is_transformer(name: &str, sig: &syn::Signature, aliases: &[String]) -> bool {
+        TRANSFORMERS.contains(&name)
+            && sig.inputs.len() == 1
+            && match sig.inputs.first() {
+                Some(syn::FnArg::Typed(pt)) => {
+                    names_a_node(quote::ToTokens::to_token_stream(&pt.ty), aliases)
+                }
+                _ => false,
+            }
     }
     let is_door = |vis: &syn::Visibility, sig: &syn::Signature| {
-        escapes_flat(vis) && hands_out_a_node(&sig.output) && !is_transformer(sig)
+        escapes_flat(vis)
+            && hands_out_a_node(&sig.output, aliases)
+            && !is_transformer(&sig.ident.to_string(), sig, aliases)
     };
     for item in items {
         match item {
@@ -842,7 +915,7 @@ fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>)
             }
             syn::Item::Mod(m) => {
                 if let Some((_, items)) = &m.content {
-                    collect_doors(items, at, out);
+                    collect_doors(items, at, aliases, out);
                 }
             }
             _ => {}
@@ -856,8 +929,13 @@ fn collect_doors(items: &[syn::Item], at: &str, out: &mut Vec<(String, String)>)
 fn a_door_is_the_default_and_a_transformer_is_the_exception() {
     let doors = |src: &str| {
         let file: syn::File = syn::parse_str(src).expect("test source parses");
+        let aliases: Vec<String> = syn_imports(TokenStream::from_str(src).expect("tokens"))
+            .into_iter()
+            .filter(|(_, original)| !LEAF.contains(&original.as_str()))
+            .map(|(bound, _)| bound)
+            .collect();
         let mut out = Vec::new();
-        collect_doors(&file.items, "test", &mut out);
+        collect_doors(&file.items, "test", &aliases, &mut out);
         out.into_iter().map(|(name, _)| name).collect::<Vec<_>>()
     };
 
@@ -880,13 +958,39 @@ fn a_door_is_the_default_and_a_transformer_is_the_exception() {
         ["attrs"]
     );
 
-    // A transformer is exempt: it was handed a node, so it can give back only
-    // what the caller could already reach.
+    // A decoy input defeats an existential test: this takes a node AND the
+    // model, and returns the model's. Only the allowlist keeps it out.
+    assert_eq!(
+        doors(
+            "pub fn leak<'a>(model: &'a TypeRef, _decoy: &syn::Type) -> &'a syn::Type { \
+             model.as_syn() }"
+        ),
+        ["leak"]
+    );
+    // An alias is the same door under another spelling.
+    assert_eq!(
+        doors(
+            "use syn::Type as SynType;\n\
+             impl S { pub fn leak(&self) -> &SynType { self.as_syn() } }"
+        ),
+        ["leak"]
+    );
+
+    // A named transformer is exempt: it was handed a node and nothing else, so
+    // it can give back only what the caller could already reach.
     assert!(doors("pub fn canonical_type(ty: &syn::Type) -> syn::Type { ty.clone() }").is_empty());
     assert!(
-        doors("pub fn peel(ty: &syn::Type) -> Option<(&'static str, syn::Type)> { None }")
-            .is_empty(),
+        doors(
+            "pub fn peel_transparent(ty: &syn::Type) -> Option<(&'static str, syn::Type)> { None }"
+        )
+        .is_empty(),
         "the mention nests inside a token group, and must still be seen"
+    );
+    // The allowlist is not a password: the shape still has to hold.
+    assert_eq!(
+        doors("pub fn canonical_type(t: &TypeRef, ty: &syn::Type) -> syn::Type { t.as_syn() }"),
+        ["canonical_type"],
+        "a second parameter can carry the model, so one input or nothing"
     );
     // A leaf is not a node: there is no shape to match on.
     assert!(doors("impl S { pub fn name(&self) -> &syn::Ident { &self.name } }").is_empty());

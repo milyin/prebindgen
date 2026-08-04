@@ -51,7 +51,10 @@
 # out a non-leaf syn node under a name the scan does not count — which is how
 # four of the five doors were found. It asks the question the safe way round:
 # every syn return is a door unless the type is on a small LEAF allowlist, and
-# unless the function was already handed a node to transform.
+# unless the function is one of three NAMED transformers that take a node and
+# nothing else. Both allowlists are the exception side, where being wrong is a
+# false alarm rather than a silent hole, and an import alias (`use syn::Type as
+# SynType`) is read as the syn type it binds.
 #
 # The bucket is read off the NAME, then the RECEIVER: `enum_item` hands out an
 # item; for `as_syn`, a receiver of `origin` (or an `Origin::` qualifier) means
