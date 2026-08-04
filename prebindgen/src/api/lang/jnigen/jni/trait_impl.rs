@@ -62,8 +62,52 @@ impl Declarations {
         body: &syn::Expr,
         exc: Option<&syn::Type>,
     ) -> syn::ItemFn {
+        let spelled = rust.to_token_stream();
+        let rust_with_lifetime = annotate_borrow_with_lifetime(rust, "env").to_token_stream();
+        self.build_input_fn_parts(&spelled, &rust_with_lifetime, wire, body, exc)
+    }
+
+    /// [`Self::build_input_fn`] for a caller holding the **reading** of the Rust
+    /// type this converter yields — the terminals and the transparent bridges.
+    ///
+    /// The borrow annotation is the only thing it does differently:
+    /// [`annotate_borrow_with_lifetime`] matched a `syn::Type::Reference` with
+    /// no lifetime, and the model states both facts on
+    /// [`TypeKind::Ref`](crate::api::core::flat::TypeKind::Ref), so this spells
+    /// `&'env [mut] <inner>` off the classification. Everything else the
+    /// signature needs is the spelling, which is the reading's own tokens.
+    pub(crate) fn build_input_fn_of(
+        &self,
+        rust: &crate::api::core::flat::TypeRef,
+        wire: &syn::Type,
+        body: &syn::Expr,
+        exc: Option<&syn::Type>,
+    ) -> syn::ItemFn {
+        let spelled = rust.spell();
+        let rust_with_lifetime = match rust.kind() {
+            crate::api::core::flat::TypeKind::Ref {
+                lifetime: None,
+                mutable,
+                inner,
+            } => {
+                let inner = inner.spell();
+                let m = if *mutable { quote!(mut) } else { quote!() };
+                quote!(&'env #m #inner)
+            }
+            _ => spelled.clone(),
+        };
+        self.build_input_fn_parts(&spelled, &rust_with_lifetime, wire, body, exc)
+    }
+
+    pub(crate) fn build_input_fn_parts(
+        &self,
+        rust: &TokenStream,
+        rust_with_lifetime: &TokenStream,
+        wire: &syn::Type,
+        body: &syn::Expr,
+        exc: Option<&syn::Type>,
+    ) -> syn::ItemFn {
         let name = input_name(rust, wire);
-        let rust_with_lifetime = annotate_borrow_with_lifetime(rust, "env");
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "v");
         let err_type = exc.cloned().unwrap_or_else(default_err_type);
         let ret_body = body_for_exc(body, exc);
@@ -94,6 +138,29 @@ impl Declarations {
     pub(crate) fn build_output_fn(
         &self,
         rust: &syn::Type,
+        wire: &syn::Type,
+        body: &syn::Expr,
+        exc: Option<&syn::Type>,
+    ) -> syn::ItemFn {
+        self.build_output_fn_parts(&rust.to_token_stream(), wire, body, exc)
+    }
+
+    /// [`Self::build_output_fn`] off the **reading**. The output signature takes
+    /// the value by move and needs no lifetime splice, so this is the spelling
+    /// and nothing else.
+    pub(crate) fn build_output_fn_of(
+        &self,
+        rust: &crate::api::core::flat::TypeRef,
+        wire: &syn::Type,
+        body: &syn::Expr,
+        exc: Option<&syn::Type>,
+    ) -> syn::ItemFn {
+        self.build_output_fn_parts(&rust.spell(), wire, body, exc)
+    }
+
+    pub(crate) fn build_output_fn_parts(
+        &self,
+        rust: &TokenStream,
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
@@ -129,7 +196,8 @@ impl Declarations {
                 <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
             })?
         });
-        let kotlin_name = self.override_kotlin_name(&outer_ty, Some(kt::KtType::string()));
+        let kotlin_name =
+            self.override_kotlin_name(&TypeKey::from_type(&outer_ty), Some(kt::KtType::string()));
         let niches = default_niches_for_wire(&wire);
         ConverterImpl {
             subs: vec![],
@@ -144,19 +212,17 @@ impl Declarations {
     /// `Cow<[u8]>` output converter (any lifetime form) — see the call site
     /// in [`Self::output_terminal`]. `None` when `ty` isn't a
     /// `Cow<…, [u8]>` path.
-    fn cow_bytes_output(&self, ty: &syn::Type) -> Option<ConverterImpl<KotlinMeta>> {
-        let syn::Type::Path(tp) = ty else { return None };
-        let seg = tp.path.segments.last()?;
-        if seg.ident != "Cow" {
-            return None;
-        }
-        let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+    fn cow_bytes_output(
+        &self,
+        ty: &crate::api::core::flat::TypeRef,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        // `TypeKind::Cow` is the form, and its `inner` is the argument — where
+        // this walked a path's last segment, compared the ident to the NAME
+        // `"Cow"`, and scanned the angle-bracketed arguments for a `[u8]`.
+        let crate::api::core::flat::TypeKind::Cow { inner, .. } = ty.kind() else {
             return None;
         };
-        let inner_is_bytes = ab.args.iter().any(|a| {
-            matches!(a, syn::GenericArgument::Type(t) if TypeKey::from_type(t).as_str() == "[u8]")
-        });
-        if !inner_is_bytes {
+        if inner.key().as_str() != "[u8]" {
             return None;
         }
         // The generated fn's param type must be resolvable without imports —
@@ -171,7 +237,7 @@ impl Declarations {
                 ))
             })?
         });
-        let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::byte_array()));
+        let kotlin_name = self.override_kotlin_name(&ty.key(), Some(kt::KtType::byte_array()));
         let niches = default_niches_for_wire(&wire);
         Some(ConverterImpl {
             subs: vec![],
@@ -225,9 +291,13 @@ impl Declarations {
     ///   so `Option<T>` automatically synthesises `0` = `None`,
     ///   matching the legacy "null pointer" ABI for nullable handles.
     ///   A *tagged* (closed-but-present) value is an error, not `None`.
-    pub fn opaque_handle_input(&self, ty: &syn::Type) -> ConverterImpl<KotlinMeta> {
+    pub fn opaque_handle_input(
+        &self,
+        reading: &crate::api::core::flat::TypeRef,
+    ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let name = input_name(ty, &wire);
+        let ty = reading.spell();
+        let name = input_name(&ty, &wire);
         let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
             #gen_allow
@@ -259,7 +329,7 @@ impl Declarations {
             // an `OwnedObject::from_raw` failure as the framework
             // `JniBindingError`, so the throws fields point at the
             // framework exception.
-            metadata: self.opaque_leaf_meta(TypeKey::from_type(ty)),
+            metadata: self.opaque_leaf_meta(reading.key()),
         }
     }
 
@@ -305,11 +375,10 @@ impl Declarations {
     /// fallback chain had.
     pub(crate) fn override_kotlin_name(
         &self,
-        outer_ty: &syn::Type,
+        key: &TypeKey,
         inherited: Option<kt::KtType>,
     ) -> Option<kt::KtType> {
-        let key = TypeKey::from_type(outer_ty);
-        if let Some(cfg) = self.types.get(&key) {
+        if let Some(cfg) = self.types.get(key) {
             // Opaque-handle entries keep their typed FQN in
             // `name_spec` for FQN-consumers, but the value-context
             // name is `"Long"` (set on the rank-0 handler's metadata).
@@ -329,12 +398,12 @@ impl Declarations {
     /// `impl Into<…>` parameters that can't be expressed via
     /// `input_wrapper_shape`'s fixed signature shape).
     pub fn input_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
-        input_name(rust, wire)
+        input_name(&rust.to_token_stream(), wire)
     }
 
     /// Symmetric to [`Self::input_converter_name`].
     pub fn output_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
-        output_name(rust, wire)
+        output_name(&rust.to_token_stream(), wire)
     }
 
     fn emitted_source_type_names(
@@ -422,13 +491,16 @@ impl Declarations {
 
     /// Output side of [`Self::opaque_handle_input`] — see that method's
     /// docs for the full convention.
-    pub fn opaque_handle_output(&self, ty: &syn::Type) -> ConverterImpl<KotlinMeta> {
+    pub fn opaque_handle_output(
+        &self,
+        reading: &crate::api::core::flat::TypeRef,
+    ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let body: syn::Expr =
             syn::parse_quote!(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64);
         ConverterImpl {
             subs: vec![],
-            function: self.build_output_fn(ty, &wire, &body, None),
+            function: self.build_output_fn_of(reading, &wire, &body, None),
             destination: wire,
             pre_stages: vec![],
             niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
@@ -437,7 +509,7 @@ impl Declarations {
             // [`Self::opaque_leaf_meta`]. Framework throws because the
             // wrapper's emitted match-arm still has a `JniBindingError`
             // branch reachable via the chain.
-            metadata: self.opaque_leaf_meta(TypeKey::from_type(ty)),
+            metadata: self.opaque_leaf_meta(reading.key()),
         }
     }
 }
@@ -897,7 +969,10 @@ impl Declarations {
         // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
         // type's name, unless the user pinned an explicit override
         // on the outer form itself (rare but legal).
-        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
+        let kotlin_name = self.override_kotlin_name(
+            &TypeKey::from_type(&outer_ty),
+            inner.metadata.kotlin_name.clone(),
+        );
         // The outer form shares T's converter function verbatim, so it
         // inherits T's throws behaviour. A borrowed handle (mut or not) is
         // still opaque (param classification needs to see it), but the holder
@@ -959,7 +1034,7 @@ impl Declarations {
         let inner_wire = inner.destination.clone();
         let inner_conv = inner.function.sig.ident.clone();
         let outer_ty = produced.clone();
-        let name = input_name(&outer_ty, &inner_wire);
+        let name = input_name(&outer_ty.to_token_stream(), &inner_wire);
         let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
             #gen_allow
@@ -972,7 +1047,10 @@ impl Declarations {
                 })
             }
         );
-        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
+        let kotlin_name = self.override_kotlin_name(
+            &TypeKey::from_type(&outer_ty),
+            inner.metadata.kotlin_name.clone(),
+        );
         let projection = inner.metadata.projection.clone().map(|h| Projection {
             owned: false,
             // `Option<&Handle>` always rides the inner's `*v == 0` niche
@@ -1048,7 +1126,7 @@ impl Declarations {
         });
         let inner_kotlin = inner.metadata.kotlin_name.clone()?;
         let kotlin_name = self.override_kotlin_name(
-            &outer_ty,
+            &TypeKey::from_type(&outer_ty),
             // `List` is auto-imported in Kotlin (default imports).
             Some(kt::KtType::generic("List", [inner_kotlin])),
         );
@@ -1090,7 +1168,7 @@ impl Declarations {
                 let outer_ty = produced.clone();
                 let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
                 let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
-                let name = input_name(&outer_ty, &inner_wire);
+                let name = input_name(&outer_ty.to_token_stream(), &inner_wire);
                 let gen_allow = generated_converter_attr();
                 let function: syn::ItemFn = syn::parse_quote!(
                     #gen_allow
@@ -1117,8 +1195,10 @@ impl Declarations {
                         })
                     }
                 );
-                let kotlin_name =
-                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
+                let kotlin_name = self.override_kotlin_name(
+                    &TypeKey::from_type(&outer_ty),
+                    inner.metadata.kotlin_name.clone(),
+                );
                 let projection = inner.metadata.projection.clone().map(|h| Projection {
                     owned: true,
                     // Rides the inner's `*v == 0` niche, so the wire stays
@@ -1157,7 +1237,7 @@ impl Declarations {
             let inherited = registry
                 .input_entry(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
+            let kotlin_name = self.override_kotlin_name(&TypeKey::from_type(&outer_ty), inherited);
             // Fold a Nullable layer over the inner projection (if any). The
             // kind mirrors which path `option_input` took: when it consumed
             // an inner niche, the wire stays identical to the inner's
@@ -1958,13 +2038,14 @@ impl Declarations {
         // Classify off `kind`, spell with `spell()`: the arms below that ask what
         // a type IS use `reading`, and everything that has to name it in
         // generated Rust uses this.
-        let ty = reading.as_syn();
+        // Everything below reads the reading: the identity for a lookup, the
+        // spelling for what generated Rust says. Neither needs a node.
         // Structured-config overrides first (opaque handles, then user-
         // registered rank-0 wrappers, then built-ins).
-        let key = TypeKey::from_type(ty);
+        let key = reading.key();
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
-                return Some(self.opaque_handle_input(ty));
+                return Some(self.opaque_handle_input(reading));
             }
         }
         // Fixed-size array of JNI primitives — dual of the output branch.
@@ -1973,12 +2054,12 @@ impl Declarations {
         if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(reading) {
             let body = crate::api::lang::jnigen::jni::prim_array::input_body(reading, &spec);
             let wire = spec.wire.clone();
-            let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn(ty, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -1991,7 +2072,7 @@ impl Declarations {
         // (jint → Rust enum) with the configured Kotlin FQN in metadata.
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_enum_class() {
-                if let Some(name) = bare_path_ident(ty) {
+                if let Some(name) = reading.key().ident() {
                     // The ELEMENT, and the match is the check: a declared
                     // `enum_class!` over a data-carrying enum is a `Variant`,
                     // not an `Enum`, so the shape assertion the two bodies used
@@ -2006,7 +2087,7 @@ impl Declarations {
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
-                            function: self.build_input_fn(ty, &wire, &body, None),
+                            function: self.build_input_fn_of(reading, &wire, &body, None),
                             destination: wire,
                             niches,
                             metadata: self.framework_meta(kotlin_name),
@@ -2015,14 +2096,14 @@ impl Declarations {
                 }
             }
         }
-        if let Some(conv) = self.lookup_input(ty, registry) {
+        if let Some(conv) = self.lookup_input(reading, registry) {
             return Some(conv);
         }
         // `str` is unsized, so converters can't return it directly.
         // Still register a rank-0 entry to satisfy resolution for
         // borrowed `&str` parameters: decode `JString` to owned `String`
         // and let call sites borrow as needed.
-        if TypeKey::from_type(ty).as_str() == "str" {
+        if reading.key().as_str() == "str" {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
                 let s = env.get_string(v).map_err(|e| {
@@ -2033,8 +2114,10 @@ impl Declarations {
                 })?;
                 s.into()
             });
+            // The unsized `str` yields an OWNED `String` the call site borrows,
+            // so this converter's Rust type is not the reading's spelling.
             let rust_ty: syn::Type = syn::parse_quote!(String);
-            let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::string()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(kt::KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -2070,22 +2153,21 @@ impl Declarations {
                 // The canonical value, then the spelling.
                 ::std::string::String::from(s).into()
             });
-            let rust_ty = ty.clone();
-            let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::string()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(kt::KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn(&rust_ty, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
             });
         }
-        if let Some((wire, body)) = primitive_input(ty) {
+        if let Some((wire, body)) = primitive_input(&reading.key()) {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if TypeKey::from_type(ty).as_str() == "u64" {
+            let metadata = if reading.key().as_str() == "u64" {
                 self.unsigned64_leaf_meta()
             } else {
                 self.framework_meta(kotlin_name)
@@ -2093,13 +2175,13 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn(ty, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata,
             });
         }
-        if let Some(name) = bare_path_ident(ty) {
+        if let Some(name) = reading.key().ident() {
             // A `sealed_class` sum reached as a whole `JObject` — a field of a
             // data class, or any position where the parent is already an
             // object. Its own converter, so the parent's generic field branch
@@ -2123,7 +2205,7 @@ impl Declarations {
                     return Some(ConverterImpl {
                         subs: vec![],
                         pre_stages: vec![],
-                        function: self.build_input_fn(ty, &wire, &body, None),
+                        function: self.build_input_fn_of(reading, &wire, &body, None),
                         destination: wire,
                         niches,
                         metadata: self.framework_meta(kotlin_name),
@@ -2145,7 +2227,7 @@ impl Declarations {
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn(ty, &wire, &body, None),
+                    function: self.build_input_fn_of(reading, &wire, &body, None),
                     destination: wire,
                     niches,
                     metadata: self.framework_meta(kotlin_name),
@@ -2189,7 +2271,6 @@ impl Declarations {
         if reading.erased_wrappers().is_empty() {
             return None;
         }
-        let produced = reading.as_syn();
         // The identity under every wrapper. This spelled the stripped type into
         // a node purely so `reading_of` could key off it and `subs` could key
         // off it again — `stripped_key` is that key, and the model already
@@ -2227,7 +2308,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![stripped],
             pre_stages: vec![],
-            function: self.build_output_fn(produced, &wire, &body, None),
+            function: self.build_output_fn_of(reading, &wire, &body, None),
             destination: wire,
             niches: entry.niches.clone(),
             // The surface is the inner type's — a wrapper is invisible to the
@@ -2264,7 +2345,6 @@ impl Declarations {
         if reading.erased_wrappers().is_empty() {
             return None;
         }
-        let produced = reading.as_syn();
         // The identity under every wrapper — by the model's own definition, the
         // key of the type whose lowering yields this `kind`. See the outbound
         // peer for why this is a key rather than a spelling.
@@ -2306,7 +2386,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![stripped],
             pre_stages: vec![],
-            function: self.build_input_fn(produced, &wire, &body, None),
+            function: self.build_input_fn_of(reading, &wire, &body, None),
             destination: wire,
             niches: entry.niches.clone(),
             // The surface is the inner type's: a wrapper is invisible to the
@@ -2351,12 +2431,13 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
-        let ty = reading.as_syn();
+        // Everything below reads the reading: the identity for a lookup, the
+        // spelling for what generated Rust says. Neither needs a node.
         // Structured-config overrides first (opaque handles, then built-ins).
-        let key = TypeKey::from_type(ty);
+        let key = reading.key();
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
-                return Some(self.opaque_handle_output(ty));
+                return Some(self.opaque_handle_output(reading));
             }
         }
         // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
@@ -2365,12 +2446,12 @@ impl Declarations {
         if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(reading) {
             let body = crate::api::lang::jnigen::jni::prim_array::output_body(&spec);
             let wire = spec.wire.clone();
-            let kotlin_name = self.override_kotlin_name(ty, Some(spec.kotlin.clone()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn(ty, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2382,7 +2463,7 @@ impl Declarations {
         // declared enum so the discriminant value round-trips identically.
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_enum_class() {
-                if let Some(name) = bare_path_ident(ty) {
+                if let Some(name) = reading.key().ident() {
                     if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
                         let (wire, body) = enum_output_body(self, e);
                         let niches = default_niches_for_wire(&wire);
@@ -2393,7 +2474,7 @@ impl Declarations {
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
-                            function: self.build_output_fn(ty, &wire, &body, None),
+                            function: self.build_output_fn_of(reading, &wire, &body, None),
                             destination: wire,
                             niches,
                             metadata: self.framework_meta(kotlin_name),
@@ -2402,14 +2483,14 @@ impl Declarations {
                 }
             }
         }
-        if let Some(conv) = self.lookup_output(ty, registry) {
+        if let Some(conv) = self.lookup_output(reading, registry) {
             return Some(conv);
         }
         // `str` is unsized, so it has no by-value output converter — but it is
         // reached as the sub of a `&str` reference accessor leaf. Resolve it to
         // the same `&str → jstring` fn the rank-1 `&str` arm uses (deduped by
         // name) so required-propagation doesn't flag it unresolved.
-        if TypeKey::from_type(ty).as_str() == "str" {
+        if reading.key().as_str() == "str" {
             return Some(self.str_ref_output());
         }
         // An owned string in any representation the model erases — `Box<String>`,
@@ -2431,13 +2512,12 @@ impl Declarations {
                     <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
                 })?
             });
-            let rust_ty = ty.clone();
-            let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::string()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(kt::KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn(&rust_ty, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2448,7 +2528,7 @@ impl Declarations {
         // intermediate owned `Vec` (the zero-copy dual of the `Vec<u8>`
         // output, for accessors like `zenoh::ZBytes::to_bytes()` that borrow
         // when the payload is contiguous). Surfaces as Kotlin `ByteArray`.
-        if let Some(conv) = self.cow_bytes_output(ty) {
+        if let Some(conv) = self.cow_bytes_output(reading) {
             return Some(conv);
         }
         // `()` — identity converter so `fn foo()` and `fn foo() -> ()`
@@ -2464,17 +2544,17 @@ impl Declarations {
             let body: syn::Expr = syn::parse_quote!(v);
             return Some(ConverterImpl {
                 subs: vec![],
-                function: self.build_output_fn(ty, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None),
                 destination: wire,
                 pre_stages: vec![],
                 niches: Niches::empty(),
                 metadata: KotlinMeta::default(),
             });
         }
-        if let Some((wire, body)) = primitive_output(ty) {
+        if let Some((wire, body)) = primitive_output(&reading.key()) {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
-            let metadata = if TypeKey::from_type(ty).as_str() == "u64" {
+            let metadata = if reading.key().as_str() == "u64" {
                 self.unsigned64_leaf_meta()
             } else {
                 self.framework_meta(kotlin_name)
@@ -2482,13 +2562,13 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn(ty, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata,
             });
         }
-        if let Some(name) = bare_path_ident(ty) {
+        if let Some(name) = reading.key().ident() {
             if let Some(s) = registry.flat().struct_type(&name) {
                 let (wire, body) = struct_output_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
@@ -2500,7 +2580,7 @@ impl Declarations {
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn(ty, &wire, &body, None),
+                    function: self.build_output_fn_of(reading, &wire, &body, None),
                     destination: wire,
                     niches,
                     metadata: self.framework_meta(kotlin_name),
@@ -2580,7 +2660,7 @@ impl Declarations {
             let inherited = registry
                 .output_entry(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
+            let kotlin_name = self.override_kotlin_name(&TypeKey::from_type(&outer_ty), inherited);
             // Fold a Nullable layer over the inner projection (if any). The
             // kind reflects which path `option_output` took (see
             // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
@@ -2656,7 +2736,7 @@ impl Declarations {
             });
             let inner_kotlin = inner.metadata.kotlin_name.clone()?;
             let kotlin_name = self.override_kotlin_name(
-                &outer_ty,
+                &TypeKey::from_type(&outer_ty),
                 // `List` is auto-imported in Kotlin (default imports). When
                 // the inner carries a projection, this wire-context name
                 // still drives non-projection consumers; projection-aware
@@ -2737,8 +2817,10 @@ impl Declarations {
             __list_obj
         });
         let inner_kotlin = inner.metadata.kotlin_name.clone()?;
-        let kotlin_name =
-            self.override_kotlin_name(&outer_ty, Some(kt::KtType::generic("List", [inner_kotlin])));
+        let kotlin_name = self.override_kotlin_name(
+            &TypeKey::from_type(&outer_ty),
+            Some(kt::KtType::generic("List", [inner_kotlin])),
+        );
         let projection = inner.metadata.projection.clone().map(|h| Projection {
             strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
             ..h

@@ -35,8 +35,8 @@ pub(crate) fn sentinel_for_wire(wire: &syn::Type) -> TokenStream {
 // Primitive bodies
 // ──────────────────────────────────────────────────────────────────────
 
-pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
-    let key = TypeKey::from_type(ty).as_str().to_string();
+pub(crate) fn primitive_input(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
+    let key = key.as_str().to_string();
     // Bodies receive `v: &<wire>`; primitives are Copy so `*v` works.
     Some(match key.as_str() {
         "bool" => (
@@ -107,8 +107,8 @@ pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> 
     })
 }
 
-pub(crate) fn primitive_output(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
-    let key = TypeKey::from_type(ty).as_str().to_string();
+pub(crate) fn primitive_output(key: &TypeKey) -> Option<(syn::Type, syn::Expr)> {
+    let key = key.as_str().to_string();
     // Output wrappers take v by value (move). Primitives are Copy, so
     // `v as wire` works. String/Vec consume v.
     Some(match key.as_str() {
