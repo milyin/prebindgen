@@ -780,29 +780,116 @@ fn wrapper_ops(name: &str) -> Option<&'static WrapperOps> {
     WRAPPER_OPS.iter().find(|w| w.name == name)
 }
 
-/// The chain of wrappers standing between a **spelling** and the canonical
-/// shape its `kind` names, outermost first — empty when the source already
-/// wrote the canonical form.
+/// What a wrapper arm's converter **yields**.
 ///
-/// `None` means the spelling is not a wrapping of the canonical one at all, so
-/// no converter should claim it.
-fn bridge_layers(spelling: &syn::Type, canonical: &syn::Type) -> Option<Vec<&'static WrapperOps>> {
-    if spelling.to_token_stream().to_string() == canonical.to_token_stream().to_string() {
-        return Some(Vec::new());
+/// Two cases, and the code always had both — one of them just had no name:
+///
+/// * `Reading` — the crossing's own type, as the model classified it. Every
+///   arm but one gets this.
+/// * `Composed` — a shape this adapter built. The `&[T]` parameter is the only
+///   instance: it decodes to an owned `Vec<T>` the call site borrows, and #280
+///   leaves `api::lang` no way to mint that reading. A composed shape carries
+///   no erased wrappers by construction — it *is* the canonical form.
+///
+/// The distinction is what the `canonical` argument used to stand in for. A
+/// spelling was compared token-for-token against a reconstructed
+/// `Option<t1>` / `Vec<t1>` / `&t1` to find out what wrappers sat over it —
+/// which is [`TypeRef::erased_wrappers`], asked of the classification instead
+/// of re-derived from tokens.
+pub(crate) enum Produced<'a> {
+    Reading(&'a crate::api::core::flat::TypeRef),
+    /// Boxed: a `syn::Type` dwarfs the borrow beside it, and the composed case
+    /// is the rare one (a single arm).
+    Composed(Box<syn::Type>),
+}
+
+impl Produced<'_> {
+    /// The chain of wrappers standing between what this yields and the
+    /// canonical shape its `kind` names, outermost first — empty when the
+    /// source already wrote the canonical form.
+    ///
+    /// `None` when a wrapper has no [`WrapperOps`], so no converter claims it.
+    fn bridge_layers(&self) -> Option<Vec<&'static WrapperOps>> {
+        match self {
+            Produced::Reading(r) => r.erased_wrappers().into_iter().map(wrapper_ops).collect(),
+            Produced::Composed(_) => Some(Vec::new()),
+        }
     }
-    let (name, inner) = crate::api::core::flat::peel_transparent(spelling)?;
-    let ops = wrapper_ops(name)?;
-    let mut rest = bridge_layers(&inner, canonical)?;
-    rest.insert(0, ops);
-    Some(rest)
+
+    /// True when what this yields IS the canonical shape — no wrapper to
+    /// bridge. The arms that hand back an inner converter verbatim require it:
+    /// there is no value in hand to wrap or unwrap.
+    fn is_canonical(&self) -> bool {
+        self.bridge_layers().is_some_and(|l| l.is_empty())
+    }
+
+    /// The tokens generated Rust spells for this type.
+    fn spell(&self) -> TokenStream {
+        match self {
+            Produced::Reading(r) => r.spell(),
+            Produced::Composed(t) => t.to_token_stream(),
+        }
+    }
+
+    /// This type's identity.
+    fn key(&self) -> TypeKey {
+        match self {
+            Produced::Reading(r) => r.key(),
+            Produced::Composed(t) => TypeKey::from_type(t),
+        }
+    }
+
+    /// The borrow this yields, when the source wrote one — the reading's own
+    /// `TypeKind::Ref`. A composed shape is never a borrow.
+    fn borrow(&self) -> Option<(&crate::api::core::flat::TypeRef, bool)> {
+        match self {
+            Produced::Reading(r) => match r.kind() {
+                crate::api::core::flat::TypeKind::Ref { mutable, inner, .. } => {
+                    Some((inner, *mutable))
+                }
+                _ => None,
+            },
+            Produced::Composed(_) => None,
+        }
+    }
+}
+
+impl Declarations {
+    /// [`Self::build_input_fn`] over either case.
+    fn build_input_fn_produced(
+        &self,
+        produced: &Produced<'_>,
+        wire: &syn::Type,
+        body: &syn::Expr,
+        exc: Option<&syn::Type>,
+    ) -> syn::ItemFn {
+        match produced {
+            Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc),
+            Produced::Composed(t) => self.build_input_fn(t, wire, body, exc),
+        }
+    }
+
+    /// [`Self::build_output_fn`] over either case.
+    fn build_output_fn_produced(
+        &self,
+        produced: &Produced<'_>,
+        wire: &syn::Type,
+        body: &syn::Expr,
+        exc: Option<&syn::Type>,
+    ) -> syn::ItemFn {
+        match produced {
+            Produced::Reading(r) => self.build_output_fn_of(r, wire, body, exc),
+            Produced::Composed(t) => self.build_output_fn(t, wire, body, exc),
+        }
+    }
 }
 
 /// Read the converter's `v` as the canonical shape, undoing each layer
 /// outside-in. `None` when any layer cannot be read through — the crossing then
 /// stays **unresolved**, naming the type, rather than resolving and emitting
 /// Rust the consumer cannot build (#270 review).
-fn read_as_canonical(produced: &syn::Type, canonical: &syn::Type) -> Option<TokenStream> {
-    let layers = bridge_layers(produced, canonical)?;
+fn read_as_canonical(produced: &Produced<'_>) -> Option<TokenStream> {
+    let layers = produced.bridge_layers()?;
     let mut e = quote!(v);
     for w in layers {
         e = (w.read?)(e);
@@ -812,12 +899,8 @@ fn read_as_canonical(produced: &syn::Type, canonical: &syn::Type) -> Option<Toke
 
 /// Build the spelling from a canonical value — the input-side peer, applying
 /// each layer inside-out.
-fn build_from_canonical(
-    produced: &syn::Type,
-    canonical: &syn::Type,
-    value: TokenStream,
-) -> Option<TokenStream> {
-    let layers = bridge_layers(produced, canonical)?;
+fn build_from_canonical(produced: &Produced<'_>, value: TokenStream) -> Option<TokenStream> {
+    let layers = produced.bridge_layers()?;
     let mut e = value;
     for w in layers.into_iter().rev() {
         e = (w.build?)(e);
@@ -907,17 +990,6 @@ pub(crate) fn build_through_wrappers(
     Some(out)
 }
 
-/// Whether the source wrote the canonical spelling itself — no wrapper to undo.
-///
-/// Required by the converters that do **not** produce the spelled type by
-/// construction: the borrow shapes hand back the inner type's own converter (or
-/// an `OwnedObject`) and let the call site add `&` / `.as_deref()`. There is no
-/// value in hand to wrap or unwrap, so a wrapped spelling cannot be served
-/// here at all and must not resolve.
-fn is_canonical_spelling(produced: &syn::Type, canonical: &syn::Type) -> bool {
-    bridge_layers(produced, canonical).is_some_and(|l| l.is_empty())
-}
-
 /// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
 /// `Option`). Each returns `Some(ConverterImpl)` only for the [`WrapperShape`]
 /// it claims; [`Declarations::input_wrapper_shape`] chains them in priority
@@ -939,16 +1011,11 @@ impl Declarations {
     fn input_borrow(
         &self,
         shape: WrapperShape,
-        produced: &syn::Type,
+        produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // `t1`'s spelling, for the parts that ask spelling questions — the
-        // canonical form a produced spelling is compared against, and the
-        // type ascriptions the generated body writes. Everything else takes
-        // the READING itself (#284).
-        let t1_ty = t1.spell();
-        let WrapperShape::Borrow { mutable } = shape else {
+        let WrapperShape::Borrow { .. } = shape else {
             return None;
         };
         // This converter does NOT produce the spelled type: it hands back the
@@ -956,23 +1023,15 @@ impl Declarations {
         // value in hand to unwrap a representation from, and a wrapped spelling
         // — `Box<&T>` — must not resolve here (it would pass an owned `T` where
         // `Box<&T>` is expected).
-        let canonical: syn::Type = if mutable {
-            syn::parse_quote!(&mut #t1_ty)
-        } else {
-            syn::parse_quote!(&#t1_ty)
-        };
-        if !is_canonical_spelling(produced, &canonical) {
+        if !produced.is_canonical() {
             return None;
         }
         let inner = registry.input_entry(t1)?;
-        let outer_ty = produced.clone();
+        let outer_ty = produced.key();
         // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
         // type's name, unless the user pinned an explicit override
         // on the outer form itself (rare but legal).
-        let kotlin_name = self.override_kotlin_name(
-            &TypeKey::from_type(&outer_ty),
-            inner.metadata.kotlin_name.clone(),
-        );
+        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
         // The outer form shares T's converter function verbatim, so it
         // inherits T's throws behaviour. A borrowed handle (mut or not) is
         // still opaque (param classification needs to see it), but the holder
@@ -1003,7 +1062,7 @@ impl Declarations {
     fn input_option_ref(
         &self,
         shape: WrapperShape,
-        produced: &syn::Type,
+        produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
@@ -1012,18 +1071,13 @@ impl Declarations {
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
         let t1_ty = t1.spell();
-        let WrapperShape::OptionRef { mutable } = shape else {
+        let WrapperShape::OptionRef { .. } = shape else {
             return None;
         };
         // Produces `Option<OwnedObject<T>>`, which the call site adapts with
         // `.as_deref()` — again not the spelled type, so a wrapped spelling has
         // nothing to bridge and must not resolve. See `input_borrow`.
-        let canonical: syn::Type = if mutable {
-            syn::parse_quote!(Option<&mut #t1_ty>)
-        } else {
-            syn::parse_quote!(Option<&#t1_ty>)
-        };
-        if !is_canonical_spelling(produced, &canonical) {
+        if !produced.is_canonical() {
             return None;
         }
         let inner = registry.input_entry(t1)?;
@@ -1033,8 +1087,9 @@ impl Declarations {
         }
         let inner_wire = inner.destination.clone();
         let inner_conv = inner.function.sig.ident.clone();
-        let outer_ty = produced.clone();
-        let name = input_name(&outer_ty.to_token_stream(), &inner_wire);
+        let outer_ty = produced.key();
+        let outer_spelled = produced.spell();
+        let name = input_name(&outer_spelled, &inner_wire);
         let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
             #gen_allow
@@ -1047,10 +1102,7 @@ impl Declarations {
                 })
             }
         );
-        let kotlin_name = self.override_kotlin_name(
-            &TypeKey::from_type(&outer_ty),
-            inner.metadata.kotlin_name.clone(),
-        );
+        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
         let projection = inner.metadata.projection.clone().map(|h| Projection {
             owned: false,
             // `Option<&Handle>` always rides the inner's `*v == 0` niche
@@ -1079,7 +1131,7 @@ impl Declarations {
     fn input_vec(
         &self,
         shape: WrapperShape,
-        produced: &syn::Type,
+        produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
@@ -1104,10 +1156,9 @@ impl Declarations {
             inner,
             quote::quote!(&__elem_wire),
         );
-        let outer_ty = produced.clone();
-        let canonical: syn::Type = syn::parse_quote!(Vec<#t1_ty>);
+        let outer_ty = produced.key();
         // Bridgeable first — see `box_layers_to`.
-        let build = build_from_canonical(produced, &canonical, quote::quote!(__out))?;
+        let build = build_from_canonical(produced, quote::quote!(__out))?;
         let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
         let body: syn::Expr = syn::parse_quote!({
             let __list = jni::objects::JList::from_env(env, v)
@@ -1126,14 +1177,14 @@ impl Declarations {
         });
         let inner_kotlin = inner.metadata.kotlin_name.clone()?;
         let kotlin_name = self.override_kotlin_name(
-            &TypeKey::from_type(&outer_ty),
+            &outer_ty,
             // `List` is auto-imported in Kotlin (default imports).
             Some(kt::KtType::generic("List", [inner_kotlin])),
         );
         Some(ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: self.build_input_fn(&outer_ty, &wire, &body, None),
+            function: self.build_input_fn_produced(produced, &wire, &body, None),
             destination: wire,
             niches: Niches::empty(),
             metadata: KotlinMeta {
@@ -1152,7 +1203,7 @@ impl Declarations {
     fn input_option(
         &self,
         shape: WrapperShape,
-        produced: &syn::Type,
+        produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
@@ -1165,17 +1216,17 @@ impl Declarations {
             let inner = registry.input_entry(t1)?;
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
-                let outer_ty = produced.clone();
-                let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
-                let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
-                let name = input_name(&outer_ty.to_token_stream(), &inner_wire);
+                let outer_ty = produced.key();
+                let outer_spelled = produced.spell();
+                let build = build_from_canonical(produced, quote::quote!(__v))?;
+                let name = input_name(&outer_spelled, &inner_wire);
                 let gen_allow = generated_converter_attr();
                 let function: syn::ItemFn = syn::parse_quote!(
                     #gen_allow
                     pub(crate) unsafe fn #name<'env, 'v>(
                         env: &mut jni::JNIEnv<'env>,
                         v: &#inner_wire,
-                    ) -> ::core::result::Result<#outer_ty, __JniErr> {
+                    ) -> ::core::result::Result<#outer_spelled, __JniErr> {
                         Ok({
                             let __v: ::core::option::Option<#t1_ty> = if *v == 0 {
                                 None
@@ -1195,10 +1246,8 @@ impl Declarations {
                         })
                     }
                 );
-                let kotlin_name = self.override_kotlin_name(
-                    &TypeKey::from_type(&outer_ty),
-                    inner.metadata.kotlin_name.clone(),
-                );
+                let kotlin_name =
+                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
                 let projection = inner.metadata.projection.clone().map(|h| Projection {
                     owned: true,
                     // Rides the inner's `*v == 0` niche, so the wire stays
@@ -1222,9 +1271,8 @@ impl Declarations {
             // Non-opaque inner: fall through to the general Option handler.
         }
         if shape == WrapperShape::Optional {
-            let outer_ty = produced.clone();
-            let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
-            let build = build_from_canonical(produced, &canonical, quote::quote!(__v))?;
+            let outer_ty = produced.key();
+            let build = build_from_canonical(produced, quote::quote!(__v))?;
             let (wire, inner_body, niches) = option_input(t1, registry)?;
             // `option_input` yields the canonical `Option<T>`; the converter
             // yields the spelling.
@@ -1237,7 +1285,7 @@ impl Declarations {
             let inherited = registry
                 .input_entry(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&TypeKey::from_type(&outer_ty), inherited);
+            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
             // kind mirrors which path `option_input` took: when it consumed
             // an inner niche, the wire stays identical to the inner's
@@ -1254,7 +1302,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn(&outer_ty, &wire, &body, None),
+                function: self.build_input_fn_produced(produced, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {
@@ -2407,7 +2455,7 @@ impl Declarations {
     pub(crate) fn input_wrapper_shape(
         &self,
         shape: WrapperShape,
-        produced: &syn::Type,
+        produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
@@ -2596,7 +2644,7 @@ impl Declarations {
     pub(crate) fn output_wrapper_shape(
         &self,
         shape: WrapperShape,
-        produced: &syn::Type,
+        produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
@@ -2614,18 +2662,15 @@ impl Declarations {
         // with a `.clone()`; `Option<&T>` then composes through the `Option`
         // arm below (it looks up this `&T` entry as its inner). Matched
         // structurally so the lifetime variant `&'static _` is covered too.
-        if let syn::Type::Reference(r) = produced {
-            if r.mutability.is_none() && self.types.get(&t1.key()).is_some_and(|c| c.is_opaque()) {
-                let mut ref_ty = r.clone();
-                *ref_ty.elem = syn::parse_quote!(#t1_ty);
-                let outer_ty = syn::Type::Reference(ref_ty);
+        if let Some((_, false)) = produced.borrow() {
+            if self.types.get(&t1.key()).is_some_and(|c| c.is_opaque()) {
                 let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
                 let body: syn::Expr = syn::parse_quote!(std::boxed::Box::into_raw(
                     std::boxed::Box::new(v.clone())
                 ) as i64);
                 return Some(ConverterImpl {
                     subs: vec![],
-                    function: self.build_output_fn(&outer_ty, &wire, &body, None),
+                    function: self.build_output_fn_produced(produced, &wire, &body, None),
                     destination: wire,
                     pre_stages: vec![],
                     niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
@@ -2638,8 +2683,8 @@ impl Declarations {
         // expansion). The single copy into the JVM is `&str → jstring` (no
         // intermediate owned `String`). The unsized `str` sub resolves via the
         // rank-0 arm to the same fn (see [`Self::str_ref_output`]).
-        if let syn::Type::Reference(r) = produced {
-            if r.mutability.is_none() && t1.key().as_str() == "str" {
+        if let Some((_, false)) = produced.borrow() {
+            if t1.key().as_str() == "str" {
                 return Some(self.str_ref_output());
             }
         }
@@ -2647,11 +2692,11 @@ impl Declarations {
         // `TypeKind::Fallible`. Bindings declare the `Err` type via
         // `.throwable()`.
         if shape == WrapperShape::Optional {
-            let outer_ty = produced.clone();
+            let outer_ty = produced.key();
             let canonical: syn::Type = syn::parse_quote!(Option<#t1_ty>);
             // Bridgeable first: an unsupported representation must not resolve
             // and then emit code the consumer cannot compile.
-            let read = read_as_canonical(produced, &canonical)?;
+            let read = read_as_canonical(produced)?;
             let (wire, inner_body, niches) = option_output(t1, registry)?;
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
@@ -2660,7 +2705,7 @@ impl Declarations {
             let inherited = registry
                 .output_entry(t1)
                 .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&TypeKey::from_type(&outer_ty), inherited);
+            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
             // Fold a Nullable layer over the inner projection (if any). The
             // kind reflects which path `option_output` took (see
             // [`nullable_kind_for`]): niche-fulfilled keeps the inner wire
@@ -2687,7 +2732,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn(&outer_ty, &wire, &body, None),
+                function: self.build_output_fn_produced(produced, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {
@@ -2715,9 +2760,9 @@ impl Declarations {
                 inner,
                 quote::quote!(__elem),
             );
-            let outer_ty = produced.clone();
+            let outer_ty = produced.key();
             let canonical: syn::Type = syn::parse_quote!(Vec<#t1_ty>);
-            let read = read_as_canonical(produced, &canonical)?;
+            let read = read_as_canonical(produced)?;
             let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
             let body: syn::Expr = syn::parse_quote!({
                 let v: #canonical = #read;
@@ -2736,7 +2781,7 @@ impl Declarations {
             });
             let inner_kotlin = inner.metadata.kotlin_name.clone()?;
             let kotlin_name = self.override_kotlin_name(
-                &TypeKey::from_type(&outer_ty),
+                &outer_ty,
                 // `List` is auto-imported in Kotlin (default imports). When
                 // the inner carries a projection, this wire-context name
                 // still drives non-projection consumers; projection-aware
@@ -2758,7 +2803,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn(&outer_ty, &wire, &body, None),
+                function: self.build_output_fn_produced(produced, &wire, &body, None),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {

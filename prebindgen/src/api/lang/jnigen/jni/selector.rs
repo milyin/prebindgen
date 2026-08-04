@@ -45,11 +45,11 @@ impl Declarations {
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // What the type IS comes from `kind`; what generated Rust must SPELL it
-        // comes from here. The converter yields this spelling, so a
+        // What the converter YIELDS: this crossing's own reading, so a
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
-        // is dispatched as no longer decides what it is called.
-        let syntax = ty.as_syn();
+        // is dispatched as does not decide what it is called. The one arm that
+        // yields something else says so with `crate::api::lang::jnigen::jni::trait_impl::Produced::Composed`.
+        let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Reading(ty);
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.input_terminal(ty, registry) {
@@ -67,7 +67,7 @@ impl Declarations {
                 let mutable = inner.is_exclusive_borrow();
                 if let Some(mut c) = self.input_wrapper_shape(
                     WrapperShape::OptionRef { mutable },
-                    syntax,
+                    &produced,
                     target,
                     registry,
                 ) {
@@ -81,17 +81,14 @@ impl Declarations {
             // carries a wrapper it cannot bridge. The shallow handler cannot
             // tell those apart and would decode the jlong as a `*mut &T`, so a
             // wrapped optional borrow stops here rather than resolving wrong.
-            if inner.borrow_target().is_some() {
-                let canonical: syn::Type = {
-                    let b = inner.spell();
-                    syn::parse_quote!(Option<#b>)
-                };
-                if syntax.to_token_stream().to_string() != canonical.to_token_stream().to_string() {
-                    return None;
-                }
+            if inner.borrow_target().is_some() && !ty.erased_wrappers().is_empty() {
+                // "the spelling is exactly `Option<inner>`", off the model: this
+                // rebuilt that canonical form and compared token strings, where
+                // a wrapper over it is what `erased_wrappers` reports.
+                return None;
             }
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
+                self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, registry)
             {
                 c.subs = vec![inner.key()];
                 return Some(c);
@@ -100,7 +97,7 @@ impl Declarations {
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
+                self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
             {
                 c.subs = vec![elem.key()];
                 return Some(c);
@@ -146,7 +143,9 @@ impl Declarations {
                     // the tokens the converter yields, and every question asked
                     // of it (`is_canonical_spelling`, the `Type::Reference`
                     // bridgeability guards) is a spelling question.
-                    let produced: syn::Type = syn::parse_quote!(Vec<#elem_ty>);
+                    let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Composed(
+                        syn::parse_quote!(Vec<#elem_ty>),
+                    );
                     if let Some(mut c) =
                         self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
                     {
@@ -157,9 +156,12 @@ impl Declarations {
                 }
             }
             let mutable = ty.is_exclusive_borrow();
-            if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
-            {
+            if let Some(mut c) = self.input_wrapper_shape(
+                WrapperShape::Borrow { mutable },
+                &produced,
+                inner,
+                registry,
+            ) {
                 c.subs = vec![inner.key()];
                 return Some(c);
             }
@@ -177,13 +179,12 @@ impl Declarations {
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // What the type IS comes from `kind`; the spelling is what generated
-        // Rust must say. This direction used to be handed only the spelling —
-        // `convert_crossing` fetched the reading and threw it away — so it
-        // detected its layers with `option_inner_type`/`vec_inner_type`, which
-        // read the last path segment's ident. A `Box<Option<T>>` answered
+        // What the converter YIELDS. This direction used to be handed only the
+        // spelling — `convert_crossing` fetched the reading and threw it away —
+        // so it detected its layers with `option_inner_type`/`vec_inner_type`,
+        // which read the last path segment's ident. A `Box<Option<T>>` answered
         // "neither", and got no converter at all (#270).
-        let syntax = ty.as_syn();
+        let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Reading(ty);
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
         if let Some(c) = self.output_terminal(ty, registry) {
@@ -204,7 +205,7 @@ impl Declarations {
         //    output handler).
         if let Some(inner) = ty.optional_inner() {
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Optional, syntax, inner, registry)
+                self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, registry)
             {
                 c.subs = vec![inner.key()];
                 return Some(c);
@@ -213,7 +214,7 @@ impl Declarations {
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Sequence, syntax, elem, registry)
+                self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
             {
                 c.subs = vec![elem.key()];
                 return Some(c);
@@ -234,9 +235,12 @@ impl Declarations {
                 }
             }
             let mutable = ty.is_exclusive_borrow();
-            if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Borrow { mutable }, syntax, inner, registry)
-            {
+            if let Some(mut c) = self.output_wrapper_shape(
+                WrapperShape::Borrow { mutable },
+                &produced,
+                inner,
+                registry,
+            ) {
                 c.subs = vec![inner.key()];
                 return Some(c);
             }
