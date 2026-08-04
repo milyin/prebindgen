@@ -111,7 +111,7 @@
 4	api/lang/jnigen/jni/builder.rs
 4	api/lang/jnigen/jni/emit/convert.rs
 4	api/lang/jnigen/jni/emit/flat_input.rs
-13	api/lang/jnigen/jni/emit/names.rs
+7	api/lang/jnigen/jni/emit/names.rs
 6	api/lang/jnigen/jni/emit/wrapper.rs
 3	api/lang/jnigen/jni/fold.rs
 1	api/lang/jnigen/jni/iface.rs
@@ -122,7 +122,7 @@
 2	api/lang/jnigen/jni/wire_access.rs
 1	api/lang/jnigen/util.rs
 
-# total classification sites: 79
+# total classification sites: 73
 
 ## escapes: types
 1	api/core/diagnostics.rs
@@ -149,8 +149,8 @@
 2	api/lang/cbindgen/convert.rs
 2	api/lang/cbindgen/trait_impl.rs
 2	api/lang/jnigen/jni/builder.rs
-2	api/lang/jnigen/jni/kotlin_emit.rs
+1	api/lang/jnigen/jni/kotlin_emit.rs
 3	api/lang/jnigen/jni/symbols.rs
 1	api/lang/jnigen/jni/trait_impl.rs
 
-# total escapes: items: 16
+# total escapes: items: 15
