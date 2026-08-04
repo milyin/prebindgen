@@ -566,9 +566,20 @@ fn spelled(t: &TypeRef) -> syn::Type {
     syn::parse_quote!(#toks)
 }
 
+/// [`spelled`] under its historical name, for the identity converters whose
+/// `destination` IS the Rust type they pass through.
+fn spelled_ty(t: &TypeRef) -> syn::Type {
+    spelled(t)
+}
+
 /// `String`, off the classification.
 fn r_is_string(t: &TypeRef) -> bool {
     matches!(t.kind(), TypeKind::String)
+}
+
+/// `str`, off the classification.
+fn r_is_str(t: &TypeRef) -> bool {
+    matches!(t.kind(), TypeKind::Str)
 }
 
 /// `bool`, off the classification — the one scalar with a restricted domain.
@@ -602,10 +613,6 @@ fn r_boxed_inner(t: &TypeRef) -> Option<&TypeRef> {
 
 fn is_string(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
-}
-
-fn is_str(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "str").unwrap_or(false)
 }
 
 /// If `ty` is `MaybeUninit<T>` (any path form: `MaybeUninit` / `std::mem::…` /
@@ -684,6 +691,38 @@ fn is_scalar(ty: &syn::Type) -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+/// The element of a shared slice borrow (`&[E]`), off the classification.
+fn r_shared_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
+    let TypeKind::Ref {
+        mutable: false,
+        inner,
+        ..
+    } = t.kind()
+    else {
+        return None;
+    };
+    match inner.kind() {
+        TypeKind::Slice(e) => Some(e),
+        _ => None,
+    }
+}
+
+/// [`cow_slice_elem`] off the classification: `Cow<'_, [E]>` with scalar `E`.
+fn r_cow_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
+    let TypeKind::Cow { inner, .. } = t.kind() else {
+        return None;
+    };
+    match inner.kind() {
+        TypeKind::Slice(e) if r_is_scalar(e) => Some(e),
+        _ => None,
+    }
+}
+
+/// [`scalar_slice_elem`] off the classification.
+fn r_scalar_slice_elem(t: &TypeRef) -> Option<&TypeRef> {
+    r_shared_slice_elem(t).filter(|e| r_is_scalar(e))
 }
 
 /// If `ty` is `Cow<'_, [E]>` with scalar `E`, return `E`.
