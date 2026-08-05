@@ -705,6 +705,16 @@ impl<M> Registry<M> {
         }
     }
 
+    /// Every reading the table holds in one direction.
+    ///
+    /// The adapter-facing view of [`Self::type_table`]: a back-end asking what
+    /// types crossed, and in what shape, wants the readings — not the cells
+    /// they are stored in. Handing out `TypeCell` instead would make the
+    /// registry's storage part of the public API for the sake of one caller.
+    pub fn readings(&self, dir: Direction) -> impl Iterator<Item = &crate::core::flat::TypeRef> {
+        self.type_table(dir).values().map(|cell| &*cell.subject)
+    }
+
     /// Direction-indexed mutable access to the type-resolution tables.
     pub(crate) fn type_table_mut(&mut self, dir: Direction) -> &mut HashMap<TypeKey, TypeCell<M>> {
         match dir {

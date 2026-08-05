@@ -185,9 +185,6 @@ pub use self::{
     error::{DuplicateNameError, NotExpressibleEntry, ScanError, WriteRustError},
     view::{Building, Conversions, Crossing},
 };
-/// The callback grammar, which the source language owns — re-exported here for the
-/// call sites that have not yet reached L2–L4 of #229.
-pub use crate::api::core::flat::extract_fn_trait_args;
 /// The canonical type identity, which the source model owns — re-exported
 /// here because the registry's tables are keyed by it.
 pub use crate::api::core::flat::{TypeKey, TypeKeyParseError};

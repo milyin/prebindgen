@@ -39,7 +39,7 @@ fn build(fns: &[&str]) -> String {
         items.push((syn::Item::Fn(f), loc.clone()));
     }
     let registry =
-        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let mut cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))

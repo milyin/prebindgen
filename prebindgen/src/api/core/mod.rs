@@ -34,14 +34,12 @@ pub(crate) mod resolve;
 pub mod shape;
 pub mod types_util;
 pub mod unfold;
-pub(crate) mod write;
-
-pub use prebindgen_c_runtime::{Gravestone, Transmute};
+pub mod write;
 
 pub use self::{
     decl::{
-        ConvertDecl, ConvertSourceDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
-        FunctionDecl,
+        ConvertDecl, ConvertSourceDecl, ConvertSpec, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+        FieldsDecl, FunctionDecl,
     },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
@@ -50,7 +48,7 @@ pub use self::{
     prebindgen::{ConverterImpl, Prebindgen, Stage},
     registry::{
         Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
-        NotExpressibleEntry, Registry, ScanError, TypeEntry, TypeKey, TypeKeyParseError,
-        WriteRustError,
+        NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeEntry, TypeKey,
+        TypeKeyParseError, WriteRustError,
     },
 };

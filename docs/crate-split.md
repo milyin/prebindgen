@@ -97,15 +97,32 @@ lands.
 | **A3** | shared decl vocabulary → `core::decl`; breaks `cbindgen → jnigen` | done |
 | **A5** | drop the `unstable-cbindgen` feature | done |
 | **A4** | `Emit` → `flat`; `flat/` reaches zero core-sibling refs | done |
-| **B1** | strip `prebindgen` to the base crate | todo |
-| **B2** | carve `prebindgen-flat` | todo |
+| **B1** | carve `prebindgen-c` | todo |
+| **B2** | carve `prebindgen-jni` | todo |
 | **B3** | carve `prebindgen-registry` | todo |
-| **B4** | carve `prebindgen-c` | todo |
-| **B5** | carve `prebindgen-jni` | todo |
+| **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | todo |
 | **C** | workspace manifest, examples, docs, downstream repos | todo |
 
 Phase A is all in-place, so the tree stays green at every commit and the Phase B
-moves are close to pure renames. B1–B5 are strictly sequential, bottom-up.
+moves are close to pure renames.
+
+### The carves run top-down, not bottom-up
+
+An earlier revision of this document had B1 strip `prebindgen` to the base and
+then build the layers up from it. That order is impossible one crate at a time,
+because every intermediate state would need a Cargo dependency cycle:
+
+`flat` uses `crate::SourceLocation`, which stays in the base, so
+`prebindgen-flat` → `prebindgen`. But `registry` depends on `flat`, and until
+`registry` has moved out it is still *inside* `prebindgen` — so `prebindgen` →
+`prebindgen-flat` at the same time. Cargo rejects that.
+
+Removing the **topmost** layer each time has no such problem: what remains never
+depends on what just left. So the adapters go first, then `registry`, then
+`flat`, and the base crate is simply whatever is left over — it is never
+"created" at all. The two adapters are independent siblings, so `c` before `jni`
+is only a size choice: 9.8k lines against 40k, the smaller one first to shake
+out the mechanics.
 
 ### Phase B notes
 

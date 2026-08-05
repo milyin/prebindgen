@@ -17,7 +17,7 @@ fn takeable_callback_param() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(func), loc.clone()),
     ]))
@@ -79,7 +79,7 @@ fn callback_subscriber_emits_closure_structs() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
@@ -175,7 +175,7 @@ fn callback_scalar_arg_not_module_qualified() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
@@ -220,7 +220,7 @@ fn callback_struct_name_defaults_generically() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))

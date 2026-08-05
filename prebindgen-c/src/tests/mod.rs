@@ -1,9 +1,8 @@
+use prebindgen::{core::RegistryBuilder, SourceLocation};
+
 use super::*;
-pub(crate) use crate::api::test_util::declare_referenced;
-use crate::{
-    api::{core::registry::RegistryBuilder, test_util::unique_test_dir},
-    SourceLocation,
-};
+pub(crate) use crate::test_util::declare_referenced;
+use crate::test_util::unique_test_dir;
 
 mod aliasing;
 mod boundary_invariants;

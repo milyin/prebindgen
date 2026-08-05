@@ -1,0 +1,15 @@
+[package]
+name = "prebindgen-c"
+version = { workspace = true }
+edition = { workspace = true }
+description = "Experimental C / cbindgen binding generator for prebindgen"
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+prebindgen = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }

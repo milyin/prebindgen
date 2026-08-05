@@ -1,24 +1,27 @@
+use prebindgen::core::Conversions;
+
 use super::*;
-use crate::api::core::registry::Conversions;
 
 impl CbindgenBuilder {
     pub(crate) fn prereq_domain_constants(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items = Vec::new();
         for decl in &self.convert_decls {
-            let Some(domain) = &decl.domain else { continue };
+            let Some(domain) = decl.domain() else {
+                continue;
+            };
             let demand = [Direction::Input, Direction::Output]
                 .into_iter()
-                .flat_map(|direction| registry.type_table(direction).values())
-                .map(|cell| option_depth(&cell.subject, &decl.key))
+                .flat_map(|direction| registry.readings(direction))
+                .map(|subject| option_depth(subject, decl.key()))
                 .max()
                 .unwrap_or(0);
             let ty = domain.ty();
             let base = self
                 .convert_bases
-                .get(&decl.key)
+                .get(decl.key())
                 .cloned()
                 .unwrap_or_else(|| {
-                    let short = type_short(&decl.rust_type.key().clone());
+                    let short = type_short(&decl.rust_type().key().clone());
                     self.mangle_rust_type
                         .as_ref()
                         .map(|m| m(&short))
@@ -28,7 +31,7 @@ impl CbindgenBuilder {
             for (index, value) in domain
                 .niche_values(demand.saturating_add(8))
                 .into_iter()
-                .filter_map(crate::core::ScalarValue::portable_expr)
+                .filter_map(prebindgen::core::ScalarValue::portable_expr)
                 .take(demand)
                 .enumerate()
             {
@@ -53,17 +56,17 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
-        let decl = self.convert_decls.iter().find(|d| d.key == key)?;
-        let spec = decl.input.as_ref()?;
+        let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
+        let spec = decl.input_spec().as_ref()?;
         let (repr, conversion, fallible) = self.input_conversion(decl, spec, registry, emit);
         assert!(
             is_scalar(&repr),
             "Cbindgen custom representations must be C scalar types"
         );
-        if let Some(domain) = &decl.domain {
+        if let Some(domain) = decl.domain() {
             assert_eq!(
                 TypeKey::from_type(domain.ty()),
                 TypeKey::from_type(&repr),
@@ -74,12 +77,12 @@ impl CbindgenBuilder {
         let wire = repr.clone();
         let name = Self::in_name_of(&key);
         let valid = decl
-            .domain
+            .domain()
             .as_ref()
             .map(|d| d.contains_expr(quote!(v)))
             .unwrap_or_else(|| quote!(true));
         let msg = format!("{} representation is outside its declared domain", key);
-        let function: syn::ItemFn = if decl.domain.is_some() || fallible {
+        let function: syn::ItemFn = if decl.domain().is_some() || fallible {
             let converted = if fallible {
                 quote!((#conversion).map_err(|e| e.to_string()))
             } else {
@@ -121,17 +124,17 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
-        let decl = self.convert_decls.iter().find(|d| d.key == key)?;
-        let spec = decl.output.as_ref()?;
+        let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
+        let spec = decl.output_spec().as_ref()?;
         let (repr, conversion, fallible) = self.output_conversion(decl, spec, registry, emit);
         assert!(
             is_scalar(&repr),
             "Cbindgen custom representations must be C scalar types"
         );
-        if let Some(domain) = &decl.domain {
+        if let Some(domain) = decl.domain() {
             assert_eq!(
                 TypeKey::from_type(domain.ty()),
                 TypeKey::from_type(&repr),
@@ -142,12 +145,12 @@ impl CbindgenBuilder {
         let wire = repr.clone();
         let name = Self::out_name_of(&key);
         let valid = decl
-            .domain
+            .domain()
             .as_ref()
             .map(|d| d.contains_expr(quote!(__repr)))
             .unwrap_or_else(|| quote!(true));
         let msg = format!("{} representation is outside its declared domain", key);
-        let function: syn::ItemFn = if decl.domain.is_some() || fallible {
+        let function: syn::ItemFn = if decl.domain().is_some() || fallible {
             let repr_expr = if fallible {
                 quote!((#conversion).map_err(|error| error.to_string())?)
             } else {
@@ -191,9 +194,9 @@ impl CbindgenBuilder {
         decl: &ConvertDecl,
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty_of(&decl.rust_type.key());
+        let target = self.src_ty_of(&decl.rust_type().key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = registry
@@ -209,7 +212,7 @@ impl CbindgenBuilder {
                     Some((ok, _)) => (ok, true),
                     None => (&item.ret, false),
                 };
-                assert_eq!(ok.key(), decl.key);
+                assert_eq!(ok.key(), *decl.key());
                 let path = self.conversion_fn_path(registry, f);
                 let expr = if by_ref {
                     syn::parse_quote!(#path(&v))
@@ -238,9 +241,9 @@ impl CbindgenBuilder {
         decl: &ConvertDecl,
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
-        let target = self.src_ty_of(&decl.rust_type.key());
+        let target = self.src_ty_of(&decl.rust_type().key());
         match spec {
             ConvertSpec::PrebindgenFn(f) => {
                 let item = registry
@@ -248,7 +251,7 @@ impl CbindgenBuilder {
                     .function(&f)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (param, by_ref) = one_param(item);
-                assert_eq!(param.key(), decl.key);
+                assert_eq!(param.key(), *decl.key());
                 let (repr, fallible) = match item.ret.fallible_parts() {
                     Some((ok, _)) => (emit.spell_ty(ok), true),
                     None => (emit.spell_ty(&item.ret), false),
@@ -282,7 +285,7 @@ impl CbindgenBuilder {
         registry: &impl Conversions<()>,
         direction: Direction,
     ) -> Niches {
-        let Some(domain) = &decl.domain else {
+        let Some(domain) = decl.domain() else {
             return Niches::empty();
         };
         // A crossing with no reading contributes no demand, and that is an
@@ -298,7 +301,7 @@ impl CbindgenBuilder {
             .map(|candidate| {
                 registry
                     .reading(candidate)
-                    .map_or(0, |reading| option_depth(&reading, &decl.key))
+                    .map_or(0, |reading| option_depth(&reading, decl.key()))
             })
             .max()
             .unwrap_or(0);
@@ -310,10 +313,10 @@ impl CbindgenBuilder {
                 .take(demand)
                 .map(|(value, literal)| {
                     let matches = match value {
-                        crate::core::ScalarValue::F32(bits) => {
+                        prebindgen::core::ScalarValue::F32(bits) => {
                             syn::parse_quote!(v.to_bits() == #bits)
                         }
-                        crate::core::ScalarValue::F64(bits) => {
+                        prebindgen::core::ScalarValue::F64(bits) => {
                             syn::parse_quote!(v.to_bits() == #bits)
                         }
                         _ => syn::parse_quote!(v == #literal),
@@ -340,7 +343,7 @@ impl CbindgenBuilder {
 /// Off the ELEMENT: a signature is a parameter list, and the borrow is
 /// `TypeKind::Ref` — where this filtered `syn::FnArg::Typed` and matched
 /// `syn::Type::Reference` to reach the same two facts.
-fn one_param(f: &crate::api::core::flat::Function) -> (&TypeRef, bool) {
+fn one_param(f: &prebindgen::core::flat::Function) -> (&TypeRef, bool) {
     assert_eq!(
         f.params.len(),
         1,
@@ -360,7 +363,7 @@ fn one_param(f: &crate::api::core::flat::Function) -> (&TypeRef, bool) {
 /// says this type is — `TypeKind::Optional` is produced for exactly `Option<T>`
 /// — so peeling tokens to rediscover them was re-deriving the classification
 /// the registry stored (#291).
-fn option_depth(candidate: &crate::api::core::flat::TypeRef, target: &TypeKey) -> usize {
+fn option_depth(candidate: &prebindgen::core::flat::TypeRef, target: &TypeKey) -> usize {
     let mut reading = candidate;
     let mut depth = 0;
     while let Some(inner) = reading.optional_inner() {

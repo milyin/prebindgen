@@ -692,19 +692,19 @@ impl ConstDecl {
     /// must take no parameters and must not return `Result`.
     pub fn fun(self, decl: FunctionDecl) -> Self {
         assert!(
-            decl.param_expands.is_empty() && decl.return_expand.is_none(),
+            decl.param_expands().is_empty() && decl.return_expand().is_none(),
             "constant `{}`: expand overrides don't apply to a constant source fn `{}`",
             self.rust_ident,
-            decl.rust_ident
+            decl.rust_ident()
         );
         assert!(
-            decl.kotlin_name_override.is_none(),
+            decl.kotlin_name_override().is_none(),
             "constant `{}`: the val name belongs on `constant!(…)` (or its `.name(…)`), \
              not on the source fn `{}`",
             self.rust_ident,
-            decl.rust_ident
+            decl.rust_ident()
         );
-        self.set_source(ConstSource::Fun(decl.rust_ident))
+        self.set_source(ConstSource::Fun(decl.rust_ident().clone()))
     }
 
     /// Value source: a **binding-local nullary fn** named by path —
@@ -768,14 +768,14 @@ pub(crate) enum IgnoreKind {
 impl From<FunctionDecl> for IgnoreDecl {
     fn from(decl: FunctionDecl) -> Self {
         assert!(
-            decl.kotlin_name_override.is_none()
-                && decl.param_expands.is_empty()
-                && decl.return_expand.is_none(),
+            decl.kotlin_name_override().is_none()
+                && decl.param_expands().is_empty()
+                && decl.return_expand().is_none(),
             "ignore(fun!({})): an ignored fn is never surfaced — \
              .name()/expand overrides don't apply",
-            decl.rust_ident
+            decl.rust_ident()
         );
-        IgnoreDecl(IgnoreKind::Fun(decl.rust_ident))
+        IgnoreDecl(IgnoreKind::Fun(decl.rust_ident().clone()))
     }
 }
 

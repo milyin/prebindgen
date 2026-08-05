@@ -88,7 +88,7 @@ impl ScalarValue {
 
     /// A literal expression suitable for C header generation. Arbitrary NaN
     /// payloads and infinities have no portable C constant spelling.
-    pub(crate) fn portable_expr(self) -> Option<syn::Expr> {
+    pub fn portable_expr(self) -> Option<syn::Expr> {
         match self {
             Self::F32(bits) => {
                 let value = f32::from_bits(bits);
@@ -247,7 +247,9 @@ impl RepresentationDomain {
         &self.ty
     }
 
-    pub(crate) fn contains_expr(&self, value: TokenStream) -> TokenStream {
+    /// An expression testing whether `value` lies inside the legal domain —
+    /// what a generated bounds check is built from.
+    pub fn contains_expr(&self, value: TokenStream) -> TokenStream {
         let base = match &self.base {
             Base::Range { start, end } => {
                 let lo = bound_expr(start, &value, true);
@@ -272,7 +274,10 @@ impl RepresentationDomain {
     }
 
     /// Derive a bounded number of stable values outside the legal domain.
-    pub(crate) fn niche_values(&self, limit: usize) -> Vec<ScalarValue> {
+    ///
+    /// Adapter-facing, with [`ScalarValue::portable_expr`]: a back-end that
+    /// gives a sum type a niche-based ABI needs the values to reserve.
+    pub fn niche_values(&self, limit: usize) -> Vec<ScalarValue> {
         let mut out = Vec::new();
         let extra = match &self.base {
             Base::Values(v) => v.len(),

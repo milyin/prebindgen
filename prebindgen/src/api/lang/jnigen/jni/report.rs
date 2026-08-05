@@ -152,7 +152,13 @@ impl super::JniGen {
         let mut convs: Vec<String> = ext
             .convert_decls
             .iter()
-            .map(|d| format!("- `convert!({})`{}\n", d.key.as_str(), d.describe_sources()))
+            .map(|d| {
+                format!(
+                    "- `convert!({})`{}\n",
+                    d.key().as_str(),
+                    d.describe_sources()
+                )
+            })
             .collect();
         convs.sort();
         if !convs.is_empty() {

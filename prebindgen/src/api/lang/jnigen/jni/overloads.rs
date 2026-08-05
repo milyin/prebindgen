@@ -53,18 +53,18 @@ impl Declarations {
         let type_level = self
             .param_expand_decls
             .iter()
-            .map(|d| (d.key.as_str().to_string(), d));
+            .map(|d| (d.key().as_str().to_string(), d));
         let per_fn = self
             .fn_param_expands
             .iter()
             .map(|(func, param, d)| (format!("fun `{func}` param `{param}`"), d));
         for (site, decl) in type_level.chain(per_fn) {
-            if decl.no_split || decl.variants.len() < 2 {
+            if decl.is_no_split() || decl.variants().len() < 2 {
                 continue;
             }
-            let target = decl.rust_type.key();
+            let target = decl.rust_type().key();
             let sigs: Vec<(String, Vec<ErasedJvmType>)> = decl
-                .variants
+                .variants()
                 .iter()
                 .map(|v| {
                     let ctor = match v {
@@ -85,7 +85,7 @@ impl Declarations {
                             "expand_param!({t}) [{site}]: variants {a} and {b} both surface as \
                              `({sig})` — a split would emit two overloads with the same JVM \
                              signature; disambiguate the constructors or add .no_split()",
-                            t = decl.key.as_str(),
+                            t = decl.key().as_str(),
                             a = sigs[i].0,
                             b = sigs[j].0,
                             sig = sigs[i]

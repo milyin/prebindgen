@@ -276,16 +276,16 @@ macro_rules! fields {
 /// ```
 #[derive(Clone)]
 pub struct ExpandParamDecl {
-    pub(crate) key: TypeKey,
+    key: TypeKey,
     /// The type this declaration was **written with** — the `X` the macro
     /// received. Kept because the declaration is where it came from: recovering
     /// it later *from* the key was reasoning backwards from an identity (#291).
-    pub(crate) rust_type: Origin<syn::Type>,
-    pub(crate) variants: Vec<LocalVariant>,
+    rust_type: Origin<syn::Type>,
+    variants: Vec<LocalVariant>,
     /// `.no_split()` — suppress the proactive splittability check for this
     /// variant set (it will only ever be used as the selector form). See
     /// [`Self::no_split`].
-    pub(crate) no_split: bool,
+    no_split: bool,
 }
 
 impl ExpandParamDecl {
@@ -296,6 +296,30 @@ impl ExpandParamDecl {
             variants: Vec::new(),
             no_split: false,
         }
+    }
+
+    /// The type identity this declaration is registered under.
+    pub fn key(&self) -> &TypeKey {
+        &self.key
+    }
+
+    /// The type this declaration was written with, as originally parsed.
+    pub fn rust_type(&self) -> &Origin<syn::Type> {
+        &self.rust_type
+    }
+
+    /// The declared build-from / existing-handle arms, in declaration order.
+    /// `pub(crate)`, not `pub` — [`LocalVariant`] itself is `pub(crate)`
+    /// (a public fn cannot return a private type).
+    pub(crate) fn variants(&self) -> &[LocalVariant] {
+        &self.variants
+    }
+
+    /// Whether `.no_split()` was declared (suppresses the splittability
+    /// check). Named `is_no_split` rather than `no_split` — that name is
+    /// already the builder method that sets the flag ([`Self::no_split`]).
+    pub fn is_no_split(&self) -> bool {
+        self.no_split
     }
 
     /// Add a **build-from** arm: parameters of this type also carry the
@@ -383,12 +407,12 @@ impl ExpandParamDecl {
 
 #[derive(Clone)]
 pub struct ExpandReturnDecl {
-    pub(crate) key: TypeKey,
+    key: TypeKey,
     /// The type this declaration was **written with** — the `X` the macro
     /// received. Kept because the declaration is where it came from: recovering
     /// it later *from* the key was reasoning backwards from an identity (#291).
-    pub(crate) rust_type: Origin<syn::Type>,
-    pub(crate) fields: Vec<LocalField>,
+    rust_type: Origin<syn::Type>,
+    fields: Vec<LocalField>,
 }
 
 impl ExpandReturnDecl {
@@ -398,6 +422,25 @@ impl ExpandReturnDecl {
             rust_type: declared_origin(rust_type),
             fields: Vec::new(),
         }
+    }
+
+    /// The type identity this declaration is registered under.
+    pub fn key(&self) -> &TypeKey {
+        &self.key
+    }
+
+    /// The type this declaration was written with, as originally parsed.
+    pub fn rust_type(&self) -> &Origin<syn::Type> {
+        &self.rust_type
+    }
+
+    /// The declared field records, in declaration order. Named `field_list`
+    /// rather than `fields` — that name is already the builder method that
+    /// appends a value-form ([`Self::fields`]). `pub(crate)`, not `pub` —
+    /// [`LocalField`] itself is `pub(crate)` (a public fn cannot return a
+    /// private type).
+    pub(crate) fn field_list(&self) -> &[LocalField] {
+        &self.fields
     }
 
     /// Add one field — a reader whose value crosses as this leaf:
@@ -589,14 +632,14 @@ impl ExpandReturnDecl {
 /// caught rather than silently ignored.
 #[derive(Clone)]
 pub struct FieldsDecl {
-    pub(crate) func: syn::Ident,
-    pub(crate) overrides: Vec<(String, ExpandReturnDecl)>,
-    pub(crate) names: Vec<(String, String)>,
+    func: syn::Ident,
+    overrides: Vec<(String, ExpandReturnDecl)>,
+    names: Vec<(String, String)>,
     /// Set by [`ExpandReturnDecl::fields_self_into`] — the accessor consumes its
     /// receiver. Declared rather than read off the signature, because giving
     /// the value away is a boundary decision; the two are cross-checked when
     /// the records are resolved.
-    pub(crate) consuming: bool,
+    consuming: bool,
 }
 
 impl FieldsDecl {
@@ -612,6 +655,29 @@ impl FieldsDecl {
     pub(crate) fn consuming(mut self) -> Self {
         self.consuming = true;
         self
+    }
+
+    /// The value-form accessor's ident, as declared with [`fields!`](crate::fields).
+    pub fn func(&self) -> &syn::Ident {
+        &self.func
+    }
+
+    /// The per-field decomposition overrides, in declaration order.
+    pub fn overrides(&self) -> &[(String, ExpandReturnDecl)] {
+        &self.overrides
+    }
+
+    /// The per-field name overrides, in declaration order.
+    pub fn names(&self) -> &[(String, String)] {
+        &self.names
+    }
+
+    /// Whether the accessor consumes its receiver (set by
+    /// [`ExpandReturnDecl::fields_self_into`]). Named `is_consuming` rather
+    /// than `consuming` — that name is already the crate-internal builder
+    /// method that sets the flag.
+    pub fn is_consuming(&self) -> bool {
+        self.consuming
     }
 
     /// Replace **one** field's decomposition, with the same
@@ -716,15 +782,15 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// — using the very same decl objects, so the complete-set rule is identical
 /// at both scopes.
 pub struct FunctionDecl {
-    pub(crate) rust_ident: syn::Ident,
-    pub(crate) kotlin_name_override: Option<String>,
-    pub(crate) param_expands: Vec<(String, ExpandParamDecl)>,
-    pub(crate) return_expand: Option<ExpandReturnDecl>,
-    pub(crate) split_on_params: Vec<String>,
+    rust_ident: syn::Ident,
+    kotlin_name_override: Option<String>,
+    param_expands: Vec<(String, ExpandParamDecl)>,
+    return_expand: Option<ExpandReturnDecl>,
+    split_on_params: Vec<String>,
     /// `fun!(crate::f)` — a **binding-local** fn: the declared path plus the
     /// stated signature ([`sig`](Self::sig), required by acceptance time).
     /// `None` = an ordinary `#[prebindgen]` registry fn.
-    pub(crate) local: Option<(syn::Path, Option<syn::Signature>)>,
+    local: Option<(syn::Path, Option<syn::Signature>)>,
 }
 
 impl FunctionDecl {
@@ -737,6 +803,63 @@ impl FunctionDecl {
             split_on_params: Vec::new(),
             local: None,
         }
+    }
+
+    /// The Rust-side fn ident (the path's last segment for a binding-local fn).
+    pub fn rust_ident(&self) -> &syn::Ident {
+        &self.rust_ident
+    }
+
+    /// The explicit Kotlin-side name, if `.name(...)` was declared.
+    pub fn kotlin_name_override(&self) -> &Option<String> {
+        &self.kotlin_name_override
+    }
+
+    /// The per-parameter expand overrides declared with `.expand_param(...)`.
+    pub fn param_expands(&self) -> &[(String, ExpandParamDecl)] {
+        &self.param_expands
+    }
+
+    /// The return expand override declared with `.expand_return(...)`, if any.
+    pub fn return_expand(&self) -> &Option<ExpandReturnDecl> {
+        &self.return_expand
+    }
+
+    /// The parameters named with `.split_on_param(...)`, in declaration order.
+    pub fn split_on_params(&self) -> &[String] {
+        &self.split_on_params
+    }
+
+    /// The binding-local fn's declared path and stated signature, if this is
+    /// a `fun!(crate::f)` rather than an ordinary `#[prebindgen]` registry fn.
+    pub fn local(&self) -> &Option<(syn::Path, Option<syn::Signature>)> {
+        &self.local
+    }
+
+    /// Consume `self` into its raw fields, by value. Not a plain accessor —
+    /// the one call site (`accept_fn_expands` in the JNI builder) destructures
+    /// a whole `FunctionDecl` it owns to move each field (`Vec`s, the `local`
+    /// signature) onward without cloning, so a reference-returning accessor
+    /// won't do.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        syn::Ident,
+        Option<String>,
+        Vec<(String, ExpandParamDecl)>,
+        Option<ExpandReturnDecl>,
+        Vec<String>,
+        Option<(syn::Path, Option<syn::Signature>)>,
+    ) {
+        (
+            self.rust_ident,
+            self.kotlin_name_override,
+            self.param_expands,
+            self.return_expand,
+            self.split_on_params,
+            self.local,
+        )
     }
 
     /// `fun!(crate::f)` — declare a **binding-local** fn by path. The fn
@@ -919,7 +1042,7 @@ impl FunctionDecl {
 // builder — boxing the syn payloads would only complicate the decl arms.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
-pub(crate) enum ConvertSpec {
+pub enum ConvertSpec {
     /// A `#[prebindgen]` fn (flat or helper crate): the representable type
     /// and fallibility are read from its registry signature at lookup time.
     PrebindgenFn(syn::Ident),
@@ -978,7 +1101,7 @@ impl ConvertDirection {
 /// with a stated representation type).
 #[derive(Clone)]
 pub struct ConvertSourceDecl {
-    pub(crate) kind: ConvertSourceKind,
+    kind: ConvertSourceKind,
 }
 
 // large_enum_variant: a handful of these exist per binding, held transiently
@@ -1062,18 +1185,18 @@ impl From<FunctionDecl> for ConvertSourceDecl {
 
 #[derive(Clone)]
 pub struct ConvertDecl {
-    pub(crate) key: TypeKey,
+    key: TypeKey,
     /// The type this declaration was **written with** — the `X` the macro
     /// received. Kept because the declaration is where it came from: recovering
     /// it later *from* the key was reasoning backwards from an identity (#291).
-    pub(crate) rust_type: Origin<syn::Type>,
-    pub(crate) input: Option<ConvertSpec>,
-    pub(crate) output: Option<ConvertSpec>,
-    pub(crate) domain: Option<crate::core::RepresentationDomain>,
+    rust_type: Origin<syn::Type>,
+    input: Option<ConvertSpec>,
+    output: Option<ConvertSpec>,
+    domain: Option<crate::core::RepresentationDomain>,
     /// Binding-local fn sources declared on this convert (`fun!(crate::f)
     /// .sig(…)`): drained into [`Declarations::local_fns`] at acceptance so the
     /// synthesis pre-pass covers them.
-    pub(crate) locals: Vec<(syn::Ident, syn::Path, syn::Signature)>,
+    locals: Vec<(syn::Ident, syn::Path, syn::Signature)>,
 }
 
 impl ConvertDecl {
@@ -1103,6 +1226,47 @@ impl ConvertDecl {
             domain: None,
             locals: Vec::new(),
         }
+    }
+
+    /// The type identity this declaration is registered under.
+    pub fn key(&self) -> &TypeKey {
+        &self.key
+    }
+
+    /// The type this declaration was written with, as originally parsed.
+    pub fn rust_type(&self) -> &Origin<syn::Type> {
+        &self.rust_type
+    }
+
+    /// The declared **into-Rust** conversion source, if any. Named
+    /// `input_spec` rather than `input` — that name is already the builder
+    /// method that declares it ([`Self::input`]).
+    pub fn input_spec(&self) -> &Option<ConvertSpec> {
+        &self.input
+    }
+
+    /// The declared **out-of-Rust** conversion source, if any. Named
+    /// `output_spec` rather than `output` — that name is already the builder
+    /// method that declares it ([`Self::output`]).
+    pub fn output_spec(&self) -> &Option<ConvertSpec> {
+        &self.output
+    }
+
+    /// The declared representation-domain restriction, if any.
+    pub fn domain(&self) -> &Option<crate::core::RepresentationDomain> {
+        &self.domain
+    }
+
+    /// Binding-local fn sources declared on this convert, drained into the
+    /// synthesis pre-pass at acceptance.
+    pub fn locals(&self) -> &[(syn::Ident, syn::Path, syn::Signature)] {
+        &self.locals
+    }
+
+    /// Mutable access for draining binding-local fn sources into the
+    /// synthesis pre-pass at acceptance (`Vec::append`).
+    pub(crate) fn locals_mut(&mut self) -> &mut Vec<(syn::Ident, syn::Path, syn::Signature)> {
+        &mut self.locals
     }
 
     fn set_input(mut self, spec: ConvertSpec) -> Self {
@@ -1275,7 +1439,7 @@ fn reject_builtin_convert_type(key: &TypeKey) {
 /// (`crate::sub::f` → `"crate::sub"`). Paths are validated ≥2 segments at
 /// decl time (`fun!` path arm / `FieldDecl::with`), so the prefix is
 /// always non-empty.
-pub(crate) fn local_path_prefix(path: &syn::Path) -> String {
+pub fn local_path_prefix(path: &syn::Path) -> String {
     path.segments
         .iter()
         .take(path.segments.len() - 1)

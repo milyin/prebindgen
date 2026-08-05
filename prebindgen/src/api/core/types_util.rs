@@ -103,8 +103,8 @@ pub(crate) fn ident(s: &str) -> syn::Ident {
 
 /// Convert a `PascalCase` / `camelCase` identifier to `snake_case`
 /// (`ZKeyExpr` → `z_key_expr`). The single implementation behind the
-/// public `prebindgen::lang::snake_case` re-export, and behind cbindgen's
-/// type-name mangling.
+/// public `snake_case` re-export in the `prebindgen-c` crate, and behind
+/// cbindgen's type-name mangling.
 pub fn pascal_to_snake(s: &str) -> String {
     let mut out = String::new();
     for (i, c) in s.chars().enumerate() {

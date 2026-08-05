@@ -636,7 +636,7 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
     // signature's own `impl Fn` bounds agree on every arg's identity.
     let from_reading = SpecKey::callback(arg_readings);
     let from_syntax = SpecKey::Callback(
-        crate::api::core::registry::extract_fn_trait_args(
+        crate::api::core::flat::extract_fn_trait_args(
             &crate::api::core::emit::Emit::for_test().spell_ty(&param.ty),
         )
         .expect("the param is an impl Fn")
