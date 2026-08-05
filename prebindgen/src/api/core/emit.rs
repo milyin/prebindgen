@@ -10,14 +10,13 @@
 //! the way a spelling can.
 //!
 //! Those two are the same capability if the model simply hands syntax out, so
-//! for a long time the difference was kept by *counting*: a token census froze
-//! how many places named a door, and a moving count failed the build. That
-//! worked and had three holes. It could be walked around without moving
-//! (`spell()` → `parse_quote!` recovers a node while naming no counted door).
-//! It could not see an out-of-crate adapter at all, because it scanned this
-//! crate's `src/`. And it cost about two thousand lines to maintain.
+//! the difference has to be enforced somewhere. Enforcing it by *measurement* —
+//! counting how many places name a door, and failing the build when the count
+//! moves — was tried and retired: a count can be walked around without moving
+//! (`spell()` → `parse_quote!` recovers a node while naming no door), and it
+//! cannot see an out-of-crate adapter at all.
 //!
-//! So the difference is a **capability** instead. Syntax is reachable only
+//! So the difference is a **capability**. Syntax is reachable only
 //! through this type, this type cannot be constructed outside `api::core`, and
 //! core hands one out only to the callbacks whose job is producing Rust.
 //! Adapter code that classifies, plans, names or validates never receives one,
@@ -42,9 +41,9 @@
 //! **Every route from the model to captured syntax.** `TypeRef::{as_syn, spell,
 //! stripped_syntax}`, `TypeKind::to_syn`, `Element::as_syn`, `Type::as_syn`,
 //! `Origin::{as_syn, spell}`, `Flat::enum_item` and the three `spell(head,
-//! parts)` shape methods are all `pub(in crate::api::core)`. Eleven
-//! `compile_fail` examples on [`Emit`] check each from outside the crate, and
-//! `flat::surface` fails if a *new* public item in `flat` returns a `syn` type.
+//! parts)` shape methods are all `pub(in crate::api::core)`. The
+//! `compile_fail` examples on [`Emit`] check each one from outside the crate,
+//! which is the way an adapter author meets them.
 //!
 //! Two things stay public because they are not that:
 //!
@@ -60,29 +59,20 @@
 //! delegating to `spell()` would have handed the captured tokens back out
 //! through `format!`.
 //!
-//! # What the census did that this does not
-//!
-//! `escape_surface_is_closed` read the model's own surface and failed if a NEW
-//! public method handed out a `syn` node under a name its list did not count —
-//! four of the five doors were found that way. Visibility does not give that:
-//! someone can add `pub fn as_syn2` to `flat` tomorrow.
-//!
-//! It is a smaller risk than it was. Such a method has to be added inside
-//! `flat` **and** surfaced here to be reachable from an adapter, which is a
-//! two-file diff in the one module a reviewer of this subsystem reads — where
-//! before, a new door could be added anywhere and only a count would notice.
-//! Recorded here rather than dropped silently, because a check that is retired
-//! deserves to say what it was for.
-//!
 //! # The residual
+//!
+//! Two things visibility does not do, both accepted.
 //!
 //! [`Emit::spell`] yields a `TokenStream`, so emission code can re-parse it and
 //! take the node apart. That is deliberate — emission is where syntax belongs —
 //! and closing it would mean an emission IR for Rust, mirroring
 //! [`api::gen::kotlin`](crate::api::gen), which is a much larger piece of work.
-//! It replaces the census's four blind spots, three of which the capability
-//! closes outright: ident-name classification, helper delegation and the
-//! unwatched syn enums were all reachable only *through* a door.
+//!
+//! And nothing stops a *new* door being added: someone can write `pub fn
+//! as_syn2` in `flat` tomorrow. The reason that is tolerable is that such a
+//! method has to be added inside `flat` **and** surfaced here before an adapter
+//! can reach it — a two-file diff in the one module a reviewer of this
+//! subsystem already reads.
 
 use proc_macro2::TokenStream;
 
@@ -103,8 +93,8 @@ use super::flat::{Element, EnumValue, Field, Struct, Type, TypeRef};
 /// # The seal, as compiled assertions
 ///
 /// A doctest builds as its **own crate** against the published API, so these
-/// check the property the token census structurally could not: what an
-/// out-of-crate adapter can reach. Each names a route that used to be open.
+/// check the property that matters: what an out-of-crate adapter can reach.
+/// Each names a route that used to be open.
 ///
 /// An element's item (`E0624` — the method is private):
 ///
@@ -135,8 +125,7 @@ use super::flat::{Element, EnumValue, Field, Struct, Type, TypeRef};
 /// fn leak(f: &flat::Function) -> proc_macro2::TokenStream { f.origin.spell() }
 /// ```
 ///
-/// A type's **node** — the door C5 claimed to have closed and did not, found by
-/// review after the census was already deleted:
+/// A type's **node** — the door C5 claimed to have closed and did not:
 ///
 /// ```compile_fail
 /// # use prebindgen::core::flat;
@@ -166,7 +155,7 @@ use super::flat::{Element, EnumValue, Field, Struct, Type, TypeRef};
 /// }
 /// ```
 ///
-/// A type's spelling — the route the census could only ever *count*:
+/// A type's spelling:
 ///
 /// ```compile_fail
 /// # use prebindgen::core::flat;
@@ -229,8 +218,7 @@ impl Emit {
     /// around it (`*mut #ty`, `&[#elem]`).
     ///
     /// A convenience over `parse_quote!(#spelled)`, which is what the call
-    /// sites wrote before — and which the census could not see, being the one
-    /// route to a node that named no door.
+    /// sites wrote before.
     pub fn spell_ty(&self, ty: &TypeRef) -> syn::Type {
         let toks = ty.spell();
         syn::parse_quote!(#toks)

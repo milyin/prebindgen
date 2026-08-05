@@ -236,8 +236,7 @@ pub(crate) fn callback_input(
             // fails, on exactly this clone, if that arm is made
             // spelling-blind. A local re-check here was tried (#279 review)
             // and dropped: it changed no output on `Box<&String>` or
-            // `Box<&ZThing>`, and cost a `boundary.ledger` entry for a
-            // classification that never fires.
+            // `Box<&ZThing>`, and added a classification that never fires.
             None => {
                 let core = arg_ty.borrow_target()?;
                 (quote!((#cb_arg).clone()), registry.output_entry(core)?)

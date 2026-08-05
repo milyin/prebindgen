@@ -57,10 +57,9 @@ use crate::SourceLocation;
 /// still reads it freely and everything downstream has to say which of the two
 /// it meant.
 ///
-/// It was a public field returning a `syn` node to anyone who asked, and for a
-/// while a token census counted the consequences — measurement, not prevention.
-/// Now [`Emit`](crate::api::core::emit::Emit) is the only holder of that
-/// capability, and the compiler answers instead of a committed number.
+/// It was a public field returning a `syn` node to anyone who asked.
+/// Outside `api::core`, captured syntax is reachable only through
+/// [`Emit`](crate::api::core::emit::Emit), and the compiler enforces it.
 #[derive(Clone, Debug)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
@@ -80,15 +79,13 @@ impl<S> Origin<S> {
 
     /// The node as `syn` — **the escape**.
     ///
-    /// Every remaining place that takes the source apart instead of asking the
-    /// model comes through here, which is what makes the population countable:
-    /// `boundary.rs` counts these calls per file, and the count reaching zero is
-    /// what "the model answers every source question" would mean.
+    /// Every place that takes the source apart instead of asking the model
+    /// comes through here, and `pub(in crate::api::core)` is what keeps that
+    /// list short: only [`Emit`](crate::api::core::emit::Emit) can reach it.
     ///
     /// Naming it is not an accusation. An emitter assembling a `syn::Item`, or a
     /// signature the generated crate must restate node for node, legitimately
-    /// needs the node — that is why the ledger keeps item escapes in their own
-    /// bucket. What it stops is reaching for one *by default*.
+    /// needs the node. What it stops is reaching for one *by default*.
     pub(in crate::api::core) fn as_syn(&self) -> &S {
         &self.syntax
     }

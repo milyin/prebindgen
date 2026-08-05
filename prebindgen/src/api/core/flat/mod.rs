@@ -37,13 +37,13 @@
 //! > **Classify off `kind`, spell with [`spell()`](Origin::spell).**
 //!
 //! And the model enforces it rather than asking. [`Origin`]'s syntax is
-//! private: `spell()` hands out tokens, which is all generated Rust ever needed,
-//! and [`as_syn`](Origin::as_syn) hands out the node and is the one way to get
-//! one. Matching a `syn::Type` or `syn::Expr` variant outside this module is a
-//! classifier — issue #211 says classification lives here alone — and it now
-//! takes a named escape to reach the node to match on. See [`spell`] for the
-//! helpers that turn an element back into Rust, and `boundary.rs` for the
-//! ledger that counts the escapes still owed.
+//! private, and every route to it — `spell()`, `as_syn()` — is visible only
+//! inside `api::core`. Matching a `syn::Type` or `syn::Expr` variant outside
+//! this module is a classifier, and issue #211 says classification lives here
+//! alone; the visibility is what makes that hold rather than a convention
+//! anyone has to remember. Code whose job *is* producing Rust reaches the
+//! syntax through [`Emit`](crate::core::Emit), which core hands only to the
+//! emission callbacks.
 //!
 //! # What earns a variant
 //!
@@ -189,8 +189,6 @@ pub(in crate::api::core) mod spell;
 pub(crate) mod spelling;
 mod ty;
 
-#[cfg(test)]
-mod surface;
 #[cfg(test)]
 mod tests;
 
