@@ -2,11 +2,11 @@
 
 A tool for separating the implementation of FFI interfaces from language-specific binding generation, allowing each to reside in different crates.
 
-## Stability in 0.6
+## Stability in 0.5
 
 The language-neutral pipeline (`prebindgen`, `prebindgen-flat`,
 `prebindgen-registry`) and the JNI/Kotlin `prebindgen-jni` adapter are
-supported public APIs in 0.6. `prebindgen-c` is always compiled — there is
+supported public APIs in 0.5. `prebindgen-c` is always compiled — there is
 no feature gate — but it remains an experimental proof of concept and is not
 covered by the semver guarantee; its API may change in a minor release.
 
@@ -159,15 +159,15 @@ experimental `CbindgenBuilder` adapter from `build.rs`:
 # example-cbindgen/Cargo.toml
 [dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.6"
-prebindgen-c-runtime = "0.6"   # the generated converters reference its traits
+prebindgen = "0.5"
+prebindgen-c-runtime = "0.5"   # the generated converters reference its traits
 konst = "0.3"                 # the generated file emits a konst feature guard
 
 [build-dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.6"
-prebindgen-registry = "0.6"
-prebindgen-c = "0.6"
+prebindgen = "0.5"
+prebindgen-registry = "0.5"
+prebindgen-c = "0.5"
 cbindgen = "0.29"
 syn = { version = "2", features = ["full"] }
 ```
