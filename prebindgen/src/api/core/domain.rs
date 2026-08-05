@@ -88,7 +88,7 @@ impl ScalarValue {
 
     /// A literal expression suitable for C header generation. Arbitrary NaN
     /// payloads and infinities have no portable C constant spelling.
-    pub(crate) fn portable_expr(self) -> Option<syn::Expr> {
+    pub fn portable_expr(self) -> Option<syn::Expr> {
         match self {
             Self::F32(bits) => {
                 let value = f32::from_bits(bits);

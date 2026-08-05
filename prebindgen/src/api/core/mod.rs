@@ -34,7 +34,7 @@ pub(crate) mod resolve;
 pub mod shape;
 pub mod types_util;
 pub mod unfold;
-pub(crate) mod write;
+pub mod write;
 
 pub use prebindgen_c_runtime::{Gravestone, Transmute};
 
@@ -50,7 +50,7 @@ pub use self::{
     prebindgen::{ConverterImpl, Prebindgen, Stage},
     registry::{
         Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
-        NotExpressibleEntry, Registry, ScanError, TypeEntry, TypeKey, TypeKeyParseError,
-        WriteRustError,
+        NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeEntry, TypeKey,
+        TypeKeyParseError, WriteRustError,
     },
 };

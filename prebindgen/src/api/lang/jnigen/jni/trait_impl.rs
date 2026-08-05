@@ -454,7 +454,7 @@ impl Declarations {
         // `convert!`-declared types likewise have no type-table entry but
         // appear in emitted converter signatures.
         for decl in &self.convert_decls {
-            add(&decl.key);
+            add(decl.key());
         }
         names
     }
@@ -1506,19 +1506,19 @@ impl Declarations {
         // fn's return type needs the output twin.
         let mut convert_edges: Vec<(Crossing, Crossing)> = Vec::new();
         for decl in &self.convert_decls {
-            if let Some(ty) = self.convert_target(&decl.key, &registry, Direction::Input) {
+            if let Some(ty) = self.convert_target(decl.key(), &registry, Direction::Input) {
                 registry = registry.cross(Direction::Input, &ty);
                 // The target's conversion chains through this one, and nothing
                 // about the target type says so.
                 convert_edges.push((
-                    (Direction::Input, decl.key.clone()),
+                    (Direction::Input, decl.key().clone()),
                     (Direction::Input, TypeKey::from_type(&ty)),
                 ));
             }
-            if let Some(ty) = self.convert_target(&decl.key, &registry, Direction::Output) {
+            if let Some(ty) = self.convert_target(decl.key(), &registry, Direction::Output) {
                 registry = registry.cross(Direction::Output, &ty);
                 convert_edges.push((
-                    (Direction::Output, decl.key.clone()),
+                    (Direction::Output, decl.key().clone()),
                     (Direction::Output, TypeKey::from_type(&ty)),
                 ));
             }
@@ -1874,7 +1874,7 @@ impl Prebindgen for Declarations {
                     let declared = self
                         .return_expand_decls
                         .iter()
-                        .any(|d| d.key == err_ty.key());
+                        .any(|d| *d.key() == err_ty.key());
                     if !declared && matches!(self.type_kind(binding, &core.key()), TypeKind::Sum) {
                         return Err(format!(
                             "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \

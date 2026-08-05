@@ -137,15 +137,15 @@ impl CbindgenBuilder {
     /// constants derived from the conversion's naming base.
     pub fn convert(mut self, decl: ConvertDecl) -> Self {
         assert!(
-            decl.input.is_some() || decl.output.is_some(),
+            decl.input_spec().is_some() || decl.output_spec().is_some(),
             "Cbindgen::convert declares no input or output conversion"
         );
-        let key = decl.key.clone();
+        let key = decl.key().clone();
         assert!(
             !self
                 .convert_decls
                 .iter()
-                .any(|existing| existing.key == key),
+                .any(|existing| *existing.key() == key),
             "Cbindgen::convert already declares {}",
             key
         );

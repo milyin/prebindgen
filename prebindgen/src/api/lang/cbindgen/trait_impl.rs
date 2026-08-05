@@ -1566,7 +1566,7 @@ impl CbindgenBuilder {
     fn collect_local_functions(&self) -> Vec<(syn::ItemFn, String)> {
         let mut result = Vec::new();
         let mut seen = HashMap::<syn::Ident, String>::new();
-        for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| &decl.locals) {
+        for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| decl.locals()) {
             let origin = crate::api::core::decl::local_path_prefix(path);
             let mut sig = sig.clone();
             sig.ident = ident.clone();
@@ -2577,7 +2577,7 @@ impl CbindgenBuilder {
     pub(crate) fn helper_functions(&self) -> HashSet<syn::Ident> {
         self.convert_decls
             .iter()
-            .flat_map(|decl| decl.input.iter().chain(decl.output.iter()))
+            .flat_map(|decl| decl.input_spec().iter().chain(decl.output_spec().iter()))
             .filter_map(|spec| match spec {
                 ConvertSpec::PrebindgenFn(ident) => Some(ident.clone()),
                 ConvertSpec::Trait { .. } => None,

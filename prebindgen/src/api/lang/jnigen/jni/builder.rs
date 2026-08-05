@@ -580,8 +580,8 @@ impl JniGenBuilder {
     /// (it's a factory); then the members join the class's registered set.
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
         for (decl, kind) in members {
-            let rust_ident = decl.rust_ident.clone();
-            let kotlin_name_override = decl.kotlin_name_override.clone();
+            let rust_ident = decl.rust_ident().clone();
+            let kotlin_name_override = decl.kotlin_name_override().clone();
             self.accept_fn_expands(decl);
             // A constructor member's return is a factory, never
             // output-flattened — derived from `class_members` in
@@ -599,8 +599,8 @@ impl JniGenBuilder {
     }
 
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
-        let mut entry = FunctionEntry::new(decl.rust_ident.clone());
-        entry.kotlin_name_override = decl.kotlin_name_override.clone();
+        let mut entry = FunctionEntry::new(decl.rust_ident().clone());
+        entry.kotlin_name_override = decl.kotlin_name_override().clone();
         self.decls
             .packages
             .entry(subpackage.to_string())
@@ -619,14 +619,14 @@ impl JniGenBuilder {
     /// [`Self::build_deconstructors`]) so field-name inheritance and the
     /// rust-side-only checks see the complete declaration set.
     fn accept_fn_expands(&mut self, decl: FunctionDecl) {
-        let FunctionDecl {
+        let (
             rust_ident,
-            kotlin_name_override: _,
+            _kotlin_name_override,
             param_expands,
             return_expand,
             split_on_params,
             local,
-        } = decl;
+        ) = decl.into_parts();
         // A path-built decl (`fun!(crate::f)`) declares a BINDING-LOCAL fn:
         // record its stated signature for the synthesis pre-pass
         // ([`Self::local_functions`]). The signature is mandatory — a path
@@ -678,19 +678,19 @@ impl JniGenBuilder {
         match decl.into() {
             ExpandDecl::Param(decl) => {
                 assert!(
-                    !decl.variants.is_empty(),
+                    !decl.variants().is_empty(),
                     "expand_param!({}) declares no variants — add .variant(fun!(...)) and/or \
                      .variant_self()",
-                    decl.key.as_str()
+                    decl.key().as_str()
                 );
                 self.decls.param_expand_decls.push(decl);
             }
             ExpandDecl::Return(decl) => {
                 assert!(
-                    !decl.fields.is_empty(),
+                    !decl.field_list().is_empty(),
                     "expand_return!({}) declares no fields — add .field(fun!(...)) and/or \
                      .field_self()",
-                    decl.key.as_str()
+                    decl.key().as_str()
                 );
                 self.decls.return_expand_decls.push(decl);
             }
@@ -773,27 +773,27 @@ impl Declarations {
         let mut exp = Expansions::default();
         for decl in &self.param_expand_decls {
             assert!(
-                self.is_class_declared(&decl.key)
+                self.is_class_declared(decl.key())
                     || !decl
-                        .variants
+                        .variants()
                         .iter()
                         .any(|v| matches!(v, LocalVariant::SelfIdentity)),
                 "expand_param!({k}).variant_self(): `{k}` has no class declaration, so there is \
                  no Kotlin object to pass — drop .variant_self() (the type is rust-side-only) \
                  or declare the type in a package",
-                k = decl.key.as_str()
+                k = decl.key().as_str()
             );
             // Identity-only normalization: `.variant_self()` alone declares
             // the plain-handle form — exactly the default when nothing is
             // declared, so registering it would only add a degenerate
             // 1-variant selector to every param of this type.
-            if matches!(decl.variants.as_slice(), [LocalVariant::SelfIdentity]) {
+            if matches!(decl.variants(), [LocalVariant::SelfIdentity]) {
                 continue;
             }
             exp.constructors
                 .push(crate::api::core::expand::ConstructorDecl {
-                    target: decl.rust_type.key(),
-                    variants: decl.variants.iter().map(lower).collect(),
+                    target: decl.rust_type().key(),
+                    variants: decl.variants().iter().map(lower).collect(),
                     default: true,
                 });
         }
@@ -802,21 +802,21 @@ impl Declarations {
         // in `core/expand.rs`'s `apply` (which sees the fn signatures).
         for (func, param, decl) in &self.fn_param_expands {
             assert!(
-                self.is_class_declared(&decl.key)
+                self.is_class_declared(decl.key())
                     || !decl
-                        .variants
+                        .variants()
                         .iter()
                         .any(|v| matches!(v, LocalVariant::SelfIdentity)),
                 "fun!({func}).expand_param(\"{param}\", expand_param!({k}).variant_self()): `{k}` \
                  has no class declaration, so there is no Kotlin object to pass — drop \
                  .variant_self() (the type is rust-side-only) or declare the type in a package",
-                k = decl.key.as_str()
+                k = decl.key().as_str()
             );
             exp.expands.push(ExpandDecl {
                 func: func.clone(),
                 param: syn::Ident::new(param, Span::call_site()),
-                declared_target: Some(decl.rust_type.key()),
-                sel: ExpandSel::Subset(decl.variants.iter().map(lower).collect()),
+                declared_target: Some(decl.rust_type().key()),
+                sel: ExpandSel::Subset(decl.variants().iter().map(lower).collect()),
             });
         }
         exp
@@ -838,8 +838,8 @@ impl Declarations {
             .iter()
             .map(|f| match f {
                 LocalField::Fields(decl) => DeconRecord::Fields {
-                    func: decl.func.clone(),
-                    consuming: decl.consuming,
+                    func: decl.func().clone(),
+                    consuming: decl.is_consuming(),
                     fields: self.lower_value_form(registry, key, decl),
                 },
                 LocalField::Named(func, name_override) => {
@@ -890,7 +890,7 @@ impl Declarations {
         key: &TypeKey,
         decl: &FieldsDecl,
     ) -> Vec<crate::api::core::unfold::FieldRecord> {
-        let func = &decl.func;
+        let func = decl.func();
         let accessor = registry.flat().function(&func).unwrap_or_else(|| {
             panic!(
                 "expand_return!({}).fields(fields!({func})): no `#[prebindgen]` function \
@@ -936,7 +936,7 @@ impl Declarations {
                     .join(".")
             })
             .collect();
-        for (field, _) in decl.overrides.iter() {
+        for (field, _) in decl.overrides().iter() {
             assert!(
                 named.contains(field),
                 "fields!({func}).field(\"{field}\", ...): `{}` has no field `{field}` \
@@ -945,7 +945,7 @@ impl Declarations {
                 named.iter().cloned().collect::<Vec<_>>().join(", "),
             );
         }
-        for (field, _) in decl.names.iter() {
+        for (field, _) in decl.names().iter() {
             assert!(
                 named.contains(field),
                 "fields!({func}).name(\"{field}\", ...): `{}` has no field `{field}` \
@@ -981,7 +981,7 @@ impl Declarations {
             "expand_return!({}).fields(fields!({})): `{}` nests data classes more than 16 \
              deep — is a value form holding itself?",
             key.as_str(),
-            decl.func,
+            decl.func(),
             st.name,
         );
         // A tuple struct is an `Extern` rather than a `Struct`, so it never
@@ -1000,7 +1000,7 @@ impl Declarations {
                 .join(".");
             let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
             let name = decl
-                .names
+                .names()
                 .iter()
                 .find(|(f, _)| *f == dotted)
                 .map(|(_, n)| n.clone())
@@ -1013,7 +1013,7 @@ impl Declarations {
 
             // An explicit override replaces the field type's default
             // decomposition wholesale — including any nesting it would have had.
-            if let Some((_, ovr)) = decl.overrides.iter().find(|(f, _)| *f == dotted) {
+            if let Some((_, ovr)) = decl.overrides().iter().find(|(f, _)| *f == dotted) {
                 // The override states the field's type, so it is cross-checked
                 // against the field the same way a per-fn `.expand_param` /
                 // `.expand_return` decl is checked against its parameter or
@@ -1029,20 +1029,24 @@ impl Declarations {
                 let peeled = under_opt.borrow_target().unwrap_or(under_opt);
                 let actual = peeled.key();
                 assert!(
-                    actual == ovr.key,
+                    actual == *ovr.key(),
                     "fields!({}).field(\"{dotted}\", expand_return!({})): `{}.{dotted}` is \
                      `{}`, not `{}` — a per-field override names the field's own type",
-                    decl.func,
-                    ovr.key.as_str(),
+                    decl.func(),
+                    ovr.key().as_str(),
                     st.name,
                     actual.as_str(),
-                    ovr.key.as_str(),
+                    ovr.key().as_str(),
                 );
                 out.push(FieldRecord {
                     members: member_path,
                     name,
                     ty: field.ty.clone(),
-                    decon: FieldDecon::Records(self.lower_fields(registry, &ovr.key, &ovr.fields)),
+                    decon: FieldDecon::Records(self.lower_fields(
+                        registry,
+                        ovr.key(),
+                        ovr.field_list(),
+                    )),
                 });
                 continue;
             }
@@ -1085,7 +1089,7 @@ impl Declarations {
                          `Vec<{}>` — a sequence of tag-gated groups has variable arity and \
                          cannot be laid out in a fixed leaf list",
                         key.as_str(),
-                        decl.func,
+                        decl.func(),
                         st.name,
                         dotted,
                         probe,
@@ -1098,7 +1102,7 @@ impl Declarations {
                          payload-less alternative instead of wrapping the sum in `Option`, \
                          or override it with .field(\"{}\", ...)",
                         key.as_str(),
-                        decl.func,
+                        decl.func(),
                         st.name,
                         dotted,
                         probe,
@@ -1167,19 +1171,19 @@ impl Declarations {
         };
         for decl in &self.return_expand_decls {
             assert!(
-                self.is_class_declared(&decl.key)
+                self.is_class_declared(decl.key())
                     || !decl
-                        .fields
+                        .field_list()
                         .iter()
                         .any(|f| matches!(f, LocalField::SelfField)),
                 "expand_return!({k}).field_self(): `{k}` has no class declaration, so there is \
                  no Kotlin object to deliver — drop .field_self() (the type is rust-side-only) \
                  or declare the type in a package",
-                k = decl.key.as_str()
+                k = decl.key().as_str()
             );
             dec.deconstructors.push(DeconstructorDecl {
-                target: decl.rust_type.key(),
-                records: self.lower_fields(registry, &decl.key, &decl.fields),
+                target: decl.rust_type().key(),
+                records: self.lower_fields(registry, decl.key(), decl.field_list()),
                 default: Some((DeconTarget::Output, Delivery::Callback)),
             });
         }
@@ -1188,22 +1192,22 @@ impl Declarations {
         // `core/unfold.rs`'s `apply` (which sees the fn signatures).
         for (func, decl) in &self.fn_return_expands {
             assert!(
-                self.is_class_declared(&decl.key)
+                self.is_class_declared(decl.key())
                     || !decl
-                        .fields
+                        .field_list()
                         .iter()
                         .any(|f| matches!(f, LocalField::SelfField)),
                 "fun!({func}).expand_return(expand_return!({k}).field_self()): `{k}` has no \
                  class declaration, so there is no Kotlin object to deliver — drop \
                  .field_self() (the type is rust-side-only) or declare the type in a package",
-                k = decl.key.as_str()
+                k = decl.key().as_str()
             );
             dec.outputs.push(OutputDecl {
                 func: func.clone(),
-                sel: DeconSel::Inline(self.lower_fields(registry, &decl.key, &decl.fields)),
+                sel: DeconSel::Inline(self.lower_fields(registry, decl.key(), decl.field_list())),
                 target: DeconTarget::Output,
                 delivery: Delivery::Callback,
-                declared_source: Some(decl.rust_type.key()),
+                declared_source: Some(decl.rust_type().key()),
             });
         }
         dec
@@ -1271,11 +1275,11 @@ impl Declarations {
         let type_level = self
             .return_expand_decls
             .iter()
-            .map(|d| (d.key.clone(), &d.fields));
+            .map(|d| (d.key().clone(), d.field_list()));
         let per_fn = self
             .fn_return_expands
             .iter()
-            .map(|(_, d)| (d.key.clone(), &d.fields));
+            .map(|(_, d)| (d.key().clone(), d.field_list()));
         for (_key, fields) in type_level.chain(per_fn) {
             for f in fields {
                 let LocalField::Local { path, sig, .. } = f else {
@@ -1344,21 +1348,21 @@ impl Declarations {
     ) -> impl Iterator<Item = (TypeKey, Origin<syn::Type>)> + '_ {
         self.param_expand_decls
             .iter()
-            .map(|d| (&d.key, &d.rust_type))
+            .map(|d| (d.key(), d.rust_type()))
             .chain(
                 self.return_expand_decls
                     .iter()
-                    .map(|d| (&d.key, &d.rust_type)),
+                    .map(|d| (d.key(), d.rust_type())),
             )
             .chain(
                 self.fn_param_expands
                     .iter()
-                    .map(|(_, _, d)| (&d.key, &d.rust_type)),
+                    .map(|(_, _, d)| (d.key(), d.rust_type())),
             )
             .chain(
                 self.fn_return_expands
                     .iter()
-                    .map(|(_, d)| (&d.key, &d.rust_type)),
+                    .map(|(_, d)| (d.key(), d.rust_type())),
             )
             .filter(|(k, _)| !self.is_class_declared(k))
             .map(|(k, t)| (k.clone(), t.clone()))
@@ -1374,8 +1378,8 @@ impl Declarations {
         let ctors = self
             .param_expand_decls
             .iter()
-            .map(|d| &d.variants)
-            .chain(self.fn_param_expands.iter().map(|(_, _, d)| &d.variants))
+            .map(|d| d.variants())
+            .chain(self.fn_param_expands.iter().map(|(_, _, d)| d.variants()))
             .flatten()
             .filter_map(|v| match v {
                 LocalVariant::Ctor(f) => Some(f.clone()),
@@ -1429,9 +1433,9 @@ impl Declarations {
                     // The value form's own accessor, plus whatever its
                     // per-field overrides reference.
                     LocalField::Fields(d) => {
-                        out.push(d.func.clone());
-                        for (_, ovr) in &d.overrides {
-                            walk(&ovr.fields, out);
+                        out.push(d.func().clone());
+                        for (_, ovr) in d.overrides() {
+                            walk(ovr.field_list(), out);
                         }
                     }
                 }
@@ -1441,8 +1445,8 @@ impl Declarations {
         for fields in self
             .return_expand_decls
             .iter()
-            .map(|d| &d.fields)
-            .chain(self.fn_return_expands.iter().map(|(_, d)| &d.fields))
+            .map(|d| d.field_list())
+            .chain(self.fn_return_expands.iter().map(|(_, d)| d.field_list()))
         {
             walk(fields, &mut out);
         }
@@ -1463,15 +1467,15 @@ impl JniGenBuilder {
     /// [`expand`](Self::expand) boundary decls.
     pub fn convert(mut self, mut decl: ConvertDecl) -> Self {
         assert!(
-            decl.input.is_some() || decl.output.is_some(),
+            decl.input_spec().is_some() || decl.output_spec().is_some(),
             "convert!({}) declares no conversions — add .input(fun!(...)) and/or \
              .output(fun!(...))",
-            decl.key.as_str()
+            decl.key().as_str()
         );
         // Binding-local fn sources (`fun!(crate::f).sig(…)`) join the same
         // synthesis list as fun/method/constructor sites — after the
         // pre-pass they lower exactly like `#[prebindgen]` fn sources.
-        self.decls.local_fns.append(&mut decl.locals);
+        self.decls.local_fns.append(decl.locals_mut());
         self.decls.convert_decls.push(decl);
         self
     }
@@ -1492,11 +1496,11 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         emit: &crate::api::core::emit::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
-        let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
+        let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.declared_spelling();
-        let result = match decl.input.as_ref()? {
+        let target = decl.rust_type().declared_spelling();
+        let result = match decl.input_spec().as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry.flat().function(&f).unwrap_or_else(|| {
                     panic!(
@@ -1563,11 +1567,11 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         emit: &crate::api::core::emit::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
-        let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
+        let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.declared_spelling();
-        let result = match decl.output.as_ref()? {
+        let target = decl.rust_type().declared_spelling();
+        let result = match decl.output_spec().as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
                 let item_fn = registry.flat().function(&g).unwrap_or_else(|| {
                     panic!(
@@ -1631,19 +1635,19 @@ impl Declarations {
         exc: Option<syn::Type>,
         body: syn::Expr,
     ) -> (syn::Type, Option<syn::Type>, syn::Expr) {
-        let Some(domain) = &decl.domain else {
+        let Some(domain) = decl.domain() else {
             return (repr, exc, body);
         };
         assert_eq!(
             TypeKey::from_type(domain.ty()),
             TypeKey::from_type(&repr),
             "convert!({}): domain type {} does not match input representation {}",
-            decl.key.as_str(),
+            decl.key().as_str(),
             TypeKey::from_type(domain.ty()),
             TypeKey::from_type(&repr),
         );
         let valid = domain.contains_expr(quote!(v));
-        let key = decl.key.as_str();
+        let key = decl.key().as_str();
         let converted = if exc.is_some() {
             quote!((#body).map_err(|__e| {
                 <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
@@ -1672,19 +1676,19 @@ impl Declarations {
         exc: Option<syn::Type>,
         body: syn::Expr,
     ) -> (syn::Type, Option<syn::Type>, syn::Expr) {
-        let Some(domain) = &decl.domain else {
+        let Some(domain) = decl.domain() else {
             return (repr, exc, body);
         };
         assert_eq!(
             TypeKey::from_type(domain.ty()),
             TypeKey::from_type(&repr),
             "convert!({}): domain type {} does not match output representation {}",
-            decl.key.as_str(),
+            decl.key().as_str(),
             TypeKey::from_type(domain.ty()),
             TypeKey::from_type(&repr),
         );
         let valid = domain.contains_expr(quote!(__repr));
-        let key = decl.key.as_str();
+        let key = decl.key().as_str();
         let converted = if exc.is_some() {
             quote!((#body).map_err(|__e| {
                 <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
@@ -1715,7 +1719,7 @@ impl Declarations {
     pub(crate) fn convert_fns(&self) -> impl Iterator<Item = syn::Ident> + '_ {
         self.convert_decls
             .iter()
-            .flat_map(|d| d.input.iter().chain(d.output.iter()))
+            .flat_map(|d| d.input_spec().iter().chain(d.output_spec().iter()))
             .filter_map(|spec| match spec {
                 ConvertSpec::PrebindgenFn(f) => Some(f.clone()),
                 _ => None,
@@ -1781,8 +1785,8 @@ impl Declarations {
         let Some(domain) = self
             .convert_decls
             .iter()
-            .find(|d| &d.key == key)
-            .and_then(|d| d.domain.as_ref())
+            .find(|d| d.key() == key)
+            .and_then(|d| d.domain().as_ref())
         else {
             return (Niches::empty(), Vec::new());
         };
@@ -1883,10 +1887,10 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         dir: Direction,
     ) -> Option<syn::Type> {
-        let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
+        let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
         let spec = match dir {
-            Direction::Input => decl.input.as_ref()?,
-            Direction::Output => decl.output.as_ref()?,
+            Direction::Input => decl.input_spec().as_ref()?,
+            Direction::Output => decl.output_spec().as_ref()?,
         };
         match spec {
             ConvertSpec::Trait { repr, .. } => Some(repr.clone()),
