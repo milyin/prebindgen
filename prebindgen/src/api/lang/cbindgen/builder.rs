@@ -685,10 +685,7 @@ impl CbindgenBuilder {
         if let Some(wire) = self.value_opaque_ty_of(&key) {
             return Some((self.src_ty_of(&key), wire.clone()));
         }
-        super::r_is_scalar(elem).then(|| {
-            let s = super::spelled(elem);
-            (s.clone(), s)
-        })
+        super::scalar_ty(elem).map(|s| (s.clone(), s))
     }
 
     /// Like [`Self::src_ty`], but recurses into reference and slice element types so

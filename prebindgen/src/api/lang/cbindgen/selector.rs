@@ -10,8 +10,9 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
-        self.in_custom(ty, registry)
+        self.in_custom(ty, registry, emit)
             .or_else(|| self.in_opaque_handle(ty))
             .or_else(|| self.in_data_struct(ty, registry))
             .or_else(|| self.in_value_opaque(ty, registry))
@@ -30,8 +31,9 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
-        self.out_custom(ty, registry)
+        self.out_custom(ty, registry, emit)
             .or_else(|| self.out_terminal(ty, registry))
             .or_else(|| self.out_wrappers(ty, registry))
     }

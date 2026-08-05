@@ -303,9 +303,10 @@ impl Declarations {
     pub fn opaque_handle_input(
         &self,
         reading: &crate::api::core::flat::TypeRef,
+        emit: &crate::api::core::emit::Emit,
     ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let ty = reading.spell();
+        let ty = emit.spell(reading);
         let name = input_name(&ty, &wire);
         let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
@@ -503,6 +504,7 @@ impl Declarations {
     pub fn opaque_handle_output(
         &self,
         reading: &crate::api::core::flat::TypeRef,
+        _emit: &crate::api::core::emit::Emit,
     ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let body: syn::Expr =
@@ -628,6 +630,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 pub(crate) fn build_handle_destructor_items(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
@@ -644,7 +647,7 @@ pub(crate) fn build_handle_destructor_items(
         if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none() {
             continue;
         }
-        let ty = reading.spell();
+        let ty = emit.spell(&reading);
         let class_fqn = cfg
             .name_spec
             .as_ref()
@@ -833,9 +836,9 @@ impl Produced<'_> {
     }
 
     /// The tokens generated Rust spells for this type.
-    fn spell(&self) -> TokenStream {
+    fn spell(&self, emit: &crate::api::core::emit::Emit) -> TokenStream {
         match self {
-            Produced::Reading(r) => r.spell(),
+            Produced::Reading(r) => emit.spell(r),
             Produced::Composed(t) => t.to_token_stream(),
         }
     }
@@ -1074,12 +1077,13 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         let WrapperShape::OptionRef { .. } = shape else {
             return None;
         };
@@ -1097,7 +1101,7 @@ impl Declarations {
         let inner_wire = inner.destination.clone();
         let inner_conv = inner.function.sig.ident.clone();
         let outer_ty = produced.key();
-        let outer_spelled = produced.spell();
+        let outer_spelled = produced.spell(emit);
         let name = input_name(&outer_spelled, &inner_wire);
         let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
@@ -1143,12 +1147,13 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         if shape != WrapperShape::Sequence {
             return None;
         }
@@ -1215,18 +1220,19 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         if shape == WrapperShape::Optional {
             let inner = registry.input_entry(t1)?;
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
                 let outer_ty = produced.key();
-                let outer_spelled = produced.spell();
+                let outer_spelled = produced.spell(emit);
                 let build = build_from_canonical(produced, quote::quote!(__v))?;
                 let name = input_name(&outer_spelled, &inner_wire);
                 let gen_allow = generated_converter_attr();
@@ -1407,7 +1413,7 @@ impl JniGenBuilder {
         let registry = decls
             .declare_into(registry)?
             .validate_with(&decls)?
-            .convert_with(|crossing, built| decls.convert_crossing(crossing, built))?
+            .convert_with(|crossing, built, emit| decls.convert_crossing(crossing, built, emit))?
             .build()?;
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
@@ -1427,6 +1433,7 @@ impl Declarations {
         &self,
         crossing: &Crossing,
         built: &Building<'_, KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
@@ -1436,7 +1443,7 @@ impl Declarations {
         // there is no spelling to rebuild (#284).
         let reading = built.reading(key)?;
         match dir {
-            Direction::Input => self.select_input_type(&reading, built).or_else(|| {
+            Direction::Input => self.select_input_type(&reading, built, emit).or_else(|| {
                 // `impl Fn(args)` that nothing else claimed. Callback args cross
                 // in the OPPOSITE direction, which is why their required-ness
                 // rides `immediate_edges` rather than this converter's `subs`.
@@ -1449,7 +1456,7 @@ impl Declarations {
                 };
                 self.dispatch_fn_input(args, built)
             }),
-            Direction::Output => self.select_output_type(&reading, built),
+            Direction::Output => self.select_output_type(&reading, built, emit),
         }
     }
 
@@ -1495,7 +1502,7 @@ impl Declarations {
         // fn's return type needs the output twin.
         let mut convert_edges: Vec<(Crossing, Crossing)> = Vec::new();
         for decl in &self.convert_decls {
-            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, &registry) {
+            if let Some(ty) = self.convert_target(&decl.key, &registry, Direction::Input) {
                 registry = registry.cross(Direction::Input, &ty);
                 // The target's conversion chains through this one, and nothing
                 // about the target type says so.
@@ -1504,7 +1511,7 @@ impl Declarations {
                     (Direction::Input, TypeKey::from_type(&ty)),
                 ));
             }
-            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, &registry) {
+            if let Some(ty) = self.convert_target(&decl.key, &registry, Direction::Output) {
                 registry = registry.cross(Direction::Output, &ty);
                 convert_edges.push((
                     (Direction::Output, decl.key.clone()),
@@ -1882,10 +1889,10 @@ impl Prebindgen for Declarations {
                             // peeled sum, since that is what carries the
                             // declaration. Identical for a bare `E`; they
                             // diverge once it is wrapped.
-                            err_ty.spell(),
-                            core.spell(),
-                            err_ty.spell(),
-                            err_ty.spell(),
+                            err_ty,
+                            core,
+                            err_ty,
+                            err_ty,
                         ));
                     }
                 }
@@ -1972,7 +1979,7 @@ impl Prebindgen for Declarations {
         // Handle destructors — one `extern "C" freePtr<suffix>` per
         // non-suppressed opaque handle (the Rust half of the typed-handle
         // `free()` pair the Kotlin emitter generates).
-        items.extend(build_handle_destructor_items(self, registry));
+        items.extend(build_handle_destructor_items(self, registry, _emit));
         // Slice/Vec input helpers — a `…VecNew/Push/Free` trio per flattenable
         // element type a scanned `&[T]`/`Vec<T>` param takes. Kotlin builds the
         // Rust-side `Vec` by pushing each element's decoupled leaves, then passes
@@ -2099,6 +2106,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()`: the arms below that ask what
         // a type IS use `reading`, and everything that has to name it in
@@ -2110,7 +2118,7 @@ impl Declarations {
         let key = reading.key();
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
-                return Some(self.opaque_handle_input(reading));
+                return Some(self.opaque_handle_input(reading, emit));
             }
         }
         // Fixed-size array of JNI primitives — dual of the output branch.
@@ -2161,7 +2169,7 @@ impl Declarations {
                 }
             }
         }
-        if let Some(conv) = self.lookup_input(reading, registry) {
+        if let Some(conv) = self.lookup_input(reading, registry, emit) {
             return Some(conv);
         }
         // `str` is unsized, so converters can't return it directly.
@@ -2475,14 +2483,15 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
         // borrow/option-ref/vec shapes are mutually exclusive; the two
         // `Optional` sub-cases share a method.
         self.input_borrow(shape, produced, t1, registry)
-            .or_else(|| self.input_option_ref(shape, produced, t1, registry))
-            .or_else(|| self.input_vec(shape, produced, t1, registry))
-            .or_else(|| self.input_option(shape, produced, t1, registry))
+            .or_else(|| self.input_option_ref(shape, produced, t1, registry, emit))
+            .or_else(|| self.input_vec(shape, produced, t1, registry, emit))
+            .or_else(|| self.input_option(shape, produced, t1, registry, emit))
     }
 
     // ── Output converters ────────────────────────────────────────────
@@ -2494,6 +2503,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
         // Everything below reads the reading: the identity for a lookup, the
@@ -2502,7 +2512,7 @@ impl Declarations {
         let key = reading.key();
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
-                return Some(self.opaque_handle_output(reading));
+                return Some(self.opaque_handle_output(reading, emit));
             }
         }
         // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
@@ -2548,7 +2558,7 @@ impl Declarations {
                 }
             }
         }
-        if let Some(conv) = self.lookup_output(reading, registry) {
+        if let Some(conv) = self.lookup_output(reading, registry, emit) {
             return Some(conv);
         }
         // `str` is unsized, so it has no by-value output converter — but it is
@@ -2664,12 +2674,13 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
         // return *borrowed* handles for the C tier's zero-copy borrows, but
@@ -2844,12 +2855,13 @@ impl Declarations {
         &self,
         elem: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let inner = registry.output_entry(elem)?;
         let elem_key = elem.key();
         // The element as the source spelled it — the slice type this converter
         // yields is re-emitted, never re-derived.
-        let elem = elem.spell();
+        let elem = emit.spell(elem);
         // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf
         // fold (typed-handle wrap), bypassing this whole-`ArrayList` converter; a
         // handle's `jlong` wire isn't JObject-shaped, so it returns `None` here.

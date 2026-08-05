@@ -44,6 +44,7 @@ impl Declarations {
         &self,
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // What the converter YIELDS: this crossing's own reading, so a
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
@@ -52,7 +53,7 @@ impl Declarations {
         let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Reading(ty);
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
-        if let Some(c) = self.input_terminal(ty, registry) {
+        if let Some(c) = self.input_terminal(ty, registry, emit) {
             return Some(c);
         }
         // 3. Built-in wrapper shapes, read one layer at a time rather than as a
@@ -70,6 +71,7 @@ impl Declarations {
                     &produced,
                     target,
                     registry,
+                    emit,
                 ) {
                     c.subs = vec![target.key()];
                     return Some(c);
@@ -88,7 +90,7 @@ impl Declarations {
                 return None;
             }
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, registry)
+                self.input_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)
             {
                 c.subs = vec![inner.key()];
                 return Some(c);
@@ -97,7 +99,7 @@ impl Declarations {
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
-                self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
+                self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)
             {
                 c.subs = vec![elem.key()];
                 return Some(c);
@@ -130,7 +132,7 @@ impl Declarations {
             // sub, exactly as the old syntactic slice check did.
             if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
-                    let elem_ty = elem.spell();
+                    let elem_ty = emit.spell(elem);
                     // The one place `produced` is NOT the crossing's spelling:
                     // there is no owned `[T]` to decode into, so the converter
                     // yields an owned `Vec<T>` and the call site borrows it.
@@ -146,9 +148,13 @@ impl Declarations {
                     let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Composed(
                         syn::parse_quote!(Vec<#elem_ty>),
                     );
-                    if let Some(mut c) =
-                        self.input_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
-                    {
+                    if let Some(mut c) = self.input_wrapper_shape(
+                        WrapperShape::Sequence,
+                        &produced,
+                        elem,
+                        registry,
+                        emit,
+                    ) {
                         c.subs = vec![elem.key()];
                         return Some(c);
                     }
@@ -161,6 +167,7 @@ impl Declarations {
                 &produced,
                 inner,
                 registry,
+                emit,
             ) {
                 c.subs = vec![inner.key()];
                 return Some(c);
@@ -178,6 +185,7 @@ impl Declarations {
         &self,
         ty: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // What the converter YIELDS. This direction used to be handed only the
         // spelling — `convert_crossing` fetched the reading and threw it away —
@@ -187,7 +195,7 @@ impl Declarations {
         let produced = crate::api::lang::jnigen::jni::trait_impl::Produced::Reading(ty);
 
         // 1. Terminal categories (incl. the terminal user-wrapper lookup).
-        if let Some(c) = self.output_terminal(ty, registry) {
+        if let Some(c) = self.output_terminal(ty, registry, emit) {
             return Some(c);
         }
         // 2. `Result<T, E>`: succeeds as `T`, routes `E` to the error sink.
@@ -205,7 +213,7 @@ impl Declarations {
         //    output handler).
         if let Some(inner) = ty.optional_inner() {
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, registry)
+                self.output_wrapper_shape(WrapperShape::Optional, &produced, inner, registry, emit)
             {
                 c.subs = vec![inner.key()];
                 return Some(c);
@@ -214,7 +222,7 @@ impl Declarations {
         }
         if let Some(elem) = ty.sequence_elem().filter(|_| !is_unsized_spelling(ty)) {
             if let Some(mut c) =
-                self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry)
+                self.output_wrapper_shape(WrapperShape::Sequence, &produced, elem, registry, emit)
             {
                 c.subs = vec![elem.key()];
                 return Some(c);
@@ -231,7 +239,7 @@ impl Declarations {
             // directly is a question about the SPELLING.
             if !*mutable && decoded_vec_satisfies(inner) {
                 if let Some(elem) = inner.sequence_elem() {
-                    return self.output_slice(elem, registry);
+                    return self.output_slice(elem, registry, emit);
                 }
             }
             let mutable = ty.is_exclusive_borrow();
@@ -240,6 +248,7 @@ impl Declarations {
                 &produced,
                 inner,
                 registry,
+                emit,
             ) {
                 c.subs = vec![inner.key()];
                 return Some(c);

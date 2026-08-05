@@ -75,22 +75,11 @@ pub fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {
     result_parts(ty).map(|(ok, _)| ok)
 }
 
-/// First angle-bracketed **type** argument of a path type (`T` of `Option<T>`
-/// / `Vec<T>` / `Result<T, _>`), skipping lifetime/const args. `None` when
-/// there is no type argument.
-#[cfg(feature = "unstable-cbindgen")]
-pub fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return None;
-    };
-    ab.args.iter().find_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    })
-}
-
+// `first_type_arg` lived here — the last generic-argument peel done off a
+// path's angle brackets. `TypeKind` names the argument of every wrapper the
+// language accepts (`Optional`, `Vec`, `Fallible`, `Named { args }`), so a
+// reading answers without one.
+//
 // `is_option_ref` lived here — `option_inner_type(ty)` then a `Type::Reference`
 // match — and decided how a handle parameter locks. Both halves read the
 // spelling, so an optional borrow behind an erased wrapper answered `false`.
