@@ -1858,7 +1858,7 @@ fn a_built_registry_exposes_no_mutation() {
 ///
 /// The failure it exists for is specific and was live: a consumer holding an
 /// element — whose `ret` / `ty` is already a `TypeRef` — reaching into
-/// `spell()`, digging the type back out, and re-classifying it. The boundary
+/// `spell()`, digging the type back out, and re-classifying it. The capability
 /// ledger cannot see that at all: the syn matching happens inside `core::flat`,
 /// which the ledger excludes by design, so the count falls while the round trip
 /// stays. `origin` is for reconstructing Rust, not for reasoning about it.

@@ -183,8 +183,6 @@ use std::{fmt, rc::Rc};
 use quote::ToTokens;
 
 mod array_len;
-#[cfg(test)]
-mod boundary;
 mod element;
 mod origin;
 pub mod spell;

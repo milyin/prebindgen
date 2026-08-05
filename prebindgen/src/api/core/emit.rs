@@ -57,6 +57,20 @@
 //! `Origin<syn::Type>` holds a type the **build script** wrote, which was never
 //! captured and which #280 leaves the model no reading for.
 //!
+//! # What the census did that this does not
+//!
+//! `escape_surface_is_closed` read the model's own surface and failed if a NEW
+//! public method handed out a `syn` node under a name its list did not count —
+//! four of the five doors were found that way. Visibility does not give that:
+//! someone can add `pub fn as_syn2` to `flat` tomorrow.
+//!
+//! It is a smaller risk than it was. Such a method has to be added inside
+//! `flat` **and** surfaced here to be reachable from an adapter, which is a
+//! two-file diff in the one module a reviewer of this subsystem reads — where
+//! before, a new door could be added anywhere and only a count would notice.
+//! Recorded here rather than dropped silently, because a check that is retired
+//! deserves to say what it was for.
+//!
 //! # The residual
 //!
 //! [`Emit::spell`] yields a `TokenStream`, so emission code can re-parse it and

@@ -16,8 +16,8 @@ use super::*;
 /// A [`TypeKey`] is `canonical_type` already rendered, so re-parsing it yields
 /// the same type `canonical_type(origin.as_syn())` built — without taking the
 /// node. `declared_ty` is a BUILD-SCRIPT declaration reusing `Origin` for a
-/// placeless location, the over-count the boundary ledger documents, and
-/// `Origin::key` is the answer it names.
+/// placeless location — never captured syntax — and `Origin::key` is the answer
+/// it names.
 fn canonical_of(declared_ty: &crate::api::core::flat::Origin<syn::Type>) -> syn::Type {
     syn::parse_str(declared_ty.key().as_str())
         .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses")
@@ -33,8 +33,8 @@ impl<M> Registry<M> {
         // foreign type (supported verbatim; warned about below only when it
         // shadows a captured item's name — the likely-mistake heuristic).
         //
-        // The two syntax matches below **stay** as this file's boundary-ledger
-        // entries, and the reason is what they look at: `declared.types` are types a
+        // The two syntax matches below **stay**, and the reason is what they
+        // look at: `declared.types` are types a
         // *build script author* wrote, and this is a diagnostic about the spelling
         // they wrote — is it path-qualified, and does its tail shadow a captured
         // item? No source type is being classified, so there is no element to read
