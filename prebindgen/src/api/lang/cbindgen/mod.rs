@@ -2,8 +2,7 @@
 //!
 //! # Experimental API
 //!
-//! This module is a proof of concept. Enable it with the non-default
-//! `prebindgen/unstable-cbindgen` feature. Its Rust builder API may change in a
+//! This module is a proof of concept. Its Rust builder API may change in a
 //! minor release; do not rely on it as part of the stable 0.5 API.
 //!
 //! A [`Prebindgen`] back-end that turns a "flat" `#[prebindgen]` library into a

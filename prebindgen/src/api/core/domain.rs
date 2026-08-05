@@ -88,7 +88,6 @@ impl ScalarValue {
 
     /// A literal expression suitable for C header generation. Arbitrary NaN
     /// payloads and infinities have no portable C constant spelling.
-    #[cfg(feature = "unstable-cbindgen")]
     pub(crate) fn portable_expr(self) -> Option<syn::Expr> {
         match self {
             Self::F32(bits) => {

@@ -40,22 +40,18 @@ jobs:
     - name: Install Rust toolchain
       run: rustup component add rustfmt clippy
 
-    - name: Run clippy without default features
-      run: cargo clippy --all-targets --no-default-features --all-features -- --deny warnings
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- --deny warnings
 
     - name: Run rustfmt
       run: cargo fmt --check -- --config "unstable_features=true,imports_granularity=Crate,group_imports=StdExternalCrate"
 
     - name: Build
       run: cargo build
-    # `--all-features` is NOT optional here: the whole `lang::Cbindgen` suite is
-    # behind `unstable-cbindgen`, so a bare `cargo test` silently skips ~60
-    # tests. Both lines are kept — the first proves the default feature set
-    # still builds and passes on its own.
+    # `unstable-cbindgen` is gone, so the C adapter's ~60 tests are always
+    # compiled and a single run covers everything.
     - name: Run tests
-      run: |
-        cargo test
-        cargo test --all --all-features
+      run: cargo test --all
 
   covertest:
     # JVM-runtime coverage: regenerate every binding that commits its
