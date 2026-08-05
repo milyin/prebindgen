@@ -674,9 +674,9 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
 /// arg's is a required type. Same `kind`-classifies / spelling-decides split as
 /// #272's `decoded_vec_satisfies` and `is_unsized_spelling`.
 ///
-/// A local re-check inside `emit/callback.rs` was tried and dropped (#279 review):
-/// it changed no output, and cost a `boundary.ledger` entry for a spelling
-/// classification that never fires. This test is the protection instead.
+/// A local re-check inside `emit/callback.rs` was tried and dropped (#279
+/// review): it changed no output, and added a spelling classification that
+/// never fires. This test is the protection instead.
 #[test]
 fn a_wrapped_borrow_callback_arg_declines() {
     use crate::SourceLocation;

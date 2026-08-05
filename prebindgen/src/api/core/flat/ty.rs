@@ -937,8 +937,7 @@ impl TypeKind {
 ///
 /// A name rather than a `syn::Path` on purpose: an identity kept as syntax
 /// makes every consumer take a path apart to learn what a type is, which is the
-/// re-classification issue #211 exists to stop — and one no census could have
-/// seen, since taking a path apart names no door.
+/// re-classification issue #211 exists to stop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeId {
     /// The path as written, minus any generic arguments — `Foo`,
