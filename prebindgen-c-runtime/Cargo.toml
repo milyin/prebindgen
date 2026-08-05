@@ -6,7 +6,6 @@ description = "Runtime traits implemented by prebindgen-generated C FFI counterp
 license = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
-documentation = { workspace = true }
 readme = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }

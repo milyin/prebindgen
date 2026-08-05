@@ -6,6 +6,9 @@ description = "JNI / Kotlin binding generator for prebindgen"
 license = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
 rust-version = { workspace = true }
 
 [dependencies]

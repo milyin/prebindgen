@@ -3,7 +3,7 @@
 //! # Experimental API
 //!
 //! This module is a proof of concept. Its Rust builder API may change in a
-//! minor release; do not rely on it as part of the stable 0.5 API.
+//! minor release; do not rely on it as part of the stable 0.6 API.
 //!
 //! A [`Prebindgen`] back-end that turns a "flat" `#[prebindgen]` library into a
 //! Rust file suitable for [`cbindgen`](https://github.com/mozilla/cbindgen) to
