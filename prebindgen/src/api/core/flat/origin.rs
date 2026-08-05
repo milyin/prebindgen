@@ -57,9 +57,10 @@ use crate::SourceLocation;
 /// still reads it freely and everything downstream has to say which of the two
 /// it meant.
 ///
-/// It was a public field returning a `syn` node to anyone who asked, and the
-/// boundary ledger counted the consequences — measurement, not prevention. Now
-/// the type system asks the question and the ledger counts the answer.
+/// It was a public field returning a `syn` node to anyone who asked, and for a
+/// while a token census counted the consequences — measurement, not prevention.
+/// Now [`Emit`](crate::api::core::emit::Emit) is the only holder of that
+/// capability, and the compiler answers instead of a committed number.
 #[derive(Clone, Debug)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
