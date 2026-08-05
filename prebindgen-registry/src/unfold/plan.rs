@@ -2,7 +2,7 @@
 
 /// Outer shape wrapping the [core decomposition](`UnfoldShape::Base`).
 /// The output-side analog of [`crate::expand::FoldShape`], on the
-/// unified [`Shape`](prebindgen::core::shape::Shape) layer stack:
+/// unified [`Shape`](prebindgen_flat::shape::Shape) layer stack:
 ///   * `Base` — run the accessor's records on the value, producing all
 ///     [leaves](`UnfoldPlan::leaves`) and invoking the builder once;
 ///   * `Optional((), inner)` — `Option<T>`/`Option<&T>` return: `None` ⇒ a null
@@ -15,7 +15,7 @@
 ///
 /// The `()` payload is unused here — only the JNI adapter's
 /// `Shape<NullableKind>` carries per-layer data.
-pub use prebindgen::core::shape::Shape as UnfoldShape;
+pub use prebindgen_flat::shape::Shape as UnfoldShape;
 
 use super::Delivery;
 
@@ -54,7 +54,7 @@ pub struct DeconSpec {
     /// [`TypeKey`](crate::registry::TypeKey), not syntactically" is
     /// the type rather than an instruction: `source.key()` is the identity and
     /// `source.spell()` is what generated Rust says.
-    pub source: prebindgen::core::flat::TypeRef,
+    pub source: prebindgen_flat::flat::TypeRef,
     /// Flattened leaves in declared record order — names, types, paths,
     /// nullability all declaration-fixed.
     pub leaves: Vec<UnfoldLeaf>,
@@ -201,7 +201,7 @@ pub enum LeafSource {
     /// it gets a table cell like every other leaf's, but no root, because a sum
     /// has no whole-value output converter and demanding one would fail
     /// resolution over a type that never crosses whole. The reading comes from
-    /// the declaration — [`Variant::type_ref`](prebindgen::core::flat::Variant::type_ref)
+    /// the declaration — [`Variant::type_ref`](prebindgen_flat::flat::Variant::type_ref)
     /// — never from an adapter composing one out of a name.
     SumTag,
     /// A payload field of ONE alternative of a decomposed sum, reached through
@@ -226,7 +226,7 @@ pub enum LeafSource {
 pub struct UnfoldPlan {
     /// Owned core type the records decompose — the function's return after
     /// peeling `&` / `Option` / `Vec`.
-    pub source: prebindgen::core::flat::TypeRef,
+    pub source: prebindgen_flat::flat::TypeRef,
     /// Which deconstructor declaration produced [`Self::leaves`] — the
     /// identity adapters key signature artifacts on. `None` only for the
     /// whole-element `Iterable` arm (no declaration involved).
@@ -248,7 +248,7 @@ pub struct UnfoldPlan {
     /// delivered to the fold via its own output converter + projection (not
     /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
     /// `Iterable` fold (which uses [`Self::leaves`]).
-    pub element: Option<prebindgen::core::flat::TypeRef>,
+    pub element: Option<prebindgen_flat::flat::TypeRef>,
     /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
     /// delivery.
     pub delivery: Delivery,
@@ -256,7 +256,7 @@ pub struct UnfoldPlan {
     /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option<out_ty>`). The
     /// wrapper returns this value through its ordinary output converter (no
     /// callback). `None` for [`Delivery::Callback`].
-    pub convert_out_ty: Option<prebindgen::core::flat::TypeRef>,
+    pub convert_out_ty: Option<prebindgen_flat::flat::TypeRef>,
     /// `true` for a synthesized by-value `data_class` decomposition (see
     /// [`crate::unfold::apply_value_structs`]): the builder/folder
     /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
@@ -317,9 +317,9 @@ pub struct UnfoldLeaf {
     /// hope for a cell — the round trip #263 removed from `api/core`, surviving
     /// in the plans, and answering "no layer" for a type it had never seen
     /// (#275). The composed ones (`&Source`) are built by
-    /// [`TypeRef::borrowed`](prebindgen::core::flat::TypeRef::borrowed), which
+    /// [`TypeRef::borrowed`](prebindgen_flat::flat::TypeRef::borrowed), which
     /// pairs the kind with its own spelling.
-    pub out_ty: prebindgen::core::flat::TypeRef,
+    pub out_ty: prebindgen_flat::flat::TypeRef,
     /// `true` for the move/clone-the-value handle leaf, emitted **last** (after
     /// every reference leaf's JVM conversion has ended its borrow).
     pub identity: bool,

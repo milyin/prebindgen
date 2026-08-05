@@ -115,7 +115,7 @@ pub struct FieldRecord {
     /// returns. Asking the registry here was asking before registration
     /// (#266) — a lookup that could only miss, answered by a second source of
     /// readings that hid the ordering.
-    pub ty: prebindgen::core::flat::TypeRef,
+    pub ty: prebindgen_flat::flat::TypeRef,
     /// How this field decomposes.
     pub decon: FieldDecon,
 }
@@ -407,7 +407,7 @@ pub(crate) fn apply<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let prebindgen_flat::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -424,7 +424,7 @@ pub(crate) fn apply<M>(
                 // cannot see — `Box<T>` — stops reading as un-nameable.
                 if !matches!(
                     core_ty.unwrapped().kind(),
-                    prebindgen::core::flat::TypeKind::Named { .. }
+                    prebindgen_flat::flat::TypeKind::Named { .. }
                 ) {
                     continue;
                 }
@@ -483,7 +483,7 @@ pub struct ValueDecon {
     /// Canonical key of the value struct (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The struct type (owned) the leaves decompose.
-    pub source: prebindgen::core::flat::TypeRef,
+    pub source: prebindgen_flat::flat::TypeRef,
     /// Field-access leaves in foreign-signature / `fromParts` order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -539,7 +539,7 @@ pub struct SumDecon {
     /// Canonical key of the sum type (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The enum type (owned) the leaves decompose.
-    pub source: prebindgen::core::flat::TypeRef,
+    pub source: prebindgen_flat::flat::TypeRef,
     /// The tag leaf followed by every variant's group, in tag order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -608,7 +608,7 @@ pub(crate) fn apply_sum_returns<M>(
 fn wire_fixed_decon<M>(
     registry: &mut Registry<M>,
     key: &TypeKey,
-    source: &prebindgen::core::flat::TypeRef,
+    source: &prebindgen_flat::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<DeconId, UnfoldError> {
     let decon = DeconId::Default(key.to_string());
@@ -707,7 +707,7 @@ fn wire_fixed_callbacks<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let prebindgen_flat::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -779,7 +779,7 @@ pub(crate) fn apply_leaf_vec_folds<M>(
     }
     let elem_keys = elements;
     // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
-    let is_nominated = |bare: &prebindgen::core::flat::TypeRef| elem_keys.contains(&bare.key());
+    let is_nominated = |bare: &prebindgen_flat::flat::TypeRef| elem_keys.contains(&bare.key());
     for func in declared_fns {
         let Some(params) = registry.flat().function(&func).map(|f| f.params.clone()) else {
             continue;
@@ -823,7 +823,7 @@ pub(crate) fn apply_leaf_vec_folds<M>(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen::core::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let prebindgen_flat::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -852,7 +852,7 @@ pub(crate) fn apply_leaf_vec_folds<M>(
 /// element `vec_elem` (the `Vec`/slice element as written, keeping any leading
 /// `&` so `into_iter()`'s yield matches the element's own output converter).
 fn whole_leaf_fold_plan(
-    vec_elem: &prebindgen::core::flat::TypeRef,
+    vec_elem: &prebindgen_flat::flat::TypeRef,
     shape: UnfoldShape,
 ) -> UnfoldPlan {
     UnfoldPlan {
@@ -917,8 +917,8 @@ fn check_records(
 /// The arity layers over `ty`, the types they wrap, and the value underneath.
 ///
 /// A thin owned view over
-/// [`TypeRef::layer_stack`](prebindgen::core::flat::TypeRef::layer_stack) and
-/// [`layer_types`](prebindgen::core::flat::TypeRef::layer_types): the borrows are
+/// [`TypeRef::layer_stack`](prebindgen_flat::flat::TypeRef::layer_stack) and
+/// [`layer_types`](prebindgen_flat::flat::TypeRef::layer_types): the borrows are
 /// resolved to clones because these feed plan fields and registry calls that own
 /// their types. The classification is the model's; only the copying is local, and
 /// it happens **once**, where a value is stored — not on every question asked.
@@ -929,7 +929,7 @@ struct Layered {
     /// The arity layers, outermost first.
     shape: UnfoldShape,
     /// Every type on the way down, outermost first — what a registration walks.
-    layer_types: Vec<prebindgen::core::flat::TypeRef>,
+    layer_types: Vec<prebindgen_flat::flat::TypeRef>,
     /// Past the borrow too: what actually crosses — as an **identity**, which
     /// is all its one consumer ever asked of it.
     core: TypeKey,
@@ -944,7 +944,7 @@ struct Layered {
 /// to be the scan admitting a type with no element. Re-deriving a reading from
 /// `spell()` — the round trip this signature makes impossible — is reasoning
 /// from the spelling, which is what `origin` is not for.
-fn peel(ty: &prebindgen::core::flat::TypeRef) -> Layered {
+fn peel(ty: &prebindgen_flat::flat::TypeRef) -> Layered {
     let (shape, layered) = ty.layer_stack();
     let borrowed = layered.borrow_target();
     Layered {
@@ -961,7 +961,7 @@ fn peel(ty: &prebindgen::core::flat::TypeRef) -> Layered {
 /// because the layer underneath is the thing it is about to classify. `Vec<T>`
 /// answers `(false, Vec<T>)` here and `(iterable, T)` there, and confusing the two
 /// turns "this arg is a collection" into "this arg is a T".
-fn peel_borrow(ty: &prebindgen::core::flat::TypeRef) -> (bool, &prebindgen::core::flat::TypeRef) {
+fn peel_borrow(ty: &prebindgen_flat::flat::TypeRef) -> (bool, &prebindgen_flat::flat::TypeRef) {
     match ty.borrow_target() {
         Some(inner) => (true, inner),
         None => (false, ty),
@@ -972,7 +972,7 @@ fn peel_borrow(ty: &prebindgen::core::flat::TypeRef) -> (bool, &prebindgen::core
 /// `T == key` — the default-output match. `Result<_, _>` is NOT peeled, so a
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
-fn returns_type(ret: &prebindgen::core::flat::TypeRef, key: &TypeKey) -> bool {
+fn returns_type(ret: &prebindgen_flat::flat::TypeRef, key: &TypeKey) -> bool {
     peel(ret).core == *key
 }
 
@@ -1177,7 +1177,7 @@ fn register_decon_spec<M>(
     acc: &Deconstructors,
     decon: &DeconId,
     records: &[DeconRecord],
-    source: &prebindgen::core::flat::TypeRef,
+    source: &prebindgen_flat::flat::TypeRef,
 ) -> Result<(), UnfoldError> {
     if registry.decon_plans.contains_key(decon) {
         return Ok(());
@@ -1253,7 +1253,7 @@ fn build_plan<M>(
     registry: &Registry<M>,
     ed: &OutputDecl,
     by_ref: bool,
-    source: &prebindgen::core::flat::TypeRef,
+    source: &prebindgen_flat::flat::TypeRef,
     shape: UnfoldShape,
     records: &[DeconRecord],
     decon: DeconId,
@@ -1301,7 +1301,7 @@ fn build_plan<M>(
 /// decompositions clone the root identity, so any order is fine.)
 fn require_root_identity_last(
     by_ref: bool,
-    source: &prebindgen::core::flat::TypeRef,
+    source: &prebindgen_flat::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     if by_ref {
@@ -1341,7 +1341,7 @@ fn flatten<M>(
     acc: &Deconstructors,
     registry: &Registry<M>,
     records: &[DeconRecord],
-    source: &prebindgen::core::flat::TypeRef,
+    source: &prebindgen_flat::flat::TypeRef,
     path_prefix: &[PathStep],
     name_prefix: &[String],
     by_ref: bool,
@@ -1701,7 +1701,7 @@ fn flatten<M>(
 /// names are explicit and emitted literally, so a collision is a declaration
 /// bug — never auto-resolved.
 fn require_unique_leaf_names(
-    source: &prebindgen::core::flat::TypeRef,
+    source: &prebindgen_flat::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     let mut seen: HashSet<&str> = HashSet::new();
@@ -1738,7 +1738,7 @@ pub fn dedup_names(names: &mut [String]) {
 fn accessor_signature<M>(
     registry: &Registry<M>,
     func: &syn::Ident,
-) -> Result<(TypeKey, prebindgen::core::flat::TypeRef), UnfoldError> {
+) -> Result<(TypeKey, prebindgen_flat::flat::TypeRef), UnfoldError> {
     let f = registry
         .flat()
         .function(&func)

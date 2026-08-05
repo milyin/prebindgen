@@ -18,10 +18,13 @@
 //! ## Solution
 //!
 //! `prebindgen` solves this by generating language-specific proxy code from a common
-//! Rust library crate. This crate holds the base [`Source`] step plus the
-//! flat model ([`core`]) that the language-neutral registry pipeline is built
-//! over; the pipeline itself — type resolution, boundary expansion, Rust
-//! emission — now ships in the separate
+//! Rust library crate. This crate is the base of that pipeline: it reads what
+//! `#[prebindgen]` captured and hands out `(syn::Item, [`SourceLocation`])`
+//! pairs through [`Source`] — nothing more. The flat model built over that
+//! stream ships in the separate
+//! [`prebindgen-flat`](https://docs.rs/prebindgen-flat) crate; the
+//! language-neutral registry pipeline over the flat model — type resolution,
+//! boundary expansion, Rust emission — ships in the separate
 //! [`prebindgen-registry`](https://docs.rs/prebindgen-registry) crate. The
 //! supported 0.5 surface is that pipeline plus the JNI/Kotlin `JniGenBuilder`
 //! adapter, which ships in the separate
@@ -97,6 +100,7 @@
 //! [build-dependencies]
 //! example-flat = { path = "../example-flat" }
 //! prebindgen = "0.5"
+//! prebindgen-flat = "0.5"
 //! prebindgen-registry = "0.5"
 //! prebindgen-c = "0.5"
 //! cbindgen = "0.29"
@@ -122,7 +126,7 @@
 //!         .function(pq!(calculator_get_value)).panic();
 //!
 //!     // Resolve types, then write the Rust file of `extern "C"` wrappers.
-//!     let flat = prebindgen::core::Flat::builder()
+//!     let flat = prebindgen_flat::Flat::builder()
 //!         .items(source.items_all())
 //!         .build()
 //!         .unwrap();
@@ -187,48 +191,17 @@ pub use crate::api::{
     utils::{edition::RustEdition, target_triple::TargetTriple},
 };
 
-/// The flat model prebindgen's registry pipeline is built over.
-///
-/// [`flat::Flat::builder`](core::flat::Flat::builder) parses captured
-/// `#[prebindgen]` records into one flat namespace — the language-agnostic
-/// index of everything a source crate declared: [`Element`](core::Element)s,
-/// and the [`shape`](core::shape) / [`types_util`](core::types_util)
-/// vocabulary the plan engines and adapters read it through.
-///
-/// The Registry-based pipeline that resolves a binding over this model — type
-/// resolution, boundary expansion, Rust emission — ships in the separate
-/// [`prebindgen-registry`](https://docs.rs/prebindgen-registry) crate, which
-/// re-exports this module (`flat`, `shape`, `types_util`) at its own root so a
-/// language adapter names one crate for the whole pipeline rather than
-/// reaching back here for half of it.
-///
-/// The supported JNI / Kotlin adapter ships as `JniGenBuilder` in the
-/// separate `prebindgen-jni` crate; the C / cbindgen proof of concept lives in
-/// the separate `prebindgen-c` crate.
-pub mod core {
-    /// The capability to render captured Rust syntax — handed to an adapter's
-    /// emission callbacks and nowhere else, so code that decides cannot reach
-    /// what code that emits must spell. An out-of-crate adapter implements
-    /// `Prebindgen` (in the separate `prebindgen-registry` crate) and
-    /// therefore has to name this type.
-    pub use crate::api::core::emit::Emit;
-    /// The **flat API**: the parser from captured `#[prebindgen]` records to the
-    /// [`Element`]s that make up one flat namespace, and the model itself.
-    /// Not to be confused with the *destination* adapters, which now ship as
-    /// the separate `prebindgen-c` and `prebindgen-jni` crates.
-    pub use crate::api::core::flat;
-    /// The layer algebra a boundary value is shaped by — a leaf under an ordered
-    /// stack of `Optional` / `Iterable` layers. Public because the model
-    /// *produces* it (`flat::TypeRef::layer_stack`) and the plan engines and
-    /// adapters consume it, so it is part of what a generator has to speak.
-    pub use crate::api::core::shape;
-    pub use crate::api::core::{types_util, Element, Flat, TypeKey, TypeKeyParseError};
-}
-
+// The flat model (`flat`, `shape`, `types_util`, `Element`, `Flat`, `TypeKey`,
+// `Emit`, …) moved to the separate `prebindgen-flat` crate, which depends on
+// this crate for [`Source`] / [`SourceLocation`] and parses the
+// `(syn::Item, SourceLocation)` pairs [`Source`] hands out into one flat
+// namespace — see that crate's docs for the model.
+//
 // The registry pipeline (`Registry`, `Prebindgen`, `decl`, `write`, `expand`,
 // `unfold`, …) moved to the separate `prebindgen-registry` crate, which
-// depends on this crate and re-exports the flat model above (`flat`, `shape`,
-// `types_util`) at its own root — see that crate's docs for the pipeline.
+// depends on this crate and `prebindgen-flat`, and re-exports the flat model
+// (`flat`, `shape`, `types_util`) at its own root — see that crate's docs for
+// the pipeline.
 //
 // The JNI / Kotlin adapter (`matching`, the `lang` module, `JniGenBuilder`, …)
 // moved to the separate `prebindgen-jni` crate. It depends on this crate and

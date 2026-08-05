@@ -207,7 +207,7 @@ fn a_wrapper_is_found_only_at_the_layer_that_spells_it() {
 /// slipped through and worked only when the source happened to `use` it.
 #[test]
 fn the_prelude_reaches_every_builtin_by_either_spelling() {
-    use crate::api::core::flat::spelling::Normalization;
+    use crate::flat::spelling::Normalization;
 
     // Each entry, bare against fully qualified. `MaybeUninit` needs a `&mut` to
     // mean anything, so it is checked separately below.
@@ -1883,7 +1883,7 @@ fn an_unsupported_item_still_holds_its_name() {
 /// un-requires types the shape says are part of the element.
 #[test]
 fn the_layer_stack_stops_at_an_out_of_order_layer() {
-    use crate::api::core::shape::Shape;
+    use crate::shape::Shape;
 
     let shape_of = |ty: proc_macro2::TokenStream| {
         let reading = lower(ty).expect("lowers");
@@ -1954,7 +1954,7 @@ fn the_layer_stack_stops_at_an_out_of_order_layer() {
 /// cannot be handed a disagreement.
 #[test]
 fn a_composed_type_keys_as_its_spelling() {
-    use crate::api::core::flat::{ScalarKind, TypeKey, TypeKind, TypeRef};
+    use crate::flat::{ScalarKind, TypeKey, TypeKind, TypeRef};
 
     let t = lower(quote::quote!(u64)).expect("in the language");
 
@@ -2009,7 +2009,7 @@ fn a_composed_type_keys_as_its_spelling() {
 /// keyword. `TypeId::ident` is where that recovery lives (#278 review).
 #[test]
 fn a_raw_identifier_survives_typeid() {
-    use crate::api::core::flat::{TypeKind, TypeRef};
+    use crate::flat::{TypeKind, TypeRef};
 
     let raw: syn::Ident = syn::parse_quote!(r#type);
     assert_eq!(raw.to_string(), "r#type", "the hash is part of the name");
@@ -2025,7 +2025,7 @@ fn a_raw_identifier_survives_typeid() {
 
     // A path-qualified name is not a single identifier — the same answer the
     // old `bare_path_ident` gave.
-    let qualified = crate::api::core::flat::TypeId {
+    let qualified = crate::flat::TypeId {
         name: "foreign::Option".to_string(),
     };
     assert!(qualified.ident().is_none());

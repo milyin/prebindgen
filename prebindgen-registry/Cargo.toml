@@ -10,6 +10,7 @@ rust-version = { workspace = true }
 
 [dependencies]
 prebindgen = { workspace = true }
+prebindgen-flat = { workspace = true }
 syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
@@ -19,6 +20,6 @@ itertools = { workspace = true }
 [features]
 # Test-support constructors for the test suites of out-of-crate adapters
 # (`prebindgen-jni`, `prebindgen-c`). Non-default and not covered by semver;
-# moved here with `Registry` from `prebindgen`, which defines the matching
-# feature for the flat-model (`Emit`) half of the same pattern.
+# moved here with `Registry` from `prebindgen`; `prebindgen-flat` defines the
+# matching feature for the flat-model (`Emit`) half of the same pattern.
 testing = []

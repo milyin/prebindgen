@@ -18,7 +18,7 @@ use super::*;
 /// node. `declared_ty` is a BUILD-SCRIPT declaration reusing `Origin` for a
 /// placeless location — never captured syntax — and `Origin::key` is the answer
 /// it names.
-fn canonical_of(declared_ty: &prebindgen::core::flat::Origin<syn::Type>) -> syn::Type {
+fn canonical_of(declared_ty: &prebindgen_flat::flat::Origin<syn::Type>) -> syn::Type {
     syn::parse_str(declared_ty.key().as_str())
         .expect("a `TypeKey` is a normalized `syn::Type`, so it re-parses")
 }
@@ -168,8 +168,8 @@ impl<M> Registry<M> {
                     .filter(|t| {
                         matches!(
                             t,
-                            prebindgen::core::flat::Type::Enum(_)
-                                | prebindgen::core::flat::Type::Variant(_)
+                            prebindgen_flat::flat::Type::Enum(_)
+                                | prebindgen_flat::flat::Type::Variant(_)
                         )
                     })
                     .cloned()
@@ -195,7 +195,7 @@ impl<M> Registry<M> {
 
     pub(super) fn scan_fn_signature(
         &mut self,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_flat::flat::Function,
     ) -> Result<(), ScanError> {
         // Mechanical: register every fn-signature type as the user wrote it.
         // No semantic transformations (no &T→T strip, no ZResult<T>→T strip,
@@ -229,7 +229,7 @@ impl<M> Registry<M> {
     /// nothing here is spelled, keyed or classified on the way in. It used to
     /// take a `syn::ItemStruct`, rebuild the type from the ident, and walk
     /// `syn::Fields::Named` to reach types the element had all along.
-    pub(super) fn scan_struct(&mut self, s: &prebindgen::core::flat::Struct) {
+    pub(super) fn scan_struct(&mut self, s: &prebindgen_flat::flat::Struct) {
         // The struct itself can appear in either direction.
         self.intern_reading(Direction::Input, s.type_ref(), false);
         self.intern_reading(Direction::Output, s.type_ref(), false);
@@ -242,13 +242,13 @@ impl<M> Registry<M> {
 
     /// Register a declared enum and every payload type its alternatives carry.
     ///
-    /// The [`Struct`](prebindgen::core::flat::Struct) twin, and it takes the
-    /// model's split seriously: a fieldless [`Enum`](prebindgen::core::flat::Enum)
-    /// has no payload to reach, and a [`Variant`](prebindgen::core::flat::Variant)
+    /// The [`Struct`](prebindgen_flat::flat::Struct) twin, and it takes the
+    /// model's split seriously: a fieldless [`Enum`](prebindgen_flat::flat::Enum)
+    /// has no payload to reach, and a [`Variant`](prebindgen_flat::flat::Variant)
     /// carries its alternatives' fields as readings. Walking `syn`'s `variants`
     /// could not tell the two apart and had to look at every field to find out.
-    pub(super) fn scan_enum(&mut self, e: &prebindgen::core::flat::Type) {
-        use prebindgen::core::flat::Type;
+    pub(super) fn scan_enum(&mut self, e: &prebindgen_flat::flat::Type) {
+        use prebindgen_flat::flat::Type;
         let reading = match e {
             Type::Enum(en) => en.type_ref(),
             Type::Variant(v) => v.type_ref(),
@@ -273,7 +273,7 @@ impl<M> Registry<M> {
     pub(super) fn register_type_recursive(
         &mut self,
         dir: Direction,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_flat::flat::TypeRef,
         root: bool,
     ) {
         let mut visited: HashSet<TypeKey> = HashSet::new();
@@ -286,7 +286,7 @@ impl<M> Registry<M> {
     pub(super) fn register_type_inner(
         &mut self,
         dir: Direction,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_flat::flat::TypeRef,
         is_top: bool,
         visited: &mut HashSet<TypeKey>,
     ) {
@@ -328,7 +328,7 @@ impl<M> Registry<M> {
     pub(super) fn ensure_entry(
         &mut self,
         dir: Direction,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_flat::flat::TypeRef,
         root: bool,
     ) {
         let key = reading.key();
@@ -352,7 +352,7 @@ impl<M> Registry<M> {
     /// has no reading yet, and the only fallible way into the table.
     ///
     /// Everything the pipeline composes or walks already holds a
-    /// [`TypeRef`](prebindgen::core::flat::TypeRef) and goes through
+    /// [`TypeRef`](prebindgen_flat::flat::TypeRef) and goes through
     /// [`ensure_entry`](Self::ensure_entry) instead. What genuinely arrives as
     /// tokens is a spelling *authored outside the model*: a build script's
     /// declared crossing, a constant's declared type, a `syn` type the plan
@@ -373,7 +373,7 @@ impl<M> Registry<M> {
         dir: Direction,
         ty: &syn::Type,
         root: bool,
-    ) -> Result<prebindgen::core::flat::TypeRef, ScanError> {
+    ) -> Result<prebindgen_flat::flat::TypeRef, ScanError> {
         // The registry's own answer first, in EITHER direction — a reading is
         // direction-free, and a cell that exists already holds the authoritative
         // one. Classifying anyway would derive a second reading for a key that
@@ -414,7 +414,7 @@ impl<M> Registry<M> {
     pub(crate) fn intern_reading(
         &mut self,
         dir: Direction,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_flat::flat::TypeRef,
         root: bool,
     ) {
         let known = self
@@ -429,7 +429,7 @@ impl<M> Registry<M> {
     pub(super) fn intern_recursive_reading(
         &mut self,
         dir: Direction,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_flat::flat::TypeRef,
         root: bool,
     ) {
         self.intern_reading(dir, reading, root);
@@ -453,7 +453,7 @@ impl<M> Registry<M> {
     ///
     /// The children come from [`TypeKind`], not from taking the syntax apart, and
     /// the difference is load-bearing rather than cosmetic. `&mut MaybeUninit<T>`
-    /// yields `T` — [`borrow_target`](prebindgen::core::flat::TypeRef::borrow_target)
+    /// yields `T` — [`borrow_target`](prebindgen_flat::flat::TypeRef::borrow_target)
     /// sees past the slot — instead of an intermediate `MaybeUninit<T>` that no
     /// adapter can convert and no table holds. Each edge is still *spelled* from
     /// the child's own `spell()`, which is what the caller keys the table by.
@@ -467,12 +467,12 @@ impl<M> Registry<M> {
         &self,
         dir: Direction,
         key: &TypeKey,
-    ) -> Vec<(Direction, prebindgen::core::flat::TypeRef)> {
-        use prebindgen::core::flat::TypeKind;
+    ) -> Vec<(Direction, prebindgen_flat::flat::TypeRef)> {
+        use prebindgen_flat::flat::TypeKind;
 
-        let mut out: Vec<(Direction, prebindgen::core::flat::TypeRef)> = Vec::new();
+        let mut out: Vec<(Direction, prebindgen_flat::flat::TypeRef)> = Vec::new();
         if let Some(reading) = self.type_table(dir).get(key).map(|c| &c.subject) {
-            let (children, child_dir): (Vec<&prebindgen::core::flat::TypeRef>, Direction) =
+            let (children, child_dir): (Vec<&prebindgen_flat::flat::TypeRef>, Direction) =
                 match reading.unwrapped().kind() {
                     // Through the accessor, not the field: it sees past an
                     // out-parameter's `MaybeUninit` slot, which is storage rather
@@ -556,7 +556,7 @@ impl<M> Registry<M> {
                     _ => None,
                 })
         {
-            use prebindgen::core::flat::{Field, Type};
+            use prebindgen_flat::flat::{Field, Type};
             let fields: Vec<&Field> = match self.flat.declared_type(name.as_str()) {
                 Some(Type::Struct(s)) => s.fields.iter().collect(),
                 Some(Type::Variant(v)) => v
@@ -622,7 +622,7 @@ impl<M> Registry<M> {
     ///
     /// `None` therefore means the type never entered the pipeline — a caller
     /// asking out of order, not a cache miss to paper over.
-    pub(crate) fn reading(&self, key: &TypeKey) -> Option<prebindgen::core::flat::TypeRef> {
+    pub(crate) fn reading(&self, key: &TypeKey) -> Option<prebindgen_flat::flat::TypeRef> {
         self.input_types
             .get(key)
             .or_else(|| self.output_types.get(key))
@@ -637,7 +637,7 @@ impl<M> Registry<M> {
     /// a plan leaf's `ty` — and used to call `.syntax()` on it here, which is the
     /// discard #281 is about: the registry would then re-classify the tokens and
     /// store its own answer beside the caller's.
-    pub(crate) fn require_input(&mut self, reading: &prebindgen::core::flat::TypeRef) {
+    pub(crate) fn require_input(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
         self.register_type_recursive(Direction::Input, reading, true);
     }
 
@@ -645,7 +645,7 @@ impl<M> Registry<M> {
     /// resolver produces a converter for it. The output-side peer of
     /// [`Self::require_input`]; used by [`crate::unfold`] to pull in
     /// the leaf types a decomposition delivers.
-    pub(crate) fn require_output(&mut self, reading: &prebindgen::core::flat::TypeRef) {
+    pub(crate) fn require_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
         self.register_type_recursive(Direction::Output, reading, true);
     }
 
@@ -666,7 +666,7 @@ impl<M> Registry<M> {
     /// exist. Registration and demand are separable facts and this is the door
     /// for the first alone; `ensure_entry`'s `root |= root` means calling it for
     /// a type the binding did declare cannot weaken anything.
-    pub(crate) fn reference_output(&mut self, reading: &prebindgen::core::flat::TypeRef) {
+    pub(crate) fn reference_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
         self.register_type_recursive(Direction::Output, reading, false);
     }
 
@@ -679,7 +679,7 @@ impl<M> Registry<M> {
     /// the whole-collection converter is genuinely not needed — and for a
     /// `Vec<opaque-handle>` it cannot resolve at all (a `jlong` wire is not
     /// JObject-shaped), so requiring it would wrongly fail resolution.
-    pub(crate) fn unrequire_output(&mut self, reading: &prebindgen::core::flat::TypeRef) {
+    pub(crate) fn unrequire_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
         self.clear_root(Direction::Output, &reading.key());
     }
 
@@ -714,7 +714,7 @@ impl<M> Registry<M> {
     pub fn readings(
         &self,
         dir: Direction,
-    ) -> impl Iterator<Item = &prebindgen::core::flat::TypeRef> {
+    ) -> impl Iterator<Item = &prebindgen_flat::flat::TypeRef> {
         self.type_table(dir).values().map(|cell| &*cell.subject)
     }
 
@@ -738,7 +738,7 @@ impl<M> Registry<M> {
     /// close, and every caller with a `Registry` in hand silently used it. The
     /// same "second door inside the room" that hid `classify` behind
     /// `Registry::reading` until #267.
-    pub fn input_entry(&self, reading: &prebindgen::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+    pub fn input_entry(&self, reading: &prebindgen_flat::flat::TypeRef) -> Option<&TypeEntry<M>> {
         self.type_table(Direction::Input)
             .get(&reading.key())?
             .entry
@@ -747,7 +747,7 @@ impl<M> Registry<M> {
 
     /// Look up the resolved output entry for `reading`. See
     /// [`Self::input_entry`].
-    pub fn output_entry(&self, reading: &prebindgen::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+    pub fn output_entry(&self, reading: &prebindgen_flat::flat::TypeRef) -> Option<&TypeEntry<M>> {
         self.type_table(Direction::Output)
             .get(&reading.key())?
             .entry

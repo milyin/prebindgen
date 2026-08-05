@@ -39,7 +39,7 @@ impl<M> Registry<M> {
     /// Start describing a binding over this model.
     ///
     /// A `Flat` is what a registry projects, and reading captured prebindgen
-    /// output into one is [`FlatBuilder`](prebindgen::core::flat::FlatBuilder)'s job
+    /// output into one is [`FlatBuilder`](prebindgen_flat::flat::FlatBuilder)'s job
     /// — so a build script says where items come from at the layer that owns
     /// the question, and there is one such layer rather than two:
     ///
@@ -70,7 +70,7 @@ impl<M> Registry<M> {
     /// a source crate that needs migrating sees one list instead of one rebuild
     /// per item. This is independent of what any binding declares: an
     /// inexpressible item is a hard error whether or not it is ever named.
-    pub fn builder(flat: prebindgen::core::flat::Flat) -> Result<RegistryBuilder<M>, ScanError> {
+    pub fn builder(flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder<M>, ScanError> {
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -266,7 +266,7 @@ impl<M> RegistryBuilder<M> {
 impl<M> RegistryBuilder<M> {
     /// The model being described. Complete from the first call: everything that
     /// adds to it ([`Self::local_function`]) is a declaration, not a derivation.
-    pub fn flat(&self) -> &prebindgen::core::flat::Flat {
+    pub fn flat(&self) -> &prebindgen_flat::flat::Flat {
         &self.registry.flat
     }
 
@@ -373,14 +373,14 @@ impl<M> RegistryBuilder<M> {
         F: FnMut(
             &Crossing,
             &Building<'_, M>,
-            &prebindgen::core::Emit,
+            &prebindgen_flat::Emit,
         ) -> Option<crate::prebindgen::ConverterImpl<M>>,
     {
         // A converter IS generated Rust — `ConverterImpl::function` is a
         // complete `syn::ItemFn` the adapter writes — so this closure is an
         // emission callback and is handed the capability, exactly as the
-        // `on_*` ones are. See `core::emit`.
-        let emit = prebindgen::core::Emit::new();
+        // `on_*` ones are. See `prebindgen_flat::flat::emit`.
+        let emit = prebindgen_flat::Emit::new();
         let order = self.derive()?.to_vec();
         for crossing in &order {
             let conv = f(crossing, &self.view(), &emit);
@@ -447,16 +447,16 @@ impl<M> RegistryBuilder<M> {
 ///
 /// [`conversion`]: Conversions::conversion
 impl<M> Conversions<M> for RegistryBuilder<M> {
-    fn reading(&self, key: &TypeKey) -> Option<prebindgen::core::flat::TypeRef> {
+    fn reading(&self, key: &TypeKey) -> Option<prebindgen_flat::flat::TypeRef> {
         self.registry.reading(key)
     }
-    fn flat(&self) -> &prebindgen::core::flat::Flat {
+    fn flat(&self) -> &prebindgen_flat::flat::Flat {
         &self.registry.flat
     }
     fn conversion(
         &self,
         dir: Direction,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_flat::flat::TypeRef,
     ) -> Option<&TypeEntry<M>> {
         self.built.get(&(dir, reading.key()))
     }

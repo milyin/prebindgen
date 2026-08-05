@@ -112,7 +112,7 @@ impl<M> Registry<M> {
     pub(super) fn plan_edges(
         &self,
         dir: Direction,
-        ty: &prebindgen::core::flat::TypeRef,
+        ty: &prebindgen_flat::flat::TypeRef,
     ) -> Vec<Crossing> {
         if dir != Direction::Input {
             return Vec::new();

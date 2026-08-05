@@ -162,7 +162,7 @@ pub trait Prebindgen {
     fn prerequisites(
         &self,
         _registry: &Registry<Self::Metadata>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_flat::Emit,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -182,7 +182,7 @@ pub trait Prebindgen {
         &self,
         _item: &mut syn::Item,
         _registry: &Registry<Self::Metadata>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_flat::Emit,
     ) {
     }
 
@@ -242,18 +242,18 @@ pub trait Prebindgen {
     /// (e.g. JNI `extern "C"` fn).
     fn on_function(
         &self,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_flat::flat::Function,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_flat::Emit,
     ) -> TokenStream;
 
     /// Per-struct emission. Typically empty for languages that get
     /// everything they need from auto-generated converters.
     fn on_struct(
         &self,
-        s: &prebindgen::core::flat::Struct,
+        s: &prebindgen_flat::flat::Struct,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_flat::Emit,
     ) -> TokenStream;
 
     /// Per-sum emission — an `enum` whose alternatives carry payloads.
@@ -264,17 +264,17 @@ pub trait Prebindgen {
     /// both in-tree adapters do for both.
     fn on_variant(
         &self,
-        v: &prebindgen::core::flat::Variant,
+        v: &prebindgen_flat::flat::Variant,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_flat::Emit,
     ) -> TokenStream;
 
     /// Per-enum emission — the fieldless shape, a named set of integers.
     fn on_enum(
         &self,
-        e: &prebindgen::core::flat::Enum,
+        e: &prebindgen_flat::flat::Enum,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_flat::Emit,
     ) -> TokenStream;
 
     /// Per-const emission. Default: a named const re-emits as a path-alias
@@ -284,13 +284,13 @@ pub trait Prebindgen {
     /// An adapter without a source module passes the const through verbatim.
     ///
     /// A const reaching here is always named: prebindgen's own injected feature
-    /// checks are [`Guard`](prebindgen::core::flat::Guard)s, not consts, so this
+    /// checks are [`Guard`](prebindgen_flat::flat::Guard)s, not consts, so this
     /// never has to recognise one.
     fn on_const(
         &self,
-        c: &prebindgen::core::flat::Constant,
+        c: &prebindgen_flat::flat::Constant,
         _registry: &Registry<Self::Metadata>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_flat::Emit,
     ) -> TokenStream {
         match self.source_module() {
             Some(m) => emit.const_alias(c, m),

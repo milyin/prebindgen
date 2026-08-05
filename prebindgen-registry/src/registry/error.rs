@@ -4,10 +4,10 @@ use std::fmt;
 
 use prebindgen::SourceLocation;
 
-impl From<prebindgen::core::flat::ParseError> for ScanError {
-    fn from(e: prebindgen::core::flat::ParseError) -> Self {
+impl From<prebindgen_flat::flat::ParseError> for ScanError {
+    fn from(e: prebindgen_flat::flat::ParseError) -> Self {
         match e {
-            prebindgen::core::flat::ParseError::DuplicateName(d) => {
+            prebindgen_flat::flat::ParseError::DuplicateName(d) => {
                 ScanError::DuplicateName(Box::new(DuplicateNameError {
                     name: d.name,
                     first: d.first,
@@ -25,7 +25,7 @@ impl From<prebindgen::core::flat::ParseError> for ScanError {
 pub struct NotExpressibleEntry {
     /// The item's name, or `None` for an item kind that has none.
     pub name: Option<syn::Ident>,
-    /// Rendered [`ItemError`](prebindgen::core::flat::ItemError) — the frontend's own
+    /// Rendered [`ItemError`](prebindgen_flat::flat::ItemError) — the frontend's own
     /// message, so one authority produces it.
     pub reason: String,
     pub location: SourceLocation,
@@ -53,7 +53,7 @@ pub enum ScanError {
     /// Items the flat language cannot express, all of them at once.
     ///
     /// The message for each comes from
-    /// [`ItemError`](prebindgen::core::flat::ItemError), so one authority produces it.
+    /// [`ItemError`](prebindgen_flat::flat::ItemError), so one authority produces it.
     /// This replaces the per-item guards the registry used to duplicate — a `self`
     /// receiver, a non-ident parameter pattern, a disallowed `impl Trait` — which
     /// the frontend now catches with a richer diagnosis (it names the parameter).

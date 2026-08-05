@@ -40,7 +40,7 @@
 //! **Every route from the model to captured syntax, except the ones the
 //! registry pipeline itself needs.** `TypeRef::{as_syn, stripped_syntax}`,
 //! `TypeKind::to_syn`, `Element::as_syn`, `Type::as_syn`, `Origin::as_syn` and
-//! the three `spell(head, parts)` shape methods stay `pub(in crate::api::core)`
+//! the three `spell(head, parts)` shape methods stay `pub(crate)`
 //! — nothing outside this crate calls them. `TypeRef::spell`, `Origin::spell`
 //! and `Flat::enum_item` are `pub`: the registry pipeline that legitimately
 //! calls them (`write_rust`'s emission, and its own tests) is now the separate
@@ -104,7 +104,7 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 
 /// The capability to render captured Rust syntax.
 ///
-/// Unforgeable outside `api::core`: the field is private and there is no public
+/// Unforgeable outside this crate: the field is private and there is no public
 /// constructor, so the only way to hold one is to have been handed one. See the
 /// [module docs](self) for where that happens and why.
 ///
@@ -123,21 +123,21 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// An element's item (`E0624` — the method is private):
 ///
 /// ```compile_fail
-/// # use prebindgen::core::{Element, flat};
+/// # use prebindgen_flat::{Element, flat};
 /// fn leak(e: &Element) -> syn::Item { e.as_syn() }
 /// ```
 ///
 /// A declared type's item:
 ///
 /// ```compile_fail
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(t: &flat::Type) -> syn::Item { t.as_syn() }
 /// ```
 ///
 /// A captured function's own node, through its `Origin`:
 ///
 /// ```compile_fail
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(f: &flat::Function) -> &syn::ItemFn { f.origin.as_syn() }
 /// ```
 ///
@@ -148,14 +148,14 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// separate `prebindgen-registry` crate rather than code inside this one:
 ///
 /// ```
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(f: &flat::Function) -> proc_macro2::TokenStream { f.origin.spell() }
 /// ```
 ///
 /// A type's **node** — the door C5 claimed to have closed and did not:
 ///
 /// ```compile_fail
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(t: &flat::TypeRef) -> &syn::Type { t.as_syn() }
 /// ```
 ///
@@ -164,21 +164,21 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// helper:
 ///
 /// ```
-/// # use prebindgen::core::Flat;
+/// # use prebindgen_flat::Flat;
 /// fn leak(f: &Flat) -> Option<&syn::ItemEnum> { f.enum_item("E") }
 /// ```
 ///
 /// The delimiters a shape was written with — `S { a }` vs `S(a)` vs `S`:
 ///
 /// ```compile_fail
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(s: &flat::Struct) -> proc_macro2::TokenStream {
 ///     s.spell(Default::default(), &[])
 /// }
 /// ```
 ///
 /// ```compile_fail
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(v: &flat::EnumValue) -> proc_macro2::TokenStream {
 ///     v.spell(Default::default(), &[])
 /// }
@@ -189,19 +189,19 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// caller, lives in the separate `prebindgen-registry` crate:
 ///
 /// ```
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(t: &flat::TypeRef) -> proc_macro2::TokenStream { t.spell() }
 /// ```
 ///
 /// …its stripped form, and the kind's reconstruction:
 ///
 /// ```compile_fail
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(t: &flat::TypeRef) -> syn::Type { t.stripped_syntax() }
 /// ```
 ///
 /// ```compile_fail
-/// # use prebindgen::core::flat;
+/// # use prebindgen_flat::flat;
 /// fn leak(k: &flat::TypeKind) -> syn::Type { k.to_syn() }
 /// ```
 ///
@@ -209,7 +209,7 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// field is private:
 ///
 /// ```compile_fail
-/// # use prebindgen::core::Emit;
+/// # use prebindgen_flat::Emit;
 /// let forged = Emit { _seal: () };
 /// ```
 #[derive(Debug)]
@@ -218,7 +218,7 @@ pub struct Emit {
 }
 
 impl Emit {
-    /// Mint one. Previously `pub(in crate::api::core)`, the whole enforcement
+    /// Mint one. Previously `pub(crate)`, the whole enforcement
     /// mechanism when the registry pipeline that is this method's sole
     /// legitimate caller lived in this crate; now `pub`, since that pipeline
     /// is the separate `prebindgen-registry` crate and a module-path seal

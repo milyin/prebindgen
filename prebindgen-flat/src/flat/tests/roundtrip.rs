@@ -192,7 +192,7 @@ fn empty_delimiters_survive_and_spell() {
 
     let spell = |a: &Alternative| {
         let name = &a.name;
-        crate::api::core::emit::Emit::for_test()
+        crate::flat::emit::Emit::for_test()
             .shape(a, quote::quote!(E::#name), &[])
             .to_string()
     };
@@ -212,7 +212,7 @@ fn empty_delimiters_survive_and_spell() {
     let e = as_enum(&element);
     let spell = |v: &EnumValue| {
         let name = &v.name;
-        crate::api::core::emit::Emit::for_test()
+        crate::flat::emit::Emit::for_test()
             .shape(v, quote::quote!(F::#name), &[])
             .to_string()
     };
@@ -235,7 +235,7 @@ fn empty_delimiters_survive_and_spell() {
             .map(|f| f.bind(&quote::format_ident!("__f{}", f.index)))
             .collect();
         let name = &a.name;
-        crate::api::core::emit::Emit::for_test()
+        crate::flat::emit::Emit::for_test()
             .shape(a, quote::quote!(Reading::#name), &parts)
             .to_string()
     };
@@ -258,7 +258,7 @@ fn struct_delimiters_survive_and_spell() {
         let name = &s.name;
         (
             s.fields.len(),
-            crate::api::core::emit::Emit::for_test()
+            crate::flat::emit::Emit::for_test()
                 .shape(s, quote::quote!(#name), parts)
                 .to_string(),
         )

@@ -26,11 +26,7 @@ use super::element::{Alternative, EnumValue, Field, Struct};
 ///
 /// `head` is the type's or variant's path, and each part is an already-rendered
 /// [`Field::bind`].
-pub(in crate::api::core) fn fields(
-    shape: &syn::Fields,
-    head: TokenStream,
-    parts: &[TokenStream],
-) -> TokenStream {
+pub(crate) fn fields(shape: &syn::Fields, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
     match shape {
         syn::Fields::Unit => head,
         syn::Fields::Unnamed(_) => quote!(#head(#(#parts),*)),
@@ -40,10 +36,10 @@ pub(in crate::api::core) fn fields(
 
 /// The three elements that carry their own field delimiters.
 ///
-/// `pub(in crate::api::core)`, so it can bound
-/// [`Emit::shape`](crate::api::core::emit::Emit::shape) without becoming a door
+/// `pub(crate)`, so it can bound
+/// [`Emit::shape`](crate::flat::emit::Emit::shape) without becoming a door
 /// itself: an out-of-crate consumer cannot name it, so cannot call through it.
-pub(in crate::api::core) trait Shaped {
+pub(crate) trait Shaped {
     fn shape(&self) -> &syn::Fields;
 }
 
@@ -71,7 +67,7 @@ impl Field {
     /// [`index`](Self::index), both model facts. No captured syntax is
     /// involved, so this is not a door — unlike the `spell` methods above,
     /// which read the delimiters the source wrote and are
-    /// [`Emit::shape`](crate::api::core::emit::Emit::shape)'s to hand out.
+    /// [`Emit::shape`](crate::flat::emit::Emit::shape)'s to hand out.
     pub fn member(&self) -> syn::Member {
         match &self.name {
             Some(id) => syn::Member::Named(id.clone()),

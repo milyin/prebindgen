@@ -10,8 +10,8 @@ fn key(s: &str) -> crate::registry::TypeKey {
 
 /// A reading for a fixture type — see the twin in `core/unfold/tests.rs`.
 /// Plan leaves carry `TypeRef`s, and a fixture naming a type inline needs one.
-fn tref(ty: syn::Type) -> prebindgen::core::flat::TypeRef {
-    prebindgen::core::flat::Flat::builder()
+fn tref(ty: syn::Type) -> prebindgen_flat::flat::TypeRef {
+    prebindgen_flat::flat::Flat::builder()
         .build()
         .expect("an empty model")
         .classify(&ty)
@@ -640,7 +640,7 @@ fn recursive_input_cycle_errors() {
 /// `expand_param!(...).variant(fun!(…))` cannot silently vanish.
 #[test]
 fn unknown_constructor_errors() {
-    use prebindgen::core::types_util::ident;
+    use prebindgen_flat::types_util::ident;
     let mut reg: Registry<()> =
         reg_with(&["fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }"]);
     let mut exp = Expansions::default();
@@ -669,7 +669,7 @@ fn unknown_constructor_errors() {
 /// cross-checked against the parameter's type.
 #[test]
 fn constructor_target_mismatch_errors() {
-    use prebindgen::core::types_util::ident;
+    use prebindgen_flat::types_util::ident;
     let mut reg: Registry<()> = reg_with(&[
         "fn z_sample_new(s: String) -> ZSample { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
@@ -697,7 +697,7 @@ fn constructor_target_mismatch_errors() {
 /// resolution.
 #[test]
 fn invalid_declarations_collected() {
-    use prebindgen::core::types_util::ident;
+    use prebindgen_flat::types_util::ident;
     let mut reg: Registry<()> = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_session_get(s: &ZSession, k: &ZKeyExpr) -> bool { todo!() }",

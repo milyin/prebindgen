@@ -23,6 +23,7 @@
 
 use std::{fmt, rc::Rc};
 
+use prebindgen::SourceLocation;
 use quote::ToTokens;
 
 use super::{
@@ -30,7 +31,6 @@ use super::{
     key::TypeKey,
     origin::Origin,
 };
-use crate::SourceLocation;
 
 /// A type as the language accepted it, plus the exact syntax it came from.
 ///
@@ -56,9 +56,9 @@ use crate::SourceLocation;
 /// | | |
 /// |---|---|
 /// | the `kind` and `origin` fields | `pub(super)` — a public field **is** a constructor, so restricting only the composers would block nothing |
-/// | `borrowed` / `optional` / `scalar` | `pub(in crate::api::core)` |
+/// | `borrowed` / `optional` / `scalar` | `pub(crate)` |
 /// | `named` | `pub(super)` — `flat` alone |
-/// | `Flat::classify` | `pub(in crate::api::core)` |
+/// | `Flat::classify` | `pub(crate)` |
 ///
 /// A module-path seal can no longer express "the registry pipeline, and
 /// nothing else" once that pipeline is a different crate — there is no path
@@ -110,7 +110,7 @@ impl fmt::Display for TypeRef {
     ///
     /// Diagnostics are not emission: a panic naming an unsupported type is
     /// decision code reporting why it decided, and it must not need the
-    /// [`Emit`](crate::api::core::emit::Emit) capability to say so. So this is
+    /// [`Emit`](crate::flat::emit::Emit) capability to say so. So this is
     /// ungated where [`spell`](Self::spell) is not.
     ///
     /// **The identity, not the spelling** — `TypeKey`, which is
@@ -133,7 +133,7 @@ impl TypeRef {
     /// (`E0451`):
     ///
     /// ```compile_fail
-    /// # use prebindgen::core::flat::{TypeKind, TypeRef};
+    /// # use prebindgen_flat::flat::{TypeKind, TypeRef};
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
@@ -143,7 +143,7 @@ impl TypeRef {
     /// crate rather than code inside this one:
     ///
     /// ```
-    /// # use prebindgen::core::flat::{ScalarKind, TypeRef};
+    /// # use prebindgen_flat::flat::{ScalarKind, TypeRef};
     /// let composed = TypeRef::scalar(ScalarKind::Bool);
     /// ```
     ///
@@ -175,7 +175,7 @@ impl TypeRef {
     // callers. That is the correct end state — the check that a kind can
     // reproduce its own syntax needs both halves.
     #[allow(dead_code)]
-    pub(in crate::api::core) fn as_syn(&self) -> &syn::Type {
+    pub(crate) fn as_syn(&self) -> &syn::Type {
         self.origin.as_syn()
     }
 
@@ -200,7 +200,7 @@ impl TypeRef {
     /// The **arity layers** over this type, and what they wrap.
     ///
     /// `Option<Vec<T>>` is `Optional(Iterable(Base))` over `T`. The stack is the
-    /// same [`Shape`](crate::core::shape::Shape) the expansion and decomposition plans are built from — so a
+    /// same [`Shape`](crate::shape::Shape) the expansion and decomposition plans are built from — so a
     /// consumer that needs a plan shape has it, rather than rebuilding one from
     /// flags that were derived from this type moments earlier.
     ///
@@ -218,8 +218,8 @@ impl TypeRef {
     /// **decline**: a consumer that can only build `Base` and `Optional(Base)`
     /// matches those and falls through on anything else, instead of silently
     /// consuming a layer it cannot honour.
-    pub fn layer_stack(&self) -> (crate::core::shape::Shape, &TypeRef) {
-        use crate::api::core::shape::Shape;
+    pub fn layer_stack(&self) -> (crate::shape::Shape, &TypeRef) {
+        use crate::shape::Shape;
         // Bounded on purpose, and not a recursion: the accepted crossing is
         // `Option<Vec<T>>` — at most one optional, then at most one run, in that
         // order. Recursing would accept `Vec<Option<T>>` as `Iterable(Optional)`,
@@ -387,7 +387,7 @@ impl TypeRef {
             kind: TypeKind::Scalar(kind),
             origin: Origin::new(
                 syn::parse_quote!(#ident),
-                std::rc::Rc::new(crate::SourceLocation::default()),
+                std::rc::Rc::new(prebindgen::SourceLocation::default()),
             ),
         }
     }
@@ -405,7 +405,7 @@ impl TypeRef {
             },
             origin: Origin::new(
                 syn::parse_quote!(#ident),
-                std::rc::Rc::new(crate::SourceLocation::default()),
+                std::rc::Rc::new(prebindgen::SourceLocation::default()),
             ),
         }
     }
@@ -541,7 +541,7 @@ impl TypeRef {
     /// tabulates: this strips what stands over *this* node's classification, and
     /// a wrapper under a borrow or inside an `Option` belongs to that inner
     /// node's own spelling.
-    pub(in crate::api::core) fn stripped_syntax(&self) -> syn::Type {
+    pub(crate) fn stripped_syntax(&self) -> syn::Type {
         self.unwrapped().origin.as_syn().clone()
     }
 
@@ -856,7 +856,7 @@ impl TypeKind {
     // the correct end state, not dead code: a kind that cannot reproduce its
     // own syntax has lost something, and this is what says so.
     #[allow(dead_code)]
-    pub(in crate::api::core) fn to_syn(&self) -> syn::Type {
+    pub(crate) fn to_syn(&self) -> syn::Type {
         let opt_lifetime =
             |l: &Option<syn::Lifetime>| l.as_ref().map(|l| quote::quote!(#l)).unwrap_or_default();
         match self {

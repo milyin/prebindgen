@@ -23,7 +23,7 @@ impl<M> Registry<M> {
     }
 
     /// The parsed model this registry projects.
-    pub fn flat(&self) -> &prebindgen::core::flat::Flat {
+    pub fn flat(&self) -> &prebindgen_flat::flat::Flat {
         &self.flat
     }
 
@@ -36,7 +36,7 @@ impl<M> Registry<M> {
     /// — see the arm below — and callers are expected to pair this with
     /// `origin_module(..).unwrap_or_else(default_module)`.
     pub fn named_item_idents(&self) -> impl Iterator<Item = &syn::Ident> {
-        use prebindgen::core::flat::{Element, Type};
+        use prebindgen_flat::flat::{Element, Type};
         self.flat.elements().filter_map(|e| match e {
             // An `Extern` names a type without declaring a body, and is
             // deliberately absent: its caller decides which names to qualify in

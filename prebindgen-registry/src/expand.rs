@@ -26,7 +26,7 @@
 
 use std::collections::HashSet;
 
-use prebindgen::core::types_util::ident;
+use prebindgen_flat::types_util::ident;
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -273,7 +273,7 @@ fn param_reading<M>(
     registry: &Registry<M>,
     func: &syn::Ident,
     param: &syn::Ident,
-) -> Result<prebindgen::core::flat::TypeRef, ExpandError> {
+) -> Result<prebindgen_flat::flat::TypeRef, ExpandError> {
     registry
         .flat()
         .function(&func)
@@ -356,7 +356,7 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
         .function(&func)
         .ok_or_else(|| ExpandError::UnknownConstructor(func.clone()))?;
 
-    let params: Vec<(syn::Ident, prebindgen::core::flat::TypeRef)> = f
+    let params: Vec<(syn::Ident, prebindgen_flat::flat::TypeRef)> = f
         .params
         .iter()
         .map(|p| (p.name.clone(), p.ty.clone()))
@@ -377,7 +377,7 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
 struct CtorSig {
     /// Readings, not spellings: they come off `Function::params`, and a consumer
     /// that needs the spelling takes it at the point it stores one.
-    params: Vec<(syn::Ident, prebindgen::core::flat::TypeRef)>,
+    params: Vec<(syn::Ident, prebindgen_flat::flat::TypeRef)>,
     /// The type the constructor produces, as an **identity**: every use of it
     /// is `check_target`, which keyed both sides.
     target: TypeKey,
@@ -395,7 +395,7 @@ fn build_plan<M>(
     ed: &ExpandDecl,
     optional: bool,
     by_ref: bool,
-    target: &prebindgen::core::flat::TypeRef,
+    target: &prebindgen_flat::flat::TypeRef,
     variants: &[Variant],
     visited: &mut HashSet<TypeKey>,
 ) -> Result<FoldPlan, ExpandError> {
@@ -466,7 +466,7 @@ fn build_plan<M>(
         leaves.push(FoldLeaf {
             name: ident(&format!("{}_present", param)),
             // A presence flag no source wrote — placeless by construction.
-            ty: prebindgen::core::flat::TypeRef::scalar(prebindgen::core::flat::ScalarKind::Bool),
+            ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::Bool),
         });
         let prefix = param.to_string();
         let mut inputs = Vec::new();
@@ -544,7 +544,7 @@ fn build_core<M>(
     exp: &Expansions,
     registry: &Registry<M>,
     ed: &ExpandDecl,
-    target: &prebindgen::core::flat::TypeRef,
+    target: &prebindgen_flat::flat::TypeRef,
     variants: &[Variant],
     by_ref: bool,
     prefix: &str,
@@ -582,7 +582,7 @@ fn build_core<M>(
         leaves.push(FoldLeaf {
             name: ident(&format!("{}_sel", prefix)),
             // The selector, likewise composed and placeless.
-            ty: prebindgen::core::flat::TypeRef::scalar(prebindgen::core::flat::ScalarKind::I32),
+            ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
         });
         let mut fold_variants: Vec<FoldVariant> = Vec::new();
         for (vi, v) in variants.iter().enumerate() {
@@ -644,7 +644,7 @@ fn build_arg<M>(
     exp: &Expansions,
     registry: &Registry<M>,
     ed: &ExpandDecl,
-    pty: &prebindgen::core::flat::TypeRef,
+    pty: &prebindgen_flat::flat::TypeRef,
     name: syn::Ident,
     dispatched: bool,
     leaves: &mut Vec<FoldLeaf>,
@@ -1081,17 +1081,15 @@ fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: 
 /// A type the grammar cannot express answers itself — the identity, not a
 /// fallback classifier. Nothing reaching here can be one: every signature in play
 /// was accepted by the frontend before the scan registered it.
-fn constructed_value(
-    reading: &prebindgen::core::flat::TypeRef,
-) -> &prebindgen::core::flat::TypeRef {
+fn constructed_value(reading: &prebindgen_flat::flat::TypeRef) -> &prebindgen_flat::flat::TypeRef {
     let after_opt = reading.optional_inner().unwrap_or(reading);
     after_opt.borrow_target().unwrap_or(after_opt)
 }
 
 /// [`constructed_value`], plus which of the two layers were there.
 fn constructed_value_layers(
-    reading: &prebindgen::core::flat::TypeRef,
-) -> (bool, bool, prebindgen::core::flat::TypeRef) {
+    reading: &prebindgen_flat::flat::TypeRef,
+) -> (bool, bool, prebindgen_flat::flat::TypeRef) {
     let optional = reading.optional_inner().is_some();
     let after_opt = reading.optional_inner().unwrap_or(reading);
     let by_ref = after_opt.borrow_target().is_some();

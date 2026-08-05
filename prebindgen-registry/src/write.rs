@@ -70,8 +70,9 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // this writer is a pure emission.
     // The capability, minted here and nowhere else in this function's reach.
     // Every callback below is handed a borrow; nothing else in the pipeline is.
-    // See `core::emit` for what that buys and what it deliberately does not.
-    let emit = prebindgen::core::Emit::new();
+    // See `prebindgen_flat::flat::emit` for what that buys and what it
+    // deliberately does not.
+    let emit = prebindgen_flat::Emit::new();
     let mut items: Vec<syn::Item> = Vec::new();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,
@@ -101,7 +102,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     items.extend(parse_items_from_tokens(
         "on_struct",
         sorted_by_name(flat.types().filter_map(|t| match t {
-            prebindgen::core::flat::Type::Struct(s) => Some((&s.name, s)),
+            prebindgen_flat::flat::Type::Struct(s) => Some((&s.name, s)),
             _ => None,
         }))
         .into_iter()
@@ -116,15 +117,15 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     items.extend(parse_items_from_tokens(
         "on_enum",
         sorted_by_name(flat.types().filter_map(|t| match t {
-            prebindgen::core::flat::Type::Variant(v) => Some((&v.name, t)),
-            prebindgen::core::flat::Type::Enum(e) => Some((&e.name, t)),
+            prebindgen_flat::flat::Type::Variant(v) => Some((&v.name, t)),
+            prebindgen_flat::flat::Type::Enum(e) => Some((&e.name, t)),
             _ => None,
         }))
         .into_iter()
         .filter(|(ident, _)| declared_types.contains_key(&TypeKey::from_ident(ident)))
         .map(|(_, t)| match t {
-            prebindgen::core::flat::Type::Variant(v) => ext.on_variant(v, registry, &emit),
-            prebindgen::core::flat::Type::Enum(e) => ext.on_enum(e, registry, &emit),
+            prebindgen_flat::flat::Type::Variant(v) => ext.on_variant(v, registry, &emit),
+            prebindgen_flat::flat::Type::Enum(e) => ext.on_enum(e, registry, &emit),
             _ => unreachable!("filtered to the two enum shapes above"),
         }),
     )?);

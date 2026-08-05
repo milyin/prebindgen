@@ -1,9 +1,10 @@
 //! The prebindgen **source language**: one parser from captured records to
 //! [`Element`]s.
 //!
-//! > Naming: `core::flat` is the *source* side — the flat API a
-//! > `#[prebindgen]` crate may write. `api::lang` is the *destination* adapters
-//! > (C, JNI). They are opposite ends of the pipeline.
+//! > Naming: `flat` is the *source* side — the flat API a
+//! > `#[prebindgen]` crate may write. The destination adapters (C, JNI) ship
+//! > as the separate `prebindgen-c` / `prebindgen-jni` crates. They are
+//! > opposite ends of the pipeline.
 //!
 //! ```text
 //! Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
@@ -38,12 +39,13 @@
 //!
 //! And the model enforces it rather than asking. [`Origin`]'s syntax is
 //! private, and every route to it — `spell()`, `as_syn()` — is visible only
-//! inside `api::core`. Matching a `syn::Type` or `syn::Expr` variant outside
+//! inside this crate. Matching a `syn::Type` or `syn::Expr` variant outside
 //! this module is a classifier, and issue #211 says classification lives here
 //! alone; the visibility is what makes that hold rather than a convention
 //! anyone has to remember. Code whose job *is* producing Rust reaches the
-//! syntax through [`Emit`](crate::core::Emit), which core hands only to the
-//! emission callbacks.
+//! syntax through [`Emit`](crate::Emit), which the registry pipeline
+//! (`prebindgen-registry`'s `write_rust`) hands only to the emission
+//! callbacks.
 //!
 //! # What earns a variant
 //!
@@ -145,7 +147,7 @@
 //!
 //! The one item that *is* re-emitted verbatim is a [`Guard`] — an anonymous
 //! const, which has no address and so cannot be part of an API addressed by name.
-//! Today these are the feature checks [`Source`](crate::Source) injects on its own
+//! Today these are the feature checks [`Source`](prebindgen::Source) injects on its own
 //! behalf. Modelled rather than dropped because this module must be total over
 //! what it is handed, and a separate element so nothing that consumes the API has
 //! to remember to skip it.
@@ -187,12 +189,14 @@ mod element;
 pub mod emit;
 mod key;
 mod origin;
-pub(in crate::api::core) mod spell;
+pub(crate) mod spell;
 pub(crate) mod spelling;
 mod ty;
 
 #[cfg(test)]
 mod tests;
+
+use prebindgen::SourceLocation;
 
 use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
@@ -209,7 +213,6 @@ pub use self::{
         UnsupportedTypeReason, TRANSPARENT_WRAPPERS,
     },
 };
-use crate::SourceLocation;
 
 /// Collects what to parse, then hands over the model.
 ///
@@ -220,29 +223,30 @@ use crate::SourceLocation;
 /// # Reading a source directory
 ///
 /// A build script's whole job, in one expression — the
-/// [`Source`](crate::Source) step included. Pass
+/// [`Source`](prebindgen::Source) step included. Pass
 /// `<source_crate>::PREBINDGEN_OUT_DIR`:
 ///
 /// ```
 /// # prebindgen::Source::init_doctest_simulate();
-/// use prebindgen::core::Flat;
+/// use prebindgen_flat::Flat;
 ///
 /// let flat = Flat::builder().source("source_ffi").build()?;
 /// assert!(flat.function("test_function").is_some());
 /// assert!(flat.declared_type("TestStruct").is_some());
-/// # Ok::<_, prebindgen::core::flat::ParseError>(())
+/// # Ok::<_, prebindgen_flat::flat::ParseError>(())
 /// ```
 ///
 /// # Reading a stream
 ///
 /// [`Self::items`] takes any `(syn::Item, SourceLocation)` iterator, so
-/// everything a [`Source`](crate::Source) can express still composes — a group
+/// everything a [`Source`](prebindgen::Source) can express still composes — a group
 /// selection, a renamed dependency, several sources at once. The feeders
 /// accumulate, so mix them freely:
 ///
 /// ```
 /// # prebindgen::Source::init_doctest_simulate();
-/// use prebindgen::{core::Flat, Source};
+/// use prebindgen::Source;
+/// use prebindgen_flat::Flat;
 ///
 /// // A dependency renamed in Cargo.toml needs the name THIS crate uses, so it
 /// // is configured rather than named by directory.
@@ -251,7 +255,7 @@ use crate::SourceLocation;
 ///     .items(helpers.items_in_groups(&["functions"]))
 ///     .build()?;
 /// assert_eq!(flat.functions().count(), 1);
-/// # Ok::<_, prebindgen::core::flat::ParseError>(())
+/// # Ok::<_, prebindgen_flat::flat::ParseError>(())
 /// ```
 ///
 /// # Why accumulate, rather than parse each input
@@ -269,26 +273,26 @@ pub struct FlatBuilder {
 impl FlatBuilder {
     /// Every `#[prebindgen]` item captured in `dir`.
     ///
-    /// Sugar for [`Self::items`] over [`Source::items_all`](crate::Source::items_all),
+    /// Sugar for [`Self::items`] over [`Source::items_all`](prebindgen::Source::items_all),
     /// which is the whole of what a build script normally needs — pass
     /// `<source_crate>::PREBINDGEN_OUT_DIR`. Reach for a
-    /// [`Source`](crate::Source) directly, and feed it through [`Self::items`],
+    /// [`Source`](prebindgen::Source) directly, and feed it through [`Self::items`],
     /// only when it needs configuring.
     ///
-    /// Panics the way [`Source::new`](crate::Source::new) does if `dir` is not
+    /// Panics the way [`Source::new`](prebindgen::Source::new) does if `dir` is not
     /// readable prebindgen output: a build script has nothing to recover with.
     ///
     /// ```
     /// # prebindgen::Source::init_doctest_simulate();
-    /// use prebindgen::core::Flat;
+    /// use prebindgen_flat::Flat;
     ///
     /// let flat = Flat::builder().source("source_ffi").build()?;
     /// assert!(flat.function("test_function").is_some());
     /// assert!(flat.declared_type("TestStruct").is_some());
-    /// # Ok::<_, prebindgen::core::flat::ParseError>(())
+    /// # Ok::<_, prebindgen_flat::flat::ParseError>(())
     /// ```
     pub fn source<P: AsRef<std::path::Path>>(self, dir: P) -> Self {
-        let source = crate::Source::new(dir);
+        let source = prebindgen::Source::new(dir);
         self.items(source.items_all())
     }
 
@@ -305,7 +309,9 @@ impl FlatBuilder {
         dir: P,
         crate_name: impl Into<String>,
     ) -> Self {
-        let source = crate::Source::builder(dir).crate_name(crate_name).build();
+        let source = prebindgen::Source::builder(dir)
+            .crate_name(crate_name)
+            .build();
         self.items(source.items_all())
     }
 
@@ -317,14 +323,15 @@ impl FlatBuilder {
     ///
     /// ```
     /// # prebindgen::Source::init_doctest_simulate();
-    /// use prebindgen::{core::Flat, Source};
+    /// use prebindgen::Source;
+    /// use prebindgen_flat::Flat;
     ///
     /// let source = Source::new("source_ffi");
     /// let flat = Flat::builder()
     ///     .items(source.items_in_groups(&["structs"]))
     ///     .build()?;
     /// assert_eq!(flat.types().count(), 1);
-    /// # Ok::<_, prebindgen::core::flat::ParseError>(())
+    /// # Ok::<_, prebindgen_flat::flat::ParseError>(())
     /// ```
     pub fn items<I>(mut self, items: I) -> Self
     where
@@ -357,9 +364,9 @@ impl FlatBuilder {
         // The consequence is deliberate and stated on `Origin`: a slice
         // is the spelling generation must EMIT, which is the normalized one —
         // the flat namespace is what the generated crate can actually name.
-        let normalization = crate::api::core::flat::spelling::Normalization::from_items(&items);
+        let normalization = crate::flat::spelling::Normalization::from_items(&items);
         for (item, _) in &mut items {
-            crate::api::core::flat::spelling::normalize_item_types(item, &normalization);
+            crate::flat::spelling::normalize_item_types(item, &normalization);
         }
 
         // Pass 1: the consts an array length may name. Unnamed items are
@@ -505,7 +512,7 @@ pub struct Flat {
 ///
 /// ```
 /// # prebindgen::Source::init_doctest_simulate();
-/// use prebindgen::core::flat::Flat;
+/// use prebindgen_flat::flat::Flat;
 ///
 /// let flat = Flat::builder().source("source_ffi").build()?;
 /// let ident = quote::format_ident!("test_function");
@@ -513,7 +520,7 @@ pub struct Flat {
 /// // The same element, whichever spelling the caller happens to hold.
 /// assert!(flat.function("test_function").is_some());
 /// assert!(flat.function(&ident).is_some());
-/// # Ok::<_, prebindgen::core::flat::ParseError>(())
+/// # Ok::<_, prebindgen_flat::flat::ParseError>(())
 /// ```
 pub trait Name: sealed::Sealed {
     /// The name as a string, borrowed when the caller already holds one.
@@ -642,7 +649,7 @@ impl Flat {
     // and get the element that answers, so nothing in a built crate needs the
     // item. The registry pipeline's own tests (now in the separate
     // `prebindgen-registry` crate) still exercise it, which is why this is
-    // `pub` rather than `pub(in crate::api::core)` — see `TypeRef`'s doc for
+    // `pub` rather than `pub(crate)` — see `TypeRef`'s doc for
     // why that seal is now a convention rather than a compiler check.
     #[allow(dead_code)]
     pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
@@ -678,12 +685,11 @@ impl Flat {
     /// it is one the binding invented, and there is nothing for the frontend to
     /// have decided about it.
     ///
-    /// The argument is normalized the way [`TypeKey`](crate::core::TypeKey) does
+    /// The argument is normalized the way [`TypeKey`](crate::TypeKey) does
     /// before lookup, so an adapter-authored spelling finds the same entry a
     /// captured one does.
     pub fn type_ref(&self, ty: &syn::Type) -> Option<&TypeRef> {
-        self.by_type
-            .get(&crate::api::core::flat::canonical_spelling(ty))
+        self.by_type.get(&crate::flat::canonical_spelling(ty))
     }
 
     /// This module's reading of `ty` — the index's if the source wrote it, freshly
@@ -718,7 +724,7 @@ impl Flat {
     /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
     /// about a type the *binding* built, not a cache miss.
     ///
-    /// **`pub`, not `pub(in crate::api::core)`.** The registry pipeline that is
+    /// **`pub`, not `pub(crate)`.** The registry pipeline that is
     /// this method's sole legitimate caller now lives in the separate
     /// `prebindgen-registry` crate, so a module-path seal can no longer express
     /// "the pipeline, and nothing else" — there is no path inside this crate for
@@ -756,9 +762,7 @@ impl Flat {
             .collect();
         for ty in refs {
             self.by_type
-                .entry(crate::api::core::flat::canonical_spelling(
-                    ty.origin.as_syn(),
-                ))
+                .entry(crate::flat::canonical_spelling(ty.origin.as_syn()))
                 .or_insert(ty);
         }
     }
