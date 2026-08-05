@@ -2,7 +2,7 @@
 //!
 //! The flat model prebindgen's registry pipeline is built over.
 //!
-//! [`flat::Flat::builder`] parses `(syn::Item, `[`SourceLocation`](prebindgen::SourceLocation)`)`
+//! [`flat::Flat::builder`] parses `(syn::Item, [`SourceLocation`](prebindgen::SourceLocation))`
 //! records — read through [`prebindgen::Source`] — into one flat
 //! namespace — the language-agnostic index of everything a `#[prebindgen]`
 //! source crate declared. The Registry-based pipeline that resolves a binding
