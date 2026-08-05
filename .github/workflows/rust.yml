@@ -23,15 +23,44 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # `kotlin-codegen` is a sibling path dependency (`../kotlin-codegen`) until it
+  # is published to crates.io, so every job has to check it out alongside this
+  # repo. It tracks `main`, but each job resolving `main` independently could
+  # see different commits mid-run — pin one SHA here and have every job use it.
+  resolve-kotlin-codegen:
+    name: Resolve kotlin-codegen main
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+    - name: Resolve kotlin-codegen main to a commit
+      id: resolve
+      run: |
+        sha=$(git ls-remote https://github.com/milyin/kotlin-codegen.git refs/heads/main | cut -f1)
+        test -n "$sha" || { echo "could not resolve kotlin-codegen main"; exit 1; }
+        echo "kotlin-codegen main = $sha"
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   build:
 
     runs-on: ubuntu-latest
+    needs: resolve-kotlin-codegen
+    defaults:
+      run:
+        working-directory: prebindgen
     strategy:
       matrix:
         rust: [1.85.0, stable]
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - uses: actions/checkout@v4
+      with:
+        repository: milyin/kotlin-codegen
+        ref: ${{ needs.resolve-kotlin-codegen.outputs.sha }}
+        path: kotlin-codegen
     - name: Install Rust ${{ matrix.rust }}
       run: |
         rustup toolchain install ${{ matrix.rust }}
@@ -58,8 +87,19 @@ jobs:
     # generated output, fail on drift (the golden-diff invariant), then run
     # the covertest-kotlin assert harness on a real JVM.
     runs-on: ubuntu-latest
+    needs: resolve-kotlin-codegen
+    defaults:
+      run:
+        working-directory: prebindgen
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - uses: actions/checkout@v4
+      with:
+        repository: milyin/kotlin-codegen
+        ref: ${{ needs.resolve-kotlin-codegen.outputs.sha }}
+        path: kotlin-codegen
     - name: Install Rust
       run: rustup toolchain install stable && rustup default stable
     - uses: actions/setup-java@v4
@@ -69,7 +109,7 @@ jobs:
     - name: Regen check (golden diff of committed generated bindings)
       run: ./examples/regen-check.sh
     - name: Run covertest-kotlin assert harness
-      working-directory: examples/covertest-kotlin
+      working-directory: prebindgen/examples/covertest-kotlin
       run: ./gradlew run --console=plain
 
   smoke-asan:
@@ -77,8 +117,19 @@ jobs:
     # checked by a leak detector rather than by reading `smoke.c`. Its own job
     # so a leak is reported as a leak, not buried in the covertest log.
     runs-on: ubuntu-latest
+    needs: resolve-kotlin-codegen
+    defaults:
+      run:
+        working-directory: prebindgen
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - uses: actions/checkout@v4
+      with:
+        repository: milyin/kotlin-codegen
+        ref: ${{ needs.resolve-kotlin-codegen.outputs.sha }}
+        path: kotlin-codegen
     - name: Install Rust
       run: rustup toolchain install stable && rustup default stable
     - name: Run the C smoke test under ASan/LSan/UBSan
