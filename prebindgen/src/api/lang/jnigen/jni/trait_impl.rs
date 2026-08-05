@@ -1763,11 +1763,8 @@ impl Prebindgen for Declarations {
                         let has_receiver =
                             func.params.iter().any(|p| &peel_receiver_key(&p.ty) == key);
                         if !has_receiver {
-                            let took: Vec<String> = func
-                                .params
-                                .iter()
-                                .map(|p| p.ty.spell().to_string())
-                                .collect();
+                            let took: Vec<String> =
+                                func.params.iter().map(|p| p.ty.to_string()).collect();
                             return Err(format!(
                                 "class `{}` method `{}`: no parameter of type `{}` — an \
                                  instance method's receiver must appear in the signature \
@@ -1798,7 +1795,7 @@ impl Prebindgen for Declarations {
                                 m.rust_ident,
                                 key.as_str(),
                                 key.as_str(),
-                                func.ret.spell()
+                                func.ret
                             ));
                         }
                     }
@@ -1839,8 +1836,7 @@ impl Prebindgen for Declarations {
                              factory can still hand back a handle. Return `{}` directly and \
                              report failure through the error channel, or model the failure \
                              as one of the sum's own variants",
-                            ok.spell(),
-                            ok.spell(),
+                            ok, ok,
                         ));
                     }
                 }
@@ -1919,10 +1915,7 @@ impl Prebindgen for Declarations {
                              those into the foreign list needs the element folder a `Vec<{}>` \
                              RETURN provides; declare the callback over one value \
                              (`impl Fn({})`) or return `Vec<{}>` instead",
-                            elem.spell(),
-                            elem.spell(),
-                            elem.spell(),
-                            elem.spell(),
+                            elem, elem, elem, elem,
                         ));
                     }
                 }

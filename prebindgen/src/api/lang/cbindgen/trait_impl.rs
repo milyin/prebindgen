@@ -589,7 +589,7 @@ impl CbindgenBuilder {
                         "Cbindgen: field `{}` of data struct `{}` has unsupported type `{}`",
                         fname,
                         type_short(&reading.key()),
-                        fty.spell()
+                        fty
                     )
                 });
                 field_defs.push(quote!(pub #fname: #wire));
@@ -682,7 +682,7 @@ impl CbindgenBuilder {
                                  opaque pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
                                 fname,
                                 type_short(&reading.key()),
-                                fty.spell()
+                                fty
                             )
                         });
                         quote!(pub #fname: #wire)
@@ -1054,8 +1054,7 @@ impl CbindgenBuilder {
                     panic!(
                         "Cbindgen: data-struct field `{}` of type `{}` is owning but has no \
                          release form (expected a `String` or a declared `tagged_union`)",
-                        fname,
-                        fty.spell(),
+                        fname, fty,
                     )
                 }
             });

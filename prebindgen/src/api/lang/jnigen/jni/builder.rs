@@ -909,7 +909,7 @@ impl Declarations {
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
                 key.as_str(),
-                ret.spell(),
+                ret,
             )
         };
         let st = st.clone();

@@ -98,6 +98,23 @@ pub struct TypeRef {
     pub(super) origin: Origin<syn::Type>,
 }
 
+impl fmt::Display for TypeRef {
+    /// The type as the source wrote it, **for a message**.
+    ///
+    /// Diagnostics are not emission: a panic naming an unsupported type is
+    /// decision code reporting why it decided, and it must not need the
+    /// [`Emit`](crate::api::core::emit::Emit) capability to say so. So this is
+    /// ungated where [`spell`](Self::spell) is not.
+    ///
+    /// **Not a spelling.** It renders the same tokens today, and nothing should
+    /// depend on that: re-parsing a message is not a supported route to a node,
+    /// and the reason it is not is that a message is allowed to get friendlier.
+    /// Generated Rust spells through `Emit`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.spell())
+    }
+}
+
 impl TypeRef {
     /// What the type means. **Classify off this**, never off the spelling.
     ///

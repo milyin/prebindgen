@@ -416,7 +416,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                      Reserved rather than refused for good: rebuilding through every \
                      transparent wrapper is #292 item 3 — until then, spell the return \
                      without it.",
-                    delivered.spell(),
+                    delivered,
                     delivered.erased_wrappers().join("<"),
                 )
             });

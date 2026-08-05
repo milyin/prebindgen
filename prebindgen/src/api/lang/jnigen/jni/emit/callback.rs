@@ -419,7 +419,7 @@ pub(crate) fn reject_vec_of_handle(
                 "JniGen: `Vec<{}>` is unsupported — its elements would be closeable native \
                  handles (jlong) the JVM must free individually. Expose a per-element \
                  accessor instead of returning a `Vec` of handles.",
-                elem.spell(),
+                elem,
             );
         }
     }
