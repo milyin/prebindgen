@@ -2211,7 +2211,7 @@ pub(crate) fn default_err_type() -> syn::Type {
 /// (binding-layer). A `Result<T, E>` return carries its own raw `E`, surfaced
 /// as `UserError` at the extern's error site.
 pub(crate) fn framework_error_type() -> syn::Type {
-    syn::parse_quote!(::prebindgen::lang::JniBindingError<()>)
+    syn::parse_quote!(::prebindgen_jni_runtime::JniBindingError<()>)
 }
 
 /// The body expression to splice into a converter `fn` returning

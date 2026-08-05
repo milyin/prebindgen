@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 prebindgen = { workspace = true }
+prebindgen-jni-runtime = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
 jni = "0.21.1"
 konst = "0.3.0"

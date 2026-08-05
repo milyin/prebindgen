@@ -9,6 +9,7 @@ crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 prebindgen = { workspace = true, features = ["unstable-cbindgen"] }
+prebindgen-c-runtime = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
 konst = "0.3.0"
 

@@ -1,5 +1,5 @@
 #[allow(dead_code)]
-pub(crate) type __JniErr = ::prebindgen::lang::JniBindingError<()>;
+pub(crate) type __JniErr = ::prebindgen_jni_runtime::JniBindingError<()>;
 /// See module-level docs at [`owned_object_prerequisite_items`].
 #[allow(dead_code)]
 pub(crate) struct OwnedObject<T: ?Sized> {
@@ -41,7 +41,7 @@ impl<T: ?Sized> OwnedObject<T> {
 pub(crate) fn signal_binding_error(
     env: &mut jni::JNIEnv,
     sink: &jni::objects::JObject,
-    mid: &::prebindgen::lang::CachedIfaceMethod,
+    mid: &::prebindgen_jni_runtime::CachedIfaceMethod,
     fqn: &str,
     descr: &str,
     je: &str,
@@ -69,7 +69,7 @@ pub(crate) fn signal_binding_error(
 pub(crate) fn signal_domain_error(
     env: &mut jni::JNIEnv,
     sink: &jni::objects::JObject,
-    mid: &::prebindgen::lang::CachedIfaceMethod,
+    mid: &::prebindgen_jni_runtime::CachedIfaceMethod,
     fqn: &str,
     descr: &str,
     ze: &[jni::sys::jvalue],
@@ -3244,7 +3244,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_largeFlatInputSum
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let __flat_value_left_left_left_left_left_left_value = match jlong_to_i64_fbf9a9bc(
@@ -4805,7 +4805,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_largeObjectInputS
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let value = match JObject_to_ObjectBoundary64Object_ecaf00ac(&mut env, &value) {
@@ -4847,7 +4847,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadHandlerNew
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906(&mut env, &f) {
@@ -4889,7 +4889,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVecHandler
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_95073668(&mut env, &f) {
@@ -4932,7 +4932,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallback<'
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
@@ -4989,7 +4989,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallbackVe
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
@@ -5046,7 +5046,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
@@ -5064,7 +5064,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
         }
     };
     #[allow(non_upper_case_globals)]
-    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __CB_FQN: &str = "io/prebindgen/perftest/PayloadBuilder";
     const __CB_DESCR: &str = "(JIDZLjava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::storage_get(&s);
@@ -5214,7 +5214,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
@@ -5232,7 +5232,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
         }
     };
     #[allow(non_upper_case_globals)]
-    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __CB_FQN: &str = "io/prebindgen/perftest/PayloadFolderRaw";
     const __CB_DESCR: &str = "(Ljava/lang/Object;JIDZLjava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::storage_get_vec(&s);
@@ -5392,7 +5392,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageNew<'a>(
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::storage_new();
@@ -5425,7 +5425,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
@@ -5553,7 +5553,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
@@ -5677,7 +5677,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
@@ -5722,7 +5722,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenGcNew<'a>(
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let value = match jlong_to_i64_fbf9a9bc(&mut env, &value) {
@@ -5764,7 +5764,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenGcValue<'a>(
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let t = match jlong_to_TokenGc_5e58352a(&mut env, &t) {
@@ -5806,7 +5806,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenNew<'a>(
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let value = match jlong_to_i64_fbf9a9bc(&mut env, &value) {
@@ -5848,7 +5848,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_tokenValue<'a>(
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     let t = match jlong_to_Token_4f7adafa(&mut env, &t) {

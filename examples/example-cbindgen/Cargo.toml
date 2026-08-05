@@ -13,6 +13,7 @@ crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 prebindgen = { workspace = true, features = ["unstable-cbindgen"] }
+prebindgen-c-runtime = { workspace = true }
 example-flat = { path = "../example-flat" }
 konst = "0.3.0"
 

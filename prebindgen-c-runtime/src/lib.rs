@@ -3,7 +3,7 @@
 //!
 //! Unlike the rest of `core`, these are *runtime* traits: they are implemented on
 //! the opaque counterpart of an inline-by-value Rust type and called from the
-//! `extern "C"` converters that [`crate::lang::CbindgenBuilder`] emits for a
+//! `extern "C"` converters that prebindgen's experimental C adapter emits for a
 //! `value_opaque` declaration.
 //!
 //! An inline-opaque type is passed across the C ABI *by value* (no `Box`): the

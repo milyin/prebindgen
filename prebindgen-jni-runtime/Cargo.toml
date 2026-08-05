@@ -1,0 +1,16 @@
+[package]
+name = "prebindgen-jni-runtime"
+version = { workspace = true }
+edition = { workspace = true }
+description = "Runtime support helpers called by prebindgen-generated JNI bindings"
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+documentation = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+jni = "0.21.1"

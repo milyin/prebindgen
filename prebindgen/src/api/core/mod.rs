@@ -22,7 +22,6 @@ pub mod domain;
 pub mod emit;
 pub mod expand;
 pub mod flat;
-pub mod gravestone;
 pub mod niches;
 pub mod prebindgen;
 pub mod registry;
@@ -32,11 +31,12 @@ pub mod types_util;
 pub mod unfold;
 pub(crate) mod write;
 
+pub use prebindgen_c_runtime::{Gravestone, Transmute};
+
 pub use self::{
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
     flat::{Element, Flat},
-    gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
     prebindgen::{ConverterImpl, Prebindgen, Stage},
     registry::{

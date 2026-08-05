@@ -328,11 +328,13 @@ pub mod core {
 }
 
 /// Runtime traits implemented by inline-opaque (`value_opaque`) FFI counterpart
-/// types; see [`core::Transmute`] / [`core::Gravestone`]. Re-exported at the crate
-/// root because the experimental C adapter's generated converters reference
-/// them as `::prebindgen::Transmute` / `::prebindgen::Gravestone`.
+/// types; see [`core::Transmute`] / [`core::Gravestone`]. Defined in the
+/// `prebindgen-c-runtime` crate (the experimental C adapter's generated
+/// converters reference them there directly) and re-exported at the crate root
+/// so the public surface is unchanged.
 #[cfg(feature = "unstable-cbindgen")]
-pub use crate::api::core::gravestone::{Gravestone, Transmute};
+pub use prebindgen_c_runtime::{Gravestone, Transmute};
+
 /// Root re-export of [`lang::matching`] so the ignore-predicate constructor
 /// sits next to the decl macros it composes with
 /// (`.ignore(matching(|n| …))`, like `.ignore(fun!(…))`).

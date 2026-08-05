@@ -165,14 +165,14 @@ impl CbindgenBuilder {
                 Some(fields) => Some(quote!(#( (*#slot).#fields = ::core::ptr::null_mut(); )*)),
                 // Bare `Box<T>` field ⇒ a NULL would be an invalid `Box`; full gravestone.
                 None => Some(
-                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen::Gravestone>::gravestone());),
+                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen_c_runtime::Gravestone>::gravestone());),
                 ),
             }
         } else {
             // Non-mirror opaque: the consumer chose the kind explicitly.
             match cfg.kind {
                 OpaqueKind::Owned => Some(
-                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen::Gravestone>::gravestone());),
+                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen_c_runtime::Gravestone>::gravestone());),
                 ),
                 OpaqueKind::Data => None,
             }
@@ -233,7 +233,7 @@ impl CbindgenBuilder {
                         ::std::string::String::from(#null_msg),
                     );
                 }
-                let __live = <#opaque as ::prebindgen::Transmute>::into_rust(
+                let __live = <#opaque as ::prebindgen_c_runtime::Transmute>::into_rust(
                     ::core::ptr::read(v),
                 );
                 #writeback
@@ -702,7 +702,7 @@ impl CbindgenBuilder {
                 // mirrors emit nothing here, so they impose no `Default` requirement.
                 if self.mirror_needs_gravestone_impl(registry, &reading.key()) {
                     items.push(syn::parse_quote!(
-                        impl ::prebindgen::Gravestone for #mirror_ident {
+                        impl ::prebindgen_c_runtime::Gravestone for #mirror_ident {
                             #[inline]
                             fn rust_gravestone() -> #src {
                                 <#src as ::core::default::Default>::default()
@@ -728,7 +728,7 @@ impl CbindgenBuilder {
             // unsafe rust<->opaque reinterpretation. `Gravestone` (user logic)
             // and the converters below are all expressed via these methods.
             items.push(syn::parse_quote!(
-                impl ::prebindgen::Transmute for #opaque {
+                impl ::prebindgen_c_runtime::Transmute for #opaque {
                     type Rust = #src;
                     #[inline]
                     fn from_rust(value: Self::Rust) -> Self {
@@ -764,7 +764,7 @@ impl CbindgenBuilder {
                 pub unsafe extern "C" fn #drop_ident(this_: *mut #opaque) {
                     if !this_.is_null() {
                         ::core::ptr::drop_in_place(
-                            <#opaque as ::prebindgen::Transmute>::as_rust_mut(&mut *this_),
+                            <#opaque as ::prebindgen_c_runtime::Transmute>::as_rust_mut(&mut *this_),
                         );
                     }
                 }
@@ -1729,8 +1729,9 @@ impl CbindgenBuilder {
                 call_args.push(quote!(&mut #wi as *mut #opaque));
                 // Always drop after the call (leak-safe): live value if untaken,
                 // gravestone (no-op) if the C side took it via `z_x_take`.
-                post_drops
-                    .push(quote!(let _ = <#opaque as ::prebindgen::Transmute>::into_rust(#wi);));
+                post_drops.push(
+                    quote!(let _ = <#opaque as ::prebindgen_c_runtime::Transmute>::into_rust(#wi);),
+                );
             } else {
                 call_args.push(quote!(#wi));
             }
@@ -2058,7 +2059,7 @@ impl CbindgenBuilder {
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) fn #name(v: #src) -> #opaque {
-                    <#opaque as ::prebindgen::Transmute>::from_rust(v)
+                    <#opaque as ::prebindgen_c_runtime::Transmute>::from_rust(v)
                 }
             );
             return Some(ConverterImpl {

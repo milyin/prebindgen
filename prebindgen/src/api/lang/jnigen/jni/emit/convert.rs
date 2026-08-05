@@ -336,7 +336,7 @@ pub(crate) fn option_output(
             match v {
                 Some(value) => {
                     let __raw: #inner_wire = #inner_encode;
-                    ::prebindgen::lang::#helper(env, __raw)
+                    ::prebindgen_jni_runtime::#helper(env, __raw)
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Option box: {}", e)))?
                 }
                 None => jni::objects::JObject::null(),

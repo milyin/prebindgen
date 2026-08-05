@@ -2,6 +2,8 @@
 members = [
     "prebindgen",
     "prebindgen-proc-macro",
+    "prebindgen-jni-runtime",
+    "prebindgen-c-runtime",
     "examples/example-cbindgen",
     "examples/example-flat",
     "examples/perftest-flat",
@@ -26,6 +28,8 @@ package.categories = ["development-tools", "external-ffi-bindings"]
 kotlin-codegen = { path = "../kotlin-codegen", version = "0.1.0" }
 prebindgen = { path = "prebindgen", version = "0.5.0" }
 prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.5.0" }
+prebindgen-jni-runtime = { path = "prebindgen-jni-runtime", version = "0.5.0" }
+prebindgen-c-runtime = { path = "prebindgen-c-runtime", version = "0.5.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 syn = { version = "2.0", features = ["full", "visit-mut", "extra-traits"] }

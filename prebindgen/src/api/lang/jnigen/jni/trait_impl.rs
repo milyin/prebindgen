@@ -552,7 +552,7 @@ pub(crate) fn build_signal_binding_error_item() -> syn::Item {
         pub(crate) fn signal_binding_error(
             env: &mut jni::JNIEnv,
             sink: &jni::objects::JObject,
-            mid: &::prebindgen::lang::CachedIfaceMethod,
+            mid: &::prebindgen_jni_runtime::CachedIfaceMethod,
             fqn: &str,
             descr: &str,
             je: &str,
@@ -589,7 +589,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
         pub(crate) fn signal_domain_error(
             env: &mut jni::JNIEnv,
             sink: &jni::objects::JObject,
-            mid: &::prebindgen::lang::CachedIfaceMethod,
+            mid: &::prebindgen_jni_runtime::CachedIfaceMethod,
             fqn: &str,
             descr: &str,
             ze: &[jni::sys::jvalue],

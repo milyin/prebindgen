@@ -14,6 +14,8 @@ rust-version = { workspace = true }
 
 [dependencies]
 kotlin-codegen = { workspace = true }
+prebindgen-jni-runtime = { workspace = true }
+prebindgen-c-runtime = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 syn = { workspace = true }
