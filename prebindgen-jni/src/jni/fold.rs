@@ -4,7 +4,7 @@
 //! Carved from the former `jni_kotlin_ext.rs`; shares the `jni` namespace
 //! via `use super::*`.
 
-use prebindgen::core::flat::TypeRef;
+use prebindgen_registry::flat::TypeRef;
 
 use super::*;
 
@@ -32,7 +32,7 @@ pub(crate) fn enum_probe(reading: &TypeRef) -> &TypeRef {
     cur
 }
 
-// The bottom-up layer fold is the shared `prebindgen::core::shape::fold_shape`
+// The bottom-up layer fold is the shared `prebindgen_registry::shape::fold_shape`
 // (its `on_optional` receives the layer's `&NullableKind` + the wrapped
 // `&FoldStrategy`, so callers can special-case e.g. a `Niche` layer sitting
 // directly over the `Base` leaf). Used by the **type-name** folds
@@ -41,7 +41,7 @@ pub(crate) fn enum_probe(reading: &TypeRef) -> &TypeRef {
 // expressed through it: they fold the other direction (threading a `receiver` /
 // fresh lambda variable top-down rather than combining a bottom-up result), so
 // a shared combinator would obscure rather than simplify them.
-use prebindgen::core::shape::fold_shape;
+use prebindgen_registry::shape::fold_shape;
 
 /// The Kotlin type for a closeable handle reached through the folded
 /// [`FoldStrategy`] layers, given the leaf typed-handle type (e.g.
@@ -94,7 +94,7 @@ pub(crate) fn factory_projection_wire_wrap(
     short: &str,
     name: &str,
 ) -> (kt::KtType, String) {
-    use prebindgen::core::shape::Shape::*;
+    use prebindgen_registry::shape::Shape::*;
 
     use crate::jni::{NullableKind, ProjectionKind::*};
     let direct = |kind: &crate::jni::ProjectionKind| match kind {
@@ -177,7 +177,7 @@ pub(crate) fn is_kotlin_primitive_ty(t: &kt::KtType) -> bool {
 pub(crate) fn flatten_struct_factory(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    s: &prebindgen::core::flat::Struct,
+    s: &prebindgen_registry::flat::Struct,
     prefix: &str,
     class_name: &str,
     imports: &mut BTreeSet<String>,
@@ -439,7 +439,7 @@ fn replace_ident(haystack: &str, from: &str, to: &str) -> String {
 /// level avoids `it` shadowing; the common single-layer cases are
 /// special-cased for readable output (`x?.close()`, `x.forEach { it.close() }`).
 pub(crate) fn render_handle_close(strategy: &crate::jni::FoldStrategy, receiver: &str) -> String {
-    use prebindgen::core::shape::Shape::*;
+    use prebindgen_registry::shape::Shape::*;
     fn go(strategy: &crate::jni::FoldStrategy, receiver: &str, depth: usize) -> String {
         match strategy {
             Base => format!("{receiver}.close()"),
@@ -486,7 +486,7 @@ pub(crate) fn fold_projection_wrap(
     wrap_class: &str,
     niche_sentinel: Option<&str>,
 ) -> String {
-    use prebindgen::core::shape::Shape::*;
+    use prebindgen_registry::shape::Shape::*;
 
     use crate::jni::NullableKind;
     fn go(

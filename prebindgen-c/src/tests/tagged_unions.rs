@@ -643,9 +643,9 @@ fn payload_wires_come_from_the_converter_destination() {
         .mangle_destructor(|base| format!("{base}_drop"))
         .data_struct(syn::parse_quote!(Caption))
         .convert(
-            prebindgen::convert!(Millis)
-                .input(prebindgen::fun!(millis_from_raw))
-                .output(prebindgen::fun!(millis_to_raw)),
+            prebindgen_registry::convert!(Millis)
+                .input(prebindgen_registry::fun!(millis_from_raw))
+                .output(prebindgen_registry::fun!(millis_to_raw)),
         )
         .ignore_function(syn::parse_quote!(millis_from_raw))
         .ignore_function(syn::parse_quote!(millis_to_raw))

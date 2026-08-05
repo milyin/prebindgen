@@ -4,7 +4,7 @@
 //! Carved from the former monolithic JNI module; shares the `jni`
 //! namespace via `use super::*`.
 
-use prebindgen::core::{Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 use super::*;
 
@@ -83,20 +83,20 @@ impl Declarations {
     /// The borrow annotation is the only thing it does differently:
     /// [`annotate_borrow_with_lifetime`] matched a `syn::Type::Reference` with
     /// no lifetime, and the model states both facts on
-    /// [`TypeKind::Ref`](prebindgen::core::flat::TypeKind::Ref), so this spells
+    /// [`TypeKind::Ref`](prebindgen_registry::flat::TypeKind::Ref), so this spells
     /// `&'env [mut] <inner>` off the classification. Everything else the
     /// signature needs is the spelling, which is the reading's own tokens.
     pub(crate) fn build_input_fn_of(
         &self,
-        rust: &prebindgen::core::flat::TypeRef,
+        rust: &prebindgen_registry::flat::TypeRef,
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> syn::ItemFn {
         let spelled = emit.spell(rust);
         let rust_with_lifetime = match rust.kind() {
-            prebindgen::core::flat::TypeKind::Ref {
+            prebindgen_registry::flat::TypeKind::Ref {
                 lifetime: None,
                 mutable,
                 inner,
@@ -161,11 +161,11 @@ impl Declarations {
     /// and nothing else.
     pub(crate) fn build_output_fn_of(
         &self,
-        rust: &prebindgen::core::flat::TypeRef,
+        rust: &prebindgen_registry::flat::TypeRef,
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> syn::ItemFn {
         self.build_output_fn_parts(&emit.spell(rust), wire, body, exc)
     }
@@ -226,12 +226,12 @@ impl Declarations {
     /// `Cow<…, [u8]>` path.
     fn cow_bytes_output(
         &self,
-        ty: &prebindgen::core::flat::TypeRef,
+        ty: &prebindgen_registry::flat::TypeRef,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `TypeKind::Cow` is the form, and its `inner` is the argument — where
         // this walked a path's last segment, compared the ident to the NAME
         // `"Cow"`, and scanned the angle-bracketed arguments for a `[u8]`.
-        let prebindgen::core::flat::TypeKind::Cow { inner, .. } = ty.kind() else {
+        let prebindgen_registry::flat::TypeKind::Cow { inner, .. } = ty.kind() else {
             return None;
         };
         if inner.key().as_str() != "[u8]" {
@@ -305,8 +305,8 @@ impl Declarations {
     ///   A *tagged* (closed-but-present) value is an error, not `None`.
     pub fn opaque_handle_input(
         &self,
-        reading: &prebindgen::core::flat::TypeRef,
-        emit: &prebindgen::core::Emit,
+        reading: &prebindgen_registry::flat::TypeRef,
+        emit: &prebindgen_registry::Emit,
     ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let ty = emit.spell(reading);
@@ -506,8 +506,8 @@ impl Declarations {
     /// docs for the full convention.
     pub fn opaque_handle_output(
         &self,
-        reading: &prebindgen::core::flat::TypeRef,
-        emit: &prebindgen::core::Emit,
+        reading: &prebindgen_registry::flat::TypeRef,
+        emit: &prebindgen_registry::Emit,
     ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let body: syn::Expr =
@@ -633,7 +633,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 pub(crate) fn build_handle_destructor_items(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
@@ -710,7 +710,7 @@ pub(crate) fn build_handle_destructor_items(
 /// reconstructed as `Box<_>`, matched no pattern, and got no converter at all
 /// (#270) — even though the model classifies it `Optional` and says so.
 ///
-/// So the shape comes from [`TypeKind`](prebindgen::core::flat::TypeKind) and
+/// So the shape comes from [`TypeKind`](prebindgen_registry::flat::TypeKind) and
 /// the spelling comes from `spell()`, which is the same split the rest of
 /// the pipeline follows: classify off `kind`, spell with `spell()`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -727,7 +727,7 @@ pub(crate) enum WrapperShape {
 }
 
 /// What generated Rust can do with one wrapper the model
-/// [erases](prebindgen::core::flat::TRANSPARENT_WRAPPERS).
+/// [erases](prebindgen_registry::flat::TRANSPARENT_WRAPPERS).
 ///
 /// Erasure and reconstruction are different questions, and only the first is the
 /// model's. `Box<T>` *is* `T` to every destination language — but undoing it in
@@ -812,7 +812,7 @@ fn wrapper_ops(name: &str) -> Option<&'static WrapperOps> {
 /// which is [`TypeRef::erased_wrappers`], asked of the classification instead
 /// of re-derived from tokens.
 pub(crate) enum Produced<'a> {
-    Reading(&'a prebindgen::core::flat::TypeRef),
+    Reading(&'a prebindgen_registry::flat::TypeRef),
     /// Boxed: a `syn::Type` dwarfs the borrow beside it, and the composed case
     /// is the rare one (a single arm).
     Composed(Box<syn::Type>),
@@ -839,7 +839,7 @@ impl Produced<'_> {
     }
 
     /// The tokens generated Rust spells for this type.
-    fn spell(&self, emit: &prebindgen::core::Emit) -> TokenStream {
+    fn spell(&self, emit: &prebindgen_registry::Emit) -> TokenStream {
         match self {
             Produced::Reading(r) => emit.spell(r),
             Produced::Composed(t) => t.to_token_stream(),
@@ -856,10 +856,10 @@ impl Produced<'_> {
 
     /// The borrow this yields, when the source wrote one — the reading's own
     /// `TypeKind::Ref`. A composed shape is never a borrow.
-    fn borrow(&self) -> Option<(&prebindgen::core::flat::TypeRef, bool)> {
+    fn borrow(&self) -> Option<(&prebindgen_registry::flat::TypeRef, bool)> {
         match self {
             Produced::Reading(r) => match r.kind() {
-                prebindgen::core::flat::TypeKind::Ref { mutable, inner, .. } => {
+                prebindgen_registry::flat::TypeKind::Ref { mutable, inner, .. } => {
                     Some((inner, *mutable))
                 }
                 _ => None,
@@ -877,7 +877,7 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> syn::ItemFn {
         match produced {
             Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc, emit),
@@ -892,7 +892,7 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> syn::ItemFn {
         match produced {
             Produced::Reading(r) => self.build_output_fn_of(r, wire, body, exc, emit),
@@ -943,9 +943,9 @@ fn build_from_canonical(produced: &Produced<'_>, value: TokenStream) -> Option<T
 /// **This answers for one layer's spelling.** It undoes the wrappers standing
 /// over `ty`'s own classification; a wrapper *inside* — the `Box` of
 /// `Option<Box<Vec<T>>>` — belongs to the inner reading and is that layer's
-/// question, per [`TypeRef::erased_wrappers`](prebindgen::core::flat::TypeRef::erased_wrappers).
+/// question, per [`TypeRef::erased_wrappers`](prebindgen_registry::flat::TypeRef::erased_wrappers).
 pub(crate) fn read_through_erased_wrappers(
-    ty: &prebindgen::core::flat::TypeRef,
+    ty: &prebindgen_registry::flat::TypeRef,
     e: TokenStream,
 ) -> Option<TokenStream> {
     let mut out = e;
@@ -983,7 +983,7 @@ pub(crate) fn read_through_erased_wrappers(
 /// wraps, so a rebuild collects wrappers as it descends and applies them as it
 /// comes back out.
 pub(crate) fn build_through_erased_wrappers(
-    ty: &prebindgen::core::flat::TypeRef,
+    ty: &prebindgen_registry::flat::TypeRef,
     value: TokenStream,
 ) -> Option<TokenStream> {
     build_through_wrappers(&ty.erased_wrappers(), value)
@@ -1029,7 +1029,7 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &Produced<'_>,
-        t1: &prebindgen::core::flat::TypeRef,
+        t1: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let WrapperShape::Borrow { .. } = shape else {
@@ -1080,9 +1080,9 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &Produced<'_>,
-        t1: &prebindgen::core::flat::TypeRef,
+        t1: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
@@ -1150,9 +1150,9 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &Produced<'_>,
-        t1: &prebindgen::core::flat::TypeRef,
+        t1: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
@@ -1220,9 +1220,9 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &Produced<'_>,
-        t1: &prebindgen::core::flat::TypeRef,
+        t1: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
@@ -1342,7 +1342,7 @@ impl Declarations {
     /// Classified from the adapter's declared [`TypeConfig`] table (and the
     /// `String` builtin), not the resolver's output converters — this runs
     /// **before** type resolution, exactly like [`Self::value_struct_decons`].
-    fn is_leaf_vec_element(&self, elem: &prebindgen::core::flat::TypeRef) -> bool {
+    fn is_leaf_vec_element(&self, elem: &prebindgen_registry::flat::TypeRef) -> bool {
         match self.types.get(&elem.key()) {
             // A declared opaque handle crosses as a single `jlong` (pointer)
             // leaf that the Kotlin folder wraps into its typed handle class.
@@ -1354,7 +1354,7 @@ impl Declarations {
             // into `ULong`. Other primitive collections retain their existing
             // unsupported status (`Vec<u8>` is the rank-0 ByteArray special).
             None => {
-                matches!(elem.kind(), prebindgen::core::flat::TypeKind::String)
+                matches!(elem.kind(), prebindgen_registry::flat::TypeKind::String)
                     || elem.key().as_str() == "u64"
             }
         }
@@ -1388,13 +1388,13 @@ impl JniGenBuilder {
     /// each crossing in dependency order, and check the set is complete. A
     /// `Flat` and a `Registry` exist inside — they are simply not this caller's
     /// problem.
-    pub fn build(self) -> Result<JniGen, prebindgen::core::WriteRustError> {
+    pub fn build(self) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let flat = self
             .sources
             .clone()
             .build()
-            .map_err(prebindgen::core::ScanError::from)?;
-        let registry = prebindgen::core::Registry::builder(flat)?;
+            .map_err(prebindgen_registry::ScanError::from)?;
+        let registry = prebindgen_registry::Registry::builder(flat)?;
         self.build_with(registry)
     }
 
@@ -1409,8 +1409,8 @@ impl JniGenBuilder {
     /// route to a `JniGenBuilder` at all.
     pub(crate) fn build_with(
         self,
-        registry: prebindgen::core::RegistryBuilder<KotlinMeta>,
-    ) -> Result<JniGen, prebindgen::core::WriteRustError> {
+        registry: prebindgen_registry::RegistryBuilder<KotlinMeta>,
+    ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let decls = self.decls;
         let registry = decls
             .declare_into(registry)?
@@ -1421,7 +1421,7 @@ impl JniGenBuilder {
         // and a `JniGen` is valid by construction.
         decls
             .validate_resolved(&registry)
-            .map_err(|message| prebindgen::core::ScanError::AdapterInvariant { message })?;
+            .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(JniGen { decls, registry })
     }
 }
@@ -1435,7 +1435,7 @@ impl Declarations {
         &self,
         crossing: &Crossing,
         built: &Building<'_, KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
@@ -1451,7 +1451,7 @@ impl Declarations {
                 // rides `immediate_edges` rather than this converter's `subs`.
                 // The arguments are `TypeRef`s on the classification, so nothing
                 // is re-extracted from the signature's syntax.
-                let prebindgen::core::flat::TypeKind::Callback { args } =
+                let prebindgen_registry::flat::TypeKind::Callback { args } =
                     reading.unwrapped().kind()
                 else {
                     return None;
@@ -1465,7 +1465,7 @@ impl Declarations {
     pub fn declare_into(
         &self,
         mut registry: RegistryBuilder<KotlinMeta>,
-    ) -> Result<RegistryBuilder<KotlinMeta>, prebindgen::core::ScanError> {
+    ) -> Result<RegistryBuilder<KotlinMeta>, prebindgen_registry::ScanError> {
         // Binding-local fns first: they become model, and everything below may
         // name one.
         for (item_fn, origin) in self.collect_local_functions() {
@@ -1527,7 +1527,7 @@ impl Declarations {
         // How composites cross in pieces. Every one of these reads only the
         // model, which is what lets them be stated here rather than asked for
         // mid-resolve.
-        let decompositions = prebindgen::core::Decompositions {
+        let decompositions = prebindgen_registry::Decompositions {
             expansions: Some(self.build_expansions()),
             deconstructors: Some(self.build_deconstructors(&registry)),
             value_structs: self.build_value_struct_decons(&registry),
@@ -1544,10 +1544,10 @@ impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-    ) -> Vec<prebindgen::core::unfold::ValueDecon> {
+    ) -> Vec<prebindgen_registry::unfold::ValueDecon> {
         let mut out = Vec::new();
         for item_struct in registry.flat().types().filter_map(|t| match t {
-            prebindgen::core::flat::Type::Struct(s) => Some(s),
+            prebindgen_registry::flat::Type::Struct(s) => Some(s),
             _ => None,
         }) {
             // The declaration's own reading, and its key off that — neither
@@ -1567,7 +1567,7 @@ impl Declarations {
                 crate::jni::synth_value_struct_leaves(self, registry, item_struct, &[], "", 0)
             {
                 if !leaves.is_empty() {
-                    out.push(prebindgen::core::unfold::ValueDecon {
+                    out.push(prebindgen_registry::unfold::ValueDecon {
                         key,
                         source: reading.clone(),
                         leaves,
@@ -1581,7 +1581,7 @@ impl Declarations {
     pub(crate) fn build_sum_decons(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-    ) -> Vec<prebindgen::core::unfold::SumDecon> {
+    ) -> Vec<prebindgen_registry::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         let mut out = Vec::new();
@@ -1598,12 +1598,12 @@ impl Declarations {
             let Some(ident) = self.types[key].rust_type.key().ident() else {
                 continue;
             };
-            let Some(prebindgen::core::flat::Type::Variant(sum)) =
+            let Some(prebindgen_registry::flat::Type::Variant(sum)) =
                 registry.flat().declared_type(&ident)
             else {
                 continue;
             };
-            out.push(prebindgen::core::unfold::SumDecon {
+            out.push(prebindgen_registry::unfold::SumDecon {
                 key: key.clone(),
                 // The sum's own reading, which the declaration answers with —
                 // `Variant::type_ref` exists for exactly this, and it works in
@@ -1621,7 +1621,7 @@ impl Declarations {
     ) -> Vec<TypeKey> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
-        let mut consider = |bare: &prebindgen::core::flat::TypeRef| {
+        let mut consider = |bare: &prebindgen_registry::flat::TypeRef| {
             if seen.insert(bare.key()) && self.is_leaf_vec_element(bare) {
                 out.push(bare.key());
             }
@@ -1631,10 +1631,10 @@ impl Declarations {
             // normalizes an elided return to `()`, so there is no arm for it.
             {
                 let after_opt = match f.ret.kind() {
-                    prebindgen::core::flat::TypeKind::Optional(inner) => inner,
+                    prebindgen_registry::flat::TypeKind::Optional(inner) => inner,
                     _ => &f.ret,
                 };
-                if let prebindgen::core::flat::TypeKind::Vec(elem) = after_opt.kind() {
+                if let prebindgen_registry::flat::TypeKind::Vec(elem) = after_opt.kind() {
                     consider(peel_one_borrow(elem));
                 }
             }
@@ -1646,7 +1646,7 @@ impl Declarations {
                     continue;
                 };
                 for arg in args {
-                    if let prebindgen::core::flat::TypeKind::Slice(elem) =
+                    if let prebindgen_registry::flat::TypeKind::Slice(elem) =
                         peel_one_borrow(arg).kind()
                     {
                         consider(peel_one_borrow(elem));
@@ -1660,9 +1660,9 @@ impl Declarations {
 
 /// One `&` off, and nothing else — the model's own `borrow_target` would also
 /// see through a `Box`/`Cow`, which `peel_leading_ref` did not.
-fn peel_one_borrow(t: &prebindgen::core::flat::TypeRef) -> &prebindgen::core::flat::TypeRef {
+fn peel_one_borrow(t: &prebindgen_registry::flat::TypeRef) -> &prebindgen_registry::flat::TypeRef {
     match t.kind() {
-        prebindgen::core::flat::TypeKind::Ref { inner, .. } => inner,
+        prebindgen_registry::flat::TypeKind::Ref { inner, .. } => inner,
         _ => t,
     }
 }
@@ -1680,10 +1680,10 @@ fn flat_unit_enum<'r>(
     registry: &'r impl Conversions<KotlinMeta>,
     name: &syn::Ident,
     declarator: &str,
-) -> Option<&'r prebindgen::core::flat::Enum> {
+) -> Option<&'r prebindgen_registry::flat::Enum> {
     match registry.flat().declared_type(name)? {
-        prebindgen::core::flat::Type::Enum(e) => Some(e),
-        prebindgen::core::flat::Type::Variant(v) => {
+        prebindgen_registry::flat::Type::Enum(e) => Some(e),
+        prebindgen_registry::flat::Type::Variant(v) => {
             let offender = v
                 .alternatives
                 .iter()
@@ -1704,9 +1704,9 @@ fn flat_unit_enum<'r>(
 impl Declarations {
     fn dispatch_fn_input(
         &self,
-        args: &[prebindgen::core::flat::TypeRef],
+        args: &[prebindgen_registry::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let outer_ty = build_fn_type(args, emit);
         let (wire, body) = callback_input(self, args, registry, emit)?;
@@ -1730,7 +1730,7 @@ impl Prebindgen for Declarations {
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
     /// handlers at the same point they build the wire/body; the
-    /// resolver propagates it into [`prebindgen::core::TypeEntry::metadata`];
+    /// resolver propagates it into [`prebindgen_registry::TypeEntry::metadata`];
     /// the Kotlin emitter reads it back to drive every wrapper /
     /// typed-handle / `JNIWrappers` signature.
     type Metadata = KotlinMeta;
@@ -1750,7 +1750,7 @@ impl Prebindgen for Declarations {
         // earliest generator-owned hook that sees the model, and it runs
         // exactly where the binding used to print these itself. Moves into
         // `JniGenBuilder::generate` once that exists (prebindgen#251 phase E).
-        prebindgen::core::warn_unclaimed(binding.flat(), &self.claimed());
+        prebindgen_registry::warn_unclaimed(binding.flat(), &self.claimed());
 
         for (key, members) in &self.class_members {
             for m in members {
@@ -1907,7 +1907,8 @@ impl Prebindgen for Declarations {
                     // The same walk `build_leaf_vec_fold_elements` makes over a
                     // callback argument, off the same helper: one borrow, a
                     // slice, one borrow off its element.
-                    let prebindgen::core::flat::TypeKind::Slice(elem) = peel_one_borrow(arg).kind()
+                    let prebindgen_registry::flat::TypeKind::Slice(elem) =
+                        peel_one_borrow(arg).kind()
                     else {
                         continue;
                     };
@@ -1952,7 +1953,7 @@ impl Prebindgen for Declarations {
     fn prerequisites(
         &self,
         registry: &Registry<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
         // `JniBindingError` String-wrapper. Built-in converter bodies compose
@@ -2018,7 +2019,7 @@ impl Prebindgen for Declarations {
         &self,
         item: &mut syn::Item,
         registry: &Registry<KotlinMeta>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_registry::Emit,
     ) {
         self.qualify_item(item, registry);
     }
@@ -2027,18 +2028,18 @@ impl Prebindgen for Declarations {
 
     fn on_function(
         &self,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_registry::flat::Function,
         registry: &Registry<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         emit_jni_function_wrapper(self, f, registry, emit)
     }
 
     fn on_struct(
         &self,
-        _s: &prebindgen::core::flat::Struct,
+        _s: &prebindgen_registry::flat::Struct,
         _registry: &Registry<KotlinMeta>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         // Struct converter bodies are emitted by the resolver via
         // input_terminal / output_terminal below; no separate
@@ -2048,18 +2049,18 @@ impl Prebindgen for Declarations {
 
     fn on_variant(
         &self,
-        _v: &prebindgen::core::flat::Variant,
+        _v: &prebindgen_registry::flat::Variant,
         _registry: &Registry<KotlinMeta>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
 
     fn on_enum(
         &self,
-        _e: &prebindgen::core::flat::Enum,
+        _e: &prebindgen_registry::flat::Enum,
         _registry: &Registry<KotlinMeta>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -2073,9 +2074,9 @@ impl Prebindgen for Declarations {
     /// only the callee expression differs — a path to the const, not a call.
     fn on_const(
         &self,
-        c: &prebindgen::core::flat::Constant,
+        c: &prebindgen_registry::flat::Constant,
         registry: &Registry<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);
@@ -2103,9 +2104,9 @@ impl Declarations {
     /// empty.
     pub(crate) fn input_terminal(
         &self,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()`: the arms below that ask what
         // a type IS use `reading`, and everything that has to name it in
@@ -2212,7 +2213,7 @@ impl Declarations {
         // a different contract, not a different spelling.
         if matches!(
             reading.unwrapped().kind(),
-            prebindgen::core::flat::TypeKind::Str | prebindgen::core::flat::TypeKind::String
+            prebindgen_registry::flat::TypeKind::Str | prebindgen_registry::flat::TypeKind::String
         ) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
@@ -2261,7 +2262,7 @@ impl Declarations {
             // OUTPUT direction has no counterpart: a sum crosses Rust →
             // Kotlin flattened, always.)
             if self.types.get(&key).is_some_and(|c| c.sum().is_some()) {
-                if let Some(prebindgen::core::flat::Type::Variant(v)) =
+                if let Some(prebindgen_registry::flat::Type::Variant(v)) =
                     registry.flat().declared_type(&name)
                 {
                     let (wire, body) = sum_input_body(self, v, registry, emit)?;
@@ -2337,9 +2338,9 @@ impl Declarations {
     /// Kotlin enum class instead of losing it behind the wrapper.
     pub(crate) fn output_transparent_bridge(
         &self,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
             return None;
@@ -2411,9 +2412,9 @@ impl Declarations {
     /// reached `None` arrive here.
     pub(crate) fn input_transparent_bridge(
         &self,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
             return None;
@@ -2480,9 +2481,9 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &Produced<'_>,
-        t1: &prebindgen::core::flat::TypeRef,
+        t1: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
         // borrow/option-ref/vec shapes are mutually exclusive; the two
@@ -2500,9 +2501,9 @@ impl Declarations {
     /// `str`, `Cow<[u8]>`, unit, primitive, struct) — `subs` empty.
     pub(crate) fn output_terminal(
         &self,
-        reading: &prebindgen::core::flat::TypeRef,
+        reading: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
         // Everything below reads the reading: the identity for a lookup, the
@@ -2578,7 +2579,7 @@ impl Declarations {
         // spellings that arm's key cannot name.
         if matches!(
             reading.unwrapped().kind(),
-            prebindgen::core::flat::TypeKind::Str | prebindgen::core::flat::TypeKind::String
+            prebindgen_registry::flat::TypeKind::Str | prebindgen_registry::flat::TypeKind::String
         ) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
@@ -2612,7 +2613,7 @@ impl Declarations {
         // empty.
         if matches!(
             reading.unwrapped().kind(),
-            prebindgen::core::flat::TypeKind::Unit
+            prebindgen_registry::flat::TypeKind::Unit
         ) {
             let wire: syn::Type = syn::parse_quote!(());
             let body: syn::Expr = syn::parse_quote!(v);
@@ -2671,9 +2672,9 @@ impl Declarations {
         &self,
         shape: WrapperShape,
         produced: &Produced<'_>,
-        t1: &prebindgen::core::flat::TypeRef,
+        t1: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
@@ -2849,9 +2850,9 @@ impl Declarations {
     /// (struct / String / …) — scalar slices are not handled here.
     pub(crate) fn output_slice(
         &self,
-        elem: &prebindgen::core::flat::TypeRef,
+        elem: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let inner = registry.output_entry(elem)?;
         let elem_key = elem.key();
@@ -2975,7 +2976,7 @@ impl Declarations {
     }
     /// Bulk name-family ignores from [`JniGenBuilder::ignore`] +
     /// [`matching`](crate::matching).
-    pub(crate) fn ignored_name_predicates(&self) -> Vec<prebindgen::core::NamePredicate> {
+    pub(crate) fn ignored_name_predicates(&self) -> Vec<prebindgen_registry::NamePredicate> {
         self.ignored_name_predicates.clone()
     }
     /// Framework-called fns that get no extern of their own: `convert!`
@@ -3050,7 +3051,7 @@ impl Declarations {
     /// claimed even though it is never emitted, and a boundary-only type even
     /// though it never crosses whole: both are deliberate, so neither is a
     /// skip worth reporting.
-    pub(crate) fn claimed(&self) -> prebindgen::core::Claimed {
+    pub(crate) fn claimed(&self) -> prebindgen_registry::Claimed {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
         // The report asks what was *claimed*, which is a set of identities —
@@ -3058,7 +3059,7 @@ impl Declarations {
         let mut types: std::collections::HashSet<TypeKey> =
             self.declared_types().into_keys().collect();
         types.extend(self.boundary_only_types().into_keys());
-        prebindgen::core::Claimed {
+        prebindgen_registry::Claimed {
             functions,
             types,
             consts: self.declared_consts(),
@@ -3113,7 +3114,7 @@ mod wrapper_ops_tests {
     /// of leaving the second step to be discovered.
     #[test]
     fn every_erased_wrapper_has_ops() {
-        let missing: Vec<&str> = prebindgen::core::flat::TRANSPARENT_WRAPPERS
+        let missing: Vec<&str> = prebindgen_registry::flat::TRANSPARENT_WRAPPERS
             .iter()
             .copied()
             .filter(|w| wrapper_ops(w).is_none())
@@ -3133,7 +3134,7 @@ mod wrapper_ops_tests {
         let stray: Vec<&str> = WRAPPER_OPS
             .iter()
             .map(|w| w.name)
-            .filter(|n| !prebindgen::core::flat::TRANSPARENT_WRAPPERS.contains(n))
+            .filter(|n| !prebindgen_registry::flat::TRANSPARENT_WRAPPERS.contains(n))
             .collect();
         assert!(
             stray.is_empty(),

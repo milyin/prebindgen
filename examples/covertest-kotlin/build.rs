@@ -97,11 +97,11 @@
 //! `.ignore(matching(…))` predicate. Both suppress the per-item
 //! "skipping undeclared" build warning while emitting nothing.
 
-use prebindgen::{
-    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
-};
 use prebindgen_jni::{
     constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
+};
+use prebindgen_registry::{
+    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {

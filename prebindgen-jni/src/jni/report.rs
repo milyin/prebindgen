@@ -17,7 +17,7 @@
 //! the destination language's vocabulary, so each adapter implements its
 //! own.
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -207,7 +207,7 @@ impl super::JniGen {
 
         // Param expansions.
         let mut shaped: Vec<String> = Vec::new();
-        let mut plans: Vec<(&syn::Ident, &prebindgen::core::expand::FoldPlan)> = registry
+        let mut plans: Vec<(&syn::Ident, &prebindgen_registry::expand::FoldPlan)> = registry
             .expansion_plans()
             .iter()
             .filter(|((func, _), _)| func == rust_ident)

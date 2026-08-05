@@ -1,7 +1,7 @@
 //! `impl Fn(args)` inputs: the native trampoline calling the typed
 //! Kotlin `run`.
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -22,9 +22,9 @@ use super::*;
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
     ext: &Declarations,
-    args: &[prebindgen::core::flat::TypeRef],
+    args: &[prebindgen_registry::flat::TypeRef],
     registry: &impl Conversions<KotlinMeta>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
@@ -423,7 +423,7 @@ pub(crate) fn callback_input(
 /// `return None`-ing (which surfaces as an opaque "unresolved type" error).
 pub(crate) fn reject_vec_of_handle(
     inner_projection: &Option<Projection>,
-    elem: &prebindgen::core::flat::TypeRef,
+    elem: &prebindgen_registry::flat::TypeRef,
 ) {
     if let Some(p) = inner_projection {
         if p.kind == ProjectionKind::Handle {
@@ -441,8 +441,8 @@ pub(crate) fn reject_vec_of_handle(
 /// from a flat slice of arg types. Used by the rank-1/2/3 callback impls
 /// to feed `input_wrapper` the original outer type.
 pub(crate) fn build_fn_type(
-    args: &[prebindgen::core::flat::TypeRef],
-    emit: &prebindgen::core::Emit,
+    args: &[prebindgen_registry::flat::TypeRef],
+    emit: &prebindgen_registry::Emit,
 ) -> syn::Type {
     // The args as the source spelled them — the callback's Rust type is
     // re-emitted, never re-derived.

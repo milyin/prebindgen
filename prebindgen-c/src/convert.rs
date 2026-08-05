@@ -1,4 +1,4 @@
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -31,7 +31,7 @@ impl CbindgenBuilder {
             for (index, value) in domain
                 .niche_values(demand.saturating_add(8))
                 .into_iter()
-                .filter_map(prebindgen::core::ScalarValue::portable_expr)
+                .filter_map(prebindgen_registry::ScalarValue::portable_expr)
                 .take(demand)
                 .enumerate()
             {
@@ -56,7 +56,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
@@ -124,7 +124,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| *d.key() == key)?;
@@ -194,7 +194,7 @@ impl CbindgenBuilder {
         decl: &ConvertDecl,
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty_of(&decl.rust_type().key());
         match spec {
@@ -241,7 +241,7 @@ impl CbindgenBuilder {
         decl: &ConvertDecl,
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty_of(&decl.rust_type().key());
         match spec {
@@ -313,10 +313,10 @@ impl CbindgenBuilder {
                 .take(demand)
                 .map(|(value, literal)| {
                     let matches = match value {
-                        prebindgen::core::ScalarValue::F32(bits) => {
+                        prebindgen_registry::ScalarValue::F32(bits) => {
                             syn::parse_quote!(v.to_bits() == #bits)
                         }
-                        prebindgen::core::ScalarValue::F64(bits) => {
+                        prebindgen_registry::ScalarValue::F64(bits) => {
                             syn::parse_quote!(v.to_bits() == #bits)
                         }
                         _ => syn::parse_quote!(v == #literal),
@@ -343,7 +343,7 @@ impl CbindgenBuilder {
 /// Off the ELEMENT: a signature is a parameter list, and the borrow is
 /// `TypeKind::Ref` — where this filtered `syn::FnArg::Typed` and matched
 /// `syn::Type::Reference` to reach the same two facts.
-fn one_param(f: &prebindgen::core::flat::Function) -> (&TypeRef, bool) {
+fn one_param(f: &prebindgen_registry::flat::Function) -> (&TypeRef, bool) {
     assert_eq!(
         f.params.len(),
         1,
@@ -363,7 +363,7 @@ fn one_param(f: &prebindgen::core::flat::Function) -> (&TypeRef, bool) {
 /// says this type is — `TypeKind::Optional` is produced for exactly `Option<T>`
 /// — so peeling tokens to rediscover them was re-deriving the classification
 /// the registry stored (#291).
-fn option_depth(candidate: &prebindgen::core::flat::TypeRef, target: &TypeKey) -> usize {
+fn option_depth(candidate: &prebindgen_registry::flat::TypeRef, target: &TypeKey) -> usize {
     let mut reading = candidate;
     let mut depth = 0;
     while let Some(inner) = reading.optional_inner() {

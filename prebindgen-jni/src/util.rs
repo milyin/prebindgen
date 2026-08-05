@@ -47,7 +47,7 @@ mod tests;
 /// interface name, a lambda parameter — and both used to peel by matching
 /// `syn::Type` and then read the last path segment. That was a classifier
 /// outside the model, and it is only writable now because
-/// [`TypeKind`](prebindgen::core::flat::TypeKind) **is** the accepted syntax:
+/// [`TypeKind`](prebindgen_registry::flat::TypeKind) **is** the accepted syntax:
 /// asking the kind for the head is asking the same question of the same
 /// grammar, with the model answering instead of a `match` on `syn`.
 ///
@@ -59,8 +59,10 @@ mod tests;
 /// `Box<Vec<T>>` stops at the `Box`, as it did before. The layer accessors
 /// (`borrow_target`, `optional_inner`, `sequence_elem`) see through `Box`/`Cow`
 /// by design, so this reads `kind()` directly rather than through them.
-pub(crate) fn head_type(t: &prebindgen::core::flat::TypeRef) -> &prebindgen::core::flat::TypeRef {
-    use prebindgen::core::flat::TypeKind;
+pub(crate) fn head_type(
+    t: &prebindgen_registry::flat::TypeRef,
+) -> &prebindgen_registry::flat::TypeRef {
+    use prebindgen_registry::flat::TypeKind;
     match t.kind() {
         TypeKind::Ref { inner, .. } | TypeKind::Optional(inner) | TypeKind::Vec(inner) => {
             head_type(inner)
@@ -77,8 +79,8 @@ pub(crate) fn head_type(t: &prebindgen::core::flat::TypeRef) -> &prebindgen::cor
 /// Rust has a name here, and one that is not, has none. The builtins answer
 /// with the name Rust writes, because that is what the last segment of their
 /// spelling was.
-pub(crate) fn head_name(t: &prebindgen::core::flat::TypeRef) -> Option<String> {
-    use prebindgen::core::flat::TypeKind;
+pub(crate) fn head_name(t: &prebindgen_registry::flat::TypeRef) -> Option<String> {
+    use prebindgen_registry::flat::TypeKind;
     Some(match t.kind() {
         TypeKind::Named { id, .. } => id
             .name

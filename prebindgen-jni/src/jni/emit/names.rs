@@ -105,7 +105,7 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
 ///
 /// It listed eight forms — adding `Binary`, `Unary`, `Paren`, `Group`, `Cast`
 /// and `Call` "const arithmetic over those" — and six of them could never
-/// arrive. [`lower_array_len`](prebindgen::core::flat) accepts an integer
+/// arrive. [`lower_array_len`](prebindgen_registry::flat) accepts an integer
 /// literal or a **bare single-segment name of a marked const**, and nothing
 /// else: `[u8; A + 1]`, `[u8; A as usize]` and `[u8; array_len()]` are all
 /// `ArrayLenReason::NotLiteralOrName`, so the type never becomes a

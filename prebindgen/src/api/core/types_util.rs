@@ -97,7 +97,10 @@ pub fn bare_path_ident(ty: &syn::Type) -> Option<syn::Ident> {
 }
 
 /// Build an identifier at call-site span.
-pub(crate) fn ident(s: &str) -> syn::Ident {
+///
+/// `pub`: the registry pipeline that calls this now lives in the separate
+/// `prebindgen-registry` crate.
+pub fn ident(s: &str) -> syn::Ident {
     syn::Ident::new(s, Span::call_site())
 }
 

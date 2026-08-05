@@ -28,7 +28,7 @@
 use kotlin_codegen::{
     ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis,
 };
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -461,7 +461,7 @@ impl Declarations {
             // The element: a fieldless `Enum`, which is what an `enum_class!`
             // declares. A sum under the same name is a `Variant` and is not one
             // of these — the model's own distinction, made at parse time.
-            let Some(prebindgen::core::flat::Type::Enum(item_enum)) =
+            let Some(prebindgen_registry::flat::Type::Enum(item_enum)) =
                 registry.flat().declared_type(&name)
             else {
                 continue;
@@ -486,7 +486,7 @@ impl Declarations {
     /// the surface of a sum where the target language has sums natively.
     ///
     /// The shape follows the model's own
-    /// [`Variant`](prebindgen::core::flat::Variant) directly: an alternative
+    /// [`Variant`](prebindgen_registry::flat::Variant) directly: an alternative
     /// with an empty leaf group becomes a `data object`, one with a payload a
     /// `data class`, both **nested inside** the interface so variant names
     /// cannot collide package-wide. The `fromParts(tag, …slots)` companion is
@@ -526,7 +526,7 @@ impl Declarations {
             // keeps its diagnosis; only the source of the answer changed.
             let declared = registry.flat().declared_type(&ident);
             assert!(
-                matches!(declared, Some(prebindgen::core::flat::Type::Variant(_))),
+                matches!(declared, Some(prebindgen_registry::flat::Type::Variant(_))),
                 "`{}` has no payload variants: declare it with `enum_class!({})`, not \
                  `sealed_class!({})` — a fieldless enum crosses as a bare discriminant and \
                  needs no sealed hierarchy",
@@ -534,7 +534,7 @@ impl Declarations {
                 ident,
                 ident
             );
-            let Some(prebindgen::core::flat::Type::Variant(sum)) = declared else {
+            let Some(prebindgen_registry::flat::Type::Variant(sum)) = declared else {
                 unreachable!("asserted just above")
             };
 
@@ -573,7 +573,7 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
         class_name: &str,
-        sum: &prebindgen::core::flat::Variant,
+        sum: &prebindgen_registry::flat::Variant,
         sum_cfg: &SumConfig,
     ) -> KtClass {
         // Everything below comes off the element: `alternatives` for the
@@ -689,7 +689,7 @@ impl Declarations {
     pub(crate) fn sum_companion_name(
         &self,
         sum_cfg: &SumConfig,
-        sum: &prebindgen::core::flat::Variant,
+        sum: &prebindgen_registry::flat::Variant,
     ) -> String {
         // The alternatives, not the item's `variants`: the same list, already
         // classified, and named the way the model names them.
@@ -748,7 +748,7 @@ impl Declarations {
         sum_name: &syn::Ident,
         variant: &syn::Ident,
         prop: &str,
-        field: &prebindgen::core::flat::Field,
+        field: &prebindgen_registry::flat::Field,
     ) -> KtType {
         // The field's own reading: the nullability question below is answered
         // from `kind`, so a wrapped spelling answers as the bare one does and
@@ -977,7 +977,7 @@ impl Declarations {
     /// the same source the native emitters read, so all sites agree by
     /// construction (no dedup, no signature reconciliation).
     pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
-        use prebindgen::core::unfold::{DeconId, Delivery};
+        use prebindgen_registry::unfold::{DeconId, Delivery};
 
         // Distinct interface identities in use — [`SpecKey`] (`Ord`, so
         // emission is deterministic). The memo derives each spec from the
@@ -1196,7 +1196,7 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen::core::unfold::DeconId,
+        decon: &prebindgen_registry::unfold::DeconId,
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
@@ -1234,7 +1234,7 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen::core::unfold::DeconId,
+        decon: &prebindgen_registry::unfold::DeconId,
     ) -> kt::KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
@@ -1284,7 +1284,7 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen::core::unfold::DeconId,
+        decon: &prebindgen_registry::unfold::DeconId,
     ) -> kt::KtDecl {
         let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
@@ -1323,7 +1323,7 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
-        decon: &prebindgen::core::unfold::DeconId,
+        decon: &prebindgen_registry::unfold::DeconId,
     ) -> kt::KtDecl {
         let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
@@ -1373,7 +1373,7 @@ impl Declarations {
         // `TypeKey::from_type` or `bare_path_ident`, and a key that is one
         // identifier IS the ident — the same reduction `type_kind` made.
         key: &TypeKey,
-        leaves: &[prebindgen::core::unfold::UnfoldLeaf],
+        leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
         params: &[crate::jni::IfaceParam],
         names: &[String],
         imports: &mut BTreeSet<String>,
@@ -1385,7 +1385,7 @@ impl Declarations {
         let ident = key
             .ident()
             .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
-        let Some(prebindgen::core::flat::Type::Variant(sum)) =
+        let Some(prebindgen_registry::flat::Type::Variant(sum)) =
             registry.flat().declared_type(&ident)
         else {
             panic!("sum builder: `{ident}` is not an indexed sum")
@@ -1448,7 +1448,7 @@ impl Declarations {
     fn sum_ctor_arg(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-        leaf: &prebindgen::core::unfold::UnfoldLeaf,
+        leaf: &prebindgen_registry::unfold::UnfoldLeaf,
         param: &crate::jni::IfaceParam,
         name: &str,
         imports: &mut BTreeSet<String>,
@@ -1649,7 +1649,8 @@ impl Declarations {
         // shortens types, collects imports, and wraps long signatures (no
         // derivation-time import set).
         let mut externs: Vec<kt::KtFun> = Vec::new();
-        let mut fns: Vec<&prebindgen::core::flat::Function> = registry.flat().functions().collect();
+        let mut fns: Vec<&prebindgen_registry::flat::Function> =
+            registry.flat().functions().collect();
         fns.sort_by(|a, b| a.name.cmp(&b.name));
         for f in fns {
             if !declared.contains(&f.name) {

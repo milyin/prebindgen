@@ -1,4 +1,4 @@
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -38,7 +38,7 @@ impl CbindgenBuilder {
                     .enum_alternatives(registry, key)
                     .map(|alts| {
                         alts.iter().flat_map(|a| a.fields.iter()).any(|f| {
-                            matches!(f.ty.kind(), prebindgen::core::flat::TypeKind::String)
+                            matches!(f.ty.kind(), prebindgen_registry::flat::TypeKind::String)
                         })
                     })
                     .unwrap_or(false)
@@ -67,9 +67,9 @@ impl CbindgenBuilder {
         &self,
         registry: &'r Registry<()>,
         key: &TypeKey,
-    ) -> Option<&'r [prebindgen::core::flat::Alternative]> {
+    ) -> Option<&'r [prebindgen_registry::flat::Alternative]> {
         match registry.flat().declared_type(&key.ident()?)? {
-            prebindgen::core::flat::Type::Variant(v) => Some(&v.alternatives),
+            prebindgen_registry::flat::Type::Variant(v) => Some(&v.alternatives),
             _ => None,
         }
     }
@@ -354,7 +354,7 @@ impl CbindgenBuilder {
     ///
     /// A run of values is the whole question — `Vec<T>` and `[T]` alike, and
     /// through a transparent wrapper, so `Cow<'_, [T]>` counts as the `Vec<T>`
-    /// it crosses as. [`sequence_elem`](prebindgen::core::flat::TypeRef::sequence_elem)
+    /// it crosses as. [`sequence_elem`](prebindgen_registry::flat::TypeRef::sequence_elem)
     /// answers all three, which is why the two spellings this used to test
     /// separately need no arms of their own.
     pub(super) fn produces_array(&self, registry: &Registry<()>) -> bool {
@@ -485,9 +485,9 @@ impl CbindgenBuilder {
     /// Assemble the `#[no_mangle] extern "C"` wrapper for one declared fn.
     pub(super) fn emit_function_wrapper(
         &self,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_registry::flat::Function,
         registry: &Registry<()>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> TokenStream {
         let orig = &f.name;
         let call_path = self.src_fn(orig);
@@ -1006,7 +1006,7 @@ impl CbindgenBuilder {
     /// and legal C.
     pub(super) fn alias_preflight(
         &self,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_registry::flat::Function,
         route: &ErrRoute,
     ) -> Option<TokenStream> {
         let mut slots: Vec<(syn::Ident, TypeKey, AliasAccess)> = Vec::new();
@@ -1056,10 +1056,10 @@ impl CbindgenBuilder {
     pub(super) fn emit_inputs(
         &self,
         orig: &syn::Ident,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_registry::flat::Function,
         registry: &Registry<()>,
         route: &ErrRoute,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
         let mut params = Vec::new();
         // The alias preflight runs BEFORE every decode, which is the whole

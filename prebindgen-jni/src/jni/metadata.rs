@@ -29,7 +29,7 @@ pub enum NullableKind {
 }
 
 /// The JNI adapter's nullability / collection layer stack over a projection
-/// leaf, on the unified [`Shape`](prebindgen::core::shape::Shape)
+/// leaf, on the unified [`Shape`](prebindgen_registry::shape::Shape)
 /// with [`NullableKind`] as the per-`Optional`-layer payload:
 ///   * `Base` — the receiver *is* the handle;
 ///   * `Optional(kind, inner)` — `T?`; `kind` records how null is represented
@@ -37,7 +37,7 @@ pub enum NullableKind {
 ///   * `Iterable(inner)` — `List<T>`. EXTENSION POINT: no `Vec<Handle>` shape
 ///     exists today, so the emitters guard this arm loudly rather than silently
 ///     mis-generating.
-pub type FoldStrategy = prebindgen::core::shape::Shape<NullableKind>;
+pub type FoldStrategy = prebindgen_registry::shape::Shape<NullableKind>;
 
 /// Which flavor of Kotlin newtype a [`Projection`] surfaces. Both share the
 /// same "wire != declared Kotlin type, wrap as `W(wire)`, fold through
@@ -66,7 +66,7 @@ pub struct Projection {
     /// Canonical key of the leaf type (e.g. `ZKeyExpr`, `ZenohId`); derive
     /// the typed Kotlin FQN via `Declarations::kotlin_fqn` — a typed key, so the
     /// lookup cannot drift from the declaration table's constructor.
-    pub leaf_key: prebindgen::core::TypeKey,
+    pub leaf_key: prebindgen_registry::TypeKey,
     /// `false` for `&T` borrows of a handle — still a projection (param
     /// classification needs this), but not the holder's to close, so
     /// `close()` emission skips it.
@@ -83,7 +83,7 @@ pub struct Projection {
 /// Per-converter language-specific extras carried by every converter this
 /// adapter produces. Filled by the same handler that builds the wire/body,
 /// propagated by the resolver into
-/// [`prebindgen::core::TypeEntry::metadata`], and read directly by
+/// [`prebindgen_registry::TypeEntry::metadata`], and read directly by
 /// the Kotlin emitter — so cross-language facts flow through the existing
 /// wrapper machinery rather than a parallel side channel.
 #[derive(Clone, Debug, Default)]

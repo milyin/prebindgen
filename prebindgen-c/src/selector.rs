@@ -1,6 +1,6 @@
 //! Structural converter-selection policy for [`CbindgenBuilder`].
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -11,7 +11,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<()>> {
         self.in_custom(ty, registry, emit)
             .or_else(|| self.in_opaque_handle(ty))
@@ -32,7 +32,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<()>> {
         self.out_custom(ty, registry, emit)
             .or_else(|| self.out_terminal(ty, registry, emit))

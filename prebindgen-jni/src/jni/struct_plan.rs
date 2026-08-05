@@ -15,7 +15,7 @@
 //! the resulting [`StructPlan`] — so the two sides agree by construction
 //! instead of by hand-synchronized parallel walks.
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -43,11 +43,11 @@ pub(crate) enum LeafForm {
 }
 
 /// The COMPLETE Rust → wire conversion of one leaf: the rust-side stages a
-/// custom [`convert!`](prebindgen::convert) declaration inserts (`Duration → u64`)
+/// custom [`convert!`](prebindgen_registry::convert) declaration inserts (`Duration → u64`)
 /// followed by the wire-facing converter (`u64 → jlong`).
 ///
 /// A leaf must carry the whole chain, not just
-/// [`TypeEntry::converter_ident`](prebindgen::core::TypeEntry::converter_ident):
+/// [`TypeEntry::converter_ident`](prebindgen_registry::TypeEntry::converter_ident):
 /// calling only the wire-facing function would hand it the *semantic* value
 /// (a `Duration`) where it expects the *representation* (a `u64`), which does
 /// not compile. Structural wrappers (`Option<_>`, `Vec<_>`) already compose
@@ -63,7 +63,7 @@ pub(crate) struct ConvChain {
 
 impl ConvChain {
     /// Read the chain off a resolved output entry.
-    fn of(entry: &prebindgen::core::TypeEntry<KotlinMeta>) -> Self {
+    fn of(entry: &prebindgen_registry::TypeEntry<KotlinMeta>) -> Self {
         ConvChain {
             stages: entry
                 .output_stage_order()
@@ -186,7 +186,7 @@ pub(crate) struct SumPlanField {
 pub(crate) fn build_struct_plan(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    s: &prebindgen::core::flat::Struct,
+    s: &prebindgen_registry::flat::Struct,
     depth: usize,
 ) -> Option<StructPlan> {
     assert!(
@@ -217,7 +217,7 @@ pub(crate) fn build_struct_plan(
 pub(crate) fn classify_field(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    reading: &prebindgen::core::flat::TypeRef,
+    reading: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     depth: usize,
 ) -> Option<PlanFieldKind> {
@@ -314,7 +314,7 @@ pub(crate) fn classify_field(
         if let TypeKind::DataStruct { st, cfg } = ext.type_kind(registry, &inner_ty.key()) {
             // `Vec` off the kind — the layer the model names, not a last path
             // segment that spells it.
-            if matches!(reading.kind(), prebindgen::core::flat::TypeKind::Vec(_)) {
+            if matches!(reading.kind(), prebindgen_registry::flat::TypeKind::Vec(_)) {
                 panic!(
                     "fromParts bridge: `Vec<{}>` data-class field (`{owner}`) is not supported \
                      (variable arity)",
@@ -364,7 +364,7 @@ pub(crate) fn classify_field(
                         // path segment: `Box<T>` IS `T` here, and taking the
                         // spelling apart would answer about the wrapper.
                         match slot.unwrapped().kind() {
-                            prebindgen::core::flat::TypeKind::Named { id, .. } => id.ident(),
+                            prebindgen_registry::flat::TypeKind::Named { id, .. } => id.ident(),
                             _ => None,
                         }
                         .and_then(|name| {
@@ -501,7 +501,7 @@ impl PlanFieldKind {
 fn sum_plan_kind(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    ty: &prebindgen::core::flat::TypeRef,
+    ty: &prebindgen_registry::flat::TypeRef,
     owner: &str,
     optional: bool,
     depth: usize,
@@ -528,7 +528,7 @@ fn sum_plan_kind(
     // already, so classifying one asks nothing and cannot be asked about a type
     // the model never saw. One lookup, not two — the `enum_item` that used to
     // sit beside this only fed a `SumSpec` of what the element already says.
-    let Some(prebindgen::core::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
+    let Some(prebindgen_registry::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
     else {
         panic!("fromParts bridge: sealed-class field `{owner}`: `{ident}` is not an indexed sum")
     };
@@ -605,7 +605,7 @@ pub(crate) fn sum_field_prop_name(member: &syn::Member) -> String {
 /// enum with `i32::MAX` variants is not a thing rustc can be handed. A
 /// `try_from(..).expect(..)` would put a panic in the working path for a state
 /// the compiler cannot produce, which is the shape this crate avoids.
-pub(crate) fn sum_tag(alt: &prebindgen::core::flat::Alternative) -> i32 {
+pub(crate) fn sum_tag(alt: &prebindgen_registry::flat::Alternative) -> i32 {
     alt.index as i32
 }
 

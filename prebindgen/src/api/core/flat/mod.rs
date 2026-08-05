@@ -129,7 +129,7 @@
 //! that wants to *inspect* what a source crate marked, refusals included, gets
 //! exactly that from [`Flat::unsupported`].
 //!
-//! [`Registry`](crate::core::Registry) ingestion is where the diagnoses are raised.
+//! `Registry` ingestion is where the diagnoses are raised.
 //! Building a registry from this model **fails if any element is
 //! `Unsupported`** — all of them at once, so a source crate that needs migrating
 //! sees one list rather than one rebuild per item — and it fails before any
@@ -445,7 +445,7 @@ impl FlatBuilder {
 /// holds, and [`Self::resolve`] hands it over. An item that named something the
 /// flat API does not declare is [`Element::Unsupported`] with
 /// [`ItemError::UnresolvedType`], exactly like every other refusal — carried
-/// here, raised by [`Registry`](crate::core::Registry) ingestion.
+/// here, raised by `Registry` ingestion.
 ///
 /// Resolving here rather than in the adapters is the point of #211: a dangling
 /// name used to surface much later as an unresolved-converter error, from
@@ -640,12 +640,12 @@ impl Flat {
     // Test-only since S42: `unit_enum`, `payload_enum`, `enum_alternatives` and
     // `declared_member_names` each ask the model which shape a declared enum is
     // and get the element that answers, so nothing in a built crate needs the
-    // item. The registry tests still exercise it.
+    // item. The registry pipeline's own tests (now in the separate
+    // `prebindgen-registry` crate) still exercise it, which is why this is
+    // `pub` rather than `pub(in crate::api::core)` — see `TypeRef`'s doc for
+    // why that seal is now a convention rather than a compiler check.
     #[allow(dead_code)]
-    pub(in crate::api::core) fn enum_item<N: Name + ?Sized>(
-        &self,
-        name: &N,
-    ) -> Option<&syn::ItemEnum> {
+    pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
         match self.declared_type(name)? {
             Type::Variant(v) => Some(v.origin.as_syn()),
             Type::Enum(e) => Some(e.origin.as_syn()),
@@ -707,8 +707,7 @@ impl Flat {
     /// `spell()` is reasoning from the spelling, which is what `origin` is
     /// not for. This exists for the one case with no element behind it: a type a
     /// build script declared, or one expansion composed. `ensure_entry` is its
-    /// only caller — the single call in the whole crate — and
-    /// `classify_has_no_caller_outside_the_registry` keeps it that way.
+    /// only caller in the registry pipeline.
     ///
     /// Whoever asks is expected to keep the answer. The registry does: a reading is
     /// taken once when a type-table cell is born, and lives in that cell — and
@@ -718,10 +717,17 @@ impl Flat {
     ///
     /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
     /// about a type the *binding* built, not a cache miss.
-    pub(in crate::api::core) fn classify(
-        &self,
-        ty: &syn::Type,
-    ) -> Result<TypeRef, UnsupportedType> {
+    ///
+    /// **`pub`, not `pub(in crate::api::core)`.** The registry pipeline that is
+    /// this method's sole legitimate caller now lives in the separate
+    /// `prebindgen-registry` crate, so a module-path seal can no longer express
+    /// "the pipeline, and nothing else" — there is no path inside this crate for
+    /// it to name. The seal is now a documented convention (this doc comment)
+    /// rather than a compiler-enforced one; #280's intent (an adapter must not
+    /// mint a `TypeRef` from tokens of its own) is no longer structurally
+    /// guaranteed and would need a real API (e.g. a sealed trait token minted
+    /// only by `prebindgen-registry`) to restore.
+    pub fn classify(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
         if let Some(indexed) = self.type_ref(ty) {
             return Ok(indexed.clone());
         }
@@ -760,7 +766,7 @@ impl Flat {
     /// Every item the language could not express, with its diagnosis.
     ///
     /// Present in the model so a consumer can inspect what a source crate marked
-    /// — building a [`Registry`](crate::core::Registry) from a model holding any of
+    /// — building a `Registry` from a model holding any of
     /// these fails, and reports all of them. See the [module docs](self) on where
     /// acceptance is enforced.
     pub fn unsupported(&self) -> impl Iterator<Item = &Unsupported> {
@@ -809,7 +815,11 @@ impl Flat {
     ///
     /// Deliberately does **not** extend [`Self::source_modules`]: see that
     /// field's docs.
-    pub(crate) fn add_local_function(&mut self, mut f: Function, crate_name: String) {
+    ///
+    /// `pub`: its caller (`RegistryBuilder::fun`, on a binding-local
+    /// [`fun!`](https://docs.rs/prebindgen-registry/latest/prebindgen_registry/macro.fun.html)
+    /// path) now lives in the separate `prebindgen-registry` crate.
+    pub fn add_local_function(&mut self, mut f: Function, crate_name: String) {
         f.origin.location = Rc::new(SourceLocation {
             crate_name: Some(crate_name),
             ..SourceLocation::default()

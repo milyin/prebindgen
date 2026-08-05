@@ -36,7 +36,7 @@ pub enum Element {
     ///
     /// Indexed under its name so nothing else can claim it, with the diagnosis
     /// riding along. Parsing carries it; building a
-    /// [`Registry`](crate::core::Registry) from a model holding one fails, reporting
+    /// `Registry` from a model holding one fails, reporting
     /// every offender at once. See the [module docs](super) on where acceptance
     /// is enforced.
     Unsupported(Unsupported),

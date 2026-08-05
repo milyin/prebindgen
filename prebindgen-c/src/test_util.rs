@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use prebindgen::core::{Registry, RegistryBuilder};
+use prebindgen_registry::{Registry, RegistryBuilder};
 
 /// Build a `Registry` from an item stream, the way `Registry::from_items` used
 /// to before reading captured output became `FlatBuilder`'s job alone.
@@ -17,11 +17,11 @@ use prebindgen::core::{Registry, RegistryBuilder};
 /// appear in dozens of fixtures here.
 pub(crate) fn reg_from_items<M, I>(
     items: I,
-) -> Result<RegistryBuilder<M>, prebindgen::core::ScanError>
+) -> Result<RegistryBuilder<M>, prebindgen_registry::ScanError>
 where
     I: IntoIterator<Item = (syn::Item, prebindgen::SourceLocation)>,
 {
-    let flat = prebindgen::core::Flat::builder().items(items).build()?;
+    let flat = prebindgen_registry::Flat::builder().items(items).build()?;
     Registry::builder(flat)
 }
 
@@ -31,7 +31,7 @@ where
 /// A fixture that is *about* a handle's treatment already declares it; this covers
 /// the ones where the handle is incidental — `reg_with(&["fn get(s: &Storage) -> Payload"])`
 /// is testing an unfold plan, not what `Storage` is. Declaring them as
-/// [`Extern`](prebindgen::core::flat::Extern)s is exactly what a real source crate does
+/// [`Extern`](prebindgen_registry::flat::Extern)s is exactly what a real source crate does
 /// for a foreign handle, and it is inert for the registry either way: a type alias
 /// lands in no registry map.
 ///
@@ -42,7 +42,7 @@ pub(crate) fn declare_referenced<I>(items: I) -> Vec<(syn::Item, prebindgen::Sou
 where
     I: IntoIterator<Item = (syn::Item, prebindgen::SourceLocation)>,
 {
-    use prebindgen::core::flat::{Flat, ItemError};
+    use prebindgen_registry::flat::{Flat, ItemError};
 
     let mut items: Vec<(syn::Item, prebindgen::SourceLocation)> = items.into_iter().collect();
 

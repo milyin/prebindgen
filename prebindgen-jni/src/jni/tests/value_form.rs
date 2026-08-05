@@ -85,11 +85,14 @@ fn value_form_gen(tag: &str, decl: crate::ExpandReturnDecl) -> (String, String) 
                 .class(crate::ptr_class!(ZBytes))
                 .class(crate::data_class!(ZStamp))
                 .class(crate::data_class!(ZOrigin))
-                .fun(prebindgen::fun!(z_sample_sub)),
+                .fun(prebindgen_registry::fun!(z_sample_sub)),
         )
         // A KeyExpr crosses as its string, never as a handle — the rule a
         // `.fields()` expansion has to keep honouring for the `key_expr` field.
-        .expand(prebindgen::expand_return!(ZKeyExpr).field(prebindgen::fun!(z_keyexpr_as_str)))
+        .expand(
+            prebindgen_registry::expand_return!(ZKeyExpr)
+                .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
+        )
         .expand(decl);
 
     let dir = unique_test_dir(tag);
@@ -120,7 +123,8 @@ fn value_form_gen(tag: &str, decl: crate::ExpandReturnDecl) -> (String, String) 
 fn fields_expand_by_each_field_s_own_boundary() {
     let (_, kotlin) = value_form_gen(
         "jnigen_vf_basic",
-        prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct)),
+        prebindgen_registry::expand_return!(ZSample)
+            .fields(prebindgen_registry::fields!(z_sample_to_struct)),
     );
     assert!(
         kotlin.contains("keyExpr__zKeyexprAsStr: String"),
@@ -152,7 +156,8 @@ fn fields_expand_by_each_field_s_own_boundary() {
 fn the_value_form_accessor_is_called_once() {
     let (rust, _) = value_form_gen(
         "jnigen_vf_hoist",
-        prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct)),
+        prebindgen_registry::expand_return!(ZSample)
+            .fields(prebindgen_registry::fields!(z_sample_to_struct)),
     );
     let calls = rust.matches("z_sample_to_struct").count();
     assert_eq!(
@@ -170,7 +175,8 @@ fn the_value_form_accessor_is_called_once() {
 fn an_optional_field_reaches_its_converter_whole() {
     let (rust, _) = value_form_gen(
         "jnigen_vf_opt",
-        prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct)),
+        prebindgen_registry::expand_return!(ZSample)
+            .fields(prebindgen_registry::fields!(z_sample_to_struct)),
     );
     for field in ["stamp", "attachment"] {
         assert!(
@@ -190,7 +196,7 @@ fn an_optional_field_reaches_its_converter_whole() {
 /// reason it can be trusted to replace a list that has drifted.
 ///
 /// BLOCKED by the prebindgen-jni crate split: reads `Registry::callback_arg_plans`,
-/// a `pub(crate)` field of `prebindgen::core::Registry` — reachable when this
+/// a `pub(crate)` field of `prebindgen_registry::Registry` — reachable when this
 /// test lived inside the `prebindgen` crate, not from the separate
 /// `prebindgen-jni` crate it moved to. Left in place, not deleted, pending a
 /// `prebindgen` accessor for this field (see the carve-prebindgen-jni report).
@@ -235,9 +241,12 @@ fn deriving_matches_the_equivalent_hand_written_list() {
                     .class(crate::ptr_class!(ZBytes))
                     .class(crate::data_class!(ZStamp))
                     .class(crate::data_class!(ZOrigin))
-                    .fun(prebindgen::fun!(z_sample_sub)),
+                    .fun(prebindgen_registry::fun!(z_sample_sub)),
             )
-            .expand(prebindgen::expand_return!(ZKeyExpr).field(prebindgen::fun!(z_keyexpr_as_str)))
+            .expand(
+                prebindgen_registry::expand_return!(ZKeyExpr)
+                    .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
+            )
             .expand(decl);
         let gen = jni.build_with(registry).expect("resolve");
         gen.registry()
@@ -249,17 +258,17 @@ fn deriving_matches_the_equivalent_hand_written_list() {
 
     // The two fields the hand-written list can state with real accessors.
     let derived = leaves_of(
-        prebindgen::expand_return!(ZSample).fields(
-            prebindgen::fields!(z_sample_to_struct)
+        prebindgen_registry::expand_return!(ZSample).fields(
+            prebindgen_registry::fields!(z_sample_to_struct)
                 .name("key_expr", "keyExpr")
                 .name("express", "express"),
         ),
         vec![],
     );
     let by_hand = leaves_of(
-        prebindgen::expand_return!(ZSample)
-            .field(prebindgen::fun!(z_sample_key_expr).name("keyExpr"))
-            .field(prebindgen::fun!(z_sample_express).name("express")),
+        prebindgen_registry::expand_return!(ZSample)
+            .field(prebindgen_registry::fun!(z_sample_key_expr).name("keyExpr"))
+            .field(prebindgen_registry::fun!(z_sample_express).name("express")),
         accessors,
     );
 
@@ -282,10 +291,12 @@ fn deriving_matches_the_equivalent_hand_written_list() {
 fn a_per_field_override_replaces_the_type_default() {
     let (_, kotlin) = value_form_gen(
         "jnigen_vf_override",
-        prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct).field(
-            "key_expr",
-            prebindgen::expand_return!(ZKeyExpr).field_self(),
-        )),
+        prebindgen_registry::expand_return!(ZSample).fields(
+            prebindgen_registry::fields!(z_sample_to_struct).field(
+                "key_expr",
+                prebindgen_registry::expand_return!(ZKeyExpr).field_self(),
+            ),
+        ),
     );
     assert!(
         kotlin.contains("keyExpr: ZKeyExpr"),
@@ -305,9 +316,9 @@ fn a_per_field_override_replaces_the_type_default() {
 fn an_empty_per_field_override_drops_the_field() {
     let (_, kotlin) = value_form_gen(
         "jnigen_vf_drop",
-        prebindgen::expand_return!(ZSample).fields(
-            prebindgen::fields!(z_sample_to_struct)
-                .field("key_expr", prebindgen::expand_return!(ZKeyExpr)),
+        prebindgen_registry::expand_return!(ZSample).fields(
+            prebindgen_registry::fields!(z_sample_to_struct)
+                .field("key_expr", prebindgen_registry::expand_return!(ZKeyExpr)),
         ),
     );
     assert!(
@@ -326,8 +337,8 @@ fn an_empty_per_field_override_drops_the_field() {
 fn a_field_can_be_renamed_including_a_nested_one() {
     let (_, kotlin) = value_form_gen(
         "jnigen_vf_rename",
-        prebindgen::expand_return!(ZSample).fields(
-            prebindgen::fields!(z_sample_to_struct)
+        prebindgen_registry::expand_return!(ZSample).fields(
+            prebindgen_registry::fields!(z_sample_to_struct)
                 .name("express", "fast")
                 .name("origin.node", "nodeId"),
         ),
@@ -348,8 +359,8 @@ fn a_field_can_be_renamed_including_a_nested_one() {
 fn fields_mixes_with_field_self() {
     let (_, kotlin) = value_form_gen(
         "jnigen_vf_mixed",
-        prebindgen::expand_return!(ZSample)
-            .fields(prebindgen::fields!(z_sample_to_struct))
+        prebindgen_registry::expand_return!(ZSample)
+            .fields(prebindgen_registry::fields!(z_sample_to_struct))
             .field_self(),
     );
     assert!(
@@ -410,9 +421,12 @@ fn sum_field_gen(tag: &str) -> (String, String) {
                 .class(crate::ptr_class!(ZReply))
                 .class(crate::ptr_class!(ZBytes))
                 .class(crate::sealed_class!(ZOutcome))
-                .fun(prebindgen::fun!(z_reply_sub)),
+                .fun(prebindgen_registry::fun!(z_reply_sub)),
         )
-        .expand(prebindgen::expand_return!(ZReply).fields(prebindgen::fields!(z_reply_to_struct)));
+        .expand(
+            prebindgen_registry::expand_return!(ZReply)
+                .fields(prebindgen_registry::fields!(z_reply_to_struct)),
+        );
 
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
@@ -507,10 +521,11 @@ fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
                 crate::package!()
                     .class(crate::ptr_class!(ZReply))
                     .class(crate::sealed_class!(ZOutcome))
-                    .fun(prebindgen::fun!(z_reply_sub)),
+                    .fun(prebindgen_registry::fun!(z_reply_sub)),
             )
             .expand(
-                prebindgen::expand_return!(ZReply).fields(prebindgen::fields!(z_reply_to_struct)),
+                prebindgen_registry::expand_return!(ZReply)
+                    .fields(prebindgen_registry::fields!(z_reply_to_struct)),
             );
         let dir = unique_test_dir("jnigen_vf_sum_reject");
         let _ = std::fs::remove_dir_all(&dir);
@@ -604,11 +619,15 @@ fn an_optional_field_crosses_the_same_however_rust_spells_it() {
                 crate::package!()
                     .class(crate::ptr_class!(ZSample))
                     .class(crate::ptr_class!(ZKeyExpr))
-                    .fun(prebindgen::fun!(z_sample_sub)),
+                    .fun(prebindgen_registry::fun!(z_sample_sub)),
             )
-            .expand(prebindgen::expand_return!(ZKeyExpr).field(prebindgen::fun!(z_keyexpr_as_str)))
             .expand(
-                prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct)),
+                prebindgen_registry::expand_return!(ZKeyExpr)
+                    .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
+            )
+            .expand(
+                prebindgen_registry::expand_return!(ZSample)
+                    .fields(prebindgen_registry::fields!(z_sample_to_struct)),
             );
         let dir = unique_test_dir("jnigen_vf_boxed_opt");
         let _ = std::fs::remove_dir_all(&dir);
@@ -666,10 +685,13 @@ fn an_adjustment_naming_an_unknown_field_is_an_error() {
                     .class(crate::ptr_class!(ZBytes))
                     .class(crate::data_class!(ZStamp))
                     .class(crate::data_class!(ZOrigin))
-                    .fun(prebindgen::fun!(z_sample_sub)),
+                    .fun(prebindgen_registry::fun!(z_sample_sub)),
             )
-            .expand(prebindgen::expand_return!(ZKeyExpr).field(prebindgen::fun!(z_keyexpr_as_str)))
-            .expand(prebindgen::expand_return!(ZSample).fields(decl));
+            .expand(
+                prebindgen_registry::expand_return!(ZKeyExpr)
+                    .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
+            )
+            .expand(prebindgen_registry::expand_return!(ZSample).fields(decl));
         let dir = unique_test_dir("jnigen_vf_unknown");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -679,9 +701,11 @@ fn an_adjustment_naming_an_unknown_field_is_an_error() {
     };
 
     for decl in [
-        prebindgen::fields!(z_sample_to_struct).name("kex", "kex"),
-        prebindgen::fields!(z_sample_to_struct)
-            .field("kex", prebindgen::expand_return!(ZKeyExpr).field_self()),
+        prebindgen_registry::fields!(z_sample_to_struct).name("kex", "kex"),
+        prebindgen_registry::fields!(z_sample_to_struct).field(
+            "kex",
+            prebindgen_registry::expand_return!(ZKeyExpr).field_self(),
+        ),
     ] {
         let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build(decl)))
             .expect_err("an unknown field name must be rejected");
@@ -703,9 +727,9 @@ fn an_adjustment_naming_an_unknown_field_is_an_error() {
 #[test]
 #[should_panic(expected = "already expands a value form")]
 fn a_second_value_form_is_an_error() {
-    let _ = prebindgen::expand_return!(ZSample)
-        .fields(prebindgen::fields!(z_sample_to_struct))
-        .fields(prebindgen::fields!(z_sample_to_struct));
+    let _ = prebindgen_registry::expand_return!(ZSample)
+        .fields(prebindgen_registry::fields!(z_sample_to_struct))
+        .fields(prebindgen_registry::fields!(z_sample_to_struct));
 }
 
 /// Repeating an adjustment for one field is a declaration bug — the complete
@@ -713,14 +737,14 @@ fn a_second_value_form_is_an_error() {
 #[test]
 #[should_panic(expected = "already has an override")]
 fn a_repeated_override_is_an_error() {
-    let _ = prebindgen::fields!(z_sample_to_struct)
+    let _ = prebindgen_registry::fields!(z_sample_to_struct)
         .field(
             "key_expr",
-            prebindgen::expand_return!(ZKeyExpr).field_self(),
+            prebindgen_registry::expand_return!(ZKeyExpr).field_self(),
         )
         .field(
             "key_expr",
-            prebindgen::expand_return!(ZKeyExpr).field_self(),
+            prebindgen_registry::expand_return!(ZKeyExpr).field_self(),
         );
 }
 
@@ -729,7 +753,7 @@ fn a_repeated_override_is_an_error() {
 #[test]
 #[should_panic(expected = "reserved")]
 fn a_rename_may_not_contain_the_chain_separator() {
-    let _ = prebindgen::fields!(z_sample_to_struct).name("express", "a__b");
+    let _ = prebindgen_registry::fields!(z_sample_to_struct).name("express", "a__b");
 }
 
 // ── Review findings on #221 ──────────────────────────────────────────────────
@@ -776,9 +800,12 @@ fn a_single_leaf_value_form_delivers_an_owned_field() {
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZOne))
-                .fun(prebindgen::fun!(z_one_make)),
+                .fun(prebindgen_registry::fun!(z_one_make)),
         )
-        .expand(prebindgen::expand_return!(ZOne).fields(prebindgen::fields!(z_one_to_struct)));
+        .expand(
+            prebindgen_registry::expand_return!(ZOne)
+                .fields(prebindgen_registry::fields!(z_one_to_struct)),
+        );
     let dir = unique_test_dir("jnigen_vf_single");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -836,11 +863,11 @@ fn a_single_leaf_consuming_value_form_moves_its_field() {
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZOne))
-                .fun(prebindgen::fun!(z_one_make)),
+                .fun(prebindgen_registry::fun!(z_one_make)),
         )
         .expand(
-            prebindgen::expand_return!(ZOne)
-                .fields_self_into(prebindgen::fields!(z_one_into_struct)),
+            prebindgen_registry::expand_return!(ZOne)
+                .fields_self_into(prebindgen_registry::fields!(z_one_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_single_consume");
     let _ = std::fs::remove_dir_all(&dir);
@@ -906,12 +933,12 @@ fn a_handle_field_of_a_consuming_value_form_moves() {
             crate::package!()
                 .class(crate::ptr_class!(ZEnvelope))
                 .class(crate::ptr_class!(ZChild))
-                .fun(prebindgen::fun!(z_envelope_sub)),
+                .fun(prebindgen_registry::fun!(z_envelope_sub)),
         )
-        .expand(prebindgen::expand_return!(ZChild).field_self())
+        .expand(prebindgen_registry::expand_return!(ZChild).field_self())
         .expand(
-            prebindgen::expand_return!(ZEnvelope)
-                .fields_self_into(prebindgen::fields!(z_envelope_into_struct)),
+            prebindgen_registry::expand_return!(ZEnvelope)
+                .fields_self_into(prebindgen_registry::fields!(z_envelope_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_handle_field_consume");
     let _ = std::fs::remove_dir_all(&dir);
@@ -977,12 +1004,12 @@ fn a_sole_handle_field_of_a_consuming_value_form_moves() {
             crate::package!()
                 .class(crate::ptr_class!(ZSingleEnvelope))
                 .class(crate::ptr_class!(ZChild))
-                .fun(prebindgen::fun!(z_single_envelope_make)),
+                .fun(prebindgen_registry::fun!(z_single_envelope_make)),
         )
-        .expand(prebindgen::expand_return!(ZChild).field_self())
+        .expand(prebindgen_registry::expand_return!(ZChild).field_self())
         .expand(
-            prebindgen::expand_return!(ZSingleEnvelope)
-                .fields_self_into(prebindgen::fields!(z_single_envelope_into_struct)),
+            prebindgen_registry::expand_return!(ZSingleEnvelope)
+                .fields_self_into(prebindgen_registry::fields!(z_single_envelope_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_sole_handle_consume");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1049,12 +1076,13 @@ fn an_optional_handle_field_of_a_consuming_value_form_moves() {
             crate::package!()
                 .class(crate::ptr_class!(ZOptionalEnvelope))
                 .class(crate::ptr_class!(ZChild))
-                .fun(prebindgen::fun!(z_optional_envelope_sub)),
+                .fun(prebindgen_registry::fun!(z_optional_envelope_sub)),
         )
-        .expand(prebindgen::expand_return!(ZChild).field_self())
+        .expand(prebindgen_registry::expand_return!(ZChild).field_self())
         .expand(
-            prebindgen::expand_return!(ZOptionalEnvelope)
-                .fields_self_into(prebindgen::fields!(z_optional_envelope_into_struct)),
+            prebindgen_registry::expand_return!(ZOptionalEnvelope).fields_self_into(
+                prebindgen_registry::fields!(z_optional_envelope_into_struct),
+            ),
         );
     let dir = unique_test_dir("jnigen_vf_optional_handle_consume");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1120,12 +1148,12 @@ fn a_sole_optional_handle_field_takes_callback_delivery() {
             crate::package!()
                 .class(crate::ptr_class!(ZOptionalSingle))
                 .class(crate::ptr_class!(ZChild))
-                .fun(prebindgen::fun!(z_optional_single_make)),
+                .fun(prebindgen_registry::fun!(z_optional_single_make)),
         )
-        .expand(prebindgen::expand_return!(ZChild).field_self())
+        .expand(prebindgen_registry::expand_return!(ZChild).field_self())
         .expand(
-            prebindgen::expand_return!(ZOptionalSingle)
-                .fields_self_into(prebindgen::fields!(z_optional_single_into_struct)),
+            prebindgen_registry::expand_return!(ZOptionalSingle)
+                .fields_self_into(prebindgen_registry::fields!(z_optional_single_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_sole_optional_handle");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1186,10 +1214,10 @@ fn an_owned_root_identity_moves_without_any_value_form() {
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZChild))
-                .fun(prebindgen::fun!(z_root_child_make))
-                .fun(prebindgen::fun!(z_root_child_maybe)),
+                .fun(prebindgen_registry::fun!(z_root_child_make))
+                .fun(prebindgen_registry::fun!(z_root_child_maybe)),
         )
-        .expand(prebindgen::expand_return!(ZChild).field_self());
+        .expand(prebindgen_registry::expand_return!(ZChild).field_self());
     let dir = unique_test_dir("jnigen_vf_root_identity");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1223,16 +1251,19 @@ fn a_per_field_override_must_name_the_field_s_own_type() {
                     .class(crate::ptr_class!(ZBytes))
                     .class(crate::data_class!(ZStamp))
                     .class(crate::data_class!(ZOrigin))
-                    .fun(prebindgen::fun!(z_sample_sub)),
+                    .fun(prebindgen_registry::fun!(z_sample_sub)),
             )
-            .expand(prebindgen::expand_return!(ZKeyExpr).field(prebindgen::fun!(z_keyexpr_as_str)))
             .expand(
-                prebindgen::expand_return!(ZSample).fields(
-                    // `key_expr` is a `ZKeyExpr`, not a `ZBytes`.
-                    prebindgen::fields!(z_sample_to_struct)
-                        .field("key_expr", prebindgen::expand_return!(ZBytes).field_self()),
+                prebindgen_registry::expand_return!(ZKeyExpr)
+                    .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
+            )
+            .expand(prebindgen_registry::expand_return!(ZSample).fields(
+                // `key_expr` is a `ZKeyExpr`, not a `ZBytes`.
+                prebindgen_registry::fields!(z_sample_to_struct).field(
+                    "key_expr",
+                    prebindgen_registry::expand_return!(ZBytes).field_self(),
                 ),
-            );
+            ));
         let dir = unique_test_dir("jnigen_vf_ovr_ty");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -1316,10 +1347,16 @@ fn a_nested_value_form_is_hoisted_too() {
             crate::package!()
                 .class(crate::ptr_class!(ZOuter))
                 .class(crate::ptr_class!(ZInner))
-                .fun(prebindgen::fun!(z_outer_sub)),
+                .fun(prebindgen_registry::fun!(z_outer_sub)),
         )
-        .expand(prebindgen::expand_return!(ZInner).fields(prebindgen::fields!(z_inner_to_struct)))
-        .expand(prebindgen::expand_return!(ZOuter).fields(prebindgen::fields!(z_outer_to_struct)));
+        .expand(
+            prebindgen_registry::expand_return!(ZInner)
+                .fields(prebindgen_registry::fields!(z_inner_to_struct)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZOuter)
+                .fields(prebindgen_registry::fields!(z_outer_to_struct)),
+        );
     let dir = unique_test_dir("jnigen_vf_nested");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1416,13 +1453,14 @@ fn a_nested_consuming_value_form_moves_the_parent_s_field() {
         (
             "borrow",
             false,
-            prebindgen::expand_return!(ZOuter).fields(prebindgen::fields!(z_outer_to_struct)),
+            prebindgen_registry::expand_return!(ZOuter)
+                .fields(prebindgen_registry::fields!(z_outer_to_struct)),
         ),
         (
             "consume",
             true,
-            prebindgen::expand_return!(ZOuter)
-                .fields_self_into(prebindgen::fields!(z_outer_into_struct)),
+            prebindgen_registry::expand_return!(ZOuter)
+                .fields_self_into(prebindgen_registry::fields!(z_outer_into_struct)),
         ),
     ] {
         let registry = crate::test_util::reg_from_items(declare_referenced(items(outer_by_value)))
@@ -1433,11 +1471,11 @@ fn a_nested_consuming_value_form_moves_the_parent_s_field() {
                 crate::package!()
                     .class(crate::ptr_class!(ZOuter))
                     .class(crate::ptr_class!(ZInner))
-                    .fun(prebindgen::fun!(z_outer_sub)),
+                    .fun(prebindgen_registry::fun!(z_outer_sub)),
             )
             .expand(
-                prebindgen::expand_return!(ZInner)
-                    .fields_self_into(prebindgen::fields!(z_inner_into_struct)),
+                prebindgen_registry::expand_return!(ZInner)
+                    .fields_self_into(prebindgen_registry::fields!(z_inner_into_struct)),
             )
             .expand(outer);
         let dir = unique_test_dir(&format!("jnigen_vf_nested_consume_{tag}"));
@@ -1520,11 +1558,11 @@ fn nested_review_jni(outer: crate::ExpandReturnDecl) -> JniGenBuilder {
             crate::package!()
                 .class(crate::ptr_class!(ZReviewOuter))
                 .class(crate::ptr_class!(ZReviewInner))
-                .fun(prebindgen::fun!(z_review_outer_sub)),
+                .fun(prebindgen_registry::fun!(z_review_outer_sub)),
         )
         .expand(
-            prebindgen::expand_return!(ZReviewInner)
-                .fields(prebindgen::fields!(z_review_inner_to_struct)),
+            prebindgen_registry::expand_return!(ZReviewInner)
+                .fields(prebindgen_registry::fields!(z_review_inner_to_struct)),
         )
         .expand(outer)
 }
@@ -1540,8 +1578,8 @@ fn an_optional_nested_value_form_is_rejected_before_emission() {
     let registry = crate::test_util::reg_from_items(declare_referenced(nested_review_items()))
         .expect("index items");
     let jni = nested_review_jni(
-        prebindgen::expand_return!(ZReviewOuter)
-            .fields(prebindgen::fields!(z_review_outer_to_struct)),
+        prebindgen_registry::expand_return!(ZReviewOuter)
+            .fields(prebindgen_registry::fields!(z_review_outer_to_struct)),
     );
     let err = match jni.build_with(registry) {
         Ok(_) => panic!("an optional nested value form must be rejected"),
@@ -1590,13 +1628,16 @@ fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
             crate::package!()
                 .class(crate::ptr_class!(ZCarrier))
                 .class(crate::ptr_class!(ZHolder))
-                .fun(prebindgen::fun!(zh_sub)),
+                .fun(prebindgen_registry::fun!(zh_sub)),
         )
         .expand(
-            prebindgen::expand_return!(ZCarrier)
-                .fields_self_into(prebindgen::fields!(zc_into_struct)),
+            prebindgen_registry::expand_return!(ZCarrier)
+                .fields_self_into(prebindgen_registry::fields!(zc_into_struct)),
         )
-        .expand(prebindgen::expand_return!(ZHolder).field(prebindgen::fun!(zh_get_carrier)));
+        .expand(
+            prebindgen_registry::expand_return!(ZHolder)
+                .field(prebindgen_registry::fun!(zh_get_carrier)),
+        );
     let dir = unique_test_dir("jnigen_vf_conditional");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1672,10 +1713,13 @@ fn conditional_owned_gen(tag: &str, decl: crate::ExpandReturnDecl) -> String {
             crate::package!()
                 .class(crate::ptr_class!(ZCarrier))
                 .class(crate::ptr_class!(ZHolder))
-                .fun(prebindgen::fun!(zh_sub)),
+                .fun(prebindgen_registry::fun!(zh_sub)),
         )
         .expand(decl)
-        .expand(prebindgen::expand_return!(ZHolder).field(prebindgen::fun!(zh_take_carrier)));
+        .expand(
+            prebindgen_registry::expand_return!(ZHolder)
+                .field(prebindgen_registry::fun!(zh_take_carrier)),
+        );
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1728,11 +1772,19 @@ fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
                 .class(crate::ptr_class!(ZCarrier))
                 .class(crate::ptr_class!(ZChild))
                 .class(crate::ptr_class!(ZHolder))
-                .fun(prebindgen::fun!(zh_sub)),
+                .fun(prebindgen_registry::fun!(zh_sub)),
         )
-        .expand(prebindgen::expand_return!(ZCarrier).fields(prebindgen::fields!(zc_to_struct)))
-        .expand(prebindgen::expand_return!(ZChild).field(prebindgen::fun!(zchild_carrier)))
-        .expand(prebindgen::expand_return!(ZHolder).field(prebindgen::fun!(zh_child)));
+        .expand(
+            prebindgen_registry::expand_return!(ZCarrier)
+                .fields(prebindgen_registry::fields!(zc_to_struct)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZChild)
+                .field(prebindgen_registry::fun!(zchild_carrier)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZHolder).field(prebindgen_registry::fun!(zh_child)),
+        );
     let dir = unique_test_dir("jnigen_vf_cond_owned_chain");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1800,16 +1852,19 @@ fn a_rebased_hoist_projects_its_leading_fields_past_a_sibling_move() {
                 .class(crate::ptr_class!(ZCarrier))
                 .class(crate::ptr_class!(ZWrapper))
                 .class(crate::ptr_class!(ZOuter))
-                .fun(prebindgen::fun!(zo_sub)),
+                .fun(prebindgen_registry::fun!(zo_sub)),
         )
         .expand(
-            prebindgen::expand_return!(ZCarrier)
-                .fields_self_into(prebindgen::fields!(zc_into_struct)),
+            prebindgen_registry::expand_return!(ZCarrier)
+                .fields_self_into(prebindgen_registry::fields!(zc_into_struct)),
         )
-        .expand(prebindgen::expand_return!(ZWrapper).field(prebindgen::fun!(zw_carrier)))
         .expand(
-            prebindgen::expand_return!(ZOuter)
-                .fields_self_into(prebindgen::fields!(zo_into_struct)),
+            prebindgen_registry::expand_return!(ZWrapper)
+                .field(prebindgen_registry::fun!(zw_carrier)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZOuter)
+                .fields_self_into(prebindgen_registry::fields!(zo_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_sibling_move");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1868,13 +1923,16 @@ fn a_consuming_value_form_keeps_its_by_value_boundary_behind_accessors() {
             crate::package!()
                 .class(crate::ptr_class!(ZCarrier))
                 .class(crate::ptr_class!(ZHolder))
-                .fun(prebindgen::fun!(zh_sub)),
+                .fun(prebindgen_registry::fun!(zh_sub)),
         )
         .expand(
-            prebindgen::expand_return!(ZCarrier)
-                .fields_self_into(prebindgen::fields!(zc_into_struct)),
+            prebindgen_registry::expand_return!(ZCarrier)
+                .fields_self_into(prebindgen_registry::fields!(zc_into_struct)),
         )
-        .expand(prebindgen::expand_return!(ZHolder).field(prebindgen::fun!(zh_carrier)));
+        .expand(
+            prebindgen_registry::expand_return!(ZHolder)
+                .field(prebindgen_registry::fun!(zh_carrier)),
+        );
     let dir = unique_test_dir("jnigen_vf_consume_behind_acc");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1941,12 +1999,23 @@ fn an_owned_intermediate_result_is_borrowed_for_the_next_step() {
                 .class(crate::ptr_class!(ZMiddle))
                 .class(crate::ptr_class!(ZChild))
                 .class(crate::ptr_class!(ZHolder))
-                .fun(prebindgen::fun!(zh_sub)),
+                .fun(prebindgen_registry::fun!(zh_sub)),
         )
-        .expand(prebindgen::expand_return!(ZCarrier).fields(prebindgen::fields!(zc_to_struct)))
-        .expand(prebindgen::expand_return!(ZMiddle).field(prebindgen::fun!(zmiddle_carrier)))
-        .expand(prebindgen::expand_return!(ZChild).field(prebindgen::fun!(zchild_middle)))
-        .expand(prebindgen::expand_return!(ZHolder).field(prebindgen::fun!(zh_child)));
+        .expand(
+            prebindgen_registry::expand_return!(ZCarrier)
+                .fields(prebindgen_registry::fields!(zc_to_struct)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZMiddle)
+                .field(prebindgen_registry::fun!(zmiddle_carrier)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZChild)
+                .field(prebindgen_registry::fun!(zchild_middle)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZHolder).field(prebindgen_registry::fun!(zh_child)),
+        );
     let dir = unique_test_dir("jnigen_vf_cond_owned_middle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1965,7 +2034,8 @@ fn an_owned_intermediate_result_is_borrowed_for_the_next_step() {
 fn an_owned_optional_payload_is_borrowed_for_a_borrowing_value_form() {
     let rust = conditional_owned_gen(
         "jnigen_vf_cond_owned_borrow",
-        prebindgen::expand_return!(ZCarrier).fields(prebindgen::fields!(zc_to_struct)),
+        prebindgen_registry::expand_return!(ZCarrier)
+            .fields(prebindgen_registry::fields!(zc_to_struct)),
     );
     assert!(
         rust.contains("zc_to_struct(&__hb0)"),
@@ -1978,7 +2048,8 @@ fn an_owned_optional_payload_is_borrowed_for_a_borrowing_value_form() {
 fn an_owned_optional_payload_is_moved_into_a_consuming_value_form() {
     let rust = conditional_owned_gen(
         "jnigen_vf_cond_owned_consume",
-        prebindgen::expand_return!(ZCarrier).fields_self_into(prebindgen::fields!(zc_into_struct)),
+        prebindgen_registry::expand_return!(ZCarrier)
+            .fields_self_into(prebindgen_registry::fields!(zc_into_struct)),
     );
     assert!(
         rust.contains("zc_into_struct(__hb0)"),
@@ -2054,13 +2125,16 @@ fn a_sum_field_of_a_conditional_value_form_stays_inside_the_arm() {
                 .class(crate::ptr_class!(ZCarrier))
                 .class(crate::ptr_class!(ZHolder))
                 .class(crate::sealed_class!(ZOutcome))
-                .fun(prebindgen::fun!(zh_sub)),
+                .fun(prebindgen_registry::fun!(zh_sub)),
         )
         .expand(
-            prebindgen::expand_return!(ZCarrier)
-                .fields_self_into(prebindgen::fields!(zc_into_struct)),
+            prebindgen_registry::expand_return!(ZCarrier)
+                .fields_self_into(prebindgen_registry::fields!(zc_into_struct)),
         )
-        .expand(prebindgen::expand_return!(ZHolder).field(prebindgen::fun!(zh_get_carrier)));
+        .expand(
+            prebindgen_registry::expand_return!(ZHolder)
+                .field(prebindgen_registry::fun!(zh_get_carrier)),
+        );
     let dir = unique_test_dir("jnigen_vf_conditional_sum");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -2103,10 +2177,10 @@ fn a_vec_field_override_must_name_the_whole_vec_type() {
     let build = || {
         let registry = crate::test_util::reg_from_items(declare_referenced(nested_review_items()))
             .expect("index items");
-        let jni = nested_review_jni(prebindgen::expand_return!(ZReviewOuter).fields(
-            prebindgen::fields!(z_review_outer_to_struct).field(
+        let jni = nested_review_jni(prebindgen_registry::expand_return!(ZReviewOuter).fields(
+            prebindgen_registry::fields!(z_review_outer_to_struct).field(
                 "items",
-                prebindgen::expand_return!(ZReviewInner).field_self(),
+                prebindgen_registry::expand_return!(ZReviewInner).field_self(),
             ),
         ));
         let _ = jni.build_with(registry);
@@ -2178,7 +2252,7 @@ fn consuming_gen(tag: &str, decl: crate::ExpandReturnDecl) -> String {
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZCarrier))
-                .fun(prebindgen::fun!(zc_sub)),
+                .fun(prebindgen_registry::fun!(zc_sub)),
         )
         .expand(decl);
     let dir = unique_test_dir(tag);
@@ -2196,7 +2270,8 @@ fn consuming_gen(tag: &str, decl: crate::ExpandReturnDecl) -> String {
 fn a_consuming_value_form_moves_its_fields() {
     let rust = consuming_gen(
         "jnigen_vf_consume",
-        prebindgen::expand_return!(ZCarrier).fields_self_into(prebindgen::fields!(zc_into_struct)),
+        prebindgen_registry::expand_return!(ZCarrier)
+            .fields_self_into(prebindgen_registry::fields!(zc_into_struct)),
     );
     assert!(
         rust.contains("zc_into_struct(__cb_arg0)"),
@@ -2220,7 +2295,8 @@ fn a_consuming_value_form_moves_its_fields() {
 fn the_borrowing_value_form_still_clones() {
     let rust = consuming_gen(
         "jnigen_vf_borrow",
-        prebindgen::expand_return!(ZCarrier).fields(prebindgen::fields!(zc_to_struct)),
+        prebindgen_registry::expand_return!(ZCarrier)
+            .fields(prebindgen_registry::fields!(zc_to_struct)),
     );
     assert!(
         rust.contains("zc_to_struct(&__cb_arg0)"),
@@ -2256,12 +2332,12 @@ fn a_borrowed_plan_clones_before_consuming() {
             crate::package!()
                 .class(crate::ptr_class!(ZCarrier))
                 .class(crate::ptr_class!(ZVault))
-                .fun(prebindgen::fun!(zc_sub))
-                .fun(prebindgen::fun!(zc_borrowed)),
+                .fun(prebindgen_registry::fun!(zc_sub))
+                .fun(prebindgen_registry::fun!(zc_borrowed)),
         )
         .expand(
-            prebindgen::expand_return!(ZCarrier)
-                .fields_self_into(prebindgen::fields!(zc_into_struct)),
+            prebindgen_registry::expand_return!(ZCarrier)
+                .fields_self_into(prebindgen_registry::fields!(zc_into_struct)),
         );
     let dir = unique_test_dir("jnigen_vf_consume_ref");
     let _ = std::fs::remove_dir_all(&dir);
@@ -2286,8 +2362,8 @@ fn a_borrowed_plan_clones_before_consuming() {
 #[test]
 #[should_panic(expected = "only record")]
 fn a_consuming_value_form_rejects_a_following_sibling() {
-    let _ = prebindgen::expand_return!(ZCarrier)
-        .fields_self_into(prebindgen::fields!(zc_into_struct))
+    let _ = prebindgen_registry::expand_return!(ZCarrier)
+        .fields_self_into(prebindgen_registry::fields!(zc_into_struct))
         .field_self();
 }
 
@@ -2296,18 +2372,18 @@ fn a_consuming_value_form_rejects_a_following_sibling() {
 #[test]
 #[should_panic(expected = "only record")]
 fn a_consuming_value_form_rejects_a_preceding_sibling() {
-    let _ = prebindgen::expand_return!(ZCarrier)
+    let _ = prebindgen_registry::expand_return!(ZCarrier)
         .field_self()
-        .fields_self_into(prebindgen::fields!(zc_into_struct));
+        .fields_self_into(prebindgen_registry::fields!(zc_into_struct));
 }
 
 /// Any sibling record, not just the identity one.
 #[test]
 #[should_panic(expected = "only record")]
 fn a_consuming_value_form_rejects_a_plain_field_sibling() {
-    let _ = prebindgen::expand_return!(ZCarrier)
-        .fields_self_into(prebindgen::fields!(zc_into_struct))
-        .field(prebindgen::fun!(zc_to_struct));
+    let _ = prebindgen_registry::expand_return!(ZCarrier)
+        .fields_self_into(prebindgen_registry::fields!(zc_into_struct))
+        .field(prebindgen_registry::fun!(zc_to_struct));
 }
 
 /// The declarator states whether the value is given away and the accessor's
@@ -2324,7 +2400,7 @@ fn the_declarator_and_the_accessor_s_receiver_must_agree() {
             .package(
                 crate::package!()
                     .class(crate::ptr_class!(ZCarrier))
-                    .fun(prebindgen::fun!(zc_sub)),
+                    .fun(prebindgen_registry::fun!(zc_sub)),
             )
             .expand(decl);
         match jni.build_with(registry) {
@@ -2334,15 +2410,18 @@ fn the_declarator_and_the_accessor_s_receiver_must_agree() {
     };
 
     let msg = build(
-        prebindgen::expand_return!(ZCarrier).fields_self_into(prebindgen::fields!(zc_to_struct)),
+        prebindgen_registry::expand_return!(ZCarrier)
+            .fields_self_into(prebindgen_registry::fields!(zc_to_struct)),
     );
     assert!(
         msg.contains("CONSUMING") && msg.contains("zc_to_struct"),
         "`.fields_self_into` on a borrowing accessor must be refused, naming it: {msg:?}"
     );
 
-    let msg =
-        build(prebindgen::expand_return!(ZCarrier).fields(prebindgen::fields!(zc_into_struct)));
+    let msg = build(
+        prebindgen_registry::expand_return!(ZCarrier)
+            .fields(prebindgen_registry::fields!(zc_into_struct)),
+    );
     assert!(
         msg.contains("BORROWING") && msg.contains("zc_into_struct"),
         "`.fields` on a by-value accessor must be refused, naming it: {msg:?}"
@@ -2408,10 +2487,11 @@ fn a_whole_value_crossing_ignores_how_rust_spells_it() {
                 crate::package!()
                     .class(crate::ptr_class!(ZSample))
                     .class(crate::data_class!(ZStamp))
-                    .fun(prebindgen::fun!(z_sample_sub)),
+                    .fun(prebindgen_registry::fun!(z_sample_sub)),
             )
             .expand(
-                prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct)),
+                prebindgen_registry::expand_return!(ZSample)
+                    .fields(prebindgen_registry::fields!(z_sample_to_struct)),
             );
         let dir = unique_test_dir("jnigen_vf_whole_boxed");
         let _ = std::fs::remove_dir_all(&dir);
@@ -2493,10 +2573,11 @@ fn an_owned_string_crosses_the_same_however_rust_spells_it() {
             .package(
                 crate::package!()
                     .class(crate::ptr_class!(ZSample))
-                    .fun(prebindgen::fun!(z_sample_sub)),
+                    .fun(prebindgen_registry::fun!(z_sample_sub)),
             )
             .expand(
-                prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct)),
+                prebindgen_registry::expand_return!(ZSample)
+                    .fields(prebindgen_registry::fields!(z_sample_to_struct)),
             );
         let dir = unique_test_dir("jnigen_vf_boxed_string");
         let _ = std::fs::remove_dir_all(&dir);
@@ -2580,10 +2661,11 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
             .package(
                 crate::package!()
                     .class(crate::ptr_class!(ZSample))
-                    .fun(prebindgen::fun!(z_sample_sub)),
+                    .fun(prebindgen_registry::fun!(z_sample_sub)),
             )
             .expand(
-                prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_struct)),
+                prebindgen_registry::expand_return!(ZSample)
+                    .fields(prebindgen_registry::fields!(z_sample_to_struct)),
             );
         let dir = unique_test_dir("jnigen_vf_bridge");
         let _ = std::fs::remove_dir_all(&dir);
@@ -2705,10 +2787,11 @@ fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
                 .class(crate::enum_class!(Priority))
                 .class(crate::data_class!(Leaf))
                 .class(crate::data_class!(Wrapped))
-                .fun(prebindgen::fun!(z_wrapped_take)),
+                .fun(prebindgen_registry::fun!(z_wrapped_take)),
         )
         .expand(
-            prebindgen::expand_return!(ZSample).fields(prebindgen::fields!(z_sample_to_wrapped)),
+            prebindgen_registry::expand_return!(ZSample)
+                .fields(prebindgen_registry::fields!(z_sample_to_wrapped)),
         );
     let dir = unique_test_dir("jnigen_terminal_bridge");
     let _ = std::fs::remove_dir_all(&dir);
@@ -2791,7 +2874,7 @@ fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
             .package(
                 crate::package!()
                     .class(crate::ptr_class!(ZThing))
-                    .fun(prebindgen::fun!(z_take)),
+                    .fun(prebindgen_registry::fun!(z_take)),
             );
         let dir = unique_test_dir("jnigen_wrapped_borrow");
         let _ = std::fs::remove_dir_all(&dir);
@@ -2872,7 +2955,7 @@ fn nullability_ignores_how_rust_spells_the_optional() {
             .package(
                 crate::package!()
                     .class(crate::data_class!(ZRec))
-                    .fun(prebindgen::fun!(z_rec_emit)),
+                    .fun(prebindgen_registry::fun!(z_rec_emit)),
             );
         let dir = unique_test_dir("jnigen_nullability");
         let _ = std::fs::remove_dir_all(&dir);

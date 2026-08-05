@@ -194,7 +194,8 @@ fn constant_fun_source_emits_val_over_ordinary_wrapper() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
-            crate::package!("cfg").constant(crate::constant!(THE_TAG).fun(prebindgen::fun!(tag))),
+            crate::package!("cfg")
+                .constant(crate::constant!(THE_TAG).fun(prebindgen_registry::fun!(tag))),
         );
 
     let dir = unique_test_dir("jnigen_constant_fun_basic");
@@ -248,7 +249,8 @@ fn constant_fun_source_non_nullary_rejected() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
-            crate::package!("cfg").constant(crate::constant!(SCALED).fun(prebindgen::fun!(scaled))),
+            crate::package!("cfg")
+                .constant(crate::constant!(SCALED).fun(prebindgen_registry::fun!(scaled))),
         );
     let dir = unique_test_dir("jnigen_constant_fun_arity_reject");
     let _ = std::fs::remove_dir_all(&dir);
@@ -289,7 +291,9 @@ fn constant_fun_source_handle_return_rejected() {
         .package(
             crate::package!("things")
                 .class(crate::ptr_class!(ZThing))
-                .constant(crate::constant!(DEFAULT_THING).fun(prebindgen::fun!(default_thing))),
+                .constant(
+                    crate::constant!(DEFAULT_THING).fun(prebindgen_registry::fun!(default_thing)),
+                ),
         );
     let dir = unique_test_dir("jnigen_constant_fun_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
@@ -323,11 +327,11 @@ fn constant_expr_emits_getter_and_val() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("cfg")
-                .fun(prebindgen::fun!(tag_of))
-                .constant(
-                    crate::constant!(DEFAULT_TAG)
-                        .expr(prebindgen::ty!(String), prebindgen::expr!(tag_of(7))),
-                ),
+                .fun(prebindgen_registry::fun!(tag_of))
+                .constant(crate::constant!(DEFAULT_TAG).expr(
+                    prebindgen_registry::ty!(String),
+                    prebindgen_registry::expr!(tag_of(7)),
+                )),
         );
 
     let dir = unique_test_dir("jnigen_constant_expr_basic");
@@ -400,11 +404,11 @@ fn constant_expr_handle_type_rejected() {
         .package(
             crate::package!("things")
                 .class(crate::ptr_class!(ZThing))
-                .fun(prebindgen::fun!(thing_new))
-                .constant(
-                    crate::constant!(DEFAULT_THING)
-                        .expr(prebindgen::ty!(ZThing), prebindgen::expr!(thing_new())),
-                ),
+                .fun(prebindgen_registry::fun!(thing_new))
+                .constant(crate::constant!(DEFAULT_THING).expr(
+                    prebindgen_registry::ty!(ZThing),
+                    prebindgen_registry::expr!(thing_new()),
+                )),
         );
     let dir = unique_test_dir("jnigen_constant_expr_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
@@ -452,7 +456,7 @@ fn handle_const_rejected() {
         .package(
             crate::package!("things")
                 .class(crate::ptr_class!(ZThing))
-                .fun(prebindgen::fun!(thing_new))
+                .fun(prebindgen_registry::fun!(thing_new))
                 .constant(crate::constant!(DEFAULT_THING)),
         );
 
@@ -485,10 +489,10 @@ fn constant_with_source_calls_path_verbatim() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("cfg")
-                .fun(prebindgen::fun!(unrelated))
+                .fun(prebindgen_registry::fun!(unrelated))
                 .constant(crate::constant!(COVER_VERSION).with(
-                    prebindgen::ty!(String),
-                    prebindgen::path!(crate::cover_version),
+                    prebindgen_registry::ty!(String),
+                    prebindgen_registry::path!(crate::cover_version),
                 )),
         );
     let dir = unique_test_dir("jnigen_constant_with_basic");
@@ -525,18 +529,28 @@ fn constant_with_source_calls_path_verbatim() {
 #[should_panic(expected = "value source already set")]
 fn constant_second_source_rejected() {
     let _ = crate::constant!(X)
-        .expr(prebindgen::ty!(i64), prebindgen::expr!(1 + 1))
-        .with(prebindgen::ty!(i64), prebindgen::path!(crate::f));
+        .expr(
+            prebindgen_registry::ty!(i64),
+            prebindgen_registry::expr!(1 + 1),
+        )
+        .with(
+            prebindgen_registry::ty!(i64),
+            prebindgen_registry::path!(crate::f),
+        );
 }
 
 /// `ConstDecl::named(...)` is the runtime subject form for declaration
 /// loops — equivalent to the `constant!` macro with the same ident.
 #[test]
 fn constant_named_runtime_form_matches_macro() {
-    let a = crate::ConstDecl::named(format!("ENCODING_{}", "ZENOH_BYTES"))
-        .expr(prebindgen::ty!(String), prebindgen::expr!(enc()));
-    let b = crate::constant!(ENCODING_ZENOH_BYTES)
-        .expr(prebindgen::ty!(String), prebindgen::expr!(enc()));
+    let a = crate::ConstDecl::named(format!("ENCODING_{}", "ZENOH_BYTES")).expr(
+        prebindgen_registry::ty!(String),
+        prebindgen_registry::expr!(enc()),
+    );
+    let b = crate::constant!(ENCODING_ZENOH_BYTES).expr(
+        prebindgen_registry::ty!(String),
+        prebindgen_registry::expr!(enc()),
+    );
     assert_eq!(a.val_name(), b.val_name());
     assert_eq!(a.rust_ident, b.rust_ident);
 }

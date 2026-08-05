@@ -4,7 +4,7 @@
 // `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
 // classifier (reached through `use super::*`), and an explicit import would win
 // over the glob and silently retarget it.
-use prebindgen::core::flat::{self, TypeRef};
+use prebindgen_registry::flat::{self, TypeRef};
 
 use super::*;
 use crate::jni::trait_impl::build_through_erased_wrappers;
@@ -230,7 +230,7 @@ fn vec_helper_symbol(ext: &Declarations, base: &str, suffix: &str) -> String {
 pub(crate) fn build_vec_build_helper_items(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for elem_reading in collect_vec_build_elem_types(ext, registry) {

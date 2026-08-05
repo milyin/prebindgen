@@ -1,7 +1,7 @@
 //! Struct outputs: `fromParts` leaf encoding and the value-struct
 //! synthesis probe.
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -64,7 +64,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
     }
 }
 
-/// Synthesize the [`LeafSource::Field`](prebindgen::core::unfold::LeafSource)
+/// Synthesize the [`LeafSource::Field`](prebindgen_registry::unfold::LeafSource)
 /// leaves of a by-value `data_class` for the fixed-builder output/callback path
 /// — the pre-resolve analog of [`flatten_struct_encode`] (which runs at emit
 /// time). Each named field becomes one field-access leaf
@@ -84,12 +84,12 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    s: &prebindgen::core::flat::Struct,
-    path_prefix: &[prebindgen::core::unfold::PathStep],
+    s: &prebindgen_registry::flat::Struct,
+    path_prefix: &[prebindgen_registry::unfold::PathStep],
     name_prefix: &str,
     depth: usize,
-) -> Option<Vec<prebindgen::core::unfold::UnfoldLeaf>> {
-    use prebindgen::core::unfold::{LeafSource, PathStep, UnfoldLeaf};
+) -> Option<Vec<prebindgen_registry::unfold::UnfoldLeaf>> {
+    use prebindgen_registry::unfold::{LeafSource, PathStep, UnfoldLeaf};
     if depth > 16 {
         return None;
     }
@@ -132,7 +132,7 @@ pub(crate) fn synth_value_struct_leaves(
         };
         if let Some(child) = nested {
             if field.ty.optional_inner().is_some()
-                || matches!(field.ty.kind(), prebindgen::core::flat::TypeKind::Vec(_))
+                || matches!(field.ty.kind(), prebindgen_registry::flat::TypeKind::Vec(_))
             {
                 return None;
             }
@@ -175,7 +175,7 @@ pub(crate) fn synth_value_struct_leaves(
 pub(crate) fn flatten_struct_encode(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    s: &prebindgen::core::flat::Struct,
+    s: &prebindgen_registry::flat::Struct,
     access: &TokenStream,
     prefix: &str,
     depth: usize,
@@ -590,7 +590,7 @@ fn encode_field(
 
 pub(crate) fn struct_output_body(
     ext: &Declarations,
-    s: &prebindgen::core::flat::Struct,
+    s: &prebindgen_registry::flat::Struct,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.name.to_string();

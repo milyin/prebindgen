@@ -308,10 +308,10 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry<KotlinMeta>
 /// `syn::ItemEnum`; the model states them as two elements, and both carry the
 /// names this asks for. `None` when `ident` names neither.
 fn declared_member_names(
-    registry: &impl prebindgen::core::Conversions<KotlinMeta>,
+    registry: &impl prebindgen_registry::Conversions<KotlinMeta>,
     ident: &syn::Ident,
 ) -> Option<Vec<syn::Ident>> {
-    use prebindgen::core::flat::Type;
+    use prebindgen_registry::flat::Type;
     match registry.flat().declared_type(ident)? {
         Type::Enum(e) => Some(e.values.iter().map(|v| v.name.clone()).collect()),
         Type::Variant(v) => Some(v.alternatives.iter().map(|a| a.name.clone()).collect()),

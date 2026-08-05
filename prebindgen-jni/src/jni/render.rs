@@ -4,7 +4,7 @@
 //! Carved from the former `jni_kotlin_ext.rs`; shares the `jni` namespace
 //! via `use super::*`.
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -17,7 +17,7 @@ use super::*;
 /// already speaks the `.value` / `.fromInt(...)` idiom keeps working.
 pub(crate) fn build_enum_class(
     class_name: &str,
-    item_enum: &prebindgen::core::flat::Enum,
+    item_enum: &prebindgen_registry::flat::Enum,
 ) -> kt::KtClass {
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree — and it is the
@@ -80,7 +80,7 @@ pub(crate) fn build_enum_class(
 pub(crate) fn build_data_class(
     ext: &Declarations,
     class_name: &str,
-    item_struct: &prebindgen::core::flat::Struct,
+    item_struct: &prebindgen_registry::flat::Struct,
     registry: &Registry<KotlinMeta>,
 ) -> kt::KtClass {
     // A tuple struct is an `Extern` in the model, never a `Struct`, so every
@@ -441,7 +441,7 @@ pub(crate) fn build_typed_handle(
 /// True for an `Iterable` fold delivery, including one wrapped in an
 /// `Optional` layer (`Option<Vec<T>>` → a nullable delivery). Selects the fold
 /// surface (`acc` + `fold`) over a scalar `Optional`/`Base` builder.
-pub(crate) fn is_iterable_fold(shape: &prebindgen::core::unfold::UnfoldShape) -> bool {
+pub(crate) fn is_iterable_fold(shape: &prebindgen_registry::unfold::UnfoldShape) -> bool {
     shape.has_iterable_layer()
 }
 
@@ -458,7 +458,7 @@ pub(crate) fn is_iterable_fold(shape: &prebindgen::core::unfold::UnfoldShape) ->
 /// resolved. Full-FQN types throughout — no derivation-time shortening.
 pub(crate) fn render_extern_decl(
     ext: &Declarations,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<kt::KtFun> {
     // The name and wire params come straight off the lowered plan — the
@@ -677,7 +677,7 @@ struct Opaque {
 /// a `Type::Path`'s last segment compared against the *name* `"Option"`, its
 /// `AngleBracketed` arguments, and a second `Type::Reference` — to reach a
 /// question `borrow_target` / `optional_inner` / `key` answer directly.
-pub(crate) fn peel_receiver_key(ty: &prebindgen::core::flat::TypeRef) -> TypeKey {
+pub(crate) fn peel_receiver_key(ty: &prebindgen_registry::flat::TypeRef) -> TypeKey {
     let core = ty.borrow_target().unwrap_or(ty);
     match core.optional_inner() {
         Some(inner) => inner.borrow_target().unwrap_or(inner).key(),
@@ -736,7 +736,7 @@ pub(crate) struct WrapperSurface {
 /// (`build_native_call` / `render_body` / KDoc / opaque-lock collection).
 pub(crate) fn build_wrapper_surface(
     ext: &Declarations,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
@@ -815,7 +815,7 @@ pub(crate) fn build_wrapper_surface(
 
 pub(crate) fn render_wrapper_fn(
     ext: &Declarations,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
@@ -873,7 +873,7 @@ pub(crate) fn render_wrapper_fn(
 pub(crate) fn render_const_val(
     ext: &Declarations,
     package: &str,
-    c: &prebindgen::core::flat::Constant,
+    c: &prebindgen_registry::flat::Constant,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
@@ -905,7 +905,7 @@ pub(crate) fn render_const_val(
 pub(crate) fn render_constant_fn_val(
     ext: &Declarations,
     package: &str,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
@@ -1253,7 +1253,7 @@ fn classify_params(
 /// unchanged).
 fn classify_output(
     ext: &Declarations,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1600,7 +1600,7 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
 /// separate SAM param; the wrapper passes a per-thread capture to the extern,
 /// then after the native call redispatches to whichever channel fired.
 fn error_sink_parts(
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1997,7 +1997,7 @@ fn render_body(
 pub(crate) fn unfold_leaf_kt(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    out_ty: &prebindgen::core::flat::TypeRef,
+    out_ty: &prebindgen_registry::flat::TypeRef,
     nullable: bool,
     pk: &str,
 ) -> Option<(kt::KtType, String, String, bool)> {
@@ -2054,16 +2054,16 @@ pub(crate) fn unfold_leaf_kt(
 /// writes valid Kotlin identifiers) and no dedup (uniqueness is enforced in
 /// `core::unfold`).
 ///
-/// [`UnfoldLeaf::name`]: prebindgen::core::unfold::UnfoldLeaf::name
-pub(crate) fn plan_leaf_names(leaves: &[prebindgen::core::unfold::UnfoldLeaf]) -> Vec<String> {
+/// [`UnfoldLeaf::name`]: prebindgen_registry::unfold::UnfoldLeaf::name
+pub(crate) fn plan_leaf_names(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> Vec<String> {
     leaves.iter().map(|leaf| leaf.name.clone()).collect()
 }
 
 /// Lambda parameter name for a whole-value (plan-less) callback arg: the
 /// decapitalized bare type short (`ZQuery` → `zQuery`), peeling a `&` /
 /// `Option<…>` layer; `arg{i}` for non-path shapes.
-pub(crate) fn whole_value_name(ty: &prebindgen::core::flat::TypeRef, i: usize) -> String {
-    use prebindgen::core::flat::TypeKind;
+pub(crate) fn whole_value_name(ty: &prebindgen_registry::flat::TypeRef, i: usize) -> String {
+    use prebindgen_registry::flat::TypeKind;
     // One borrow, then one `Option` — a fixed depth, not the general peel, and
     // read off `kind()` rather than through `optional_inner` so a `Box` stops
     // it here as it stopped the `syn::Type::Path` match before.
@@ -2115,7 +2115,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 ///   plain non-projection returns.
 pub(crate) fn classify_return(
     ext: &Declarations,
-    output: &prebindgen::core::flat::TypeRef,
+    output: &prebindgen_registry::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(Option<kt::KtType>, Option<crate::jni::Projection>)> {
     let (surface, _canonical) = ReturnSurface::classify(ext, registry, output);
@@ -2209,7 +2209,7 @@ pub(crate) fn kt_param_name(rust_ident: &str) -> String {
 /// position a plan reshaped, phrased for the caller. `None` for an
 /// undocumented, unshaped fn.
 fn wrapper_kdoc(
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<String> {
     let prose = f.docs();
@@ -2228,13 +2228,13 @@ fn wrapper_kdoc(
 /// (what `onError` receives). Reads the same resolved plan maps the C7
 /// report uses.
 fn shape_notes(
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
 ) -> Option<String> {
     let fn_ident = &f.name;
     let mut notes: Vec<String> = Vec::new();
 
-    let mut plans: Vec<(&syn::Ident, &prebindgen::core::expand::FoldPlan)> = registry
+    let mut plans: Vec<(&syn::Ident, &prebindgen_registry::expand::FoldPlan)> = registry
         .expansion_plans()
         .iter()
         .filter(|((func, _), _)| func == fn_ident)
@@ -2282,14 +2282,14 @@ fn shape_notes(
         let source = plan.source.to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
-            prebindgen::core::unfold::Delivery::Callback if !leaves.is_empty() => {
+            prebindgen_registry::unfold::Delivery::Callback if !leaves.is_empty() => {
                 notes.push(format!(
                     "The Rust `{source}` result is delivered decomposed: the builder \
                      callback receives (`{}`).",
                     leaves.join("`, `")
                 ));
             }
-            prebindgen::core::unfold::Delivery::Return => {
+            prebindgen_registry::unfold::Delivery::Return => {
                 notes.push(format!(
                     "The Rust `{source}` result is converted and returned as a single value."
                 ));
@@ -2321,9 +2321,9 @@ pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Optio
     // Whichever of the three shapes the name declares — the docs are the
     // element's answer, so there is no `attrs` slice to unify across them.
     match registry.flat().declared_type(&key.ident()?)? {
-        prebindgen::core::flat::Type::Struct(s) => s.docs(),
-        prebindgen::core::flat::Type::Enum(e) => e.docs(),
-        prebindgen::core::flat::Type::Variant(v) => v.docs(),
-        prebindgen::core::flat::Type::Extern(_) => None,
+        prebindgen_registry::flat::Type::Struct(s) => s.docs(),
+        prebindgen_registry::flat::Type::Enum(e) => e.docs(),
+        prebindgen_registry::flat::Type::Variant(v) => v.docs(),
+        prebindgen_registry::flat::Type::Extern(_) => None,
     }
 }

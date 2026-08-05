@@ -21,7 +21,7 @@
 //! builds every memo hit re-derives and asserts equality, so the
 //! determinism is a checked invariant rather than a convention.
 
-use prebindgen::core::{
+use prebindgen_registry::{
     unfold::{dedup_names, DeconId, LeafSource, UnfoldPlan},
     Conversions,
 };
@@ -647,13 +647,13 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
 /// surfaces as `List<E>`) gets a `List` suffix — `<E>List` — so it yields a valid,
 /// distinct interface name (`<E>ListCallback`) instead of the bracketed `[E]` and
 /// without colliding with the scalar `&E` callback (`<E>Callback`).
-fn subject_short(ty: &prebindgen::core::flat::TypeRef) -> String {
+fn subject_short(ty: &prebindgen_registry::flat::TypeRef) -> String {
     use crate::util::{head_name, head_type};
     // One `&` off, then a slice — the `List` suffix is decided before the
     // general peel, exactly as it was, because `&[E]` and `Vec<E>` must not
     // collapse to the same interface name.
     let no_ref = ty.borrow_target().unwrap_or(ty);
-    if let prebindgen::core::flat::TypeKind::Slice(elem) = no_ref.kind() {
+    if let prebindgen_registry::flat::TypeKind::Slice(elem) = no_ref.kind() {
         return format!("{}List", subject_short(elem));
     }
     let peeled = head_type(ty);
@@ -662,7 +662,7 @@ fn subject_short(ty: &prebindgen::core::flat::TypeRef) -> String {
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
-fn subject_package(ext: &Declarations, subject: &prebindgen::core::flat::TypeRef) -> String {
+fn subject_package(ext: &Declarations, subject: &prebindgen_registry::flat::TypeRef) -> String {
     let key = crate::util::head_type(subject).key();
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
@@ -674,7 +674,7 @@ fn subject_package(ext: &Declarations, subject: &prebindgen::core::flat::TypeRef
 fn plan_leaf_params(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    leaves: &[prebindgen::core::unfold::UnfoldLeaf],
+    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
 ) -> Option<Vec<IfaceParam>> {
     // Decomposition leaf names are author-supplied, literal, and unique by
     // construction (enforced in `core::unfold`) — no dedup/casing here.
@@ -695,9 +695,9 @@ fn plan_leaf_param(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
-    leaf: &prebindgen::core::unfold::UnfoldLeaf,
+    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
 ) -> Option<IfaceParam> {
-    use prebindgen::core::unfold::LeafSource;
+    use prebindgen_registry::unfold::LeafSource;
     // The sum selector has no converter behind it — it is a plain `Int` the
     // emitter assigns per `match` arm. Nullable when the sum sits under a
     // conditional value form: null is the absent case, which the tag's own
@@ -740,7 +740,7 @@ fn leaf_iface_param(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
-    out_ty: &prebindgen::core::flat::TypeRef,
+    out_ty: &prebindgen_registry::flat::TypeRef,
     nullable: bool,
     raw_handle: bool,
 ) -> Option<IfaceParam> {
@@ -757,7 +757,7 @@ fn leaf_iface_param(
     // would resolve a shape the wrapper arms own.
     let mut out_ty = out_ty;
     if registry.output_entry(out_ty).is_none() {
-        if let prebindgen::core::flat::TypeKind::Ref { inner, .. } = out_ty.kind() {
+        if let prebindgen_registry::flat::TypeKind::Ref { inner, .. } = out_ty.kind() {
             out_ty = inner;
         }
     }
@@ -856,7 +856,7 @@ pub(crate) fn owned_handle_iface_param(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     name: String,
-    out_ty: &prebindgen::core::flat::TypeRef,
+    out_ty: &prebindgen_registry::flat::TypeRef,
     nullable: bool,
 ) -> Option<IfaceParam> {
     let proj = registry.output_entry(out_ty)?.metadata.projection.clone()?;
@@ -905,12 +905,12 @@ impl SpecKey {
     /// Off the readings, like its [`whole_folder`](Self::whole_folder) peer:
     /// the key IS a `Vec<TypeKey>`, and every caller was spelling each arg into
     /// a throwaway `Vec<syn::Type>` for `TypeKey::from_type` to read back.
-    pub fn callback(args: &[prebindgen::core::flat::TypeRef]) -> Self {
+    pub fn callback(args: &[prebindgen_registry::flat::TypeRef]) -> Self {
         SpecKey::Callback(args.iter().map(|a| a.key()).collect())
     }
 
     /// The whole-element fold identity for an element type.
-    pub fn whole_folder(element: &prebindgen::core::flat::TypeRef) -> Self {
+    pub fn whole_folder(element: &prebindgen_registry::flat::TypeRef) -> Self {
         SpecKey::WholeFolder(element.key())
     }
 }
@@ -998,7 +998,7 @@ fn derive_iface_spec(
             // derivable" state `iface_spec` already documents and retries —
             // so it defers rather than answering "not optional", which is what
             // the accessor used to do here.
-            let args: Vec<prebindgen::core::flat::TypeRef> = arg_keys
+            let args: Vec<prebindgen_registry::flat::TypeRef> = arg_keys
                 .iter()
                 .map(|k| registry.reading(k))
                 .collect::<Option<_>>()?;
@@ -1072,7 +1072,7 @@ fn fixed_reassembly(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     source: &TypeKey,
-    leaves: &[prebindgen::core::unfold::UnfoldLeaf],
+    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
     class_fqn: &str,
 ) -> (String, Vec<String>) {
     let slots: Vec<String> = (0..leaves.len()).map(|i| format!("${i}")).collect();
@@ -1096,7 +1096,7 @@ fn fixed_reassembly(
 pub(crate) fn callback_iface_spec(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    cb_args: &[prebindgen::core::flat::TypeRef],
+    cb_args: &[prebindgen_registry::flat::TypeRef],
 ) -> Option<IfaceSpec> {
     // Per-arg grouping over the flat raw leaves. A **fixed-builder** (by-value
     // `data_class`) arg crosses the wire as decoupled leaves but the user
@@ -1119,10 +1119,10 @@ pub(crate) fn callback_iface_spec(
     /// and `owned_handle` marks a plan-less opaque handle delivered as a raw
     /// `jlong` and wrapped + closed Kotlin-side (Phase 3).
     enum LeafDesc {
-        Plan(String, prebindgen::core::unfold::UnfoldLeaf),
+        Plan(String, prebindgen_registry::unfold::UnfoldLeaf),
         Whole {
             name: String,
-            ty: prebindgen::core::flat::TypeRef,
+            ty: prebindgen_registry::flat::TypeRef,
             nullable: bool,
             owned_handle: bool,
         },
@@ -1379,7 +1379,7 @@ pub(crate) fn folder_iface_spec(
 pub(crate) fn whole_folder_iface_spec(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    element: &prebindgen::core::flat::TypeRef,
+    element: &prebindgen_registry::flat::TypeRef,
 ) -> Option<IfaceSpec> {
     let mut params: Vec<IfaceParam> =
         vec![IfaceParam::same("acc".to_string(), kt::KtType::var_("A"))];

@@ -50,8 +50,8 @@ pub(crate) struct PrimArray {
 /// `None` for everything else, including `[T; N]` of a declared class or enum —
 /// those keep resolving as unsupported, so an unhandled shape is a clear
 /// resolve error rather than silently wrong code.
-pub(crate) fn prim_array_of(ty: &prebindgen::core::flat::TypeRef) -> Option<PrimArray> {
-    use prebindgen::core::flat::{ScalarKind, TypeKind};
+pub(crate) fn prim_array_of(ty: &prebindgen_registry::flat::TypeRef) -> Option<PrimArray> {
+    use prebindgen_registry::flat::{ScalarKind, TypeKind};
     let TypeKind::Array { elem, .. } = ty.kind() else {
         return None;
     };
@@ -131,15 +131,15 @@ pub(crate) fn output_body(spec: &PrimArray) -> syn::Expr {
 /// The length check is the `try_into`: a JVM array of the wrong size becomes a
 /// binding error naming the type, never a panic or a partially-filled array.
 pub(crate) fn input_body(
-    ty: &prebindgen::core::flat::TypeRef,
+    ty: &prebindgen_registry::flat::TypeRef,
     spec: &PrimArray,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> syn::Expr {
     let key = ty.key();
     // The element spelled from the model's own `Array`, so the local's type
     // ascription cannot disagree with what `prim_array_of` matched.
     let elem_ty = match ty.kind() {
-        prebindgen::core::flat::TypeKind::Array { elem, .. } => emit.spell(elem),
+        prebindgen_registry::flat::TypeKind::Array { elem, .. } => emit.spell(elem),
         _ => unreachable!("prim_array_of matched a non-array"),
     };
     // The ascription the decoded array is checked against — spelled from the

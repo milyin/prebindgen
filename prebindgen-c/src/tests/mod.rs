@@ -1,4 +1,5 @@
-use prebindgen::{core::RegistryBuilder, SourceLocation};
+use prebindgen::SourceLocation;
+use prebindgen_registry::RegistryBuilder;
 
 use super::*;
 pub(crate) use crate::test_util::declare_referenced;

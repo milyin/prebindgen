@@ -10,7 +10,7 @@
 //! construction. The pattern generalizes [`build_struct_plan`]'s field-level
 //! plan to function granularity; the output side follows in a later stage.
 
-use prebindgen::core::{flat::TypeRef, Conversions};
+use prebindgen_registry::{flat::TypeRef, Conversions};
 
 use super::*;
 
@@ -49,7 +49,7 @@ pub(crate) struct PlanParam {
     /// reading the leaf carries — `emit/wrapper.rs` says as much where it uses
     /// the leaf's instead — so carrying the spelling was carrying a copy that
     /// could not disagree, in a form that could not be asked anything.
-    pub ty: prebindgen::core::flat::TypeRef,
+    pub ty: prebindgen_registry::flat::TypeRef,
     pub form: ParamForm,
 }
 
@@ -135,7 +135,7 @@ pub(crate) enum InputKind {
 }
 
 /// How the return value crosses the boundary. Mirrors the unfold plan's
-/// [`Delivery`](prebindgen::core::unfold::Delivery), resolved per function:
+/// [`Delivery`](prebindgen_registry::unfold::Delivery), resolved per function:
 /// `Unfold` = callback delivery (builder/fold lambda, erased `Any?` wire);
 /// `Value` = everything else, including the `Return`-delivery convert.
 pub(crate) enum FnOutputPlan {
@@ -186,7 +186,7 @@ pub(crate) struct ValueOutputPlan {
     /// asks it for the entry directly. Its entry is validated at plan build;
     /// the Rust emitter re-looks it up (`expect`) to keep the plan
     /// lifetime-free.
-    pub target_ty: prebindgen::core::flat::TypeRef,
+    pub target_ty: prebindgen_registry::flat::TypeRef,
     /// The resolved output entry's `destination` — the extern's wire return
     /// and the sentinel source.
     pub wire_ty: syn::Type,
@@ -342,7 +342,7 @@ impl PlanError {
 /// invalid binding can no longer leave one artifact written and its sibling
 /// missing.
 ///
-/// [`Prebindgen::validate_resolved`]: prebindgen::core::Prebindgen::validate_resolved
+/// [`Prebindgen::validate_resolved`]: prebindgen_registry::Prebindgen::validate_resolved
 pub(crate) fn validate_bindings(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
@@ -377,7 +377,7 @@ pub(crate) fn validate_bindings(
     // The elements themselves, not their names: looking a name back up would be
     // a second hash and an infallible-lookup-that-is-not. `Ident: Ord` is the
     // string order, so the sort is unchanged.
-    let mut fns: Vec<&prebindgen::core::flat::Function> = registry.flat().functions().collect();
+    let mut fns: Vec<&prebindgen_registry::flat::Function> = registry.flat().functions().collect();
     fns.sort_by(|a, b| a.name.cmp(&b.name));
     for f in fns {
         let ident = &f.name;
@@ -393,7 +393,7 @@ pub(crate) fn validate_bindings(
     // Declared consts: their synthetic nullary getters run through the same
     // plan machinery (`Declarations::on_const`).
     if let Some(declared_consts) = ext.declared_consts() {
-        let mut consts: Vec<&prebindgen::core::flat::Constant> =
+        let mut consts: Vec<&prebindgen_registry::flat::Constant> =
             registry.flat().constants().collect();
         consts.sort_by(|a, b| a.name.cmp(&b.name));
         for c in consts {
@@ -463,7 +463,7 @@ impl Declarations {
     pub(crate) fn fn_plan(
         &self,
         registry: &Registry<KotlinMeta>,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_registry::flat::Function,
     ) -> Result<std::rc::Rc<JniFunctionPlan>, PlanError> {
         if let Some(hit) = self.fn_plans.borrow().get(&f.name).cloned() {
             return Ok(hit);
@@ -483,7 +483,7 @@ impl JniFunctionPlan {
     pub fn build(
         ext: &Declarations,
         registry: &Registry<KotlinMeta>,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_registry::flat::Function,
     ) -> Result<Self, PlanError> {
         let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
         let native_symbol = ext.native_method_symbol(&jni_method);
@@ -547,7 +547,7 @@ impl JniFunctionPlan {
     fn jvm_parameter_slots(
         &self,
         registry: &Registry<KotlinMeta>,
-        f: &prebindgen::core::flat::Function,
+        f: &prebindgen_registry::flat::Function,
     ) -> usize {
         // `JNINative` is a Kotlin object, so its external methods are instance
         // methods and the JVM counts the implicit receiver as one unit.
@@ -706,9 +706,9 @@ fn classify_leaf(
 fn build_output(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
 ) -> Result<FnOutputPlan, PlanError> {
-    use prebindgen::core::unfold::{Delivery, UnfoldShape};
+    use prebindgen_registry::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
     let unfold_plan = registry.unfold_plans().get(ident);
 
@@ -763,7 +763,7 @@ fn build_output(
     // All three candidates are readings: a plan's `convert_out_ty`, the `Ok`
     // side of the return, and the return itself. This met them as spellings
     // because one of them used to be a node.
-    let target_ty: &prebindgen::core::flat::TypeRef = match unfold_plan {
+    let target_ty: &prebindgen_registry::flat::TypeRef = match unfold_plan {
         Some(p) => p
             .convert_out_ty
             .as_ref()
@@ -825,7 +825,7 @@ impl ReturnSurface {
     pub fn classify(
         ext: &Declarations,
         registry: &impl Conversions<KotlinMeta>,
-        ret: &prebindgen::core::flat::TypeRef,
+        ret: &prebindgen_registry::flat::TypeRef,
     ) -> (Self, EnumSurface) {
         // The RETURN, as the model classified it. Both callers used to spell a
         // reading into a `-> #ty` fragment for this to take apart again, and
@@ -844,7 +844,7 @@ impl ReturnSurface {
         let stored = outer_meta.as_ref().and_then(|m| m.value_rust_type.as_ref());
         let is_unit = match stored {
             Some(t) => crate::util::is_unit(t),
-            None => matches!(ret.kind(), prebindgen::core::flat::TypeKind::Unit),
+            None => matches!(ret.kind(), prebindgen_registry::flat::TypeKind::Unit),
         };
         // The two enum questions, answered where BOTH branches are in view.
         // They used to ride out on a `canonical: syn::Type` built by spelling
@@ -857,7 +857,7 @@ impl ReturnSurface {
         let (is_enum, is_option_enum) = match stored {
             Some(t) => (
                 enum_probe(t),
-                prebindgen::core::types_util::option_inner_type(t)
+                prebindgen_registry::types_util::option_inner_type(t)
                     .map(|inner| enum_probe(&inner))
                     .unwrap_or(false),
             ),

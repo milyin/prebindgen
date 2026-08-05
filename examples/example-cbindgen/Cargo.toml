@@ -19,6 +19,7 @@ konst = "0.3.0"
 
 [build-dependencies]
 prebindgen = { workspace = true }
+prebindgen-registry = { workspace = true }
 prebindgen-c = { workspace = true }
 syn = { workspace = true }
 cbindgen = "=0.29.4"

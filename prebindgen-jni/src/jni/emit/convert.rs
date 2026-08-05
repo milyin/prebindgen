@@ -1,6 +1,6 @@
 //! Scalar / `Option` / enum converter bodies and their wire probes.
 
-use prebindgen::core::{Conversions, TypeEntry};
+use prebindgen_registry::{Conversions, TypeEntry};
 
 use super::*;
 
@@ -243,9 +243,9 @@ pub(crate) fn composed_inner_output(
 /// If neither path applies (non-primitive wire, no niche), the wrap
 /// fails and the resolver falls through to other rank-1 attempts.
 pub(crate) fn option_input(
-    t1: &prebindgen::core::flat::TypeRef,
+    t1: &prebindgen_registry::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
     let inner_entry = registry.input_entry(t1)?;
     let t1_spelled = emit.spell(t1);
@@ -311,7 +311,7 @@ pub(crate) fn option_input(
 
 /// Build `Option<T>`'s output converter — symmetric to [`option_input`].
 pub(crate) fn option_output(
-    t1: &prebindgen::core::flat::TypeRef,
+    t1: &prebindgen_registry::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
     let inner_entry = registry.output_entry(t1)?;
@@ -408,7 +408,7 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 pub(crate) fn enum_input_body(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    e: &prebindgen::core::flat::Enum,
+    e: &prebindgen_registry::flat::Enum,
 ) -> (syn::Type, syn::Expr) {
     let ident = &e.name;
     let ident_name = ident.to_string();
@@ -457,7 +457,7 @@ pub(crate) fn enum_input_body(
 /// `as` cast picks up the right type by inference.
 pub(crate) fn enum_output_body(
     _ext: &Declarations,
-    _e: &prebindgen::core::flat::Enum,
+    _e: &prebindgen_registry::flat::Enum,
 ) -> (syn::Type, syn::Expr) {
     let body: syn::Expr = syn::parse_quote!({ v as jni::sys::jint });
     (syn::parse_quote!(jni::sys::jint), body)
@@ -475,7 +475,7 @@ pub(crate) fn enum_output_body(
 /// they consult — the comparison is identical.
 pub(crate) fn nullable_kind_for(
     outer_wire: &syn::Type,
-    inner_ty: &prebindgen::core::flat::TypeRef,
+    inner_ty: &prebindgen_registry::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry
@@ -494,7 +494,7 @@ pub(crate) fn nullable_kind_for(
 
 pub(crate) fn nullable_kind_for_output(
     outer_wire: &syn::Type,
-    inner_ty: &prebindgen::core::flat::TypeRef,
+    inner_ty: &prebindgen_registry::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
 ) -> NullableKind {
     let inner_dest = registry

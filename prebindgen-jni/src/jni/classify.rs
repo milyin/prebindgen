@@ -2,7 +2,7 @@
 //! adapter — the single precedence every emitter agrees on instead of each
 //! re-deriving it from `TypeConfig` flags and `registry.flat()` type probes.
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -32,7 +32,7 @@ pub(crate) enum TypeKind<'r, 'c> {
     /// through the syntax means asking some other authority for it again. An
     /// emitter that only re-emits the struct reads `st.origin.as_syn()`.
     DataStruct {
-        st: &'r prebindgen::core::flat::Struct,
+        st: &'r prebindgen_registry::flat::Struct,
         cfg: Option<&'c TypeConfig>,
     },
     /// Scalars, `String`, undeclared / non-path types.

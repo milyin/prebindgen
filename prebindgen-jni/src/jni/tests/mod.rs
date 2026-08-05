@@ -1,6 +1,6 @@
 // Only `entry` (below, gated off with the `niches` module) needs `TypeEntry`.
-use prebindgen::core::TypeEntry;
 pub(crate) use prebindgen::SourceLocation;
+use prebindgen_registry::TypeEntry;
 use quote::ToTokens;
 
 use super::*;

@@ -1,6 +1,6 @@
 //! Structural converter-selection policy for [`Declarations`].
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::{trait_impl::WrapperShape, *};
 
@@ -17,10 +17,10 @@ use super::{trait_impl::WrapperShape, *};
 /// **is** the accepted syntax now, so the kind draws every distinction this needs
 /// — `Vec`, `Slice`, `Boxed` and `Cow` are four kinds — and the question is
 /// answered by the model instead of by a `match` on `syn`.
-fn decoded_vec_satisfies(referent: &prebindgen::core::flat::TypeRef) -> bool {
+fn decoded_vec_satisfies(referent: &prebindgen_registry::flat::TypeRef) -> bool {
     matches!(
         referent.kind(),
-        prebindgen::core::flat::TypeKind::Slice(_) | prebindgen::core::flat::TypeKind::Vec(_)
+        prebindgen_registry::flat::TypeKind::Slice(_) | prebindgen_registry::flat::TypeKind::Vec(_)
     )
 }
 
@@ -34,8 +34,8 @@ fn decoded_vec_satisfies(referent: &prebindgen::core::flat::TypeRef) -> bool {
 /// `str` is the same shape of fact and is handled the same way, one layer up:
 /// its terminal arm resolves it to the borrowed `&str` converter rather than
 /// pretending an owned `str` exists — which is why `Str` is not an arm here.
-fn is_unsized_spelling(ty: &prebindgen::core::flat::TypeRef) -> bool {
-    matches!(ty.kind(), prebindgen::core::flat::TypeKind::Slice(_))
+fn is_unsized_spelling(ty: &prebindgen_registry::flat::TypeRef) -> bool {
+    matches!(ty.kind(), prebindgen_registry::flat::TypeKind::Slice(_))
 }
 
 impl Declarations {
@@ -43,9 +43,9 @@ impl Declarations {
     /// built-in structural wrappers.
     pub(crate) fn select_input_type(
         &self,
-        ty: &prebindgen::core::flat::TypeRef,
+        ty: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // What the converter YIELDS: this crossing's own reading, so a
         // `Box<Option<T>>` crossing produces a `Box<Option<T>>` — the shape it
@@ -107,7 +107,7 @@ impl Declarations {
             }
             return None;
         }
-        if let prebindgen::core::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
+        if let prebindgen_registry::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
             // The target through the accessor: an out-parameter's `MaybeUninit`
             // is the slot a `T` goes in, and it is the `T` that converts.
             let inner = ty.borrow_target().expect("a borrow");
@@ -184,9 +184,9 @@ impl Declarations {
     /// built-in structural wrappers.
     pub(crate) fn select_output_type(
         &self,
-        ty: &prebindgen::core::flat::TypeRef,
+        ty: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // What the converter YIELDS. This direction used to be handed only the
         // spelling — `convert_crossing` fetched the reading and threw it away —
@@ -230,7 +230,7 @@ impl Declarations {
             }
             return None;
         }
-        if let prebindgen::core::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
+        if let prebindgen_registry::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
             // The target through the accessor, as on the input side.
             let inner = ty.borrow_target().expect("a borrow");
             // `&[T]` shared slice (a callback argument crossing native→JVM):
@@ -276,8 +276,8 @@ impl Declarations {
 /// `kind` is what says whether it is a `Result`. The fallback was measured
 /// never to fire in-tree; it is now unreachable by construction.
 fn fallible_parts(
-    ty: &prebindgen::core::flat::TypeRef,
-    emit: &prebindgen::core::Emit,
+    ty: &prebindgen_registry::flat::TypeRef,
+    emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Type)> {
     let (ok, err) = ty.fallible_parts()?;
     let (ok, err) = (emit.spell(ok), emit.spell(err));

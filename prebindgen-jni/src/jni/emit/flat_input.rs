@@ -3,7 +3,7 @@
 
 // `flat` as a module for `TypeKind`: the bare name in this scope is jnigen's own
 // classifier (via `use super::*`), and an explicit import would shadow it.
-use prebindgen::core::{
+use prebindgen_registry::{
     flat::{self, TypeRef},
     Conversions,
 };
@@ -20,7 +20,7 @@ pub(crate) fn struct_input_body(
     ext: &Declarations,
     s: &flat::Struct,
     registry: &impl Conversions<KotlinMeta>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.name.to_string();
     let struct_module = struct_module_path(ext, registry, &s.name);
@@ -325,7 +325,7 @@ pub(crate) fn sum_input_body(
     ext: &Declarations,
     v: &flat::Variant,
     registry: &impl Conversions<KotlinMeta>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     let key = TypeKey::from_ident(&v.name);
     let cfg = ext.types.get(&key)?;
@@ -420,7 +420,7 @@ fn read_kotlin_property(
     reading: &TypeRef,
     bind: &syn::Ident,
     err_prefix: &str,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> Option<(TokenStream, TokenStream)> {
     // The payload's own reading straight to its entry, and the layer questions
     // below asked of it once — `option_inner_type` compared the last path
@@ -598,7 +598,7 @@ fn read_kotlin_property(
 
 /// The complete `wire -> Rust` decode of one value read out of a JVM object:
 /// the wire-facing converter applied to `raw`, followed by the rust-side
-/// stages a custom [`convert!`](prebindgen::convert) declaration inserts.
+/// stages a custom [`convert!`](prebindgen_registry::convert) declaration inserts.
 ///
 /// The mirror of [`ConvChain::call`](super::super::struct_plan::ConvChain) on
 /// the output side, and of the structural wrappers' own chain composition:
@@ -613,7 +613,7 @@ fn read_kotlin_property(
 /// derive from `stage_base`, so two values of the same type in one scope get
 /// distinct names.
 fn composed_entry_decode(
-    entry: &prebindgen::core::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
     raw: &syn::Ident,
     stage_base: &syn::Ident,
 ) -> TokenStream {
@@ -640,7 +640,7 @@ fn composed_entry_decode(
 /// [`composed_entry_decode`] for a sealed-class property, whose raw binding is
 /// `<bind>_raw` by construction.
 fn composed_property_decode(
-    entry: &prebindgen::core::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
     bind: &syn::Ident,
 ) -> TokenStream {
     composed_entry_decode(entry, &format_ident!("{}_raw", bind), bind)
@@ -694,7 +694,7 @@ pub(crate) struct FlatLeaf {
     pub is_present_flag: bool,
     /// Complete converter entry for an ordinary value leaf. Present flags and
     /// direct owned-handle leaves have no entry here.
-    pub entry: Option<prebindgen::core::TypeEntry<KotlinMeta>>,
+    pub entry: Option<prebindgen_registry::TypeEntry<KotlinMeta>>,
     /// A nested owned handle crosses as a raw pointer under the same Kotlin
     /// locking/consume scaffold as a top-level handle. This stores the typed
     /// property access tail (`.child.handle` / `?.handle`) used to collect it.
@@ -760,9 +760,9 @@ pub(crate) enum FlatFieldNode {
         /// from where the reading was (#289).
         /// The handle type a leaf reconstructs by `Box::from_raw` — the
         /// reading, spelled at the emit site like every other generated type.
-        direct_handle: Option<Box<prebindgen::core::flat::TypeRef>>,
+        direct_handle: Option<Box<prebindgen_registry::flat::TypeRef>>,
         optional_handle: bool,
-        rust_ty: Box<prebindgen::core::flat::TypeRef>,
+        rust_ty: Box<prebindgen_registry::flat::TypeRef>,
         /// The transparent wrappers this field's spelling adds over its
         /// classification, outermost first — put back wherever the decode
         /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
@@ -788,7 +788,7 @@ pub(crate) enum FlatFieldNode {
         source: syn::Path,
         /// Variants in declaration order; index == tag.
         variants: Vec<FlatSumVariant>,
-        rust_ty: Box<prebindgen::core::flat::TypeRef>,
+        rust_ty: Box<prebindgen_registry::flat::TypeRef>,
         /// The transparent wrappers this field's spelling adds over its
         /// classification, outermost first — put back wherever the decode
         /// **rebuilds** the value (an `Option::Some`/`None` literal) rather than
@@ -1004,7 +1004,7 @@ fn flat_error(root: &TypeKey, path: &str, reason: impl Into<String>) -> FlatInpu
     }
 }
 
-fn wire_kotlin_type(entry: &prebindgen::core::TypeEntry<KotlinMeta>) -> String {
+fn wire_kotlin_type(entry: &prebindgen_registry::TypeEntry<KotlinMeta>) -> String {
     if let Some(p) = JniPrim::from_wire(&entry.destination) {
         return p.kotlin_type().to_string();
     }
@@ -1087,7 +1087,7 @@ fn build_flat_sum_field(
     }
     struct PlannedLeaf {
         native: String,
-        entry: prebindgen::core::TypeEntry<KotlinMeta>,
+        entry: prebindgen_registry::TypeEntry<KotlinMeta>,
         access_tail: String,
         nullable_wire: bool,
     }
@@ -1249,7 +1249,7 @@ fn push_value_leaf(
     leaves: &mut Vec<FlatLeaf>,
     native: &str,
     field: syn::Ident,
-    entry: &prebindgen::core::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
     access: String,
     nullable_wire: bool,
 ) -> usize {
@@ -1751,7 +1751,7 @@ pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, TokenStream) {
     let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err, emit);
     let root_binding = &plan.root.binding;
@@ -1771,7 +1771,7 @@ pub(crate) fn render_flat_input_decode(
 }
 
 fn render_entry_decode(
-    entry: &prebindgen::core::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
     wire_ident: &syn::Ident,
     out_ident: &syn::Ident,
     on_err: &TokenStream,
@@ -1825,7 +1825,7 @@ fn render_flat_struct_node(
     node: &FlatStructNode,
     target: Option<&RebuildTarget>,
     on_err: &TokenStream,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
     let mut decodes = TokenStream::new();
     let mut inits = Vec::new();

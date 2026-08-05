@@ -56,8 +56,8 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         )
         .package(
             crate::package!("thing")
-                .fun(prebindgen::fun!(z_thing_new))
-                .fun(prebindgen::fun!(z_thing_name)),
+                .fun(prebindgen_registry::fun!(z_thing_new))
+                .fun(prebindgen_registry::fun!(z_thing_name)),
         );
 
     let dir = unique_test_dir("jnigen_snap");
@@ -247,9 +247,10 @@ fn handler_interfaces_carry_split_contract_kdoc() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("ops").fun(prebindgen::fun!(z_fallible)))
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_fallible)))
         .expand(
-            prebindgen::expand_return!(ZErr).field(prebindgen::fun!(z_err_message).name("message")),
+            prebindgen_registry::expand_return!(ZErr)
+                .field(prebindgen_registry::fun!(z_err_message).name("message")),
         );
 
     let dir = unique_test_dir("jnigen_handler_kdoc");
@@ -314,8 +315,8 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
         .package(
             crate::package!("payload")
                 .class(crate::data_class!(Payload))
-                .fun(prebindgen::fun!(payload_get))
-                .fun(prebindgen::fun!(payload_put)),
+                .fun(prebindgen_registry::fun!(payload_get))
+                .fun(prebindgen_registry::fun!(payload_put)),
         );
 
     let dir = unique_test_dir("jnigen_boxstr");
@@ -394,8 +395,8 @@ fn slice_input_builds_vec_handle() {
         .package(
             crate::package!("foo")
                 .class(crate::data_class!(Foo))
-                .fun(prebindgen::fun!(put_slice))
-                .fun(prebindgen::fun!(put_vec)),
+                .fun(prebindgen_registry::fun!(put_slice))
+                .fun(prebindgen_registry::fun!(put_vec)),
         );
 
     let dir = unique_test_dir("jnigen_slice_vec_handle");
@@ -520,8 +521,8 @@ fn native_symbols_are_jni_escaped() {
             crate::package!("sub_pkg")
                 .class(crate::ptr_class!(ZThing).name("Z_Thing"))
                 .class(crate::data_class!(Foo))
-                .fun(prebindgen::fun!(do_work))
-                .fun(prebindgen::fun!(put_slice)),
+                .fun(prebindgen_registry::fun!(do_work))
+                .fun(prebindgen_registry::fun!(put_slice)),
         );
 
     let dir = unique_test_dir("jnigen_symbol_escaping");
@@ -585,7 +586,7 @@ fn jni_native_init_emits_init_block() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
-        .package(crate::package!("thing").fun(prebindgen::fun!(z_ping)));
+        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_ping)));
 
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);

@@ -10,6 +10,7 @@ rust-version = { workspace = true }
 
 [dependencies]
 prebindgen = { workspace = true }
+prebindgen-registry = { workspace = true }
 prebindgen-jni-runtime = { workspace = true }
 kotlin-codegen = { workspace = true }
 jni = "0.21.1"
@@ -21,4 +22,7 @@ proc-macro2 = { workspace = true }
 # The fixtures for niches, callback identity, sealed cells and value-form
 # deriving build a registry directly and mint an `Emit`. Those constructors are
 # sealed against ordinary callers and opened only for a test suite.
+# `Emit::for_test` lives in `prebindgen` (with the flat model); `Registry`'s
+# `*_for_test` accessors now live in `prebindgen-registry` (with the pipeline).
 prebindgen = { workspace = true, features = ["testing"] }
+prebindgen-registry = { workspace = true, features = ["testing"] }

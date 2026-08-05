@@ -17,20 +17,19 @@
 //! cannot see an out-of-crate adapter at all.
 //!
 //! So the difference is a **capability**. Syntax is reachable only
-//! through this type, this type cannot be constructed outside `api::core`, and
-//! core hands one out only to the callbacks whose job is producing Rust.
-//! Adapter code that classifies, plans, names or validates never receives one,
-//! and a call to a door from there does not compile — in this crate and in
-//! anyone else's.
+//! through this type, this type cannot be constructed outside this crate, and
+//! `write_rust` (in the separate `prebindgen-registry` crate, which is where
+//! the callbacks below now live) hands one out only to the callbacks whose job
+//! is producing Rust. Adapter code that classifies, plans, names or validates
+//! never receives one, and a call to a door from there does not compile.
 //!
 //! # Where one comes from
 //!
-//! [`Prebindgen::on_function`](super::super::prebindgen::Prebindgen::on_function) and
-//! its four peers, [`prerequisites`](super::super::prebindgen::Prebindgen::prerequisites),
-//! [`post_process_item`](super::super::prebindgen::Prebindgen::post_process_item), and
-//! the closure [`RegistryBuilder::convert_with`](super::super::registry::RegistryBuilder::convert_with)
-//! calls — a converter is generated Rust, since `ConverterImpl::function` is a
-//! complete `syn::ItemFn` the adapter writes. Nothing else.
+//! `Prebindgen::on_function` and its four peers, `prerequisites`,
+//! `post_process_item`, and the closure `RegistryBuilder::convert_with`
+//! calls — all in the separate `prebindgen-registry` crate — a converter is
+//! generated Rust, since `ConverterImpl::function` is a complete
+//! `syn::ItemFn` the adapter writes. Nothing else.
 //!
 //! If a helper needs an `&Emit`, that is the helper saying it emits; if
 //! threading one to it feels wrong, it is probably deciding something and wants
@@ -38,12 +37,16 @@
 //!
 //! # What is closed
 //!
-//! **Every route from the model to captured syntax.** `TypeRef::{as_syn, spell,
-//! stripped_syntax}`, `TypeKind::to_syn`, `Element::as_syn`, `Type::as_syn`,
-//! `Origin::{as_syn, spell}`, `Flat::enum_item` and the three `spell(head,
-//! parts)` shape methods are all `pub(in crate::api::core)`. The
-//! `compile_fail` examples on [`Emit`] check each one from outside the crate,
-//! which is the way an adapter author meets them.
+//! **Every route from the model to captured syntax, except the ones the
+//! registry pipeline itself needs.** `TypeRef::{as_syn, stripped_syntax}`,
+//! `TypeKind::to_syn`, `Element::as_syn`, `Type::as_syn`, `Origin::as_syn` and
+//! the three `spell(head, parts)` shape methods stay `pub(in crate::api::core)`
+//! — nothing outside this crate calls them. `TypeRef::spell`, `Origin::spell`
+//! and `Flat::enum_item` are `pub`: the registry pipeline that legitimately
+//! calls them (`write_rust`'s emission, and its own tests) is now the separate
+//! `prebindgen-registry` crate, and a module-path seal cannot reach across a
+//! crate boundary. The `compile_fail` examples on [`Emit`] check what remains
+//! closed from outside the crate.
 //!
 //! Two things stay public because they are not that:
 //!
@@ -139,9 +142,12 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// ```
 ///
 /// …and its tokens, which re-parse to the same item — the door under another
-/// name, and the one a reviewer found still open when this type was introduced:
+/// name, and the one a reviewer found still open when this type was introduced.
+/// **No longer closed**: `Origin::spell` is `pub` now that the registry
+/// pipeline's own tests, this method's other legitimate caller, are the
+/// separate `prebindgen-registry` crate rather than code inside this one:
 ///
-/// ```compile_fail
+/// ```
 /// # use prebindgen::core::flat;
 /// fn leak(f: &flat::Function) -> proc_macro2::TokenStream { f.origin.spell() }
 /// ```
@@ -153,9 +159,11 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// fn leak(t: &flat::TypeRef) -> &syn::Type { t.as_syn() }
 /// ```
 ///
-/// A declared enum's item, by name:
+/// A declared enum's item, by name. **No longer closed**, for the same reason
+/// as `Origin::spell` above — `Flat::enum_item` is a registry-pipeline test
+/// helper:
 ///
-/// ```compile_fail
+/// ```
 /// # use prebindgen::core::Flat;
 /// fn leak(f: &Flat) -> Option<&syn::ItemEnum> { f.enum_item("E") }
 /// ```
@@ -176,9 +184,11 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// }
 /// ```
 ///
-/// A type's spelling:
+/// A type's spelling. **No longer closed**: `TypeRef::spell` is `pub` now
+/// that `write_rust`'s own emission code, this method's other legitimate
+/// caller, lives in the separate `prebindgen-registry` crate:
 ///
-/// ```compile_fail
+/// ```
 /// # use prebindgen::core::flat;
 /// fn leak(t: &flat::TypeRef) -> proc_macro2::TokenStream { t.spell() }
 /// ```
@@ -195,8 +205,8 @@ fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStrea
 /// fn leak(k: &flat::TypeKind) -> syn::Type { k.to_syn() }
 /// ```
 ///
-/// Minting one is not available either — the field is private and `new` is
-/// `pub(in crate::api::core)`:
+/// Minting one by naming the struct literal is not available either — the
+/// field is private:
 ///
 /// ```compile_fail
 /// # use prebindgen::core::Emit;
@@ -208,9 +218,20 @@ pub struct Emit {
 }
 
 impl Emit {
-    /// Mint one. `pub(in crate::api::core)` is the whole enforcement mechanism:
-    /// the hand-out sites are exactly the callers of this.
-    pub(in crate::api::core) fn new() -> Self {
+    /// Mint one. Previously `pub(in crate::api::core)`, the whole enforcement
+    /// mechanism when the registry pipeline that is this method's sole
+    /// legitimate caller lived in this crate; now `pub`, since that pipeline
+    /// is the separate `prebindgen-registry` crate and a module-path seal
+    /// cannot reach across the boundary. `write_rust` there mints the one
+    /// `Emit` per generation and hands out only borrows of it — see the module
+    /// doc.
+    ///
+    /// No `Default` impl on purpose: `Emit::default()` would be one more
+    /// trivially-derivable way to mint one, undermining the "only where a
+    /// capability is deliberately needed" convention `new` itself relies on
+    /// now that visibility alone cannot enforce it.
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
         Self { _seal: () }
     }
 

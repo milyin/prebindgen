@@ -75,17 +75,34 @@ already writes `convert!(Millis).input(fun!(millis_from_raw))`, so
 all four name only `TypeKey`, `Origin<syn::Type>`, `syn` types and each other,
 never a Kotlin or JNI type.
 
-## What the split costs
+## What the split costs — and the follow-up it owes
 
-`Emit::new()` is `pub(in crate::api::core)` — *only core may mint the
-capability*. Once `core` becomes `flat` + `registry` that is **inexpressible**:
-`registry` must mint, and Rust has no cross-crate friend. It becomes `pub`.
+`Emit::new()` was `pub(in crate::api::core)` — *only core may mint the
+capability*. Once the pipeline moved to `prebindgen-registry` that became
+**inexpressible**: the registry must mint, and Rust has no cross-crate friend.
 
-The important half survives. `as_syn` / `spell` / `stripped_syntax` stay private
-**inside `flat`**, so "classify off `kind`, spell with `spell()`" still holds.
-What is lost is only the secondary control over *who mints*. `emit.rs`'s module
-doc asserts the stronger claim today and must be amended when the `flat` carve
-lands.
+This document previously claimed the important half survived — that `as_syn` /
+`spell` / `stripped_syntax` would all stay private inside `flat`. **That was
+wrong, and the B3 carve proved it.** The registry's emission path calls
+`TypeRef::spell`, `Origin::spell` and `Flat::enum_item`, so those three had to
+open along with `Emit::new`, `TypeRef::{borrowed, optional, scalar}`,
+`Flat::{classify, add_local_function}` and `types_util::ident`.
+
+What actually survives is narrower but still the load-bearing part: `as_syn`,
+`stripped_syntax`, `TypeKind::to_syn` and the three `spell(head, parts)` shape
+methods — **every route to the `syn` node itself** — remain
+`pub(in crate::api::core)`. What opened is `spell()`, which yields a
+`TokenStream`; re-parsing one to recover a node was already documented here as
+the accepted residual, so the regression is that the residual is now reachable
+without holding an `Emit`, not that a new door appeared.
+
+Four `compile_fail` doctests asserted the closed form of `spell` / `enum_item`
+and no longer prove anything; they are now plain doctests.
+
+**Owed:** a real cross-crate seal — a public-but-unconstructable token that only
+`prebindgen-registry` can mint, threaded through the ~9 signatures above, so the
+capability is compiler-enforced again rather than a documented convention. Its
+own PR; it is redesign, not a move.
 
 ## Phases
 
@@ -99,8 +116,9 @@ lands.
 | **A4** | `Emit` → `flat`; `flat/` reaches zero core-sibling refs | done |
 | **B1** | carve `prebindgen-c` | done |
 | **B2** | carve `prebindgen-jni` | in progress |
-| **B3** | carve `prebindgen-registry` | todo |
+| **B3** | carve `prebindgen-registry` | in progress |
 | **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | todo |
+| **B5** | restore the `Emit` seal across the crate boundary | todo |
 | **C** | workspace manifest, examples, docs, downstream repos | todo |
 
 Phase A is all in-place, so the tree stays green at every commit and the Phase B

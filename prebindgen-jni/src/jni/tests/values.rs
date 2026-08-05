@@ -20,12 +20,12 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            prebindgen::convert!(Duration)
-                .input(prebindgen::fun!(duration_from_millis))
-                .output(prebindgen::fun!(duration_to_millis))
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
         )
-        .package(crate::package!("time").fun(prebindgen::fun!(duration_echo)));
+        .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_echo)));
     let dir = unique_test_dir("jnigen_bounded_duration");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -113,16 +113,16 @@ fn flattened_field_composes_bounded_conversion_stages() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            prebindgen::convert!(Duration)
-                .input(prebindgen::fun!(duration_from_millis))
-                .output(prebindgen::fun!(duration_to_millis))
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
         )
         .package(
             crate::package!()
                 .class(crate::data_class!(Timed))
-                .fun(prebindgen::fun!(timed_use))
-                .fun(prebindgen::fun!(timed_echo)),
+                .fun(prebindgen_registry::fun!(timed_use))
+                .fun(prebindgen_registry::fun!(timed_echo)),
         );
     let dir = unique_test_dir("jnigen_flat_staged_field");
     let _ = std::fs::remove_dir_all(&dir);
@@ -185,7 +185,7 @@ fn duration_requires_an_explicit_conversion() {
     .expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("time").fun(prebindgen::fun!(duration_echo)));
+        .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_echo)));
 
     let error = jni
         .build_with(registry)
@@ -212,11 +212,11 @@ fn conversion_domain_must_match_the_representation() {
     let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
     let jni = JniGenBuilder::new()
         .convert(
-            prebindgen::convert!(Duration)
-                .input(prebindgen::fun!(duration_from_millis))
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
                 .valid_range(0i64..=1_000i64),
         )
-        .package(crate::package!("time").fun(prebindgen::fun!(duration_use)));
+        .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_use)));
 
     let _ = jni.build_with(registry);
 }
@@ -256,7 +256,7 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().class(crate::enum_class!(Mode)))
-        .package(crate::package!("cfg").fun(prebindgen::fun!(z_set_timeout)));
+        .package(crate::package!("cfg").fun(prebindgen_registry::fun!(z_set_timeout)));
 
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
@@ -356,8 +356,8 @@ fn vec_of_handle_output_folds_kotlin_side() {
         .package(
             crate::package!("thing")
                 .class(crate::ptr_class!(ZThing))
-                .fun(prebindgen::fun!(thing_list))
-                .fun(prebindgen::fun!(thing_list_opt)),
+                .fun(prebindgen_registry::fun!(thing_list))
+                .fun(prebindgen_registry::fun!(thing_list_opt)),
         );
 
     let dir = unique_test_dir("jnigen_vec_handle_out");
@@ -442,7 +442,7 @@ fn option_scalar_struct_field_flattens() {
         .package(
             crate::package!()
                 .class(crate::data_class!(Opts))
-                .fun(prebindgen::fun!(opts_put)),
+                .fun(prebindgen_registry::fun!(opts_put)),
         );
 
     let dir = unique_test_dir("jnigen_optfield");
@@ -565,8 +565,8 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
         )
         .package(
             crate::package!("job")
-                .fun(prebindgen::fun!(job_make))
-                .fun(prebindgen::fun!(job_mode)),
+                .fun(prebindgen_registry::fun!(job_make))
+                .fun(prebindgen_registry::fun!(job_mode)),
         );
 
     let dir = unique_test_dir("jnigen_fromparts_optbox");
@@ -678,8 +678,8 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
                 .class(crate::data_class!(FlatChild))
                 .class(crate::data_class!(ObjectChild).jobject_input())
                 .class(crate::data_class!(Hybrid))
-                .fun(prebindgen::fun!(hybrid_use))
-                .fun(prebindgen::fun!(hybrid_optional)),
+                .fun(prebindgen_registry::fun!(hybrid_use))
+                .fun(prebindgen_registry::fun!(hybrid_optional)),
         );
     let dir = unique_test_dir("jnigen_hybrid_jobject_input");
     let _ = std::fs::remove_dir_all(&dir);
@@ -763,7 +763,7 @@ fn empty_structs_keep_their_own_constructor_delimiters() {
             crate::package!()
                 .class(crate::data_class!(Unit).jobject_input())
                 .class(crate::data_class!(EmptyNamed).jobject_input())
-                .fun(prebindgen::fun!(take_empties)),
+                .fun(prebindgen_registry::fun!(take_empties)),
         );
     let dir = unique_test_dir("jnigen_empty_struct_delimiters");
     let _ = std::fs::remove_dir_all(&dir);
@@ -826,7 +826,7 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
             crate::package!()
                 .class(crate::ptr_class!(Token))
                 .class(crate::data_class!(Envelope))
-                .fun(prebindgen::fun!(envelope_use)),
+                .fun(prebindgen_registry::fun!(envelope_use)),
         );
     let dir = unique_test_dir("jnigen_recursive_handles");
     let _ = std::fs::remove_dir_all(&dir);
@@ -885,7 +885,7 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
     let jni = JniGenBuilder::new().package(
         crate::package!()
             .class(crate::data_class!(Wide))
-            .fun(prebindgen::fun!(use_wide)),
+            .fun(prebindgen_registry::fun!(use_wide)),
     );
     let error = jni
         .build_with(registry)
@@ -905,7 +905,7 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
     let jni = JniGenBuilder::new().package(
         crate::package!()
             .class(crate::data_class!(Wide).jobject_input())
-            .fun(prebindgen::fun!(use_wide)),
+            .fun(prebindgen_registry::fun!(use_wide)),
     );
     let generation = jni
         .build_with(registry)
@@ -936,8 +936,8 @@ fn output_only_convert_resolves_without_input_twin() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .convert(prebindgen::convert!(Len).output(prebindgen::fun!(len_value)))
-        .package(crate::package!("len").fun(prebindgen::fun!(len_of)));
+        .convert(prebindgen_registry::convert!(Len).output(prebindgen_registry::fun!(len_value)))
+        .package(crate::package!("len").fun(prebindgen_registry::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_convert");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -982,8 +982,8 @@ fn convert_fn_qualifies_with_origin_crate() {
             .expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .convert(prebindgen::convert!(Len).output(prebindgen::fun!(len_value)))
-        .package(crate::package!("len").fun(prebindgen::fun!(len_of)));
+        .convert(prebindgen_registry::convert!(Len).output(prebindgen_registry::fun!(len_value)))
+        .package(crate::package!("len").fun(prebindgen_registry::fun!(len_of)));
     let dir = unique_test_dir("jnigen_convert_origin");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1017,8 +1017,8 @@ fn convert_input_target_mismatch_rejected() {
     let registry =
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
-        .convert(prebindgen::convert!(Len).input(prebindgen::fun!(from_long)))
-        .package(crate::package!("len").fun(prebindgen::fun!(use_len)));
+        .convert(prebindgen_registry::convert!(Len).input(prebindgen_registry::fun!(from_long)))
+        .package(crate::package!("len").fun(prebindgen_registry::fun!(use_len)));
     let dir = unique_test_dir("jnigen_convert_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1041,11 +1041,11 @@ fn convert_via_trait_impls() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            prebindgen::convert!(Celsius)
-                .input(prebindgen::from!(i32))
-                .output(prebindgen::into!(i32)),
+            prebindgen_registry::convert!(Celsius)
+                .input(prebindgen_registry::from!(i32))
+                .output(prebindgen_registry::into!(i32)),
         )
-        .package(crate::package!("m").fun(prebindgen::fun!(temp_double)));
+        .package(crate::package!("m").fun(prebindgen_registry::fun!(temp_double)));
     let dir = unique_test_dir("jnigen_convert_trait");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1076,8 +1076,8 @@ fn convert_via_try_from_is_fallible() {
             .expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .convert(prebindgen::convert!(Percent).input(prebindgen::try_from!(i32)))
-        .package(crate::package!("m").fun(prebindgen::fun!(pct_use)));
+        .convert(prebindgen_registry::convert!(Percent).input(prebindgen_registry::try_from!(i32)))
+        .package(crate::package!("m").fun(prebindgen_registry::fun!(pct_use)));
     let dir = unique_test_dir("jnigen_convert_tryfrom");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1112,14 +1112,14 @@ fn option_composition_normalizes_fallible_stage_errors() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            prebindgen::convert!(Percent)
-                .input(prebindgen::try_from!(i32))
+            prebindgen_registry::convert!(Percent)
+                .input(prebindgen_registry::try_from!(i32))
                 .output(
-                    prebindgen::fun!(crate::conv::pct_out)
-                        .sig(prebindgen::sig!((p: Percent) -> Result<i32, String>)),
+                    prebindgen_registry::fun!(crate::conv::pct_out)
+                        .sig(prebindgen_registry::sig!((p: Percent) -> Result<i32, String>)),
                 ),
         )
-        .package(crate::package!("m").fun(prebindgen::fun!(pct_optional)));
+        .package(crate::package!("m").fun(prebindgen_registry::fun!(pct_optional)));
     let dir = unique_test_dir("jnigen_option_fallible_stages");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1150,17 +1150,17 @@ fn convert_via_local_fns() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            prebindgen::convert!(Label)
+            prebindgen_registry::convert!(Label)
                 .input(
-                    prebindgen::fun!(crate::conv::label_in)
-                        .sig(prebindgen::sig!((s: String) -> Label)),
+                    prebindgen_registry::fun!(crate::conv::label_in)
+                        .sig(prebindgen_registry::sig!((s: String) -> Label)),
                 )
                 .output(
-                    prebindgen::fun!(crate::conv::label_out)
-                        .sig(prebindgen::sig!((l: Label) -> String)),
+                    prebindgen_registry::fun!(crate::conv::label_out)
+                        .sig(prebindgen_registry::sig!((l: Label) -> String)),
                 ),
         )
-        .package(crate::package!("m").fun(prebindgen::fun!(label_id)));
+        .package(crate::package!("m").fun(prebindgen_registry::fun!(label_id)));
     let dir = unique_test_dir("jnigen_convert_local");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1176,22 +1176,25 @@ fn convert_via_local_fns() {
 #[test]
 #[should_panic(expected = "input conversion is already declared")]
 fn convert_duplicate_input_rejected() {
-    let _ = prebindgen::convert!(Widget)
-        .input(prebindgen::from!(i32))
-        .input(prebindgen::fun!(crate::widget_in).sig(prebindgen::sig!((v: String) -> Widget)));
+    let _ = prebindgen_registry::convert!(Widget)
+        .input(prebindgen_registry::from!(i32))
+        .input(
+            prebindgen_registry::fun!(crate::widget_in)
+                .sig(prebindgen_registry::sig!((v: String) -> Widget)),
+        );
 }
 
 /// The source macros state their direction; the acceptor cross-checks it.
 #[test]
 #[should_panic(expected = "an input conversion is built with from!/try_from!")]
 fn convert_input_into_direction_rejected() {
-    let _ = prebindgen::convert!(Widget).input(prebindgen::into!(i32));
+    let _ = prebindgen_registry::convert!(Widget).input(prebindgen_registry::into!(i32));
 }
 
 #[test]
 #[should_panic(expected = "an output conversion is built with into!/try_into!")]
 fn convert_output_from_direction_rejected() {
-    let _ = prebindgen::convert!(Widget).output(prebindgen::from!(i32));
+    let _ = prebindgen_registry::convert!(Widget).output(prebindgen_registry::from!(i32));
 }
 
 /// A binding-local conversion source must state its signature — a path
@@ -1200,7 +1203,8 @@ fn convert_output_from_direction_rejected() {
 #[test]
 #[should_panic(expected = ".sig(sig!(")]
 fn convert_local_source_missing_sig_rejected() {
-    let _ = prebindgen::convert!(Widget).input(prebindgen::fun!(crate::widget_in));
+    let _ =
+        prebindgen_registry::convert!(Widget).input(prebindgen_registry::fun!(crate::widget_in));
 }
 
 /// A `fun!` conversion source is never surfaced in Kotlin — decorations are
@@ -1208,7 +1212,8 @@ fn convert_local_source_missing_sig_rejected() {
 #[test]
 #[should_panic(expected = ".name()/expand overrides don't apply")]
 fn convert_source_fun_with_decorations_rejected() {
-    let _ = prebindgen::convert!(Widget).input(prebindgen::fun!(widget_in).name("widgetIn"));
+    let _ = prebindgen_registry::convert!(Widget)
+        .input(prebindgen_registry::fun!(widget_in).name("widgetIn"));
 }
 
 /// The fallible binding-local form: the sig's `Result<_, E>` IS the error
@@ -1225,17 +1230,17 @@ fn convert_via_local_try_fn_is_fallible() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .convert(
-            prebindgen::convert!(Label)
+            prebindgen_registry::convert!(Label)
                 .input(
-                    prebindgen::fun!(crate::conv::label_in)
-                        .sig(prebindgen::sig!((s: String) -> Result<Label, String>)),
+                    prebindgen_registry::fun!(crate::conv::label_in)
+                        .sig(prebindgen_registry::sig!((s: String) -> Result<Label, String>)),
                 )
                 .output(
-                    prebindgen::fun!(crate::conv::label_out)
-                        .sig(prebindgen::sig!((l: Label) -> String)),
+                    prebindgen_registry::fun!(crate::conv::label_out)
+                        .sig(prebindgen_registry::sig!((l: Label) -> String)),
                 ),
         )
-        .package(crate::package!("m").fun(prebindgen::fun!(label_id)));
+        .package(crate::package!("m").fun(prebindgen_registry::fun!(label_id)));
     let dir = unique_test_dir("jnigen_convert_local_try");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -1288,8 +1293,8 @@ fn data_class_members_reenter_as_field_leaves() {
         .package(
             crate::package!().class(
                 crate::data_class!(Point)
-                    .method(prebindgen::fun!(point_norm).name("norm"))
-                    .constructor(prebindgen::fun!(point_origin).name("origin")),
+                    .method(prebindgen_registry::fun!(point_norm).name("norm"))
+                    .constructor(prebindgen_registry::fun!(point_origin).name("origin")),
             ),
         );
     let dir = unique_test_dir("jnigen_data_members");
@@ -1390,10 +1395,10 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
         .package(
             crate::package!()
                 .class(crate::data_class!(Unsigned))
-                .fun(prebindgen::fun!(unsigned_round_trip))
-                .fun(prebindgen::fun!(unsigned_data_maybe))
-                .fun(prebindgen::fun!(unsigned_callback))
-                .fun(prebindgen::fun!(unsigned_result)),
+                .fun(prebindgen_registry::fun!(unsigned_round_trip))
+                .fun(prebindgen_registry::fun!(unsigned_data_maybe))
+                .fun(prebindgen_registry::fun!(unsigned_callback))
+                .fun(prebindgen_registry::fun!(unsigned_result)),
         );
     let dir = unique_test_dir("jnigen_unsigned");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1524,8 +1529,8 @@ fn data_class_properties_match_their_from_parts_params() {
                 .class(crate::data_class!(Child))
                 .class(crate::enum_class!(Level))
                 .class(crate::data_class!(Bag))
-                .fun(prebindgen::fun!(bag_make))
-                .fun(prebindgen::fun!(bag_take)),
+                .fun(prebindgen_registry::fun!(bag_make))
+                .fun(prebindgen_registry::fun!(bag_take)),
         );
 
     let dir = unique_test_dir("jnigen_data_class_props");
@@ -1619,7 +1624,7 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
         .package(
             crate::package!("blob")
                 .class(crate::data_class!(Blob))
-                .fun(prebindgen::fun!(blob_echo)),
+                .fun(prebindgen_registry::fun!(blob_echo)),
         );
     let dir = unique_test_dir(&format!("jnigen_array_len_const_{module}"));
     let _ = std::fs::remove_dir_all(&dir);
@@ -1712,7 +1717,7 @@ fn a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec() {
 /// and it exists only to give the model a field per spelling to classify.
 #[test]
 fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
-    use prebindgen::core::flat;
+    use prebindgen_registry::flat;
 
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
@@ -1850,8 +1855,8 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
         .package(crate::package!().class(crate::enum_class!(Mode)))
         .package(
             crate::package!("cfg")
-                .fun(prebindgen::fun!(z_bare))
-                .fun(prebindgen::fun!(z_boxed)),
+                .fun(prebindgen_registry::fun!(z_bare))
+                .fun(prebindgen_registry::fun!(z_boxed)),
         );
 
     let dir = unique_test_dir("jnigen_wrapped_optscalar");
@@ -1966,8 +1971,8 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
         .package(
             crate::package!("foo")
                 .class(crate::data_class!(Foo))
-                .fun(prebindgen::fun!(put_bare))
-                .fun(prebindgen::fun!(put_wrapped)),
+                .fun(prebindgen_registry::fun!(put_bare))
+                .fun(prebindgen_registry::fun!(put_wrapped)),
         );
 
     let dir = unique_test_dir("jnigen_outer_wrapper_ref");
