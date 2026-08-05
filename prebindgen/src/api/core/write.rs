@@ -5,6 +5,12 @@
 //! and every anonymous const; concatenates them; and hands them to
 //! `Destination::write` (which does prettyplease formatting and
 //! resolves the path against `OUT_DIR`).
+//!
+//! This module is `pub`, so **every `pub` item in it is public API of the
+//! crate**. That is meant to be exactly two — [`write_rust`] and
+//! [`WriteError`] — which is what an out-of-crate adapter calls to emit its
+//! generated file. Anything else added here stays private unless publishing it
+//! is a deliberate decision.
 
 use std::{
     collections::BTreeMap,
@@ -163,7 +169,10 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 /// of its [`crate::api::core::prebindgen::Stage`] functions by name, sort
 /// for determinism. Names are read directly off `function.sig.ident` —
 /// the adapter owns the naming.
-pub fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, syn::ItemFn)> {
+///
+/// Private: an internal step of [`write_rust`], not part of the
+/// adapter-facing surface this module exposes.
+fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, syn::ItemFn)> {
     let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
     let mut collect = |entry: &TypeEntry<M>| {
         let name = entry.function.sig.ident.clone();
