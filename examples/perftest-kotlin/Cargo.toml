@@ -19,6 +19,7 @@ tracing = "0.1"
 
 [build-dependencies]
 prebindgen = { workspace = true }
+prebindgen-registry = { workspace = true }
 prebindgen-jni = { workspace = true }
 syn = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "prebindgen",
+    "prebindgen-registry",
     "prebindgen-c",
     "prebindgen-jni",
     "prebindgen-proc-macro",
@@ -29,6 +30,7 @@ package.categories = ["development-tools", "external-ffi-bindings"]
 [workspace.dependencies]
 kotlin-codegen = { path = "../kotlin-codegen", version = "0.1.0" }
 prebindgen = { path = "prebindgen", version = "0.5.0" }
+prebindgen-registry = { path = "prebindgen-registry", version = "0.5.0" }
 prebindgen-c = { path = "prebindgen-c", version = "0.5.0" }
 prebindgen-jni = { path = "prebindgen-jni", version = "0.5.0" }
 prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.5.0" }

@@ -45,12 +45,13 @@ use crate::SourceLocation;
 /// # The invariant
 ///
 /// > **Every `TypeRef` was classified by the model.** [`Flat`](super::Flat)
-/// > classified it from source syntax, or `api::core` composed it by layering
-/// > over something already classified. Nothing above `api::core` can mint one.
+/// > classified it from source syntax, or the registry pipeline composed it by
+/// > layering over something already classified.
 ///
-/// **Scoped to what is enforced, not to what is intended.** The boundary is
-/// `api::core`, and it is drawn by visibility at four places, each checked by
-/// the compiler on every build:
+/// **Historically enforced by visibility, now by convention.** Before the
+/// registry pipeline moved to the separate `prebindgen-registry` crate, the
+/// boundary was `api::core` and was drawn by visibility at four places, each
+/// checked by the compiler on every build:
 ///
 /// | | |
 /// |---|---|
@@ -59,11 +60,17 @@ use crate::SourceLocation;
 /// | `named` | `pub(super)` — `flat` alone |
 /// | `Flat::classify` | `pub(in crate::api::core)` |
 ///
-/// So a language adapter under `api::lang` cannot mint a reading at all — not
-/// by field, not by composer, not by classifying a spelling of its own. Where
-/// one needs a type the model already declares, the **declaration** answers:
-/// see [`Variant::type_ref`](super::Variant::type_ref), which is what the
-/// `SumTag` selector uses instead of composing a reading from an ident.
+/// A module-path seal can no longer express "the registry pipeline, and
+/// nothing else" once that pipeline is a different crate — there is no path
+/// inside this crate to name it — so `borrowed` / `optional` / `scalar` and
+/// `Flat::classify` are now plain `pub`, and the fields stay `pub(super)`
+/// (nothing outside `flat` ever needed them). The intent is unchanged and
+/// documented here, but no longer compiler-enforced against a destination
+/// adapter (`prebindgen-c`, `prebindgen-jni`): restoring that would need a real
+/// API, e.g. a sealed capability token minted only by `prebindgen-registry`.
+/// Where one needs a type the model already declares, the **declaration**
+/// answers: see [`Variant::type_ref`](super::Variant::type_ref), which is what
+/// the `SumTag` selector uses instead of composing a reading from an ident.
 ///
 /// The invariant is unconditional — no phase, no lifetime, no direction — so it
 /// holds for a **stored** value. That is the point: a `TypeRef` lives in
@@ -130,18 +137,22 @@ impl TypeRef {
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
-    /// …nor through a composer, which is not visible either (`E0624`):
+    /// …nor, historically, through a composer (`E0624`) — **no longer true**:
+    /// `borrowed` / `optional` / `scalar` are `pub` now that the registry
+    /// pipeline that composes with them is the separate `prebindgen-registry`
+    /// crate rather than code inside this one:
     ///
-    /// ```compile_fail
+    /// ```
     /// # use prebindgen::core::flat::{ScalarKind, TypeRef};
-    /// let forged = TypeRef::scalar(ScalarKind::Bool);
+    /// let composed = TypeRef::scalar(ScalarKind::Bool);
     /// ```
     ///
-    /// These two prove only the **crate** boundary. The stronger claim — that
-    /// nothing above `api::core` can mint one either — is enforced by the
-    /// visibilities tabulated on [`TypeRef`], and a doctest cannot reach inside
-    /// the crate to test it. The compiler checks it on every build instead: an
-    /// `api::lang` adapter naming any of the four routes fails with `E0624`.
+    /// The struct-literal case above still proves the **crate** boundary. The
+    /// stronger claim this crate used to enforce by visibility — that nothing
+    /// above `api::core` can mint one either — no longer has a module path to
+    /// be checked against once the registry pipeline is the separate
+    /// `prebindgen-registry` crate; see the type-level doc's "The invariant"
+    /// section for what replaced it.
     pub fn kind(&self) -> &TypeKind {
         &self.kind
     }
@@ -154,7 +165,7 @@ impl TypeRef {
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside it,
     /// and a consumer that still has to take the node apart says so with
     /// [`as_syn`](Self::as_syn).
-    pub(in crate::api::core) fn spell(&self) -> proc_macro2::TokenStream {
+    pub fn spell(&self) -> proc_macro2::TokenStream {
         self.origin.spell()
     }
 
@@ -340,7 +351,7 @@ impl TypeRef {
     ///
     /// Keeps this type's location: the borrow exists *because of* this value,
     /// so a diagnostic about it should point where the value came from.
-    pub(in crate::api::core) fn borrowed(&self) -> TypeRef {
+    pub fn borrowed(&self) -> TypeRef {
         let inner = self.origin.spell();
         TypeRef {
             kind: TypeKind::Ref {
@@ -354,7 +365,7 @@ impl TypeRef {
 
     /// An optional of this type — `Option<T>` from `T`. Location as
     /// [`Self::borrowed`].
-    pub(in crate::api::core) fn optional(&self) -> TypeRef {
+    pub fn optional(&self) -> TypeRef {
         let inner = self.origin.spell();
         TypeRef {
             kind: TypeKind::Optional(Box::new(self.clone())),
@@ -369,7 +380,7 @@ impl TypeRef {
     /// [`Flat::classify`](super::Flat::classify) does exactly this for a
     /// composed spelling, and `ensure_entry` gives adapter-authored cells the
     /// same treatment — `has_position` already gates what a diagnostic prints.
-    pub(in crate::api::core) fn scalar(kind: ScalarKind) -> TypeRef {
+    pub fn scalar(kind: ScalarKind) -> TypeRef {
         // The spelling comes from the kind, so the two cannot drift.
         let ident = syn::Ident::new(kind.as_str(), proc_macro2::Span::call_site());
         TypeRef {

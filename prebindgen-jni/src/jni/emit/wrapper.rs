@@ -1,7 +1,7 @@
 //! Extern `"C"` JNI wrapper functions: signature lowering, input
 //! params, and the expanded-param path.
 
-use prebindgen::core::{types_util::result_ok_type, Conversions};
+use prebindgen_registry::{types_util::result_ok_type, Conversions};
 
 use super::*;
 use crate::jni::trait_impl::{
@@ -10,9 +10,9 @@ use crate::jni::trait_impl::{
 
 pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
     emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
 }
@@ -24,18 +24,18 @@ pub(crate) fn emit_jni_function_wrapper(
 /// initializer (`render_const_val`) — derive the extern symbol from this one
 /// ident, so they stay in sync by construction. The body is never used.
 pub(crate) fn const_getter_fn(
-    c: &prebindgen::core::flat::Constant,
-) -> prebindgen::core::flat::Function {
+    c: &prebindgen_registry::flat::Constant,
+) -> prebindgen_registry::flat::Function {
     let ident = format_ident!("const_get_{}", c.name.to_string().to_lowercase());
     // No lookup: a constant element carries its own `TypeRef`.
-    prebindgen::core::flat::Function::synthetic_getter(ident, c.ty.clone())
+    prebindgen_registry::flat::Function::synthetic_getter(ident, c.ty.clone())
 }
 
 /// A const whose (peeled) type is a declared opaque handle is rejected: a
 /// shared closeable `val` is semantically wrong (whose `close()` is it?).
 /// Expose a factory function instead — the established idiom (e.g. zenoh's
 /// `encoding_const_*` companion factories).
-pub(crate) fn reject_handle_const(ext: &Declarations, c: &prebindgen::core::flat::Constant) {
+pub(crate) fn reject_handle_const(ext: &Declarations, c: &prebindgen_registry::flat::Constant) {
     // Off the element: a constant's type is a reading, so the peel is the
     // model's (`crate::util::head_type`) and no node is fetched to reach it.
     reject_handle_key(
@@ -52,7 +52,7 @@ pub(crate) fn reject_handle_const(ext: &Declarations, c: &prebindgen::core::flat
 /// (`const MAX_LEN` / `constant fn encoding_const_x_str`).
 pub(crate) fn reject_handle_constant_type(
     ext: &Declarations,
-    ty: &prebindgen::core::flat::TypeRef,
+    ty: &prebindgen_registry::flat::TypeRef,
     what: &str,
     name: &str,
 ) {
@@ -98,7 +98,7 @@ fn reject_handle_key(ext: &Declarations, key: &TypeKey, what: &str, name: &str) 
 /// the `val` initializer's throwing `JniErrorHandler` only fits the
 /// infallible wrapper shape), and its return type must not peel to a
 /// declared opaque handle (same rationale as [`reject_handle_const`]).
-pub(crate) fn validate_constant_fn(ext: &Declarations, f: &prebindgen::core::flat::Function) {
+pub(crate) fn validate_constant_fn(ext: &Declarations, f: &prebindgen_registry::flat::Function) {
     // The ELEMENT: a signature is a parameter list and a return, both already
     // classified. This walked `sig.inputs` for the arity, matched
     // `ReturnType::Type` for the return — an elided one the element already
@@ -129,7 +129,7 @@ pub(crate) fn const_expr_getter_fn(
     kotlin_name: &str,
     ty: &syn::Type,
     registry: &impl Conversions<KotlinMeta>,
-) -> prebindgen::core::flat::Function {
+) -> prebindgen_registry::flat::Function {
     let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
     // The one lookup this path needs: the type is named by a build script, so
     // no element carries it. A miss means the declared type never entered the
@@ -142,7 +142,7 @@ pub(crate) fn const_expr_getter_fn(
             quote::ToTokens::to_token_stream(ty),
         )
     });
-    prebindgen::core::flat::Function::synthetic_getter(ident, ret)
+    prebindgen_registry::flat::Function::synthetic_getter(ident, ret)
 }
 /// Validates an expression constant's declared value type (checked on both
 /// write paths): not a `Result` (a domain-fallible value is not a constant),
@@ -181,10 +181,10 @@ pub(crate) fn validate_constant_expr(ext: &Declarations, kotlin_name: &str, ty: 
 /// `<origin module>::<CONST_IDENT>` — a path, not a call.
 pub(crate) fn emit_jni_function_wrapper_with_callee(
     ext: &Declarations,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
     callee: Option<syn::Expr>,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
     let original_ident = &f.name;
 
@@ -262,7 +262,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // block so the normal output phase converts it. `Decompose` ⇒ `acc(raw)`;
     // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
     let call_expr: TokenStream = if is_convert {
-        use prebindgen::core::unfold::UnfoldShape;
+        use prebindgen_registry::unfold::UnfoldShape;
         let uplan = unfold_plan.expect("is_convert ⇒ plan");
         let leaf = &uplan.leaves[0];
         let by_ref = uplan.by_ref;
@@ -525,7 +525,7 @@ fn emit_input_param(
     original_ident: &syn::Ident,
     param: &PlanParam,
     on_err: &TokenStream,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     // Constructor-expansion: this parameter's wire form is the fold plan's
     // flattened leaves. Decode each leaf with its own converter, run the
@@ -654,7 +654,10 @@ fn emit_input_param(
         // A null or tagged (closed) pointer — a close that raced past
         // the pre-lock guard — is rejected before any dereference.
         InputKind::Handle { direct: true }
-            if !matches!(arg_ty.kind(), prebindgen::core::flat::TypeKind::Ref { .. }) =>
+            if !matches!(
+                arg_ty.kind(),
+                prebindgen_registry::flat::TypeKind::Ref { .. }
+            ) =>
         {
             let entry = registry
                 .input_entry(arg_ty)
@@ -708,21 +711,21 @@ fn emit_input_param(
 /// wire param + staged decode prelude + the call argument (`&decoded` /
 /// `.as_deref()` per the source param's Rust shape).
 fn emit_plain_decode(
-    entry: &prebindgen::core::TypeEntry<KotlinMeta>,
+    entry: &prebindgen_registry::TypeEntry<KotlinMeta>,
     arg_ident: &syn::Ident,
-    arg_ty: &prebindgen::core::flat::TypeRef,
+    arg_ty: &prebindgen_registry::flat::TypeRef,
     on_err: &TokenStream,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
-    use prebindgen::core::flat::TypeKind;
+    use prebindgen_registry::flat::TypeKind;
     /// `&mut T`, read off the kind — and off `kind()` rather than through
     /// `is_exclusive_borrow`, which also sees through a `Box` and refuses an
     /// out-parameter's slot. This is the borrow the source wrote.
-    fn is_mut_ref(t: &prebindgen::core::flat::TypeRef) -> bool {
+    fn is_mut_ref(t: &prebindgen_registry::flat::TypeRef) -> bool {
         matches!(t.kind(), TypeKind::Ref { mutable: true, .. })
     }
     /// `Option<&T>` / `Option<&mut T>` → `Some(is_mut)`, the shape
     /// `option_inner_ref_mutability` used to fish out of a path.
-    fn opt_ref_mut(t: &prebindgen::core::flat::TypeRef) -> Option<bool> {
+    fn opt_ref_mut(t: &prebindgen_registry::flat::TypeRef) -> Option<bool> {
         let TypeKind::Optional(inner) = t.kind() else {
             return None;
         };
@@ -837,17 +840,17 @@ fn emit_plain_decode(
 /// constructor-expanded parameter. Each classified leaf is decoded with its
 /// own resolved input converter (reusing the by-value-handle consume fast
 /// path where the leaf is a direct owned handle); the leaves then feed
-/// [`prebindgen::core::expand::emit_fold`], whose `Result<_, String>` is routed
+/// [`prebindgen_registry::expand::emit_fold`], whose `Result<_, String>` is routed
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    plan: &prebindgen::core::expand::FoldPlan,
+    plan: &prebindgen_registry::expand::FoldPlan,
     leaves: &[PlanLeaf],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
@@ -938,7 +941,10 @@ pub(crate) fn emit_expanded_param(
         // jlong handle inline, mirroring the normal by-value-handle path —
         // including its null/tagged (closed) pointer guard.
         let is_consume = matches!(classified.kind, InputKind::Handle { direct: true })
-            && !matches!(leaf_ty.kind(), prebindgen::core::flat::TypeKind::Ref { .. });
+            && !matches!(
+                leaf_ty.kind(),
+                prebindgen_registry::flat::TypeKind::Ref { .. }
+            );
         if is_consume {
             let wire_ident = format_ident!("{}_ptr", leaf.name);
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
@@ -1022,7 +1028,7 @@ pub(crate) fn emit_expanded_param(
         let m = ext.fn_module(registry, id);
         syn::parse_quote!(#m::#id)
     };
-    let fold_expr = prebindgen::core::expand::emit_fold(plan, &leaf_locals, &qualify);
+    let fold_expr = prebindgen_registry::expand::emit_fold(plan, &leaf_locals, &qualify);
     let folded = format_ident!("__folded_{}", orig_param);
     prelude.push(quote!(
         let #folded = match #fold_expr {

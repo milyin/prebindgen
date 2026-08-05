@@ -13,11 +13,11 @@
 // Language-neutral declaration vocabulary moved to `api::core::decl` (it
 // references only `TypeKey`/`Origin<syn::Type>`/plain `syn` types, nothing
 // Kotlin/JNI-specific) — re-exported here so `jni`'s `pub use decl::*;` (and
-// therefore `prebindgen::lang::*` / `prebindgen::core::*`) is unaffected.
-pub(crate) use prebindgen::core::decl::{
+// therefore `prebindgen::lang::*` / `prebindgen_registry::*`) is unaffected.
+pub(crate) use prebindgen_registry::decl::{
     declared_origin, local_path_prefix, ConvertSpec, LocalField, LocalVariant,
 };
-pub use prebindgen::core::decl::{
+pub use prebindgen_registry::decl::{
     ConvertDecl, ConvertSourceDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
     FunctionDecl,
 };
@@ -45,7 +45,9 @@ use super::*;
 #[macro_export]
 macro_rules! ptr_class {
     ($t:ty) => {
-        $crate::PtrClassDecl::new(prebindgen::__macro_support::parse_type(stringify!($t)))
+        $crate::PtrClassDecl::new(prebindgen_registry::__macro_support::parse_type(
+            stringify!($t),
+        ))
     };
 }
 
@@ -53,7 +55,9 @@ macro_rules! ptr_class {
 #[macro_export]
 macro_rules! enum_class {
     ($t:ty) => {
-        $crate::EnumClassDecl::new(prebindgen::__macro_support::parse_type(stringify!($t)))
+        $crate::EnumClassDecl::new(prebindgen_registry::__macro_support::parse_type(
+            stringify!($t),
+        ))
     };
 }
 
@@ -62,7 +66,9 @@ macro_rules! enum_class {
 #[macro_export]
 macro_rules! sealed_class {
     ($t:ty) => {
-        $crate::SealedClassDecl::new(prebindgen::__macro_support::parse_type(stringify!($t)))
+        $crate::SealedClassDecl::new(prebindgen_registry::__macro_support::parse_type(
+            stringify!($t),
+        ))
     };
 }
 
@@ -79,12 +85,14 @@ macro_rules! variant {
 #[macro_export]
 macro_rules! data_class {
     ($t:ty) => {
-        $crate::DataClassDecl::new(prebindgen::__macro_support::parse_type(stringify!($t)))
+        $crate::DataClassDecl::new(prebindgen_registry::__macro_support::parse_type(
+            stringify!($t),
+        ))
     };
 }
 
 /// Build a [`ConstDecl`] from a bare ident: `constant!(MAX_LEN)` is
-/// `ConstDecl::new(prebindgen::ident!(MAX_LEN))`.
+/// `ConstDecl::new(prebindgen_registry::ident!(MAX_LEN))`.
 ///
 /// What the ident names depends on where the decl lands:
 /// * in `.constant(...)` it is always the Kotlin **`val` name**, and in the
@@ -98,7 +106,7 @@ macro_rules! data_class {
 #[macro_export]
 macro_rules! constant {
     ($name:ident) => {
-        $crate::ConstDecl::new(prebindgen::ident!($name))
+        $crate::ConstDecl::new(prebindgen_registry::ident!($name))
     };
 }
 
@@ -127,8 +135,8 @@ macro_rules! package {
 /// as opposed to plain data you copy across ([`data_class!`](crate::data_class)).
 ///
 /// A type that never materializes in Kotlin needs **no class declaration at
-/// all**: give it boundary decls only ([`expand_param!`](prebindgen::expand_param)
-/// / [`expand_return!`](prebindgen::expand_return)) and it stays rust-side-only —
+/// all**: give it boundary decls only ([`expand_param!`](prebindgen_registry::expand_param)
+/// / [`expand_return!`](prebindgen_registry::expand_return)) and it stays rust-side-only —
 /// built from ingredients on the way in, decomposed into fields on the way
 /// out.
 ///
@@ -140,14 +148,14 @@ macro_rules! package {
 /// companion-object factories ([`constructor`](Self::constructor)). How the
 /// type crosses the FFI boundary by default — accepted as which parameter
 /// variants, returned as which field set — is declared separately with
-/// [`expand_param!`](prebindgen::expand_param) / [`expand_return!`](prebindgen::expand_return)
+/// [`expand_param!`](prebindgen_registry::expand_param) / [`expand_return!`](prebindgen_registry::expand_return)
 /// handed to [`JniGenBuilder::expand`]; any single
 /// function can override those defaults locally (see [`FunctionDecl`]).
 ///
 /// ```
 /// // A KeyExpr handle exposing `str()` as an instance method.
 /// let _ = prebindgen_jni::ptr_class!(KeyExpr)
-///     .method(prebindgen::fun!(keyexpr_get_str).name("str"));
+///     .method(prebindgen_registry::fun!(keyexpr_get_str).name("str"));
 /// ```
 /// Deliberately has no verbatim type mapping: the generated typed-handle
 /// class OWNS a lifecycle contract — the `NativeHandle` base, the `ptr`
@@ -312,7 +320,7 @@ impl PtrClassDecl {
     /// factory** — callers write `Class.name(...)`. `rust_fun` returns `Self`
     /// (or `Result<Self, E>`) and its parameters become the factory's
     /// arguments. A constructor can also serve as a build option in a
-    /// [`expand_param!`](prebindgen::expand_param) variant list.
+    /// [`expand_param!`](prebindgen_registry::expand_param) variant list.
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
         self.members.push((rust_fun, MemberKind::Constructor));
         self
@@ -763,7 +771,7 @@ pub(crate) enum IgnoreKind {
     Fun(syn::Ident),
     Type(TypeKey),
     Const(syn::Ident),
-    Matching(prebindgen::core::NamePredicate),
+    Matching(prebindgen_registry::NamePredicate),
 }
 
 impl From<FunctionDecl> for IgnoreDecl {
@@ -864,7 +872,7 @@ impl PackageDecl {
     }
 
     /// Add a free function to this package. Take a bare name via
-    /// [`fun!`](prebindgen::fun), or a customized [`FunctionDecl`] when you need
+    /// [`fun!`](prebindgen_registry::fun), or a customized [`FunctionDecl`] when you need
     /// `.name(...)` or per-function overrides.
     pub fn fun(mut self, decl: FunctionDecl) -> Self {
         self.functions.push(decl);

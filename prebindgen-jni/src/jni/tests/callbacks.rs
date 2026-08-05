@@ -1,4 +1,4 @@
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -42,19 +42,20 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         .package(
             crate::package!("thing")
                 .class(
-                    crate::ptr_class!(ZThing).method(prebindgen::fun!(z_thing_name).name("name")),
+                    crate::ptr_class!(ZThing)
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name")),
                 )
                 // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
                 .class(crate::ptr_class!(ZOther))
-                .fun(prebindgen::fun!(z_thing_sub))
-                .fun(prebindgen::fun!(z_other_sub)),
+                .fun(prebindgen_registry::fun!(z_thing_sub))
+                .fun(prebindgen_registry::fun!(z_other_sub)),
         )
         // Canonical output: handle (identity) + its string form — a callback
         // arg of ZThing decomposes into these 2 leaves.
         .expand(
-            prebindgen::expand_return!(ZThing)
+            prebindgen_registry::expand_return!(ZThing)
                 .field_self()
-                .field(prebindgen::fun!(z_thing_name)),
+                .field(prebindgen_registry::fun!(z_thing_name)),
         );
 
     let dir = unique_test_dir("jnigen_cb_snap");
@@ -230,24 +231,25 @@ fn callback_root_identity_moved_after_nested_borrow() {
         .package(
             crate::package!("thing")
                 .class(
-                    crate::ptr_class!(ZChild).method(prebindgen::fun!(z_child_name).name("name")),
+                    crate::ptr_class!(ZChild)
+                        .method(prebindgen_registry::fun!(z_child_name).name("name")),
                 )
                 .class(
                     crate::ptr_class!(ZParent)
-                        .method(prebindgen::fun!(z_parent_child).name("child")),
+                        .method(prebindgen_registry::fun!(z_parent_child).name("child")),
                 )
-                .fun(prebindgen::fun!(z_parent_sub)),
+                .fun(prebindgen_registry::fun!(z_parent_sub)),
         )
         // Child handle: canonical output = identity (clone) + its name string.
         .expand(
-            prebindgen::expand_return!(ZChild)
+            prebindgen_registry::expand_return!(ZChild)
                 .field_self()
-                .field(prebindgen::fun!(z_child_name)),
+                .field(prebindgen_registry::fun!(z_child_name)),
         )
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .expand(
-            prebindgen::expand_return!(ZParent)
-                .field(prebindgen::fun!(z_parent_child))
+            prebindgen_registry::expand_return!(ZParent)
+                .field(prebindgen_registry::fun!(z_parent_child))
                 .field_self(),
         );
 
@@ -333,44 +335,53 @@ fn callback_double_option_unwrap_pipeline() {
                 .class(crate::data_class!(ZId))
                 .class(
                     crate::ptr_class!(ZKeyExpr)
-                        .method(prebindgen::fun!(z_keyexpr_as_str).name("asStr")),
+                        .method(prebindgen_registry::fun!(z_keyexpr_as_str).name("asStr")),
                 )
-                .class(crate::ptr_class!(ZTs).method(prebindgen::fun!(z_ts_ntp64).name("ntp64")))
+                .class(
+                    crate::ptr_class!(ZTs)
+                        .method(prebindgen_registry::fun!(z_ts_ntp64).name("ntp64")),
+                )
                 .class(
                     crate::ptr_class!(ZSample)
-                        .method(prebindgen::fun!(z_sample_key_expr).name("keyExpr"))
-                        .method(prebindgen::fun!(z_sample_timestamp).name("timestamp")),
+                        .method(prebindgen_registry::fun!(z_sample_key_expr).name("keyExpr"))
+                        .method(prebindgen_registry::fun!(z_sample_timestamp).name("timestamp")),
                 )
                 .class(
-                    crate::ptr_class!(ZErr).method(prebindgen::fun!(z_err_payload).name("payload")),
+                    crate::ptr_class!(ZErr)
+                        .method(prebindgen_registry::fun!(z_err_payload).name("payload")),
                 )
                 .class(
                     crate::ptr_class!(ZReply)
-                        .method(prebindgen::fun!(z_reply_zid).name("zid"))
-                        .method(prebindgen::fun!(z_reply_is_ok).name("isOk"))
-                        .method(prebindgen::fun!(z_reply_sample).name("sample"))
-                        .method(prebindgen::fun!(z_reply_err).name("err")),
+                        .method(prebindgen_registry::fun!(z_reply_zid).name("zid"))
+                        .method(prebindgen_registry::fun!(z_reply_is_ok).name("isOk"))
+                        .method(prebindgen_registry::fun!(z_reply_sample).name("sample"))
+                        .method(prebindgen_registry::fun!(z_reply_err).name("err")),
                 )
-                .fun(prebindgen::fun!(z_get)),
+                .fun(prebindgen_registry::fun!(z_get)),
         )
         .expand(
-            prebindgen::expand_return!(ZKeyExpr)
+            prebindgen_registry::expand_return!(ZKeyExpr)
                 .field_self()
-                .field(prebindgen::fun!(z_keyexpr_as_str)),
+                .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
         )
-        .expand(prebindgen::expand_return!(ZTs).field(prebindgen::fun!(z_ts_ntp64)))
         .expand(
-            prebindgen::expand_return!(ZSample)
-                .field(prebindgen::fun!(z_sample_key_expr))
-                .field(prebindgen::fun!(z_sample_timestamp)),
+            prebindgen_registry::expand_return!(ZTs).field(prebindgen_registry::fun!(z_ts_ntp64)),
         )
-        .expand(prebindgen::expand_return!(ZErr).field(prebindgen::fun!(z_err_payload)))
         .expand(
-            prebindgen::expand_return!(ZReply)
-                .field(prebindgen::fun!(z_reply_zid))
-                .field(prebindgen::fun!(z_reply_is_ok))
-                .field(prebindgen::fun!(z_reply_sample))
-                .field(prebindgen::fun!(z_reply_err)),
+            prebindgen_registry::expand_return!(ZSample)
+                .field(prebindgen_registry::fun!(z_sample_key_expr))
+                .field(prebindgen_registry::fun!(z_sample_timestamp)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZErr)
+                .field(prebindgen_registry::fun!(z_err_payload)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZReply)
+                .field(prebindgen_registry::fun!(z_reply_zid))
+                .field(prebindgen_registry::fun!(z_reply_is_ok))
+                .field(prebindgen_registry::fun!(z_reply_sample))
+                .field(prebindgen_registry::fun!(z_reply_err)),
         );
 
     let dir = unique_test_dir("jnigen_double_opt");
@@ -502,15 +513,16 @@ fn iface_spec_memo_shares_one_derivation() {
         .package(
             crate::package!("thing")
                 .class(
-                    crate::ptr_class!(ZThing).method(prebindgen::fun!(z_thing_name).name("name")),
+                    crate::ptr_class!(ZThing)
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name")),
                 )
-                .fun(prebindgen::fun!(z_things_all))
-                .fun(prebindgen::fun!(z_thing_sub)),
+                .fun(prebindgen_registry::fun!(z_things_all))
+                .fun(prebindgen_registry::fun!(z_thing_sub)),
         )
         .expand(
-            prebindgen::expand_return!(ZThing)
+            prebindgen_registry::expand_return!(ZThing)
                 .field_self()
-                .field(prebindgen::fun!(z_thing_name)),
+                .field(prebindgen_registry::fun!(z_thing_name)),
         );
     let gen = jni.build_with(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
@@ -576,7 +588,7 @@ fn fn_plan_memo_shares_one_derivation() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("thing").fun(prebindgen::fun!(z_do_thing)));
+        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_do_thing)));
     // resolve runs validation, which builds and stores every function's plan.
     let gen = jni.build_with(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
@@ -610,7 +622,7 @@ fn fn_plan_memo_shares_one_derivation() {
 /// it is pinned here rather than trusted.
 ///
 /// BLOCKED by the prebindgen-jni crate split: calls `Emit::for_test()`, a
-/// `pub(crate)` constructor of `prebindgen::core::Emit` — reachable when this
+/// `pub(crate)` constructor of `prebindgen_registry::Emit` — reachable when this
 /// test lived inside the `prebindgen` crate, not from the separate
 /// `prebindgen-jni` crate it moved to. Left in place, not deleted, pending a
 /// `prebindgen`-side test-support hook (see the carve-prebindgen-jni report).
@@ -633,7 +645,7 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZThing))
-                .fun(prebindgen::fun!(z_sub)),
+                .fun(prebindgen_registry::fun!(z_sub)),
         );
     let gen = jni.build_with(registry).expect("resolve");
     let registry = gen.registry();
@@ -643,7 +655,7 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
         .params
         .iter()
         .find_map(|p| match p.ty.kind() {
-            prebindgen::core::flat::TypeKind::Callback { args } => Some((p, args)),
+            prebindgen_registry::flat::TypeKind::Callback { args } => Some((p, args)),
             _ => None,
         })
         .expect("z_sub takes a callback");
@@ -655,12 +667,12 @@ fn a_callback_identity_is_the_same_from_the_reading_or_the_syntax() {
     // signature's own `impl Fn` bounds agree on every arg's identity.
     let from_reading = SpecKey::callback(arg_readings);
     let from_syntax = SpecKey::Callback(
-        prebindgen::core::flat::extract_fn_trait_args(
-            &prebindgen::core::Emit::for_test().spell_ty(&param.ty),
+        prebindgen_registry::flat::extract_fn_trait_args(
+            &prebindgen_registry::Emit::for_test().spell_ty(&param.ty),
         )
         .expect("the param is an impl Fn")
         .iter()
-        .map(prebindgen::core::TypeKey::from_type)
+        .map(prebindgen_registry::TypeKey::from_type)
         .collect(),
     );
 
@@ -726,7 +738,7 @@ fn a_wrapped_borrow_callback_arg_declines() {
             .package(
                 crate::package!()
                     .class(crate::ptr_class!(ZThing))
-                    .fun(prebindgen::fun!(z_sub)),
+                    .fun(prebindgen_registry::fun!(z_sub)),
             );
         let dir = unique_test_dir("jnigen_wrapped_cb");
         let _ = std::fs::remove_dir_all(&dir);

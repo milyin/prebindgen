@@ -11,7 +11,7 @@
 // above), and an explicit import beats a glob — importing the model's would
 // silently retarget the `TypeKind::Sum` / `TypeKind::DataStruct` matches below.
 // One qualifier keeps both names short and says which of the two it is.
-use prebindgen::core::{
+use prebindgen_registry::{
     flat::{self, TypeRef},
     Conversions,
 };
@@ -298,7 +298,7 @@ impl JniGenBuilder {
     /// Every `#[prebindgen]` item captured in `dir` — pass
     /// `<source_crate>::PREBINDGEN_OUT_DIR`.
     ///
-    /// The same feeder [`FlatBuilder::source`](prebindgen::core::flat::FlatBuilder::source)
+    /// The same feeder [`FlatBuilder::source`](prebindgen_registry::flat::FlatBuilder::source)
     /// has, because it is that feeder: the binding says where its source is,
     /// and the model is built from it at [`Self::build`].
     pub fn source<P: AsRef<std::path::Path>>(mut self, dir: P) -> Self {
@@ -665,10 +665,10 @@ impl JniGenBuilder {
     /// [`ExpandDecl`] directions, the direction carried by the decl object
     /// (the boundary-decl peer of [`PackageDecl::class`]):
     ///
-    /// * [`expand_param!`](prebindgen::expand_param) — the input side: how a
+    /// * [`expand_param!`](prebindgen_registry::expand_param) — the input side: how a
     ///   parameter of the type may be supplied, as an OR-list of build
     ///   variants.
-    /// * [`expand_return!`](prebindgen::expand_return) — the output side: the
+    /// * [`expand_return!`](prebindgen_registry::expand_return) — the output side: the
     ///   AND-set of fields a returned / callback-delivered / `Result`-error
     ///   value of the type decomposes into.
     ///
@@ -765,8 +765,8 @@ impl Declarations {
     /// `package` that declares its constructors (which is also why the
     /// rust-side-only `_self` check lives here and not at accept time).
     /// Duplicate targets pass through unmerged; core `apply` diagnoses them.
-    pub(crate) fn build_expansions(&self) -> prebindgen::core::expand::Expansions {
-        use prebindgen::core::expand::{ExpandDecl, ExpandSel, Expansions, Variant};
+    pub(crate) fn build_expansions(&self) -> prebindgen_registry::expand::Expansions {
+        use prebindgen_registry::expand::{ExpandDecl, ExpandSel, Expansions, Variant};
         let lower = |v: &LocalVariant| match v {
             LocalVariant::Ctor(f) => Variant::Ctor(f.clone()),
             LocalVariant::SelfIdentity => Variant::Identity,
@@ -792,7 +792,7 @@ impl Declarations {
                 continue;
             }
             exp.constructors
-                .push(prebindgen::core::expand::ConstructorDecl {
+                .push(prebindgen_registry::expand::ConstructorDecl {
                     target: decl.rust_type().key(),
                     variants: decl.variants().iter().map(lower).collect(),
                     default: true,
@@ -833,8 +833,8 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         fields: &[LocalField],
-    ) -> Vec<prebindgen::core::unfold::DeconRecord> {
-        use prebindgen::core::unfold::DeconRecord;
+    ) -> Vec<prebindgen_registry::unfold::DeconRecord> {
+        use prebindgen_registry::unfold::DeconRecord;
         fields
             .iter()
             .map(|f| match f {
@@ -871,7 +871,7 @@ impl Declarations {
     }
 
     /// Expand a `.fields(fields!(f))` declaration into one
-    /// [`FieldRecord`](prebindgen::core::unfold::FieldRecord) per field of the
+    /// [`FieldRecord`](prebindgen_registry::unfold::FieldRecord) per field of the
     /// struct `f` returns — the value form.
     ///
     /// The walk is the adapter's job because only it knows which structs are
@@ -890,7 +890,7 @@ impl Declarations {
         registry: &impl Conversions<KotlinMeta>,
         key: &TypeKey,
         decl: &FieldsDecl,
-    ) -> Vec<prebindgen::core::unfold::FieldRecord> {
+    ) -> Vec<prebindgen_registry::unfold::FieldRecord> {
         let func = decl.func();
         let accessor = registry.flat().function(&func).unwrap_or_else(|| {
             panic!(
@@ -929,7 +929,7 @@ impl Declarations {
         // than a no-op.
         let named: std::collections::HashSet<String> = out
             .iter()
-            .map(|r: &prebindgen::core::unfold::FieldRecord| {
+            .map(|r: &prebindgen_registry::unfold::FieldRecord| {
                 r.members
                     .iter()
                     .map(|m| m.to_string())
@@ -972,9 +972,9 @@ impl Declarations {
         members: &[syn::Ident],
         name_prefix: &str,
         depth: usize,
-        out: &mut Vec<prebindgen::core::unfold::FieldRecord>,
+        out: &mut Vec<prebindgen_registry::unfold::FieldRecord>,
     ) {
-        use prebindgen::core::unfold::{FieldDecon, FieldRecord};
+        use prebindgen_registry::unfold::{FieldDecon, FieldRecord};
         // A value form holding itself would expand forever; the cycle rule for
         // everything reachable BELOW a field is core's `visited` check.
         assert!(
@@ -1154,8 +1154,8 @@ impl Declarations {
     pub(crate) fn build_deconstructors(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-    ) -> prebindgen::core::unfold::Deconstructors {
-        use prebindgen::core::unfold::{
+    ) -> prebindgen_registry::unfold::Deconstructors {
+        use prebindgen_registry::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
         };
         let mut dec = Deconstructors {
@@ -1457,7 +1457,7 @@ impl Declarations {
 
 impl JniGenBuilder {
     /// Declare a type's **canonical single-value conversion** (a
-    /// [`ConvertDecl`], built with [`convert!`](prebindgen::convert)): a pair of
+    /// [`ConvertDecl`], built with [`convert!`](prebindgen_registry::convert)): a pair of
     /// `#[prebindgen]` functions carrying one value of the type across the
     /// boundary wherever a single value is needed (params, returns,
     /// `Option`/`Vec` elements, the `Result<T, E>` success position,
@@ -1493,7 +1493,7 @@ impl Declarations {
         &self,
         key: &TypeKey,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
@@ -1564,7 +1564,7 @@ impl Declarations {
         &self,
         key: &TypeKey,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| d.key() == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
@@ -1730,7 +1730,7 @@ impl Declarations {
 /// asserts arity 1. Returns `(peeled_type, was_by_ref)`.
 fn convert_single_param_any<'f>(
     f: &syn::Ident,
-    item_fn: &'f prebindgen::core::flat::Function,
+    item_fn: &'f prebindgen_registry::flat::Function,
 ) -> (&'f TypeRef, bool) {
     assert!(
         item_fn.params.len() == 1,
@@ -1748,7 +1748,7 @@ fn convert_single_param_any<'f>(
 fn convert_single_param<'f>(
     key: &TypeKey,
     f: &syn::Ident,
-    item_fn: &'f prebindgen::core::flat::Function,
+    item_fn: &'f prebindgen_registry::flat::Function,
     dir: &str,
 ) -> (&'f TypeRef, bool) {
     let (ty, by_ref) = convert_single_param_any(f, item_fn);
@@ -1790,7 +1790,7 @@ impl Declarations {
             return (Niches::empty(), Vec::new());
         };
         if TypeKey::from_type(domain.ty()).as_str() != "u64"
-            || prebindgen::core::types_util::path_tail_ident(wire)
+            || prebindgen_registry::types_util::path_tail_ident(wire)
                 .is_none_or(|ident| ident != "jlong")
         {
             return (Niches::empty(), Vec::new());
@@ -1909,9 +1909,9 @@ impl Declarations {
 
     pub(crate) fn lookup_input(
         &self,
-        outer: &prebindgen::core::flat::TypeRef,
+        outer: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // A `convert!`-declared conversion is the only thing that answers here.
         // There was a wildcard-pattern table beside it; nothing ever wrote to
@@ -2022,9 +2022,9 @@ impl Declarations {
     ///   (`None`) if `ty`'s converter isn't resolved yet.
     pub(crate) fn lookup_output(
         &self,
-        outer: &prebindgen::core::flat::TypeRef,
+        outer: &prebindgen_registry::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
         let (ty, exc_ty, body) = self.convert_output_body(&key, registry, emit)?;
@@ -2036,15 +2036,15 @@ impl Declarations {
     ///
     /// This was the sole entry in a four-rank wildcard-pattern table, reached
     /// through a general unification engine. The model already calls this shape
-    /// [`TypeKind::Fallible`](prebindgen::core::flat::TypeKind::Fallible), so the
+    /// [`TypeKind::Fallible`](prebindgen_registry::flat::TypeKind::Fallible), so the
     /// engine expressed one fact the frontend states outright.
     pub(crate) fn result_peel(
         &self,
-        outer: &prebindgen::core::flat::TypeRef,
+        outer: &prebindgen_registry::flat::TypeRef,
         ok: &syn::Type,
         err: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         self.build_output_converter(
             outer,
@@ -2065,13 +2065,13 @@ impl Declarations {
     #[allow(clippy::too_many_arguments)]
     fn build_output_converter(
         &self,
-        outer: &prebindgen::core::flat::TypeRef,
+        outer: &prebindgen_registry::flat::TypeRef,
         arg0: Option<&syn::Type>,
         ty: syn::Type,
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
         registry: &impl Conversions<KotlinMeta>,
-        emit: &prebindgen::core::Emit,
+        emit: &prebindgen_registry::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
         // The middle slot carries the `Result`'s raw Rust error type (or `None`
@@ -2096,7 +2096,7 @@ impl Declarations {
                         .map(|e| {
                             (
                                 e.metadata.kotlin_name.clone(),
-                                Some(prebindgen::core::flat::canonical_type(a0)),
+                                Some(prebindgen_registry::flat::canonical_type(a0)),
                             )
                         })
                         .unwrap_or((None, None))
@@ -2139,7 +2139,7 @@ impl Declarations {
                 let mut pre_stages = vec![stage];
                 pre_stages.extend(inner.pre_stages.iter().cloned());
                 let kotlin_name = inner.metadata.kotlin_name.clone();
-                let value_rust_type = arg0.map(prebindgen::core::flat::canonical_type);
+                let value_rust_type = arg0.map(prebindgen_registry::flat::canonical_type);
                 let (niches, sentinels) = match arg0 {
                     None => self.conversion_domain_niches(
                         &key,

@@ -1,4 +1,4 @@
-use prebindgen::core::RegistryBuilder;
+use prebindgen_registry::RegistryBuilder;
 
 use super::*;
 
@@ -681,7 +681,7 @@ fn sum_is_its_own_type_kind() {
 /// when the leaf stops registering it.
 ///
 /// BLOCKED by the prebindgen-jni crate split: reads `Registry::input_types` /
-/// `output_types`, `pub(crate)` fields of `prebindgen::core::Registry` —
+/// `output_types`, `pub(crate)` fields of `prebindgen_registry::Registry` —
 /// reachable when this test lived inside the `prebindgen` crate, not from the
 /// separate `prebindgen-jni` crate it moved to. Left in place, not deleted,
 /// pending a `prebindgen` accessor for these fields (see the
@@ -715,7 +715,7 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
         .package(
             crate::package!()
                 .class(crate::sealed_class!(Reading))
-                .fun(prebindgen::fun!(read_one)),
+                .fun(prebindgen_registry::fun!(read_one)),
         );
     let gen = jni.build_with(registry).expect("resolve");
     let reg = gen.registry();
@@ -785,7 +785,7 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
                 crate::package!()
                     .class(crate::sealed_class!(Reading))
                     .class(crate::data_class!(Holder))
-                    .fun(prebindgen::fun!(holder_new)),
+                    .fun(prebindgen_registry::fun!(holder_new)),
             );
         let dir = unique_test_dir("sealed_vec_field");
         let _ = std::fs::remove_dir_all(&dir);
@@ -847,7 +847,7 @@ fn recursive_sum_shapes_fail_deterministically() {
                 crate::package!()
                     .class(crate::sealed_class!(Node))
                     .class(crate::data_class!(Holder))
-                    .fun(prebindgen::fun!(holder_new)),
+                    .fun(prebindgen_registry::fun!(holder_new)),
             );
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
@@ -991,13 +991,13 @@ fn sum_returns(tag: &str) -> (String, String) {
                 .class(crate::sealed_class!(Reading))
                 .class(crate::sealed_class!(Lookup))
                 .class(crate::ptr_class!(Probe))
-                .fun(prebindgen::fun!(read_one))
-                .fun(prebindgen::fun!(read_maybe))
-                .fun(prebindgen::fun!(read_all))
-                .fun(prebindgen::fun!(look_up))
-                .fun(prebindgen::fun!(read_each))
-                .fun(prebindgen::fun!(read_borrowed))
-                .fun(prebindgen::fun!(read_borrowed_maybe)),
+                .fun(prebindgen_registry::fun!(read_one))
+                .fun(prebindgen_registry::fun!(read_maybe))
+                .fun(prebindgen_registry::fun!(read_all))
+                .fun(prebindgen_registry::fun!(look_up))
+                .fun(prebindgen_registry::fun!(read_each))
+                .fun(prebindgen_registry::fun!(read_borrowed))
+                .fun(prebindgen_registry::fun!(read_borrowed_maybe)),
         );
 
     let dir = unique_test_dir(tag);
@@ -1309,7 +1309,7 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
                 .class(crate::ptr_class!(Probe))
                 .class(crate::sealed_class!(Lookup))
                 .class(crate::data_class!(Holder))
-                .fun(prebindgen::fun!(holder_new)),
+                .fun(prebindgen_registry::fun!(holder_new)),
         );
     let dir = unique_test_dir("jnigen_sum_handle_field");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1404,7 +1404,7 @@ fn two_sum_callback_args_keep_their_own_selectors() {
                 .class(crate::sealed_class!(Reading))
                 .class(crate::sealed_class!(Lookup))
                 .class(crate::ptr_class!(Probe))
-                .fun(prebindgen::fun!(read_pair)),
+                .fun(prebindgen_registry::fun!(read_pair)),
         );
     let dir = unique_test_dir("jnigen_two_sum_cb");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1485,7 +1485,7 @@ fn sum_in_result_ok_position_is_rejected_with_its_reason() {
             crate::package!()
                 .class(crate::sealed_class!(Reading))
                 .class(crate::ptr_class!(Probe))
-                .fun(prebindgen::fun!(read_try)),
+                .fun(prebindgen_registry::fun!(read_try)),
         );
     let err = jni
         .build_with(registry)
@@ -1537,7 +1537,7 @@ fn undeclared_sum_in_result_error_position_is_rejected() {
         .package(
             crate::package!()
                 .class(crate::sealed_class!(Reading))
-                .fun(prebindgen::fun!(read_try)),
+                .fun(prebindgen_registry::fun!(read_try)),
         );
     let err = jni
         .build_with(registry)
@@ -1592,7 +1592,7 @@ fn the_diagnostic_names_the_whole_error_type_where_it_must() {
         .package(
             crate::package!()
                 .class(crate::sealed_class!(Reading))
-                .fun(prebindgen::fun!(read_try)),
+                .fun(prebindgen_registry::fun!(read_try)),
         );
     let err = jni
         .build_with(registry)
@@ -1648,11 +1648,14 @@ fn declared_sum_in_result_error_position_resolves() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .expand(prebindgen::expand_return!(Reading).field(prebindgen::fun!(reading_code)))
+        .expand(
+            prebindgen_registry::expand_return!(Reading)
+                .field(prebindgen_registry::fun!(reading_code)),
+        )
         .package(
             crate::package!()
                 .class(crate::sealed_class!(Reading))
-                .fun(prebindgen::fun!(read_try)),
+                .fun(prebindgen_registry::fun!(read_try)),
         );
     jni.build_with(registry)
         .expect("a declared error deconstructor is the supported shape");
@@ -1695,7 +1698,7 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
         .package(
             crate::package!()
                 .class(crate::sealed_class!(Reading))
-                .fun(prebindgen::fun!(read_batch)),
+                .fun(prebindgen_registry::fun!(read_batch)),
         );
     let err = jni
         .build_with(registry)
@@ -1771,9 +1774,12 @@ fn a_raw_named_sum_generates() {
             crate::package!()
                 .class(crate::ptr_class!(ZThing))
                 .class(crate::sealed_class!(r#type))
-                .fun(prebindgen::fun!(z_emit)),
+                .fun(prebindgen_registry::fun!(z_emit)),
         )
-        .expand(prebindgen::expand_return!(ZThing).fields(prebindgen::fields!(z_thing_to_struct)));
+        .expand(
+            prebindgen_registry::expand_return!(ZThing)
+                .fields(prebindgen_registry::fields!(z_thing_to_struct)),
+        );
 
     let dir = unique_test_dir("jnigen_raw_sum");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1833,7 +1839,7 @@ fn empty_sum_alternatives_keep_their_own_pattern_delimiters() {
         .package(
             crate::package!()
                 .class(crate::sealed_class!(Shape))
-                .fun(prebindgen::fun!(make_shape)),
+                .fun(prebindgen_registry::fun!(make_shape)),
         );
 
     let dir = unique_test_dir("jnigen_empty_sum_alternatives");

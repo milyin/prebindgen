@@ -1,4 +1,4 @@
-use prebindgen::core::{Conversions, RegistryBuilder};
+use prebindgen_registry::{Conversions, RegistryBuilder};
 
 use super::*;
 
@@ -30,19 +30,19 @@ fn inline_output_gets_own_builder() {
             crate::package!("thing")
                 .class(
                     crate::ptr_class!(ZThing)
-                        .method(prebindgen::fun!(z_thing_name).name("name"))
-                        .method(prebindgen::fun!(z_thing_size).name("size")),
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name"))
+                        .method(prebindgen_registry::fun!(z_thing_size).name("size")),
                 )
-                .fun(prebindgen::fun!(z_make_a))
+                .fun(prebindgen_registry::fun!(z_make_a))
                 // Per-fn inline fields: name + size + name again (different shape). The
                 // third field reuses the `z_thing_name` accessor but must carry a
                 // distinct (literal) leaf name — duplicate names are a hard error.
                 .fun(
-                    prebindgen::fun!(z_make_b).expand_return(
-                        prebindgen::expand_return!(ZThing)
-                            .field(prebindgen::fun!(z_thing_name).name("name"))
-                            .field(prebindgen::fun!(z_thing_size).name("size"))
-                            .field(prebindgen::fun!(z_thing_name).name("name2")),
+                    prebindgen_registry::fun!(z_make_b).expand_return(
+                        prebindgen_registry::expand_return!(ZThing)
+                            .field(prebindgen_registry::fun!(z_thing_name).name("name"))
+                            .field(prebindgen_registry::fun!(z_thing_size).name("size"))
+                            .field(prebindgen_registry::fun!(z_thing_name).name("name2")),
                     ),
                 ),
         )
@@ -50,9 +50,9 @@ fn inline_output_gets_own_builder() {
         // `name` field inherits its Kotlin name from the class member; `size`
         // sets it explicitly — both paths resolve to the member-equal names.
         .expand(
-            prebindgen::expand_return!(ZThing)
-                .field(prebindgen::fun!(z_thing_name))
-                .field(prebindgen::fun!(z_thing_size).name("size")),
+            prebindgen_registry::expand_return!(ZThing)
+                .field(prebindgen_registry::fun!(z_thing_name))
+                .field(prebindgen_registry::fun!(z_thing_size).name("size")),
         );
 
     let dir = unique_test_dir("jnigen_inline_out");
@@ -127,24 +127,28 @@ fn error_unwrap_universal_records() {
         .package(
             crate::package!("errors")
                 .class(
-                    crate::ptr_class!(ZDetail).method(prebindgen::fun!(z_detail_code).name("code")),
+                    crate::ptr_class!(ZDetail)
+                        .method(prebindgen_registry::fun!(z_detail_code).name("code")),
                 )
                 .class(
                     crate::ptr_class!(ZErr)
-                        .method(prebindgen::fun!(z_err_message).name("message"))
-                        .method(prebindgen::fun!(z_err_detail).name("detail")),
+                        .method(prebindgen_registry::fun!(z_err_message).name("message"))
+                        .method(prebindgen_registry::fun!(z_err_detail).name("detail")),
                 )
-                .fun(prebindgen::fun!(z_fallible)),
+                .fun(prebindgen_registry::fun!(z_fallible)),
         )
-        .expand(prebindgen::expand_return!(ZDetail).field(prebindgen::fun!(z_detail_code)))
+        .expand(
+            prebindgen_registry::expand_return!(ZDetail)
+                .field(prebindgen_registry::fun!(z_detail_code)),
+        )
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
         // Field names inherit from the class members.
         .expand(
-            prebindgen::expand_return!(ZErr)
+            prebindgen_registry::expand_return!(ZErr)
                 .field_self()
-                .field(prebindgen::fun!(z_err_message))
-                .field(prebindgen::fun!(z_err_detail)),
+                .field(prebindgen_registry::fun!(z_err_message))
+                .field(prebindgen_registry::fun!(z_err_detail)),
         );
 
     let dir = unique_test_dir("jnigen_err_universal");
@@ -262,18 +266,18 @@ fn method_constructor_and_inline_field_self() {
             crate::package!("thing")
                 .class(
                     crate::ptr_class!(ZThing)
-                        .method(prebindgen::fun!(z_thing_name).name("name"))
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name"))
                         // A method with extra params: `&ZThing` receiver + a `name: String` param.
-                        .method(prebindgen::fun!(z_thing_rename).name("rename"))
+                        .method(prebindgen_registry::fun!(z_thing_rename).name("rename"))
                         // A constructor: factory returning ZThing.
-                        .constructor(prebindgen::fun!(z_thing_make).name("make")),
+                        .constructor(prebindgen_registry::fun!(z_thing_make).name("make")),
                 )
                 // A free fn whose per-fn inline output decomposes to (handle, name).
                 .fun(
-                    prebindgen::fun!(z_get).expand_return(
-                        prebindgen::expand_return!(ZThing)
+                    prebindgen_registry::fun!(z_get).expand_return(
+                        prebindgen_registry::expand_return!(ZThing)
                             .field_self()
-                            .field(prebindgen::fun!(z_thing_name).name("name")),
+                            .field(prebindgen_registry::fun!(z_thing_name).name("name")),
                     ),
                 ),
         );
@@ -331,11 +335,12 @@ fn rust_side_only_error_type() {
 
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("ops").fun(prebindgen::fun!(z_fallible)))
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_fallible)))
         // No class declaration for ZErr anywhere — rust-side-only. The field
         // name is explicit (no class member to inherit from).
         .expand(
-            prebindgen::expand_return!(ZErr).field(prebindgen::fun!(z_err_message).name("message")),
+            prebindgen_registry::expand_return!(ZErr)
+                .field(prebindgen_registry::fun!(z_err_message).name("message")),
         );
 
     let dir = unique_test_dir("jnigen_rust_side_only_err");
@@ -402,8 +407,11 @@ fn rust_side_only_input_type() {
 
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("ops").fun(prebindgen::fun!(z_run)))
-        .expand(prebindgen::expand_param!(ZOpts).variant(prebindgen::fun!(z_opts_new)));
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_run)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        );
 
     let dir = unique_test_dir("jnigen_rust_side_only_in");
     let _ = std::fs::remove_dir_all(&dir);
@@ -445,8 +453,8 @@ fn rust_side_only_variant_self_rejected() {
         crate::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGenBuilder::new()
-        .package(crate::package!("ops").fun(prebindgen::fun!(z_run)))
-        .expand(prebindgen::expand_param!(ZOpts).variant_self());
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_run)))
+        .expand(prebindgen_registry::expand_param!(ZOpts).variant_self());
     let dir = unique_test_dir("jnigen_rso_self_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -466,8 +474,8 @@ fn rust_side_only_field_self_rejected() {
         crate::test_util::reg_from_items(declare_referenced(vec![(syn::Item::Fn(f), loc)]))
             .expect("index items");
     let jni = JniGenBuilder::new()
-        .package(crate::package!("ops").fun(prebindgen::fun!(z_make)))
-        .expand(prebindgen::expand_return!(ZThing).field_self());
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_make)))
+        .expand(prebindgen_registry::expand_return!(ZThing).field_self());
     let dir = unique_test_dir("jnigen_rso_self_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -497,13 +505,16 @@ fn fn_expand_param_type_mismatch_rejected() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new().package(
         crate::package!("ops")
-            .class(crate::ptr_class!(ZThing).constructor(prebindgen::fun!(z_thing_make)))
+            .class(crate::ptr_class!(ZThing).constructor(prebindgen_registry::fun!(z_thing_make)))
             .class(crate::ptr_class!(ZOther))
             // Wrong type: the param `t` is a ZThing, not a ZOther.
-            .fun(prebindgen::fun!(z_use).expand_param(
-                "t",
-                prebindgen::expand_param!(ZOther).variant(prebindgen::fun!(z_thing_make)),
-            )),
+            .fun(
+                prebindgen_registry::fun!(z_use).expand_param(
+                    "t",
+                    prebindgen_registry::expand_param!(ZOther)
+                        .variant(prebindgen_registry::fun!(z_thing_make)),
+                ),
+            ),
     );
     let dir = unique_test_dir("jnigen_fn_param_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
@@ -535,12 +546,15 @@ fn fn_expand_return_type_mismatch_rejected() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new().package(
         crate::package!("ops")
-            .class(crate::ptr_class!(ZThing).method(prebindgen::fun!(z_thing_name).name("name")))
+            .class(
+                crate::ptr_class!(ZThing)
+                    .method(prebindgen_registry::fun!(z_thing_name).name("name")),
+            )
             .class(crate::ptr_class!(ZOther))
             // Wrong type: z_make returns ZThing, not ZOther.
             .fun(
-                prebindgen::fun!(z_make)
-                    .expand_return(prebindgen::expand_return!(ZOther).field_self()),
+                prebindgen_registry::fun!(z_make)
+                    .expand_return(prebindgen_registry::expand_return!(ZOther).field_self()),
             ),
     );
     let dir = unique_test_dir("jnigen_fn_return_mismatch");
@@ -573,11 +587,14 @@ fn fn_expand_param_unknown_param_rejected() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new().package(
         crate::package!("ops")
-            .class(crate::ptr_class!(ZThing).constructor(prebindgen::fun!(z_thing_make)))
-            .fun(prebindgen::fun!(z_use).expand_param(
-                "typo",
-                prebindgen::expand_param!(ZThing).variant(prebindgen::fun!(z_thing_make)),
-            )),
+            .class(crate::ptr_class!(ZThing).constructor(prebindgen_registry::fun!(z_thing_make)))
+            .fun(
+                prebindgen_registry::fun!(z_use).expand_param(
+                    "typo",
+                    prebindgen_registry::expand_param!(ZThing)
+                        .variant(prebindgen_registry::fun!(z_thing_make)),
+                ),
+            ),
     );
     let dir = unique_test_dir("jnigen_fn_param_unknown");
     let _ = std::fs::remove_dir_all(&dir);
@@ -593,9 +610,9 @@ fn fn_expand_param_unknown_param_rejected() {
 #[test]
 #[should_panic(expected = "already has a return expand override")]
 fn fn_expand_return_duplicate_rejected() {
-    let _ = prebindgen::fun!(z_make)
-        .expand_return(prebindgen::expand_return!(ZThing).field_self())
-        .expand_return(prebindgen::expand_return!(ZThing).field_self());
+    let _ = prebindgen_registry::fun!(z_make)
+        .expand_return(prebindgen_registry::expand_return!(ZThing).field_self())
+        .expand_return(prebindgen_registry::expand_return!(ZThing).field_self());
 }
 
 /// A typo'd `fun!` inside a boundary decl is a HARD scan error (I7):
@@ -604,7 +621,7 @@ fn fn_expand_return_duplicate_rejected() {
 /// omission, no stale-ignore warning.
 #[test]
 fn typo_in_expand_decl_is_hard_error() {
-    use prebindgen::core::{ScanError, WriteRustError};
+    use prebindgen_registry::{ScanError, WriteRustError};
     let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
@@ -613,10 +630,11 @@ fn typo_in_expand_decl_is_hard_error() {
             .expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("ops").fun(prebindgen::fun!(z_fallible)))
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_fallible)))
         // `z_err_mesage` (sic) exists nowhere among the indexed items.
         .expand(
-            prebindgen::expand_return!(ZErr).field(prebindgen::fun!(z_err_mesage).name("message")),
+            prebindgen_registry::expand_return!(ZErr)
+                .field(prebindgen_registry::fun!(z_err_mesage).name("message")),
         );
     let dir = unique_test_dir("jnigen_expand_typo_hard_error");
     let _ = std::fs::remove_dir_all(&dir);
@@ -659,10 +677,10 @@ fn ignore_matching_acknowledges_naming_family() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("ops").fun(prebindgen::fun!(z_len)))
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_len)))
         .ignore(crate::matching(|name| name.starts_with("detail_const_")))
         // The previously-untested type-ignore path: acknowledge a type by key.
-        .ignore(prebindgen::ty!(ZUnusedThing));
+        .ignore(prebindgen_registry::ty!(ZUnusedThing));
     // The predicate flows through the Prebindgen hook…
     {
         let preds = jni.decls.ignored_name_predicates();
@@ -689,7 +707,7 @@ fn ignore_matching_acknowledges_naming_family() {
 #[test]
 #[should_panic(expected = "expand overrides don't apply")]
 fn ignore_fun_with_overrides_rejected() {
-    let _ = crate::IgnoreDecl::from(prebindgen::fun!(z_thing).name("thing"));
+    let _ = crate::IgnoreDecl::from(prebindgen_registry::fun!(z_thing).name("thing"));
 }
 
 /// Same for constants: an ignore names a `#[prebindgen]` const, not a
@@ -697,9 +715,10 @@ fn ignore_fun_with_overrides_rejected() {
 #[test]
 #[should_panic(expected = "value sources/.name() don't apply")]
 fn ignore_const_with_source_rejected() {
-    let _ = crate::IgnoreDecl::from(
-        crate::constant!(X).expr(prebindgen::ty!(i64), prebindgen::expr!(1 + 1)),
-    );
+    let _ = crate::IgnoreDecl::from(crate::constant!(X).expr(
+        prebindgen_registry::ty!(i64),
+        prebindgen_registry::expr!(1 + 1),
+    ));
 }
 
 /// A `.variant()` arm only names its constructor — a `.name()` decoration
@@ -708,15 +727,17 @@ fn ignore_const_with_source_rejected() {
 #[test]
 #[should_panic(expected = ".name()/expand overrides don't apply")]
 fn expand_param_variant_with_name_rejected() {
-    let _ = prebindgen::expand_param!(ZThing).variant(prebindgen::fun!(z_thing_new).name("thing"));
+    let _ = prebindgen_registry::expand_param!(ZThing)
+        .variant(prebindgen_registry::fun!(z_thing_new).name("thing"));
 }
 
 /// Same for expand overrides on a variant constructor.
 #[test]
 #[should_panic(expected = ".name()/expand overrides don't apply")]
 fn expand_param_variant_with_expand_override_rejected() {
-    let _ = prebindgen::expand_param!(ZThing).variant(
-        prebindgen::fun!(z_thing_new).expand_return(prebindgen::expand_return!(ZName).field_self()),
+    let _ = prebindgen_registry::expand_param!(ZThing).variant(
+        prebindgen_registry::fun!(z_thing_new)
+            .expand_return(prebindgen_registry::expand_return!(ZName).field_self()),
     );
 }
 
@@ -725,9 +746,11 @@ fn expand_param_variant_with_expand_override_rejected() {
 #[test]
 #[should_panic(expected = "only .name() is honored")]
 fn expand_return_field_with_expand_override_rejected() {
-    let _ = prebindgen::expand_return!(ZThing).field(
-        prebindgen::fun!(z_thing_name)
-            .expand_param("v", prebindgen::expand_param!(ZName).variant_self()),
+    let _ = prebindgen_registry::expand_return!(ZThing).field(
+        prebindgen_registry::fun!(z_thing_name).expand_param(
+            "v",
+            prebindgen_registry::expand_param!(ZName).variant_self(),
+        ),
     );
 }
 
@@ -735,7 +758,8 @@ fn expand_return_field_with_expand_override_rejected() {
 /// the documented way to name the field — still accepted.
 #[test]
 fn expand_return_field_with_name_accepted() {
-    let _ = prebindgen::expand_return!(ZThing).field(prebindgen::fun!(z_thing_name).name("label"));
+    let _ = prebindgen_registry::expand_return!(ZThing)
+        .field(prebindgen_registry::fun!(z_thing_name).name("label"));
 }
 
 /// N5: a `.method()` whose target has no parameter of the class type
@@ -762,8 +786,8 @@ fn method_without_receiver_rejected() {
         .package(
             crate::package!("t").class(
                 crate::ptr_class!(ZThing)
-                    .method(prebindgen::fun!(z_thing_free_standing))
-                    .constructor(prebindgen::fun!(z_make)),
+                    .method(prebindgen_registry::fun!(z_thing_free_standing))
+                    .constructor(prebindgen_registry::fun!(z_make)),
             ),
         );
     let err = jni.build_with(registry).expect_err("receiver-less member");
@@ -796,8 +820,8 @@ fn constructor_with_wrong_return_rejected() {
         .package(
             crate::package!("t").class(
                 crate::ptr_class!(ZThing)
-                    .method(prebindgen::fun!(z_thing_len))
-                    .constructor(prebindgen::fun!(z_make_number)),
+                    .method(prebindgen_registry::fun!(z_thing_len))
+                    .constructor(prebindgen_registry::fun!(z_make_number)),
             ),
         );
     let err = jni.build_with(registry).expect_err("wrong ctor return");
@@ -841,15 +865,15 @@ fn binding_local_field_conditional_handle() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("enc")
-                .class(crate::ptr_class!(ZEnc).method(prebindgen::fun!(z_enc_get_id)))
-                .fun(prebindgen::fun!(z_enc_make)),
+                .class(crate::ptr_class!(ZEnc).method(prebindgen_registry::fun!(z_enc_get_id)))
+                .fun(prebindgen_registry::fun!(z_enc_make)),
         )
         .expand(
-            prebindgen::expand_return!(ZEnc)
-                .field(prebindgen::fun!(z_enc_get_id))
+            prebindgen_registry::expand_return!(ZEnc)
+                .field(prebindgen_registry::fun!(z_enc_get_id))
                 .field(
-                    prebindgen::fun!(crate::enc_if_custom)
-                        .sig(prebindgen::sig!((e: &ZEnc) -> Option<&ZEnc>))
+                    prebindgen_registry::fun!(crate::enc_if_custom)
+                        .sig(prebindgen_registry::sig!((e: &ZEnc) -> Option<&ZEnc>))
                         .name("handle"),
                 ),
         );
@@ -927,14 +951,14 @@ fn binding_local_field_name_collision_rejected() {
         .package(
             crate::package!("enc")
                 .class(crate::ptr_class!(ZEnc))
-                .fun(prebindgen::fun!(z_enc_make)),
+                .fun(prebindgen_registry::fun!(z_enc_make)),
         )
         .expand(
             // `z_enc_get_id` names a real #[prebindgen] fn — a binding-local
             // field may not shadow it.
-            prebindgen::expand_return!(ZEnc).field(
-                prebindgen::fun!(crate::z_enc_get_id)
-                    .sig(prebindgen::sig!((e: &ZEnc) -> i32))
+            prebindgen_registry::expand_return!(ZEnc).field(
+                prebindgen_registry::fun!(crate::z_enc_get_id)
+                    .sig(prebindgen_registry::sig!((e: &ZEnc) -> i32))
                     .name("id"),
             ),
         );
@@ -988,23 +1012,23 @@ fn binding_local_field_splices_through_parent() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("msg")
-                .class(crate::ptr_class!(ZEnc).method(prebindgen::fun!(z_enc_get_id)))
+                .class(crate::ptr_class!(ZEnc).method(prebindgen_registry::fun!(z_enc_get_id)))
                 .class(crate::ptr_class!(ZMsg))
-                .fun(prebindgen::fun!(z_msg_make)),
+                .fun(prebindgen_registry::fun!(z_msg_make)),
         )
         .expand(
-            prebindgen::expand_return!(ZEnc)
-                .field(prebindgen::fun!(z_enc_get_id))
+            prebindgen_registry::expand_return!(ZEnc)
+                .field(prebindgen_registry::fun!(z_enc_get_id))
                 .field(
-                    prebindgen::fun!(crate::enc_if_custom)
-                        .sig(prebindgen::sig!((e: &ZEnc) -> Option<&ZEnc>))
+                    prebindgen_registry::fun!(crate::enc_if_custom)
+                        .sig(prebindgen_registry::sig!((e: &ZEnc) -> Option<&ZEnc>))
                         .name("handle"),
                 ),
         )
         .expand(
-            prebindgen::expand_return!(ZMsg)
-                .field(prebindgen::fun!(z_msg_len).name("len"))
-                .field(prebindgen::fun!(z_msg_enc).name("enc")),
+            prebindgen_registry::expand_return!(ZMsg)
+                .field(prebindgen_registry::fun!(z_msg_len).name("len"))
+                .field(prebindgen_registry::fun!(z_msg_enc).name("enc")),
         );
     let dir = unique_test_dir("jnigen_local_field_splice");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1066,29 +1090,29 @@ fn binding_local_functions_all_positions() {
                 crate::package!("t")
                     .class(
                         crate::ptr_class!(ZThing)
-                            .method(prebindgen::fun!(z_thing_len))
+                            .method(prebindgen_registry::fun!(z_thing_len))
                             // binding-local INSTANCE METHOD (receiver &Self first)
                             .method(
-                                prebindgen::fun!(crate::z_thing_ratio)
-                                    .sig(prebindgen::sig!((t: &ZThing, scale: f64) -> f64)),
+                                prebindgen_registry::fun!(crate::z_thing_ratio)
+                                    .sig(prebindgen_registry::sig!((t: &ZThing, scale: f64) -> f64)),
                             )
                             // binding-local COMPANION CONSTRUCTOR
                             .constructor(
-                                prebindgen::fun!(crate::z_thing_from_len)
-                                    .sig(prebindgen::sig!((len: i64) -> ZThing)),
+                                prebindgen_registry::fun!(crate::z_thing_from_len)
+                                    .sig(prebindgen_registry::sig!((len: i64) -> ZThing)),
                             ),
                     )
                     // binding-local FREE FUNCTION, fallible (Result -> onError)
-                    .fun(prebindgen::fun!(crate::z_thing_describe).sig(
-                        prebindgen::sig!((t: &ZThing, verbose: bool) -> Result<String, String>),
+                    .fun(prebindgen_registry::fun!(crate::z_thing_describe).sig(
+                        prebindgen_registry::sig!((t: &ZThing, verbose: bool) -> Result<String, String>),
                     ))
-                    .fun(prebindgen::fun!(z_use)),
+                    .fun(prebindgen_registry::fun!(z_use)),
             )
             // The local constructor also serves as an expand_param! variant arm,
             // referenced by IDENT like any registry fn.
             .expand(
-                prebindgen::expand_param!(ZThing)
-                    .variant(prebindgen::fun!(z_thing_from_len))
+                prebindgen_registry::expand_param!(ZThing)
+                    .variant(prebindgen_registry::fun!(z_thing_from_len))
                     .variant_self(),
             );
     let dir = unique_test_dir("jnigen_local_funs");
@@ -1174,28 +1198,28 @@ fn binding_local_fn_names_flow_through_manglers() {
             crate::package!("t")
                 .class(
                     crate::ptr_class!(ZThing)
-                        .constructor(prebindgen::fun!(z_thing_make))
+                        .constructor(prebindgen_registry::fun!(z_thing_make))
                         // local METHOD, no .name(): hook sees `zThingRatio`.
                         .method(
-                            prebindgen::fun!(crate::sub::z_thing_ratio)
-                                .sig(prebindgen::sig!((t: &ZThing, scale: f64) -> f64)),
+                            prebindgen_registry::fun!(crate::sub::z_thing_ratio)
+                                .sig(prebindgen_registry::sig!((t: &ZThing, scale: f64) -> f64)),
                         ),
                 )
                 // local FREE FN, no .name(): fun hook sees `zThingTag`.
                 .fun(
-                    prebindgen::fun!(crate::sub::z_thing_tag)
-                        .sig(prebindgen::sig!((t: &ZThing) -> i64)),
+                    prebindgen_registry::fun!(crate::sub::z_thing_tag)
+                        .sig(prebindgen_registry::sig!((t: &ZThing) -> i64)),
                 )
-                .fun(prebindgen::fun!(z_thing_query)),
+                .fun(prebindgen_registry::fun!(z_thing_query)),
         )
         // local FIELD, no .name(): defaults to camel(last segment). A second
         // field (the handle) keeps the decomposition on the builder path —
         // a single leaf would deliver by direct return, hiding the name.
         .expand(
-            prebindgen::expand_return!(ZThing)
+            prebindgen_registry::expand_return!(ZThing)
                 .field(
-                    prebindgen::fun!(crate::sub::z_thing_len)
-                        .sig(prebindgen::sig!((t: &ZThing) -> i64)),
+                    prebindgen_registry::fun!(crate::sub::z_thing_len)
+                        .sig(prebindgen_registry::sig!((t: &ZThing) -> i64)),
                 )
                 .field_self(),
         );
@@ -1219,7 +1243,7 @@ fn binding_local_fn_names_flow_through_manglers() {
 fn binding_local_fun_missing_sig_rejected() {
     let _ = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("t").fun(prebindgen::fun!(crate::z_no_sig)));
+        .package(crate::package!("t").fun(prebindgen_registry::fun!(crate::z_no_sig)));
 }
 
 /// `.sig(…)` on an ident-built (registry) `fun!` is a hard error — the
@@ -1227,7 +1251,8 @@ fn binding_local_fun_missing_sig_rejected() {
 #[test]
 #[should_panic(expected = "read from the")]
 fn sig_on_registry_fun_rejected() {
-    let _ = prebindgen::fun!(z_thing_len).sig(prebindgen::sig!((t: &ZThing) -> i64));
+    let _ =
+        prebindgen_registry::fun!(z_thing_len).sig(prebindgen_registry::sig!((t: &ZThing) -> i64));
 }
 
 /// A binding-local fn name colliding with a `#[prebindgen]` item is a hard
@@ -1253,10 +1278,13 @@ fn binding_local_fun_name_collision_rejected() {
         crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("t").class(crate::ptr_class!(ZThing)).fun(
-            // shadows the #[prebindgen] fn of the same name
-            prebindgen::fun!(crate::z_thing_len).sig(prebindgen::sig!((t: &ZThing) -> i64)),
-        ));
+        .package(
+            crate::package!("t").class(crate::ptr_class!(ZThing)).fun(
+                // shadows the #[prebindgen] fn of the same name
+                prebindgen_registry::fun!(crate::z_thing_len)
+                    .sig(prebindgen_registry::sig!((t: &ZThing) -> i64)),
+            ),
+        );
     let err = jni
         .build_with(registry)
         .expect_err("collision must be rejected");
@@ -1312,11 +1340,13 @@ fn gc_managed_handle_lifecycle() {
                 .class(
                     crate::ptr_class!(ZThing)
                         .gc_managed()
-                        .constructor(prebindgen::fun!(z_thing_new)),
+                        .constructor(prebindgen_registry::fun!(z_thing_new)),
                 )
-                .class(crate::ptr_class!(ZOther).constructor(prebindgen::fun!(z_other_new)))
-                .fun(prebindgen::fun!(z_thing_use))
-                .fun(prebindgen::fun!(z_other_use)),
+                .class(
+                    crate::ptr_class!(ZOther).constructor(prebindgen_registry::fun!(z_other_new)),
+                )
+                .fun(prebindgen_registry::fun!(z_thing_use))
+                .fun(prebindgen_registry::fun!(z_other_use)),
         );
     let raw = write_all(
         jni.build_with(registry).expect("resolve"),
@@ -1422,11 +1452,11 @@ fn split_on_param_emits_typed_overloads() {
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
-                .fun(prebindgen::fun!(z_store_expect).split_on_param("expected")),
+                .fun(prebindgen_registry::fun!(z_store_expect).split_on_param("expected")),
         )
         .expand(
-            prebindgen::expand_param!(ZSummary)
-                .variant(prebindgen::fun!(z_summary_new))
+            prebindgen_registry::expand_param!(ZSummary)
+                .variant(prebindgen_registry::fun!(z_summary_new))
                 .variant_self(),
         );
     let raw = write_all(
@@ -1456,14 +1486,14 @@ fn split_on_param_cartesian_product() {
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
                 .fun(
-                    prebindgen::fun!(z_prefer)
+                    prebindgen_registry::fun!(z_prefer)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 ),
         )
         .expand(
-            prebindgen::expand_param!(ZSummary)
-                .variant(prebindgen::fun!(z_summary_new))
+            prebindgen_registry::expand_param!(ZSummary)
+                .variant(prebindgen_registry::fun!(z_summary_new))
                 .variant_self(),
         );
     let raw = write_all(
@@ -1517,20 +1547,20 @@ fn split_on_param_preserves_wrapper_generics() {
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
                 .fun(
-                    prebindgen::fun!(z_summarize)
+                    prebindgen_registry::fun!(z_summarize)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 ),
         )
         .expand(
-            prebindgen::expand_param!(ZSummary)
-                .variant(prebindgen::fun!(z_summary_new))
+            prebindgen_registry::expand_param!(ZSummary)
+                .variant(prebindgen_registry::fun!(z_summary_new))
                 .variant_self(),
         )
         .expand(
-            prebindgen::expand_return!(ZSummary)
-                .field(prebindgen::fun!(z_summary_count))
-                .field(prebindgen::fun!(z_summary_total)),
+            prebindgen_registry::expand_return!(ZSummary)
+                .field(prebindgen_registry::fun!(z_summary_count))
+                .field(prebindgen_registry::fun!(z_summary_total)),
         );
     let raw = write_all(
         jni.build_with(registry).expect("resolve"),
@@ -1591,15 +1621,15 @@ fn split_on_param_product_ambiguous_rejected() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops").class(crate::ptr_class!(ZThing)).fun(
-                prebindgen::fun!(z_combine)
+                prebindgen_registry::fun!(z_combine)
                     .split_on_param("primary")
                     .split_on_param("fallback"),
             ),
         )
         .expand(
-            prebindgen::expand_param!(ZThing)
-                .variant(prebindgen::fun!(z_thing_one))
-                .variant(prebindgen::fun!(z_thing_two)),
+            prebindgen_registry::expand_param!(ZThing)
+                .variant(prebindgen_registry::fun!(z_thing_one))
+                .variant(prebindgen_registry::fun!(z_thing_two)),
         );
     let _ = write_all(
         jni.build_with(registry).expect("resolve"),
@@ -1635,12 +1665,12 @@ fn split_declaration_colliding_variants_rejected() {
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZName))
-                .fun(prebindgen::fun!(z_use_name)), // NOT split — still errors
+                .fun(prebindgen_registry::fun!(z_use_name)), // NOT split — still errors
         )
         .expand(
-            prebindgen::expand_param!(ZName)
-                .variant(prebindgen::fun!(z_name_from_text))
-                .variant(prebindgen::fun!(z_name_from_label)),
+            prebindgen_registry::expand_param!(ZName)
+                .variant(prebindgen_registry::fun!(z_name_from_text))
+                .variant(prebindgen_registry::fun!(z_name_from_label)),
         );
     let _ = write_all(
         jni.build_with(registry).expect("resolve"),
@@ -1676,12 +1706,12 @@ fn split_declaration_collision_fails_resolve() {
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZName))
-                .fun(prebindgen::fun!(z_use_name)),
+                .fun(prebindgen_registry::fun!(z_use_name)),
         )
         .expand(
-            prebindgen::expand_param!(ZName)
-                .variant(prebindgen::fun!(z_name_from_text))
-                .variant(prebindgen::fun!(z_name_from_label)),
+            prebindgen_registry::expand_param!(ZName)
+                .variant(prebindgen_registry::fun!(z_name_from_text))
+                .variant(prebindgen_registry::fun!(z_name_from_label)),
         );
     let err = jni
         .build_with(registry)
@@ -1719,12 +1749,12 @@ fn split_no_split_suppresses_check() {
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZName))
-                .fun(prebindgen::fun!(z_use_name)),
+                .fun(prebindgen_registry::fun!(z_use_name)),
         )
         .expand(
-            prebindgen::expand_param!(ZName)
-                .variant(prebindgen::fun!(z_name_from_text))
-                .variant(prebindgen::fun!(z_name_from_label))
+            prebindgen_registry::expand_param!(ZName)
+                .variant(prebindgen_registry::fun!(z_name_from_text))
+                .variant(prebindgen_registry::fun!(z_name_from_label))
                 .no_split(),
         );
     // No panic: the colliding variants are tolerated as selector-only.
@@ -1747,11 +1777,11 @@ fn split_on_unknown_param_rejected() {
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
-                .fun(prebindgen::fun!(z_store_expect).split_on_param("nope")),
+                .fun(prebindgen_registry::fun!(z_store_expect).split_on_param("nope")),
         )
         .expand(
-            prebindgen::expand_param!(ZSummary)
-                .variant(prebindgen::fun!(z_summary_new))
+            prebindgen_registry::expand_param!(ZSummary)
+                .variant(prebindgen_registry::fun!(z_summary_new))
                 .variant_self(),
         );
     let _ = write_all(
@@ -1774,11 +1804,11 @@ fn split_on_option_param_emits_nullable_arm() {
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
-                .fun(prebindgen::fun!(z_maybe).split_on_param("opt")),
+                .fun(prebindgen_registry::fun!(z_maybe).split_on_param("opt")),
         )
         .expand(
-            prebindgen::expand_param!(ZSummary)
-                .variant(prebindgen::fun!(z_summary_new))
+            prebindgen_registry::expand_param!(ZSummary)
+                .variant(prebindgen_registry::fun!(z_summary_new))
                 .variant_self(),
         );
     let raw = write_all(
@@ -1812,12 +1842,12 @@ fn split_on_option_param_without_single_leaf_arm_rejected() {
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
-                .fun(prebindgen::fun!(z_maybe).split_on_param("opt")),
+                .fun(prebindgen_registry::fun!(z_maybe).split_on_param("opt")),
         )
         .expand(
-            prebindgen::expand_param!(ZSummary)
-                .variant(prebindgen::fun!(z_summary_new))
-                .variant(prebindgen::fun!(z_summary_scaled)),
+            prebindgen_registry::expand_param!(ZSummary)
+                .variant(prebindgen_registry::fun!(z_summary_new))
+                .variant(prebindgen_registry::fun!(z_summary_scaled)),
         );
     let _ = write_all(
         jni.build_with(registry).expect("resolve"),
@@ -1840,14 +1870,14 @@ fn split_on_param_optional_cartesian_with_plain() {
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
                 .fun(
-                    prebindgen::fun!(z_mixed)
+                    prebindgen_registry::fun!(z_mixed)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 ),
         )
         .expand(
-            prebindgen::expand_param!(ZSummary)
-                .variant(prebindgen::fun!(z_summary_new))
+            prebindgen_registry::expand_param!(ZSummary)
+                .variant(prebindgen_registry::fun!(z_summary_new))
                 .variant_self(),
         );
     let raw = write_all(
@@ -1913,12 +1943,14 @@ fn optional_selector_dispatch_end_to_end() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
-                .class(crate::ptr_class!(ZEnc).constructor(prebindgen::fun!(z_enc_from_id)))
-                .fun(prebindgen::fun!(z_put)),
+                .class(
+                    crate::ptr_class!(ZEnc).constructor(prebindgen_registry::fun!(z_enc_from_id)),
+                )
+                .fun(prebindgen_registry::fun!(z_put)),
         )
         .expand(
-            prebindgen::expand_param!(ZEnc)
-                .variant(prebindgen::fun!(z_enc_from_id))
+            prebindgen_registry::expand_param!(ZEnc)
+                .variant(prebindgen_registry::fun!(z_enc_from_id))
                 .variant_self(),
         );
     let dir = unique_test_dir("jnigen_opt_selector");
@@ -1975,17 +2007,17 @@ fn constructor_member_skips_default_output_expand() {
             crate::package!("ops")
                 .class(
                     crate::ptr_class!(ZThing)
-                        .constructor(prebindgen::fun!(z_thing_make).name("make"))
-                        .method(prebindgen::fun!(z_thing_name).name("name")),
+                        .constructor(prebindgen_registry::fun!(z_thing_make).name("make"))
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name")),
                 )
-                .fun(prebindgen::fun!(z_thing_get)),
+                .fun(prebindgen_registry::fun!(z_thing_get)),
         )
         // Canonical output for ZThing: any ZThing-returning declared fn gets
         // callback delivery by default…
         .expand(
-            prebindgen::expand_return!(ZThing)
+            prebindgen_registry::expand_return!(ZThing)
                 .field_self()
-                .field(prebindgen::fun!(z_thing_name)),
+                .field(prebindgen_registry::fun!(z_thing_name)),
         );
     let gen = jni.build_with(registry).expect("resolve");
     let registry = gen.registry();
@@ -2041,9 +2073,10 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
         .package(
             crate::package!("thing")
                 .class(
-                    crate::ptr_class!(ZThing).method(prebindgen::fun!(z_thing_name).name("name")),
+                    crate::ptr_class!(ZThing)
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name")),
                 )
-                .fun(prebindgen::fun!(z_thing_get)),
+                .fun(prebindgen_registry::fun!(z_thing_get)),
         );
     let dir = unique_test_dir("jnigen_q95");
     let _ = std::fs::remove_dir_all(&dir);

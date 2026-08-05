@@ -6,7 +6,7 @@ use super::*;
 #[test]
 #[should_panic(expected = "convert!(usize): builtins already have converters")]
 fn builtin_convert_type_panics() {
-    let _ = prebindgen::convert!(usize);
+    let _ = prebindgen_registry::convert!(usize);
 }
 
 /// #54: `.implements(...)` WITHOUT `.interface()` — declared interfaces join
@@ -33,9 +33,9 @@ fn ptr_class_implements_adds_interface_supertypes() {
                     crate::ptr_class!(ZThing)
                         .implements("io.other.Resource")
                         .implements("LocalIface")
-                        .method(prebindgen::fun!(z_thing_size)),
+                        .method(prebindgen_registry::fun!(z_thing_size)),
                 )
-                .fun(prebindgen::fun!(z_thing_new)),
+                .fun(prebindgen_registry::fun!(z_thing_new)),
         );
     let dir = unique_test_dir("jnigen_implements");
     let _ = std::fs::remove_dir_all(&dir);
@@ -85,9 +85,9 @@ fn ptr_class_interface_emits_generated_api() {
                     crate::ptr_class!(ZThing)
                         .interface()
                         .implements("io.other.Resource")
-                        .method(prebindgen::fun!(z_thing_size)),
+                        .method(prebindgen_registry::fun!(z_thing_size)),
                 )
-                .fun(prebindgen::fun!(z_thing_new)),
+                .fun(prebindgen_registry::fun!(z_thing_new)),
         );
     let dir = unique_test_dir("jnigen_interface");
     let _ = std::fs::remove_dir_all(&dir);
@@ -148,7 +148,7 @@ fn interface_name_mangle_identity_rejected() {
         .package(
             crate::package!("thing")
                 .class(crate::ptr_class!(ZThing).interface())
-                .fun(prebindgen::fun!(z_thing_new)),
+                .fun(prebindgen_registry::fun!(z_thing_new)),
         );
     let err = jni
         .build_with(registry)
@@ -195,7 +195,7 @@ fn interface_name_override_and_hook() {
         .package(
             crate::package!("m")
                 .class(crate::enum_class!(Mode).interface_name("ModeIface"))
-                .fun(prebindgen::fun!(flip)),
+                .fun(prebindgen_registry::fun!(flip)),
         );
     let dir = unique_test_dir("jnigen_iface_name");
     let _ = std::fs::remove_dir_all(&dir);
@@ -253,7 +253,7 @@ fn data_class_interface_emits_generated_api() {
             crate::package!("t").class(
                 crate::data_class!(ZStamp)
                     .interface()
-                    .method(prebindgen::fun!(z_stamp_secs).name("secs")),
+                    .method(prebindgen_registry::fun!(z_stamp_secs).name("secs")),
             ),
         );
     let dir = unique_test_dir("jnigen_data_iface");
@@ -331,8 +331,8 @@ fn per_class_name_and_base_package_fun() {
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZThing).name("Gadget"))
-                .fun(prebindgen::fun!(ping))
-                .fun(prebindgen::fun!(thing_new)),
+                .fun(prebindgen_registry::fun!(ping))
+                .fun(prebindgen_registry::fun!(thing_new)),
         );
 
     let dir = unique_test_dir("jnigen_class_name_base_fun");
@@ -403,7 +403,7 @@ fn setters_after_declarations_apply() {
         .package(
             crate::package!("things")
                 .class(crate::ptr_class!(ZThing))
-                .fun(prebindgen::fun!(thing_new)),
+                .fun(prebindgen_registry::fun!(thing_new)),
         )
         .set_package_prefix("io.late.jni")
         .set_ptr_class_name_mangle(|package, n| {
@@ -449,7 +449,7 @@ fn generation_writes_are_order_free() {
                 .expect("index");
         let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
-            .package(crate::package!("thing").fun(prebindgen::fun!(z_ping)));
+            .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_ping)));
         jni.build_with(registry).expect("resolve")
     };
     let read_all = |dir: &std::path::Path, paths: &[std::path::PathBuf]| -> String {
@@ -527,11 +527,11 @@ fn method_hook_can_strip_flat_class_prefix() {
         .package(
             crate::package!("ke").class(
                 crate::ptr_class!(KeyExpr)
-                    .method(prebindgen::fun!(key_expr_get_str))
-                    .method(prebindgen::fun!(keyexpr_intersects))
-                    .method(prebindgen::fun!(shared_helper))
+                    .method(prebindgen_registry::fun!(key_expr_get_str))
+                    .method(prebindgen_registry::fun!(keyexpr_intersects))
+                    .method(prebindgen_registry::fun!(shared_helper))
                     // `.name()` is verbatim and wins over the hook.
-                    .method(prebindgen::fun!(keyexpr_to_string).name("toStr")),
+                    .method(prebindgen_registry::fun!(keyexpr_to_string).name("toStr")),
             ),
         );
     let dir = unique_test_dir("jnigen_member_names");
@@ -589,8 +589,8 @@ fn method_name_mangle_hook_applies_order_independently() {
             crate::package!("t").class(
                 crate::ptr_class!(ZThing)
                     .name("Thing")
-                    .method(prebindgen::fun!(thing_size))
-                    .method(prebindgen::fun!(thing_label).name("label")),
+                    .method(prebindgen_registry::fun!(thing_size))
+                    .method(prebindgen_registry::fun!(thing_label).name("label")),
             ),
         )
         // Registered AFTER the declaration — must still apply (settings are
@@ -640,7 +640,7 @@ fn harness_hook_receives_derived_default() {
             assert_eq!(n, "JNINative", "hook must receive the derived default");
             "MyNative".to_string()
         })
-        .package(crate::package!("thing").fun(prebindgen::fun!(z_ping)));
+        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_ping)));
     let dir = unique_test_dir("jnigen_harness_mangle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -684,7 +684,7 @@ fn function_and_native_method_hooks_receive_placement() {
             assert_eq!(name, "zSessionPing");
             format!("{name}Native")
         })
-        .package(crate::package!("session").fun(prebindgen::fun!(z_session_ping)));
+        .package(crate::package!("session").fun(prebindgen_registry::fun!(z_session_ping)));
     let dir = unique_test_dir("jnigen_placement_mangles");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -718,7 +718,7 @@ fn write_kotlin_owns_and_resets_the_root() {
             .expect("index");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("thing").fun(prebindgen::fun!(z_ping)));
+        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_ping)));
     let gen = jni.build_with(registry).expect("resolve");
 
     let dir = unique_test_dir("jnigen_owned_root");
@@ -771,16 +771,16 @@ fn report_explains_the_resolved_surface() {
             crate::package!("ops")
                 .class(
                     crate::ptr_class!(Summary)
-                        .method(prebindgen::fun!(summary_count))
-                        .method(prebindgen::fun!(summary_total)),
+                        .method(prebindgen_registry::fun!(summary_count))
+                        .method(prebindgen_registry::fun!(summary_total)),
                 )
-                .fun(prebindgen::fun!(storage_summary))
-                .fun(prebindgen::fun!(z_plain)),
+                .fun(prebindgen_registry::fun!(storage_summary))
+                .fun(prebindgen_registry::fun!(z_plain)),
         )
         .expand(
-            prebindgen::expand_return!(Summary)
-                .field(prebindgen::fun!(summary_count))
-                .field(prebindgen::fun!(summary_total)),
+            prebindgen_registry::expand_return!(Summary)
+                .field(prebindgen_registry::fun!(summary_count))
+                .field(prebindgen_registry::fun!(summary_total)),
         );
     let gen = jni.build_with(registry).expect("resolve");
     let report = gen.report();
@@ -888,17 +888,17 @@ fn docs_become_kdoc_with_shape_notes() {
             crate::package!("ops")
                 .class(
                     crate::ptr_class!(Summary)
-                        .method(prebindgen::fun!(summary_count))
-                        .method(prebindgen::fun!(summary_total)),
+                        .method(prebindgen_registry::fun!(summary_count))
+                        .method(prebindgen_registry::fun!(summary_total)),
                 )
-                .fun(prebindgen::fun!(storage_summary))
-                .fun(prebindgen::fun!(z_plain))
+                .fun(prebindgen_registry::fun!(storage_summary))
+                .fun(prebindgen_registry::fun!(z_plain))
                 .constant(crate::constant!(MAGIC)),
         )
         .expand(
-            prebindgen::expand_return!(Summary)
-                .field(prebindgen::fun!(summary_count))
-                .field(prebindgen::fun!(summary_total)),
+            prebindgen_registry::expand_return!(Summary)
+                .field(prebindgen_registry::fun!(summary_count))
+                .field(prebindgen_registry::fun!(summary_total)),
         );
     let gen = jni.build_with(registry).expect("resolve");
     let dir = unique_test_dir("jnigen_kdoc");

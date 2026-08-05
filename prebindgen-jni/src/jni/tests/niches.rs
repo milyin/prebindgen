@@ -1,4 +1,4 @@
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -22,7 +22,7 @@ fn option_carves_single_niche() {
     let (wire, _body, niches) = option_input(
         &reg.reading_of(&inner_ty).expect("interned"),
         &reg,
-        &prebindgen::core::Emit::for_test(),
+        &prebindgen_registry::Emit::for_test(),
     )
     .expect("Option<TestType> resolves");
 
@@ -66,7 +66,7 @@ fn option_cascades_through_multi_niche() {
     let (w1, _, n1) = option_input(
         &reg.reading_of(&layer1_ty).expect("interned"),
         &reg,
-        &prebindgen::core::Emit::for_test(),
+        &prebindgen_registry::Emit::for_test(),
     )
     .expect("layer 1 resolves");
     assert_eq!(w1.to_token_stream().to_string(), "jni :: sys :: jint");
@@ -87,7 +87,7 @@ fn option_cascades_through_multi_niche() {
     let (w2, _, n2) = option_input(
         &reg.reading_of(&layer2_ty).expect("interned"),
         &reg,
-        &prebindgen::core::Emit::for_test(),
+        &prebindgen_registry::Emit::for_test(),
     )
     .expect("layer 2 resolves");
     assert_eq!(
@@ -111,7 +111,7 @@ fn option_cascades_through_multi_niche() {
     let (w3, _, n3) = option_input(
         &reg.reading_of(&layer3_ty).expect("interned"),
         &reg,
-        &prebindgen::core::Emit::for_test(),
+        &prebindgen_registry::Emit::for_test(),
     )
     .expect("layer 3 resolves via box fallback");
     assert_eq!(
@@ -204,7 +204,7 @@ fn option_over_jobject_uses_default_null_niche() {
     let (wire, _, rest) = option_input(
         &reg.reading_of(&ty).expect("interned"),
         &reg,
-        &prebindgen::core::Emit::for_test(),
+        &prebindgen_registry::Emit::for_test(),
     )
     .expect("Option<MyStruct> resolves");
     assert_eq!(
@@ -234,7 +234,7 @@ fn option_fails_when_no_niche_and_non_primitive_wire() {
     assert!(option_input(
         &reg.reading_of(&ty).expect("interned"),
         &reg,
-        &prebindgen::core::Emit::for_test()
+        &prebindgen_registry::Emit::for_test()
     )
     .is_none());
 }
@@ -259,7 +259,7 @@ fn option_box_fallback_exposes_no_niches() {
     let (wire, _, rest) = option_input(
         &reg.reading_of(&ty).expect("interned"),
         &reg,
-        &prebindgen::core::Emit::for_test(),
+        &prebindgen_registry::Emit::for_test(),
     )
     .expect("Option<i64> via box fallback");
     assert_eq!(

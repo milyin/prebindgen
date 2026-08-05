@@ -1,0 +1,807 @@
+use quote::ToTokens;
+
+use super::*;
+
+/// A fixture declaration's identity. A declaration is a key, not a spelling —
+/// see `ConstructorDecl::target`.
+fn key(s: &str) -> crate::registry::TypeKey {
+    crate::registry::TypeKey::parse(s).expect("a fixture type")
+}
+
+/// A reading for a fixture type — see the twin in `core/unfold/tests.rs`.
+/// Plan leaves carry `TypeRef`s, and a fixture naming a type inline needs one.
+fn tref(ty: syn::Type) -> prebindgen::core::flat::TypeRef {
+    prebindgen::core::flat::Flat::builder()
+        .build()
+        .expect("an empty model")
+        .classify(&ty)
+        .expect("a fixture type the language accepts")
+}
+use crate::{registry::Registry, test_util::scanned_with as reg_with};
+
+fn src_qualify(id: &syn::Ident) -> syn::Path {
+    syn::parse_quote!(zenoh_flat::#id)
+}
+
+#[test]
+fn single_constructor_plan_and_fold() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    // Single build-from variant = one Ctor arm (no selector), declared
+    // per-fn (`.expand_param`).
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
+    });
+
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .expect("plan for a");
+    assert!(plan.by_ref, "param was &ZKeyExpr");
+    assert_eq!(plan.selector, None);
+    assert_eq!(plan.leaves.len(), 1);
+    assert_eq!(plan.leaves[0].name.to_string(), "a");
+    assert_eq!(plan.leaves[0].ty.spell().to_string(), "String");
+
+    let locals = vec![ident("a")];
+    let folded = emit_fold(plan, &locals, &src_qualify);
+    let s = folded.to_token_stream().to_string();
+    assert!(s.contains("z_keyexpr_try_from"), "fold calls ctor: {}", s);
+    assert!(s.contains("map_err"), "fallible ctor mapped: {}", s);
+}
+
+#[test]
+fn constructor_plan_and_fold() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
+    });
+    // selector + try_from(String) + identity(ZKeyExpr) = 3 leaves
+    // `&ZKeyExpr` consumer ⇒ borrowed identity leaf (clone-preserving).
+    // Leaf types registered as required inputs (so the resolver builds
+    // their converters).
+    // `attachment: Option<ZZBytes>` with single `z_zbytes_from_vec(Vec<u8>)`.
+
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .unwrap();
+    assert_eq!(plan.selector, Some(0));
+    // selector + try_from(String) + identity(ZKeyExpr) = 3 leaves
+    assert_eq!(plan.leaves.len(), 3);
+    assert_eq!(plan.leaves[0].ty.spell().to_string(), "i32");
+    assert_eq!(plan.leaves[1].ty.spell().to_string(), "Option < String >");
+    // `&ZKeyExpr` consumer ⇒ borrowed identity leaf (clone-preserving).
+    assert_eq!(
+        plan.leaves[2].ty.spell().to_string(),
+        "Option < & ZKeyExpr >"
+    );
+    assert_eq!(plan.variants.len(), 2);
+    assert!(plan.variants[0].ctor.is_some());
+    assert!(plan.variants[1].ctor.is_none(), "identity arm");
+    assert!(plan.variants[1].clone, "by-ref identity clones");
+
+    // Leaf types registered as required inputs (so the resolver builds
+    // their converters).
+    assert!(reg.input_types[&plan.leaves[1].ty.key()].root);
+
+    let locals = vec![ident("sel"), ident("v0"), ident("vid")];
+    let folded = emit_fold(plan, &locals, &src_qualify);
+    let s = folded.to_token_stream().to_string();
+    assert!(s.contains("match sel"), "dispatch on selector: {}", s);
+    assert!(s.contains("z_keyexpr_try_from"));
+    assert!(s.contains("invalid constructor selector"));
+}
+
+#[test]
+fn optional_byvalue_single_ctor() {
+    // `attachment: Option<ZZBytes>` with single `z_zbytes_from_vec(Vec<u8>)`.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_zbytes_from_vec(bytes: Vec<u8>) -> ZZBytes { todo!() }",
+        "fn z_session_delete(s: &ZSession, attachment: Option<ZZBytes>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_delete"),
+        param: ident("attachment"),
+        declared_target: Some(key("ZZBytes")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_zbytes_from_vec"))]),
+    });
+    // nullable leaf wrapping the ctor param
+    // `encoding: Option<&ZEncoding>` with single, infallible
+    // `z_encoding_from_string(String) -> ZEncoding`.
+
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply optional by-value");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_delete"), ident("attachment")))
+        .unwrap();
+    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(plan.produces_option());
+    assert!(!plan.by_ref);
+    assert_eq!(plan.leaves.len(), 1);
+    // nullable leaf wrapping the ctor param
+    assert_eq!(
+        plan.leaves[0].ty.spell().to_string(),
+        "Option < Vec < u8 > >"
+    );
+
+    let locals = vec![ident("att")];
+    let s = emit_fold(plan, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string();
+    assert!(s.contains("z_zbytes_from_vec"), "fold calls ctor: {}", s);
+    assert!(
+        s.contains("Some") && s.contains("None"),
+        "maps Option: {}",
+        s
+    );
+}
+
+#[test]
+fn optional_byref_single_ctor() {
+    // `encoding: Option<&ZEncoding>` with single, infallible
+    // `z_encoding_from_string(String) -> ZEncoding`.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_encoding_from_string(s: String) -> ZEncoding { todo!() }",
+        "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_put"),
+        param: ident("encoding"),
+        declared_target: Some(key("ZEncoding")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_encoding_from_string"))]),
+    });
+    // `encoding: Option<&ZEncoding>` built from a TWO-arg, infallible
+    // `z_encoding_from_id(i32, Option<String>) -> ZEncoding`: an explicit
+    // `present: bool` flag + two plain (non-`Option`-wrapped) arg leaves.
+
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply optional by-ref");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_put"), ident("encoding")))
+        .unwrap();
+    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(plan.produces_option());
+    assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
+    assert_eq!(plan.leaves[0].ty.spell().to_string(), "Option < String >");
+    assert_eq!(
+        plan.target.spell().to_string(),
+        "ZEncoding",
+        "target peeled through Option<&_>"
+    );
+}
+
+#[test]
+fn optional_byref_multi_arg_ctor() {
+    // `encoding: Option<&ZEncoding>` built from a TWO-arg, infallible
+    // `z_encoding_from_id(i32, Option<String>) -> ZEncoding`: an explicit
+    // `present: bool` flag + two plain (non-`Option`-wrapped) arg leaves.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_encoding_from_id(id: i32, schema: Option<String>) -> ZEncoding { todo!() }",
+        "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_put"),
+        param: ident("encoding"),
+        declared_target: Some(key("ZEncoding")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_encoding_from_id"))]),
+    });
+    // leaf 0 = present:bool, leaf 1 = id:i32, leaf 2 = schema:Option<String>
+    // `encoding: Option<&ZEncoding>` with TWO variants — build-from
+    // `z_encoding_from_id(i32, Option<String>)` OR identity — composes the
+    // selector dispatch under `Optional`: the selector leaf also encodes
+    // absence (`-1` = `None`). The ctor's own `Option<String>` arg is a
+    // PASSTHROUGH leaf (kept as `Option<String>`, not double-wrapped —
+    // `None` is a legitimate value for the taken arm).
+
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply optional multi-arg by-ref");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_put"), ident("encoding")))
+        .unwrap();
+    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(plan.produces_option());
+    assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
+    assert_eq!(plan.present, Some(0), "explicit presence flag at leaf 0");
+    // leaf 0 = present:bool, leaf 1 = id:i32, leaf 2 = schema:Option<String>
+    assert_eq!(plan.leaves.len(), 3);
+    assert_eq!(plan.leaves[0].name.to_string(), "encoding_present");
+    assert_eq!(plan.leaves[0].ty.spell().to_string(), "bool");
+    assert_eq!(plan.leaves[1].name.to_string(), "encoding_id");
+    assert_eq!(plan.leaves[1].ty.spell().to_string(), "i32");
+    assert_eq!(plan.leaves[2].name.to_string(), "encoding_schema");
+    assert_eq!(plan.leaves[2].ty.spell().to_string(), "Option < String >");
+
+    let locals = vec![ident("pres"), ident("id"), ident("schema")];
+    let s = emit_fold(plan, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string();
+    assert!(s.contains("if pres"), "presence-flag gated: {}", s);
+    assert!(
+        s.contains("z_encoding_from_id"),
+        "fold calls multi-arg ctor: {}",
+        s
+    );
+    assert!(
+        s.contains("Some") && s.contains("None"),
+        "maps Option: {}",
+        s
+    );
+}
+
+#[test]
+fn optional_combined_selector_encodes_absence() {
+    // `encoding: Option<&ZEncoding>` with TWO variants — build-from
+    // `z_encoding_from_id(i32, Option<String>)` OR identity — composes the
+    // selector dispatch under `Optional`: the selector leaf also encodes
+    // absence (`-1` = `None`). The ctor's own `Option<String>` arg is a
+    // PASSTHROUGH leaf (kept as `Option<String>`, not double-wrapped —
+    // `None` is a legitimate value for the taken arm).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_encoding_from_id(id: i32, schema: Option<String>) -> ZEncoding { todo!() }",
+        "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_put"),
+        param: ident("encoding"),
+        declared_target: Some(key("ZEncoding")),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_encoding_from_id")),
+            Variant::Identity,
+        ]),
+    });
+    // leaves: sel:i32, id:Option<i32> (wrapped), schema:Option<String>
+    // (passthrough), identity:Option<&ZEncoding>.
+    // `Iterable(Construct)` is not yet produced by `apply` (no `Vec<_>`
+    // param expansion is declared), but the fold is emit-ready: a hand-built
+    // plan must produce the `into_iter().map(...).collect::<Result<Vec<_>,_>>()`
+    // form, with the inner single-arg ctor applied per element.
+    // A `.default()` ZKeyExpr constructor auto-`construct`s every matching
+    // param of every declared fn — except where `.skip_default_construct`'d.
+
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply optional combined");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_put"), ident("encoding")))
+        .unwrap();
+    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(plan.produces_option());
+    assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
+    assert_eq!(plan.selector, Some(0), "selector at leaf 0");
+    assert_eq!(plan.present, None, "absence rides the selector, no flag");
+    // leaves: sel:i32, id:Option<i32> (wrapped), schema:Option<String>
+    // (passthrough), identity:Option<&ZEncoding>.
+    assert_eq!(plan.leaves.len(), 4);
+    assert_eq!(plan.leaves[0].name.to_string(), "encoding_sel");
+    assert_eq!(plan.leaves[0].ty.spell().to_string(), "i32");
+    assert_eq!(plan.leaves[1].ty.spell().to_string(), "Option < i32 >");
+    assert_eq!(
+        plan.leaves[2].ty.spell().to_string(),
+        "Option < String >",
+        "already-Option ctor arg is NOT double-wrapped"
+    );
+    assert_eq!(
+        plan.leaves[3].ty.spell().to_string(),
+        "Option < & ZEncoding >"
+    );
+    assert!(
+        matches!(plan.variants[0].inputs[1], FoldArg::Leaf(2, true)),
+        "schema input marked passthrough"
+    );
+    assert!(plan.variants[1].clone, "borrowed identity arm clones");
+
+    let locals = vec![ident("sel"), ident("id"), ident("schema"), ident("enc")];
+    let s = emit_fold(plan, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string();
+    assert!(s.contains("if sel < 0"), "selector absence gate: {}", s);
+    assert!(
+        s.contains("z_encoding_from_id (__p0 , schema)"),
+        "wrapped id unwrapped, passthrough schema passed directly: {}",
+        s
+    );
+    assert!(
+        s.contains("Clone :: clone"),
+        "identity arm clones the borrow: {}",
+        s
+    );
+    assert!(
+        s.contains("Some") && s.contains("None"),
+        "maps Option: {}",
+        s
+    );
+}
+
+#[test]
+fn iterable_emit_shape() {
+    // `Iterable(Construct)` is not yet produced by `apply` (no `Vec<_>`
+    // param expansion is declared), but the fold is emit-ready: a hand-built
+    // plan must produce the `into_iter().map(...).collect::<Result<Vec<_>,_>>()`
+    // form, with the inner single-arg ctor applied per element.
+    let plan = FoldPlan {
+        target: tref(syn::parse_quote!(ZKeyExpr)),
+        by_ref: false,
+        shape: FoldShape::Iterable(Box::new(FoldShape::Base)),
+        leaves: vec![FoldLeaf {
+            name: ident("kes"),
+            ty: tref(syn::parse_quote!(Vec<String>)),
+        }],
+        selector: None,
+        present: None,
+        variants: vec![FoldVariant {
+            ctor: Some(ident("z_keyexpr_try_from")),
+            fallible: true,
+            clone: false,
+            inputs: vec![FoldArg::Leaf(0, false)],
+        }],
+    };
+    let locals = vec![ident("kes")];
+    let s = emit_fold(&plan, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string();
+    assert!(s.contains("into_iter"), "iterates: {}", s);
+    assert!(s.contains("collect"), "collects: {}", s);
+    assert!(
+        s.contains("Vec") && s.contains("z_keyexpr_try_from"),
+        "collects Result<Vec<_>> via per-elem ctor: {}",
+        s
+    );
+    assert!(!plan.produces_option());
+}
+
+#[test]
+fn default_constructor_auto_applies_and_skips() {
+    // A `.default()` ZKeyExpr constructor auto-`construct`s every matching
+    // param of every declared fn — except where `.skip_default_construct`'d.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+        "fn z_session_undeclare(s: &ZSession, k: ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZKeyExpr"),
+        variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
+        default: true,
+    });
+    // Opt the undeclare's `k` out (must stay a handle).
+    // Opt the undeclare's `k` out (must stay a handle).
+    exp.skip_construct
+        .insert((ident("z_session_undeclare"), ident("k")));
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_keyexpr_intersects", "z_session_undeclare"]
+            .iter()
+            .map(|s| ident(s))
+            .collect();
+    apply(
+        &mut reg,
+        &exp,
+        &declared,
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+
+    // Both `&ZKeyExpr` params of intersects are constructed.
+    assert!(reg
+        .expansion_plans
+        .contains_key(&(ident("z_keyexpr_intersects"), ident("a"))));
+    assert!(reg
+        .expansion_plans
+        .contains_key(&(ident("z_keyexpr_intersects"), ident("b"))));
+    // The skipped param is NOT.
+    assert!(!reg
+        .expansion_plans
+        .contains_key(&(ident("z_session_undeclare"), ident("k"))));
+}
+
+#[test]
+fn default_constructor_skips_accessor_and_explicit_construct_errors() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+        "fn z_keyexpr_clone(ke: &ZKeyExpr) -> ZKeyExpr { todo!() }",
+    ]);
+    let accessor: std::collections::HashSet<syn::Ident> =
+        ["z_keyexpr_clone"].iter().map(|s| ident(s)).collect();
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_keyexpr_intersects", "z_keyexpr_clone"]
+            .iter()
+            .map(|s| ident(s))
+            .collect();
+
+    // `.default()` skips the accessor's `ke`, constructs the consumer's a/b.
+    let mut exp = Expansions::default();
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZKeyExpr"),
+        variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
+        default: true,
+    });
+    apply(&mut reg, &exp, &declared, &accessor, &Default::default()).expect("apply");
+    assert!(reg
+        .expansion_plans
+        .contains_key(&(ident("z_keyexpr_intersects"), ident("a"))));
+    assert!(!reg
+        .expansion_plans
+        .contains_key(&(ident("z_keyexpr_clone"), ident("ke"))));
+
+    // An explicit per-fn input flatten on an accessor is a build error.
+    let mut reg2: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_clone(ke: &ZKeyExpr) -> ZKeyExpr { todo!() }",
+    ]);
+    let mut exp2 = Expansions::default();
+    exp2.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_clone"),
+        param: ident("ke"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
+    });
+    let err = apply(&mut reg2, &exp2, &declared, &accessor, &Default::default()).unwrap_err();
+    assert!(matches!(err, ExpandError::ConstructOnAccessor { .. }));
+}
+
+#[test]
+fn recursive_input_nests_param_constructors() {
+    // z_sample_new(key_expr: ZKeyExpr, payload: ZZBytes) -> ZSample, consumed
+    // by z_reply_sample(sample: ZSample). ZSample's default input expands
+    // the `sample` param into z_sample_new's params, each of which (ZKeyExpr,
+    // ZZBytes) recursively expands per ITS default input.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_new(key_expr: ZKeyExpr, payload: ZZBytes) -> ZSample { todo!() }",
+        "fn z_keyexpr_try_from(s: String) -> ZKeyExpr { todo!() }",
+        "fn z_zbytes_from_vec(b: Vec<u8>) -> ZZBytes { todo!() }",
+        "fn z_reply_sample(sample: ZSample) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    // Default inputs for ZSample (single), ZKeyExpr (combined: try_from|id),
+    // ZZBytes (single).
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZSample"),
+        variants: vec![Variant::Ctor(ident("z_sample_new"))],
+        default: true,
+    });
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZKeyExpr"),
+        variants: vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ],
+        default: true,
+    });
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZZBytes"),
+        variants: vec![Variant::Ctor(ident("z_zbytes_from_vec"))],
+        default: true,
+    });
+    // Top: single z_sample_new ctor, 2 args, both recursive Build.
+    // key_expr's nested build is COMBINED (try_from | identity ⇒ selector).
+    // payload's nested build is SINGLE (no selector).
+    // Wire leaves: key-expr selector + try_from String + identity ZKeyExpr +
+    // zbytes Vec<u8> — all flattened into the one signature.
+    // A → B → A constructor cycle is a build error (not an infinite expansion).
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_reply_sample"].iter().map(|s| ident(s)).collect();
+    apply(
+        &mut reg,
+        &exp,
+        &declared,
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_reply_sample"), ident("sample")))
+        .expect("sample plan");
+    // Top: single z_sample_new ctor, 2 args, both recursive Build.
+    assert_eq!(plan.selector, None);
+    assert_eq!(plan.variants.len(), 1);
+    let args = &plan.variants[0].inputs;
+    assert_eq!(args.len(), 2);
+    assert!(
+        matches!(args[0], FoldArg::Build(_)),
+        "key_expr is a nested build"
+    );
+    assert!(
+        matches!(args[1], FoldArg::Build(_)),
+        "payload is a nested build"
+    );
+    // key_expr's nested build is COMBINED (try_from | identity ⇒ selector).
+    if let FoldArg::Build(b) = &args[0] {
+        assert!(b.selector.is_some(), "ZKeyExpr default input is combined");
+        assert_eq!(b.variants.len(), 2);
+    }
+    // payload's nested build is SINGLE (no selector).
+    if let FoldArg::Build(b) = &args[1] {
+        assert!(b.selector.is_none(), "ZZBytes default input is single");
+    }
+    // Wire leaves: key-expr selector + try_from String + identity ZKeyExpr +
+    // zbytes Vec<u8> — all flattened into the one signature.
+    let leaf_tys: Vec<String> = plan
+        .leaves
+        .iter()
+        .map(|l| l.ty.spell().to_string())
+        .collect();
+    assert!(
+        leaf_tys.iter().any(|t| t.contains("i32")),
+        "selector leaf: {leaf_tys:?}"
+    );
+    assert!(
+        leaf_tys.iter().any(|t| t.contains("String")),
+        "try_from arg: {leaf_tys:?}"
+    );
+}
+
+#[test]
+fn recursive_input_cycle_errors() {
+    // A → B → A constructor cycle is a build error (not an infinite expansion).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn make_a(b: B) -> A { todo!() }",
+        "fn make_b(a: A) -> B { todo!() }",
+        "fn consume_a(a: A) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.constructors.push(ConstructorDecl {
+        target: key("A"),
+        variants: vec![Variant::Ctor(ident("make_a"))],
+        default: true,
+    });
+    exp.constructors.push(ConstructorDecl {
+        target: key("B"),
+        variants: vec![Variant::Ctor(ident("make_b"))],
+        default: true,
+    });
+    // C5 validation map: a variant ctor ident that names no `#[prebindgen]`
+    // fn is a hard `UnknownConstructor` at resolve time — a typo'd
+    // `expand_param!(...).variant(fun!(…))` cannot silently vanish.
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["consume_a"].iter().map(|s| ident(s)).collect();
+    let err = apply(
+        &mut reg,
+        &exp,
+        &declared,
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ExpandError::InputCycle { .. }), "got {err:?}");
+}
+
+/// C5 validation map: a variant ctor ident that names no `#[prebindgen]`
+/// fn is a hard `UnknownConstructor` at resolve time — a typo'd
+/// `expand_param!(...).variant(fun!(…))` cannot silently vanish.
+#[test]
+fn unknown_constructor_errors() {
+    use prebindgen::core::types_util::ident;
+    let mut reg: Registry<()> =
+        reg_with(&["fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }"]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from_typo"))]),
+    });
+    // C5 validation map: a variant ctor that exists but does not produce the
+    // expanded type is a hard `TargetMismatch` — the ctor's return is
+    // cross-checked against the parameter's type.
+    let err = apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ExpandError::UnknownConstructor(_)), "{err}");
+}
+
+/// C5 validation map: a variant ctor that exists but does not produce the
+/// expanded type is a hard `TargetMismatch` — the ctor's return is
+/// cross-checked against the parameter's type.
+#[test]
+fn constructor_target_mismatch_errors() {
+    use prebindgen::core::types_util::ident;
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_new(s: String) -> ZSample { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_sample_new"))]),
+    });
+    let err = apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ExpandError::TargetMismatch { .. }), "{err}");
+}
+
+/// #96: structurally invalid declaration sets are rejected with COLLECTED
+/// diagnostics — every offender reported in one error, before any plan
+/// resolution.
+#[test]
+fn invalid_declarations_collected() {
+    use prebindgen::core::types_util::ident;
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_session_get(s: &ZSession, k: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    // Duplicate constructor target (two records, same TypeKey).
+    for _ in 0..2 {
+        exp.constructors.push(ConstructorDecl {
+            target: key("ZKeyExpr"),
+            variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
+            default: true,
+        });
+    }
+    // Empty constructor variant list.
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZEmpty"),
+        variants: vec![],
+        default: true,
+    });
+    // Duplicate per-fn expand for the same (fn, param), plus an empty subset.
+    for sel in [
+        ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
+        ExpandSel::Subset(vec![]),
+    ] {
+        exp.expands.push(ExpandDecl {
+            func: ident("z_session_get"),
+            param: ident("k"),
+            declared_target: Some(key("ZKeyExpr")),
+            sel,
+        });
+    }
+    let err = apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap_err();
+    let ExpandError::InvalidDeclarations { entries } = &err else {
+        panic!("expected InvalidDeclarations, got {err}");
+    };
+    // All four problems collected in one pass.
+    assert_eq!(entries.len(), 4, "{err}");
+    let text = err.to_string();
+    assert!(
+        text.contains("duplicate constructor declaration for `ZKeyExpr`"),
+        "{text}"
+    );
+    assert!(
+        text.contains("constructor for `ZEmpty` declares no variants"),
+        "{text}"
+    );
+    assert!(
+        text.contains("expand for parameter `k` of `z_session_get` declares no variants"),
+        "{text}"
+    );
+    assert!(
+        text.contains("duplicate expand declaration for parameter `k` of `z_session_get`"),
+        "{text}"
+    );
+}
+
+/// A `Vec<T>` parameter is **not** a `T` parameter, even when `T` has a
+/// constructor.
+///
+/// Expansion builds one value: `FoldPlan`'s shape is `Base` or `Optional(Base)`,
+/// with no iterable arm. So the layer peel here stops at the borrow — if it also
+/// peeled the `Sequence`, a `Vec<T>` parameter would match a `T` constructor and
+/// the wrapper would reconstruct a single `T` and hand it to a parameter
+/// expecting the collection. Not a rejected plan: a wrong one, in generated code.
+///
+/// Missed once, and by everything: the whole suite passed either way, and
+/// regen-check was byte-identical, because no example declares a `Vec<T>`
+/// parameter whose element is constructible. That is what this fixture is.
+#[test]
+fn a_vec_param_does_not_match_its_elements_constructor() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_join_all(parts: Vec<ZKeyExpr>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    // The type-level default: every `ZKeyExpr` parameter may be built from a
+    // `String`. `parts` is a `Vec<ZKeyExpr>`, so it is not one of them.
+    exp.constructors.push(ConstructorDecl {
+        target: key("ZKeyExpr"),
+        variants: vec![Variant::Ctor(ident("z_keyexpr_try_from"))],
+        default: true,
+    });
+
+    apply(
+        &mut reg,
+        &exp,
+        &[ident("z_keyexpr_join_all")].into_iter().collect(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+
+    assert!(
+        !reg.expansion_plans
+            .contains_key(&(ident("z_keyexpr_join_all"), ident("parts"))),
+        "a Vec<ZKeyExpr> parameter must not be expanded as one ZKeyExpr; \
+         plans: {:?}",
+        reg.expansion_plans.keys().collect::<Vec<_>>()
+    );
+}

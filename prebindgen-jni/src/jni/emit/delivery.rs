@@ -1,6 +1,6 @@
 //! Output-expansion delivery: unfold plans and leaf encoding.
 
-use prebindgen::core::{
+use prebindgen_registry::{
     unfold::{steps_are_movable, PathStep},
     Conversions,
 };
@@ -28,18 +28,18 @@ use super::*;
 /// (JString/JByteArray/JObject — cast via `.into()`) or primitive (boxed to
 /// `java.lang.*` via the cached `box_helper_for_wire` runtime helpers).
 ///
-/// [`UnfoldShape::Base`]: prebindgen::core::unfold::UnfoldShape::Base
-/// [`UnfoldShape::Optional`]: prebindgen::core::unfold::UnfoldShape::Optional
+/// [`UnfoldShape::Base`]: prebindgen_registry::unfold::UnfoldShape::Base
+/// [`UnfoldShape::Optional`]: prebindgen_registry::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    plan: &prebindgen::core::unfold::UnfoldPlan,
+    plan: &prebindgen_registry::unfold::UnfoldPlan,
     iface: Option<&IfaceSpec>,
     call_expr: &TokenStream,
     on_err: &TokenStream,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> TokenStream {
-    use prebindgen::core::unfold::UnfoldShape;
+    use prebindgen_registry::unfold::UnfoldShape;
 
     let n = plan.leaves.len();
 
@@ -444,16 +444,16 @@ fn project_leading_fields(
 /// read and changed together: they drifted once already — the shortcut was
 /// missing the `Field` clone and handed `&F` to an `F` converter.
 ///
-/// [`Delivery::Return`]: prebindgen::core::unfold::Delivery::Return
+/// [`Delivery::Return`]: prebindgen_registry::unfold::Delivery::Return
 pub(crate) fn reach_leaf_flat(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    leaf: &prebindgen::core::unfold::UnfoldLeaf,
+    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
     path: &[PathStep],
     base: TokenStream,
     base_is_ref: bool,
     consuming: bool,
 ) -> TokenStream {
-    use prebindgen::core::unfold::LeafSource;
+    use prebindgen_registry::unfold::LeafSource;
     // An optional step BEFORE the last one needs a `match` whose `None` arm has
     // somewhere to go. This derivation has none — it yields a plain Rust value,
     // not a `JObject` that could be null — so the shape is refused here rather
@@ -497,7 +497,7 @@ pub(crate) fn reach_leaf_flat(
     let reached_is_ours = if leaf.identity {
         !matches!(
             leaf.out_ty.kind(),
-            prebindgen::core::flat::TypeKind::Ref { .. }
+            prebindgen_registry::flat::TypeKind::Ref { .. }
         )
     } else {
         consuming
@@ -650,7 +650,7 @@ fn reach_optional(
 
 pub(crate) fn bind_hoists(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    hoists: &[prebindgen::core::unfold::Hoist],
+    hoists: &[prebindgen_registry::unfold::Hoist],
     value: &TokenStream,
     by_ref: bool,
 ) -> Hoisted {
@@ -860,11 +860,11 @@ fn reach_leaf(
 pub(crate) fn encode_plan_leaves(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    plan: &prebindgen::core::unfold::UnfoldPlan,
+    plan: &prebindgen_registry::unfold::UnfoldPlan,
     obj_idents: &[syn::Ident],
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<TokenStream>) {
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
@@ -899,7 +899,7 @@ pub(crate) fn encode_plan_leaves(
     // `Some` arm binds — a borrow of the struct, so nothing moves out of it —
     // and its statements are collected into that arm rather than emitted here.
     let rebase =
-        |leaf: &prebindgen::core::unfold::UnfoldLeaf| -> (TokenStream, bool, Vec<PathStep>, bool) {
+        |leaf: &prebindgen_registry::unfold::UnfoldLeaf| -> (TokenStream, bool, Vec<PathStep>, bool) {
             if let Some((i, _, bind, rest)) = hoisted.conditional(&leaf.path) {
                 return (quote!(#bind), false, rest, hoisted.consumed(i));
             }
@@ -916,7 +916,7 @@ pub(crate) fn encode_plan_leaves(
     // the returned value is the degenerate case of one segment covering
     // everything, while a value form contributes one per sum-typed field.
     let sum_segments: Vec<std::ops::Range<usize>> = (0..n)
-        .filter(|&i| plan.leaves[i].source == prebindgen::core::unfold::LeafSource::SumTag)
+        .filter(|&i| plan.leaves[i].source == prebindgen_registry::unfold::LeafSource::SumTag)
         .map(|start| {
             let end = (start + 1..n)
                 .take_while(|&i| plan.leaves[i].group.is_some())
@@ -1084,7 +1084,7 @@ pub(crate) fn encode_plan_leaves(
             // whole `Option` in rather than borrowing it.
             let owned_place: Option<TokenStream> = if !matches!(
                 leaf.out_ty.kind(),
-                prebindgen::core::flat::TypeKind::Ref { .. }
+                prebindgen_registry::flat::TypeKind::Ref { .. }
             ) && steps_are_movable(&path)
             {
                 let segs: Vec<&syn::Ident> = path.iter().map(PathStep::ident).collect();
@@ -1260,7 +1260,7 @@ pub(crate) fn encode_plan_leaves(
         // String, …) carries any nullability, so there is no path `Option` to
         // unwrap. `reach(body)` dispatches on the source and feeds the reached
         // Rust expression to `body`.
-        use prebindgen::core::unfold::LeafSource;
+        use prebindgen_registry::unfold::LeafSource;
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
             match &leaf.source {
                 LeafSource::Accessor => {
@@ -1381,7 +1381,7 @@ pub(crate) fn encode_plan_leaves(
 /// nullable primitive boxes (object chunk), object wires pass as objects.
 pub(crate) fn leaf_is_prim(
     registry: &impl Conversions<KotlinMeta>,
-    leaf: &prebindgen::core::unfold::UnfoldLeaf,
+    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
 ) -> bool {
     // The synthesized sum selector is a `jint` by definition — it is assigned,
     // never converted, so it has no output entry to read a wire from and must
@@ -1391,7 +1391,7 @@ pub(crate) fn leaf_is_prim(
     // the absent case needs a representation the tag's own variants do not
     // provide. A raw `jint` has none — zero is a real variant — so the selector
     // boxes like any other nullable leaf and JVM null means "no value here".
-    if leaf.source == prebindgen::core::unfold::LeafSource::SumTag {
+    if leaf.source == prebindgen_registry::unfold::LeafSource::SumTag {
         return !leaf.nullable;
     }
     if leaf.nullable {
@@ -1406,7 +1406,7 @@ pub(crate) fn leaf_is_prim(
 /// inert sum group slot).
 pub(crate) fn leaf_ty_is_prim(
     registry: &impl Conversions<KotlinMeta>,
-    out_ty: &prebindgen::core::flat::TypeRef,
+    out_ty: &prebindgen_registry::flat::TypeRef,
 ) -> bool {
     let Some(entry) = registry.output_entry(out_ty) else {
         return false;
@@ -1425,7 +1425,7 @@ pub(crate) fn leaf_ty_is_prim(
 
 #[cfg(test)]
 mod tests {
-    use prebindgen::core::unfold::{LeafSource, UnfoldLeaf};
+    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
 
     use super::*;
     /// A `TypeRef` through the model. `Flat::classify` is sealed to `api::core`

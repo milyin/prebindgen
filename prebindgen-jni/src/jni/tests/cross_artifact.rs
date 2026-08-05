@@ -361,11 +361,11 @@ fn cross_artifact_representative_shapes_agree() {
         )
         .package(
             crate::package!("thing")
-                .fun(prebindgen::fun!(z_thing_new))
-                .fun(prebindgen::fun!(z_thing_name))
-                .fun(prebindgen::fun!(z_thing_consume))
-                .fun(prebindgen::fun!(z_thing_peek))
-                .fun(prebindgen::fun!(z_paint))
+                .fun(prebindgen_registry::fun!(z_thing_new))
+                .fun(prebindgen_registry::fun!(z_thing_name))
+                .fun(prebindgen_registry::fun!(z_thing_consume))
+                .fun(prebindgen_registry::fun!(z_thing_peek))
+                .fun(prebindgen_registry::fun!(z_paint))
                 .constant(crate::constant!(MAX_LEN)),
         );
     let (rust, kotlin) = run_pipeline("jnigen_xart_repr", items, jni);
@@ -436,20 +436,21 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
             crate::package!("thing")
                 .class(crate::data_class!(Payload))
                 .class(
-                    crate::ptr_class!(ZThing).method(prebindgen::fun!(z_thing_name).name("name")),
+                    crate::ptr_class!(ZThing)
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name")),
                 )
-                .fun(prebindgen::fun!(z_thing_get))
-                .fun(prebindgen::fun!(take_payload))
-                .fun(prebindgen::fun!(take_many))
-                .fun(prebindgen::fun!(z_thing_sub)),
+                .fun(prebindgen_registry::fun!(z_thing_get))
+                .fun(prebindgen_registry::fun!(take_payload))
+                .fun(prebindgen_registry::fun!(take_many))
+                .fun(prebindgen_registry::fun!(z_thing_sub)),
         )
         // Canonical output: handle (identity) + its string form — a return /
         // callback arg of ZThing decomposes into these 2 leaves (builder
         // delivery for `z_thing_get`).
         .expand(
-            prebindgen::expand_return!(ZThing)
+            prebindgen_registry::expand_return!(ZThing)
                 .field_self()
-                .field(prebindgen::fun!(z_thing_name)),
+                .field(prebindgen_registry::fun!(z_thing_name)),
         );
     let (rust, kotlin) = run_pipeline("jnigen_xart_shapes", items, jni);
     assert_cross_artifact(&rust, &kotlin);
@@ -496,15 +497,16 @@ fn cross_artifact_optional_iterable_fold_agrees() {
         .package(
             crate::package!("thing")
                 .class(
-                    crate::ptr_class!(ZThing).method(prebindgen::fun!(z_thing_name).name("name")),
+                    crate::ptr_class!(ZThing)
+                        .method(prebindgen_registry::fun!(z_thing_name).name("name")),
                 )
-                .fun(prebindgen::fun!(z_things_all))
-                .fun(prebindgen::fun!(z_things_maybe)),
+                .fun(prebindgen_registry::fun!(z_things_all))
+                .fun(prebindgen_registry::fun!(z_things_maybe)),
         )
         .expand(
-            prebindgen::expand_return!(ZThing)
+            prebindgen_registry::expand_return!(ZThing)
                 .field_self()
-                .field(prebindgen::fun!(z_thing_name)),
+                .field(prebindgen_registry::fun!(z_thing_name)),
         );
     let (rust, kotlin) = run_pipeline("jnigen_xart_opt_fold", items, jni);
     assert_cross_artifact(&rust, &kotlin);

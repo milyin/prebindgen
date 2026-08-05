@@ -1,6 +1,6 @@
 //! JNI back-end for the Registry pipeline.
 //!
-//! [`JniGenBuilder`] implements [`prebindgen::core::Prebindgen`]
+//! [`JniGenBuilder`] implements [`prebindgen_registry::Prebindgen`]
 //! (Rust-side conversion bodies) and provides an inherent
 //! `JniGenBuilder::write_kotlin` for emitting all Kotlin output
 //! (`NativeHandle.kt`, typed-handle classes, `JNIWrappers.kt`).
@@ -32,16 +32,16 @@ pub(crate) use std::{
 pub(crate) use kotlin_codegen as kt;
 use kotlin_codegen::WriteKotlinError;
 pub(crate) use metadata::{FoldStrategy, KotlinMeta, NullableKind, Projection, ProjectionKind};
-// Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
-pub(crate) use prebindgen::core::{
-    flat::Origin,
-    types_util::{option_inner_type, vec_inner_type},
-    ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, ScalarValue, Stage, TypeKey,
-};
 pub use prebindgen_jni_runtime::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
     decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
     null_string, CachedIfaceMethod, JniBindingError,
+};
+// Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
+pub(crate) use prebindgen_registry::{
+    flat::Origin,
+    types_util::{option_inner_type, vec_inner_type},
+    ConverterImpl, Direction, NicheSlot, Niches, Prebindgen, Registry, ScalarValue, Stage, TypeKey,
 };
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
@@ -95,7 +95,7 @@ pub(crate) struct EnumConfig {}
 /// of [`DeclaredKind::Sealed`], which is what marks a `#[prebindgen]`
 /// **data-carrying** enum as mirrored by a
 /// Kotlin `sealed interface`. The tag/leaf-group structure itself is read
-/// from the model's [`Variant`](prebindgen::core::flat::Variant) — its
+/// from the model's [`Variant`](prebindgen_registry::flat::Variant) — its
 /// `alternatives` in declaration order, indexed as they are tagged — and only
 /// what the declaration adds lives here.
 #[derive(Clone, Default)]
@@ -350,17 +350,17 @@ pub(crate) type MethodNameMangle = Arc<dyn Fn(&str, &str, &str) -> String + Send
 ///     .package(
 ///         prebindgen_jni::package!("keyexpr")
 ///             .class(prebindgen_jni::ptr_class!(KeyExpr)
-///                 .method(prebindgen::fun!(keyexpr_get_str).name("getStr"))
-///                 .constructor(prebindgen::fun!(keyexpr_new_try_from).name("tryFrom"))),
+///                 .method(prebindgen_registry::fun!(keyexpr_get_str).name("getStr"))
+///                 .constructor(prebindgen_registry::fun!(keyexpr_new_try_from).name("tryFrom"))),
 ///     )
 ///     // A KeyExpr param accepts EITHER a String (built via tryFrom) OR an
 ///     // existing handle; a returned KeyExpr decomposes into its string form.
 ///     .expand(
-///         prebindgen::expand_param!(KeyExpr)
-///             .variant(prebindgen::fun!(keyexpr_new_try_from))
+///         prebindgen_registry::expand_param!(KeyExpr)
+///             .variant(prebindgen_registry::fun!(keyexpr_new_try_from))
 ///             .variant_self(),
 ///     )
-///     .expand(prebindgen::expand_return!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
+///     .expand(prebindgen_registry::expand_return!(KeyExpr).field(prebindgen_registry::fun!(keyexpr_get_str)));
 /// ```
 /// A resolved JNI binding: every crossing has a conversion, and the artifacts
 /// can be written.
@@ -377,7 +377,7 @@ pub struct JniGen {
     /// would be a comment rather than a type.
     decls: Declarations,
     /// Every crossing this binding needs, each with its conversion.
-    registry: prebindgen::core::Registry<KotlinMeta>,
+    registry: prebindgen_registry::Registry<KotlinMeta>,
 }
 
 // Opaque — exists so `Result<JniGen, _>::expect_err` works in tests.
@@ -403,8 +403,8 @@ impl JniGen {
     pub fn write_rust(
         &self,
         out_path: impl AsRef<std::path::Path>,
-    ) -> Result<std::path::PathBuf, prebindgen::core::WriteRustError> {
-        Ok(prebindgen::core::write::write_rust(
+    ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        Ok(prebindgen_registry::write::write_rust(
             &self.registry,
             &self.decls,
             out_path,
@@ -412,7 +412,7 @@ impl JniGen {
     }
 
     /// The resolved registry — conversions, decompositions, and the model.
-    pub fn registry(&self) -> &prebindgen::core::Registry<KotlinMeta> {
+    pub fn registry(&self) -> &prebindgen_registry::Registry<KotlinMeta> {
         &self.registry
     }
 
@@ -560,7 +560,7 @@ pub struct Declarations {
     /// [`matching`](crate::matching). Backs
     /// [`Prebindgen::ignored_name_predicates`]: every undeclared item
     /// (fn/type/const) whose name matches is an acknowledged skip.
-    pub(crate) ignored_name_predicates: Vec<prebindgen::core::NamePredicate>,
+    pub(crate) ignored_name_predicates: Vec<prebindgen_registry::NamePredicate>,
 
     /// `#[prebindgen]` types the binding deliberately does NOT declare,
     /// via [`JniGenBuilder::ignore`]. Backs [`Prebindgen::ignored_types`].
@@ -569,7 +569,7 @@ pub struct Declarations {
     /// `#[prebindgen]` consts the binding deliberately does NOT declare,
     /// via [`JniGenBuilder::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
     pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
-    /// Binding-local fns declared via path-built [`fun!`](prebindgen::fun) +
+    /// Binding-local fns declared via path-built [`fun!`](prebindgen_registry::fun) +
     /// [`FunctionDecl::sig`]: `(fn ident = path last segment, declared path,
     /// stated signature)`. Synthesized into registry entries by the
     /// [`Prebindgen::local_functions`] pre-pass.
@@ -611,7 +611,7 @@ pub struct JniGenBuilder {
 
     /// Where the `#[prebindgen]` items come from.
     ///
-    /// A [`FlatBuilder`](prebindgen::core::flat::FlatBuilder), stated with the same
+    /// A [`FlatBuilder`](prebindgen_registry::flat::FlatBuilder), stated with the same
     /// three feeders it has — so a build script says where the source is in the
     /// vocabulary the model already uses, and never names a `Flat` or a
     /// `Registry` itself.
@@ -619,7 +619,7 @@ pub struct JniGenBuilder {
     /// Not a declaration, which is why it stays here rather than moving across:
     /// it is *input to* building, and keeping it out is what makes
     /// [`Declarations`] mean one thing.
-    pub(crate) sources: prebindgen::core::flat::FlatBuilder,
+    pub(crate) sources: prebindgen_registry::flat::FlatBuilder,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────

@@ -21,9 +21,9 @@ fn bounded_duration_option_is_one_scalar_with_named_niche() {
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
-            prebindgen::convert!(Duration)
-                .input(prebindgen::fun!(duration_from_millis))
-                .output(prebindgen::fun!(duration_to_millis))
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis))
                 .valid_range(0u64..=1_000_000u64),
         )
         .base_name("z_duration")
@@ -79,9 +79,9 @@ fn bounded_float_option_uses_a_finite_bit_exact_niche() {
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
-            prebindgen::convert!(Ratio)
-                .input(prebindgen::fun!(ratio_from_f64))
-                .output(prebindgen::fun!(ratio_to_f64))
+            prebindgen_registry::convert!(Ratio)
+                .input(prebindgen_registry::fun!(ratio_from_f64))
+                .output(prebindgen_registry::fun!(ratio_to_f64))
                 .valid_range(0.0f64..=1.0f64),
         )
         .base_name("z_ratio")
@@ -125,9 +125,9 @@ fn custom_conversion_without_domain_stays_infallible() {
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
         .convert(
-            prebindgen::convert!(Ratio)
-                .input(prebindgen::fun!(ratio_from_f64))
-                .output(prebindgen::fun!(ratio_to_f64)),
+            prebindgen_registry::convert!(Ratio)
+                .input(prebindgen_registry::fun!(ratio_from_f64))
+                .output(prebindgen_registry::fun!(ratio_to_f64)),
         )
         .function(syn::parse_quote!(ratio_echo));
 

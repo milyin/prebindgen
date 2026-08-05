@@ -10,7 +10,7 @@
 //!   JVM signatures — so a function can safely request overloads. A collision is
 //!   a hard build error attributed to the declaration; `.no_split()` opts out.
 //! * **Per-function emission** ([`render_param_overloads`], driven by
-//!   [`FunctionDecl::split_on_param`](prebindgen::fun)): for the named split params the
+//!   [`FunctionDecl::split_on_param`](prebindgen_registry::fun)): for the named split params the
 //!   generator emits, alongside the selector wrapper, the **cartesian product** of
 //!   their arms as typed overloads, each delegating to the selector form. The
 //!   concrete product must have no two combinations sharing a JVM signature.
@@ -29,7 +29,7 @@
 //! Kotlin call sites (both mean absent) and needs a cast — signatures are
 //! still pairwise-distinct per the checks above.
 
-use prebindgen::core::{
+use prebindgen_registry::{
     expand::{FoldArg, FoldPlan},
     Conversions,
 };
@@ -39,14 +39,14 @@ use super::*;
 impl Declarations {
     /// Proactively verify every multi-variant `expand_param!` declaration is
     /// splittable (its arms have pairwise-distinct JVM-erased signatures), so
-    /// [`FunctionDecl::split_on_param`](prebindgen::fun) can emit unambiguous
+    /// [`FunctionDecl::split_on_param`](prebindgen_registry::fun) can emit unambiguous
     /// overloads. Runs regardless of whether any function actually splits the
     /// type, so authorship errors surface early. `.no_split()` opts a decl out.
     /// A collision errors with a message attributed to the declaration
     /// (surfaced through the [`validate_resolved`] boundary before any
     /// artifact is written).
     ///
-    /// [`validate_resolved`]: prebindgen::core::Prebindgen::validate_resolved
+    /// [`validate_resolved`]: prebindgen_registry::Prebindgen::validate_resolved
     pub(crate) fn validate_split_declarations(
         &self,
         registry: &Registry<KotlinMeta>,
@@ -145,12 +145,12 @@ fn arm_erased_sig(
 fn rust_type_erased(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    ty: &prebindgen::core::flat::TypeRef,
+    ty: &prebindgen_registry::flat::TypeRef,
 ) -> ErasedJvmType {
     // The spelling's own outermost borrow, as `TypeKind::Ref` — not
     // `borrow_target`, which reaches through the erased wrappers (#S31).
     let peeled = match ty.kind() {
-        prebindgen::core::flat::TypeKind::Ref { inner, .. } => inner,
+        prebindgen_registry::flat::TypeKind::Ref { inner, .. } => inner,
         _ => ty,
     };
     let key = peeled.key();
@@ -215,7 +215,7 @@ struct Split<'a> {
 /// `sig.inputs` walk this replaced had to skip a receiver it could not have
 /// (the frontend refuses one) and match `Pat::Ident` for a pattern the frontend
 /// already required.
-fn ctor_param_names(f: &prebindgen::core::flat::Function) -> Vec<String> {
+fn ctor_param_names(f: &prebindgen_registry::flat::Function) -> Vec<String> {
     f.params
         .iter()
         .map(|p| kt_param_name(&p.name.to_string()))
@@ -250,7 +250,7 @@ fn non_null(mut ty: kt::KtType) -> kt::KtType {
 /// Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
     registry: &impl Conversions<KotlinMeta>,
-    variant: &prebindgen::core::expand::FoldVariant,
+    variant: &prebindgen_registry::expand::FoldVariant,
     origin: &syn::Ident,
     block: &[kt::KtParam],
     multi: bool,
@@ -265,7 +265,12 @@ fn variant_typed_params(
             let optional = f
                 .params
                 .iter()
-                .map(|p| matches!(p.ty.kind(), prebindgen::core::flat::TypeKind::Optional(_)))
+                .map(|p| {
+                    matches!(
+                        p.ty.kind(),
+                        prebindgen_registry::flat::TypeKind::Optional(_)
+                    )
+                })
                 .collect();
             (ctor_param_names(f), optional)
         }
@@ -314,7 +319,7 @@ fn find_block(params: &[kt::KtParam], leaf_names: &[String]) -> Option<usize> {
 /// hard errors — the user explicitly asked to split it).
 fn resolve_split<'a>(
     registry: &'a Registry<KotlinMeta>,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     sel_fun: &kt::KtFun,
     param_name: &str,
     multi: bool,
@@ -402,7 +407,7 @@ fn resolve_split<'a>(
 /// error) if the product has two combinations with the same JVM signature.
 pub(crate) fn render_param_overloads(
     ext: &Declarations,
-    f: &prebindgen::core::flat::Function,
+    f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
     sel_fun: &kt::KtFun,
 ) -> Vec<kt::KtFun> {
@@ -602,7 +607,7 @@ mod tests {
             vec![(syn::Item::Fn(ctor), SourceLocation::default())],
         ))
         .expect("index constructor");
-        let variant = prebindgen::core::expand::FoldVariant {
+        let variant = prebindgen_registry::expand::FoldVariant {
             ctor: Some(syn::parse_quote!(z_summary_optional)),
             fallible: false,
             clone: false,

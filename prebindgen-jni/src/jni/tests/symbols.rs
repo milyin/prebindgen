@@ -3,7 +3,7 @@
 //! / custom-hook output and genuine collisions are collected hard errors
 //! surfaced before any file is written.
 
-use prebindgen::core::RegistryBuilder;
+use prebindgen_registry::RegistryBuilder;
 
 use super::*;
 
@@ -42,7 +42,7 @@ fn invalid_name_override_is_error() {
     let registry = one_fn("pub fn z_do_thing() -> i64 { 0 }");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("thing").fun(prebindgen::fun!(z_do_thing).name("when")));
+        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_do_thing).name("when")));
     let err = resolve_result("jni_sym_name", registry, jni).expect_err("invalid .name()");
     assert!(err.contains("`when`"), "{err}");
     assert!(err.contains("not a valid Kotlin identifier"), "{err}");
@@ -56,7 +56,7 @@ fn invalid_hook_output_is_error() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .set_fun_name_mangle(|_pkg, _name| "1bad".to_string())
-        .package(crate::package!("thing").fun(prebindgen::fun!(z_do_thing)));
+        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_do_thing)));
     let err = resolve_result("jni_sym_hook", registry, jni).expect_err("invalid hook output");
     assert!(err.contains("`1bad`"), "{err}");
     assert!(err.contains("not a valid Kotlin identifier"), "{err}");
@@ -70,7 +70,7 @@ fn valid_default_names_pass() {
     let registry = one_fn("pub fn z_do_thing() -> i64 { 0 }");
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("thing").fun(prebindgen::fun!(z_do_thing)));
+        .package(crate::package!("thing").fun(prebindgen_registry::fun!(z_do_thing)));
     resolve_result("jni_sym_ok", registry, jni).expect("valid names must pass");
 }
 
@@ -98,8 +98,8 @@ fn duplicate_native_symbol_is_error() {
         .set_method_name_mangle(|_pkg, _class, _name| "collide".to_string())
         .package(
             crate::package!("thing")
-                .fun(prebindgen::fun!(z_alpha))
-                .fun(prebindgen::fun!(z_beta)),
+                .fun(prebindgen_registry::fun!(z_alpha))
+                .fun(prebindgen_registry::fun!(z_beta)),
         );
     let err = resolve_result("jni_sym_dupnative", registry, jni).expect_err("duplicate symbol");
     assert!(err.contains("duplicate native symbol"), "{err}");
@@ -132,7 +132,7 @@ fn keyword_struct_field_is_sanitized_not_error() {
         .package(
             crate::package!("thing")
                 .class(crate::data_class!(Payload))
-                .fun(prebindgen::fun!(make)),
+                .fun(prebindgen_registry::fun!(make)),
         );
     // The keyword field is sanitized (mangle → `object_`), not rejected.
     let dir = unique_test_dir("jni_sym_field");
@@ -169,7 +169,7 @@ fn class_interface_collision_is_error() {
         .package(
             crate::package!("thing")
                 .class(crate::ptr_class!(ZThing).interface())
-                .fun(prebindgen::fun!(z_thing_new)),
+                .fun(prebindgen_registry::fun!(z_thing_new)),
         );
     let err = resolve_result("jni_sym_iface", registry, jni).expect_err("iface==class collision");
     assert!(
@@ -201,8 +201,8 @@ fn same_name_same_signature_functions_collide() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
-                .fun(prebindgen::fun!(z_alpha).name("combine"))
-                .fun(prebindgen::fun!(z_beta).name("combine")),
+                .fun(prebindgen_registry::fun!(z_alpha).name("combine"))
+                .fun(prebindgen_registry::fun!(z_beta).name("combine")),
         );
     let err = resolve_result("jni_ov_collide", registry, jni).expect_err("overload clash");
     assert!(err.contains("conflicting Kotlin overload"), "{err}");
@@ -229,8 +229,8 @@ fn same_name_distinct_signature_functions_allowed() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
-                .fun(prebindgen::fun!(z_alpha).name("combine"))
-                .fun(prebindgen::fun!(z_beta).name("combine")),
+                .fun(prebindgen_registry::fun!(z_alpha).name("combine"))
+                .fun(prebindgen_registry::fun!(z_beta).name("combine")),
         );
     resolve_result("jni_ov_ok", registry, jni).expect("distinct signatures are valid overloads");
 }
@@ -255,8 +255,8 @@ fn method_and_factory_same_name_do_not_collide() {
         .package(
             crate::package!("thing").class(
                 crate::ptr_class!(Thing)
-                    .method(prebindgen::fun!(thing_size).name("of"))
-                    .constructor(prebindgen::fun!(thing_make).name("of")),
+                    .method(prebindgen_registry::fun!(thing_size).name("of"))
+                    .constructor(prebindgen_registry::fun!(thing_make).name("of")),
             ),
         );
     // Instance method `of()` and companion factory `of()` are distinct scopes.

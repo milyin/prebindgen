@@ -5,7 +5,7 @@
 //! ONE alternative's leaves are live per value. Core models that with a
 //! synthesized [`LeafSource::SumTag`] selector plus per-leaf
 //! [`UnfoldLeaf::group`] membership
-//! ([`apply_sum_returns`](prebindgen::core::unfold::apply_sum_returns)); this
+//! ([`apply_sum_returns`](prebindgen_registry::unfold::apply_sum_returns)); this
 //! module is the JNI adapter's two ends of it — [`synth_sum_leaves`] builds the
 //! leaf list before `resolve`, [`encode_sum_leaves`] emits the single `match`
 //! that fills every slot at emit time.
@@ -16,7 +16,7 @@
 //! wire-defaulted. Only the delivery differs — a field's slots ride the
 //! parent's `fromParts`, a return's ride the hoisted builder singleton.
 
-use prebindgen::core::Conversions;
+use prebindgen_registry::Conversions;
 
 use super::*;
 
@@ -44,9 +44,9 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 pub(crate) fn synth_sum_leaves(
     ext: &Declarations,
     sum_cfg: &SumConfig,
-    sum: &prebindgen::core::flat::Variant,
-) -> Vec<prebindgen::core::unfold::UnfoldLeaf> {
-    use prebindgen::core::unfold::{LeafSource, UnfoldLeaf};
+    sum: &prebindgen_registry::flat::Variant,
+) -> Vec<prebindgen_registry::unfold::UnfoldLeaf> {
+    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
 
     // The selector rides ahead of the groups it chooses between, and carries
     // **which sum** it selects over as its `out_ty` — that is how the emitter
@@ -107,9 +107,9 @@ pub(crate) struct Slot {
 
 pub(crate) fn leaf_slot(
     registry: &impl Conversions<KotlinMeta>,
-    leaf: &prebindgen::core::unfold::UnfoldLeaf,
+    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
 ) -> Slot {
-    use prebindgen::core::unfold::LeafSource;
+    use prebindgen_registry::unfold::LeafSource;
     if !leaf_is_prim(registry, leaf) {
         return Slot {
             prim: false,
@@ -141,8 +141,8 @@ pub(crate) fn leaf_slot(
 
 /// True when `plan` decomposes a sum — it carries the synthesized selector.
 /// The one place that question is asked, so every consumer agrees on it.
-pub(crate) fn is_sum_leaves(leaves: &[prebindgen::core::unfold::UnfoldLeaf]) -> bool {
-    use prebindgen::core::unfold::LeafSource;
+pub(crate) fn is_sum_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> bool {
+    use prebindgen_registry::unfold::LeafSource;
     leaves.iter().any(|l| l.source == LeafSource::SumTag)
 }
 
@@ -165,13 +165,13 @@ pub(crate) fn is_sum_leaves(leaves: &[prebindgen::core::unfold::UnfoldLeaf]) -> 
 pub(crate) fn encode_sum_group(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
-    leaves: &[prebindgen::core::unfold::UnfoldLeaf],
+    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
     obj_idents: &[syn::Ident],
     matched: TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
-    emit: &prebindgen::core::Emit,
+    emit: &prebindgen_registry::Emit,
 ) -> (TokenStream, Vec<TokenStream>) {
-    use prebindgen::core::unfold::LeafSource;
+    use prebindgen_registry::unfold::LeafSource;
 
     // Which sum this is comes from the selector leaf, not from the plan's
     // source: the plan's source is the *containing* value when the sum is a
@@ -182,7 +182,7 @@ pub(crate) fn encode_sum_group(
         .expect("a sum segment carries its selector leaf");
     // The name off the reading — `TypeId` IS the name, so nothing takes a path
     // apart to re-derive one.
-    let prebindgen::core::flat::TypeKind::Named { id, .. } = tag_leaf.out_ty.unwrapped().kind()
+    let prebindgen_registry::flat::TypeKind::Named { id, .. } = tag_leaf.out_ty.unwrapped().kind()
     else {
         panic!(
             "jnigen sum unfold: selector type `{}` is not a named type",
@@ -238,7 +238,7 @@ pub(crate) fn encode_sum_group(
     // enum's own alternatives, not by the grouped leaves. `enum_item` hands
     // back only the `syn::ItemEnum`, deliberately — a consumer that acts on the
     // Variant/Enum distinction asks `declared_type` (#289).
-    let Some(prebindgen::core::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
+    let Some(prebindgen_registry::flat::Type::Variant(sum)) = registry.flat().declared_type(&ident)
     else {
         panic!("jnigen sum unfold: no indexed sum `{ident}` for the decomposed sum")
     };
@@ -339,7 +339,7 @@ pub(crate) fn encode_sum_group(
 /// way.
 fn encode_group_leaf(
     registry: &impl Conversions<KotlinMeta>,
-    leaf: &prebindgen::core::unfold::UnfoldLeaf,
+    leaf: &prebindgen_registry::unfold::UnfoldLeaf,
     obj_ident: &syn::Ident,
     prim: bool,
     bind: &syn::Ident,
