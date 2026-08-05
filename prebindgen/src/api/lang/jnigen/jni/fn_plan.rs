@@ -791,11 +791,11 @@ fn build_output(
     // Kotlin error peel rides the entry's `value_rust_type`, so the full
     // `Result<T, E>` type is looked up as written.)
     let ret_decl = if is_convert { target_ty } else { &f.ret };
-    let (surface, canonical) = ReturnSurface::classify(ext, registry, ret_decl);
-    let is_enum = ext.is_kotlin_enum(&canonical);
-    let is_option_enum = crate::api::core::types_util::option_inner_type(&canonical)
-        .map(|inner| ext.is_kotlin_enum(&inner))
-        .unwrap_or(false);
+    let (surface, enums) = ReturnSurface::classify(ext, registry, ret_decl);
+    let EnumSurface {
+        is_enum,
+        is_option_enum,
+    } = enums;
 
     Ok(FnOutputPlan::Value(Box::new(ValueOutputPlan {
         is_convert,
@@ -807,6 +807,15 @@ fn build_output(
     })))
 }
 
+/// Whether a return surfaces as a Kotlin enum class, and whether an optional
+/// one does — the only two things the old `canonical` spelling was consulted
+/// for, now answered at the one place that can see how it was obtained.
+#[derive(Clone, Copy)]
+pub(crate) struct EnumSurface {
+    pub is_enum: bool,
+    pub is_option_enum: bool,
+}
+
 impl ReturnSurface {
     /// Classify a declared return type. Returns the surface plus the
     /// canonical (`value_rust_type`-peeled) type the enum probes run over —
@@ -816,7 +825,7 @@ impl ReturnSurface {
         ext: &Declarations,
         registry: &impl Conversions<KotlinMeta>,
         ret: &crate::api::core::flat::TypeRef,
-    ) -> (Self, syn::Type) {
+    ) -> (Self, EnumSurface) {
         // The RETURN, as the model classified it. Both callers used to spell a
         // reading into a `-> #ty` fragment for this to take apart again, and
         // the `ReturnType::Default` arm was a unit the element already states.
@@ -836,12 +845,37 @@ impl ReturnSurface {
             Some(t) => crate::api::lang::jnigen::util::is_unit(t),
             None => matches!(ret.kind(), crate::api::core::flat::TypeKind::Unit),
         };
-        let canonical: syn::Type = match stored {
-            Some(t) => t.clone(),
-            None => {
-                let toks = ret.spell();
-                syn::parse_quote!(#toks)
-            }
+        // The two enum questions, answered where BOTH branches are in view.
+        // They used to ride out on a `canonical: syn::Type` built by spelling
+        // the reading — and then `option_inner_type` peeled that spelling to
+        // ask about its inner, which is the layer-off-a-spelling mistake #273
+        // is named for: the model erases wrappers the spelling still shows.
+        // A stored `value_rust_type` is an adapter-composed node and keeps its
+        // node-shaped answer; with no metadata the reading answers directly.
+        let enum_probe = |t: &syn::Type| ext.is_kotlin_enum(t);
+        let (is_enum, is_option_enum) = match stored {
+            Some(t) => (
+                enum_probe(t),
+                crate::api::core::types_util::option_inner_type(t)
+                    .map(|inner| enum_probe(&inner))
+                    .unwrap_or(false),
+            ),
+            // `is_kotlin_enum_reading` is NOT the peer here: it probes THROUGH
+            // the layers, so `Option<Level>` answers true for the first
+            // question, where the node version keys on the whole type and
+            // answers false. Both questions want the exact type's identity —
+            // the second asks it of the optional's inner, which is what
+            // `option_inner_type` did to the spelling.
+            None => (
+                ext.is_kotlin_enum_key(&ret.key()),
+                ret.optional_inner()
+                    .map(|inner| ext.is_kotlin_enum_key(&inner.key()))
+                    .unwrap_or(false),
+            ),
+        };
+        let canonical = EnumSurface {
+            is_enum,
+            is_option_enum,
         };
         if is_unit {
             return (Self::Unit, canonical);

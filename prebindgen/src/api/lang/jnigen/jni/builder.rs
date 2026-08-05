@@ -112,8 +112,14 @@ impl Declarations {
     /// question asked of the model, and is what a caller holding a reading
     /// should use.
     pub(crate) fn is_kotlin_enum(&self, ty: &syn::Type) -> bool {
-        let key = TypeKey::from_type(ty);
-        self.types.get(&key).is_some_and(|c| c.is_enum_class())
+        self.is_kotlin_enum_key(&TypeKey::from_type(ty))
+    }
+
+    /// [`Self::is_kotlin_enum`] off the **identity** — the whole type's, not a
+    /// probe through its layers. See [`Self::is_kotlin_enum_reading`] for the
+    /// question that does peel, and why the two are not interchangeable.
+    pub(crate) fn is_kotlin_enum_key(&self, key: &TypeKey) -> bool {
+        self.types.get(key).is_some_and(|c| c.is_enum_class())
     }
 
     /// Whether this value's core is a type registered via an `EnumClassDecl`,
