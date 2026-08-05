@@ -19,7 +19,7 @@
 //!
 //! `prebindgen` solves this by generating language-specific proxy code from a common
 //! Rust library crate. This crate is the base of that pipeline: it reads what
-//! `#[prebindgen]` captured and hands out `(syn::Item, `[`SourceLocation`]`)`
+//! `#[prebindgen]` captured and hands out `(syn::Item, [`SourceLocation`])`
 //! pairs through [`Source`] — nothing more. The flat model built over that
 //! stream ships in the separate
 //! [`prebindgen-flat`](https://docs.rs/prebindgen-flat) crate; the
