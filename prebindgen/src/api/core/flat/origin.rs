@@ -58,8 +58,8 @@ use crate::SourceLocation;
 /// it meant.
 ///
 /// It was a public field returning a `syn` node to anyone who asked.
-/// [`Emit`](crate::api::core::emit::Emit) is now the only holder of that
-/// capability, and the compiler enforces it.
+/// Outside `api::core`, captured syntax is reachable only through
+/// [`Emit`](crate::api::core::emit::Emit), and the compiler enforces it.
 #[derive(Clone, Debug)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
