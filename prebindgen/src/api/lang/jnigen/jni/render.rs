@@ -2263,7 +2263,7 @@ fn shape_notes(
         .collect();
     plans.sort_by_key(|(p, _)| p.to_string());
     for (param, plan) in plans {
-        let target = plan.target.spell().to_string();
+        let target = plan.target.to_string();
         let arms: Vec<String> = plan
             .variants
             .iter()
@@ -2300,7 +2300,7 @@ fn shape_notes(
     }
 
     if let Some(plan) = registry.unfold_plans().get(fn_ident) {
-        let source = plan.source.spell().to_string();
+        let source = plan.source.to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
             crate::api::core::unfold::Delivery::Callback if !leaves.is_empty() => {
@@ -2320,7 +2320,7 @@ fn shape_notes(
     }
 
     if let Some(plan) = registry.error_plans().get(fn_ident) {
-        let source = plan.source.spell().to_string();
+        let source = plan.source.to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         notes.push(format!(
             "On a domain error `onError` receives the decomposed Rust `{source}` error \

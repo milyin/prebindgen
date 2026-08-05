@@ -218,7 +218,7 @@ impl super::JniGen {
                 .collect();
             shaped.push(format!(
                 "param `{param}` expanded from `{}` — variants [{}]",
-                plan.target.spell(),
+                plan.target,
                 variants.join(", ")
             ));
         }
@@ -226,7 +226,7 @@ impl super::JniGen {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "return `{}` decomposed → [{}] ({:?} delivery)",
-                plan.source.spell(),
+                plan.source,
                 leaves.join(", "),
                 plan.delivery
             ));
@@ -235,7 +235,7 @@ impl super::JniGen {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "domain error `{}` decomposed → onError [{}] (binding failures → onBindingError)",
-                plan.source.spell(),
+                plan.source,
                 leaves.join(", ")
             ));
         }
