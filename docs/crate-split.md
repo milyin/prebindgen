@@ -99,10 +99,9 @@ without holding an `Emit`, not that a new door appeared.
 Four `compile_fail` doctests asserted the closed form of `spell` / `enum_item`
 and no longer prove anything; they are now plain doctests.
 
-**Owed:** a real cross-crate seal — a public-but-unconstructable token that only
-`prebindgen-registry` can mint, threaded through the ~9 signatures above, so the
-capability is compiler-enforced again rather than a documented convention. Its
-own PR; it is redesign, not a move.
+Restoring the seal is **[#375](https://github.com/milyin/prebindgen/issues/375)**
+— a separate effort, deliberately not part of this split. It is redesign rather
+than a move, nothing is unsound, and no generated output depends on it.
 
 ## Phases
 
@@ -116,10 +115,13 @@ own PR; it is redesign, not a move.
 | **A4** | `Emit` → `flat`; `flat/` reaches zero core-sibling refs | done |
 | **B1** | carve `prebindgen-c` | done |
 | **B2** | carve `prebindgen-jni` | in progress |
-| **B3** | carve `prebindgen-registry` | in progress |
+| **B3** | carve `prebindgen-registry` | done |
 | **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | todo |
-| **B5** | restore the `Emit` seal across the crate boundary | todo |
 | **C** | workspace manifest, examples, docs, downstream repos | todo |
+
+Restoring the `Emit` seal is tracked separately as
+[#375](https://github.com/milyin/prebindgen/issues/375) and is **not** a phase of
+this split.
 
 Phase A is all in-place, so the tree stays green at every commit and the Phase B
 moves are close to pure renames.
