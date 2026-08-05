@@ -158,8 +158,9 @@ compiler names exactly which items need `pub`.
 
 ### Phase C notes
 
-- workspace version → **0.6.0**; `prebindgen`'s public API shrinks, so this is
-  breaking
+- workspace version stays **0.5.0**. `prebindgen` has never been published, so
+  its shrinking API breaks no released contract and the split is the 0.5 shape
+  rather than a bump away from it. `kotlin-codegen` is independent at 0.1.0.
 - `examples/{example-cbindgen,perftest-c}` → `prebindgen-c` build-dep;
   `examples/{covertest,perftest}-kotlin` → `prebindgen-jni` build-dep
 - `examples/{example,perftest}-flat` and `covertest-helpers` are **unchanged** —

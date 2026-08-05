@@ -1,0 +1,226 @@
+name: Publish to crates.io
+
+# One crate per run. The eight crates are interdependent, and crates.io will
+# reject a crate whose path dependencies are not yet published, so they go out
+# bottom-up — see PUBLISH ORDER below. Dispatch once per crate, in that order,
+# waiting for each to appear on the registry before the next.
+#
+# PUBLISH ORDER
+#   1. prebindgen              (no workspace deps)
+#   2. prebindgen-c-runtime    (no deps at all)
+#   3. prebindgen-jni-runtime  (only `jni`)
+#   4. prebindgen-proc-macro   -> prebindgen
+#   5. prebindgen-flat         -> prebindgen
+#   6. prebindgen-registry     -> prebindgen-flat, prebindgen
+#   7. prebindgen-c            -> prebindgen-registry, prebindgen-c-runtime
+#   8. prebindgen-jni          -> prebindgen-registry, prebindgen-jni-runtime,
+#                                 and kotlin-codegen, which lives in its own
+#                                 repo and must be published from there FIRST
+#
+# `dry_run` runs every check and `cargo publish --dry-run`, then stops before
+# the registry is touched. It creates no tag and no release. Use it to rehearse
+# the whole order before publishing anything for real.
+
+on:
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: Which crate to publish
+        required: true
+        type: choice
+        options:
+          - prebindgen
+          - prebindgen-c-runtime
+          - prebindgen-jni-runtime
+          - prebindgen-proc-macro
+          - prebindgen-flat
+          - prebindgen-registry
+          - prebindgen-c
+          - prebindgen-jni
+      version:
+        description: Version from Cargo.toml, without the v prefix
+        required: true
+        type: string
+      dry_run:
+        description: Rehearse only — run every check, publish nothing
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: crates-io-publication
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CRATES_IO_USER_AGENT: prebindgen-release-workflow (https://github.com/milyin/prebindgen)
+  RELEASE_CRATE: ${{ inputs.crate }}
+  RELEASE_VERSION: ${{ inputs.version }}
+  # `prebindgen-jni` depends on kotlin-codegen, which lives in its own repo and
+  # is a sibling path dependency until it is published. Keep in step with the
+  # value in ci.yml.
+  KOTLIN_CODEGEN_REV: 201497cc04a12f352e15468a1fd7c1a693c2fc1c
+
+jobs:
+  publish:
+    name: ${{ inputs.dry_run && 'Dry run' || 'Publish' }} ${{ inputs.crate }} ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    environment: crates-io
+    defaults:
+      run:
+        working-directory: prebindgen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: prebindgen
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: milyin/kotlin-codegen
+          ref: ${{ env.KOTLIN_CODEGEN_REV }}
+          path: kotlin-codegen
+
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+
+      - name: Validate release request
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "Releases must be dispatched from main, not $GITHUB_REF" >&2
+            exit 1
+          }
+          case "$RELEASE_VERSION" in
+            ''|*[!0-9.]*|.*|*.)
+              echo "Invalid release version: $RELEASE_VERSION" >&2
+              exit 1
+              ;;
+          esac
+          manifest_version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r --arg c "$RELEASE_CRATE" '.packages[] | select(.name == $c) | .version')
+          test -n "$manifest_version" || {
+            echo "$RELEASE_CRATE is not a member of this workspace" >&2
+            exit 1
+          }
+          test "$manifest_version" = "$RELEASE_VERSION" || {
+            echo "$RELEASE_CRATE is $manifest_version in Cargo.toml, not $RELEASE_VERSION" >&2
+            exit 1
+          }
+
+      - name: Run release checks
+        run: |
+          cargo +stable fmt --all -- --check \
+            --config "unstable_features=true,imports_granularity=Crate,group_imports=StdExternalCrate"
+          cargo +stable clippy --all-targets --all-features -- -D warnings
+          RUSTDOCFLAGS='-D warnings' cargo +stable doc --no-deps
+          cargo +stable test --all --all-features
+          ./examples/regen-check.sh
+
+      - name: Package
+        run: cargo +stable package -p "$RELEASE_CRATE"
+
+      # Everything above this point runs identically for a dry run; everything
+      # below is skipped, so a rehearsal never reaches the registry.
+      - name: Dry-run publish
+        if: inputs.dry_run
+        run: |
+          cargo +stable publish -p "$RELEASE_CRATE" --dry-run
+          echo "Dry run complete — nothing was published, no tag was created."
+
+      - name: Inspect crates.io state
+        if: ${{ !inputs.dry_run }}
+        id: registry
+        run: |
+          metadata=$(mktemp)
+          url="https://crates.io/api/v1/crates/$RELEASE_CRATE/$RELEASE_VERSION"
+          status=$(curl --silent --show-error --location \
+            --user-agent "$CRATES_IO_USER_AGENT" \
+            --write-out '%{http_code}' "$url" --output "$metadata")
+          case "$status" in
+            200)
+              archive=$(mktemp)
+              curl --fail --silent --show-error --location \
+                --user-agent "$CRATES_IO_USER_AGENT" \
+                "$url/download" --output "$archive"
+              published_sha=$(tar -xOf "$archive" \
+                "$RELEASE_CRATE-$RELEASE_VERSION/.cargo_vcs_info.json" | jq -r .git.sha1)
+              test "$published_sha" = "$GITHUB_SHA" || {
+                echo "$RELEASE_CRATE $RELEASE_VERSION is already published from $published_sha" >&2
+                exit 1
+              }
+              needs_publish=false
+              ;;
+            404)
+              needs_publish=true
+              ;;
+            *)
+              echo "crates.io returned HTTP $status" >&2
+              exit 1
+              ;;
+          esac
+          echo "needs_publish=$needs_publish" >> "$GITHUB_OUTPUT"
+
+          tag="$RELEASE_CRATE-v$RELEASE_VERSION"
+          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            test "$needs_publish" = false || {
+              echo "$tag exists before publication" >&2
+              exit 1
+            }
+            tag_sha=$(git rev-list -n 1 "$tag")
+            test "$tag_sha" = "$GITHUB_SHA" || {
+              echo "$tag already points to $tag_sha" >&2
+              exit 1
+            }
+          fi
+
+      - name: Authenticate with crates.io
+        if: ${{ !inputs.dry_run && steps.registry.outputs.needs_publish == 'true' && vars.CRATES_IO_TRUSTED_PUBLISHING == 'true' }}
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish crate
+        if: ${{ !inputs.dry_run && steps.registry.outputs.needs_publish == 'true' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ vars.CRATES_IO_TRUSTED_PUBLISHING == 'true' && steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          test -n "$CARGO_REGISTRY_TOKEN" || {
+            echo "No crates.io credential is configured" >&2
+            exit 1
+          }
+          cargo +stable publish -p "$RELEASE_CRATE"
+
+      - name: Verify published archive
+        if: ${{ !inputs.dry_run }}
+        run: |
+          archive=$(mktemp)
+          url="https://crates.io/api/v1/crates/$RELEASE_CRATE/$RELEASE_VERSION/download"
+          for attempt in $(seq 1 24); do
+            if curl --fail --silent --show-error --location \
+              --user-agent "$CRATES_IO_USER_AGENT" \
+              "$url" --output "$archive"; then
+              break
+            fi
+            test "$attempt" -lt 24 || exit 1
+            sleep 5
+          done
+          published_sha=$(tar -xOf "$archive" \
+            "$RELEASE_CRATE-$RELEASE_VERSION/.cargo_vcs_info.json" | jq -r .git.sha1)
+          test "$published_sha" = "$GITHUB_SHA"
+
+      - name: Create tag and GitHub release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$RELEASE_CRATE-v$RELEASE_VERSION"
+          if ! git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git tag --annotate "$tag" --message "$RELEASE_CRATE $RELEASE_VERSION"
+            git push origin "$tag"
+          fi
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --verify-tag --title "$tag" --generate-notes
+          fi
