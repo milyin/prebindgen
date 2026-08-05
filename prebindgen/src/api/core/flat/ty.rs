@@ -27,6 +27,7 @@ use quote::ToTokens;
 
 use super::{
     array_len::{lower_array_len, ArrayExtent, ConstIndex, UnsupportedArrayLen},
+    key::TypeKey,
     origin::Origin,
 };
 use crate::SourceLocation;
@@ -80,8 +81,7 @@ use crate::SourceLocation;
 /// in three parts — a **cell** (the type entered the pipeline), a **root** (the
 /// binding asked for it directly), an **entry** (a converter resolved). A
 /// `SumTag` leaf's type makes the first and not the second, deliberately
-/// (#282); see
-/// [`Registry::reference_output`](crate::api::core::registry::Registry::reference_output).
+/// (#282); see `Registry::reference_output` in the registry layer above.
 #[derive(Clone, Debug)]
 pub struct TypeRef {
     /// The accepted syntax this type is — the closed grammar, not an
@@ -405,8 +405,8 @@ impl TypeRef {
     /// legitimate — but it should be the model's answer rather than every caller
     /// reaching for the spelling itself, since a caller that reaches
     /// into `origin` to *reason* is the thing this model exists to stop.
-    pub fn key(&self) -> crate::api::core::registry::TypeKey {
-        crate::api::core::registry::TypeKey::from_type(self.origin.as_syn())
+    pub fn key(&self) -> TypeKey {
+        TypeKey::from_type(self.origin.as_syn())
     }
 
     /// The [transparent wrapper](TRANSPARENT_WRAPPERS) this type's **spelling**
@@ -506,8 +506,8 @@ impl TypeRef {
     ///
     /// Use this wherever the lookup is against declarations the binding author
     /// wrote, and `key` wherever it is against something derived per spelling.
-    pub fn stripped_key(&self) -> crate::api::core::registry::TypeKey {
-        crate::api::core::registry::TypeKey::from_type(&self.stripped_syntax())
+    pub fn stripped_key(&self) -> TypeKey {
+        TypeKey::from_type(&self.stripped_syntax())
     }
 
     /// This type's spelling with every [transparent

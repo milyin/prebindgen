@@ -235,8 +235,8 @@ impl RepresentationDomain {
 
     pub fn exclude<T: DomainScalar>(&mut self, values: impl IntoIterator<Item = T>) {
         assert_eq!(
-            crate::api::core::registry::TypeKey::from_type(&self.ty),
-            crate::api::core::registry::TypeKey::from_type(&T::domain_type()),
+            crate::api::core::flat::TypeKey::from_type(&self.ty),
+            crate::api::core::flat::TypeKey::from_type(&T::domain_type()),
             "representation-domain exclusions must use the base domain's scalar type"
         );
         self.excluded

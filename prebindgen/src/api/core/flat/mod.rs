@@ -184,6 +184,7 @@ use quote::ToTokens;
 
 mod array_len;
 mod element;
+mod key;
 mod origin;
 pub(in crate::api::core) mod spell;
 pub(crate) mod spelling;
@@ -199,6 +200,7 @@ pub use self::{
         Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Guard, Param,
         Struct, Type, Unsupported, Variant,
     },
+    key::{TypeKey, TypeKeyParseError},
     origin::Origin,
     spelling::{canonical_spelling, canonical_type},
     ty::{
@@ -709,7 +711,7 @@ impl Flat {
     ///
     /// Whoever asks is expected to keep the answer. The registry does: a reading is
     /// taken once when a type-table cell is born, and lives in that cell — and
-    /// [`Registry::reading`](crate::api::core::registry::Registry::reading) hands
+    /// `Registry::reading` (in the registry layer above) hands
     /// back only what is in one, so a second source of readings cannot reappear
     /// here (#266).
     ///

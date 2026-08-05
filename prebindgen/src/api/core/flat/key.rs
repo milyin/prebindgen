@@ -13,8 +13,8 @@ use quote::ToTokens;
 ///
 /// It is what a table is indexed by. It is **not** a route to `syn::Type`: the
 /// only way to reach a type's syntax is
-/// [`Conversions::reading`](super::Conversions::reading) followed by
-/// [`TypeRef::syntax`](crate::api::core::flat::TypeRef::syntax), because a
+/// `Conversions::reading` (in the registry layer above) followed by
+/// [`TypeRef`], because a
 /// reading is what pairs a spelling with the classification that vouches for
 /// it.
 ///
