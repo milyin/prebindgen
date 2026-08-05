@@ -868,7 +868,11 @@ impl CbindgenBuilder {
     /// `<base>_drop(t_t *)` that frees the **active arm** and nulls the freed
     /// slots, so a second drop is a no-op. A union of plain data owns nothing
     /// and gets no drop.
-    fn prereq_tagged_unions(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_tagged_unions(
+        &self,
+        registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
             let Some(reading) = registry.reading(key) else {
@@ -903,7 +907,7 @@ impl CbindgenBuilder {
                     .zip(&wires)
                     .map(|(f, w)| f.bind(w))
                     .collect();
-                variant_defs.push(a.spell(quote!(#vident), &defs));
+                variant_defs.push(emit.shape(a, quote!(#vident), &defs));
 
                 // Drop arm: bind every field, free the owning ones.
                 let owning: Vec<(usize, &Field, &syn::Type)> = a
@@ -926,7 +930,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let pattern = a.spell(quote!(#cname::#vident), &parts);
+                let pattern = emit.shape(a, quote!(#cname::#vident), &parts);
                 let frees = owning.iter().map(|(i, f, _)| {
                     let b = &binds[*i];
                     self.payload_free_stmt(&f.ty, b, registry)
@@ -1091,6 +1095,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         r: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         if !self.tagged_unions.contains_key(&key) {
@@ -1128,7 +1133,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let from = a.spell(quote!(#cname::#vident), &parts);
+                let from = emit.shape(a, quote!(#cname::#vident), &parts);
                 let exprs: Vec<TokenStream> = a
                     .fields
                     .iter()
@@ -1152,7 +1157,7 @@ impl CbindgenBuilder {
                     .zip(&exprs)
                     .map(|(f, e)| f.bind(e))
                     .collect();
-                let to = a.spell(quote!(#src::#vident), &inits);
+                let to = emit.shape(a, quote!(#src::#vident), &inits);
                 quote!(#from => #to,)
             })
             .collect();
@@ -1232,6 +1237,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         r: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         if !self.tagged_unions.contains_key(&key) {
@@ -1264,7 +1270,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let from = a.spell(quote!(#src::#vident), &parts);
+                let from = emit.shape(a, quote!(#src::#vident), &parts);
                 let exprs: Vec<TokenStream> = a
                     .fields
                     .iter()
@@ -1282,7 +1288,7 @@ impl CbindgenBuilder {
                     .zip(&exprs)
                     .map(|(f, e)| f.bind(e))
                     .collect();
-                let to = a.spell(quote!(#cname::#vident), &inits);
+                let to = emit.shape(a, quote!(#cname::#vident), &inits);
                 quote!(#from => #to,)
             })
             .collect();
@@ -1839,7 +1845,7 @@ impl Prebindgen for CbindgenBuilder {
         items.extend(self.prereq_data_structs(registry));
         items.extend(self.prereq_value_opaque(registry));
         items.extend(self.prereq_enums(registry, emit));
-        items.extend(self.prereq_tagged_unions(registry));
+        items.extend(self.prereq_tagged_unions(registry, emit));
         items.extend(self.prereq_callback_structs(registry));
         items.extend(self.prereq_domain_constants(registry));
         items
@@ -1893,6 +1899,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         _r: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
@@ -2092,7 +2099,7 @@ impl CbindgenBuilder {
 
         // Tagged-union output: `match` the source enum to the C union,
         // converting each arm's payload.
-        if let Some(c) = self.out_tagged_union(ty, _r) {
+        if let Some(c) = self.out_tagged_union(ty, _r, emit) {
             return Some(c);
         }
 

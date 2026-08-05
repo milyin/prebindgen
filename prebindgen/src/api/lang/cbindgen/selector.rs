@@ -17,7 +17,7 @@ impl CbindgenBuilder {
             .or_else(|| self.in_data_struct(ty, registry))
             .or_else(|| self.in_value_opaque(ty, registry))
             .or_else(|| self.in_enum(ty, registry))
-            .or_else(|| self.in_tagged_union(ty, registry))
+            .or_else(|| self.in_tagged_union(ty, registry, emit))
             .or_else(|| self.in_string(ty))
             .or_else(|| self.in_str(ty))
             .or_else(|| self.in_bool(ty))
@@ -34,7 +34,7 @@ impl CbindgenBuilder {
         emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         self.out_custom(ty, registry, emit)
-            .or_else(|| self.out_terminal(ty, registry))
+            .or_else(|| self.out_terminal(ty, registry, emit))
             .or_else(|| self.out_wrappers(ty, registry))
     }
 }

@@ -106,12 +106,15 @@ impl fmt::Display for TypeRef {
     /// [`Emit`](crate::api::core::emit::Emit) capability to say so. So this is
     /// ungated where [`spell`](Self::spell) is not.
     ///
-    /// **Not a spelling.** It renders the same tokens today, and nothing should
-    /// depend on that: re-parsing a message is not a supported route to a node,
-    /// and the reason it is not is that a message is allowed to get friendlier.
-    /// Generated Rust spells through `Emit`.
+    /// **The identity, not the spelling** — `TypeKey`, which is
+    /// `canonical_type` rendered. Delegating to `spell()` would have handed the
+    /// captured spelling back out through `format!("{ty}")`, so
+    /// `syn::parse_str(&ty.to_string())` reconstructed it exactly and the
+    /// capability was a suggestion. Rendering the canonical form keeps
+    /// diagnostics readable while making the round trip land on a *normalized*
+    /// type rather than the source's own tokens.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.spell())
+        write!(f, "{}", self.key().as_str())
     }
 }
 
@@ -156,7 +159,12 @@ impl TypeRef {
     }
 
     /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
-    pub fn as_syn(&self) -> &syn::Type {
+    // Test-only as of C7: `Emit` hands out a spelling, never the node, so the
+    // round-trip checks (`syntax_is_recoverable_from_kind`) are the last
+    // callers. That is the correct end state — the check that a kind can
+    // reproduce its own syntax needs both halves.
+    #[allow(dead_code)]
+    pub(in crate::api::core) fn as_syn(&self) -> &syn::Type {
         self.origin.as_syn()
     }
 

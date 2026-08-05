@@ -331,8 +331,15 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                 return #on_err;
             }
         };
-        let (ze_stmts, ze_args) =
-            encode_plan_leaves(ext, registry, ep, &eze_idents, &quote!(__de), &ze_fail);
+        let (ze_stmts, ze_args) = encode_plan_leaves(
+            ext,
+            registry,
+            ep,
+            &eze_idents,
+            &quote!(__de),
+            &ze_fail,
+            emit,
+        );
         quote! {
             match #raw_call {
                 ::core::result::Result::Ok(__v) => __v,
@@ -399,6 +406,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             u.iface.as_deref(),
             &call_expr,
             &on_err,
+            emit,
         )
     } else {
         let output_entry = output_entry.expect("normal path has an output entry");

@@ -1778,11 +1778,11 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
     // The difference from the spelling-keyed probe, pinned: a transparent
     // wrapper is invisible to the model and decisive for a canonical key.
     assert!(
-        !ext.is_kotlin_enum(field("borrowed").as_syn()),
+        !ext.is_kotlin_enum_key(&field("borrowed").key()),
         "if the spelling key ever started seeing through `Box`, this test would \
          stop distinguishing the two probes"
     );
-    assert!(ext.is_kotlin_enum(field("plain").as_syn()));
+    assert!(ext.is_kotlin_enum_key(&field("plain").key()));
 }
 
 /// A **transparently-wrapped** parameter takes the same specialized lowering as
