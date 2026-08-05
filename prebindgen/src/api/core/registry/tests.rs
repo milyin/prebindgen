@@ -44,7 +44,9 @@ impl DeclareAndResolve<()> for RegistryBuilder<()> {
             .validate_with(&ext)?
             // The reading, not a spelling re-derived from the key: this is the
             // route a real generator takes, so the stub takes it too (#291).
-            .convert_with(|crossing, built| ext.converter(built.reading(&crossing.1)?.as_syn()))?
+            .convert_with(|crossing, built, emit| {
+                ext.converter(&emit.spell_ty(&built.reading(&crossing.1)?))
+            })?
             .build()?;
         ext.validate_resolved(&registry)
             .map_err(|message| ScanError::AdapterInvariant { message })?;

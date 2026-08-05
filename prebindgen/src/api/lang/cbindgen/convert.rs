@@ -53,11 +53,12 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
         let spec = decl.input.as_ref()?;
-        let (repr, conversion, fallible) = self.input_conversion(decl, spec, registry);
+        let (repr, conversion, fallible) = self.input_conversion(decl, spec, registry, emit);
         assert!(
             is_scalar(&repr),
             "Cbindgen custom representations must be C scalar types"
@@ -120,11 +121,12 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         registry: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         let decl = self.convert_decls.iter().find(|d| d.key == key)?;
         let spec = decl.output.as_ref()?;
-        let (repr, conversion, fallible) = self.output_conversion(decl, spec, registry);
+        let (repr, conversion, fallible) = self.output_conversion(decl, spec, registry, emit);
         assert!(
             is_scalar(&repr),
             "Cbindgen custom representations must be C scalar types"
@@ -189,6 +191,7 @@ impl CbindgenBuilder {
         decl: &ConvertDecl,
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
@@ -198,7 +201,7 @@ impl CbindgenBuilder {
                     .function(&f)
                     .unwrap_or_else(|| panic!("Cbindgen conversion function {} was not found", f));
                 let (repr_reading, by_ref) = one_param(item);
-                let repr = spelled(repr_reading);
+                let repr = emit.spell_ty(repr_reading);
                 // The element normalizes an elided return to `Unit`, and
                 // `TypeKind::Fallible` is the `Result` `result_parts` looked for
                 // in a path.
@@ -235,6 +238,7 @@ impl CbindgenBuilder {
         decl: &ConvertDecl,
         spec: &ConvertSpec,
         registry: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> (syn::Type, syn::Expr, bool) {
         let target = self.src_ty_of(&decl.rust_type.key());
         match spec {
@@ -246,8 +250,8 @@ impl CbindgenBuilder {
                 let (param, by_ref) = one_param(item);
                 assert_eq!(param.key(), decl.key);
                 let (repr, fallible) = match item.ret.fallible_parts() {
-                    Some((ok, _)) => (spelled(ok), true),
-                    None => (spelled(&item.ret), false),
+                    Some((ok, _)) => (emit.spell_ty(ok), true),
+                    None => (emit.spell_ty(&item.ret), false),
                 };
                 let path = self.conversion_fn_path(registry, f);
                 let expr = if by_ref {

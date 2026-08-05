@@ -373,11 +373,17 @@ impl<M> RegistryBuilder<M> {
         F: FnMut(
             &Crossing,
             &Building<'_, M>,
+            &crate::api::core::emit::Emit,
         ) -> Option<crate::api::core::prebindgen::ConverterImpl<M>>,
     {
+        // A converter IS generated Rust — `ConverterImpl::function` is a
+        // complete `syn::ItemFn` the adapter writes — so this closure is an
+        // emission callback and is handed the capability, exactly as the
+        // `on_*` ones are. See `core::emit`.
+        let emit = crate::api::core::emit::Emit::new();
         let order = self.derive()?.to_vec();
         for crossing in &order {
-            let conv = f(crossing, &self.view());
+            let conv = f(crossing, &self.view(), &emit);
             if let Some(c) = conv {
                 self.built
                     .insert(crossing.clone(), TypeEntry::from_converter(c));

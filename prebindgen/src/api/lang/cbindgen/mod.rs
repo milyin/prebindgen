@@ -108,7 +108,7 @@ use quote::{format_ident, quote, ToTokens};
 // remain — a build-script declaration, and a converter's own generated
 // signature.
 pub(crate) use crate::api::core::types_util::{
-    first_type_arg, is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
+    is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
 };
 use crate::api::{
     core::{
@@ -570,12 +570,6 @@ fn spelled(t: &TypeRef) -> syn::Type {
     syn::parse_quote!(#toks)
 }
 
-/// [`spelled`] under its historical name, for the identity converters whose
-/// `destination` IS the Rust type they pass through.
-fn spelled_ty(t: &TypeRef) -> syn::Type {
-    spelled(t)
-}
-
 /// `String`, off the classification.
 fn r_is_string(t: &TypeRef) -> bool {
     matches!(t.kind(), TypeKind::String)
@@ -589,6 +583,21 @@ fn r_is_str(t: &TypeRef) -> bool {
 /// `bool`, off the classification — the one scalar with a restricted domain.
 fn r_is_bool(t: &TypeRef) -> bool {
     matches!(t.kind(), TypeKind::Scalar(ScalarKind::Bool))
+}
+
+/// A scalar's Rust type, built from its **kind**.
+///
+/// A scalar's spelling is its name — `ScalarKind::as_str` is the closed set the
+/// source can have written — so this needs no captured syntax and no `Emit`.
+/// Three wire policies asked `spelled()` for exactly this behind an
+/// `r_is_scalar` guard, which was a source spelling standing in for an
+/// identity that could answer.
+fn scalar_ty(t: &TypeRef) -> Option<syn::Type> {
+    let TypeKind::Scalar(k) = t.kind() else {
+        return None;
+    };
+    let id = syn::Ident::new(k.as_str(), proc_macro2::Span::call_site());
+    Some(syn::parse_quote!(#id))
 }
 
 /// An FFI-safe scalar primitive, off the classification. `ScalarKind` IS the
@@ -617,24 +626,6 @@ fn r_boxed_inner(t: &TypeRef) -> Option<&TypeRef> {
 
 fn is_string(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
-}
-
-/// If `ty` is `MaybeUninit<T>` (any path form: `MaybeUninit` / `std::mem::…` /
-/// `core::mem::…`), return `T` — the inner of an uninitialized out-param slot.
-fn maybe_uninit_inner(ty: &syn::Type) -> Option<syn::Type> {
-    if type_path_tail(ty)
-        .map(|i| i == "MaybeUninit")
-        .unwrap_or(false)
-    {
-        return first_type_arg(ty);
-    }
-    None
-}
-
-/// Whether `ty` is `bool` — the one scalar whose domain is restricted (`0`/`1`),
-/// so C-supplied bytes may not be held in it without being normalised first.
-fn is_bool(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "bool").unwrap_or(false)
 }
 
 /// The C wire for a `bool` in any position C can write: `MaybeUninit<bool>`.

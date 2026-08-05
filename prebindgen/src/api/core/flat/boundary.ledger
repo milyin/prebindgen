@@ -136,7 +136,7 @@
 # gaps are listed here rather than implied away.
 
 2	api/core/registry/scan.rs
-5	api/core/types_util.rs
+4	api/core/types_util.rs
 4	api/lang/cbindgen/builder.rs
 4	api/lang/cbindgen/emit.rs
 3	api/lang/cbindgen/mod.rs
@@ -153,7 +153,7 @@
 2	api/lang/jnigen/jni/wire_access.rs
 1	api/lang/jnigen/util.rs
 
-# total classification sites: 49
+# total classification sites: 48
 
 ## escapes: types
 
