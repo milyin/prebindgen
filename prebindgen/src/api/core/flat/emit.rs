@@ -25,10 +25,10 @@
 //!
 //! # Where one comes from
 //!
-//! [`Prebindgen::on_function`](super::prebindgen::Prebindgen::on_function) and
-//! its four peers, [`prerequisites`](super::prebindgen::Prebindgen::prerequisites),
-//! [`post_process_item`](super::prebindgen::Prebindgen::post_process_item), and
-//! the closure [`RegistryBuilder::convert_with`](super::registry::RegistryBuilder::convert_with)
+//! [`Prebindgen::on_function`](super::super::prebindgen::Prebindgen::on_function) and
+//! its four peers, [`prerequisites`](super::super::prebindgen::Prebindgen::prerequisites),
+//! [`post_process_item`](super::super::prebindgen::Prebindgen::post_process_item), and
+//! the closure [`RegistryBuilder::convert_with`](super::super::registry::RegistryBuilder::convert_with)
 //! calls — a converter is generated Rust, since `ConverterImpl::function` is a
 //! complete `syn::ItemFn` the adapter writes. Nothing else.
 //!
@@ -47,11 +47,11 @@
 //!
 //! Two things stay public because they are not that:
 //!
-//! * [`Origin::declared_spelling`](super::flat::Origin::declared_spelling) — an
+//! * [`Origin::declared_spelling`](super::Origin::declared_spelling) — an
 //!   adapter declaration's `Origin<syn::Type>` holds a type the **build script**
 //!   wrote, never captured, which #280 leaves the model no reading for.
-//! * [`Field::member`](super::flat::Field::member) and
-//!   [`Field::bind`](super::flat::Field::bind) — they read the field's `name`
+//! * [`Field::member`](super::Field::member) and
+//!   [`Field::bind`](super::Field::bind) — they read the field's `name`
 //!   and `index`, model facts, no syntax.
 //!
 //! `Display for TypeRef` renders the **identity**, not the spelling: a message
@@ -76,7 +76,28 @@
 
 use proc_macro2::TokenStream;
 
-use super::flat::{Element, EnumValue, Field, Struct, Type, TypeRef};
+use super::{Element, EnumValue, Field, Struct, Type, TypeRef};
+
+/// Re-emit a captured `#[prebindgen]` const as a **path-alias** to its
+/// source-of-truth: same attributes (doc comments), visibility, name and
+/// type, with the initializer replaced by `<source_module>::<ident>`. Used
+/// by `Prebindgen::on_const` implementations so consts whose initializers
+/// reference source-crate internals (private helpers, upstream constants)
+/// still compile in the generated file.
+///
+/// Lives here rather than beside the `Prebindgen` trait because it is pure
+/// syntax rendering with no pipeline dependency, and [`Emit::const_alias`] is
+/// its only caller.
+fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStream {
+    let attrs = &c.attrs;
+    let vis = &c.vis;
+    let ident = &c.ident;
+    let ty = &c.ty;
+    quote::quote! {
+        #(#attrs)*
+        #vis const #ident: #ty = #source_module::#ident;
+    }
+}
 
 /// The capability to render captured Rust syntax.
 ///
@@ -206,7 +227,7 @@ impl Emit {
 
     /// The type as the **source spelled it** — what generated Rust must say.
     ///
-    /// Not [`TypeKind::to_syn`](super::flat::TypeKind::to_syn), which reconstructs a
+    /// Not [`TypeKind::to_syn`](super::TypeKind::to_syn), which reconstructs a
     /// canonical form to check the lowering against: this is the crate's own
     /// tokens, so a generated signature names the type the way the source crate
     /// does and compiles in its scope.
@@ -227,7 +248,7 @@ impl Emit {
     /// The type under every transparent wrapper, spelled — `Box<Payload>` →
     /// `Payload`.
     ///
-    /// The spelling peer of [`TypeRef::stripped_key`](super::flat::TypeRef::stripped_key),
+    /// The spelling peer of [`TypeRef::stripped_key`](super::TypeRef::stripped_key),
     /// for an emitter that must name what a declaration is *about* rather than
     /// what the use site wrote.
     pub fn spell_stripped(&self, ty: &TypeRef) -> syn::Type {
@@ -255,7 +276,7 @@ impl Emit {
     /// adapter that re-emits its input unchanged is the whole use — both
     /// in-tree adapters build wrappers instead, so this is what a
     /// pass-through generator would call.
-    pub fn verbatim_fn(&self, f: &super::flat::Function) -> TokenStream {
+    pub fn verbatim_fn(&self, f: &super::Function) -> TokenStream {
         f.origin.spell()
     }
 
@@ -265,12 +286,12 @@ impl Emit {
     }
 
     /// A captured sum's tokens, as written. See [`Self::verbatim_fn`].
-    pub fn verbatim_variant(&self, v: &super::flat::Variant) -> TokenStream {
+    pub fn verbatim_variant(&self, v: &super::Variant) -> TokenStream {
         v.origin.spell()
     }
 
     /// A captured fieldless enum's tokens, as written. See [`Self::verbatim_fn`].
-    pub fn verbatim_enum(&self, e: &super::flat::Enum) -> TokenStream {
+    pub fn verbatim_enum(&self, e: &super::Enum) -> TokenStream {
         e.origin.spell()
     }
 
@@ -281,17 +302,17 @@ impl Emit {
     /// Takes the element rather than its item because the alias needs four
     /// facts off it and nothing else; handing over the whole `syn::ItemConst`
     /// to read four fields is what an accessor is for.
-    pub fn const_alias(&self, c: &super::flat::Constant, source_module: &syn::Path) -> TokenStream {
-        super::prebindgen::const_path_alias(c.origin.as_syn(), source_module)
+    pub fn const_alias(&self, c: &super::Constant, source_module: &syn::Path) -> TokenStream {
+        const_path_alias(c.origin.as_syn(), source_module)
     }
 
     /// A constant re-emitted verbatim, for an adapter with no source module.
-    pub fn const_verbatim(&self, c: &super::flat::Constant) -> TokenStream {
+    pub fn const_verbatim(&self, c: &super::Constant) -> TokenStream {
         c.origin.spell()
     }
 
-    /// A [`Guard`](super::flat::Guard)'s anonymous `const _`, as written.
-    pub fn guard(&self, g: &super::flat::Guard) -> syn::ItemConst {
+    /// A [`Guard`](super::Guard)'s anonymous `const _`, as written.
+    pub fn guard(&self, g: &super::Guard) -> syn::ItemConst {
         g.origin.as_syn().clone()
     }
 
@@ -316,21 +337,21 @@ impl Emit {
     /// `B` and `B()` are both payload-free and still spelled differently, which
     /// is why this is a rendering rather than something `kind` could answer.
     ///
-    /// Note what is *not* here: [`Field::member`](super::flat::Field::member)
-    /// and [`Field::bind`](super::flat::Field::bind) stay ungated, because they
+    /// Note what is *not* here: [`Field::member`](super::Field::member)
+    /// and [`Field::bind`](super::Field::bind) stay ungated, because they
     /// read the field's `name` and `index` — model facts, no captured syntax.
     // `Shaped` is deliberately more private than this method: that is the
     // sealed-trait pattern, and it is what stops the trait itself becoming a
     // door. An out-of-crate consumer can call `shape` on the three elements
     // and cannot implement it for anything else, or name it to route around.
     #[allow(private_bounds)]
-    pub fn shape<S: super::flat::spell::Shaped>(
+    pub fn shape<S: super::spell::Shaped>(
         &self,
         s: &S,
         head: TokenStream,
         parts: &[TokenStream],
     ) -> TokenStream {
-        super::flat::spell::fields(s.shape(), head, parts)
+        super::spell::fields(s.shape(), head, parts)
     }
 
     /// How a field is addressed in a pattern or an initializer — by name when

@@ -184,6 +184,7 @@ use quote::ToTokens;
 
 mod array_len;
 mod element;
+pub mod emit;
 mod key;
 mod origin;
 pub(in crate::api::core) mod spell;

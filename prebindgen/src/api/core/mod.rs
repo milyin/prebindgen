@@ -20,9 +20,13 @@
 pub mod decl;
 pub mod diagnostics;
 pub mod domain;
-pub mod emit;
 pub mod expand;
 pub mod flat;
+/// The `Emit` capability lives with the flat model, because every one of its
+/// methods delegates to a model method that is private to `flat` — that
+/// pairing is what makes `Emit` the only route to a node's syntax. Re-exported
+/// here so `core::emit` keeps naming it.
+pub use self::flat::emit;
 pub mod niches;
 pub mod prebindgen;
 pub mod registry;

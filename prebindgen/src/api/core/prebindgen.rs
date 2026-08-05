@@ -116,26 +116,6 @@ pub struct ConverterImpl<M = ()> {
     pub subs: Vec<crate::api::core::registry::TypeKey>,
 }
 
-/// Re-emit a captured `#[prebindgen]` const as a **path-alias** to its
-/// source-of-truth: same attributes (doc comments), visibility, name and
-/// type, with the initializer replaced by `<source_module>::<ident>`. Used
-/// by [`Prebindgen::on_const`] implementations so consts whose initializers
-/// reference source-crate internals (private helpers, upstream constants)
-/// still compile in the generated file.
-pub(in crate::api::core) fn const_path_alias(
-    c: &syn::ItemConst,
-    source_module: &syn::Path,
-) -> TokenStream {
-    let attrs = &c.attrs;
-    let vis = &c.vis;
-    let ident = &c.ident;
-    let ty = &c.ty;
-    quote::quote! {
-        #(#attrs)*
-        #vis const #ident: #ty = #source_module::#ident;
-    }
-}
-
 /// The single extension point of the pipeline: implement this trait once per
 /// **destination language** (C/cbindgen, JNI/Kotlin, Swift, Python, …) to teach
 /// the language-agnostic [`Registry`] how that language represents Rust types
