@@ -320,10 +320,12 @@ pub mod core {
     /// adapters consume it, so it is part of what a generator has to speak.
     pub use crate::api::core::shape;
     pub use crate::api::core::{
-        warn_unclaimed, Building, Claimed, Conversions, ConverterImpl, Crossing, Decompositions,
-        Direction, DomainScalar, DuplicateNameError, Element, Flat, Gravestone, NicheSlot, Niches,
-        NotExpressibleEntry, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError,
-        Stage, Transmute, TypeEntry, TypeKey, TypeKeyParseError, WriteRustError,
+        warn_unclaimed, Building, Claimed, Conversions, ConvertDecl, ConvertSourceDecl,
+        ConverterImpl, Crossing, Decompositions, Direction, DomainScalar, DuplicateNameError,
+        Element, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl, Flat, FunctionDecl,
+        Gravestone, NicheSlot, Niches, NotExpressibleEntry, Prebindgen, Registry,
+        RepresentationDomain, ScalarValue, ScanError, Stage, Transmute, TypeEntry, TypeKey,
+        TypeKeyParseError, WriteRustError,
     };
 }
 

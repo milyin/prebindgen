@@ -2182,26 +2182,6 @@ pub(crate) fn is_wire_type(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Ptr(_)) || kotlin_for_wire(ty).is_some()
 }
 
-/// Bare-ident type `__JniErr` — the generated file's alias for the
-/// framework [`crate::api::lang::jnigen::jni::JniBindingError`]. Built-in
-/// converters use this as their `Result<…, _>` error type so their bodies'
-/// `<__JniErr as From<String>>::from(...)` calls keep compiling. A
-/// `Result<T, E>` return instead binds its own raw `E` (see
-/// [`JniGenBuilder::lookup_output`]); the extern's `Err` arm funnels both to the
-/// per-call `signal_error` sink via `E: Display`.
-/// The origin-module prefix of a binding-local fn's declared path
-/// (`crate::sub::f` → `"crate::sub"`). Paths are validated ≥2 segments at
-/// decl time (`fun!` path arm / `FieldDecl::with`), so the prefix is
-/// always non-empty.
-pub(crate) fn local_path_prefix(path: &syn::Path) -> String {
-    path.segments
-        .iter()
-        .take(path.segments.len() - 1)
-        .map(|s| s.ident.to_string())
-        .collect::<Vec<_>>()
-        .join("::")
-}
-
 pub(crate) fn default_err_type() -> syn::Type {
     syn::parse_quote!(__JniErr)
 }

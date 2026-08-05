@@ -17,6 +17,7 @@
 //! Secondary artifacts such as C headers or Kotlin sources are produced by the
 //! language adapter after the Rust registry is resolved.
 
+pub mod decl;
 pub mod diagnostics;
 pub mod domain;
 pub mod emit;
@@ -34,6 +35,10 @@ pub(crate) mod write;
 pub use prebindgen_c_runtime::{Gravestone, Transmute};
 
 pub use self::{
+    decl::{
+        ConvertDecl, ConvertSourceDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
+        FunctionDecl,
+    },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
     flat::{Element, Flat},

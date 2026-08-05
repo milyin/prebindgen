@@ -1567,7 +1567,7 @@ impl CbindgenBuilder {
         let mut result = Vec::new();
         let mut seen = HashMap::<syn::Ident, String>::new();
         for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| &decl.locals) {
-            let origin = crate::api::lang::jnigen::jni::local_path_prefix(path);
+            let origin = crate::api::core::decl::local_path_prefix(path);
             let mut sig = sig.clone();
             sig.ident = ident.clone();
             let signature = quote!(#origin #sig).to_string();
@@ -1627,7 +1627,7 @@ impl CbindgenBuilder {
     ) -> Option<ConverterImpl<()>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
-        // key the crossing IS — the same migration the jnigen twin made in #284,
+        // key the crossing IS — the same migration the JNI adapter's twin made in #284,
         // in place of `key -> to_type() -> spelling` (#291). Every crossing
         // `convert_with` hands out comes from a type table, so it has a cell.
         // The selectors take the reading now, so nothing here spells it.

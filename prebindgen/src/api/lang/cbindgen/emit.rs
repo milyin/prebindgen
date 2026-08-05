@@ -174,7 +174,7 @@ impl CbindgenBuilder {
         //
         // So: peel the optional off the model and ask whether what is under it is
         // a declared `opaque_ptr`. `stripped_key` rather than `key`, because a
-        // declaration is about the TYPE — see the same rule on the jnigen side
+        // declaration is about the TYPE — see the same rule on the JNI side
         // (#292). The two spellings now share this C type; their converter bodies
         // differ, which is exactly the split (`kind` decides what C sees, syntax
         // decides how the value is built).
