@@ -3,7 +3,7 @@
 //! [`Declarations::write_kotlin`] is the single entry point for every Kotlin
 //! file the JNI back-end emits. Each per-kind emitter builds in-memory
 //! [`kt::KtFile`] *model fragments* (declarations, not strings — the
-//! generator module `api::gen::kotlin` owns formatting and imports):
+//! `kotlin_codegen` crate owns formatting and imports):
 //!   * the shared `NativeHandle` base + lock helpers (root package, e.g.
 //!     `io.zenoh.jni`).
 //!   * one typed-handle class per `ptr_class` entry.
@@ -25,14 +25,12 @@
 //! (`PackageDecl::fun`). Undeclared functions are skipped with a build
 //! warning (the generator's unclaimed-item report); there is no "orphan" bucket.
 
-use super::*;
-use crate::api::{
-    core::registry::Conversions,
-    gen::{
-        kotlin as kt,
-        kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
-    },
+use kotlin_codegen::{
+    ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis,
 };
+
+use super::*;
+use crate::api::core::registry::Conversions;
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
 ///

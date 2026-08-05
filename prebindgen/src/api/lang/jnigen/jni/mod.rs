@@ -40,13 +40,14 @@ pub use box_helpers::{
 pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_array};
 pub use iface_method::CachedIfaceMethod;
 pub use jni_binding_error::JniBindingError;
+pub(crate) use kotlin_codegen as kt;
+use kotlin_codegen::WriteKotlinError;
 pub(crate) use metadata::{FoldStrategy, KotlinMeta, NullableKind, Projection, ProjectionKind};
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
 pub use string_helpers::{decode_string, encode_string, null_string};
 
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
-pub(crate) use crate::api::gen::kotlin as kt;
 pub(crate) use crate::api::{
     core::{
         domain::ScalarValue,
@@ -56,7 +57,6 @@ pub(crate) use crate::api::{
         registry::{Direction, Registry, TypeKey},
         types_util::{option_inner_type, vec_inner_type},
     },
-    gen::kotlin::WriteKotlinError,
     lang::jnigen::{
         jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
         util::snake_to_camel,

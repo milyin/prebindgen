@@ -23,6 +23,7 @@ package.keywords = ["ffi", "bindings", "cbindgen", "csbindgen", "cross-platform"
 package.categories = ["development-tools", "external-ffi-bindings"] 
 
 [workspace.dependencies]
+kotlin-codegen = { path = "../kotlin-codegen", version = "0.1.0" }
 prebindgen = { path = "prebindgen", version = "0.5.0" }
 prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.5.0" }
 serde = { version = "1.0", features = ["derive"] }

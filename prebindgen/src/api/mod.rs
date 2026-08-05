@@ -2,7 +2,6 @@ pub(crate) mod batching;
 pub(crate) mod buildrs;
 pub(crate) mod collect;
 pub(crate) mod core;
-pub(crate) mod gen;
 pub(crate) mod lang;
 pub(crate) mod record;
 pub(crate) mod source;

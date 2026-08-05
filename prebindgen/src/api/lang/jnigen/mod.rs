@@ -46,9 +46,8 @@ pub use jni::{
     FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, JniGenBuilder, PackageDecl,
     PtrClassDecl, SealedClassDecl, VariantDecl,
 };
-
-// Kotlin emission types now live in the standalone generator module
-// (`api::gen::kotlin`); re-exported here so the public `lang::` surface is
-// unchanged (`KotlinFile` aliases the model's `KtFile`).
-pub use crate::api::gen::kotlin::KtFile as KotlinFile;
-pub use crate::api::gen::kotlin::WriteKotlinError;
+// Kotlin emission types now live in the standalone `kotlin-codegen` crate;
+// re-exported here so the public `lang::` surface is unchanged (`KotlinFile`
+// aliases the model's `KtFile`).
+pub use kotlin_codegen::KtFile as KotlinFile;
+pub use kotlin_codegen::WriteKotlinError;
