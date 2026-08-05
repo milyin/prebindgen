@@ -26,12 +26,12 @@
 //! language-neutral registry pipeline over the flat model — type resolution,
 //! boundary expansion, Rust emission — ships in the separate
 //! [`prebindgen-registry`](https://docs.rs/prebindgen-registry) crate. The
-//! supported 0.5 surface is that pipeline plus the JNI/Kotlin `JniGenBuilder`
+//! supported 0.6 surface is that pipeline plus the JNI/Kotlin `JniGenBuilder`
 //! adapter, which ships in the separate
 //! [`prebindgen-jni`](https://docs.rs/prebindgen-jni) crate.
 //!
 //! The C / cbindgen adapter is an experimental proof of concept, ships in the
-//! separate `prebindgen-c` crate, and is not covered by the 0.5 semver
+//! separate `prebindgen-c` crate, and is not covered by the 0.6 semver
 //! guarantee.
 //!
 //! ## Usage example
@@ -93,16 +93,15 @@
 //! # example-cbindgen/Cargo.toml
 //! [dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.5"
-//! prebindgen-c-runtime = "0.5"   # the generated converters reference its traits
+//! prebindgen = "0.6"
+//! prebindgen-c-runtime = "0.6"   # the generated converters reference its traits
 //! konst = "0.3"      # the generated file emits a konst feature guard
 //!
 //! [build-dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.5"
-//! prebindgen-flat = "0.5"
-//! prebindgen-registry = "0.5"
-//! prebindgen-c = "0.5"
+//! prebindgen = "0.6"
+//! prebindgen-registry = "0.6"
+//! prebindgen-c = "0.6"
 //! cbindgen = "0.29"
 //! syn = { version = "2", features = ["full"] }
 //! ```
@@ -111,11 +110,10 @@
 //! use syn::parse_quote as pq;
 //!
 //! fn main() {
-//!     // Read the items captured from the common FFI crate.
-//!     let source = prebindgen::Source::new(example_flat::PREBINDGEN_OUT_DIR);
-//!
-//!     // Configure the C adapter: declare which items to export and how to name them.
-//!     let cbindgen = prebindgen_c::CbindgenBuilder::new()
+//!     // Configure the C adapter: point it at the items captured from the
+//!     // common FFI crate, and declare which ones to export and how to name them.
+//!     let cbindgen = prebindgen_c::Cbindgen::builder()
+//!         .source(example_flat::PREBINDGEN_OUT_DIR)
 //!         .source_module(pq!(example_flat))
 //!         .free_memory_function("example_free")
 //!         .mangle_type_name(|base| format!("{base}_t"))
@@ -126,13 +124,7 @@
 //!         .function(pq!(calculator_get_value)).panic();
 //!
 //!     // Resolve types, then write the Rust file of `extern "C"` wrappers.
-//!     let flat = prebindgen_flat::Flat::builder()
-//!         .items(source.items_all())
-//!         .build()
-//!         .unwrap();
-//!     let builder = prebindgen_registry::Registry::builder(flat).unwrap();
-//!     let generation = cbindgen.resolve(builder).unwrap();
-//!     let bindings_file = generation.write_rust("example_flat.rs").unwrap();
+//!     let bindings_file = cbindgen.build().unwrap().write_rust("example_flat.rs").unwrap();
 //!
 //!     // Pass the generated file to cbindgen for C header generation.
 //!     generate_c_headers(&bindings_file);

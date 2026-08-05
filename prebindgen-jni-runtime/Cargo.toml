@@ -6,7 +6,6 @@ description = "Runtime support helpers called by prebindgen-generated JNI bindin
 license = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
-documentation = { workspace = true }
 readme = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }

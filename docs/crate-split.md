@@ -117,7 +117,7 @@ than a move, nothing is unsound, and no generated output depends on it.
 | **B2** | carve `prebindgen-jni` | in progress |
 | **B3** | carve `prebindgen-registry` | done |
 | **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | todo |
-| **C** | workspace manifest, examples, docs, downstream repos | todo |
+| **C** | workspace manifest, examples, docs, downstream repos | done |
 
 Restoring the `Emit` seal is tracked separately as
 [#375](https://github.com/milyin/prebindgen/issues/375) and is **not** a phase of
