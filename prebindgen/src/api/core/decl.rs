@@ -1,13 +1,14 @@
 //! Language-neutral declaration vocabulary: the decl objects and constructor
 //! macros a build script uses to describe boundary expansion (`expand_param!`
 //! / `expand_return!`), free functions (`fun!`), and canonical single-value
-//! conversions (`convert!`). Moved down from the JNI adapter (`api/lang/jnigen`)
-//! because none of it is Kotlin/JNI-specific — it only references [`TypeKey`],
-//! [`Origin<syn::Type>`], and plain `syn` types. `api/lang/jnigen/jni/decl.rs`
-//! keeps the genuinely Kotlin-specific declarations (`ptr_class!`,
-//! `enum_class!`, `sealed_class!`, `data_class!`, `constant!`, `package!`) and
-//! re-exports everything here so the public `prebindgen::lang::*` /
-//! `prebindgen::core::*` surfaces are unaffected.
+//! conversions (`convert!`). Moved down from the JNI adapter (formerly
+//! `api/lang/jnigen`, now the separate `prebindgen-jni` crate) because none of
+//! it is Kotlin/JNI-specific — it only references [`TypeKey`],
+//! [`Origin<syn::Type>`], and plain `syn` types. `prebindgen-jni`'s own
+//! `jni/decl.rs` keeps the genuinely Kotlin-specific declarations
+//! (`ptr_class!`, `enum_class!`, `sealed_class!`, `data_class!`, `constant!`,
+//! `package!`) and re-exports these types from here, so the public
+//! `prebindgen::core::*` surface is unaffected by the split.
 
 use quote::ToTokens;
 
@@ -19,7 +20,7 @@ use super::flat::{Origin, TypeKey};
 /// is the sanctioned placeless location for exactly this — a signature or type a
 /// build script authored was never in a captured file, and `has_position` already
 /// gates what a diagnostic prints for one.
-pub(crate) fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
+pub fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
     Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
 }
 
@@ -30,7 +31,7 @@ pub(crate) fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
 
 /// One arm of an `expand_param!` `.variant*` list (type-level or per-fn).
 #[derive(Clone)]
-pub(crate) enum LocalVariant {
+pub enum LocalVariant {
     /// Build via this declared constructor member / constructor fn.
     Ctor(syn::Ident),
     /// Accept an already-built value directly.
@@ -46,7 +47,7 @@ pub(crate) enum LocalVariant {
 // arms (same trade-off as `ConvertSourceKind`).
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
-pub(crate) enum LocalField {
+pub enum LocalField {
     /// Include the named accessor's value as a leaf/field, with an optional
     /// explicit name override.
     Named(syn::Ident, Option<String>),
@@ -311,7 +312,7 @@ impl ExpandParamDecl {
     /// The declared build-from / existing-handle arms, in declaration order.
     /// `pub(crate)`, not `pub` — [`LocalVariant`] itself is `pub(crate)`
     /// (a public fn cannot return a private type).
-    pub(crate) fn variants(&self) -> &[LocalVariant] {
+    pub fn variants(&self) -> &[LocalVariant] {
         &self.variants
     }
 
@@ -439,7 +440,7 @@ impl ExpandReturnDecl {
     /// appends a value-form ([`Self::fields`]). `pub(crate)`, not `pub` —
     /// [`LocalField`] itself is `pub(crate)` (a public fn cannot return a
     /// private type).
-    pub(crate) fn field_list(&self) -> &[LocalField] {
+    pub fn field_list(&self) -> &[LocalField] {
         &self.fields
     }
 
@@ -842,7 +843,7 @@ impl FunctionDecl {
     /// signature) onward without cloning, so a reference-returning accessor
     /// won't do.
     #[allow(clippy::type_complexity)]
-    pub(crate) fn into_parts(
+    pub fn into_parts(
         self,
     ) -> (
         syn::Ident,
@@ -1055,7 +1056,7 @@ pub enum ConvertSpec {
 
 impl ConvertSpec {
     /// One-line human description of the source kind (report use).
-    pub(crate) fn describe(&self) -> String {
+    pub fn describe(&self) -> String {
         match self {
             ConvertSpec::PrebindgenFn(f) => format!("`#[prebindgen]` fn `{f}`"),
             ConvertSpec::Trait {
@@ -1201,7 +1202,7 @@ pub struct ConvertDecl {
 
 impl ConvertDecl {
     /// `: input …, output …` suffix for the report's conversions section.
-    pub(crate) fn describe_sources(&self) -> String {
+    pub fn describe_sources(&self) -> String {
         let mut parts = Vec::new();
         if let Some(i) = &self.input {
             parts.push(format!("input {}", i.describe()));
@@ -1265,7 +1266,7 @@ impl ConvertDecl {
 
     /// Mutable access for draining binding-local fn sources into the
     /// synthesis pre-pass at acceptance (`Vec::append`).
-    pub(crate) fn locals_mut(&mut self) -> &mut Vec<(syn::Ident, syn::Path, syn::Signature)> {
+    pub fn locals_mut(&mut self) -> &mut Vec<(syn::Ident, syn::Path, syn::Signature)> {
         &mut self.locals
     }
 
@@ -1429,11 +1430,11 @@ fn reject_builtin_convert_type(key: &TypeKey) {
 }
 
 /// Bare-ident type `__JniErr` — the generated file's alias for the
-/// framework [`crate::api::lang::jnigen::jni::JniBindingError`]. Built-in
+/// `prebindgen-jni` crate's `JniBindingError` framework type. Built-in
 /// converters use this as their `Result<…, _>` error type so their bodies'
 /// `<__JniErr as From<String>>::from(...)` calls keep compiling. A
 /// `Result<T, E>` return instead binds its own raw `E` (see
-/// [`JniGenBuilder::lookup_output`]); the extern's `Err` arm funnels both to the
+/// `JniGenBuilder::lookup_output`); the extern's `Err` arm funnels both to the
 /// per-call `signal_error` sink via `E: Display`.
 /// The origin-module prefix of a binding-local fn's declared path
 /// (`crate::sub::f` → `"crate::sub"`). Paths are validated ≥2 segments at

@@ -276,7 +276,7 @@ fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
 ///
 /// Runs inside `write_rust` after `expand::apply` and before `resolve`, so leaf
 /// converters resolve through the normal rank machinery.
-pub fn apply<M>(
+pub(crate) fn apply<M>(
     registry: &mut Registry<M>,
     acc: &Deconstructors,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -500,7 +500,7 @@ pub struct ValueDecon {
 /// stays non-generic.
 ///
 /// Runs in `write_rust` right after [`apply`] and before `resolve`.
-pub fn apply_value_structs<M>(
+pub(crate) fn apply_value_structs<M>(
     registry: &mut Registry<M>,
     decons: Vec<ValueDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -588,7 +588,7 @@ fn register_leaves<M>(
 }
 
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
-pub fn apply_sum_returns<M>(
+pub(crate) fn apply_sum_returns<M>(
     registry: &mut Registry<M>,
     decons: Vec<SumDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -772,7 +772,7 @@ fn wire_fixed_callbacks<M>(
 /// Runs right after [`apply_value_structs`]; skips any function/arg that already
 /// carries a plan (an explicit `.deconstruct_output`, a `data_class` fold, …) so
 /// declared decompositions and value-struct folds win.
-pub fn apply_leaf_vec_folds<M>(
+pub(crate) fn apply_leaf_vec_folds<M>(
     registry: &mut Registry<M>,
     elements: Vec<TypeKey>,
     declared_fns: &std::collections::HashSet<syn::Ident>,

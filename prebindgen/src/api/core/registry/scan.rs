@@ -583,8 +583,8 @@ impl<M> Registry<M> {
     /// shape and nothing else.
     /// Takes the **spelling**, like every other door into the table: interning
     /// needs real tokens, and a fixture has them — it wrote them (#291).
-    #[cfg(test)]
-    pub(crate) fn insert_crossing(
+    #[cfg(any(test, feature = "testing"))]
+    pub fn insert_crossing(
         &mut self,
         dir: Direction,
         ty: &syn::Type,

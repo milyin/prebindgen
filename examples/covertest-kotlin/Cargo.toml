@@ -23,6 +23,7 @@ tracing = "0.1"
 
 [build-dependencies]
 prebindgen = { workspace = true }
+prebindgen-jni = { workspace = true }
 syn = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
 cov_helpers = { package = "covertest-helpers", path = "../covertest-helpers" }

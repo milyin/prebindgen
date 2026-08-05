@@ -170,7 +170,7 @@ fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
 ///
 /// Runs inside the builder's scan, before any conversion is built, so
 /// leaf converters resolve through the normal rank machinery.
-pub fn apply<M>(
+pub(crate) fn apply<M>(
     registry: &mut Registry<M>,
     exp: &Expansions,
     declared_fns: &std::collections::HashSet<syn::Ident>,

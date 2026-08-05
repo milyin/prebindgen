@@ -1,12 +1,12 @@
-//! Build script generating Kotlin/JNI bindings for `perftest-flat` using
-//! prebindgen's [`prebindgen::lang::JniGenBuilder`] adapter — exercising **every**
+//! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
+//! separate `prebindgen-jni` crate's `JniGenBuilder` adapter — exercising **every**
 //! JniGenBuilder feature so the hand-written `kotlin/.../Test.kt` can assert each one.
 //!
 //! Unlike `examples/perftest-kotlin` (which maps only the lean perf surface in
 //! the performance-optimal shape), this binding maps the *same* flat library —
 //! including the coverage-only items in `perftest_flat::ext` — through the full
 //! adapter surface. `JniGenBuilder` accepts pre-built declaration objects (the
-//! `prebindgen::lang` decl types, built by the root decl macros) rather than a fluent typestate
+//! `prebindgen-jni` decl types, built by its root decl macros) rather than a fluent typestate
 //! chain — each row below is a `PackageDecl`/`ConvertDecl`/etc. built
 //! independently and then handed to `jni.package(...)` / `jni.convert(...)`:
 //!
@@ -98,9 +98,10 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen::{
-    constant, convert, data_class, enum_class, expand_param, expand_return, expr, fields, from,
-    fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig, try_from, ty,
-    variant,
+    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
+};
+use prebindgen_jni::{
+    constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
