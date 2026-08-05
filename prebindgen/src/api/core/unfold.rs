@@ -80,7 +80,7 @@ pub enum DeconRecord {
     /// therefore inline); this record only says how to get there.
     ///
     /// Each field then decomposes exactly like an [`Acc`](Self::Acc) record's
-    /// return does — its own [`records`](FieldRecord::records) if the
+    /// return does — its own `records` if the
     /// declaration overrode it, else its type's own deconstructor if it has
     /// one, else one leaf — so a value form and a hand-written field list
     /// produce the same leaves.
@@ -218,7 +218,7 @@ pub struct OutputDecl {
 /// builder — an immutable record set: complete values, no build protocol.
 /// Declaration order is the vector order; leaf order is each record
 /// vector's order. Handed to [`apply`] via
-/// [`crate::api::core::prebindgen::Prebindgen::deconstructors`]; empty or
+/// `Prebindgen::deconstructors`; empty or
 /// duplicate declarations are diagnosed there (collected), not at
 /// construction.
 #[derive(Clone, Default)]
@@ -276,7 +276,7 @@ fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
 ///
 /// Runs inside `write_rust` after `expand::apply` and before `resolve`, so leaf
 /// converters resolve through the normal rank machinery.
-pub fn apply<M>(
+pub(crate) fn apply<M>(
     registry: &mut Registry<M>,
     acc: &Deconstructors,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -500,7 +500,7 @@ pub struct ValueDecon {
 /// stays non-generic.
 ///
 /// Runs in `write_rust` right after [`apply`] and before `resolve`.
-pub fn apply_value_structs<M>(
+pub(crate) fn apply_value_structs<M>(
     registry: &mut Registry<M>,
     decons: Vec<ValueDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -588,7 +588,7 @@ fn register_leaves<M>(
 }
 
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
-pub fn apply_sum_returns<M>(
+pub(crate) fn apply_sum_returns<M>(
     registry: &mut Registry<M>,
     decons: Vec<SumDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
@@ -761,7 +761,7 @@ fn wire_fixed_callbacks<M>(
 /// Wire **whole-element** `Iterable` fold plans for bare `Vec<T>` /
 /// `Option<Vec<T>>` returns and `impl Fn(&[T])` callback args whose element `T`
 /// is a single leaf (String, scalar, opaque handle) nominated by the adapter
-/// via [`crate::api::core::prebindgen::Prebindgen::leaf_vec_fold_elements`]. Each
+/// via `Prebindgen::leaf_vec_fold_elements`. Each
 /// such position crosses as decoupled raw leaves folded into a **foreign-built**
 /// list — the single-leaf dual of [`apply_value_structs`] (which handles
 /// multi-field `data_class` elements). The fold is a **fixed** foreign singleton
@@ -772,7 +772,7 @@ fn wire_fixed_callbacks<M>(
 /// Runs right after [`apply_value_structs`]; skips any function/arg that already
 /// carries a plan (an explicit `.deconstruct_output`, a `data_class` fold, …) so
 /// declared decompositions and value-struct folds win.
-pub fn apply_leaf_vec_folds<M>(
+pub(crate) fn apply_leaf_vec_folds<M>(
     registry: &mut Registry<M>,
     elements: Vec<TypeKey>,
     declared_fns: &std::collections::HashSet<syn::Ident>,

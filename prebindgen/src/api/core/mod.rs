@@ -39,13 +39,13 @@ pub mod write;
 pub use self::{
     decl::{
         ConvertDecl, ConvertSourceDecl, ConvertSpec, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
-        FieldsDecl, FunctionDecl,
+        FieldsDecl, FunctionDecl, LocalField, LocalVariant,
     },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
     flat::{Element, Flat},
     niches::{NicheSlot, Niches},
-    prebindgen::{ConverterImpl, Prebindgen, Stage},
+    prebindgen::{ConverterImpl, NamePredicate, Prebindgen, Stage},
     registry::{
         Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
         NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeEntry, TypeKey,

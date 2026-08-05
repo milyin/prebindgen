@@ -271,10 +271,55 @@ impl<M> std::fmt::Debug for Registry<M> {
 impl<M> Registry<M> {
     /// An empty registry: no model, no items, no types.
     ///
-    /// **Not public.** A `Registry` is a projection of a [`Flat`], and one built
+    /// **Not public.** A `Registry` is a projection of a [`Flat`](crate::core::Flat), and one built
     /// this way projects nothing — [`Self::flat`] would hand a later stage an
     /// empty model that claims to be this registry's source. Outside this crate
-    /// the entry point is [`Self::new`], which has a model behind it.
+    /// the entry point is [`Self::builder`], which has a model behind it.
+    /// [`Self::empty`] for the test suite of an out-of-crate adapter.
+    ///
+    /// Gated on the non-default `testing` feature, so the "not public" rule
+    /// above is unchanged for every ordinary build; a fixture that wants a
+    /// registry projecting nothing is the one caller it was never aimed at.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn empty_for_test() -> Self {
+        Self::empty()
+    }
+
+    /// Whether `key` is registered in `dir`, and if so whether the binding
+    /// asked for it directly (the cell's root flag).
+    ///
+    /// Test support, `testing`-gated: it answers the one question a fixture
+    /// asks of a cell without handing out [`TypeCell`], which is the
+    /// registry's storage and no part of the public surface.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn is_root_for_test(&self, dir: Direction, key: &TypeKey) -> Option<bool> {
+        self.type_table(dir).get(key).map(|cell| cell.root)
+    }
+
+    /// Whether `key`'s cell in `dir` has a resolved converter.
+    ///
+    /// Test support, `testing`-gated. The public [`Self::input_entry`] /
+    /// [`Self::output_entry`] answer this from a reading; a fixture that built
+    /// the type itself holds only its identity.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn has_entry_for_test(&self, dir: Direction, key: &TypeKey) -> Option<bool> {
+        self.type_table(dir)
+            .get(key)
+            .map(|cell| cell.entry.is_some())
+    }
+
+    /// The unfold plans built for callback arguments.
+    ///
+    /// Test support, `testing`-gated. [`UnfoldPlan`](crate::core::unfold::UnfoldPlan)
+    /// is already public, so this exposes no new type — only the map the
+    /// registry keeps them in.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn callback_arg_plans_for_test(
+        &self,
+    ) -> impl Iterator<Item = &crate::core::unfold::UnfoldPlan> {
+        self.callback_arg_plans.values()
+    }
+
     pub(crate) fn empty() -> Self {
         Self {
             flat: crate::api::core::flat::Flat::default(),

@@ -207,7 +207,7 @@ impl TypeRef {
     /// **decline**: a consumer that can only build `Base` and `Optional(Base)`
     /// matches those and falls through on anything else, instead of silently
     /// consuming a layer it cannot honour.
-    pub fn layer_stack(&self) -> (crate::api::core::shape::Shape, &TypeRef) {
+    pub fn layer_stack(&self) -> (crate::core::shape::Shape, &TypeRef) {
         use crate::api::core::shape::Shape;
         // Bounded on purpose, and not a recursion: the accepted crossing is
         // `Option<Vec<T>>` — at most one optional, then at most one run, in that

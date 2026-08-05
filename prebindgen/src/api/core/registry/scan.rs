@@ -583,8 +583,8 @@ impl<M> Registry<M> {
     /// shape and nothing else.
     /// Takes the **spelling**, like every other door into the table: interning
     /// needs real tokens, and a fixture has them — it wrote them (#291).
-    #[cfg(test)]
-    pub(crate) fn insert_crossing(
+    #[cfg(any(test, feature = "testing"))]
+    pub fn insert_crossing(
         &mut self,
         dir: Direction,
         ty: &syn::Type,
@@ -735,7 +735,7 @@ impl<M> Registry<M> {
     /// close, and every caller with a `Registry` in hand silently used it. The
     /// same "second door inside the room" that hid `classify` behind
     /// `Registry::reading` until #267.
-    pub fn input_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+    pub fn input_entry(&self, reading: &crate::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
         self.type_table(Direction::Input)
             .get(&reading.key())?
             .entry
@@ -744,7 +744,7 @@ impl<M> Registry<M> {
 
     /// Look up the resolved output entry for `reading`. See
     /// [`Self::input_entry`].
-    pub fn output_entry(&self, reading: &crate::api::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
+    pub fn output_entry(&self, reading: &crate::core::flat::TypeRef) -> Option<&TypeEntry<M>> {
         self.type_table(Direction::Output)
             .get(&reading.key())?
             .entry

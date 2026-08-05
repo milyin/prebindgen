@@ -72,7 +72,7 @@ impl<M> TypeEntry<M> {
     ///
     /// The only difference is `subs`: a generator names its inners as types,
     /// and the table keys them.
-    pub fn from_converter(c: crate::api::core::prebindgen::ConverterImpl<M>) -> Self {
+    pub fn from_converter(c: crate::core::ConverterImpl<M>) -> Self {
         Self {
             destination: c.destination,
             function: c.function,

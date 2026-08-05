@@ -25,7 +25,7 @@ impl<M> Registry<M> {
     }
 
     /// The parsed model this registry projects.
-    pub fn flat(&self) -> &crate::api::core::flat::Flat {
+    pub fn flat(&self) -> &crate::core::flat::Flat {
         &self.flat
     }
 

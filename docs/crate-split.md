@@ -97,8 +97,8 @@ lands.
 | **A3** | shared decl vocabulary → `core::decl`; breaks `cbindgen → jnigen` | done |
 | **A5** | drop the `unstable-cbindgen` feature | done |
 | **A4** | `Emit` → `flat`; `flat/` reaches zero core-sibling refs | done |
-| **B1** | carve `prebindgen-c` | todo |
-| **B2** | carve `prebindgen-jni` | todo |
+| **B1** | carve `prebindgen-c` | done |
+| **B2** | carve `prebindgen-jni` | in progress |
 | **B3** | carve `prebindgen-registry` | todo |
 | **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | todo |
 | **C** | workspace manifest, examples, docs, downstream repos | todo |

@@ -40,35 +40,6 @@ pub(crate) fn declared_origin(ty: syn::Type) -> crate::core::flat::Origin<syn::T
     crate::core::flat::Origin::new(ty, std::rc::Rc::new(crate::SourceLocation::default()))
 }
 
-/// One type as the **model** reads it, for a test that needs a `TypeRef` and has
-/// only a spelling.
-///
-/// Minting is sealed to `api::core` (#280), and rightly — a hand-assembled
-/// reading could pair a `kind` with a disagreeing `syntax`, which is the one
-/// thing holding a `TypeRef` is supposed to rule out. So this does not reach
-/// around the seal: it puts the spelling in a parameter position, runs the real
-/// parse, and hands back the reading the model produced. A spelling the grammar
-/// refuses panics here rather than yielding something weaker.
-pub(crate) fn reading(ty: syn::Type) -> crate::core::flat::TypeRef {
-    let item: syn::Item = syn::parse_quote!(
-        pub fn __probe(v: #ty) {
-            unimplemented!()
-        }
-    );
-    let flat = crate::core::Flat::builder()
-        .items(declare_referenced(vec![(
-            item,
-            crate::SourceLocation::default(),
-        )]))
-        .build()
-        .expect("the probe parses");
-    flat.function("__probe")
-        .expect("the probe is indexed")
-        .params[0]
-        .ty
-        .clone()
-}
-
 /// Build a `Registry` from an item stream, the way `Registry::from_items` used
 /// to before reading captured output became `FlatBuilder`'s job alone.
 ///

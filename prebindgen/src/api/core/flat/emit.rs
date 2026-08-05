@@ -66,7 +66,7 @@
 //! [`Emit::spell`] yields a `TokenStream`, so emission code can re-parse it and
 //! take the node apart. That is deliberate — emission is where syntax belongs —
 //! and closing it would mean an emission IR for Rust, mirroring the
-//! [`kotlin_codegen`] crate, which is a much larger piece of work.
+//! `kotlin-codegen` crate, which is a much larger piece of work.
 //!
 //! And nothing stops a *new* door being added: someone can write `pub fn
 //! as_syn2` in `flat` tomorrow. The reason that is tolerable is that such a
@@ -216,12 +216,18 @@ impl Emit {
 
     /// A capability for a test that drives an emission helper directly.
     ///
-    /// `#[cfg(test)]`, so it does not exist in a built crate — production code
-    /// still cannot mint one, and the `compile_fail` examples above still prove
-    /// the out-of-crate seal, since a doctest compiles against the built crate
+    /// Gated on `cfg(test)` or the non-default `testing` feature, so it does
+    /// not exist in an ordinary built crate — production code still cannot
+    /// mint one, and the `compile_fail` examples above still prove the
+    /// out-of-crate seal, since a doctest compiles against the built crate
     /// where this is absent.
-    #[cfg(test)]
-    pub(crate) fn for_test() -> Self {
+    ///
+    /// The feature exists because the adapters that drive emission are now
+    /// separate crates, so their test suites need the same capability this
+    /// crate's own tests do — and a test suite is exactly the caller the seal
+    /// was never aimed at.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn for_test() -> Self {
         Self { _seal: () }
     }
 

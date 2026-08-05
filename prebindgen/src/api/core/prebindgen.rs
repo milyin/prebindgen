@@ -20,7 +20,7 @@ use proc_macro2::TokenStream;
 use crate::api::core::{niches::Niches, registry::Registry};
 
 /// A shared predicate over an item name, as used by
-/// [`Prebindgen::ignored_name_predicates`] (bulk ignores keyed on a naming
+/// `Prebindgen`'s ignore hooks (bulk ignores keyed on a naming
 /// family rather than an exact ident).
 pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 

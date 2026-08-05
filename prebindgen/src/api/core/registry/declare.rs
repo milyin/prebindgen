@@ -70,7 +70,7 @@ impl<M> Registry<M> {
     /// a source crate that needs migrating sees one list instead of one rebuild
     /// per item. This is independent of what any binding declares: an
     /// inexpressible item is a hard error whether or not it is ever named.
-    pub fn builder(flat: crate::api::core::flat::Flat) -> Result<RegistryBuilder<M>, ScanError> {
+    pub fn builder(flat: crate::core::flat::Flat) -> Result<RegistryBuilder<M>, ScanError> {
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -266,7 +266,7 @@ impl<M> RegistryBuilder<M> {
 impl<M> RegistryBuilder<M> {
     /// The model being described. Complete from the first call: everything that
     /// adds to it ([`Self::local_function`]) is a declaration, not a derivation.
-    pub fn flat(&self) -> &crate::api::core::flat::Flat {
+    pub fn flat(&self) -> &crate::core::flat::Flat {
         &self.registry.flat
     }
 

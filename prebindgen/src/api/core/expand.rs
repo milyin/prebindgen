@@ -104,7 +104,7 @@ pub struct ExpandDecl {
 /// Constructor / expansion declarations gathered from a language builder —
 /// an immutable record set: complete values, no build protocol. Declaration
 /// order is the vector order. Handed to [`apply`] via
-/// [`crate::api::core::prebindgen::Prebindgen::expansions`]; empty or
+/// `Prebindgen::expansions`; empty or
 /// duplicate declarations are diagnosed there (collected), not at
 /// construction.
 #[derive(Clone, Default)]
@@ -170,7 +170,7 @@ fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
 ///
 /// Runs inside the builder's scan, before any conversion is built, so
 /// leaf converters resolve through the normal rank machinery.
-pub fn apply<M>(
+pub(crate) fn apply<M>(
     registry: &mut Registry<M>,
     exp: &Expansions,
     declared_fns: &std::collections::HashSet<syn::Ident>,

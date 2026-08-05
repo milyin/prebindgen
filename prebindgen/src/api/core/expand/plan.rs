@@ -66,7 +66,7 @@ pub struct FoldLeaf {
     /// types; for a combined one the selector (`i32`) and `Option`-wrapped
     /// variant inputs. Spell it with `ty.spell()`.
     ///
-    /// A reading rather than a spelling for the reason [`UnfoldLeaf::out_ty`]
+    /// A reading rather than a spelling for the reason `UnfoldLeaf::out_ty`
     /// gives: a consumer asking what this leaf's type MEANS had to hand the
     /// spelling back to the registry (#275). The leaves no source wrote — the
     /// presence flag, the selector — are built by
