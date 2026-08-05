@@ -192,6 +192,38 @@ pub struct Function {
     pub origin: Origin<syn::ItemFn>,
 }
 
+impl Function {
+    /// A synthesized **nullary getter**: `pub fn <ident>() -> <ret>`.
+    ///
+    /// The model's own constructor for the one element an adapter legitimately
+    /// needs to invent — a declared `const`'s accessor, whose type flows through
+    /// the ordinary output-converter machinery and so has to arrive as a
+    /// `Function` like any other.
+    ///
+    /// It lives here because building one means **spelling** `ret`, and #280
+    /// says a `TypeRef` is the model's to mint. An adapter that built this
+    /// itself needed a spelling for a model element — which dragged the
+    /// emission capability into validation and Kotlin rendering, both of which
+    /// only wanted the resulting `Function`.
+    ///
+    /// The body is `unimplemented!()` and is never emitted: only the signature
+    /// is read.
+    pub fn synthetic_getter(ident: syn::Ident, ret: TypeRef) -> Self {
+        let ret_syntax = ret.spell();
+        let item: syn::ItemFn = syn::parse_quote! {
+            pub fn #ident() -> #ret_syntax {
+                unimplemented!()
+            }
+        };
+        Self {
+            name: ident,
+            params: Vec::new(),
+            origin: ret.origin_with(item),
+            ret,
+        }
+    }
+}
+
 /// One parameter of a [`Function`].
 #[derive(Clone, Debug)]
 pub struct Param {

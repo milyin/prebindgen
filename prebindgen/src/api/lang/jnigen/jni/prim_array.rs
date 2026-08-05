@@ -130,17 +130,21 @@ pub(crate) fn output_body(spec: &PrimArray) -> syn::Expr {
 ///
 /// The length check is the `try_into`: a JVM array of the wrong size becomes a
 /// binding error naming the type, never a panic or a partially-filled array.
-pub(crate) fn input_body(ty: &crate::api::core::flat::TypeRef, spec: &PrimArray) -> syn::Expr {
+pub(crate) fn input_body(
+    ty: &crate::api::core::flat::TypeRef,
+    spec: &PrimArray,
+    emit: &crate::api::core::emit::Emit,
+) -> syn::Expr {
     let key = ty.key();
     // The element spelled from the model's own `Array`, so the local's type
     // ascription cannot disagree with what `prim_array_of` matched.
     let elem_ty = match ty.kind() {
-        crate::api::core::flat::TypeKind::Array { elem, .. } => elem.spell(),
+        crate::api::core::flat::TypeKind::Array { elem, .. } => emit.spell(elem),
         _ => unreachable!("prim_array_of matched a non-array"),
     };
     // The ascription the decoded array is checked against — spelled from the
     // reading, as generated Rust always spells.
-    let ty = ty.spell();
+    let ty = emit.spell(ty);
     let len_err = format!("fixed-size array decode: `{key}` expects a different length");
     if spec.is_u8 {
         return syn::parse_quote!({

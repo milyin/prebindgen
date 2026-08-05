@@ -13,8 +13,9 @@ pub(crate) fn emit_jni_function_wrapper(
     ext: &Declarations,
     f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> TokenStream {
-    emit_jni_function_wrapper_with_callee(ext, f, registry, None)
+    emit_jni_function_wrapper_with_callee(ext, f, registry, None, emit)
 }
 
 /// The synthetic nullary getter signature a declared const is emitted
@@ -28,7 +29,7 @@ pub(crate) fn const_getter_fn(
 ) -> crate::api::core::flat::Function {
     let ident = format_ident!("const_get_{}", c.name.to_string().to_lowercase());
     // No lookup: a constant element carries its own `TypeRef`.
-    synthetic_getter(ident, c.ty.clone())
+    crate::api::core::flat::Function::synthetic_getter(ident, c.ty.clone())
 }
 
 /// A const whose (peeled) type is a declared opaque handle is rejected: a
@@ -142,39 +143,8 @@ pub(crate) fn const_expr_getter_fn(
             quote::ToTokens::to_token_stream(ty),
         )
     });
-    synthetic_getter(ident, ret)
+    crate::api::core::flat::Function::synthetic_getter(ident, ret)
 }
-/// A nullary getter as the MODEL would hold it — the one function no source
-/// wrote.
-///
-/// A declared constant crosses as a getter extern, and that getter goes through
-/// exactly the same emitter a real function does. So it needs a
-/// [`flat::Function`](crate::api::core::flat::Function), not a `syn::ItemFn`:
-/// the emitter classifies off `kind` now, and a synthesized item would have no
-/// reading to classify from.
-///
-/// `ret` is supplied by the caller because the two callers get it from
-/// different places — a declared const carries its own `TypeRef`, an
-/// expression constant names a type in the build script — and only the second
-/// has to look one up.
-pub(crate) fn synthetic_getter(
-    ident: syn::Ident,
-    ret: crate::api::core::flat::TypeRef,
-) -> crate::api::core::flat::Function {
-    let ret_syntax = ret.spell();
-    let item: syn::ItemFn = syn::parse_quote! {
-        pub fn #ident() -> #ret_syntax {
-            unimplemented!()
-        }
-    };
-    crate::api::core::flat::Function {
-        name: ident,
-        params: Vec::new(),
-        origin: ret.origin_with(item),
-        ret,
-    }
-}
-
 /// Validates an expression constant's declared value type (checked on both
 /// write paths): not a `Result` (a domain-fallible value is not a constant),
 /// not (peeled to) a declared opaque handle.
@@ -215,6 +185,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     f: &crate::api::core::flat::Function,
     registry: &Registry<KotlinMeta>,
     callee: Option<syn::Expr>,
+    emit: &crate::api::core::emit::Emit,
 ) -> TokenStream {
     let original_ident = &f.name;
 
@@ -272,7 +243,8 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let on_err = sentinel_for_wire(&wire_ty);
 
     for param in &plan.params {
-        let (wp, pre, call_arg) = emit_input_param(ext, registry, original_ident, param, &on_err);
+        let (wp, pre, call_arg) =
+            emit_input_param(ext, registry, original_ident, param, &on_err, emit);
         wire_params.extend(wp);
         prelude.extend(pre);
         call_args.push(call_arg);
@@ -546,6 +518,7 @@ fn emit_input_param(
     original_ident: &syn::Ident,
     param: &PlanParam,
     on_err: &TokenStream,
+    emit: &crate::api::core::emit::Emit,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     // Constructor-expansion: this parameter's wire form is the fold plan's
     // flattened leaves. Decode each leaf with its own converter, run the
@@ -556,7 +529,7 @@ fn emit_input_param(
                 .expansion_plans()
                 .get(&(original_ident.clone(), param.ident.clone()))
                 .expect("ParamForm::Expanded ⇒ expansion plan present");
-            return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err);
+            return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err, emit);
         }
         ParamForm::Single(leaf) => &**leaf,
     };
@@ -578,7 +551,7 @@ fn emit_input_param(
                 let pty = &leaf.native_wire_ty;
                 wire_params.push(quote!(#pid: #pty));
             }
-            let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err);
+            let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err, emit);
             prelude.push(decode);
             (wire_params, prelude, call_arg)
         }
@@ -633,7 +606,7 @@ fn emit_input_param(
         // by-value-handle consume below.
         InputKind::VecBuild { elem, by_ref } => {
             // Generated Rust spells the reading's own tokens.
-            let elem = elem.spell();
+            let elem = emit.spell(elem);
             let handle_ident = format_ident!("{}_handle", arg_ident);
             wire_params.push(quote!(#handle_ident: jni::sys::jlong));
             if *by_ref {
@@ -685,7 +658,7 @@ fn emit_input_param(
                 arg_ident.clone()
             };
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
-            let arg_ty = arg_ty.spell();
+            let arg_ty = emit.spell(arg_ty);
             prelude.push(quote!(
                 if #wire_ident == 0 || (#wire_ident & 1) == 1 {
                     signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
@@ -867,6 +840,7 @@ pub(crate) fn emit_expanded_param(
     leaves: &[PlanLeaf],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
+    emit: &crate::api::core::emit::Emit,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
@@ -876,7 +850,7 @@ pub(crate) fn emit_expanded_param(
     for (leaf, classified) in plan.leaves.iter().zip(leaves) {
         let leaf_ty = &leaf.ty;
         // The ascription generated Rust writes for this leaf's local.
-        let leaf_ty_tokens = leaf_ty.spell();
+        let leaf_ty_tokens = emit.spell(leaf_ty);
         let lookup_entry = || {
             // The leaf's own reading goes straight to the entry: spelling it and
             // looking the same reading back up is the round trip #286 removed.
@@ -903,7 +877,7 @@ pub(crate) fn emit_expanded_param(
                 let wire = &flat_leaf.native_wire_ty;
                 wire_params.push(quote!(#ident: #wire));
             }
-            let (decode, _) = render_flat_input_decode(flat, &local, on_err);
+            let (decode, _) = render_flat_input_decode(flat, &local, on_err, emit);
             prelude.push(decode);
             leaf_locals.push(local);
             continue;
