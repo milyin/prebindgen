@@ -141,7 +141,7 @@ fn every_input_category() -> String {
         ),
     ];
 
-    let registry = crate::api::test_util::reg_from_items(declare_referenced(
+    let registry = crate::test_util::reg_from_items(declare_referenced(
         items.into_iter().map(|i| (i, loc.clone())),
     ))
     .expect("index items");

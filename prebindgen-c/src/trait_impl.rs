@@ -1,5 +1,6 @@
+use prebindgen::core::{Building, Conversions, Crossing, RegistryBuilder};
+
 use super::{builder::callback_fn_type, *};
-use crate::api::core::registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 /// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
@@ -804,7 +805,7 @@ impl CbindgenBuilder {
     /// **re-emitted verbatim**, exactly as the source wrote it.
     ///
     /// Deliberately NOT routed through the shared
-    /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values).
+    /// [`enum_discriminant_values`](prebindgen::core::types_util::enum_discriminant_values).
     /// That helper resolves each variant to a concrete `i64`, which is what an
     /// adapter needs when it must *know the number* — JniGenBuilder's `jint` decode
     /// and the Kotlin `value(N)` constants. This mirror needs no number: it is
@@ -820,7 +821,7 @@ impl CbindgenBuilder {
     fn prereq_enums(
         &self,
         registry: &Registry<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
@@ -871,7 +872,7 @@ impl CbindgenBuilder {
     fn prereq_tagged_unions(
         &self,
         registry: &Registry<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
@@ -1095,7 +1096,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         r: &impl Conversions<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         if !self.tagged_unions.contains_key(&key) {
@@ -1237,7 +1238,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         r: &impl Conversions<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         if !self.tagged_unions.contains_key(&key) {
@@ -1567,7 +1568,7 @@ impl CbindgenBuilder {
         let mut result = Vec::new();
         let mut seen = HashMap::<syn::Ident, String>::new();
         for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| decl.locals()) {
-            let origin = crate::api::core::decl::local_path_prefix(path);
+            let origin = prebindgen::core::decl::local_path_prefix(path);
             let mut sig = sig.clone();
             sig.ident = ident.clone();
             let signature = quote!(#origin #sig).to_string();
@@ -1590,28 +1591,28 @@ impl CbindgenBuilder {
     /// `JniGenBuilder::build`.
     /// Read the source, resolve every crossing, and hand back the binding —
     /// see `JniGenBuilder::build`.
-    pub fn build(self) -> Result<Cbindgen, crate::core::WriteRustError> {
+    pub fn build(self) -> Result<Cbindgen, prebindgen::core::WriteRustError> {
         let flat = self
             .sources
             .clone()
             .build()
-            .map_err(crate::core::ScanError::from)?;
-        let registry = crate::core::Registry::builder(flat)?;
+            .map_err(prebindgen::core::ScanError::from)?;
+        let registry = prebindgen::core::Registry::builder(flat)?;
         self.build_with(registry)
     }
 
     /// [`Self::build`] over a registry described elsewhere — the test seam.
     pub(crate) fn build_with(
         self,
-        registry: crate::api::core::registry::RegistryBuilder<()>,
-    ) -> Result<Cbindgen, crate::core::WriteRustError> {
+        registry: prebindgen::core::RegistryBuilder<()>,
+    ) -> Result<Cbindgen, prebindgen::core::WriteRustError> {
         let registry = self
             .declare_into(registry)?
             .validate_with(&self)?
             .convert_with(|crossing, built, emit| self.convert_crossing(crossing, built, emit))?
             .build()?;
         self.validate_resolved(&registry)
-            .map_err(|message| crate::core::ScanError::AdapterInvariant { message })?;
+            .map_err(|message| prebindgen::core::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {
             gen: self,
             registry,
@@ -1623,7 +1624,7 @@ impl CbindgenBuilder {
         &self,
         crossing: &Crossing,
         built: &Building<'_, ()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Option<ConverterImpl<()>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
@@ -1646,7 +1647,7 @@ impl CbindgenBuilder {
     pub fn declare_into(
         &self,
         mut registry: RegistryBuilder<()>,
-    ) -> Result<RegistryBuilder<()>, crate::core::ScanError> {
+    ) -> Result<RegistryBuilder<()>, prebindgen::core::ScanError> {
         for (item_fn, origin) in self.collect_local_functions() {
             registry = registry.local_function(item_fn, origin)?;
         }
@@ -1793,9 +1794,9 @@ impl Prebindgen for CbindgenBuilder {
     fn validate(&self, binding: &Building<'_, Self::Metadata>) -> Result<(), String> {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
-        crate::core::warn_unclaimed(
+        prebindgen::core::warn_unclaimed(
             binding.flat(),
-            &crate::core::Claimed {
+            &prebindgen::core::Claimed {
                 functions,
                 // The report asks what was *claimed*, which is a set of
                 // identities — the declarations' spellings are the scan's
@@ -1830,7 +1831,7 @@ impl Prebindgen for CbindgenBuilder {
     fn prerequisites(
         &self,
         registry: &Registry<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Vec<syn::Item> {
         // C-string data memory (string returns + `String` fields of data structs)
         // is malloc'd raw and freed by the single universal `free_memory_function`.
@@ -1856,18 +1857,18 @@ impl Prebindgen for CbindgenBuilder {
 
     fn on_function(
         &self,
-        f: &crate::api::core::flat::Function,
+        f: &prebindgen::core::flat::Function,
         registry: &Registry<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> TokenStream {
         self.emit_function_wrapper(f, registry, emit)
     }
 
     fn on_struct(
         &self,
-        _s: &crate::api::core::flat::Struct,
+        _s: &prebindgen::core::flat::Struct,
         _registry: &Registry<()>,
-        _emit: &crate::api::core::emit::Emit,
+        _emit: &prebindgen::core::Emit,
     ) -> TokenStream {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
         // on_output_type; the original (non-FFI-safe) struct is dropped.
@@ -1876,18 +1877,18 @@ impl Prebindgen for CbindgenBuilder {
 
     fn on_variant(
         &self,
-        _v: &crate::api::core::flat::Variant,
+        _v: &prebindgen::core::flat::Variant,
         _registry: &Registry<()>,
-        _emit: &crate::api::core::emit::Emit,
+        _emit: &prebindgen::core::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
 
     fn on_enum(
         &self,
-        _e: &crate::api::core::flat::Enum,
+        _e: &prebindgen::core::flat::Enum,
         _registry: &Registry<()>,
-        _emit: &crate::api::core::emit::Emit,
+        _emit: &prebindgen::core::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -1900,7 +1901,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         _r: &impl Conversions<()>,
-        emit: &crate::api::core::emit::Emit,
+        emit: &prebindgen::core::Emit,
     ) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
@@ -2341,7 +2342,7 @@ impl CbindgenBuilder {
             // memory. Rust writes via the `MaybeUninit` (no drop of the garbage slot).
             // `TypeKind::Uninit` is the form `maybe_uninit_inner` matched by
             // reading a path's tail ident.
-            if let crate::api::core::flat::TypeKind::Uninit(inner) = elem.kind() {
+            if let prebindgen::core::flat::TypeKind::Uninit(inner) = elem.kind() {
                 let op = self.value_opaque_ty_of(&inner.key())?.clone();
                 let name = Self::in_name_of(&ty.key());
                 let src = self.src_ty_of(&inner.key());

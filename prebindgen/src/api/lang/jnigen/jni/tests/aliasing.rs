@@ -1,5 +1,5 @@
 //! The Kotlin-side alias preflight (#189) — the JNI counterpart of the C one
-//! in `lang::cbindgen::tests::aliasing`.
+//! in the C adapter's own aliasing preflight test (now in the `prebindgen-c` crate).
 //!
 //! Two typed handles a caller passes to one wrapper can be the same object, or
 //! two objects over one native allocation. `zCombine(x, x)` then hands that

@@ -1042,7 +1042,7 @@ impl FunctionDecl {
 // builder — boxing the syn payloads would only complicate the decl arms.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
-pub(crate) enum ConvertSpec {
+pub enum ConvertSpec {
     /// A `#[prebindgen]` fn (flat or helper crate): the representable type
     /// and fallibility are read from its registry signature at lookup time.
     PrebindgenFn(syn::Ident),
@@ -1241,14 +1241,14 @@ impl ConvertDecl {
     /// The declared **into-Rust** conversion source, if any. Named
     /// `input_spec` rather than `input` — that name is already the builder
     /// method that declares it ([`Self::input`]).
-    pub(crate) fn input_spec(&self) -> &Option<ConvertSpec> {
+    pub fn input_spec(&self) -> &Option<ConvertSpec> {
         &self.input
     }
 
     /// The declared **out-of-Rust** conversion source, if any. Named
     /// `output_spec` rather than `output` — that name is already the builder
     /// method that declares it ([`Self::output`]).
-    pub(crate) fn output_spec(&self) -> &Option<ConvertSpec> {
+    pub fn output_spec(&self) -> &Option<ConvertSpec> {
         &self.output
     }
 
@@ -1259,7 +1259,7 @@ impl ConvertDecl {
 
     /// Binding-local fn sources declared on this convert, drained into the
     /// synthesis pre-pass at acceptance.
-    pub(crate) fn locals(&self) -> &[(syn::Ident, syn::Path, syn::Signature)] {
+    pub fn locals(&self) -> &[(syn::Ident, syn::Path, syn::Signature)] {
         &self.locals
     }
 
@@ -1439,7 +1439,7 @@ fn reject_builtin_convert_type(key: &TypeKey) {
 /// (`crate::sub::f` → `"crate::sub"`). Paths are validated ≥2 segments at
 /// decl time (`fun!` path arm / `FieldDecl::with`), so the prefix is
 /// always non-empty.
-pub(crate) fn local_path_prefix(path: &syn::Path) -> String {
+pub fn local_path_prefix(path: &syn::Path) -> String {
     path.segments
         .iter()
         .take(path.segments.len() - 1)

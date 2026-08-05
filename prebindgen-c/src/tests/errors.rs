@@ -10,7 +10,7 @@ fn result_error_not_declared_is_build_error() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
@@ -49,7 +49,7 @@ fn fallible_input_without_result_needs_panic() {
     );
 
     // No `.panic()` → build error.
-    let reg1 = crate::api::test_util::reg_from_items(declare_referenced([(
+    let reg1 = crate::test_util::reg_from_items(declare_referenced([(
         syn::Item::Fn(func.clone()),
         loc.clone(),
     )]))
@@ -65,11 +65,9 @@ fn fallible_input_without_result_needs_panic() {
     assert!(err.is_err(), "expected a build error without .panic()");
 
     // With `.panic()` → wrapper aborts on decode failure.
-    let reg2 = crate::api::test_util::reg_from_items(declare_referenced([(
-        syn::Item::Fn(func),
-        loc.clone(),
-    )]))
-    .expect("index items");
+    let reg2 =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
     let cb2 = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log))
@@ -101,7 +99,7 @@ fn error_out_param_is_null_guarded() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(ptr_fn), loc.clone()),
         (syn::Item::Fn(unit_fn), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),

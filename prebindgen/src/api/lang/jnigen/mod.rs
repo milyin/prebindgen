@@ -1,6 +1,6 @@
 //! JNI / Kotlin language adapter — the [`JniGenBuilder`] back-end.
 //!
-//! Sibling of [`crate::api::lang::cbindgen`]: it implements the
+//! Sibling of the C adapter (now the separate `prebindgen-c` crate): it implements the
 //! language-agnostic [`crate::api::core::prebindgen::Prebindgen`] trait to
 //! turn a flat `#[prebindgen]` library into a Rust file of JNI `extern "C"`
 //! wrappers plus a fan-out of generated Kotlin sources.

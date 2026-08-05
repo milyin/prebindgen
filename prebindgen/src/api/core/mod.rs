@@ -36,12 +36,10 @@ pub mod types_util;
 pub mod unfold;
 pub mod write;
 
-pub use prebindgen_c_runtime::{Gravestone, Transmute};
-
 pub use self::{
     decl::{
-        ConvertDecl, ConvertSourceDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
-        FunctionDecl,
+        ConvertDecl, ConvertSourceDecl, ConvertSpec, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+        FieldsDecl, FunctionDecl,
     },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},

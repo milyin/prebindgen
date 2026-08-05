@@ -10,11 +10,9 @@ fn slice_u8_input_two_params() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
-        syn::Item::Fn(func),
-        loc.clone(),
-    )]))
-    .expect("index items");
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -49,7 +47,7 @@ fn option_opaque_input_reuses_pointer() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))
@@ -93,11 +91,9 @@ fn option_scalar_input_boxed_pointer() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
-        syn::Item::Fn(func),
-        loc.clone(),
-    )]))
-    .expect("index items");
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -127,11 +123,9 @@ fn str_borrow_input_lowering() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([(
-        syn::Item::Fn(func),
-        loc.clone(),
-    )]))
-    .expect("index items");
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
 
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(zenoh_flat))
@@ -170,7 +164,7 @@ fn relation_to_lowering() {
         }
     );
 
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Enum(enum_item), loc.clone()),
     ]))
@@ -230,7 +224,7 @@ fn enum_input_validates_the_discriminant() {
         }
     );
 
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Enum(enum_item), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
@@ -299,7 +293,7 @@ fn enum_input_without_error_channel_requires_panic() {
     );
     let build = |allow_panic: bool| {
         let loc = SourceLocation::default();
-        let registry = crate::api::test_util::reg_from_items(declare_referenced([
+        let registry = crate::test_util::reg_from_items(declare_referenced([
             (syn::Item::Fn(func.clone()), loc.clone()),
             (syn::Item::Enum(enum_item.clone()), loc.clone()),
         ]))
@@ -340,7 +334,7 @@ fn mutable_opaque_borrow_input_lowering() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ]))

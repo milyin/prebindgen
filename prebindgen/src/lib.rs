@@ -73,7 +73,8 @@
 //! ### 2. Experimental C binding crate
 //!
 //! Depend on the common FFI library (as both a normal and a build dependency) and
-//! drive the experimental `lang::CbindgenBuilder` adapter from `build.rs`:
+//! drive the experimental `prebindgen-c` crate's `CbindgenBuilder` adapter from
+//! `build.rs`:
 //!
 //! ```toml
 //! # example-cbindgen/Cargo.toml
@@ -86,6 +87,7 @@
 //! [build-dependencies]
 //! example-flat = { path = "../example-flat" }
 //! prebindgen = "0.5"
+//! prebindgen-c = "0.5"
 //! cbindgen = "0.29"
 //! syn = { version = "2", features = ["full"] }
 //! ```
@@ -98,7 +100,7 @@
 //!     let source = prebindgen::Source::new(example_flat::PREBINDGEN_OUT_DIR);
 //!
 //!     // Configure the C adapter: declare which items to export and how to name them.
-//!     let cbindgen = prebindgen::lang::CbindgenBuilder::new()
+//!     let cbindgen = prebindgen_c::CbindgenBuilder::new()
 //!         .source_module(pq!(example_flat))
 //!         .free_memory_function("example_free")
 //!         .mangle_type_name(|base| format!("{base}_t"))
@@ -302,8 +304,8 @@ macro_rules! ident {
 ///   info lives in that back-end's `Metadata`).
 ///
 /// The supported JNI / Kotlin adapter ships in [`mod@lang`] as
-/// [`lang::JniGenBuilder`], alongside the C / cbindgen proof of concept
-/// [`lang::CbindgenBuilder`].
+/// [`lang::JniGenBuilder`]; the C / cbindgen proof of concept lives in the
+/// separate `prebindgen-c` crate.
 pub mod core {
     /// The capability to render captured Rust syntax — handed to an adapter's
     /// emission callbacks and nowhere else, so code that decides cannot reach
@@ -321,20 +323,13 @@ pub mod core {
     pub use crate::api::core::shape;
     pub use crate::api::core::{
         decl, types_util, warn_unclaimed, write, Building, Claimed, Conversions, ConvertDecl,
-        ConvertSourceDecl, ConverterImpl, Crossing, Decompositions, Direction, DomainScalar,
-        DuplicateNameError, Element, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
-        Flat, FunctionDecl, Gravestone, NicheSlot, Niches, NotExpressibleEntry, Prebindgen,
-        Registry, RegistryBuilder, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,
-        TypeEntry, TypeKey, TypeKeyParseError, WriteRustError,
+        ConvertSourceDecl, ConvertSpec, ConverterImpl, Crossing, Decompositions, Direction,
+        DomainScalar, DuplicateNameError, Element, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+        FieldsDecl, Flat, FunctionDecl, NicheSlot, Niches, NotExpressibleEntry, Prebindgen,
+        Registry, RegistryBuilder, RepresentationDomain, ScalarValue, ScanError, Stage, TypeEntry,
+        TypeKey, TypeKeyParseError, WriteRustError,
     };
 }
-
-/// Runtime traits implemented by inline-opaque (`value_opaque`) FFI counterpart
-/// types; see [`core::Transmute`] / [`core::Gravestone`]. Defined in the
-/// `prebindgen-c-runtime` crate (the C adapter's generated converters reference
-/// them there directly) and re-exported at the crate root so the public surface
-/// is unchanged.
-pub use prebindgen_c_runtime::{Gravestone, Transmute};
 
 /// Root re-export of [`lang::matching`] so the ignore-predicate constructor
 /// sits next to the decl macros it composes with
@@ -343,25 +338,22 @@ pub use crate::api::lang::jnigen::matching;
 
 /// Destination-language adapters implementing [`core::Prebindgen`].
 ///
-/// [`lang::CbindgenBuilder`] is an experimental C / cbindgen adapter. Its API is
-/// not covered by the 0.5 semver guarantee.
+/// The experimental C / cbindgen adapter lives in the separate `prebindgen-c`
+/// crate now; its API is not covered by the 0.5 semver guarantee.
 ///
 /// [`lang::JniGenBuilder`] is the JNI / Kotlin adapter: it turns a flat
 /// `#[prebindgen]` library into a Rust file of JNI `extern "C"` wrappers plus
 /// a fan-out of generated Kotlin sources (typed-handle classes, data/enum
 /// classes, exception classes).
 pub mod lang {
-    pub use crate::api::lang::{
-        cbindgen::{snake_case, Cbindgen, CbindgenBuilder},
-        jnigen::{
-            box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
-            box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
-            matching, null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl,
-            ConvertDecl, ConvertSourceDecl, DataClassDecl, Declarations, EnumClassDecl, ExpandDecl,
-            ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl,
-            JniBindingError, JniGen, JniGenBuilder, KotlinFile, PackageDecl, PtrClassDecl,
-            SealedClassDecl, VariantDecl, WriteKotlinError,
-        },
+    pub use crate::api::lang::jnigen::{
+        box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
+        box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string, matching,
+        null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
+        ConvertSourceDecl, DataClassDecl, Declarations, EnumClassDecl, ExpandDecl, ExpandParamDecl,
+        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen,
+        JniGenBuilder, KotlinFile, PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl,
+        WriteKotlinError,
     };
 }
 

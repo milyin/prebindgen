@@ -39,7 +39,7 @@ fn tagged_union_mirror_and_converters() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
@@ -133,7 +133,7 @@ fn owning_payload_gets_typed_drop() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
@@ -189,7 +189,7 @@ fn plain_data_union_has_no_drop() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(e), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
     ]))
@@ -223,7 +223,7 @@ fn tagged_union_as_data_struct_field() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Struct(st), loc.clone()),
@@ -292,7 +292,7 @@ fn a_union_nested_in_a_struct_payload_is_freed() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(shape_enum()), loc.clone()),
         (syn::Item::Enum(operation_enum()), loc.clone()),
         (syn::Item::Struct(drawing), loc.clone()),
@@ -345,7 +345,7 @@ fn plain_data_struct_decode_stays_infallible() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(f), loc.clone()),
     ]))
@@ -381,7 +381,7 @@ fn declarators_do_not_accept_each_others_shape() {
 
     // Payload enum handed to `.enum_type()`.
     let payload_as_enum = || {
-        let registry = crate::api::test_util::reg_from_items(declare_referenced([
+        let registry = crate::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(shape_enum()), loc.clone()),
             (syn::Item::Enum(operation_enum()), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
@@ -404,7 +404,7 @@ fn declarators_do_not_accept_each_others_shape() {
         }
     );
     let unit_as_union = || {
-        let registry = crate::api::test_util::reg_from_items(declare_referenced([
+        let registry = crate::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(operation_enum()), loc.clone()),
             (syn::Item::Fn(unit_fn.clone()), loc.clone()),
         ]))
@@ -442,7 +442,7 @@ fn each_payload_rejection_names_its_own_reason() {
                 Many(Vec<u8>),
             }
         );
-        let registry = crate::api::test_util::reg_from_items(declare_referenced([
+        let registry = crate::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(e), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
@@ -492,7 +492,7 @@ fn unsupported_payload_is_a_generation_error() {
         }
     );
     let boom = || {
-        let registry = crate::api::test_util::reg_from_items(declare_referenced([
+        let registry = crate::test_util::reg_from_items(declare_referenced([
             (syn::Item::Enum(e.clone()), loc.clone()),
             (syn::Item::Fn(make.clone()), loc.clone()),
         ]))
@@ -533,7 +533,7 @@ fn null_opaque_payload_is_reported_not_materialised() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(e), loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
         (syn::Item::Fn(take), loc.clone()),
@@ -634,7 +634,7 @@ fn payload_wires_come_from_the_converter_destination() {
         ),
     ];
     let registry =
-        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
@@ -643,9 +643,9 @@ fn payload_wires_come_from_the_converter_destination() {
         .mangle_destructor(|base| format!("{base}_drop"))
         .data_struct(syn::parse_quote!(Caption))
         .convert(
-            crate::convert!(Millis)
-                .input(crate::fun!(millis_from_raw))
-                .output(crate::fun!(millis_to_raw)),
+            prebindgen::convert!(Millis)
+                .input(prebindgen::fun!(millis_from_raw))
+                .output(prebindgen::fun!(millis_to_raw)),
         )
         .ignore_function(syn::parse_quote!(millis_from_raw))
         .ignore_function(syn::parse_quote!(millis_to_raw))
@@ -728,7 +728,7 @@ fn bool_payload_is_normalised_not_materialised() {
         ),
     ];
     let registry =
-        crate::api::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
 
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(example_flat))
@@ -805,7 +805,7 @@ fn one_kind_presents_one_c_type_however_it_is_spelled() {
             unimplemented!()
         }
     );
-    let registry = crate::api::test_util::reg_from_items(declare_referenced([
+    let registry = crate::test_util::reg_from_items(declare_referenced([
         (syn::Item::Enum(e), loc.clone()),
         (h, loc.clone()),
         (syn::Item::Fn(make), loc.clone()),
