@@ -1,0 +1,32 @@
+[package]
+name = "prebindgen-jni"
+version = { workspace = true }
+edition = { workspace = true }
+description = "JNI / Kotlin binding generator for prebindgen"
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+prebindgen = { workspace = true }
+prebindgen-registry = { workspace = true }
+prebindgen-jni-runtime = { workspace = true }
+kotlin-codegen = { workspace = true }
+jni = "0.21.1"
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+
+[dev-dependencies]
+# The fixtures for niches, callback identity, sealed cells and value-form
+# deriving build a registry directly and mint an `Emit`. Those constructors are
+# sealed against ordinary callers and opened only for a test suite.
+# `Emit::for_test` lives in `prebindgen-flat` (with the flat model); `Registry`'s
+# `*_for_test` accessors live in `prebindgen-registry` (with the pipeline).
+prebindgen = { workspace = true, features = ["testing"] }
+prebindgen-flat = { workspace = true, features = ["testing"] }
+prebindgen-registry = { workspace = true, features = ["testing"] }

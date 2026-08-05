@@ -1,0 +1,25 @@
+[package]
+name = "prebindgen-flat"
+version = { workspace = true }
+edition = { workspace = true }
+description = "The prebindgen flat model: the parser from captured #[prebindgen] records to a flat namespace of elements"
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+prebindgen = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+
+[features]
+# Test-support constructor for the test suites of out-of-crate adapters
+# (`prebindgen-jni`, `prebindgen-c`). Non-default and not covered by semver:
+# with it off, the seal `Emit` documents holds exactly as documented, so a
+# normal build is unaffected and production code still cannot mint an `Emit`.
+testing = []

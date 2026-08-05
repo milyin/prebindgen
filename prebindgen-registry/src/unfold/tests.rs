@@ -1,0 +1,1892 @@
+use quote::ToTokens;
+
+use super::*;
+
+/// A fixture declaration's identity. A declaration is a key, not a spelling —
+/// see `ConstructorDecl::target`.
+fn key(s: &str) -> crate::registry::TypeKey {
+    crate::registry::TypeKey::parse(s).expect("a fixture type")
+}
+use prebindgen_flat::types_util::ident;
+
+use crate::{registry::Registry, test_util::scanned_with as reg_with};
+
+/// A reading for a fixture type, lowered by the model.
+///
+/// Plan leaves carry `TypeRef`s, and these fixtures assert on plan STRUCTURE —
+/// so they need a reading for a type they name inline. Lowering it through an
+/// empty `Flat` gives the same classification the pipeline would, without
+/// standing up a source crate for it. Legitimate here and nowhere else: the
+/// `classify` guard exempts tests precisely because a fixture composing its own
+/// input is not a consumer reasoning from `origin`.
+fn tref(ty: syn::Type) -> prebindgen_flat::flat::TypeRef {
+    prebindgen_flat::flat::Flat::builder()
+        .build()
+        .expect("an empty model")
+        .classify(&ty)
+        .expect("a fixture type the language accepts")
+}
+
+/// A generous `.fun_accessor` set covering every function used as a
+/// deconstructor record across these tests (a superset is fine — `apply`
+/// only checks records are members). The `nested_record_*` tests that
+/// exercise the gate's *rejection* pass an explicit smaller set instead.
+fn acc_set() -> std::collections::HashSet<syn::Ident> {
+    [
+        "a_to_b",
+        "b_to_a",
+        "wrong",
+        "z_error_message",
+        "z_keyexpr_as_str",
+        "z_reply_replier_zid",
+        "z_reply_is_ok",
+        "z_reply_sample",
+        "z_reply_err",
+        "z_reply_error_payload",
+        "z_sample_key_expr",
+        "z_sample_payload",
+        "z_sample_encoding",
+        "z_sample_kind",
+        "z_sample_timestamp",
+        "z_sample_express",
+        "z_sample_priority",
+        "z_sample_congestion_control",
+        "z_sample_attachment",
+        "z_timestamp_ntp64",
+        "z_zbytes_to_bytes",
+        "z_zenoh_id_to_string",
+        "z_encoding_to_string",
+    ]
+    .iter()
+    .map(|s| ident(s))
+    .collect()
+}
+
+/// [`acc_set`] minus the decomposed fn: the default auto-apply skips
+/// accessor fns, and some tests decompose a fn that doubles as a record
+/// accessor elsewhere in the shared set.
+fn acc_set_without(f: &str) -> std::collections::HashSet<syn::Ident> {
+    let mut s = acc_set();
+    s.remove(&ident(f));
+    s
+}
+
+#[test]
+fn accessor_optional_primitive() {
+    // M2: `z_sample_timestamp(&ZSample) -> Option<&ZTimestamp>` decomposed
+    // into a single primitive leaf `z_timestamp_ntp64(&ZTimestamp) -> i64`
+    // (no identity). Outer shape is `Optional(Decompose)`.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+        "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZTimestamp"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // `z_sample_key_expr(&ZSample) -> &ZKeyExpr` decomposed into the keyexpr
+    // handle (identity) + its string form (`z_keyexpr_as_str`).
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_sample_timestamp")].into_iter().collect(),
+        &acc_set_without("z_sample_timestamp"),
+    )
+    .expect("apply");
+
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_sample_timestamp"))
+        .expect("plan");
+    assert!(plan.by_ref, "inner was &ZTimestamp");
+    assert_eq!(plan.source.spell().to_string(), "ZTimestamp");
+    assert!(
+        matches!(&plan.shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)),
+        "outer shape is Optional(Decompose)"
+    );
+    assert_eq!(plan.leaves.len(), 1);
+    assert!(!plan.leaves[0].identity);
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_timestamp_ntp64"
+    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "i64");
+    assert!(
+        reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
+        "the leaf type must be a root"
+    );
+}
+
+#[test]
+fn accessor_plan_byref() {
+    // `z_sample_key_expr(&ZSample) -> &ZKeyExpr` decomposed into the keyexpr
+    // handle (identity) + its string form (`z_keyexpr_as_str`).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Identity leaf: out_ty `&ZKeyExpr`, empty path, emitted last.
+    // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
+    // Leaf out_tys registered as required outputs so the resolver builds
+    // their converters.
+    // Owned return: the root `.field_self()` MOVES the value, a nested
+    // identity (spliced ZKeyExpr handle) borrows it — id-first is the
+    // order that would generate non-compiling Rust, caught at apply time.
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_sample_key_expr")].into_iter().collect(),
+        &acc_set_without("z_sample_key_expr"),
+    )
+    .expect("apply");
+
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_sample_key_expr"))
+        .expect("plan");
+    assert!(plan.by_ref, "return was &ZKeyExpr");
+    assert_eq!(plan.source.spell().to_string(), "ZKeyExpr");
+    assert!(matches!(plan.shape, UnfoldShape::Base));
+    assert_eq!(plan.leaves.len(), 2);
+
+    // Identity leaf: out_ty `&ZKeyExpr`, empty path, emitted last.
+    assert!(plan.leaves[0].identity);
+    assert!(plan.leaves[0].path.is_empty());
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "& ZKeyExpr");
+    // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
+    assert!(!plan.leaves[1].identity);
+    assert_eq!(plan.leaves[1].path.len(), 1);
+    assert_eq!(
+        plan.leaves[1].path[0].ident().to_string(),
+        "z_keyexpr_as_str"
+    );
+    assert_eq!(plan.leaves[1].out_ty.spell().to_string(), "& str");
+
+    // Leaf out_tys registered as required outputs so the resolver builds
+    // their converters.
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
+}
+
+#[test]
+fn root_identity_before_nested_identity_errors() {
+    // Owned return: the root `.field_self()` MOVES the value, a nested
+    // identity (spliced ZKeyExpr handle) borrows it — id-first is the
+    // order that would generate non-compiling Rust, caught at apply time.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_take_query(q: &ZQuery) -> ZQuery { todo!() }",
+        "fn z_query_key_expr(q: &ZQuery) -> &ZKeyExpr { todo!() }",
+    ]);
+    let accessors: std::collections::HashSet<syn::Ident> =
+        ["z_query_key_expr"].iter().map(|s| ident(s)).collect();
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![DeconRecord::Identity],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZQuery"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_query_key_expr"),
+                name: "key_expr".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // root identity FIRST — wrong
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_take_query")].into_iter().collect(),
+        &accessors,
+    )
+    .unwrap_err();
+    assert!(matches!(err, UnfoldError::RootIdentityBeforeNested { .. }));
+
+    // Root identity LAST (the zenoh `Query` shape) is accepted.
+    let mut reg2: Registry<()> = reg_with(&[
+        "fn z_take_query(q: &ZQuery) -> ZQuery { todo!() }",
+        "fn z_query_key_expr(q: &ZQuery) -> &ZKeyExpr { todo!() }",
+    ]);
+    let mut acc2 = Deconstructors::default();
+    acc2.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![DeconRecord::Identity],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc2.deconstructors.push(DeconstructorDecl {
+        target: key("ZQuery"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_query_key_expr"),
+                name: "key_expr".into(),
+            },
+            DeconRecord::Identity,
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    }); // root identity last — ok
+    apply(
+        &mut reg2,
+        &acc2,
+        &[ident("z_take_query")].into_iter().collect(),
+        &accessors,
+    )
+    .expect("root identity last is the supported order");
+}
+
+#[test]
+fn accessor_target_mismatch_errors() {
+    // Accessor takes a different type than the accessor's target.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_foo() -> ZKeyExpr { todo!() }",
+        "fn wrong(x: &ZSample) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![DeconRecord::Acc {
+            func: ident("wrong"),
+            name: "wrong".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &acc_set(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, UnfoldError::AccessorTargetMismatch { .. }));
+}
+
+#[test]
+fn multiple_identity_errors() {
+    let mut reg: Registry<()> = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![DeconRecord::Identity, DeconRecord::Identity],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A deconstructor record referencing a non-`.fun_accessor` fn errors.
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &acc_set(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, UnfoldError::MultipleIdentity { .. }));
+}
+
+#[test]
+fn record_must_be_fun_accessor() {
+    // A deconstructor record referencing a non-`.fun_accessor` fn errors.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_foo(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Empty accessor set ⇒ z_keyexpr_as_str is not a fun_accessor ⇒ error.
+    // With it declared as an accessor, the gate passes.
+    // Two records of one deconstructor given the same literal name ⇒ hard
+    // error (names are emitted verbatim; never auto-disambiguated).
+    // Empty accessor set ⇒ z_keyexpr_as_str is not a fun_accessor ⇒ error.
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &Default::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, UnfoldError::RecordNotAccessor { .. }));
+    // With it declared as an accessor, the gate passes.
+    let accset: std::collections::HashSet<syn::Ident> =
+        ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
+    apply(&mut reg, &acc, &Default::default(), &accset).expect("gate passes");
+}
+
+#[test]
+fn duplicate_leaf_name_errors() {
+    // Two records of one deconstructor given the same literal name ⇒ hard
+    // error (names are emitted verbatim; never auto-disambiguated).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_foo() -> ZSample { todo!() }",
+        "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
+        "fn z_sample_payload(s: &ZSample) -> Vec<u8> { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "field".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_payload"),
+                name: "field".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A record name containing the reserved `"__"` chain separator ⇒ error.
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &acc_set(),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, UnfoldError::DuplicateLeafName { .. }),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn reserved_separator_in_name_errors() {
+    // A record name containing the reserved `"__"` chain separator ⇒ error.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_foo() -> ZSample { todo!() }",
+        "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_sample_key_expr"),
+            name: "key__expr".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // M3: `z_reply_sample -> Option<&ZSample>` whose ZSample combined
+    // accessor nests ZKeyExpr (handle+string), ZZBytes (bytes), and a
+    // nullable ZTimestamp (Option<&ZTimestamp> → ntp64), plus a direct enum
+    // leaf. Verifies path prefixes + nullable propagation.
+    // Child accessors (reused via nesting).
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &acc_set(),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, UnfoldError::ReservedSeparator { .. }),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn nested_accessor_flatten() {
+    // M3: `z_reply_sample -> Option<&ZSample>` whose ZSample combined
+    // accessor nests ZKeyExpr (handle+string), ZZBytes (bytes), and a
+    // nullable ZTimestamp (Option<&ZTimestamp> → ntp64), plus a direct enum
+    // leaf. Verifies path prefixes + nullable propagation.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_sample_payload(s: &ZSample) -> &ZZBytes { todo!() }",
+        "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+        "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
+        "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    // Child accessors (reused via nesting).
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZZBytes"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zbytes_to_bytes"),
+            name: "z_zbytes_to_bytes".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZTimestamp"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Parent accessor with nested + direct records.
+    // Parent accessor with nested + direct records.
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_payload"),
+                name: "z_sample_payload".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_kind"),
+                name: "z_sample_kind".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_timestamp"),
+                name: "z_sample_timestamp".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // keyexpr identity (path [z_sample_key_expr]) + string + payload bytes
+    // + kind enum + nullable timestamp ntp64.
+    // Only the timestamp leaf (Option nesting accessor) is nullable.
+    // ZReply-shaped product (Result<Sample, ReplyError> decomposed in the
+    // current product model): the root's records include two
+    // `Option<&Child>` nesting accessors (`z_reply_sample`, `z_reply_err`)
+    // whose children themselves contain `Option` nesting steps and a
+    // nested identity — the double-unwrap case — plus an
+    // `Option<ZZenohId>` Acc record with NO default child, which keeps
+    // the full `Option<…>` as its leaf `out_ty` (its own `Option` is the
+    // converter's business, not a nesting step ⇒ NOT nullable).
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_reply_sample")].into_iter().collect(),
+        &acc_set_without("z_reply_sample"),
+    )
+    .expect("apply");
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+    assert!(plan.by_ref);
+    assert_eq!(plan.source.spell().to_string(), "ZSample");
+    assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
+
+    let path = |l: &UnfoldLeaf| {
+        l.path
+            .iter()
+            .map(|i| i.ident().to_string())
+            .collect::<Vec<_>>()
+            .join(".")
+    };
+    // keyexpr identity (path [z_sample_key_expr]) + string + payload bytes
+    // + kind enum + nullable timestamp ntp64.
+    assert_eq!(plan.leaves.len(), 5);
+    assert!(plan.leaves[0].identity);
+    assert_eq!(path(&plan.leaves[0]), "z_sample_key_expr");
+    assert_eq!(path(&plan.leaves[1]), "z_sample_key_expr.z_keyexpr_as_str");
+    assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
+    assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
+    assert_eq!(plan.leaves[3].out_ty.spell().to_string(), "SampleKind");
+    assert_eq!(
+        path(&plan.leaves[4]),
+        "z_sample_timestamp.z_timestamp_ntp64"
+    );
+    // Only the timestamp leaf (Option nesting accessor) is nullable.
+    assert!(!plan.leaves[1].nullable && !plan.leaves[2].nullable);
+    assert!(plan.leaves[4].nullable);
+}
+
+#[test]
+fn reply_product_double_option_flatten() {
+    // ZReply-shaped product (Result<Sample, ReplyError> decomposed in the
+    // current product model): the root's records include two
+    // `Option<&Child>` nesting accessors (`z_reply_sample`, `z_reply_err`)
+    // whose children themselves contain `Option` nesting steps and a
+    // nested identity — the double-unwrap case — plus an
+    // `Option<ZZenohId>` Acc record with NO default child, which keeps
+    // the full `Option<…>` as its leaf `out_ty` (its own `Option` is the
+    // converter's business, not a nesting step ⇒ NOT nullable).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_recv_reply(q: &ZQuery) -> ZReply { todo!() }",
+        "fn z_reply_replier_zid(r: &ZReply) -> Option<ZZenohId> { todo!() }",
+        "fn z_reply_is_ok(r: &ZReply) -> bool { todo!() }",
+        "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
+        "fn z_reply_err(r: &ZReply) -> Option<&ZReplyError> { todo!() }",
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+        "fn z_reply_error_payload(e: &ZReplyError) -> &ZZBytes { todo!() }",
+        "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZTimestamp"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZZBytes"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zbytes_to_bytes"),
+            name: "z_zbytes_to_bytes".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_timestamp"),
+                name: "z_sample_timestamp".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZReplyError"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_reply_error_payload"),
+            name: "z_reply_error_payload".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZReply"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_reply_replier_zid"),
+                name: "z_reply_replier_zid".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_reply_is_ok"),
+                name: "z_reply_is_ok".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_reply_sample"),
+                name: "z_reply_sample".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_reply_err"),
+                name: "z_reply_err".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Acc leaf keeping its full `Option<…>` return — not a nesting step.
+    // Ok-arm leaves: spliced through the `Option`-returning
+    // `z_reply_sample` ⇒ all nullable, incl. the nested keyexpr identity
+    // and the doubly-`Option` timestamp path.
+    // Err-arm leaf: spliced through `z_reply_err`.
+    // A → B → A nesting is rejected.
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_recv_reply")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg.unfold_plans.get(&ident("z_recv_reply")).expect("plan");
+    assert!(!plan.by_ref, "owned ZReply return");
+    assert_eq!(plan.source.spell().to_string(), "ZReply");
+    assert!(matches!(&plan.shape, UnfoldShape::Base));
+    assert!(matches!(plan.delivery, Delivery::Callback));
+
+    let path = |l: &UnfoldLeaf| {
+        l.path
+            .iter()
+            .map(|i| i.ident().to_string())
+            .collect::<Vec<_>>()
+            .join(".")
+    };
+    assert_eq!(plan.leaves.len(), 6);
+    // Acc leaf keeping its full `Option<…>` return — not a nesting step.
+    assert_eq!(path(&plan.leaves[0]), "z_reply_replier_zid");
+    assert_eq!(
+        plan.leaves[0].out_ty.spell().to_string(),
+        "Option < ZZenohId >"
+    );
+    assert!(!plan.leaves[0].nullable && !plan.leaves[0].identity);
+    assert_eq!(path(&plan.leaves[1]), "z_reply_is_ok");
+    assert!(!plan.leaves[1].nullable);
+    // Ok-arm leaves: spliced through the `Option`-returning
+    // `z_reply_sample` ⇒ all nullable, incl. the nested keyexpr identity
+    // and the doubly-`Option` timestamp path.
+    assert!(plan.leaves[2].identity);
+    assert_eq!(path(&plan.leaves[2]), "z_reply_sample.z_sample_key_expr");
+    assert!(plan.leaves[2].nullable);
+    assert_eq!(
+        path(&plan.leaves[3]),
+        "z_reply_sample.z_sample_key_expr.z_keyexpr_as_str"
+    );
+    assert!(plan.leaves[3].nullable);
+    assert_eq!(
+        path(&plan.leaves[4]),
+        "z_reply_sample.z_sample_timestamp.z_timestamp_ntp64"
+    );
+    assert!(plan.leaves[4].nullable);
+    // Err-arm leaf: spliced through `z_reply_err`.
+    assert_eq!(
+        path(&plan.leaves[5]),
+        "z_reply_err.z_reply_error_payload.z_zbytes_to_bytes"
+    );
+    assert!(plan.leaves[5].nullable);
+}
+
+#[test]
+fn nested_cycle_errors() {
+    // A → B → A nesting is rejected.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_foo() -> ZA { todo!() }",
+        "fn a_to_b(a: &ZA) -> &ZB { todo!() }",
+        "fn b_to_a(b: &ZB) -> &ZA { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZA"),
+        records: vec![DeconRecord::Acc {
+            func: ident("a_to_b"),
+            name: "a_to_b".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZB"),
+        records: vec![DeconRecord::Acc {
+            func: ident("b_to_a"),
+            name: "b_to_a".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // M4: `z_session_peers_zid(&ZSession) -> Vec<ZZenohId>` → Iterable;
+    // each element delivered WHOLE (no accessor, no leaves): a per-fn
+    // flatten with an empty record list on an element type that has no
+    // deconstructor of its own.
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &acc_set(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, UnfoldError::Cycle { .. }));
+}
+
+#[test]
+fn iterable_whole_element_plan() {
+    // M4: `z_session_peers_zid(&ZSession) -> Vec<ZZenohId>` → Iterable;
+    // each element delivered WHOLE (no accessor, no leaves): a per-fn
+    // flatten with an empty record list on an element type that has no
+    // deconstructor of its own.
+    let mut reg: Registry<()> =
+        reg_with(&["fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }"]);
+    let mut acc = Deconstructors::default();
+    acc.outputs.push(OutputDecl {
+        func: ident("z_session_peers_zid"),
+        sel: DeconSel::Inline(vec![]),
+        target: DeconTarget::Output,
+        delivery: Delivery::Callback,
+        declared_source: Some(key("ZZenohId")),
+    });
+    // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
+    // accessor → Iterable with per-element leaves: the string form + the
+    // value itself via `record_id` (an identity leaf, owned at the
+    // root since `Vec<ZZenohId>` owns its elements).
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_session_peers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_session_peers_zid"))
+        .expect("plan");
+    assert!(
+        matches!(&plan.shape, UnfoldShape::Iterable(inner) if matches!(**inner, UnfoldShape::Base)),
+        "outer shape is Iterable(Decompose)"
+    );
+    assert!(!plan.by_ref, "Vec<ZZenohId> owns its elements");
+    assert!(
+        plan.leaves.is_empty(),
+        "whole-element: no decomposed leaves"
+    );
+    assert_eq!(
+        plan.element.as_ref().map(|t| t.spell().to_string()),
+        Some("ZZenohId".to_string())
+    );
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(ZZenohId))].root);
+}
+
+#[test]
+fn iterable_decomposed_plan() {
+    // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
+    // accessor → Iterable with per-element leaves: the string form + the
+    // value itself via `record_id` (an identity leaf, owned at the
+    // root since `Vec<ZZenohId>` owns its elements).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
+        "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZZenohId"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_zenoh_id_to_string"),
+                name: "z_zenoh_id_to_string".into(),
+            },
+            DeconRecord::Identity,
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
+    // owns its elements (by_ref = false).
+    // `.converter(ZTimestamp, z_timestamp_ntp64)` + `.convert_output()` on
+    // `z_sample_timestamp -> Option<&ZTimestamp>` ⇒ Return delivery, single
+    // leaf, convert_out_ty = Option<i64>.
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_session_peers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_session_peers_zid"))
+        .expect("plan");
+    assert!(matches!(&plan.shape, UnfoldShape::Iterable(_)));
+    assert!(plan.element.is_none(), "decomposed: element not used");
+    assert_eq!(plan.leaves.len(), 2);
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_zenoh_id_to_string"
+    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "String");
+    // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
+    // owns its elements (by_ref = false).
+    assert!(plan.leaves[1].identity);
+    assert!(plan.leaves[1].path.is_empty());
+    assert_eq!(plan.leaves[1].out_ty.spell().to_string(), "ZZenohId");
+}
+
+#[test]
+fn convert_output_single_value() {
+    // `.converter(ZTimestamp, z_timestamp_ntp64)` + `.convert_output()` on
+    // `z_sample_timestamp -> Option<&ZTimestamp>` ⇒ Return delivery, single
+    // leaf, convert_out_ty = Option<i64>.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+        "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZTimestamp"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // The shaped convert type is registered as a required output.
+    // A two-record deconstructor (handle + string) ⇒ Callback delivery (>1 leaf).
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_sample_timestamp")].into_iter().collect(),
+        &acc_set_without("z_sample_timestamp"),
+    )
+    .expect("apply");
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_sample_timestamp"))
+        .expect("plan");
+    assert_eq!(plan.delivery, Delivery::Return);
+    assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
+    assert_eq!(plan.leaves.len(), 1);
+    assert_eq!(
+        plan.convert_out_ty.as_ref().map(|t| t.spell().to_string()),
+        Some("Option < i64 >".to_string())
+    );
+    // The shaped convert type is registered as a required output.
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(Option<i64>))].root);
+}
+
+#[test]
+fn multi_leaf_output_is_callback() {
+    // A two-record deconstructor (handle + string) ⇒ Callback delivery (>1 leaf).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A `Vec` return ⇒ Iterable + Callback (a fold), never a single Return.
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_sample_key_expr")].into_iter().collect(),
+        &acc_set_without("z_sample_key_expr"),
+    )
+    .expect("apply");
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_sample_key_expr"))
+        .expect("plan");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert_eq!(plan.leaves.len(), 2);
+    assert!(plan.convert_out_ty.is_none());
+}
+
+#[test]
+fn vec_output_is_iterable_callback() {
+    // A `Vec` return ⇒ Iterable + Callback (a fold), never a single Return.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
+        "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZZenohId"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zenoh_id_to_string"),
+            name: "z_zenoh_id_to_string".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A by-value `data_class` returned as `Option<Vec<T>>` (perftest's
+    // `storage_get_vec` contract) synthesizes a FIXED-BUILDER fold wrapped in
+    // an Optional layer: the field leaves cross raw per element and the
+    // foreign folder rebuilds + appends them (no Java object is built on the
+    // Rust side); `None` ⇒ a null list. Closes the data_class→Vec milestone.
+    // An `impl Fn(&[data_class])` callback arg (perftest's
+    // `storage_callback_vec`) synthesizes an Iterable fixed-folder
+    // `callback_arg_plans` entry keyed by the `&[Payload]` arg: the
+    // trampoline folds each element's field leaves into a foreign list, the
+    // user callback still sees the whole `List<Payload>`.
+    // A scalar `&Payload` callback arg must stay a Base fixed builder.
+    // The ZError deconstructor (`z_error_message`) auto-applies to every fn
+    // returning `Result<_, ZError>`, storing the plan in `error_plans`. Error
+    // delivery is always Callback (its leaves are the `ze` callback args).
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_session_peers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_session_peers_zid"))
+        .expect("plan");
+    assert!(matches!(&plan.shape, UnfoldShape::Iterable(_)));
+    assert_eq!(plan.delivery, Delivery::Callback);
+}
+
+#[test]
+fn option_vec_output_is_optional_iterable_callback() {
+    // An `Option<Vec<T>>` return with `T`'s default deconstructor composes as
+    // a RECORD-BUILT `Optional(Iterable)` fold (issue #105): the auto-apply
+    // peels the `Option` before probing the `Vec`, the elements decompose
+    // into leaves (M5), and `None` skips the fold to deliver a null result.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }",
+        "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZZenohId"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_zenoh_id_to_string"),
+                name: "z_zenoh_id_to_string".into(),
+            },
+            DeconRecord::Identity,
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_routers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg.unfold_plans.get(&ident("z_routers_zid")).expect("plan");
+    assert!(
+        matches!(&plan.shape,
+            UnfoldShape::Optional((), inner)
+                if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))),
+        "shape is Optional(Iterable(Base))"
+    );
+    assert!(!plan.fixed_builder, "record-built, not a fixed singleton");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert!(plan.element.is_none(), "decomposed (M5): element not used");
+    assert_eq!(plan.leaves.len(), 2);
+    assert!(!plan.by_ref, "Option<Vec<ZZenohId>> owns its elements");
+}
+
+#[test]
+fn option_vec_single_leaf_stays_callback() {
+    // A SINGLE-leaf `Optional(Iterable)` fold must stay Callback: the
+    // single-Return reclassification is gated on "no Iterable at any layer",
+    // not just a top-level `Iterable` (an `Option<Vec<T>>` fold has no single
+    // value to return through `convert_out_ty`).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }",
+        "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZZenohId"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zenoh_id_to_string"),
+            name: "z_zenoh_id_to_string".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_routers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg.unfold_plans.get(&ident("z_routers_zid")).expect("plan");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert_eq!(plan.leaves.len(), 1);
+    assert!(plan.convert_out_ty.is_none());
+}
+
+#[test]
+fn option_vec_whole_element_plan() {
+    // M4 dual of the decomposed case: an `Option<Vec<T>>` return with an
+    // inline EMPTY record list delivers each element whole through its own
+    // output converter, wrapped in the `Optional` layer.
+    let mut reg: Registry<()> =
+        reg_with(&["fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }"]);
+    let mut acc = Deconstructors::default();
+    acc.outputs.push(OutputDecl {
+        func: ident("z_routers_zid"),
+        sel: DeconSel::Inline(vec![]),
+        target: DeconTarget::Output,
+        delivery: Delivery::Callback,
+        declared_source: Some(key("ZZenohId")),
+    });
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_routers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg.unfold_plans.get(&ident("z_routers_zid")).expect("plan");
+    assert!(
+        matches!(&plan.shape,
+            UnfoldShape::Optional((), inner) if matches!(&**inner, UnfoldShape::Iterable(_))),
+        "shape is Optional(Iterable(Base))"
+    );
+    assert!(!plan.fixed_builder);
+    assert!(
+        plan.leaves.is_empty(),
+        "whole-element: no decomposed leaves"
+    );
+    assert_eq!(
+        plan.element.as_ref().map(|t| t.spell().to_string()),
+        Some("ZZenohId".to_string())
+    );
+}
+
+#[test]
+fn value_struct_vec_is_fixed_iterable_fold() {
+    // A by-value `data_class` returned as `Option<Vec<T>>` (perftest's
+    // `storage_get_vec` contract) synthesizes a FIXED-BUILDER fold wrapped in
+    // an Optional layer: the field leaves cross raw per element and the
+    // foreign folder rebuilds + appends them (no Java object is built on the
+    // Rust side); `None` ⇒ a null list. Closes the data_class→Vec milestone.
+    let mut reg: Registry<()> =
+        reg_with(&["fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> { todo!() }"]);
+    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
+        name: name.to_string(),
+        path: vec![PathStep::field(ident(name), false)],
+        out_ty: tref(ty),
+        identity: false,
+        nullable: false,
+        source: LeafSource::Field,
+        group: None,
+    };
+    let vd = ValueDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+        source: tref(syn::parse_quote!(Payload)),
+        leaves: vec![
+            leaf("id", syn::parse_quote!(i64)),
+            leaf("seq", syn::parse_quote!(i32)),
+        ],
+    };
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["storage_get_vec"].iter().map(|s| ident(s)).collect();
+    apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
+
+    let plan = reg
+        .unfold_plans
+        .get(&ident("storage_get_vec"))
+        .expect("fixed-builder fold plan");
+    assert!(plan.fixed_builder, "Vec<data_class> ⇒ fixed builder");
+    assert!(
+        matches!(&plan.shape,
+                UnfoldShape::Optional((), inner)
+                    if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))),
+        "Option<Vec<T>> ⇒ Optional(Iterable(Base))"
+    );
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert!(plan.decon.is_some(), "carries the field decon");
+    assert!(
+        plan.element.is_none(),
+        "decomposed-leaf fold, not whole-element"
+    );
+    assert_eq!(plan.leaves.len(), 2, "field leaves cross raw per element");
+    assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
+    assert!(!plan.by_ref, "owned Vec<Payload> elements");
+}
+
+#[test]
+fn value_struct_slice_callback_is_fixed_iterable_fold() {
+    // An `impl Fn(&[data_class])` callback arg (perftest's
+    // `storage_callback_vec`) synthesizes an Iterable fixed-folder
+    // `callback_arg_plans` entry keyed by the `&[Payload]` arg: the
+    // trampoline folds each element's field leaves into a foreign list, the
+    // user callback still sees the whole `List<Payload>`.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn storage_callback_vec(f: impl Fn(&[Payload]) + Send + Sync + 'static) { todo!() }",
+    ]);
+    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
+        name: name.to_string(),
+        path: vec![PathStep::field(ident(name), false)],
+        out_ty: tref(ty),
+        identity: false,
+        nullable: false,
+        source: LeafSource::Field,
+        group: None,
+    };
+    let vd = ValueDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+        source: tref(syn::parse_quote!(Payload)),
+        leaves: vec![
+            leaf("id", syn::parse_quote!(i64)),
+            leaf("seq", syn::parse_quote!(i32)),
+        ],
+    };
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["storage_callback_vec"].iter().map(|s| ident(s)).collect();
+    apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
+
+    let key = TypeKey::from_type(&syn::parse_quote!(&[Payload]));
+    let plan = reg
+        .callback_arg_plans
+        .get(&key)
+        .expect("slice callback-arg fold plan");
+    assert!(plan.fixed_builder, "&[data_class] ⇒ fixed folder");
+    assert!(
+        matches!(&plan.shape, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base)),
+        "&[T] ⇒ Iterable(Base)"
+    );
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert!(plan.decon.is_some(), "carries the field decon");
+    assert!(plan.element.is_none(), "decomposed-leaf fold");
+    assert_eq!(plan.leaves.len(), 2);
+    assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
+    // A scalar `&Payload` callback arg must stay a Base fixed builder.
+    let mut reg2: Registry<()> = reg_with(&[
+        "fn storage_callback(f: impl Fn(&Payload) + Send + Sync + 'static) { todo!() }",
+    ]);
+    let vd2 = ValueDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+        source: tref(syn::parse_quote!(Payload)),
+        leaves: vec![leaf("id", syn::parse_quote!(i64))],
+    };
+    let declared2: std::collections::HashSet<syn::Ident> =
+        ["storage_callback"].iter().map(|s| ident(s)).collect();
+    apply_value_structs(&mut reg2, vec![vd2], &declared2).expect("apply_value_structs");
+    let scalar = reg2
+        .callback_arg_plans
+        .get(&TypeKey::from_type(&syn::parse_quote!(&Payload)))
+        .expect("scalar callback-arg plan");
+    assert!(matches!(scalar.shape, UnfoldShape::Base), "&T ⇒ Base");
+}
+
+#[test]
+fn convert_error_decomposes_result_e() {
+    // The ZError deconstructor (`z_error_message`) auto-applies to every fn
+    // returning `Result<_, ZError>`, storing the plan in `error_plans`. Error
+    // delivery is always Callback (its leaves are the `ze` callback args).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, ZError> { todo!() }",
+        "fn z_error_message(e: &ZError) -> String { todo!() }",
+        "fn z_infallible(s: &ZSample) -> bool { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZError"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_error_message"),
+            name: "z_error_message".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // The infallible fn gets no error plan.
+    // No output plans created (no ZKeyExpr return among the declared fns; the
+    // ZError deconstructor only matches the Result error position).
+    // Default-everywhere: the ZKeyExpr deconstructor auto-applies to BOTH a
+    // `&ZKeyExpr` (borrow) and an owned `ZKeyExpr` return. (`Result<…>` returns
+    // are excluded — they keep a handle — and `fun_accessor`s are skipped.)
+    let declared: std::collections::HashSet<syn::Ident> = ["z_keyexpr_try_from", "z_infallible"]
+        .iter()
+        .map(|s| ident(s))
+        .collect();
+    let accset: std::collections::HashSet<syn::Ident> =
+        ["z_error_message"].iter().map(|s| ident(s)).collect();
+    apply(&mut reg, &acc, &declared, &accset).expect("apply");
+
+    let plan = reg
+        .error_plans
+        .get(&ident("z_keyexpr_try_from"))
+        .expect("error plan for the fallible fn");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert_eq!(plan.leaves.len(), 1);
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "String");
+    assert_eq!(plan.source.spell().to_string(), "ZError");
+    // The infallible fn gets no error plan.
+    assert!(!reg.error_plans.contains_key(&ident("z_infallible")));
+    // No output plans created (no ZKeyExpr return among the declared fns; the
+    // ZError deconstructor only matches the Result error position).
+    assert!(reg.unfold_plans.is_empty());
+}
+
+#[test]
+fn default_output_applies_to_owned_and_borrow_returns() {
+    // Default-everywhere: the ZKeyExpr deconstructor auto-applies to BOTH a
+    // `&ZKeyExpr` (borrow) and an owned `ZKeyExpr` return. (`Result<…>` returns
+    // are excluded — they keep a handle — and `fun_accessor`s are skipped.)
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_borrow_keyexpr(s: &ZSession) -> &ZKeyExpr { todo!() }",
+        "fn z_make_keyexpr(s: &ZSession) -> ZKeyExpr { todo!() }",
+        "fn z_keyexpr_as_str(k: &ZKeyExpr) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Only the record fn is an accessor; the two return fns are plain.
+    // An `impl Fn(ZSample)` parameter of a declared fn gets a type-level
+    // plan from ZSample's default deconstructor — same leaves a return of
+    // ZSample would produce, but owned (`by_ref = false`).
+    // Only the record fn is an accessor; the two return fns are plain.
+    let accset: std::collections::HashSet<syn::Ident> =
+        ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
+    let declared: std::collections::HashSet<syn::Ident> = ["z_borrow_keyexpr", "z_make_keyexpr"]
+        .iter()
+        .map(|s| ident(s))
+        .collect();
+    apply(&mut reg, &acc, &declared, &accset).expect("apply");
+
+    assert!(
+        reg.unfold_plans.contains_key(&ident("z_borrow_keyexpr")),
+        "borrow return"
+    );
+    assert!(
+        reg.unfold_plans.contains_key(&ident("z_make_keyexpr")),
+        "owned return"
+    );
+}
+
+#[test]
+fn callback_arg_plan_derived() {
+    // An `impl Fn(ZSample)` parameter of a declared fn gets a type-level
+    // plan from ZSample's default deconstructor — same leaves a return of
+    // ZSample would produce, but owned (`by_ref = false`).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_declare_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) { todo!() }",
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_kind"),
+                name: "z_sample_kind".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Nested keyexpr identity (borrowed: non-root) + string + direct enum.
+    // Leaf out_tys registered so the resolver builds their converters.
+    // No return-position plan was created for the declaring fn.
+    // A BORROWED `impl Fn(&ZSample)` decomposes through the same default
+    // deconstructor as the by-value case, but with `by_ref = true` (leaves
+    // read through the reference) and keyed under the actual `&ZSample` arg
+    // type — so `callback_input`/`callback_iface_spec` find it.
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_declare_sub"].iter().map(|s| ident(s)).collect();
+    apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+
+    let plan = reg
+        .callback_arg_plans
+        .get(&TypeKey::from_type(&syn::parse_quote!(ZSample)))
+        .expect("callback-arg plan for ZSample");
+    assert!(!plan.by_ref, "the trampoline owns the callback arg");
+    assert_eq!(plan.source.spell().to_string(), "ZSample");
+    assert!(matches!(plan.shape, UnfoldShape::Base));
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert_eq!(plan.leaves.len(), 3);
+    // Nested keyexpr identity (borrowed: non-root) + string + direct enum.
+    assert!(plan.leaves[0].identity);
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_sample_key_expr"
+    );
+    assert_eq!(plan.leaves[0].out_ty.spell().to_string(), "& ZKeyExpr");
+    assert_eq!(
+        plan.leaves[1].path.last().unwrap().ident().to_string(),
+        "z_keyexpr_as_str"
+    );
+    assert_eq!(plan.leaves[2].out_ty.spell().to_string(), "SampleKind");
+    // Leaf out_tys registered so the resolver builds their converters.
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(&str))].root);
+    assert!(reg.output_types[&TypeKey::from_type(&syn::parse_quote!(SampleKind))].root);
+    // No return-position plan was created for the declaring fn.
+    assert!(reg.unfold_plans.is_empty());
+}
+
+#[test]
+fn callback_arg_borrowed_decomposed() {
+    // A BORROWED `impl Fn(&ZSample)` decomposes through the same default
+    // deconstructor as the by-value case, but with `by_ref = true` (leaves
+    // read through the reference) and keyed under the actual `&ZSample` arg
+    // type — so `callback_input`/`callback_iface_spec` find it.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_declare_sub(cb: impl Fn(&ZSample) + Send + Sync + 'static) { todo!() }",
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_kind"),
+                name: "z_sample_kind".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // No plan under the bare `ZSample` key — only under the borrowed arg type.
+    // No deconstructor for ZQuery ⇒ no plan: the arg is delivered whole.
+    // `impl Fn(Vec<ZSample>)`: the arg type key (`Vec<ZSample>`) matches no
+    // deconstructor target ⇒ whole-value fallback, no plan.
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_declare_sub"].iter().map(|s| ident(s)).collect();
+    apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+
+    // No plan under the bare `ZSample` key — only under the borrowed arg type.
+    assert!(!reg
+        .callback_arg_plans
+        .contains_key(&TypeKey::from_type(&syn::parse_quote!(ZSample))));
+    let plan = reg
+        .callback_arg_plans
+        .get(&TypeKey::from_type(&syn::parse_quote!(&ZSample)))
+        .expect("callback-arg plan for &ZSample");
+    assert!(plan.by_ref, "the callback only borrows the delivered value");
+    assert_eq!(plan.source.spell().to_string(), "ZSample");
+    assert!(matches!(plan.shape, UnfoldShape::Base));
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert_eq!(plan.leaves.len(), 3);
+    assert!(plan.leaves[0].identity);
+    assert_eq!(
+        plan.leaves[0].path[0].ident().to_string(),
+        "z_sample_key_expr"
+    );
+    assert_eq!(plan.leaves[2].out_ty.spell().to_string(), "SampleKind");
+}
+
+#[test]
+fn callback_arg_identity_fallback() {
+    // No deconstructor for ZQuery ⇒ no plan: the arg is delivered whole.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_declare_queryable(cb: impl Fn(ZQuery) + Send + Sync + 'static) { todo!() }",
+    ]);
+    let acc = Deconstructors::default();
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_declare_queryable"].iter().map(|s| ident(s)).collect();
+    apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+    assert!(reg.callback_arg_plans.is_empty());
+}
+
+#[test]
+fn callback_zero_arg_no_plan() {
+    let mut reg: Registry<()> =
+        reg_with(&["fn z_with_close(on_close: impl Fn() + Send + Sync + 'static) { todo!() }"]);
+    let acc = Deconstructors::default();
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_with_close"].iter().map(|s| ident(s)).collect();
+    apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+    assert!(reg.callback_arg_plans.is_empty());
+}
+
+#[test]
+fn callback_arg_nonbare_skipped() {
+    // `impl Fn(Vec<ZSample>)`: the arg type key (`Vec<ZSample>`) matches no
+    // deconstructor target ⇒ whole-value fallback, no plan.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_batched(cb: impl Fn(Vec<ZSample>) + Send + Sync + 'static) { todo!() }",
+        "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZSample"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_sample_kind"),
+            name: "z_sample_kind".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // `Vec<String>` / `Option<Vec<ZenohId>>` returns and an `impl Fn(&[String])`
+    // callback arg synthesize FIXED **whole-element** folds (no decon, element
+    // set, no leaves) — the single-leaf dual of the `data_class` Vec fold.
+    // `Vec<String>` return ⇒ Iterable(Base), whole element.
+    // `Option<Vec<ZenohId>>` ⇒ Optional(Iterable(Base)).
+    // `impl Fn(&[String])` callback arg ⇒ Iterable fold keyed by `&[String]`.
+    // An un-nominated element is left on the ArrayList path (no plan); a fn
+    // that already has a plan is never overwritten.
+    // Pre-seed `strings` with a sentinel plan to prove it is preserved.
+    // C5 validation map: a field accessor ident that names no `#[prebindgen]`
+    // fn is a hard `UnknownAccessor` at resolve time — a typo'd
+    // `expand_return!(...).field(fun!(…))` cannot silently vanish. (At the
+    // jnigen level a registry-absent fn is caught even earlier, by the scan's
+    // `DeclaredNotFound` on the helper channel; this is the core-tier guard
+    // that stands on its own for any adapter.)
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["z_batched"].iter().map(|s| ident(s)).collect();
+    apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+    assert!(reg.callback_arg_plans.is_empty());
+}
+
+#[test]
+fn leaf_vec_fold_synthesizes_whole_element_plans() {
+    // `Vec<String>` / `Option<Vec<ZenohId>>` returns and an `impl Fn(&[String])`
+    // callback arg synthesize FIXED **whole-element** folds (no decon, element
+    // set, no leaves) — the single-leaf dual of the `data_class` Vec fold.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn hello_get_locators(h: &Hello) -> Vec<String> { todo!() }",
+        "fn session_peers(s: &Session) -> Option<Vec<ZenohId>> { todo!() }",
+        "fn on_strings(f: impl Fn(&[String]) + Send + Sync + 'static) { todo!() }",
+    ]);
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["hello_get_locators", "session_peers", "on_strings"]
+            .iter()
+            .map(|s| ident(s))
+            .collect();
+    let elements = vec![key("String"), key("ZenohId")];
+    apply_leaf_vec_folds(&mut reg, elements, &declared).expect("apply_leaf_vec_folds");
+
+    // `Vec<String>` return ⇒ Iterable(Base), whole element.
+    let p = reg
+        .unfold_plans
+        .get(&ident("hello_get_locators"))
+        .expect("Vec<String> plan");
+    assert!(p.fixed_builder, "synthesized leaf fold is fixed");
+    assert!(matches!(&p.shape, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base)));
+    assert_eq!(p.delivery, Delivery::Callback);
+    assert!(p.decon.is_none(), "whole-element fold carries no decon");
+    assert!(p.leaves.is_empty(), "no decomposed leaves");
+    assert_eq!(
+        p.element.as_ref().map(|t| t.spell().to_string()),
+        Some("String".to_string())
+    );
+
+    // `Option<Vec<ZenohId>>` ⇒ Optional(Iterable(Base)).
+    let p2 = reg
+        .unfold_plans
+        .get(&ident("session_peers"))
+        .expect("Option<Vec<ZenohId>> plan");
+    assert!(p2.fixed_builder);
+    assert!(matches!(&p2.shape,
+            UnfoldShape::Optional((), inner)
+                if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))));
+    assert_eq!(
+        p2.element.as_ref().map(|t| t.spell().to_string()),
+        Some("ZenohId".to_string())
+    );
+
+    // `impl Fn(&[String])` callback arg ⇒ Iterable fold keyed by `&[String]`.
+    let key = TypeKey::from_type(&syn::parse_quote!(&[String]));
+    let cb = reg
+        .callback_arg_plans
+        .get(&key)
+        .expect("slice callback fold plan");
+    assert!(cb.fixed_builder);
+    assert!(matches!(&cb.shape, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base)));
+    assert!(cb.element.is_some());
+    assert!(cb.decon.is_none());
+}
+
+#[test]
+fn leaf_vec_fold_skips_unnominated_and_preexisting() {
+    // An un-nominated element is left on the ArrayList path (no plan); a fn
+    // that already has a plan is never overwritten.
+    let mut reg: Registry<()> = reg_with(&[
+        "fn other(x: &X) -> Vec<NotNominated> { todo!() }",
+        "fn strings() -> Vec<String> { todo!() }",
+    ]);
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["other", "strings"].iter().map(|s| ident(s)).collect();
+    // Pre-seed `strings` with a sentinel plan to prove it is preserved.
+    let sentinel = UnfoldPlan {
+        source: tref(syn::parse_quote!(String)),
+        decon: None,
+        by_ref: false,
+        shape: UnfoldShape::Base,
+        leaves: vec![],
+        element: None,
+        delivery: Delivery::Return,
+        convert_out_ty: None,
+        fixed_builder: false,
+        hoists: Vec::new(),
+    };
+    reg.unfold_plans.insert(ident("strings"), sentinel);
+    apply_leaf_vec_folds(&mut reg, vec![key("String")], &declared).expect("apply_leaf_vec_folds");
+    assert!(
+        !reg.unfold_plans.contains_key(&ident("other")),
+        "un-nominated `NotNominated` element ⇒ no fold plan"
+    );
+    assert_eq!(
+        reg.unfold_plans.get(&ident("strings")).map(|p| p.delivery),
+        Some(Delivery::Return),
+        "pre-existing plan preserved (not overwritten)"
+    );
+}
+
+/// C5 validation map: a field accessor ident that names no `#[prebindgen]`
+/// fn is a hard `UnknownAccessor` at resolve time — a typo'd
+/// `expand_return!(...).field(fun!(…))` cannot silently vanish. (At the
+/// jnigen level a registry-absent fn is caught even earlier, by the scan's
+/// `DeclaredNotFound` on the helper channel; this is the core-tier guard
+/// that stands on its own for any adapter.)
+#[test]
+fn unknown_accessor_errors() {
+    let mut reg: Registry<()> = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("ZKeyExpr"),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_keyexpr_as_str_typo"),
+            name: "as_str".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &[ident("z_keyexpr_as_str_typo")].into_iter().collect(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, UnfoldError::UnknownAccessor(_)), "{err}");
+}
+
+/// #96: duplicate declaration records are rejected with COLLECTED
+/// diagnostics — every offender reported in one error. (Empty record lists
+/// are NOT diagnosed: an empty inline list is the valid whole-element
+/// delivery form.)
+#[test]
+fn duplicate_declarations_collected() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        "fn z_session_key(s: &ZSession) -> ZKeyExpr { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    for _ in 0..2 {
+        acc.deconstructors.push(DeconstructorDecl {
+            target: key("ZKeyExpr"),
+            records: vec![DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "asStr".into(),
+            }],
+            default: Some((DeconTarget::Output, Delivery::Callback)),
+        });
+        acc.outputs.push(OutputDecl {
+            func: ident("z_session_key"),
+            sel: DeconSel::Inline(vec![DeconRecord::Identity]),
+            target: DeconTarget::Output,
+            delivery: Delivery::Callback,
+            declared_source: Some(key("ZKeyExpr")),
+        });
+    }
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_session_key")].into_iter().collect(),
+        &acc_set(),
+    )
+    .unwrap_err();
+    let UnfoldError::InvalidDeclarations { entries } = &err else {
+        panic!("expected InvalidDeclarations, got {err}");
+    };
+    assert_eq!(entries.len(), 2, "{err}");
+    let text = err.to_string();
+    assert!(
+        text.contains("duplicate deconstructor declaration for `ZKeyExpr`"),
+        "{text}"
+    );
+    assert!(
+        text.contains("duplicate output expansion for `z_session_key`"),
+        "{text}"
+    );
+}
+
+/// The tag + group leaves a sum decomposition is made of. Mirrors what the
+/// JNI adapter synthesizes: a selector followed by one group per alternative.
+///
+/// The selector's `out_ty` is **the sum**, as `synth_sum_leaves` stores it — it
+/// names *which* sum it chooses between, which is how the emitter finds the enum
+/// to `match`. It said `i32` here, the tag's wire type, which made the
+/// registration test prove only that *some* converter-free leaf gets a cell
+/// rather than that the selector registers the sum it names (#282).
+fn reading_sum_decon() -> SumDecon {
+    let tag = UnfoldLeaf {
+        name: "tag".to_string(),
+        path: vec![],
+        out_ty: tref(syn::parse_quote!(Reading)),
+        identity: false,
+        nullable: false,
+        source: LeafSource::SumTag,
+        group: None,
+    };
+    let field = |name: &str, variant: &str, idx: u32, ty: syn::Type, group: i32| UnfoldLeaf {
+        name: name.to_string(),
+        path: vec![],
+        out_ty: tref(ty),
+        identity: false,
+        nullable: false,
+        source: LeafSource::VariantField {
+            variant: ident(variant),
+            member: syn::Member::Unnamed(syn::Index::from(idx as usize)),
+        },
+        group: Some(group),
+    };
+    SumDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Reading)),
+        source: tref(syn::parse_quote!(Reading)),
+        leaves: vec![
+            tag,
+            // group 0 (`Missing`) is empty — a unit variant contributes only
+            // its tag.
+            field("exact_v0", "Exact", 0, syn::parse_quote!(i64), 1),
+        ],
+    }
+}
+
+/// A sum returned by a function decomposes into a **fixed-builder** plan over
+/// its tag and groups — the same delivery a by-value `data_class` gets, with
+/// the selector added. The declared return's own output requirement is dropped:
+/// a sum has no whole-value converter by construction, so leaving it required
+/// would fail the resolve on a converter that must not exist.
+#[test]
+fn sum_return_is_a_fixed_builder_plan() {
+    let mut reg: Registry<()> = reg_with(&["fn read_one(which: i32) -> Reading { todo!() }"]);
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_one"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    let plan = reg.unfold_plans.get(&ident("read_one")).expect("plan");
+    assert!(plan.fixed_builder, "sum ⇒ fixed builder");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert!(matches!(plan.shape, UnfoldShape::Base));
+    assert!(!plan.by_ref);
+    assert_eq!(plan.leaves.len(), 2, "the tag plus one group leaf");
+    assert_eq!(plan.leaves[0].source, LeafSource::SumTag);
+    assert_eq!(plan.leaves[0].group, None, "the selector joins no group");
+    assert_eq!(
+        plan.leaves[1].group,
+        Some(1),
+        "the group is its variant's tag"
+    );
+    assert!(matches!(
+        &plan.leaves[1].source,
+        LeafSource::VariantField { variant, .. } if variant == "Exact"
+    ));
+    // The selector is synthesized, so it must not drag an `i32` output
+    // requirement into a binding that has no `i32` crossing of its own.
+    assert!(!plan.leaves[0].has_converter());
+    assert!(plan.leaves[1].has_converter());
+    // #282's invariant, stated over the plan rather than over one type name:
+    // EVERY leaf's `out_ty` is registered, and only a converter-bearing leaf is
+    // a root. The assertion this replaced could state neither half — it read
+    // `!...is_some_and(|c| c.root)` on `Reading`, which is also true when the
+    // cell is ABSENT, and absent is what it was: this fixture's registry
+    // declares nothing, so it passed for the wrong reason.
+    for leaf in &plan.leaves {
+        let cell = reg
+            .output_types
+            .get(&leaf.out_ty.key())
+            .unwrap_or_else(|| panic!("leaf `{}` registers its out_ty", leaf.name));
+        assert_eq!(
+            cell.root,
+            leaf.has_converter(),
+            "leaf `{}`: a cell says the type entered the pipeline, a root says \
+             the binding demands its converter — the selector makes only the \
+             first, because a sum has no whole-value output converter",
+            leaf.name
+        );
+    }
+}
+
+/// `Option` and `Vec` layers ride the existing shape fold — a sum needs
+/// nothing new for them — and each layer's own scan-time output requirement is
+/// dropped along with the bare type's.
+#[test]
+fn sum_return_layers_ride_the_shape_fold() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn read_maybe(w: i32) -> Option<Reading> { todo!() }",
+        "fn read_all(n: i32) -> Vec<Reading> { todo!() }",
+    ]);
+    let declared: std::collections::HashSet<syn::Ident> = ["read_maybe", "read_all"]
+        .iter()
+        .map(|s| ident(s))
+        .collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    let opt = reg.unfold_plans.get(&ident("read_maybe")).expect("plan");
+    assert!(matches!(&opt.shape,
+        UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)));
+    let vec_plan = reg.unfold_plans.get(&ident("read_all")).expect("plan");
+    assert!(matches!(&vec_plan.shape,
+        UnfoldShape::Iterable(inner) if matches!(**inner, UnfoldShape::Base)));
+    assert!(vec_plan.element.is_none(), "decomposed-leaf fold");
+    for ty in ["Option<Reading>", "Vec<Reading>", "Reading"] {
+        let ty: syn::Type = syn::parse_str(ty).unwrap();
+        assert!(
+            !reg.output_types
+                .get(&TypeKey::from_type(&ty))
+                .is_some_and(|c| c.root),
+            "no layer of a sum return may require a whole-value converter: {}",
+            ty.to_token_stream()
+        );
+    }
+}
+
+/// A `Vec<sum>` return **on its own** — no bare or `Option`-wrapped return of
+/// the same sum anywhere in the binding. The test above cannot state this: its
+/// `Option<Reading>` fixture unrequires the bare type through a *different*
+/// layer, so it would keep passing if the `Vec` element were left required.
+///
+/// The bare requirement is **seeded explicitly**. A scan registers only the
+/// top-level return, so `Reading` would not be in the set to begin with and the
+/// assertion would hold whether or not `wire_fixed_returns` unrequired the
+/// peeled element — passing while testing nothing. Seeding reproduces what an
+/// adapter that does require the element leaves behind, which is the state the
+/// unrequire exists for.
+#[test]
+fn a_vec_only_sum_return_drops_the_bare_requirement() {
+    let mut reg: Registry<()> = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
+    let bare: syn::Type = syn::parse_quote!(Reading);
+    let bare_reading = reg
+        .intern(crate::registry::Direction::Output, &bare, true)
+        .expect("fixture type");
+    reg.require_output(&bare_reading);
+    assert!(
+        reg.output_types[&TypeKey::from_type(&bare)].root,
+        "fixture precondition: the bare element starts out required"
+    );
+
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_all"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    for ty in ["Vec<Reading>", "Reading"] {
+        let ty: syn::Type = syn::parse_str(ty).unwrap();
+        assert!(
+            !reg.output_types
+                .get(&TypeKey::from_type(&ty))
+                .is_some_and(|c| c.root),
+            "no layer of a sum return may require a whole-value converter: {}",
+            ty.to_token_stream()
+        );
+    }
+}
+
+/// An `impl Fn(E)` callback argument decomposes the same way a return does —
+/// the plan is keyed by the arg type, so the trampoline delivers the tag and
+/// groups instead of a whole value built on the Rust side.
+#[test]
+fn sum_callback_arg_is_a_fixed_builder_plan() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn read_each(n: i32, f: impl Fn(Reading) + Send + Sync + 'static) { todo!() }",
+    ]);
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_each"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    let key = TypeKey::from_type(&syn::parse_quote!(Reading));
+    let plan = reg
+        .callback_arg_plans
+        .get(&key)
+        .expect("callback-arg plan keyed by the arg type");
+    assert!(plan.fixed_builder);
+    assert!(matches!(plan.shape, UnfoldShape::Base));
+    assert_eq!(plan.leaves[0].source, LeafSource::SumTag);
+}
+
+/// A `Vec<Option<T>>` return does not match a `T` decomposition.
+///
+/// The boundary accepts `Option<Vec<T>>` — an optional list — and the layer stack
+/// stops at any layer out of that order. So the optional inside a `Vec` belongs
+/// to the **element**, the return's core is `Option<Payload>` rather than
+/// `Payload`, and no fixed fold is installed.
+///
+/// This is the pairing that matters: the explicit decomposition path a few
+/// hundred lines up refuses `Vec<Option<…>>` outright as unsupported, so a
+/// silently-installed nested fold here would mean the two paths disagree about
+/// the same return type. An unbounded layer peel makes exactly that happen —
+/// verified by sabotage, not assumed.
+#[test]
+fn a_vec_of_optionals_installs_no_fixed_fold() {
+    let mut reg: Registry<()> =
+        reg_with(&["fn storage_get_vec(s: &Storage) -> Vec<Option<Payload>> { todo!() }"]);
+    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
+        name: name.to_string(),
+        path: vec![PathStep::field(ident(name), false)],
+        out_ty: tref(ty),
+        identity: false,
+        nullable: false,
+        source: LeafSource::Field,
+        group: None,
+    };
+    let vd = ValueDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+        source: tref(syn::parse_quote!(Payload)),
+        leaves: vec![
+            leaf("id", syn::parse_quote!(i64)),
+            leaf("seq", syn::parse_quote!(i32)),
+        ],
+    };
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["storage_get_vec"].iter().map(|s| ident(s)).collect();
+    apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
+
+    assert!(
+        !reg.unfold_plans.contains_key(&ident("storage_get_vec")),
+        "a Vec<Option<Payload>> return must not fold as a Payload decomposition"
+    );
+}

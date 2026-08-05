@@ -2,12 +2,13 @@
 
 A tool for separating the implementation of FFI interfaces from language-specific binding generation, allowing each to reside in different crates.
 
-## Stability in 0.5
+## Stability in 0.6
 
-The language-neutral `core` pipeline and the JNI/Kotlin `lang::JniGen` adapter
-are supported public APIs in 0.5. The C / cbindgen adapter is a proof of concept:
-enable it explicitly with `features = ["unstable-cbindgen"]`. Its API may change
-in a minor release.
+The language-neutral pipeline (`prebindgen`, `prebindgen-flat`,
+`prebindgen-registry`) and the JNI/Kotlin `prebindgen-jni` adapter are
+supported public APIs in 0.6. `prebindgen-c` is always compiled — there is
+no feature gate — but it remains an experimental proof of concept and is not
+covered by the semver guarantee; its API may change in a minor release.
 
 ## Problem
 
@@ -63,12 +64,42 @@ Each element to be exported is marked in the source crate with the `#[prebindgen
 
 It's important to keep in mind that `[build-dependencies]` and `[dependencies]` are different. The `#[prebindgen]` macro collects sources when compiling the `[build-dependencies]` instance of the source crate. Later, these sources are used to generate proxy calls to the `[dependencies]` instance, which may be built with a different feature set and for a different architecture. A set of assertions is added to the generated code to catch possible divergences, but it's the developer's job to manually resolve these errors.
 
+## Crates
+
+This repository is a Cargo workspace of eight crates, layered so a *source*
+crate and a *shipped binding library* each pull in only what they need: a
+source crate that just calls `init_prebindgen_out_dir()` depends on
+`prebindgen` alone, while a shipped binding library depends on a small
+runtime crate (~350 lines), not the generator.
+
+| Crate | What it's for | Depends on |
+|---|---|---|
+| `prebindgen` | Base: reads what `#[prebindgen]` captured and hands out `(syn::Item, SourceLocation)` pairs via `Source` | — |
+| `prebindgen-proc-macro` | The `#[prebindgen]` macro itself | `prebindgen` |
+| `prebindgen-flat` | The flat model: parses the captured stream into one flat namespace | `prebindgen` |
+| `prebindgen-registry` | The language-agnostic pipeline: type resolution, boundary expansion, Rust emission | `prebindgen-flat`, `prebindgen` |
+| `prebindgen-c` | C / cbindgen adapter (`CbindgenBuilder`) — experimental proof of concept | `prebindgen-registry` |
+| `prebindgen-jni` | JNI / Kotlin adapter (`JniGenBuilder`) | `prebindgen-registry`, [`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) |
+| `prebindgen-c-runtime` | Leaf, ~65 lines, no deps — traits the generated C converters call at run time | — |
+| `prebindgen-jni-runtime` | Leaf, ~350 lines, only `jni` — helpers the generated JNI bindings call at run time | `jni` |
+
+A binding crate's `build.rs` depends on a generator (`prebindgen-c` or
+`prebindgen-jni`, plus `prebindgen-registry`); the crate it builds depends on
+the matching runtime crate instead. The generator itself — `syn`, `quote`,
+`prettyplease`, and for JNI the `kotlin-codegen` emitter — never ends up in a
+shipped library's regular dependency graph.
+
+[`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) is a
+general-purpose Kotlin source emitter, developed as a separate, sibling repo
+consumed by `prebindgen-jni` as a path dependency.
+
 ## Usage
 
 ### Stable core and JNI/Kotlin path
 
-Use `Source` + `core::Registry` to collect and resolve annotated items, then
-configure `lang::JniGen` to emit Rust JNI wrappers and Kotlin sources. The
+Use `prebindgen::Source` to collect annotated items, resolve them through
+`prebindgen-registry`'s `Registry`, then configure `prebindgen-jni`'s
+`JniGenBuilder` to emit Rust JNI wrappers and Kotlin sources. The
 [`covertest-kotlin`](examples/covertest-kotlin) example is the maintained,
 comprehensive reference for that supported flow; the smaller
 [`perftest-kotlin`](examples/perftest-kotlin) consumer shows a lean production
@@ -119,19 +150,24 @@ fn main() {
 
 ### 2. Experimental C Binding Crate (e.g., `example-cbindgen`)
 
-Add the source FFI library to both dependencies and build-dependencies, and drive
-the experimental `lang::Cbindgen` adapter from `build.rs`:
+Add the source FFI library and `prebindgen-c-runtime` as regular dependencies
+(the generated converters reference its traits at run time), and
+`prebindgen-registry` + `prebindgen-c` as build-dependencies to drive the
+experimental `CbindgenBuilder` adapter from `build.rs`:
 
 ```toml
 # example-cbindgen/Cargo.toml
 [dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
-konst = "0.3"      # the generated file emits a konst feature guard
+prebindgen = "0.6"
+prebindgen-c-runtime = "0.6"   # the generated converters reference its traits
+konst = "0.3"                 # the generated file emits a konst feature guard
 
 [build-dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
+prebindgen = "0.6"
+prebindgen-registry = "0.6"
+prebindgen-c = "0.6"
 cbindgen = "0.29"
 syn = { version = "2", features = ["full"] }
 ```
@@ -143,11 +179,10 @@ Declare which `#[prebindgen]`-marked items to export and how to name them, then 
 use syn::parse_quote as pq;
 
 fn main() {
-    // Read the items captured from the common FFI crate.
-    let source = prebindgen::Source::new(example_flat::PREBINDGEN_OUT_DIR);
-
-    // Configure the C adapter: declare the items to export and how to name them.
-    let cbindgen = prebindgen::lang::Cbindgen::new()
+    // Configure the C adapter: point it at the captured items, and declare
+    // which ones to export and how to name them.
+    let cbindgen = prebindgen_c::Cbindgen::builder()
+        .source(example_flat::PREBINDGEN_OUT_DIR)
         .source_module(pq!(example_flat))
         .free_memory_function("example_free")
         .mangle_type_name(|base| format!("{base}_t"))
@@ -158,11 +193,11 @@ fn main() {
         .function(pq!(calculator_get_value)).panic();
 
     // Resolve types, then write the Rust file of `extern "C"` wrappers.
-    let generation = prebindgen::core::Registry::from_items(source.items_all())
+    let bindings_file = cbindgen
+        .build()
         .unwrap()
-        .resolve(cbindgen)
+        .write_rust("example_flat.rs")
         .unwrap();
-    let bindings_file = generation.write_rust("example_flat.rs").unwrap();
 
     // Pass the generated file to cbindgen for C header generation.
     generate_c_headers(&bindings_file);
@@ -181,11 +216,15 @@ include!(concat!(env!("OUT_DIR"), "/example_flat.rs"));
 See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples):
 
 - **example-flat**: Common FFI library (plain Rust, `#[prebindgen]`-annotated) demonstrating prebindgen usage
-- **example-cbindgen**: experimental C proof of concept using `lang::Cbindgen` + cbindgen for C headers
+- **example-cbindgen**: experimental C proof of concept using `prebindgen-c`'s `CbindgenBuilder` + cbindgen for C headers
 - **perftest-flat** / **perftest-c** / **perftest-kotlin**: A shared flat library and its performance-oriented C and Kotlin/JNI bindings
-- **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `lang::JniGen` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
+- **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `prebindgen-jni` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
 
 ## Documentation
 
-- **prebindgen API Reference**: [docs.rs/prebindgen](https://docs.rs/prebindgen)
-- **prebindgen-proc-macro API Reference**: [docs.rs/prebindgen-proc-macro](https://docs.rs/prebindgen-proc-macro)
+- **prebindgen**: [docs.rs/prebindgen](https://docs.rs/prebindgen)
+- **prebindgen-proc-macro**: [docs.rs/prebindgen-proc-macro](https://docs.rs/prebindgen-proc-macro)
+- **prebindgen-flat**: [docs.rs/prebindgen-flat](https://docs.rs/prebindgen-flat)
+- **prebindgen-registry**: [docs.rs/prebindgen-registry](https://docs.rs/prebindgen-registry)
+- **prebindgen-c**: [docs.rs/prebindgen-c](https://docs.rs/prebindgen-c)
+- **prebindgen-jni**: [docs.rs/prebindgen-jni](https://docs.rs/prebindgen-jni)

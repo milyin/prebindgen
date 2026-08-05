@@ -18,12 +18,21 @@
 //! ## Solution
 //!
 //! `prebindgen` solves this by generating language-specific proxy code from a common
-//! Rust library crate. The supported 0.5 surface is the language-neutral
-//! [`core`] pipeline and the JNI/Kotlin [`lang::JniGenBuilder`] adapter.
+//! Rust library crate. This crate is the base of that pipeline: it reads what
+//! `#[prebindgen]` captured and hands out `(syn::Item, [`SourceLocation`])`
+//! pairs through [`Source`] — nothing more. The flat model built over that
+//! stream ships in the separate
+//! [`prebindgen-flat`](https://docs.rs/prebindgen-flat) crate; the
+//! language-neutral registry pipeline over the flat model — type resolution,
+//! boundary expansion, Rust emission — ships in the separate
+//! [`prebindgen-registry`](https://docs.rs/prebindgen-registry) crate. The
+//! supported 0.6 surface is that pipeline plus the JNI/Kotlin `JniGenBuilder`
+//! adapter, which ships in the separate
+//! [`prebindgen-jni`](https://docs.rs/prebindgen-jni) crate.
 //!
-//! The C / cbindgen adapter is an experimental proof of concept. It is available
-//! only with the non-default `unstable-cbindgen` feature and is not covered by
-//! the 0.5 semver guarantee.
+//! The C / cbindgen adapter is an experimental proof of concept, ships in the
+//! separate `prebindgen-c` crate, and is not covered by the 0.6 semver
+//! guarantee.
 //!
 //! ## Usage example
 //!
@@ -35,9 +44,12 @@
 //! ### Stable core and JNI/Kotlin path
 //!
 //! The supported workflow reads captured items with [`Source`], resolves them
-//! through [`core::Registry`], and configures [`lang::JniGenBuilder`] to emit Rust JNI
-//! wrappers plus Kotlin sources. The `covertest-kotlin` and `perftest-kotlin`
-//! workspace examples are the maintained references for that path.
+//! through the separate `prebindgen-registry` crate's `Registry`, and
+//! configures the separate `prebindgen-jni` crate's `JniGenBuilder` to emit
+//! Rust JNI wrappers plus Kotlin sources. The `covertest-kotlin` and
+//! `perftest-kotlin` workspace examples are the maintained references for
+//! that path; see `prebindgen-jni`'s own crate docs for the full JNI/Kotlin
+//! workflow and macro surface.
 //!
 //! ### 1. In the Common FFI Library Crate (e.g., `example_flat`)
 //!
@@ -71,21 +83,25 @@
 //! prebindgen::init_prebindgen_out_dir();
 //! ```
 //!
-//! ### 2. Experimental C binding crate (`unstable-cbindgen`)
+//! ### 2. Experimental C binding crate
 //!
 //! Depend on the common FFI library (as both a normal and a build dependency) and
-//! drive the experimental `lang::CbindgenBuilder` adapter from `build.rs`:
+//! drive the experimental `prebindgen-c` crate's `CbindgenBuilder` adapter from
+//! `build.rs`:
 //!
 //! ```toml
 //! # example-cbindgen/Cargo.toml
 //! [dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
+//! prebindgen = "0.6"
+//! prebindgen-c-runtime = "0.6"   # the generated converters reference its traits
 //! konst = "0.3"      # the generated file emits a konst feature guard
 //!
 //! [build-dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
+//! prebindgen = "0.6"
+//! prebindgen-registry = "0.6"
+//! prebindgen-c = "0.6"
 //! cbindgen = "0.29"
 //! syn = { version = "2", features = ["full"] }
 //! ```
@@ -94,11 +110,10 @@
 //! use syn::parse_quote as pq;
 //!
 //! fn main() {
-//!     // Read the items captured from the common FFI crate.
-//!     let source = prebindgen::Source::new(example_flat::PREBINDGEN_OUT_DIR);
-//!
-//!     // Configure the C adapter: declare which items to export and how to name them.
-//!     let cbindgen = prebindgen::lang::CbindgenBuilder::new()
+//!     // Configure the C adapter: point it at the items captured from the
+//!     // common FFI crate, and declare which ones to export and how to name them.
+//!     let cbindgen = prebindgen_c::Cbindgen::builder()
+//!         .source(example_flat::PREBINDGEN_OUT_DIR)
 //!         .source_module(pq!(example_flat))
 //!         .free_memory_function("example_free")
 //!         .mangle_type_name(|base| format!("{base}_t"))
@@ -109,13 +124,7 @@
 //!         .function(pq!(calculator_get_value)).panic();
 //!
 //!     // Resolve types, then write the Rust file of `extern "C"` wrappers.
-//!     let flat = prebindgen::core::Flat::builder()
-//!         .items(source.items_all())
-//!         .build()
-//!         .unwrap();
-//!     let builder = prebindgen::core::Registry::builder(flat).unwrap();
-//!     let generation = cbindgen.resolve(builder).unwrap();
-//!     let bindings_file = generation.write_rust("example_flat.rs").unwrap();
+//!     let bindings_file = cbindgen.build().unwrap().write_rust("example_flat.rs").unwrap();
 //!
 //!     // Pass the generated file to cbindgen for C header generation.
 //!     generate_c_headers(&bindings_file);
@@ -131,27 +140,25 @@
 //!
 //! ## Macros
 //!
-//! The declaration surface is built almost entirely from exported macros, which
-//! fall into two groups.
+//! The declaration surface is built almost entirely from exported macros. The
+//! language-neutral ones — the domain vocabulary shared by every adapter, plus
+//! the syntax helpers they're built from — now live in the separate
+//! `prebindgen-registry` crate:
 //!
-//! **Declaration macros** construct a typed [`lang`] `*Decl` from bare Rust
-//! syntax — the domain vocabulary you compose and hand to [`lang::JniGenBuilder`]:
-//!
-//! - Kotlin surface: [`package!`](crate::package), [`ptr_class!`](crate::ptr_class),
-//!   [`data_class!`](crate::data_class), [`enum_class!`](crate::enum_class)
-//! - Members & constants: [`fun!`](crate::fun), [`constant!`](crate::constant)
-//! - Conversions: [`convert!`](crate::convert), [`from!`](crate::from),
-//!   [`try_from!`](crate::try_from), [`into!`](crate::into),
-//!   [`try_into!`](crate::try_into)
-//! - Boundary expansion: [`expand_param!`](crate::expand_param),
-//!   [`expand_return!`](crate::expand_return), [`fields!`](crate::fields)
+//! - Members & constants: `fun!`
+//! - Conversions: `convert!`, `from!`, `try_from!`, `into!`, `try_into!`
+//! - Boundary expansion: `expand_param!`, `expand_return!`, `fields!`
 //!
 //! **Syntax helpers** produce a bare `syn` node — `Type` / `Path` / `Expr` /
 //! `Signature` / `Ident` — to hand to a declaration method that requires one.
 //! They exist only to sidestep `syn::parse_quote!`'s type-inference ambiguity
 //! (E0283) in a generic argument position, not to express a domain concept:
-//! [`ty!`](crate::ty), [`path!`](crate::path), [`expr!`](crate::expr),
-//! [`sig!`](crate::sig), [`ident!`](crate::ident).
+//! `ty!`, `path!`, `expr!`, `sig!`, `ident!`.
+//!
+//! The JNI/Kotlin-specific declaration macros — `package!`, `ptr_class!`,
+//! `data_class!`, `enum_class!`, `sealed_class!`, `variant!`, `constant!` —
+//! construct a typed `*Decl` for the Kotlin surface and live in the separate
+//! `prebindgen-jni` crate, which hands the result to its `JniGenBuilder`.
 //!
 
 /// File name for storing the crate name
@@ -176,191 +183,22 @@ pub use crate::api::{
     utils::{edition::RustEdition, target_triple::TargetTriple},
 };
 
-/// Not part of the public API — referenced by the [`ident!`] macro expansion
-/// so callers don't need their own `proc-macro2` dependency just to build a
-/// `Span`, and by the `lang::jnigen` decl macros (`ptr_class!`, `fun!`, …) to
-/// parse a bare type token into a concrete `syn::Type`.
-#[doc(hidden)]
-pub mod __macro_support {
-    pub use proc_macro2;
-
-    pub fn parse_type(s: &str) -> ::syn::Type {
-        ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid type `{s}`: {e}"))
-    }
-
-    pub fn parse_path(s: &str) -> ::syn::Path {
-        ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid path `{s}`: {e}"))
-    }
-
-    pub fn parse_expr(s: &str) -> ::syn::Expr {
-        ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid expression `{s}`: {e}"))
-    }
-
-    /// Parse a `sig!((params) -> Ret)` body: `s` is the token text between
-    /// the macro's outer parens plus the optional `-> Ret` tail, e.g.
-    /// `"(s: & Summary, verbose: bool) -> String"`. Wrapped into a full fn
-    /// item signature under a placeholder name (replaced by the declaring
-    /// decl's fn ident at synthesis time).
-    pub fn parse_signature(s: &str) -> ::syn::Signature {
-        let full = format!("fn __sig {s}");
-        ::syn::parse_str::<::syn::ItemFn>(&format!("{full} {{ unimplemented!() }}"))
-            .map(|f| f.sig)
-            .unwrap_or_else(|e| panic!("prebindgen: invalid signature `sig!({s})`: {e}"))
-    }
-}
-
-/// Build a `syn::Ident` from a bare identifier token. Unlike
-/// `syn::parse_quote!`, this always yields the concrete type `syn::Ident` —
-/// there's no external context needed to infer it — so it can be passed
-/// directly into a generic `impl Into<T>` parameter without hitting rustc's
-/// "type annotations needed" ambiguity. `syn::parse_quote!`'s output type
-/// has to be pinned by a *concrete* parameter type to infer successfully; a
-/// generic `impl Into<T>` bound doesn't give it anything to unify against.
-///
-/// This is what powers the `lang::jnigen` [`fun!`](crate::fun) decl macro —
-/// see that macro (and `ptr_class!`/`enum_class!`/`data_class!`,
-/// which apply the same trick to `syn::Type`) for the primary way this
-/// crate's builders are fed bare Rust names today.
-///
-/// ```
-/// let _: syn::Ident = prebindgen::ident!(z_thing_name);
-/// ```
-#[macro_export]
-macro_rules! ident {
-    ($name:ident) => {
-        ::syn::Ident::new(
-            stringify!($name),
-            $crate::__macro_support::proc_macro2::Span::call_site(),
-        )
-    };
-}
-
-/// Registry-based, **language-agnostic** converter pipeline.
-///
-/// This module is the language-neutral core of prebindgen: it turns a stream of
-/// `#[prebindgen]` items into generated Rust FFI bindings plus a fully resolved
-/// table of type converters. It has no knowledge of any particular destination
-/// language — C, JNI/Kotlin, Swift, Python, etc. all plug in the same way.
-///
-/// # The plug-in point
-///
-/// Write one generator per destination language. It does two things:
-///
-/// * **Says how the language represents Rust types on the wire** — it builds a
-///   [`ConverterImpl`](core::ConverterImpl) (a generated converter fn plus its
-///   wire type) for each crossing the registry hands it, and gives them all
-///   back through [`Registry::supply`](core::Registry::supply).
-/// * **Emits the wrapper code per item** — `on_function` / `on_struct` /
-///   `on_enum` / `on_const` on the [`Prebindgen`](core::Prebindgen) trait.
-///
-/// Everything language-specific that must travel through the pipeline rides in
-/// the back-end's chosen [`Metadata`](core::Prebindgen::Metadata) type (a JNI
-/// back-end's Kotlin class names and exception info, a C back-end's header
-/// names, …). It is set on each converter, propagated into the registry's
-/// [`TypeEntry`](core::TypeEntry), and read back by the back-end's own emitter —
-/// no side channels. Back-ends needing no extras leave it at the default `()`.
-///
-/// # Flow
-///
-/// A build script sees one type — the generator — and never names a `Flat` or a
-/// `Registry`:
-///
-/// ```ignore
-/// let jni = JniGen::builder()
-///     .package(package!("io.zenoh"))
-///     .fun(fun!(session_open))
-///     .source(zenoh_flat::PREBINDGEN_OUT_DIR)
-///     .build()?;
-/// jni.write_rust(&rust_dest)?;
-/// jni.write_kotlin(&kotlin_root)?;
-/// ```
-///
-/// Inside `build()`, the generator does what it alone knows how to do:
-///
-/// 1. [`Flat::builder`](core::Flat::builder) parses the declared sources into
-///    the model, and [`Registry::builder`](core::Registry::builder) starts
-///    describing a binding over it.
-/// 2. The generator states that binding, then
-///    [`Registry::crossings`](core::Registry::crossings) hands over every
-///    crossing needing a conversion — inner types first, so each one can be
-///    built from those already done. `convert_with` answers them and
-///    `build` names any gap.
-/// 3. The resolved registry becomes a field of the built generator, whose
-///    `write_*` methods emit the artifacts — Rust wrappers, and whatever else
-///    that language needs (a C header, Kotlin sources, …).
-///
-/// # Universality, by example
-///
-/// The same machinery serves very different languages:
-///
-/// * **C / cbindgen back-end:** wire types are raw pointers and primitive C
-///   types; converters are thin transmutes; `pre_stages` are usually empty
-///   (errors surface as return codes).
-/// * **JNI / Kotlin back-end:** wire types are JNI handles (`jlong`,
-///   `JObject`); converters marshal across the JVM boundary; `pre_stages`
-///   carry fallible steps whose `Err` arms throw JVM exceptions (the exception
-///   info lives in that back-end's `Metadata`).
-///
-/// The supported JNI / Kotlin adapter ships in [`mod@lang`] as
-/// [`lang::JniGenBuilder`]. The C / cbindgen proof of concept is available separately
-/// with the `unstable-cbindgen` feature.
-pub mod core {
-    /// The capability to render captured Rust syntax — handed to an adapter's
-    /// emission callbacks and nowhere else, so code that decides cannot reach
-    /// what code that emits must spell. An out-of-crate adapter implements
-    /// [`Prebindgen`] and therefore has to name this type.
-    pub use crate::api::core::emit::Emit;
-    /// The **flat API**: the parser from captured `#[prebindgen]` records to the
-    /// [`flat::Element`]s that make up one flat namespace, and the model itself.
-    /// Not to be confused with [`crate::lang`], the *destination* adapters.
-    pub use crate::api::core::flat;
-    /// The layer algebra a boundary value is shaped by — a leaf under an ordered
-    /// stack of `Optional` / `Iterable` layers. Public because the model now
-    /// *produces* it ([`flat::TypeRef::layer_stack`]) and the plan engines and
-    /// adapters consume it, so it is part of what a generator has to speak.
-    pub use crate::api::core::shape;
-    pub use crate::api::core::{
-        warn_unclaimed, Building, Claimed, Conversions, ConverterImpl, Crossing, Decompositions,
-        Direction, DomainScalar, DuplicateNameError, Element, Flat, Gravestone, NicheSlot, Niches,
-        NotExpressibleEntry, Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError,
-        Stage, Transmute, TypeEntry, TypeKey, TypeKeyParseError, WriteRustError,
-    };
-}
-
-/// Runtime traits implemented by inline-opaque (`value_opaque`) FFI counterpart
-/// types; see [`core::Transmute`] / [`core::Gravestone`]. Re-exported at the crate
-/// root because the experimental C adapter's generated converters reference
-/// them as `::prebindgen::Transmute` / `::prebindgen::Gravestone`.
-#[cfg(feature = "unstable-cbindgen")]
-pub use crate::api::core::gravestone::{Gravestone, Transmute};
-/// Root re-export of [`lang::matching`] so the ignore-predicate constructor
-/// sits next to the decl macros it composes with
-/// (`.ignore(matching(|n| …))`, like `.ignore(fun!(…))`).
-pub use crate::api::lang::jnigen::matching;
-
-/// Destination-language adapters implementing [`core::Prebindgen`].
-///
-/// With the non-default `unstable-cbindgen` feature, `CbindgenBuilder` is an
-/// experimental C / cbindgen adapter. Its API is not covered by the 0.5 semver
-/// guarantee.
-///
-/// [`lang::JniGenBuilder`] is the JNI / Kotlin adapter: it turns a flat
-/// `#[prebindgen]` library into a Rust file of JNI `extern "C"` wrappers plus
-/// a fan-out of generated Kotlin sources (typed-handle classes, data/enum
-/// classes, exception classes).
-pub mod lang {
-    #[cfg(feature = "unstable-cbindgen")]
-    pub use crate::api::lang::cbindgen::{snake_case, Cbindgen, CbindgenBuilder};
-    pub use crate::api::lang::jnigen::{
-        box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
-        box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string, matching,
-        null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
-        ConvertSourceDecl, DataClassDecl, Declarations, EnumClassDecl, ExpandDecl, ExpandParamDecl,
-        ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen,
-        JniGenBuilder, KotlinFile, PackageDecl, PtrClassDecl, SealedClassDecl, VariantDecl,
-        WriteKotlinError,
-    };
-}
+// The flat model (`flat`, `shape`, `types_util`, `Element`, `Flat`, `TypeKey`,
+// `Emit`, …) moved to the separate `prebindgen-flat` crate, which depends on
+// this crate for [`Source`] / [`SourceLocation`] and parses the
+// `(syn::Item, SourceLocation)` pairs [`Source`] hands out into one flat
+// namespace — see that crate's docs for the model.
+//
+// The registry pipeline (`Registry`, `Prebindgen`, `decl`, `write`, `expand`,
+// `unfold`, …) moved to the separate `prebindgen-registry` crate, which
+// depends on this crate and `prebindgen-flat`, and re-exports the flat model
+// (`flat`, `shape`, `types_util`) at its own root — see that crate's docs for
+// the pipeline.
+//
+// The JNI / Kotlin adapter (`matching`, the `lang` module, `JniGenBuilder`, …)
+// moved to the separate `prebindgen-jni` crate. It depends on this crate and
+// `prebindgen-registry`, and re-exports its own decl macros' support types at
+// its own root — see `prebindgen-jni`'s docs for the JNI / Kotlin workflow.
 
 pub mod utils {
     #[doc(hidden)]

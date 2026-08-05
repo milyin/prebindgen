@@ -1,0 +1,14 @@
+[package]
+name = "prebindgen-c-runtime"
+version = { workspace = true }
+edition = { workspace = true }
+description = "Runtime traits implemented by prebindgen-generated C FFI counterpart types"
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]

@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 prebindgen = { workspace = true }
+prebindgen-jni-runtime = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
 # Renamed dependency ON PURPOSE: proves `Source::builder(..).crate_name(..)`
 # — generated code must qualify helper calls with the RENAMED module
@@ -22,6 +23,8 @@ tracing = "0.1"
 
 [build-dependencies]
 prebindgen = { workspace = true }
+prebindgen-registry = { workspace = true }
+prebindgen-jni = { workspace = true }
 syn = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
 cov_helpers = { package = "covertest-helpers", path = "../covertest-helpers" }

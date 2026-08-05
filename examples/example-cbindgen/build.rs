@@ -1,7 +1,7 @@
 //! Build script generating C bindings for `example-flat` using prebindgen + cbindgen.
 //!
 //! This is a language-specific binding crate. It reads the `#[prebindgen]` items
-//! captured by `example-flat`, runs them through the `prebindgen::lang::CbindgenBuilder`
+//! captured by `example-flat`, runs them through the `prebindgen_c::CbindgenBuilder`
 //! adapter to produce a Rust file of `extern "C"` wrappers, then runs cbindgen on
 //! that file to produce a C header.
 //!
@@ -65,13 +65,13 @@ fn main() {
 }
 
 /// Generate the Rust FFI bindings from `example-flat`'s prebindgen output via the
-/// `lang::CbindgenBuilder` adapter, and publish the result to `generated/example_flat.rs`.
+/// `prebindgen_c::CbindgenBuilder` adapter, and publish the result to `generated/example_flat.rs`.
 fn generate_ffi_bindings() -> PathBuf {
     let unstable = std::env::var("CARGO_FEATURE_UNSTABLE").is_ok();
 
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name, so no per-item `.name(...)` is needed.
-    let mut cbindgen = prebindgen::lang::Cbindgen::builder()
+    let mut cbindgen = prebindgen_c::Cbindgen::builder()
         .source(example_flat::PREBINDGEN_OUT_DIR)
         .source_module(pq!(example_flat))
         // Single universal freer for the `char*` data the layer hands out
@@ -114,9 +114,9 @@ fn generate_ffi_bindings() -> PathBuf {
     // leaf (`Millis` → `u64`).
     cbindgen = cbindgen.data_struct(pq!(Caption));
     cbindgen = cbindgen.convert(
-        prebindgen::convert!(Millis)
-            .input(prebindgen::fun!(millis_from_raw))
-            .output(prebindgen::fun!(millis_to_raw)),
+        prebindgen_registry::convert!(Millis)
+            .input(prebindgen_registry::fun!(millis_from_raw))
+            .output(prebindgen_registry::fun!(millis_to_raw)),
     );
     cbindgen = cbindgen
         .ignore_function(pq!(millis_from_raw))

@@ -12,12 +12,15 @@ internal = ["example-flat/internal"]
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
-prebindgen = { workspace = true, features = ["unstable-cbindgen"] }
+prebindgen = { workspace = true }
+prebindgen-c-runtime = { workspace = true }
 example-flat = { path = "../example-flat" }
 konst = "0.3.0"
 
 [build-dependencies]
-prebindgen = { workspace = true, features = ["unstable-cbindgen"] }
+prebindgen = { workspace = true }
+prebindgen-registry = { workspace = true }
+prebindgen-c = { workspace = true }
 syn = { workspace = true }
 cbindgen = "=0.29.4"
 example-flat = { path = "../example-flat" }

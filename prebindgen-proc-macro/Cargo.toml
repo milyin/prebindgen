@@ -6,7 +6,9 @@ description = "Procedural macros for prebindgen - export FFI definitions for bin
 license = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
-documentation = { workspace = true }
+# Not inherited: the workspace's `documentation` names docs.rs/prebindgen,
+# which is this crate's sibling, not this crate. Omitted so docs.rs derives
+# the right URL — same reason as every other non-`prebindgen` member.
 keywords = { workspace = true }
 categories = {workspace = true }
 rust-version = { workspace = true }

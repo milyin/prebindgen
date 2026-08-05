@@ -1,5 +1,5 @@
-//! Build script generating Kotlin/JNI bindings for `perftest-flat` using
-//! prebindgen's [`prebindgen::lang::JniGenBuilder`] adapter. It produces:
+//! Build script generating Kotlin/JNI bindings for `perftest-flat` using the
+//! separate `prebindgen-jni` crate's `JniGenBuilder` adapter. It produces:
 //!   * `src/generated_bindings.rs` — the Rust-side JNI wrappers (included by
 //!     `src/lib.rs`), and
 //!   * `kotlin/generated/**` — the matching typed Kotlin classes.
@@ -21,7 +21,8 @@
 //! `ObjectBoundary64` is recursively flattened, while its structural twin
 //! `ObjectBoundary64Object` uses `.jobject_input()`.
 
-use prebindgen::{data_class, fun, lang::JniGen, package, ptr_class};
+use prebindgen_jni::{data_class, package, ptr_class, JniGen};
+use prebindgen_registry::fun;
 
 fn main() {
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
