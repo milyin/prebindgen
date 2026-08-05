@@ -8,10 +8,10 @@
 //! Pipeline:
 //!   1. [`prebindgen::core::Registry::builder`] describes a binding over a model built from
 //!      `(syn::Item, SourceLocation)` (typically `source.items_all()`).
-//!   2. [`prebindgen::core::Registry::write_rust`] resolves every
+//!   2. `Registry::write_rust` resolves every
 //!      required type via a configured [`JniGenBuilder`] and writes the generated
 //!      Rust bindings file.
-//!   3. [`jni::JniGenBuilder::write_kotlin`] walks the resolved registry to emit the
+//!   3. `JniGenBuilder::write_kotlin` walks the resolved registry to emit the
 //!      secondary Kotlin artifacts (typed-handle classes, data/enum classes,
 //!      exception classes, the centralized `JNINative` holder).
 //!

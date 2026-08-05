@@ -271,10 +271,10 @@ impl<M> std::fmt::Debug for Registry<M> {
 impl<M> Registry<M> {
     /// An empty registry: no model, no items, no types.
     ///
-    /// **Not public.** A `Registry` is a projection of a [`Flat`], and one built
+    /// **Not public.** A `Registry` is a projection of a [`Flat`](crate::core::Flat), and one built
     /// this way projects nothing — [`Self::flat`] would hand a later stage an
     /// empty model that claims to be this registry's source. Outside this crate
-    /// the entry point is [`Self::new`], which has a model behind it.
+    /// the entry point is [`Self::builder`], which has a model behind it.
     /// [`Self::empty`] for the test suite of an out-of-crate adapter.
     ///
     /// Gated on the non-default `testing` feature, so the "not public" rule
@@ -316,7 +316,7 @@ impl<M> Registry<M> {
     #[cfg(any(test, feature = "testing"))]
     pub fn callback_arg_plans_for_test(
         &self,
-    ) -> impl Iterator<Item = &crate::api::core::unfold::UnfoldPlan> {
+    ) -> impl Iterator<Item = &crate::core::unfold::UnfoldPlan> {
         self.callback_arg_plans.values()
     }
 

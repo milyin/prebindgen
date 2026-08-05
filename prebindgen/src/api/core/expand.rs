@@ -104,7 +104,7 @@ pub struct ExpandDecl {
 /// Constructor / expansion declarations gathered from a language builder —
 /// an immutable record set: complete values, no build protocol. Declaration
 /// order is the vector order. Handed to [`apply`] via
-/// [`crate::api::core::prebindgen::Prebindgen::expansions`]; empty or
+/// `Prebindgen::expansions`; empty or
 /// duplicate declarations are diagnosed there (collected), not at
 /// construction.
 #[derive(Clone, Default)]

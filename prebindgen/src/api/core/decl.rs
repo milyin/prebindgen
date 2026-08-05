@@ -77,7 +77,7 @@ pub enum LocalField {
 /// * `fun!(crate::foo)` — a **binding-local** fn: any fn the binding crate
 ///   defines, exported through the same machinery as a `#[prebindgen]` one.
 ///   A path carries no signature to read, so chain
-///   [`.sig(sig!(…))`](crate::lang::FunctionDecl::sig). The generated file
+///   [`.sig(sig!(…))`](crate::core::FunctionDecl::sig). The generated file
 ///   calls it by the declared path (it compiles inside the binding crate,
 ///   so `crate::`-rooted paths resolve).
 #[macro_export]
@@ -95,7 +95,7 @@ macro_rules! fun {
 /// State a binding-local fn's exact Rust signature, with **named parameters**
 /// (they become the foreign-side parameter names): `sig!((s: &Summary,
 /// verbose: bool) -> String)`; the `-> Ret` tail is optional (unit). The
-/// signature argument of [`FunctionDecl::sig`](crate::lang::FunctionDecl::sig)
+/// signature argument of [`FunctionDecl::sig`](crate::core::FunctionDecl::sig)
 /// for a path-built [`fun!`](crate::fun).
 #[macro_export]
 macro_rules! sig {
@@ -154,9 +154,9 @@ macro_rules! expand_param {
     };
 }
 
-/// Build a [`ConvertSourceDecl`](crate::lang::ConvertSourceDecl) for an
+/// Build a [`ConvertSourceDecl`](crate::core::ConvertSourceDecl) for an
 /// **input** conversion via `core::convert`: `.input(from!(i32))` requires
-/// `i32: Into<T>`. Chain [`with`](crate::lang::ConvertSourceDecl::with) to
+/// `i32: Into<T>`. Chain `with` to
 /// use a binding-local callable instead of the trait.
 #[macro_export]
 macro_rules! from {
@@ -169,9 +169,9 @@ macro_rules! from {
 
 /// Fallible twin of [`from!`]: `.input(try_from!(i32))` requires
 /// `i32: TryInto<T>`; an `Err` routes to the caller's error handler. With
-/// [`with`](crate::lang::ConvertSourceDecl::with), the callable returns
+/// `with`, the callable returns
 /// `Result` and must state its error type via
-/// [`error`](crate::lang::ConvertSourceDecl::error).
+/// `error`.
 #[macro_export]
 macro_rules! try_from {
     ($t:ty) => {
@@ -181,9 +181,9 @@ macro_rules! try_from {
     };
 }
 
-/// Build a [`ConvertSourceDecl`](crate::lang::ConvertSourceDecl) for an
+/// Build a [`ConvertSourceDecl`](crate::core::ConvertSourceDecl) for an
 /// **output** conversion via `core::convert`: `.output(into!(i32))` requires
-/// `T: Into<i32>`. Chain [`with`](crate::lang::ConvertSourceDecl::with) to
+/// `T: Into<i32>`. Chain `with` to
 /// use a binding-local callable instead of the trait.
 #[macro_export]
 macro_rules! into {
@@ -196,9 +196,9 @@ macro_rules! into {
 
 /// Fallible twin of [`into!`]: `.output(try_into!(i32))` requires
 /// `T: TryInto<i32>`; an `Err` routes to the caller's error handler. With
-/// [`with`](crate::lang::ConvertSourceDecl::with), the callable returns
+/// `with`, the callable returns
 /// `Result` and must state its error type via
-/// [`error`](crate::lang::ConvertSourceDecl::error).
+/// `error`.
 #[macro_export]
 macro_rules! try_into {
     ($t:ty) => {
@@ -220,7 +220,7 @@ macro_rules! expand_return {
 
 /// Build a [`FieldsDecl`] from the ident of a **value-form accessor** —
 /// `fields!(sample_to_struct)` is `FieldsDecl::new(prebindgen::ident!(sample_to_struct))`.
-/// The argument of [`ExpandReturnDecl::fields`](crate::lang::ExpandReturnDecl::fields).
+/// The argument of [`ExpandReturnDecl::fields`](crate::core::ExpandReturnDecl::fields).
 #[macro_export]
 macro_rules! fields {
     ($name:ident) => {

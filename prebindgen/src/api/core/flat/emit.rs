@@ -66,7 +66,7 @@
 //! [`Emit::spell`] yields a `TokenStream`, so emission code can re-parse it and
 //! take the node apart. That is deliberate — emission is where syntax belongs —
 //! and closing it would mean an emission IR for Rust, mirroring the
-//! [`kotlin_codegen`] crate, which is a much larger piece of work.
+//! `kotlin-codegen` crate, which is a much larger piece of work.
 //!
 //! And nothing stops a *new* door being added: someone can write `pub fn
 //! as_syn2` in `flat` tomorrow. The reason that is tolerable is that such a

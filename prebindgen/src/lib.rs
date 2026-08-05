@@ -320,26 +320,26 @@ pub mod core {
     /// what code that emits must spell. An out-of-crate adapter implements
     /// [`Prebindgen`] and therefore has to name this type.
     pub use crate::api::core::emit::Emit;
-    /// Constructor (input) expansion — the dual of [`unfold`]. [`expand::apply`]
-    /// resolves declarations into [`expand::FoldPlan`]s and [`expand::emit_fold`]
-    /// emits the dispatch expression at the parameter-emission site; both are
-    /// read by an adapter's own parameter-emission code, same reasoning as
-    /// [`unfold`].
+    /// Constructor (input) expansion — the dual of [`unfold`]. Resolution
+    /// itself is the pipeline's, but the [`expand::FoldPlan`] it produces and
+    /// [`expand::emit_fold`], which emits the dispatch expression, are read and
+    /// called by an adapter's own parameter-emission code.
     pub use crate::api::core::expand;
     /// The **flat API**: the parser from captured `#[prebindgen]` records to the
     /// [`flat::Element`]s that make up one flat namespace, and the model itself.
-    /// Not to be confused with [`crate::lang`], the *destination* adapters.
+    /// Not to be confused with the *destination* adapters, which now ship as
+    /// the separate `prebindgen-c` and `prebindgen-jni` crates.
     pub use crate::api::core::flat;
     /// The layer algebra a boundary value is shaped by — a leaf under an ordered
     /// stack of `Optional` / `Iterable` layers. Public because the model now
     /// *produces* it ([`flat::TypeRef::layer_stack`]) and the plan engines and
     /// adapters consume it, so it is part of what a generator has to speak.
     pub use crate::api::core::shape;
-    /// Output (data) expansion — deconstructor resolution ([`unfold::apply`])
-    /// and the resulting [`unfold::UnfoldPlan`]s an adapter's return-emission
-    /// site reads back off the registry. Public for the same reason as
-    /// [`flat`] and [`shape`]: an out-of-crate adapter is exactly the code
-    /// that reads a resolved plan.
+    /// Output (data) expansion. Deconstructor resolution is the pipeline's own
+    /// step; what is public here is the resulting [`unfold::UnfoldPlan`], which
+    /// an adapter's return-emission site reads back off the registry. Public
+    /// for the same reason as [`flat`] and [`shape`]: an out-of-crate adapter
+    /// is exactly the code that reads a resolved plan.
     pub use crate::api::core::unfold;
     pub use crate::api::core::{
         decl, types_util, warn_unclaimed, write, Building, Claimed, Conversions, ConvertDecl,

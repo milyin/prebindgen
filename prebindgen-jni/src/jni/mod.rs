@@ -2,7 +2,7 @@
 //!
 //! [`JniGenBuilder`] implements [`prebindgen::core::Prebindgen`]
 //! (Rust-side conversion bodies) and provides an inherent
-//! [`JniGenBuilder::write_kotlin`] for emitting all Kotlin output
+//! `JniGenBuilder::write_kotlin` for emitting all Kotlin output
 //! (`NativeHandle.kt`, typed-handle classes, `JNIWrappers.kt`).
 //!
 //! The implementation is split across sibling submodules, all sharing this
