@@ -1950,7 +1950,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn_of(outer, &ty, &body, exc),
+                    function: self.build_input_fn_of(outer, &ty, &body, exc, emit),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -2025,7 +2025,7 @@ impl Declarations {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
         let (ty, exc_ty, body) = self.convert_output_body(&key, registry, emit)?;
-        self.build_output_converter(outer, None, ty, exc_ty, body, registry)
+        self.build_output_converter(outer, None, ty, exc_ty, body, registry, emit)
     }
 
     /// The `Result<T, E>` output peel: the value succeeds as `T`, and `E` routes
@@ -2041,6 +2041,7 @@ impl Declarations {
         ok: &syn::Type,
         err: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         self.build_output_converter(
             outer,
@@ -2049,6 +2050,7 @@ impl Declarations {
             Some(err.clone()),
             syn::parse_quote!(v),
             registry,
+            emit,
         )
     }
 
@@ -2057,6 +2059,7 @@ impl Declarations {
     /// `arg0` is the peeled inner type for a shape peel, `None` for a
     /// `convert!`-declared conversion — which is what the old `rank == 0`
     /// tested.
+    #[allow(clippy::too_many_arguments)]
     fn build_output_converter(
         &self,
         outer: &crate::api::core::flat::TypeRef,
@@ -2065,6 +2068,7 @@ impl Declarations {
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
         // The middle slot carries the `Result`'s raw Rust error type (or `None`
@@ -2109,7 +2113,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn_of(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc, emit),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -2126,7 +2130,7 @@ impl Declarations {
             Some(inner) => {
                 // Composed: `ty` is the continue rust type; chain its converter.
                 let stage = Stage {
-                    function: self.build_output_fn_of(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc, emit),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];

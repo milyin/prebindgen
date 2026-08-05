@@ -151,7 +151,7 @@ impl TypeRef {
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside it,
     /// and a consumer that still has to take the node apart says so with
     /// [`as_syn`](Self::as_syn).
-    pub fn spell(&self) -> proc_macro2::TokenStream {
+    pub(in crate::api::core) fn spell(&self) -> proc_macro2::TokenStream {
         self.origin.spell()
     }
 
@@ -522,7 +522,7 @@ impl TypeRef {
     /// tabulates: this strips what stands over *this* node's classification, and
     /// a wrapper under a borrow or inside an `Option` belongs to that inner
     /// node's own spelling.
-    pub fn stripped_syntax(&self) -> syn::Type {
+    pub(in crate::api::core) fn stripped_syntax(&self) -> syn::Type {
         self.unwrapped().origin.as_syn().clone()
     }
 
@@ -832,7 +832,12 @@ impl TypeKind {
     /// * a `Group` or `Paren` around a type, which the lowering sees through;
     /// * a [`Callback`](TypeKind::Callback)'s bound *order* — `Send + Sync` and
     ///   `Sync + Send` are one accepted form, and nothing reads the order.
-    pub fn to_syn(&self) -> syn::Type {
+    // Its whole job is the round-trip check (`syntax_is_recoverable_from_kind`),
+    // and with the spelling sealed nothing in a built crate calls it — which is
+    // the correct end state, not dead code: a kind that cannot reproduce its
+    // own syntax has lost something, and this is what says so.
+    #[allow(dead_code)]
+    pub(in crate::api::core) fn to_syn(&self) -> syn::Type {
         let opt_lifetime =
             |l: &Option<syn::Lifetime>| l.as_ref().map(|l| quote::quote!(#l)).unwrap_or_default();
         match self {

@@ -47,13 +47,15 @@
 //! `compile_fail` examples on [`Emit`] check each of those from outside the
 //! crate, which is where a doctest runs and where the census could never look.
 //!
-//! **Open until C3: type spellings.** [`TypeRef::spell`](super::flat::TypeRef::spell)
-//! is still public and has 71 adapter call sites;
-//! [`Origin::declared_spelling`](super::flat::Origin::declared_spelling) is
-//! public for the two sites that spell a *build-script declaration*, which was
-//! never captured syntax. Until those move, an adapter can still reach a type's
-//! tokens — so this stage closes the item half of the boundary and says so
-//! rather than claiming both.
+//! **Closed as of C5: type spellings too.** `TypeRef::spell`,
+//! `TypeRef::stripped_syntax` and `TypeKind::to_syn` are
+//! `pub(in crate::api::core)`. There is no route from the model to captured
+//! syntax outside this type, and the `compile_fail` examples check every one
+//! from outside the crate.
+//!
+//! `Origin::declared_spelling` stays public: an adapter declaration's
+//! `Origin<syn::Type>` holds a type the **build script** wrote, which was never
+//! captured and which #280 leaves the model no reading for.
 //!
 //! # The residual
 //!
@@ -116,6 +118,26 @@ use super::flat::{Element, EnumValue, Field, Struct, Type, TypeRef};
 /// fn leak(f: &flat::Function) -> proc_macro2::TokenStream { f.origin.spell() }
 /// ```
 ///
+/// A type's spelling, sealed as of C5 — the last route, and the one the census
+/// could only ever *count*:
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(t: &flat::TypeRef) -> proc_macro2::TokenStream { t.spell() }
+/// ```
+///
+/// …its stripped form, and the kind's reconstruction:
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(t: &flat::TypeRef) -> syn::Type { t.stripped_syntax() }
+/// ```
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(k: &flat::TypeKind) -> syn::Type { k.to_syn() }
+/// ```
+///
 /// Minting one is not available either — the field is private and `new` is
 /// `pub(in crate::api::core)`:
 ///
@@ -132,6 +154,17 @@ impl Emit {
     /// Mint one. `pub(in crate::api::core)` is the whole enforcement mechanism:
     /// the hand-out sites are exactly the callers of this.
     pub(in crate::api::core) fn new() -> Self {
+        Self { _seal: () }
+    }
+
+    /// A capability for a test that drives an emission helper directly.
+    ///
+    /// `#[cfg(test)]`, so it does not exist in a built crate — production code
+    /// still cannot mint one, and the `compile_fail` examples above still prove
+    /// the out-of-crate seal, since a doctest compiles against the built crate
+    /// where this is absent.
+    #[cfg(test)]
+    pub(crate) fn for_test() -> Self {
         Self { _seal: () }
     }
 

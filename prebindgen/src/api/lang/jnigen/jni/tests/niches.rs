@@ -18,8 +18,12 @@ fn option_carves_single_niche() {
     );
 
     let inner_ty: syn::Type = syn::parse_quote!(TestType);
-    let (wire, _body, niches) = option_input(&reg.reading_of(&inner_ty).expect("interned"), &reg)
-        .expect("Option<TestType> resolves");
+    let (wire, _body, niches) = option_input(
+        &reg.reading_of(&inner_ty).expect("interned"),
+        &reg,
+        &crate::api::core::emit::Emit::for_test(),
+    )
+    .expect("Option<TestType> resolves");
 
     assert_eq!(
         wire.to_token_stream().to_string(),
@@ -58,8 +62,12 @@ fn option_cascades_through_multi_niche() {
 
     // Layer 1: Option<TestType>.
     let layer1_ty: syn::Type = syn::parse_quote!(TestType);
-    let (w1, _, n1) = option_input(&reg.reading_of(&layer1_ty).expect("interned"), &reg)
-        .expect("layer 1 resolves");
+    let (w1, _, n1) = option_input(
+        &reg.reading_of(&layer1_ty).expect("interned"),
+        &reg,
+        &crate::api::core::emit::Emit::for_test(),
+    )
+    .expect("layer 1 resolves");
     assert_eq!(w1.to_token_stream().to_string(), "jni :: sys :: jint");
     assert_eq!(n1.len(), 1, "first carve leaves one niche");
 
@@ -75,8 +83,12 @@ fn option_cascades_through_multi_niche() {
 
     // Layer 2: Option<Option<TestType>>.
     let layer2_ty: syn::Type = syn::parse_quote!(Option<TestType>);
-    let (w2, _, n2) = option_input(&reg.reading_of(&layer2_ty).expect("interned"), &reg)
-        .expect("layer 2 resolves");
+    let (w2, _, n2) = option_input(
+        &reg.reading_of(&layer2_ty).expect("interned"),
+        &reg,
+        &crate::api::core::emit::Emit::for_test(),
+    )
+    .expect("layer 2 resolves");
     assert_eq!(
         w2.to_token_stream().to_string(),
         "jni :: sys :: jint",
@@ -95,8 +107,12 @@ fn option_cascades_through_multi_niche() {
     // Layer 3: Option<Option<Option<TestType>>>. No niches left,
     // inner wire is jint (a JNI primitive) → boxed-Long fallback.
     let layer3_ty: syn::Type = syn::parse_quote!(Option<Option<TestType>>);
-    let (w3, _, n3) = option_input(&reg.reading_of(&layer3_ty).expect("interned"), &reg)
-        .expect("layer 3 resolves via box fallback");
+    let (w3, _, n3) = option_input(
+        &reg.reading_of(&layer3_ty).expect("interned"),
+        &reg,
+        &crate::api::core::emit::Emit::for_test(),
+    )
+    .expect("layer 3 resolves via box fallback");
     assert_eq!(
         w3.to_token_stream().to_string(),
         "jni :: objects :: JObject",
@@ -184,8 +200,12 @@ fn option_over_jobject_uses_default_null_niche() {
     );
 
     let ty: syn::Type = syn::parse_quote!(MyStruct);
-    let (wire, _, rest) = option_input(&reg.reading_of(&ty).expect("interned"), &reg)
-        .expect("Option<MyStruct> resolves");
+    let (wire, _, rest) = option_input(
+        &reg.reading_of(&ty).expect("interned"),
+        &reg,
+        &crate::api::core::emit::Emit::for_test(),
+    )
+    .expect("Option<MyStruct> resolves");
     assert_eq!(
         wire.to_token_stream().to_string(),
         "jni :: objects :: JObject"
@@ -210,7 +230,12 @@ fn option_fails_when_no_niche_and_non_primitive_wire() {
         ),
     );
     let ty: syn::Type = syn::parse_quote!(MyStruct);
-    assert!(option_input(&reg.reading_of(&ty).expect("interned"), &reg).is_none());
+    assert!(option_input(
+        &reg.reading_of(&ty).expect("interned"),
+        &reg,
+        &crate::api::core::emit::Emit::for_test()
+    )
+    .is_none());
 }
 
 /// Boxed fallback widens to `JObject` and exposes no further
@@ -230,8 +255,12 @@ fn option_box_fallback_exposes_no_niches() {
         ),
     );
     let ty: syn::Type = syn::parse_quote!(i64);
-    let (wire, _, rest) = option_input(&reg.reading_of(&ty).expect("interned"), &reg)
-        .expect("Option<i64> via box fallback");
+    let (wire, _, rest) = option_input(
+        &reg.reading_of(&ty).expect("interned"),
+        &reg,
+        &crate::api::core::emit::Emit::for_test(),
+    )
+    .expect("Option<i64> via box fallback");
     assert_eq!(
         wire.to_token_stream().to_string(),
         "jni :: objects :: JObject"

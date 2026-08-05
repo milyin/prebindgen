@@ -23,6 +23,7 @@ pub(crate) fn callback_input(
     ext: &Declarations,
     args: &[crate::api::core::flat::TypeRef],
     registry: &impl Conversions<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
@@ -49,7 +50,7 @@ pub(crate) fn callback_input(
     let arg_pat_ty: Vec<TokenStream> = args
         .iter()
         .map(|t| {
-            let t = t.spell();
+            let t = emit.spell(t);
             quote!(#t)
         })
         .collect();
@@ -428,9 +429,12 @@ pub(crate) fn reject_vec_of_handle(
 /// Reconstruct the `impl Fn(args...) + Send + Sync + 'static` syn::Type
 /// from a flat slice of arg types. Used by the rank-1/2/3 callback impls
 /// to feed `input_wrapper` the original outer type.
-pub(crate) fn build_fn_type(args: &[crate::api::core::flat::TypeRef]) -> syn::Type {
+pub(crate) fn build_fn_type(
+    args: &[crate::api::core::flat::TypeRef],
+    emit: &crate::api::core::emit::Emit,
+) -> syn::Type {
     // The args as the source spelled them — the callback's Rust type is
     // re-emitted, never re-derived.
-    let arg_iter = args.iter().map(|a| a.spell());
+    let arg_iter = args.iter().map(|a| emit.spell(a));
     syn::parse_quote!(impl Fn( #(#arg_iter),* ) + Send + Sync + 'static)
 }

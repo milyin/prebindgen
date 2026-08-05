@@ -91,15 +91,16 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
-        let spelled = rust.spell();
+        let spelled = emit.spell(rust);
         let rust_with_lifetime = match rust.kind() {
             crate::api::core::flat::TypeKind::Ref {
                 lifetime: None,
                 mutable,
                 inner,
             } => {
-                let inner = inner.spell();
+                let inner = emit.spell(inner);
                 let m = if *mutable { quote!(mut) } else { quote!() };
                 quote!(&'env #m #inner)
             }
@@ -163,8 +164,9 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
-        self.build_output_fn_parts(&rust.spell(), wire, body, exc)
+        self.build_output_fn_parts(&emit.spell(rust), wire, body, exc)
     }
 
     pub(crate) fn build_output_fn_parts(
@@ -504,14 +506,14 @@ impl Declarations {
     pub fn opaque_handle_output(
         &self,
         reading: &crate::api::core::flat::TypeRef,
-        _emit: &crate::api::core::emit::Emit,
+        emit: &crate::api::core::emit::Emit,
     ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let body: syn::Expr =
             syn::parse_quote!(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64);
         ConverterImpl {
             subs: vec![],
-            function: self.build_output_fn_of(reading, &wire, &body, None),
+            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
             destination: wire,
             pre_stages: vec![],
             niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
@@ -874,9 +876,10 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
         match produced {
-            Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc),
+            Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc, emit),
             Produced::Composed(t) => self.build_input_fn_composed(t, wire, body, exc),
         }
     }
@@ -888,9 +891,10 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
         match produced {
-            Produced::Reading(r) => self.build_output_fn_of(r, wire, body, exc),
+            Produced::Reading(r) => self.build_output_fn_of(r, wire, body, exc, emit),
             Produced::Composed(t) => self.build_output_fn(t, wire, body, exc),
         }
     }
@@ -1198,7 +1202,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: self.build_input_fn_produced(produced, &wire, &body, None),
+            function: self.build_input_fn_produced(produced, &wire, &body, None, emit),
             destination: wire,
             niches: Niches::empty(),
             metadata: KotlinMeta {
@@ -1288,7 +1292,7 @@ impl Declarations {
         if shape == WrapperShape::Optional {
             let outer_ty = produced.key();
             let build = build_from_canonical(produced, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1, registry)?;
+            let (wire, inner_body, niches) = option_input(t1, registry, emit)?;
             // `option_input` yields the canonical `Option<T>`; the converter
             // yields the spelling.
             let body: syn::Expr = syn::parse_quote!({
@@ -1317,7 +1321,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_produced(produced, &wire, &body, None),
+                function: self.build_input_fn_produced(produced, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {
@@ -1454,7 +1458,7 @@ impl Declarations {
                 else {
                     return None;
                 };
-                self.dispatch_fn_input(args, built)
+                self.dispatch_fn_input(args, built, emit)
             }),
             Direction::Output => self.select_output_type(&reading, built, emit),
         }
@@ -1709,9 +1713,10 @@ impl Declarations {
         &self,
         args: &[crate::api::core::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args);
-        let (wire, body) = callback_input(self, args, registry)?;
+        let outer_ty = build_fn_type(args, emit);
+        let (wire, body) = callback_input(self, args, registry, emit)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed
@@ -1954,7 +1959,7 @@ impl Prebindgen for Declarations {
     fn prerequisites(
         &self,
         registry: &Registry<KotlinMeta>,
-        _emit: &crate::api::core::emit::Emit,
+        emit: &crate::api::core::emit::Emit,
     ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
         // `JniBindingError` String-wrapper. Built-in converter bodies compose
@@ -1979,13 +1984,13 @@ impl Prebindgen for Declarations {
         // Handle destructors — one `extern "C" freePtr<suffix>` per
         // non-suppressed opaque handle (the Rust half of the typed-handle
         // `free()` pair the Kotlin emitter generates).
-        items.extend(build_handle_destructor_items(self, registry, _emit));
+        items.extend(build_handle_destructor_items(self, registry, emit));
         // Slice/Vec input helpers — a `…VecNew/Push/Free` trio per flattenable
         // element type a scanned `&[T]`/`Vec<T>` param takes. Kotlin builds the
         // Rust-side `Vec` by pushing each element's decoupled leaves, then passes
         // the handle (see `ParamMode::VecBuild`), avoiding per-element
         // `env.get_field(...)` upcalls on the Rust side.
-        items.extend(build_vec_build_helper_items(self, registry));
+        items.extend(build_vec_build_helper_items(self, registry, emit));
         // Expression constants — one nullary JNI getter extern per
         // `PackageDecl::constant_expr`, its value the binding-defined
         // expression evaluated with a glob import of every source module (so
@@ -2008,7 +2013,7 @@ impl Prebindgen for Declarations {
                 #expr
             });
             let wrapper =
-                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
+                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
             items.push(syn::parse2::<syn::Item>(wrapper).expect(
                 "constant_expr: generated getter wrapper is a single item by construction",
             ));
@@ -2031,9 +2036,9 @@ impl Prebindgen for Declarations {
         &self,
         f: &crate::api::core::flat::Function,
         registry: &Registry<KotlinMeta>,
-        _emit: &crate::api::core::emit::Emit,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        emit_jni_function_wrapper(self, f, registry)
+        emit_jni_function_wrapper(self, f, registry, emit)
     }
 
     fn on_struct(
@@ -2084,7 +2089,8 @@ impl Prebindgen for Declarations {
         let const_ident = &c.name;
         let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
-        let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
+        let wrapper =
+            emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
         let alias = emit.const_alias(c, &source_module);
         quote! {
             #alias
@@ -2125,14 +2131,14 @@ impl Declarations {
         // The `try_into` IS the length check: a JVM array of the wrong size
         // becomes a binding error naming the type, never a panic.
         if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(reading) {
-            let body = crate::api::lang::jnigen::jni::prim_array::input_body(reading, &spec);
+            let body = crate::api::lang::jnigen::jni::prim_array::input_body(reading, &spec, emit);
             let wire = spec.wire.clone();
             let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2160,7 +2166,7 @@ impl Declarations {
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
-                            function: self.build_input_fn_of(reading, &wire, &body, None),
+                            function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                             destination: wire,
                             niches,
                             metadata: self.framework_meta(kotlin_name),
@@ -2231,7 +2237,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2248,7 +2254,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata,
@@ -2265,7 +2271,7 @@ impl Declarations {
                 if let Some(crate::api::core::flat::Type::Variant(v)) =
                     registry.flat().declared_type(&name)
                 {
-                    let (wire, body) = sum_input_body(self, v, registry)?;
+                    let (wire, body) = sum_input_body(self, v, registry, emit)?;
                     // The wire's own null niche, exactly as a data class gets
                     // — that is what lets `Option<sum>` fold with JVM null as
                     // `None` instead of needing a boxed wrapper.
@@ -2278,7 +2284,7 @@ impl Declarations {
                     return Some(ConverterImpl {
                         subs: vec![],
                         pre_stages: vec![],
-                        function: self.build_input_fn_of(reading, &wire, &body, None),
+                        function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                         destination: wire,
                         niches,
                         metadata: self.framework_meta(kotlin_name),
@@ -2286,7 +2292,7 @@ impl Declarations {
                 }
             }
             if let Some(s) = registry.flat().struct_type(&name) {
-                let (wire, body) = struct_input_body(self, s, registry)?;
+                let (wire, body) = struct_input_body(self, s, registry, emit)?;
                 let niches = default_niches_for_wire(&wire);
                 // Auto-generated struct: the value-context Kotlin name is
                 // whatever the user pinned via `data_class`. If
@@ -2300,7 +2306,7 @@ impl Declarations {
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn_of(reading, &wire, &body, None),
+                    function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                     destination: wire,
                     niches,
                     metadata: self.framework_meta(kotlin_name),
@@ -2340,6 +2346,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
             return None;
@@ -2381,7 +2388,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![stripped],
             pre_stages: vec![],
-            function: self.build_output_fn_of(reading, &wire, &body, None),
+            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
             destination: wire,
             niches: entry.niches.clone(),
             // The surface is the inner type's — a wrapper is invisible to the
@@ -2414,6 +2421,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
             return None;
@@ -2459,7 +2467,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![stripped],
             pre_stages: vec![],
-            function: self.build_input_fn_of(reading, &wire, &body, None),
+            function: self.build_input_fn_of(reading, &wire, &body, None, emit),
             destination: wire,
             niches: entry.niches.clone(),
             // The surface is the inner type's: a wrapper is invisible to the
@@ -2526,7 +2534,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2549,7 +2557,7 @@ impl Declarations {
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
-                            function: self.build_output_fn_of(reading, &wire, &body, None),
+                            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                             destination: wire,
                             niches,
                             metadata: self.framework_meta(kotlin_name),
@@ -2592,7 +2600,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2619,7 +2627,7 @@ impl Declarations {
             let body: syn::Expr = syn::parse_quote!(v);
             return Some(ConverterImpl {
                 subs: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -2637,7 +2645,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata,
@@ -2655,7 +2663,7 @@ impl Declarations {
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn_of(reading, &wire, &body, None),
+                    function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                     destination: wire,
                     niches,
                     metadata: self.framework_meta(kotlin_name),
@@ -2698,7 +2706,7 @@ impl Declarations {
                 ) as i64);
                 return Some(ConverterImpl {
                     subs: vec![],
-                    function: self.build_output_fn_produced(produced, &wire, &body, None),
+                    function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
                     destination: wire,
                     pre_stages: vec![],
                     niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
@@ -2760,7 +2768,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_produced(produced, &wire, &body, None),
+                function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {
@@ -2831,7 +2839,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_produced(produced, &wire, &body, None),
+                function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {

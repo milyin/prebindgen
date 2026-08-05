@@ -565,8 +565,8 @@ pub fn snake_case(s: &str) -> String {
 /// exists to check the lowering rather than to generate with. Every wire this
 /// back-end builds from a field's own type goes through here, so what C sees
 /// is what the source wrote.
-fn spelled(t: &TypeRef) -> syn::Type {
-    let toks = t.spell();
+fn spelled(t: &TypeRef, emit: &crate::api::core::emit::Emit) -> syn::Type {
+    let toks = emit.spell(t);
     syn::parse_quote!(#toks)
 }
 

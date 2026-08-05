@@ -176,7 +176,7 @@ impl Declarations {
         // 4. Last resort: the spelling differs from something convertible only
         //    by the wrappers the model erased. Nothing that resolves above
         //    reaches here, so this adds routes rather than changing them.
-        self.input_transparent_bridge(ty, registry)
+        self.input_transparent_bridge(ty, registry, emit)
     }
 
     /// Select the output converter for `ty`: terminals, user wrappers, then
@@ -202,8 +202,8 @@ impl Declarations {
         //    Read off the model, which calls this shape `TypeKind::Fallible`.
         //    `result_parts` covers a `Result` the adapter composed itself, which
         //    the frontend never read.
-        if let Some((ok, err)) = fallible_parts(ty) {
-            if let Some(c) = self.result_peel(ty, &ok, &err, registry) {
+        if let Some((ok, err)) = fallible_parts(ty, emit) {
+            if let Some(c) = self.result_peel(ty, &ok, &err, registry, emit) {
                 return Some(c);
             }
         }
@@ -258,7 +258,7 @@ impl Declarations {
         //    by the wrappers the model erased. Dual of the input side's step 4,
         //    and reached the same way — after every layer arm, so nothing that
         //    resolves today changes route (#309).
-        self.output_transparent_bridge(ty, registry)
+        self.output_transparent_bridge(ty, registry, emit)
     }
 }
 
@@ -274,8 +274,11 @@ impl Declarations {
 /// minting to the model, so every reading reaching here was classified, and
 /// `kind` is what says whether it is a `Result`. The fallback was measured
 /// never to fire in-tree; it is now unreachable by construction.
-fn fallible_parts(ty: &crate::api::core::flat::TypeRef) -> Option<(syn::Type, syn::Type)> {
+fn fallible_parts(
+    ty: &crate::api::core::flat::TypeRef,
+    emit: &crate::api::core::emit::Emit,
+) -> Option<(syn::Type, syn::Type)> {
     let (ok, err) = ty.fallible_parts()?;
-    let (ok, err) = (ok.spell(), err.spell());
+    let (ok, err) = (emit.spell(ok), emit.spell(err));
     Some((syn::parse_quote!(#ok), syn::parse_quote!(#err)))
 }

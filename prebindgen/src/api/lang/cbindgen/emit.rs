@@ -511,7 +511,7 @@ impl CbindgenBuilder {
             Some((ok, e)) => (ok, Some(e)),
             None => (&f.ret, None),
         };
-        let err_ty: Option<syn::Type> = err_reading.map(spelled);
+        let err_ty: Option<syn::Type> = err_reading.map(|t| spelled(t, emit));
         let has_fallible_output = Self::output_is_fallible(value_ty, registry);
 
         // Error wiring: the error type must be declared via `.error()`.
@@ -1074,7 +1074,7 @@ impl CbindgenBuilder {
 
             // `&[E]` slice (scalar `E`): two wire params (`*const E`, `usize`),
             // decoded zero-copy. NULL pointer ⇒ empty slice (not an error).
-            if let Some(elem) = r_scalar_slice_elem(arg_reading).map(spelled) {
+            if let Some(elem) = r_scalar_slice_elem(arg_reading).map(|t| spelled(t, emit)) {
                 let len_id = format_ident!("{}_len", ident);
                 params.push(quote!(#ident: *const #elem));
                 params.push(quote!(#len_id: usize));
@@ -1095,7 +1095,10 @@ impl CbindgenBuilder {
             // by a generated `const _`), so the whole block transmutes in one shot —
             // the slice analogue of the single-`&E` `__cbg_in_*` converter. NULL ⇒
             // empty slice.
-            if let Some(elem) = self.r_value_opaque_slice_elem(arg_reading).map(spelled) {
+            if let Some(elem) = self
+                .r_value_opaque_slice_elem(arg_reading)
+                .map(|t| spelled(t, emit))
+            {
                 // The C wire element is the inline-opaque counterpart (e.g. the
                 // generated `payload_t` mirror), layout-identical to the Rust value.
                 let elem_wire = self
