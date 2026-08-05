@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use prebindgen::core::flat::Flat;
+use prebindgen_flat::flat::Flat;
 
 use super::*;
 

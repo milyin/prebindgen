@@ -8,10 +8,10 @@
 
 use std::rc::Rc;
 
+use prebindgen::SourceLocation;
 use quote::ToTokens;
 
 use super::key::TypeKey;
-use crate::SourceLocation;
 
 /// The syntax a node was built from, plus where that syntax came from.
 ///
@@ -59,8 +59,8 @@ use crate::SourceLocation;
 /// it meant.
 ///
 /// It was a public field returning a `syn` node to anyone who asked.
-/// Outside `api::core`, captured syntax is reachable only through
-/// [`Emit`](crate::api::core::emit::Emit), and the compiler enforces it.
+/// Outside this crate, captured syntax is reachable only through
+/// [`Emit`](crate::flat::emit::Emit), and the compiler enforces it.
 #[derive(Clone, Debug)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
@@ -81,13 +81,13 @@ impl<S> Origin<S> {
     /// The node as `syn` — **the escape**.
     ///
     /// Every place that takes the source apart instead of asking the model
-    /// comes through here, and `pub(in crate::api::core)` is what keeps that
-    /// list short: only [`Emit`](crate::api::core::emit::Emit) can reach it.
+    /// comes through here, and `pub(crate)` is what keeps that
+    /// list short: only [`Emit`](crate::flat::emit::Emit) can reach it.
     ///
     /// Naming it is not an accusation. An emitter assembling a `syn::Item`, or a
     /// signature the generated crate must restate node for node, legitimately
     /// needs the node. What it stops is reaching for one *by default*.
-    pub(in crate::api::core) fn as_syn(&self) -> &S {
+    pub(crate) fn as_syn(&self) -> &S {
         &self.syntax
     }
 
@@ -137,7 +137,7 @@ impl<S: ToTokens> Origin<S> {
     /// **visible**: `.to_token_stream().to_string()` was indistinguishable from
     /// the same call on a type an adapter built itself.
     ///
-    /// `pub`, not `pub(in crate::api::core)`: the registry pipeline's own
+    /// `pub`, not `pub(crate)`: the registry pipeline's own
     /// tests (now in the separate `prebindgen-registry` crate) call this on a
     /// captured element's `origin` — see `TypeRef`'s doc for why this seal is
     /// now a convention rather than a compiler check.
@@ -152,7 +152,7 @@ impl Origin<syn::Type> {
     /// Public where [`Origin::spell`] is sealed, and the difference is what `S`
     /// is. An `Origin<syn::ItemFn>`'s tokens re-parse to the captured item, so
     /// handing them out is the item door under another name — that one is
-    /// [`Emit`](crate::api::core::emit::Emit)'s to open. An
+    /// [`Emit`](crate::flat::emit::Emit)'s to open. An
     /// `Origin<syn::Type>` in an adapter's declaration holds a type the
     /// **build script wrote**, which was never captured syntax and which #280
     /// leaves the model no way to have a reading for.

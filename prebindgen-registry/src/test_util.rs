@@ -38,8 +38,8 @@ pub(crate) fn scanned_with<M>(sources: &[&str]) -> Registry<M> {
 /// position. What
 /// [`RegistryBuilder::export_type`](crate::registry::RegistryBuilder::export_type)
 /// takes.
-pub(crate) fn declared_origin(ty: syn::Type) -> prebindgen::core::flat::Origin<syn::Type> {
-    prebindgen::core::flat::Origin::new(ty, std::rc::Rc::new(SourceLocation::default()))
+pub(crate) fn declared_origin(ty: syn::Type) -> prebindgen_flat::flat::Origin<syn::Type> {
+    prebindgen_flat::flat::Origin::new(ty, std::rc::Rc::new(SourceLocation::default()))
 }
 
 /// Build a `Registry` from an item stream, the way `Registry::from_items` used
@@ -51,7 +51,7 @@ pub(crate) fn reg_from_items<M, I>(items: I) -> Result<RegistryBuilder<M>, crate
 where
     I: IntoIterator<Item = (syn::Item, SourceLocation)>,
 {
-    let flat = prebindgen::core::Flat::builder().items(items).build()?;
+    let flat = prebindgen_flat::Flat::builder().items(items).build()?;
     Registry::builder(flat)
 }
 
@@ -61,7 +61,7 @@ where
 /// A fixture that is *about* a handle's treatment already declares it; this covers
 /// the ones where the handle is incidental — `reg_with(&["fn get(s: &Storage) -> Payload"])`
 /// is testing an unfold plan, not what `Storage` is. Declaring them as
-/// [`Extern`](prebindgen::core::flat::Extern)s is exactly what a real source crate does
+/// [`Extern`](prebindgen_flat::flat::Extern)s is exactly what a real source crate does
 /// for a foreign handle, and it is inert for the registry either way: a type alias
 /// lands in no registry map.
 ///
@@ -72,7 +72,7 @@ pub(crate) fn declare_referenced<I>(items: I) -> Vec<(syn::Item, SourceLocation)
 where
     I: IntoIterator<Item = (syn::Item, SourceLocation)>,
 {
-    use prebindgen::core::flat::{Flat, ItemError};
+    use prebindgen_flat::flat::{Flat, ItemError};
 
     let mut items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
 

@@ -17,10 +17,10 @@
 
 use std::{collections::HashMap, fmt, rc::Rc};
 
+use prebindgen::SourceLocation;
 use quote::ToTokens;
 
 use super::origin::Origin;
-use crate::SourceLocation;
 
 /// A length the prebindgen source language does not accept.
 ///

@@ -11,7 +11,7 @@
 
 use std::collections::HashSet;
 
-use prebindgen::core::flat::Flat;
+use prebindgen_flat::flat::Flat;
 
 use crate::{prebindgen::NamePredicate, registry::TypeKey};
 
@@ -141,7 +141,7 @@ pub(crate) fn unclaimed_report(flat: &Flat, claimed: &Claimed) -> Vec<String> {
 
 /// Every **struct or enum** name — either enum shape, never an alias.
 fn struct_enum_idents(flat: &Flat) -> impl Iterator<Item = &syn::Ident> {
-    use prebindgen::core::flat::Type;
+    use prebindgen_flat::flat::Type;
     flat.types().filter_map(|t| match t {
         Type::Struct(_) | Type::Variant(_) | Type::Enum(_) => Some(t.name()),
         Type::Extern(_) => None,

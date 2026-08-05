@@ -17,7 +17,7 @@ pub(crate) struct TypeCell<M = ()> {
     /// present, and a spelling the grammar genuinely refuses is a
     /// [`ScanError::NotExpressible`] naming it rather than a cell that quietly means
     /// less than its neighbours.
-    pub subject: Box<prebindgen::core::flat::TypeRef>,
+    pub subject: Box<prebindgen_flat::flat::TypeRef>,
     /// The binding asks for this cell **directly** — a declared fn's signature, a
     /// declared type, an `unfold` leaf — as opposed to reaching it through some
     /// converter's [`TypeEntry::subs`].

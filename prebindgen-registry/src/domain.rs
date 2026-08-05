@@ -234,8 +234,8 @@ impl RepresentationDomain {
 
     pub fn exclude<T: DomainScalar>(&mut self, values: impl IntoIterator<Item = T>) {
         assert_eq!(
-            prebindgen::core::flat::TypeKey::from_type(&self.ty),
-            prebindgen::core::flat::TypeKey::from_type(&T::domain_type()),
+            prebindgen_flat::flat::TypeKey::from_type(&self.ty),
+            prebindgen_flat::flat::TypeKey::from_type(&T::domain_type()),
             "representation-domain exclusions must use the base domain's scalar type"
         );
         self.excluded

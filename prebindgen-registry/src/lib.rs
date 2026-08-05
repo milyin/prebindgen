@@ -9,8 +9,9 @@
 //! same way.
 //!
 //! It also re-exports the flat model (`flat`, `shape`, `types_util`) from
-//! [`prebindgen`], so a language adapter names one crate root for the whole
-//! pipeline rather than reaching back into `prebindgen::core` for half of it.
+//! the separate [`prebindgen-flat`](https://docs.rs/prebindgen-flat) crate, so
+//! a language adapter names one crate root for the whole pipeline rather than
+//! reaching back into `prebindgen-flat` for half of it.
 //!
 //! # The plug-in point
 //!
@@ -108,10 +109,11 @@ pub(crate) mod test_util;
 pub mod unfold;
 pub mod write;
 
-/// The flat model itself lives in `prebindgen::core` — re-exported here so
-/// an adapter names one crate root for the whole pipeline.
-pub use ::prebindgen::core::{flat, shape, types_util};
-pub use ::prebindgen::core::{Element, Emit, Flat};
+/// The flat model itself lives in the separate `prebindgen-flat` crate —
+/// re-exported here so an adapter names one crate root for the whole
+/// pipeline.
+pub use ::prebindgen_flat::{flat, shape, types_util};
+pub use ::prebindgen_flat::{Element, Emit, Flat};
 
 pub use self::{
     decl::{

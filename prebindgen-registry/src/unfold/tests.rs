@@ -7,7 +7,7 @@ use super::*;
 fn key(s: &str) -> crate::registry::TypeKey {
     crate::registry::TypeKey::parse(s).expect("a fixture type")
 }
-use prebindgen::core::types_util::ident;
+use prebindgen_flat::types_util::ident;
 
 use crate::{registry::Registry, test_util::scanned_with as reg_with};
 
@@ -19,8 +19,8 @@ use crate::{registry::Registry, test_util::scanned_with as reg_with};
 /// standing up a source crate for it. Legitimate here and nowhere else: the
 /// `classify` guard exempts tests precisely because a fixture composing its own
 /// input is not a consumer reasoning from `origin`.
-fn tref(ty: syn::Type) -> prebindgen::core::flat::TypeRef {
-    prebindgen::core::flat::Flat::builder()
+fn tref(ty: syn::Type) -> prebindgen_flat::flat::TypeRef {
+    prebindgen_flat::flat::Flat::builder()
         .build()
         .expect("an empty model")
         .classify(&ty)

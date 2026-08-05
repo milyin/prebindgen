@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use prebindgen::core::flat::{Flat, TypeRef};
+use prebindgen_flat::flat::{Flat, TypeRef};
 
 use super::*;
 use crate::unfold::{DeconId, DeconSpec, UnfoldPlan};

@@ -3,7 +3,7 @@
 /// Outer shape wrapping the core construct. The value-side analog of how the
 /// `Option<_>` / `Vec<_>` wrapper converters compose at the wire.
 ///
-/// The unified [`Shape`](prebindgen::core::shape::Shape) layer stack: `Base`
+/// The unified [`Shape`](prebindgen_flat::shape::Shape) layer stack: `Base`
 /// builds the target directly from the decoded leaves (a single constructor of
 /// any arity or a combined-selector dispatch); `Optional((), inner)` lifts that
 /// over `Option<T>`/`Option<&T>` (`Some` ⇒ run `inner` on the unwrapped value
@@ -11,7 +11,7 @@
 /// `Iterable(inner)` maps `inner` over each element of a `Vec<T>` (emit-ready
 /// but not yet produced by `apply`). The `()` payload is unused here — only the
 /// JNI adapter's `Shape<NullableKind>` carries per-layer data.
-pub use prebindgen::core::shape::Shape as FoldShape;
+pub use prebindgen_flat::shape::Shape as FoldShape;
 
 /// A resolved expansion for one `(function, parameter)`.
 #[derive(Clone)]
@@ -19,7 +19,7 @@ pub struct FoldPlan {
     /// Owned type the core construct produces — what the underlying call needs
     /// (before any [`Self::shape`] wrapping). A **reading**: `target.spell()`
     /// for generated Rust, `target.key()` for a lookup.
-    pub target: prebindgen::core::flat::TypeRef,
+    pub target: prebindgen_flat::flat::TypeRef,
     /// True when the original parameter was `&T` / `Option<&T>`: the call
     /// receives `&folded` (or `folded.as_ref()` when also optional). A
     /// call-site concern (the resolver's `&_` handler shares the inner
@@ -70,9 +70,9 @@ pub struct FoldLeaf {
     /// gives: a consumer asking what this leaf's type MEANS had to hand the
     /// spelling back to the registry (#275). The leaves no source wrote — the
     /// presence flag, the selector — are built by
-    /// [`TypeRef::scalar`](prebindgen::core::flat::TypeRef::scalar), which
+    /// [`TypeRef::scalar`](prebindgen_flat::flat::TypeRef::scalar), which
     /// pairs the kind with its own spelling and is placeless by construction.
-    pub ty: prebindgen::core::flat::TypeRef,
+    pub ty: prebindgen_flat::flat::TypeRef,
 }
 
 /// One dispatch arm of a [`FoldPlan`].
@@ -119,7 +119,7 @@ pub enum FoldArg {
 #[derive(Clone)]
 pub struct FoldBuild {
     /// Owned type this nested build produces (the constructor parameter type).
-    pub target: prebindgen::core::flat::TypeRef,
+    pub target: prebindgen_flat::flat::TypeRef,
     /// `true` when the consuming parameter is `&T` (the built value is borrowed
     /// at the call site).
     pub by_ref: bool,

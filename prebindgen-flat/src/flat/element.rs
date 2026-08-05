@@ -9,8 +9,9 @@
 //! lives in [`spell`](super::spell), so the shape of an element says nothing
 //! about the language it came from.
 
+use prebindgen::SourceLocation;
+
 use super::{origin::Origin, ty::TypeRef};
-use crate::SourceLocation;
 
 /// One member of the flat API.
 ///
@@ -79,7 +80,7 @@ impl Element {
     /// keeps the item kind it was parsed as. That makes it the natural route for
     /// an emitter re-stating a whole item, and the ledger's **item** bucket is
     /// where those land.
-    pub(in crate::api::core) fn as_syn(&self) -> syn::Item {
+    pub(crate) fn as_syn(&self) -> syn::Item {
         match self {
             Element::Function(f) => syn::Item::Fn(f.origin.as_syn().clone()),
             Element::Type(t) => t.as_syn(),
@@ -130,7 +131,7 @@ impl Type {
     }
 
     /// The whole item as `syn` — **the escape**. See [`Element::as_syn`].
-    pub(in crate::api::core) fn as_syn(&self) -> syn::Item {
+    pub(crate) fn as_syn(&self) -> syn::Item {
         match self {
             Type::Struct(s) => syn::Item::Struct(s.origin.as_syn().clone()),
             Type::Variant(v) => syn::Item::Enum(v.origin.as_syn().clone()),
@@ -150,7 +151,7 @@ impl Type {
 ///   thereafter the only way to spell that type inside the flat API, and the
 ///   qualified path stays refused. This declares a name; it is not an equivalence
 ///   between spellings — see
-///   [`normalize_type`](crate::api::core::flat::spelling::normalize_type)'s rule 4 for
+///   [`normalize_type`](crate::flat::spelling::normalize_type)'s rule 4 for
 ///   why treating it as one is a category error.
 /// * `#[prebindgen] pub struct X(..);` — a tuple struct, whose fields no adapter
 ///   has ever crossed.
@@ -257,7 +258,7 @@ impl Struct {
     /// something needs a reading naming it.
     ///
     /// The alternative is composing one from the name at the call site, which
-    /// an adapter cannot do (minting is sealed to `api::core`) and which would
+    /// an adapter cannot do (minting is sealed to this crate) and which would
     /// be phase-dependent if routed through the registry instead: a
     /// decomposition is declared before anything is interned. The declaration
     /// is the one thing that can always say. Same reasoning as
@@ -327,7 +328,7 @@ impl Variant {
     /// so the two cannot even be paired inconsistently:
     ///
     /// ```compile_fail
-    /// # use prebindgen::core::flat::{Origin, Variant};
+    /// # use prebindgen_flat::flat::{Origin, Variant};
     /// let assembled = Variant {
     ///     name: syn::parse_str("String").unwrap(),
     ///     alternatives: vec![],
@@ -490,7 +491,7 @@ pub struct Constant {
 /// however the item arrived: synthesized, hand-fed to [`FlatBuilder`](super::FlatBuilder), or written
 /// as `#[prebindgen] const _: () = ..` in a source crate.
 ///
-/// **Today's producer** is [`Source`](crate::Source)'s cfg filter, which
+/// **Today's producer** is [`Source`](prebindgen::Source)'s cfg filter, which
 /// synthesizes `const _: () = { konst::assertc_eq!(..) }` to assert that a source
 /// crate's `FEATURES` match what the build script asked for. Nothing *marked*
 /// that one — it is prebindgen's own item riding the same stream — but it is not

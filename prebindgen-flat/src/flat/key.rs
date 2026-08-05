@@ -5,7 +5,7 @@ use std::fmt;
 use quote::ToTokens;
 
 /// Canonical type-shape key: identity is the token string of the
-/// **normalized** type ([`crate::api::core::flat::spelling::normalize_type`] —
+/// **normalized** type ([`crate::flat::spelling::normalize_type`] —
 /// group/paren unwrap, `crate::`/`self::` and std-prelude path reduction;
 /// the complete equivalence rule set is documented there).
 ///
@@ -100,7 +100,7 @@ impl TypeKey {
         // Off the shared reduction, so this key and the model's type index
         // cannot drift apart about what a type is called.
         Self {
-            canon: crate::api::core::flat::canonical_type(ty)
+            canon: crate::flat::canonical_type(ty)
                 .to_token_stream()
                 .to_string()
                 .into(),
@@ -122,7 +122,7 @@ impl TypeKey {
     /// `a::Foo<u8>::Bar` → `Bar`; `None` when the **last** segment carries
     /// generic arguments (`Vec<u8>` names no bare item) or the key is not a
     /// path.
-    /// Matches [`bare_path_ident`](crate::api::core::types_util::bare_path_ident)
+    /// Matches [`bare_path_ident`](crate::types_util::bare_path_ident)
     /// on the same type, which is what
     /// `key_name_accessors_match_the_syn_walks` pins.
     ///
@@ -264,7 +264,7 @@ impl fmt::Display for TypeKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::core::types_util::bare_path_ident;
+    use crate::types_util::bare_path_ident;
 
     /// Every shape a key can hold, as a build script or a source could spell it.
     ///
@@ -314,13 +314,13 @@ mod tests {
 
             assert_eq!(
                 key.ident(),
-                bare_path_ident(&crate::api::core::flat::canonical_type(&ty)),
+                bare_path_ident(&crate::flat::canonical_type(&ty)),
                 "ident() disagrees with bare_path_ident on `{spec}` (canon `{key}`)"
             );
 
             // `rust_short_name_opt`: the last path segment's ident, generic
             // arguments and all.
-            let expected_short = match &crate::api::core::flat::canonical_type(&ty) {
+            let expected_short = match &crate::flat::canonical_type(&ty) {
                 syn::Type::Path(tp) => tp.path.segments.last().map(|s| s.ident.to_string()),
                 _ => None,
             };

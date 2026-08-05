@@ -8,9 +8,9 @@
 //! `jni/decl.rs` keeps the genuinely Kotlin-specific declarations
 //! (`ptr_class!`, `enum_class!`, `sealed_class!`, `data_class!`, `constant!`,
 //! `package!`) and re-exports these types from here, so the public
-//! `prebindgen::core::*` surface is unaffected by the split.
+//! `prebindgen_flat::*` surface is unaffected by the split.
 
-use prebindgen::core::flat::{Origin, TypeKey};
+use prebindgen_flat::flat::{Origin, TypeKey};
 use quote::ToTokens;
 
 /// The origin of a type a **build script** wrote.
@@ -1018,7 +1018,7 @@ impl FunctionDecl {
 /// an otherwise legal domain. A `try_` source's `Err`
 /// routes to the caller's error handler. Conversion fns may live in the flat
 /// crate or in a **helper crate** whose item stream is chained into the same
-/// [`prebindgen::core::Flat::builder`] parse; generated calls qualify each
+/// [`prebindgen_flat::Flat::builder`] parse; generated calls qualify each
 /// function with its origin crate.
 ///
 /// Distinct from the [`expand_param!`](crate::expand_param) /

@@ -7,7 +7,7 @@
 //! Nothing outside `api/core` ever called it.
 //!
 //! Two things key on [`canonical_type`] — this module's type index and
-//! [`TypeKey`](crate::core::TypeKey) — and they must agree, which is why the
+//! [`TypeKey`](crate::TypeKey) — and they must agree, which is why the
 //! reduction has exactly one definition and neither spells it out itself.
 //!
 //! The ledger counts *constructing* a watched syn variant as well as matching
@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 
-use crate::SourceLocation;
+use prebindgen::SourceLocation;
 
 /// Normalize a type to its canonical flat-namespace spelling (issue #95).
 /// The COMPLETE equivalence rule set — any spelling not listed is preserved
@@ -43,7 +43,7 @@ use crate::SourceLocation;
 ///    type**: a `#[prebindgen] pub type` is a one-way road, bringing a
 ///    foreign type into the flat API under a name that is thereafter the
 ///    only way to spell it. It declares
-///    an [`Extern`](crate::core::flat::Extern); it is not an equivalence.
+///    an [`Extern`](crate::flat::Extern); it is not an equivalence.
 ///
 ///    That keeps the rule meaning-preserving, which is the whole contract
 ///    here: reduction may choose among spellings of ONE type, never change
@@ -89,7 +89,7 @@ impl Normalization {
     /// Not identical to Rust's prelude: it adds `MaybeUninit`, which the grammar
     /// recognises for out-parameters, and `Cow`, which it treats as transparent.
     /// Its entries are exactly the bare names
-    /// [`lower_path`](crate::core::flat) classifies as builtins and that have a
+    /// [`lower_path`](crate::flat) classifies as builtins and that have a
     /// std path at all — `str` has none, and neither do the scalars.
     ///
     /// Written with the `std` root; `core` and `alloc` are re-exports of the same
@@ -172,8 +172,8 @@ fn constructor_key(path: &syn::Path) -> String {
 /// `std::option::Option<T>` and `Option<T>` are one entry.
 ///
 /// The **single** definition of that reduction. Two things key on it — the
-/// model's type index ([`Flat::type_ref`](crate::core::flat::Flat::type_ref))
-/// and [`TypeKey`](crate::core::TypeKey) — and they have to agree, so neither
+/// model's type index ([`Flat::type_ref`](crate::flat::Flat::type_ref))
+/// and [`TypeKey`](crate::TypeKey) — and they have to agree, so neither
 /// spells it out itself.
 ///
 /// Deliberately `prelude()` rather than a source-module-aware normalization: a
@@ -219,7 +219,7 @@ pub fn normalize_type(ty: &mut syn::Type, against: &Normalization) {
 
 /// Apply [`normalize_type`] to every type position inside an item — fn
 /// signatures, struct fields, enum variants, const types. The ingest-time
-/// pass ([`crate::api::core::flat::FlatBuilder::build`]) that makes
+/// pass ([`crate::flat::FlatBuilder::build`]) that makes
 /// captured spellings canonical before any key is formed, so every
 /// downstream `TypeKey::from_type` sees the flat spelling.
 pub fn normalize_item_types(item: &mut syn::Item, against: &Normalization) {

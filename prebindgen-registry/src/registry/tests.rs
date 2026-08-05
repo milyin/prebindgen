@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use prebindgen::core::flat::Flat;
+use prebindgen_flat::flat::Flat;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 
@@ -102,33 +102,33 @@ impl Prebindgen for StubExt {
 
     fn on_function(
         &self,
-        _f: &prebindgen::core::flat::Function,
+        _f: &prebindgen_flat::flat::Function,
         _registry: &Registry<()>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_flat::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
     fn on_struct(
         &self,
-        _s: &prebindgen::core::flat::Struct,
+        _s: &prebindgen_flat::flat::Struct,
         _registry: &Registry<()>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_flat::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
     fn on_variant(
         &self,
-        _v: &prebindgen::core::flat::Variant,
+        _v: &prebindgen_flat::flat::Variant,
         _registry: &Registry<()>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_flat::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
     fn on_enum(
         &self,
-        _e: &prebindgen::core::flat::Enum,
+        _e: &prebindgen_flat::flat::Enum,
         _registry: &Registry<()>,
-        _emit: &prebindgen::core::Emit,
+        _emit: &prebindgen_flat::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -424,33 +424,33 @@ fn resolve_surfaces_adapter_invariant_errors() {
         }
         fn on_function(
             &self,
-            f: &prebindgen::core::flat::Function,
+            f: &prebindgen_flat::flat::Function,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_function(f, r, _emit)
         }
         fn on_struct(
             &self,
-            s: &prebindgen::core::flat::Struct,
+            s: &prebindgen_flat::flat::Struct,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_struct(s, r, _emit)
         }
         fn on_variant(
             &self,
-            v: &prebindgen::core::flat::Variant,
+            v: &prebindgen_flat::flat::Variant,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_variant(v, r, _emit)
         }
         fn on_enum(
             &self,
-            e: &prebindgen::core::flat::Enum,
+            e: &prebindgen_flat::flat::Enum,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_enum(e, r, _emit)
         }
@@ -805,7 +805,7 @@ fn builder_and_from_items_agree() {
 /// re-derivation — the registry looks the model up rather than lowering twice.
 #[test]
 fn a_source_type_cell_carries_the_models_typeref() {
-    use prebindgen::core::flat::TypeKind;
+    use prebindgen_flat::flat::TypeKind;
 
     let loc = SourceLocation {
         file: "src/lib.rs".into(),
@@ -863,7 +863,7 @@ fn a_source_type_cell_carries_the_models_typeref() {
 /// differ.
 #[test]
 fn a_composed_reading_reaches_the_cell_unchanged() {
-    use prebindgen::core::flat::TypeKind;
+    use prebindgen_flat::flat::TypeKind;
 
     let loc = SourceLocation {
         file: "src/lib.rs".into(),
@@ -971,7 +971,7 @@ fn reading_is_a_lookup_not_a_classification() {
 /// source API.
 #[test]
 fn an_adapter_authored_type_cell_is_classified_but_placeless() {
-    use prebindgen::core::flat::TypeKind;
+    use prebindgen_flat::flat::TypeKind;
 
     let items = vec![fn_item("fn f(x: u64) -> u64 { x }")];
     let reg: RegistryBuilder<()> = crate::test_util::reg_from_items(items).unwrap();
@@ -1079,7 +1079,7 @@ fn from_flat_projects_each_element_kind() {
             at("helpers"),
         ),
     ];
-    let flat = prebindgen::core::flat::Flat::builder()
+    let flat = prebindgen_flat::flat::Flat::builder()
         .items(items)
         .build()
         .expect("parse");
@@ -1443,7 +1443,7 @@ fn a_qualified_alias_warns_rather_than_failing() {
 /// `Flat` owns the index now and `add_local_function` feeds it.
 #[test]
 fn a_type_only_a_local_fn_writes_still_has_a_reading() {
-    use prebindgen::core::flat::TypeKind;
+    use prebindgen_flat::flat::TypeKind;
 
     /// Resolves anything to itself, so declaring the local fn does not also
     /// require an adapter that can convert its types.
@@ -1474,33 +1474,33 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
         type Metadata = ();
         fn on_function(
             &self,
-            f: &prebindgen::core::flat::Function,
+            f: &prebindgen_flat::flat::Function,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_function(f, r, _emit)
         }
         fn on_struct(
             &self,
-            st: &prebindgen::core::flat::Struct,
+            st: &prebindgen_flat::flat::Struct,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_struct(st, r, _emit)
         }
         fn on_variant(
             &self,
-            v: &prebindgen::core::flat::Variant,
+            v: &prebindgen_flat::flat::Variant,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_variant(v, r, _emit)
         }
         fn on_enum(
             &self,
-            e: &prebindgen::core::flat::Enum,
+            e: &prebindgen_flat::flat::Enum,
             r: &Registry<()>,
-            _emit: &prebindgen::core::Emit,
+            _emit: &prebindgen_flat::Emit,
         ) -> TokenStream {
             self.0.on_enum(e, r, _emit)
         }

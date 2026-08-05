@@ -2,7 +2,7 @@
 //!
 //! # The boundary
 //!
-//! [`Flat`](prebindgen::core::flat::Flat) describes the source Rust code. A binding
+//! [`Flat`](prebindgen_flat::flat::Flat) describes the source Rust code. A binding
 //! puts a wrapper on each side of an FFI boundary — generated Rust that the
 //! destination language can call, and destination-language code shaped to match
 //! it (`#[repr(C)]` structs and a C header; JNI externs and Kotlin classes).
@@ -61,7 +61,7 @@
 //!
 //! | in | |
 //! |---|---|
-//! | the model | [`Flat`](prebindgen::core::flat::Flat) — what the source offers |
+//! | the model | [`Flat`](prebindgen_flat::flat::Flat) — what the source offers |
 //! | the crossings | which `(direction, type)` pairs actually cross |
 //! | the decompositions | how a composite crosses in pieces: which leaf crossings that adds, and which whole-value crossing it removes |
 //! | a conversion builder | the [`Prebindgen`] adapter |
@@ -159,10 +159,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use prebindgen::{
-    core::{flat::Origin, types_util::bare_path_ident},
-    SourceLocation,
-};
+use prebindgen::SourceLocation;
+use prebindgen_flat::{flat::Origin, types_util::bare_path_ident};
 
 use crate::{
     niches::Niches,
@@ -181,7 +179,7 @@ mod view;
 
 /// The canonical type identity, which the source model owns — re-exported
 /// here because the registry's tables are keyed by it.
-pub use prebindgen::core::flat::{TypeKey, TypeKeyParseError};
+pub use prebindgen_flat::flat::{TypeKey, TypeKeyParseError};
 
 pub use self::{
     cell::{Direction, TypeEntry},
@@ -202,7 +200,7 @@ pub struct Registry<M = ()> {
     /// The parsed model these maps project. Held rather than discarded, so a
     /// later stage can ask it what a name means through the registry it already
     /// has — see [`Self::flat`].
-    flat: prebindgen::core::flat::Flat,
+    flat: prebindgen_flat::flat::Flat,
     /// What the binding declared, pushed in through `RegistryBuilder`'s
     /// `export` / `export_type` / `cross` / `reference` before its `build`.
     ///
@@ -270,7 +268,7 @@ impl<M> std::fmt::Debug for Registry<M> {
 impl<M> Registry<M> {
     /// An empty registry: no model, no items, no types.
     ///
-    /// **Not public.** A `Registry` is a projection of a [`Flat`](prebindgen::core::Flat), and one built
+    /// **Not public.** A `Registry` is a projection of a [`Flat`](prebindgen_flat::Flat), and one built
     /// this way projects nothing — [`Self::flat`] would hand a later stage an
     /// empty model that claims to be this registry's source. Outside this crate
     /// the entry point is [`Self::builder`], which has a model behind it.
@@ -319,7 +317,7 @@ impl<M> Registry<M> {
 
     pub(crate) fn empty() -> Self {
         Self {
-            flat: prebindgen::core::flat::Flat::default(),
+            flat: prebindgen_flat::flat::Flat::default(),
             declared: Declared::default(),
             input_types: Default::default(),
             output_types: Default::default(),
