@@ -253,7 +253,7 @@ pub(crate) fn classify_field(
             panic!(
                 "fromParts bridge: `Vec<{}>` sealed-class field (`{owner}`) is not supported \
                  (variable arity)",
-                core.spell(),
+                core,
             );
         }
         return sum_plan_kind(
@@ -317,7 +317,7 @@ pub(crate) fn classify_field(
                 panic!(
                     "fromParts bridge: `Vec<{}>` data-class field (`{owner}`) is not supported \
                      (variable arity)",
-                    inner_ty.spell(),
+                    inner_ty,
                 );
             }
             let child_fqn = cfg

@@ -251,7 +251,7 @@ impl CbindgenBuilder {
         if r_is_bool(fty) {
             return Some(bool_wire());
         }
-        r_is_scalar(fty).then(|| spelled(fty))
+        scalar_ty(fty)
     }
 
     /// True when a payload wire hands owned memory to C — a `char *` block or
@@ -401,8 +401,8 @@ impl CbindgenBuilder {
     /// separately by [`Self::restricted_validity_field`] — this function keeps
     /// answering what the layout is.
     pub(super) fn mirror_field_wire(&self, fty: &TypeRef) -> Option<syn::Type> {
-        if r_is_scalar(fty) {
-            return Some(spelled(fty));
+        if let Some(t) = scalar_ty(fty) {
+            return Some(t);
         }
         if self.enums.contains_key(&fty.key()) {
             let c = self.c_type_ident(&fty.key());
@@ -486,6 +486,7 @@ impl CbindgenBuilder {
         &self,
         f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         let orig = &f.name;
         let call_path = self.src_fn(orig);
@@ -510,7 +511,7 @@ impl CbindgenBuilder {
             Some((ok, e)) => (ok, Some(e)),
             None => (&f.ret, None),
         };
-        let err_ty: Option<syn::Type> = err_reading.map(spelled);
+        let err_ty: Option<syn::Type> = err_reading.map(|t| spelled(t, emit));
         let has_fallible_output = Self::output_is_fallible(value_ty, registry);
 
         // Error wiring: the error type must be declared via `.error()`.
@@ -624,7 +625,8 @@ impl CbindgenBuilder {
             },
             None => ErrRoute::Panic,
         };
-        let (in_params, decodes, call_args) = self.emit_inputs(orig, f, registry, &input_route);
+        let (in_params, decodes, call_args) =
+            self.emit_inputs(orig, f, registry, &input_route, emit);
         let call = quote!(#call_path(#(#call_args),*));
 
         let e_param = err_bits
@@ -1056,6 +1058,7 @@ impl CbindgenBuilder {
         f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
         route: &ErrRoute,
+        emit: &crate::api::core::emit::Emit,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
         let mut params = Vec::new();
         // The alias preflight runs BEFORE every decode, which is the whole
@@ -1067,11 +1070,11 @@ impl CbindgenBuilder {
         for param in &f.params {
             let ident = &param.name;
             let arg_reading = &param.ty;
-            let arg_ty = &spelled(arg_reading);
+            let arg_ty = &emit.spell_ty(arg_reading);
 
             // `&[E]` slice (scalar `E`): two wire params (`*const E`, `usize`),
             // decoded zero-copy. NULL pointer ⇒ empty slice (not an error).
-            if let Some(elem) = r_scalar_slice_elem(arg_reading).map(spelled) {
+            if let Some(elem) = r_scalar_slice_elem(arg_reading).map(|t| spelled(t, emit)) {
                 let len_id = format_ident!("{}_len", ident);
                 params.push(quote!(#ident: *const #elem));
                 params.push(quote!(#len_id: usize));
@@ -1092,7 +1095,10 @@ impl CbindgenBuilder {
             // by a generated `const _`), so the whole block transmutes in one shot —
             // the slice analogue of the single-`&E` `__cbg_in_*` converter. NULL ⇒
             // empty slice.
-            if let Some(elem) = self.r_value_opaque_slice_elem(arg_reading).map(spelled) {
+            if let Some(elem) = self
+                .r_value_opaque_slice_elem(arg_reading)
+                .map(|t| spelled(t, emit))
+            {
                 // The C wire element is the inline-opaque counterpart (e.g. the
                 // generated `payload_t` mirror), layout-identical to the Rust value.
                 let elem_wire = self

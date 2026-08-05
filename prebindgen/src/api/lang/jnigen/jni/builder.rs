@@ -112,8 +112,14 @@ impl Declarations {
     /// question asked of the model, and is what a caller holding a reading
     /// should use.
     pub(crate) fn is_kotlin_enum(&self, ty: &syn::Type) -> bool {
-        let key = TypeKey::from_type(ty);
-        self.types.get(&key).is_some_and(|c| c.is_enum_class())
+        self.is_kotlin_enum_key(&TypeKey::from_type(ty))
+    }
+
+    /// [`Self::is_kotlin_enum`] off the **identity** — the whole type's, not a
+    /// probe through its layers. See [`Self::is_kotlin_enum_reading`] for the
+    /// question that does peel, and why the two are not interchangeable.
+    pub(crate) fn is_kotlin_enum_key(&self, key: &TypeKey) -> bool {
+        self.types.get(key).is_some_and(|c| c.is_enum_class())
     }
 
     /// Whether this value's core is a type registered via an `EnumClassDecl`,
@@ -909,7 +915,7 @@ impl Declarations {
                 "expand_return!({}).fields(fields!({func})): `{func}` returns `{}`, which is \
                  not a struct — a value form returns a struct whose fields become the leaves",
                 key.as_str(),
-                ret.spell(),
+                ret,
             )
         };
         let st = st.clone();
@@ -1082,7 +1088,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.spell(),
+                        probe,
                     );
                     assert!(
                         field.ty.optional_inner().is_none(),
@@ -1095,7 +1101,7 @@ impl Declarations {
                         decl.func,
                         st.name,
                         dotted,
-                        probe.spell(),
+                        probe,
                         dotted,
                     );
                     // The name is the reading's, not a path taken apart to
@@ -1484,11 +1490,12 @@ impl Declarations {
         &self,
         key: &TypeKey,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.spell();
+        let target = decl.rust_type.declared_spelling();
         let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
                 let item_fn = registry.flat().function(&f).unwrap_or_else(|| {
@@ -1498,14 +1505,14 @@ impl Declarations {
                     )
                 });
                 let (param_reading, by_ref) = convert_single_param(key, f, item_fn, "input");
-                let param_ty = spelled_ty(param_reading);
+                let param_ty = emit.spell_ty(param_reading);
                 // Return: `T` (infallible) or `Result<T, E>` (fallible — E
                 // routes to the caller's error handler via the exc slot).
                 // Off `TypeKind::Fallible`, where `result_ok_type` /
                 // `result_err_type` each found the `Result` in a path.
                 let (ok_ty, exc) = match item_fn.ret.fallible_parts() {
-                    Some((ok, err)) => (spelled_ty(ok), Some(spelled_ty(err))),
-                    None => (spelled_ty(&item_fn.ret), None),
+                    Some((ok, err)) => (emit.spell_ty(ok), Some(emit.spell_ty(err))),
+                    None => (emit.spell_ty(&item_fn.ret), None),
                 };
                 assert!(
                     TypeKey::from_type(&ok_ty) == *key,
@@ -1554,11 +1561,12 @@ impl Declarations {
         &self,
         key: &TypeKey,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         // The `convert!` declaration's own spelling — the key is how the decl
         // was found, not a second source for what it says (#291).
-        let target = decl.rust_type.spell();
+        let target = decl.rust_type.declared_spelling();
         let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
                 let item_fn = registry.flat().function(&g).unwrap_or_else(|| {
@@ -1575,8 +1583,8 @@ impl Declarations {
                     got = param_reading.key().as_str()
                 );
                 let (repr, exc) = match item_fn.ret.fallible_parts() {
-                    Some((ok, err)) => (spelled_ty(ok), Some(spelled_ty(err))),
-                    None => (spelled_ty(&item_fn.ret), None),
+                    Some((ok, err)) => (emit.spell_ty(ok), Some(emit.spell_ty(err))),
+                    None => (emit.spell_ty(&item_fn.ret), None),
                 };
                 assert!(
                     TypeKey::from_type(&repr) != *key,
@@ -1749,12 +1757,6 @@ fn convert_single_param<'f>(
     (ty, by_ref)
 }
 
-/// A reading spelled back as a `syn::Type` — the source's own tokens, re-parsed.
-fn spelled_ty(t: &TypeRef) -> syn::Type {
-    let toks = t.spell();
-    syn::parse_quote!(#toks)
-}
-
 impl Declarations {
     /// Build a `KotlinMeta` carrying just the value-context Kotlin name.
     /// Used by every built-in converter (primitives, structs, `Option<_>`,
@@ -1859,16 +1861,60 @@ impl Declarations {
     ///   [`Self::build_output_fn`]) prepended to the inner chain. Defer
     ///   (`None`) if the inner converter isn't resolved yet.
     ///
+    /// The type a `convert!` declaration's conversion chains through, by
+    /// **identity**.
+    ///
+    /// The declare-time probe: `declare_into` crosses this type and records an
+    /// edge to it, and both are identity uses. It used to call
+    /// `convert_{input,output}_body` and throw the body away — which now would
+    /// mean handing the capability to declaration code, for a spelling it
+    /// discards.
+    ///
+    /// The representation, per direction, is what those bodies return: the
+    /// input fn's **parameter** (what the wire hands in), the output fn's
+    /// **return** (what the wire gets back), and for a `Trait` spec the `repr`
+    /// the declaration states outright.
+    ///
+    /// A `TypeKey` is a normalized type, so re-parsing one is exactly what
+    /// `cross` canonicalizes to anyway.
+    pub(crate) fn convert_target(
+        &self,
+        key: &TypeKey,
+        registry: &impl Conversions<KotlinMeta>,
+        dir: Direction,
+    ) -> Option<syn::Type> {
+        let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
+        let spec = match dir {
+            Direction::Input => decl.input.as_ref()?,
+            Direction::Output => decl.output.as_ref()?,
+        };
+        match spec {
+            ConvertSpec::Trait { repr, .. } => Some(repr.clone()),
+            ConvertSpec::PrebindgenFn(f) => {
+                let item_fn = registry.flat().function(f)?;
+                let reading = match dir {
+                    Direction::Input => convert_single_param_any(f, item_fn).0,
+                    Direction::Output => item_fn
+                        .ret
+                        .fallible_parts()
+                        .map_or(&item_fn.ret, |(ok, _)| ok),
+                };
+                syn::parse_str(reading.key().as_str()).ok()
+            }
+        }
+    }
+
     pub(crate) fn lookup_input(
         &self,
         outer: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // A `convert!`-declared conversion is the only thing that answers here.
         // There was a wildcard-pattern table beside it; nothing ever wrote to
         // the input half, so every lookup through it returned `None`.
         let key = outer.key();
-        let (ty, exc_ty, body) = self.convert_input_body(&key, registry)?;
+        let (ty, exc_ty, body) = self.convert_input_body(&key, registry, emit)?;
         // The closure's middle slot carries the `Result`'s raw Rust error
         // type (or `None` for the framework `__JniErr`); it feeds the
         // converter signature `Result<_, E>` directly — no registration.
@@ -1880,7 +1926,7 @@ impl Declarations {
         // (terminal) without forcing `()` either way. A non-wire `ty` that
         // isn't yet resolved defers.
         let outer_node: syn::Type = {
-            let spelled = outer.spell();
+            let spelled = emit.spell(outer);
             syn::parse_quote!(#spelled)
         };
         let is_self = TypeKey::from_type(&ty) == outer.key();
@@ -1904,7 +1950,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn_of(outer, &ty, &body, exc),
+                    function: self.build_input_fn_of(outer, &ty, &body, exc, emit),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -1975,10 +2021,11 @@ impl Declarations {
         &self,
         outer: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
-        let (ty, exc_ty, body) = self.convert_output_body(&key, registry)?;
-        self.build_output_converter(outer, None, ty, exc_ty, body, registry)
+        let (ty, exc_ty, body) = self.convert_output_body(&key, registry, emit)?;
+        self.build_output_converter(outer, None, ty, exc_ty, body, registry, emit)
     }
 
     /// The `Result<T, E>` output peel: the value succeeds as `T`, and `E` routes
@@ -1994,6 +2041,7 @@ impl Declarations {
         ok: &syn::Type,
         err: &syn::Type,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         self.build_output_converter(
             outer,
@@ -2002,6 +2050,7 @@ impl Declarations {
             Some(err.clone()),
             syn::parse_quote!(v),
             registry,
+            emit,
         )
     }
 
@@ -2010,6 +2059,7 @@ impl Declarations {
     /// `arg0` is the peeled inner type for a shape peel, `None` for a
     /// `convert!`-declared conversion — which is what the old `rank == 0`
     /// tested.
+    #[allow(clippy::too_many_arguments)]
     fn build_output_converter(
         &self,
         outer: &crate::api::core::flat::TypeRef,
@@ -2018,6 +2068,7 @@ impl Declarations {
         exc_ty: Option<syn::Type>,
         body: syn::Expr,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let key = outer.key();
         // The middle slot carries the `Result`'s raw Rust error type (or `None`
@@ -2062,7 +2113,7 @@ impl Declarations {
                 Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn_of(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc, emit),
                     destination: ty,
                     niches,
                     metadata: KotlinMeta {
@@ -2079,7 +2130,7 @@ impl Declarations {
             Some(inner) => {
                 // Composed: `ty` is the continue rust type; chain its converter.
                 let stage = Stage {
-                    function: self.build_output_fn_of(outer, &ty, &body, exc),
+                    function: self.build_output_fn_of(outer, &ty, &body, exc, emit),
                     metadata: KotlinMeta::default(),
                 };
                 let mut pre_stages = vec![stage];

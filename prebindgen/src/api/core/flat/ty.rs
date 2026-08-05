@@ -98,6 +98,26 @@ pub struct TypeRef {
     pub(super) origin: Origin<syn::Type>,
 }
 
+impl fmt::Display for TypeRef {
+    /// The type as the source wrote it, **for a message**.
+    ///
+    /// Diagnostics are not emission: a panic naming an unsupported type is
+    /// decision code reporting why it decided, and it must not need the
+    /// [`Emit`](crate::api::core::emit::Emit) capability to say so. So this is
+    /// ungated where [`spell`](Self::spell) is not.
+    ///
+    /// **The identity, not the spelling** — `TypeKey`, which is
+    /// `canonical_type` rendered. Delegating to `spell()` would have handed the
+    /// captured spelling back out through `format!("{ty}")`, so
+    /// `syn::parse_str(&ty.to_string())` reconstructed it exactly and the
+    /// capability was a suggestion. Rendering the canonical form keeps
+    /// diagnostics readable while making the round trip land on a *normalized*
+    /// type rather than the source's own tokens.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.key().as_str())
+    }
+}
+
 impl TypeRef {
     /// What the type means. **Classify off this**, never off the spelling.
     ///
@@ -134,12 +154,17 @@ impl TypeRef {
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside it,
     /// and a consumer that still has to take the node apart says so with
     /// [`as_syn`](Self::as_syn).
-    pub fn spell(&self) -> proc_macro2::TokenStream {
+    pub(in crate::api::core) fn spell(&self) -> proc_macro2::TokenStream {
         self.origin.spell()
     }
 
     /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
-    pub fn as_syn(&self) -> &syn::Type {
+    // Test-only as of C7: `Emit` hands out a spelling, never the node, so the
+    // round-trip checks (`syntax_is_recoverable_from_kind`) are the last
+    // callers. That is the correct end state — the check that a kind can
+    // reproduce its own syntax needs both halves.
+    #[allow(dead_code)]
+    pub(in crate::api::core) fn as_syn(&self) -> &syn::Type {
         self.origin.as_syn()
     }
 
@@ -505,7 +530,7 @@ impl TypeRef {
     /// tabulates: this strips what stands over *this* node's classification, and
     /// a wrapper under a borrow or inside an `Option` belongs to that inner
     /// node's own spelling.
-    pub fn stripped_syntax(&self) -> syn::Type {
+    pub(in crate::api::core) fn stripped_syntax(&self) -> syn::Type {
         self.unwrapped().origin.as_syn().clone()
     }
 
@@ -815,7 +840,12 @@ impl TypeKind {
     /// * a `Group` or `Paren` around a type, which the lowering sees through;
     /// * a [`Callback`](TypeKind::Callback)'s bound *order* — `Send + Sync` and
     ///   `Sync + Send` are one accepted form, and nothing reads the order.
-    pub fn to_syn(&self) -> syn::Type {
+    // Its whole job is the round-trip check (`syntax_is_recoverable_from_kind`),
+    // and with the spelling sealed nothing in a built crate calls it — which is
+    // the correct end state, not dead code: a kind that cannot reproduce its
+    // own syntax has lost something, and this is what says so.
+    #[allow(dead_code)]
+    pub(in crate::api::core) fn to_syn(&self) -> syn::Type {
         let opt_lifetime =
             |l: &Option<syn::Lifetime>| l.as_ref().map(|l| quote::quote!(#l)).unwrap_or_default();
         match self {
@@ -907,8 +937,8 @@ impl TypeKind {
 ///
 /// A name rather than a `syn::Path` on purpose: an identity kept as syntax
 /// makes every consumer take a path apart to learn what a type is, which is the
-/// re-classification issue #211 exists to stop — and one the boundary ledger
-/// would not even see, since it watches `syn::Type` and `syn::Expr`.
+/// re-classification issue #211 exists to stop — and one no census could have
+/// seen, since taking a path apart names no door.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeId {
     /// The path as written, minus any generic arguments — `Foo`,

@@ -21,6 +21,7 @@ pub(crate) fn struct_input_body(
     ext: &Declarations,
     s: &flat::Struct,
     registry: &impl Conversions<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.name.to_string();
     let struct_module = struct_module_path(ext, registry, &s.name);
@@ -75,7 +76,7 @@ pub(crate) fn struct_input_body(
                     // converter would yield `OwnedObject<T>`, which can't
                     // populate an owned field. `Option<_>` handle fields keep
                     // the niche-aware converter (jlong 0 ⇒ `None`).
-                    let field_ty = field.ty.spell();
+                    let field_ty = emit.spell(&field.ty);
                     let decode = if field_optional {
                         quote! { let #fname_ident = #field_conv; }
                     } else {
@@ -292,7 +293,7 @@ pub(crate) fn struct_input_body(
     // refuse both; the per-field name check cannot, because an empty struct
     // has no field to refuse. `Struct::spell` is the dual of the
     // `Alternative::spell` the sum decoder uses for exactly this.
-    let ctor = s.spell(quote!(#struct_module::#struct_ident), &field_init);
+    let ctor = emit.shape(s, quote!(#struct_module::#struct_ident), &field_init);
     let body: syn::Expr = syn::parse_quote!({
         #(#field_preludes)*
         #ctor
@@ -325,6 +326,7 @@ pub(crate) fn sum_input_body(
     ext: &Declarations,
     v: &flat::Variant,
     registry: &impl Conversions<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     let key = TypeKey::from_ident(&v.name);
     let cfg = ext.types.get(&key)?;
@@ -358,6 +360,7 @@ pub(crate) fn sum_input_body(
                 &field.ty,
                 &bind,
                 &err_prefix,
+                emit,
             )?;
             preludes.push(pre);
             inits.push(field.bind(&value));
@@ -367,7 +370,7 @@ pub(crate) fn sum_input_body(
         // a three-arm `syn::Fields` match here would have had to re-derive
         // that, and `Alternative::is_empty()` cannot: `B`, `B()` and `B {}`
         // are all empty by it.
-        let ctor = alt.spell(quote!(#source_module::#enum_ident::#vident), &inits);
+        let ctor = emit.shape(alt, quote!(#source_module::#enum_ident::#vident), &inits);
         arms.push(quote! {
             if env.is_instance_of(__obj, #jvm_class)
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
@@ -410,6 +413,7 @@ pub(crate) fn sum_input_body(
 /// binding the result to `bind`. Mirrors the per-field decode
 /// [`struct_input_body`] performs, for the positions that are properties of a
 /// generated class rather than fields of a data class.
+#[allow(clippy::too_many_arguments)]
 fn read_kotlin_property(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
@@ -418,13 +422,14 @@ fn read_kotlin_property(
     reading: &TypeRef,
     bind: &syn::Ident,
     err_prefix: &str,
+    emit: &crate::api::core::emit::Emit,
 ) -> Option<(TokenStream, TokenStream)> {
     // The payload's own reading straight to its entry, and the layer questions
     // below asked of it once — `option_inner_type` compared the last path
     // segment, so a payload spelled `Box<Option<T>>` answered "not optional"
     // four separate times here (#289).
     let entry = registry.input_entry(reading)?;
-    let ty = reading.spell();
+    let ty = emit.spell(reading);
     let optional = reading.optional_inner().is_some();
     let inner = reading.optional_inner().unwrap_or(reading);
     let wire = entry.destination.clone();
@@ -1751,8 +1756,9 @@ pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
+    emit: &crate::api::core::emit::Emit,
 ) -> (TokenStream, TokenStream) {
-    let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err);
+    let reconstruct = render_flat_struct_node(plan, &plan.root, Some(&plan.target), on_err, emit);
     let root_binding = &plan.root.binding;
     let prelude = quote! {
         #reconstruct
@@ -1824,13 +1830,14 @@ fn render_flat_struct_node(
     node: &FlatStructNode,
     target: Option<&RebuildTarget>,
     on_err: &TokenStream,
+    emit: &crate::api::core::emit::Emit,
 ) -> TokenStream {
     let mut decodes = TokenStream::new();
     let mut inits = Vec::new();
     for field in &node.fields {
         match field {
             FlatFieldNode::Nested { field, node: child } => {
-                decodes.extend(render_flat_struct_node(plan, child, None, on_err));
+                decodes.extend(render_flat_struct_node(plan, child, None, on_err, emit));
                 let child_binding = &child.binding;
                 inits.push(quote!(#field: #child_binding));
             }
@@ -1849,7 +1856,7 @@ fn render_flat_struct_node(
                 let tmp = format_ident!("{}_{}", node.binding, field);
                 // The slot's ascription, spelled from the reading the node
                 // carries — see the comment below on why the type is written.
-                let rust_ty = rust_ty.spell();
+                let rust_ty = emit.spell(rust_ty);
                 let tag = &plan.leaves[*tag_leaf].native_ident;
                 let arms = variants.iter().enumerate().map(|(t, v)| {
                     let vident = &v.rust_ident;
@@ -1932,13 +1939,13 @@ fn render_flat_struct_node(
                 let leaf = &plan.leaves[*value_leaf];
                 let wire = &leaf.native_ident;
                 let tmp = format_ident!("{}_{}", node.binding, field);
-                let rust_ty = rust_ty.spell();
+                let rust_ty = emit.spell(rust_ty);
                 let wrap = |e: TokenStream| {
                     build_through_wrappers(wrappers, e)
                         .expect("a field spelling the plan accepted is buildable")
                 };
                 if let Some(target) = direct_handle {
-                    let target_ty = target.spell();
+                    let target_ty = emit.spell(target);
                     if *optional_handle {
                         let gated = wrap(quote! {
                             if #wire == 0 {

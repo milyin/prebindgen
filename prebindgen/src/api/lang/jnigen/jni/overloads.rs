@@ -164,7 +164,14 @@ fn rust_type_erased(
     {
         return erase_kt_type(&[], &kt);
     }
-    ErasedJvmType::raw(peeled.spell().to_string())
+    // The type's IDENTITY, not its spelling. `ErasedJvmType` is a string
+    // compared with `==` — "two parameters collide as overloads iff their
+    // tokens are equal" — so keying it on what the source wrote meant two
+    // spellings of one type (`Box<Payload>` and `Payload`, `crate::Foo` and
+    // `Foo`) erased to different tokens and were judged NOT to collide. The
+    // JVM would then reject the emitted class for a clash this check exists
+    // to catch first. A `TypeKey` is canonical, so equal types compare equal.
+    ErasedJvmType::raw(peeled.key().as_str())
 }
 
 /// Whether `plan` is a multi-variant expansion that can be turned into

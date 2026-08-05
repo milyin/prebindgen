@@ -755,8 +755,9 @@ impl Declarations {
     ) -> KtType {
         // The field's own reading: the nullability question below is answered
         // from `kind`, so a wrapped spelling answers as the bare one does and
-        // nothing is looked up (#275).
-        let field_ty = field.ty.spell();
+        // nothing is looked up (#275). It is named only in the three panics
+        // below, which is a diagnostic and needs no emission capability.
+        let field_ty = &field.ty;
         let where_ = || format!("sealed_class!({}) payload `{variant}.{prop}`", sum_name);
         let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
             panic!(
@@ -764,7 +765,7 @@ impl Declarations {
                  cannot be derived — register converters for the payload type before \
                  declaring the sealed class",
                 where_(),
-                field_ty.to_token_stream(),
+                field_ty,
             )
         });
 
@@ -783,7 +784,7 @@ impl Declarations {
             panic!(
                 "{}: `{}` has no Kotlin type mapping on its output converter",
                 where_(),
-                field_ty.to_token_stream(),
+                field_ty,
             )
         });
         // The input side must agree on WHICH TYPE the property is — Kotlin
@@ -816,7 +817,7 @@ impl Declarations {
                      type (`{}` in, `{}` out) — a sealed class's properties are read by both \
                      directions, so they must map to one type",
                     where_(),
-                    field_ty.to_token_stream(),
+                    field_ty,
                     in_ty,
                     ty,
                 );

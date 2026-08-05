@@ -423,7 +423,8 @@ impl CbindgenBuilder {
             return None;
         }
         let name = Self::in_name_of(&ty.key());
-        let spelled = ty.spell();
+        // A scalar's spelling is its name, so this needs no captured syntax.
+        let spelled = scalar_ty(ty)?;
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) fn #name(v: #spelled) -> #spelled {
@@ -432,7 +433,7 @@ impl CbindgenBuilder {
         );
         Some(ConverterImpl {
             subs: vec![],
-            destination: spelled_ty(ty),
+            destination: spelled.clone(),
             function,
             pre_stages: vec![],
             niches: Niches::empty(),
@@ -589,7 +590,7 @@ impl CbindgenBuilder {
                         "Cbindgen: field `{}` of data struct `{}` has unsupported type `{}`",
                         fname,
                         type_short(&reading.key()),
-                        fty.spell()
+                        fty
                     )
                 });
                 field_defs.push(quote!(pub #fname: #wire));
@@ -682,7 +683,7 @@ impl CbindgenBuilder {
                                  opaque pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
                                 fname,
                                 type_short(&reading.key()),
-                                fty.spell()
+                                fty
                             )
                         });
                         quote!(pub #fname: #wire)
@@ -816,7 +817,11 @@ impl CbindgenBuilder {
     /// The two adapters therefore agree on the *rule* (Rust's own assignment
     /// order, which the shared helper encodes) while differing on what they
     /// need from it — a number versus a spelling.
-    fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_enums(
+        &self,
+        registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
             let Some(reading) = registry.reading(key) else {
@@ -835,8 +840,8 @@ impl CbindgenBuilder {
             // syntax exists for, and the model's own docs name it.
             let variants = e.values.iter().map(|v| {
                 let id = &v.name;
-                match &v.origin.as_syn().discriminant {
-                    Some((_, expr)) => quote!(#id = #expr),
+                match emit.discriminant(v) {
+                    Some(expr) => quote!(#id = #expr),
                     None => quote!(#id),
                 }
             });
@@ -863,7 +868,11 @@ impl CbindgenBuilder {
     /// `<base>_drop(t_t *)` that frees the **active arm** and nulls the freed
     /// slots, so a second drop is a no-op. A union of plain data owns nothing
     /// and gets no drop.
-    fn prereq_tagged_unions(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prereq_tagged_unions(
+        &self,
+        registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
             let Some(reading) = registry.reading(key) else {
@@ -898,7 +907,7 @@ impl CbindgenBuilder {
                     .zip(&wires)
                     .map(|(f, w)| f.bind(w))
                     .collect();
-                variant_defs.push(a.spell(quote!(#vident), &defs));
+                variant_defs.push(emit.shape(a, quote!(#vident), &defs));
 
                 // Drop arm: bind every field, free the owning ones.
                 let owning: Vec<(usize, &Field, &syn::Type)> = a
@@ -921,7 +930,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let pattern = a.spell(quote!(#cname::#vident), &parts);
+                let pattern = emit.shape(a, quote!(#cname::#vident), &parts);
                 let frees = owning.iter().map(|(i, f, _)| {
                     let b = &binds[*i];
                     self.payload_free_stmt(&f.ty, b, registry)
@@ -996,7 +1005,7 @@ impl CbindgenBuilder {
                         Some(n) => format!(".{n}"),
                         None => String::new(),
                     },
-                    field.ty.spell(),
+                    field.ty,
                     reason,
                 )
             })
@@ -1050,15 +1059,13 @@ impl CbindgenBuilder {
                     panic!(
                         "Cbindgen: data-struct field `{}` of type `{}` is owning but has no \
                          release form (expected a `String` or a declared `tagged_union`)",
-                        fname,
-                        fty.spell(),
+                        fname, fty,
                     )
                 }
             });
             return quote!(#(#frees)*);
         }
-        let inner = spelled(r_boxed_inner(fty).unwrap_or(fty));
-        let src_inner = self.src_ty(&inner);
+        let src_inner = self.src_ty_of(&r_boxed_inner(fty).unwrap_or(fty).key());
         quote!(
             if !(*#binding).is_null() {
                 drop(::std::boxed::Box::from_raw(*#binding as *mut #src_inner));
@@ -1088,6 +1095,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         r: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         if !self.tagged_unions.contains_key(&key) {
@@ -1125,7 +1133,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let from = a.spell(quote!(#cname::#vident), &parts);
+                let from = emit.shape(a, quote!(#cname::#vident), &parts);
                 let exprs: Vec<TokenStream> = a
                     .fields
                     .iter()
@@ -1149,7 +1157,7 @@ impl CbindgenBuilder {
                     .zip(&exprs)
                     .map(|(f, e)| f.bind(e))
                     .collect();
-                let to = a.spell(quote!(#src::#vident), &inits);
+                let to = emit.shape(a, quote!(#src::#vident), &inits);
                 quote!(#from => #to,)
             })
             .collect();
@@ -1229,6 +1237,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         r: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         let key = ty.key();
         if !self.tagged_unions.contains_key(&key) {
@@ -1261,7 +1270,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let from = a.spell(quote!(#src::#vident), &parts);
+                let from = emit.shape(a, quote!(#src::#vident), &parts);
                 let exprs: Vec<TokenStream> = a
                     .fields
                     .iter()
@@ -1279,7 +1288,7 @@ impl CbindgenBuilder {
                     .zip(&exprs)
                     .map(|(f, e)| f.bind(e))
                     .collect();
-                let to = a.spell(quote!(#cname::#vident), &inits);
+                let to = emit.shape(a, quote!(#cname::#vident), &inits);
                 quote!(#from => #to,)
             })
             .collect();
@@ -1599,7 +1608,7 @@ impl CbindgenBuilder {
         let registry = self
             .declare_into(registry)?
             .validate_with(&self)?
-            .convert_with(|crossing, built| self.convert_crossing(crossing, built))?
+            .convert_with(|crossing, built, emit| self.convert_crossing(crossing, built, emit))?
             .build()?;
         self.validate_resolved(&registry)
             .map_err(|message| crate::core::ScanError::AdapterInvariant { message })?;
@@ -1614,6 +1623,7 @@ impl CbindgenBuilder {
         &self,
         crossing: &Crossing,
         built: &Building<'_, ()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
@@ -1623,13 +1633,13 @@ impl CbindgenBuilder {
         // The selectors take the reading now, so nothing here spells it.
         let ty = built.reading(key)?;
         match dir {
-            Direction::Input => self.select_input_type(&ty, built).or_else(|| {
+            Direction::Input => self.select_input_type(&ty, built, emit).or_else(|| {
                 // The callback's arguments off the model's own `Callback` kind,
                 // where `extract_fn_trait_args` re-read the parameter's bounds.
                 let args = ty.callback_args()?;
                 self.dispatch_fn_input(args, built)
             }),
-            Direction::Output => self.select_output_type(&ty, built),
+            Direction::Output => self.select_output_type(&ty, built, emit),
         }
     }
 
@@ -1816,7 +1826,11 @@ impl Prebindgen for CbindgenBuilder {
     // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`). See `in_wrappers`
     // / `out_wrappers`.
 
-    fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    fn prerequisites(
+        &self,
+        registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         // C-string data memory (string returns + `String` fields of data structs)
         // is malloc'd raw and freed by the single universal `free_memory_function`.
         // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
@@ -1830,8 +1844,8 @@ impl Prebindgen for CbindgenBuilder {
         items.extend(self.prereq_opaque_handles(registry));
         items.extend(self.prereq_data_structs(registry));
         items.extend(self.prereq_value_opaque(registry));
-        items.extend(self.prereq_enums(registry));
-        items.extend(self.prereq_tagged_unions(registry));
+        items.extend(self.prereq_enums(registry, emit));
+        items.extend(self.prereq_tagged_unions(registry, emit));
         items.extend(self.prereq_callback_structs(registry));
         items.extend(self.prereq_domain_constants(registry));
         items
@@ -1843,14 +1857,16 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         f: &crate::api::core::flat::Function,
         registry: &Registry<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        self.emit_function_wrapper(f, registry)
+        self.emit_function_wrapper(f, registry, emit)
     }
 
     fn on_struct(
         &self,
         _s: &crate::api::core::flat::Struct,
         _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
         // on_output_type; the original (non-FFI-safe) struct is dropped.
@@ -1861,11 +1877,17 @@ impl Prebindgen for CbindgenBuilder {
         &self,
         _v: &crate::api::core::flat::Variant,
         _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
 
-    fn on_enum(&self, _e: &crate::api::core::flat::Enum, _registry: &Registry<()>) -> TokenStream {
+    fn on_enum(
+        &self,
+        _e: &crate::api::core::flat::Enum,
+        _registry: &Registry<()>,
+        _emit: &crate::api::core::emit::Emit,
+    ) -> TokenStream {
         TokenStream::new()
     }
 }
@@ -1877,6 +1899,7 @@ impl CbindgenBuilder {
         &self,
         ty: &TypeRef,
         _r: &impl Conversions<()>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
@@ -1922,7 +1945,7 @@ impl CbindgenBuilder {
         // FFI-safe scalar (`bool`, integers, floats): identity pass-through.
         if r_is_scalar(ty) {
             let name = Self::out_name_of(&ty.key());
-            let spelled = ty.spell();
+            let spelled = scalar_ty(ty)?;
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) fn #name(v: #spelled) -> #spelled {
@@ -1931,7 +1954,7 @@ impl CbindgenBuilder {
             );
             return Some(ConverterImpl {
                 subs: vec![],
-                destination: spelled_ty(ty),
+                destination: spelled.clone(),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -2076,7 +2099,7 @@ impl CbindgenBuilder {
 
         // Tagged-union output: `match` the source enum to the C union,
         // converting each arm's payload.
-        if let Some(c) = self.out_tagged_union(ty, _r) {
+        if let Some(c) = self.out_tagged_union(ty, _r, emit) {
             return Some(c);
         }
 
@@ -2218,7 +2241,10 @@ impl CbindgenBuilder {
         else {
             return None;
         };
-        let elem = spelled(rf_inner);
+        // The borrow's target, as a reading — every use below is its identity
+        // or its source path, both of which the model answers.
+        let elem = rf_inner;
+
         // `&[E]` slice: marker only — the two-param (`*const E_wire`, `usize`)
         // lowering is done structurally in `emit_inputs`. A scalar `E` crosses as
         // itself (`*const E`); a declared inline-opaque by-value `E` (e.g. a
@@ -2226,7 +2252,7 @@ impl CbindgenBuilder {
         // `&[E]` zero-copy. `subs` marks `E`'s input required so its mirror /
         // prerequisites are emitted.
         if !*rf_mut {
-            if let Some(e) = r_shared_slice_elem(ty).map(spelled) {
+            if let Some(e) = r_shared_slice_elem(ty) {
                 // #170, the slice instance. The two-param lowering builds the
                 // `&[E]` zero-copy from C's own block, so there is nowhere to
                 // normalise the bytes: `&[bool]` would materialise every
@@ -2234,7 +2260,7 @@ impl CbindgenBuilder {
                 // not a fix here — the callee wants `&[bool]`, and rebuilding
                 // the block would silently drop the zero-copy contract this
                 // path exists for. Rejected until a raw-wire lowering exists.
-                if is_bool(&e) {
+                if r_is_bool(e) {
                     panic!(
                         "Cbindgen: `&[bool]` cannot cross IN from C. A `bool` slice is \
                          reinterpreted zero-copy from the caller's block, so a byte outside \
@@ -2243,32 +2269,30 @@ impl CbindgenBuilder {
                          `opaque_ptr` handle."
                     );
                 }
-                if is_scalar(&e) {
-                    let name =
-                        format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(&e)));
+                if let Some(e_ty) = scalar_ty(e) {
+                    let name = format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key()));
                     let function: syn::ItemFn = syn::parse_quote!(
                         #[allow(non_snake_case, dead_code, unused)]
                         pub(crate) fn #name() {}
                     );
                     return Some(ConverterImpl {
-                        subs: vec![TypeKey::from_type(&e)],
-                        destination: syn::parse_quote!(*const #e),
+                        subs: vec![e.key()],
+                        destination: syn::parse_quote!(*const #e_ty),
                         function,
                         pre_stages: vec![],
                         niches: Niches::empty(),
                         metadata: (),
                     });
                 }
-                if let Some(counterpart) = self.value_opaque_ty(&e) {
+                if let Some(counterpart) = self.value_opaque_ty_of(&e.key()) {
                     let counterpart = counterpart.clone();
-                    let name =
-                        format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(&e)));
+                    let name = format_ident!("__cbg_inmark_slice_{}", sanitize(&e.key()));
                     let function: syn::ItemFn = syn::parse_quote!(
                         #[allow(non_snake_case, dead_code, unused)]
                         pub(crate) fn #name() {}
                     );
                     return Some(ConverterImpl {
-                        subs: vec![TypeKey::from_type(&e)],
+                        subs: vec![e.key()],
                         destination: syn::parse_quote!(*const #counterpart),
                         function,
                         pre_stages: vec![],
@@ -2300,7 +2324,7 @@ impl CbindgenBuilder {
                 }
             );
             return Some(ConverterImpl {
-                subs: vec![TypeKey::from_type(&elem)],
+                subs: vec![elem.key()],
                 destination: syn::parse_quote!(*const ::core::ffi::c_char),
                 function,
                 pre_stages: vec![],
@@ -2314,11 +2338,13 @@ impl CbindgenBuilder {
         if *rf_mut {
             // `&mut MaybeUninit<X>` (X value-opaque): out-param into uninitialized
             // memory. Rust writes via the `MaybeUninit` (no drop of the garbage slot).
-            if let Some(inner) = maybe_uninit_inner(&elem) {
-                let op = self.value_opaque_ty(&inner)?.clone();
+            // `TypeKind::Uninit` is the form `maybe_uninit_inner` matched by
+            // reading a path's tail ident.
+            if let crate::api::core::flat::TypeKind::Uninit(inner) = elem.kind() {
+                let op = self.value_opaque_ty_of(&inner.key())?.clone();
                 let name = Self::in_name_of(&ty.key());
-                let src = self.src_ty(&inner);
-                let short = type_short(&TypeKey::from_type(&inner));
+                let src = self.src_ty_of(&inner.key());
+                let short = type_short(&inner.key());
                 let null_ptr_msg = format!("null {short} pointer");
                 let function: syn::ItemFn = syn::parse_quote!(
                     #[allow(non_snake_case, unused_variables, dead_code)]
@@ -2334,7 +2360,7 @@ impl CbindgenBuilder {
                     }
                 );
                 return Some(ConverterImpl {
-                    subs: vec![TypeKey::from_type(&inner)],
+                    subs: vec![inner.key()],
                     destination: syn::parse_quote!(*mut #op),
                     function,
                     pre_stages: vec![],
@@ -2345,15 +2371,15 @@ impl CbindgenBuilder {
             // `&mut` opaque handle, or `&mut` value-opaque: both reinterpret the C
             // pointer as a mutable Rust reference. The wire is the handle's C struct
             // or the value-opaque mirror.
-            let wire_ty: syn::Type = if self.opaque.contains_key(&TypeKey::from_type(&elem)) {
-                let c_struct = self.c_type_ident(&TypeKey::from_type(&elem));
+            let wire_ty: syn::Type = if self.opaque.contains_key(&elem.key()) {
+                let c_struct = self.c_type_ident(&elem.key());
                 syn::parse_quote!(#c_struct)
             } else {
-                self.value_opaque_ty(&elem)?.clone()
+                self.value_opaque_ty_of(&elem.key())?.clone()
             };
             let name = Self::in_name_of(&ty.key());
-            let src = self.src_ty(&elem);
-            let short = type_short(&TypeKey::from_type(&elem));
+            let src = self.src_ty_of(&elem.key());
+            let short = type_short(&elem.key());
             let null_ptr_msg = format!("null {short} pointer");
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -2369,7 +2395,7 @@ impl CbindgenBuilder {
                 }
             );
             return Some(ConverterImpl {
-                subs: vec![TypeKey::from_type(&elem)],
+                subs: vec![elem.key()],
                 destination: syn::parse_quote!(*mut #wire_ty),
                 function,
                 pre_stages: vec![],
@@ -2378,16 +2404,16 @@ impl CbindgenBuilder {
             });
         }
         // `&T` (shared borrow) of an opaque handle or value-opaque type.
-        let key1 = TypeKey::from_type(&elem);
+        let key1 = elem.key();
         let wire_ty: syn::Type = if self.opaque.contains_key(&key1) {
-            let c_struct = self.c_type_ident(&TypeKey::from_type(&elem));
+            let c_struct = self.c_type_ident(&elem.key());
             syn::parse_quote!(#c_struct)
         } else {
-            self.value_opaque_ty(&elem)?.clone()
+            self.value_opaque_ty_of(&elem.key())?.clone()
         };
         let name = Self::in_name_of(&ty.key());
-        let src = self.src_ty(&elem);
-        let short = type_short(&TypeKey::from_type(&elem));
+        let src = self.src_ty_of(&elem.key());
+        let short = type_short(&elem.key());
         let null_ptr_msg = format!("null {short} pointer");
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
@@ -2401,7 +2427,7 @@ impl CbindgenBuilder {
             }
         );
         Some(ConverterImpl {
-            subs: vec![TypeKey::from_type(&elem)],
+            subs: vec![elem.key()],
             destination: syn::parse_quote!(*const #wire_ty),
             function,
             pre_stages: vec![],

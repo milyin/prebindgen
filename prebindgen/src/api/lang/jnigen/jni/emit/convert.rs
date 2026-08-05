@@ -244,9 +244,10 @@ pub(crate) fn composed_inner_output(
 pub(crate) fn option_input(
     t1: &crate::api::core::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
     let inner_entry = registry.input_entry(t1)?;
-    let t1_spelled = t1.spell();
+    let t1_spelled = emit.spell(t1);
     let inner_wire = inner_entry.destination.clone();
     let inner_decode = composed_inner_input(inner_entry, quote!(v));
 

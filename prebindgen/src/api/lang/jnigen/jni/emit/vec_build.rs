@@ -231,12 +231,13 @@ fn vec_helper_symbol(ext: &Declarations, base: &str, suffix: &str) -> String {
 pub(crate) fn build_vec_build_helper_items(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for elem_reading in collect_vec_build_elem_types(ext, registry) {
         // Generated Rust spells `spell()`; the reading is what the plan
         // and the key are taken from.
-        let elem = elem_reading.spell();
+        let elem = emit.spell(&elem_reading);
         let Some(h) = vec_build_helpers(ext, registry, &elem_reading) else {
             continue;
         };

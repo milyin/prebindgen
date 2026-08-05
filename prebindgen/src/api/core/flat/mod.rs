@@ -183,14 +183,14 @@ use std::{fmt, rc::Rc};
 use quote::ToTokens;
 
 mod array_len;
-#[cfg(test)]
-mod boundary;
 mod element;
 mod origin;
-pub mod spell;
+pub(in crate::api::core) mod spell;
 pub(crate) mod spelling;
 mod ty;
 
+#[cfg(test)]
+mod surface;
 #[cfg(test)]
 mod tests;
 
@@ -202,7 +202,7 @@ pub use self::{
         Struct, Type, Unsupported, Variant,
     },
     origin::Origin,
-    spelling::{canonical_spelling, canonical_type, type_from_ident},
+    spelling::{canonical_spelling, canonical_type},
     ty::{
         peel_transparent, GenericArg, ScalarKind, TypeId, TypeKind, TypeRef, UnsupportedType,
         UnsupportedTypeReason, TRANSPARENT_WRAPPERS,
@@ -636,7 +636,15 @@ impl Flat {
     /// Rust and both keep that item. A consumer re-emitting the source wants the
     /// item without caring which shape it is; one that acts on the distinction
     /// reaches for [`Self::declared_type`].
-    pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
+    // Test-only since S42: `unit_enum`, `payload_enum`, `enum_alternatives` and
+    // `declared_member_names` each ask the model which shape a declared enum is
+    // and get the element that answers, so nothing in a built crate needs the
+    // item. The registry tests still exercise it.
+    #[allow(dead_code)]
+    pub(in crate::api::core) fn enum_item<N: Name + ?Sized>(
+        &self,
+        name: &N,
+    ) -> Option<&syn::ItemEnum> {
         match self.declared_type(name)? {
             Type::Variant(v) => Some(v.origin.as_syn()),
             Type::Enum(e) => Some(e.origin.as_syn()),

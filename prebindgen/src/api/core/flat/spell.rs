@@ -26,7 +26,11 @@ use super::element::{Alternative, EnumValue, Field, Struct};
 ///
 /// `head` is the type's or variant's path, and each part is an already-rendered
 /// [`Field::bind`].
-pub fn fields(shape: &syn::Fields, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
+pub(in crate::api::core) fn fields(
+    shape: &syn::Fields,
+    head: TokenStream,
+    parts: &[TokenStream],
+) -> TokenStream {
     match shape {
         syn::Fields::Unit => head,
         syn::Fields::Unnamed(_) => quote!(#head(#(#parts),*)),
@@ -34,36 +38,40 @@ pub fn fields(shape: &syn::Fields, head: TokenStream, parts: &[TokenStream]) -> 
     }
 }
 
-impl Alternative {
-    /// [`fields`] over this alternative's own delimiters.
-    pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.origin.as_syn().fields, head, parts)
-    }
+/// The three elements that carry their own field delimiters.
+///
+/// `pub(in crate::api::core)`, so it can bound
+/// [`Emit::shape`](crate::api::core::emit::Emit::shape) without becoming a door
+/// itself: an out-of-crate consumer cannot name it, so cannot call through it.
+pub(in crate::api::core) trait Shaped {
+    fn shape(&self) -> &syn::Fields;
 }
 
-impl EnumValue {
-    /// [`fields`] over this value's own delimiters.
-    ///
-    /// A fieldless alternative still has them: `A`, `B()` and `C {}` carry no
-    /// payload alike, and Rust demands the delimiters wherever the last two are
-    /// named. `parts` is therefore always empty — the signature matches
-    /// [`Alternative::spell`] so one caller can spell either.
-    pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.origin.as_syn().fields, head, parts)
+impl Shaped for Alternative {
+    fn shape(&self) -> &syn::Fields {
+        &self.origin.as_syn().fields
     }
 }
-
-impl Struct {
-    /// [`fields`] over this struct's own delimiters — the dual of
-    /// [`Variant::spell`], and the reason neither needs a modelled shape.
-    pub fn spell(&self, head: TokenStream, parts: &[TokenStream]) -> TokenStream {
-        fields(&self.origin.as_syn().fields, head, parts)
+impl Shaped for EnumValue {
+    fn shape(&self) -> &syn::Fields {
+        &self.origin.as_syn().fields
+    }
+}
+impl Shaped for Struct {
+    fn shape(&self) -> &syn::Fields {
+        &self.origin.as_syn().fields
     }
 }
 
 impl Field {
     /// How the field is addressed in a pattern or an initializer: by name when
     /// it has one, else by position.
+    ///
+    /// Ungated, and the reason is what it reads: [`name`](Self::name) and
+    /// [`index`](Self::index), both model facts. No captured syntax is
+    /// involved, so this is not a door — unlike the `spell` methods above,
+    /// which read the delimiters the source wrote and are
+    /// [`Emit::shape`](crate::api::core::emit::Emit::shape)'s to hand out.
     pub fn member(&self) -> syn::Member {
         match &self.name {
             Some(id) => syn::Member::Named(id.clone()),

@@ -57,9 +57,10 @@ use crate::SourceLocation;
 /// still reads it freely and everything downstream has to say which of the two
 /// it meant.
 ///
-/// It was a public field returning a `syn` node to anyone who asked, and the
-/// boundary ledger counted the consequences — measurement, not prevention. Now
-/// the type system asks the question and the ledger counts the answer.
+/// It was a public field returning a `syn` node to anyone who asked, and for a
+/// while a token census counted the consequences — measurement, not prevention.
+/// Now [`Emit`](crate::api::core::emit::Emit) is the only holder of that
+/// capability, and the compiler answers instead of a committed number.
 #[derive(Clone, Debug)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
@@ -88,7 +89,7 @@ impl<S> Origin<S> {
     /// signature the generated crate must restate node for node, legitimately
     /// needs the node — that is why the ledger keeps item escapes in their own
     /// bucket. What it stops is reaching for one *by default*.
-    pub fn as_syn(&self) -> &S {
+    pub(in crate::api::core) fn as_syn(&self) -> &S {
         &self.syntax
     }
 
@@ -137,7 +138,27 @@ impl<S: ToTokens> Origin<S> {
     /// reaches one, and the ledger still lists that as open. What it makes is
     /// **visible**: `.to_token_stream().to_string()` was indistinguishable from
     /// the same call on a type an adapter built itself.
-    pub fn spell(&self) -> proc_macro2::TokenStream {
+    pub(in crate::api::core) fn spell(&self) -> proc_macro2::TokenStream {
         self.syntax.to_token_stream()
+    }
+}
+
+impl Origin<syn::Type> {
+    /// A **declared** type's tokens.
+    ///
+    /// Public where [`Origin::spell`] is sealed, and the difference is what `S`
+    /// is. An `Origin<syn::ItemFn>`'s tokens re-parse to the captured item, so
+    /// handing them out is the item door under another name — that one is
+    /// [`Emit`](crate::api::core::emit::Emit)'s to open. An
+    /// `Origin<syn::Type>` in an adapter's declaration holds a type the
+    /// **build script wrote**, which was never captured syntax and which #280
+    /// leaves the model no way to have a reading for.
+    ///
+    /// Still a token route, and still one C3 has to account for when
+    /// [`TypeRef::spell`](super::TypeRef::spell) moves onto `Emit`: a
+    /// declaration is an identity (`key()`), and the two sites that spell one
+    /// do it to splice `#target` into generated Rust.
+    pub fn declared_spelling(&self) -> proc_macro2::TokenStream {
+        self.spell()
     }
 }

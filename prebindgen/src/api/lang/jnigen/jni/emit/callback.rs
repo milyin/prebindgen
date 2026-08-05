@@ -23,6 +23,7 @@ pub(crate) fn callback_input(
     ext: &Declarations,
     args: &[crate::api::core::flat::TypeRef],
     registry: &impl Conversions<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Option<(syn::Type, syn::Expr)> {
     // Human-readable tag for attach/log messages.
     let name = format!(
@@ -49,7 +50,7 @@ pub(crate) fn callback_input(
     let arg_pat_ty: Vec<TokenStream> = args
         .iter()
         .map(|t| {
-            let t = t.spell();
+            let t = emit.spell(t);
             quote!(#t)
         })
         .collect();
@@ -127,8 +128,15 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
                 .collect();
-            let (leaf_stmts, leaf_args) =
-                encode_plan_leaves(ext, registry, plan, &obj_idents, &quote!(__cb_elem), &fail);
+            let (leaf_stmts, leaf_args) = encode_plan_leaves(
+                ext,
+                registry,
+                plan,
+                &obj_idents,
+                &quote!(__cb_elem),
+                &fail,
+                emit,
+            );
             let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
             let elem_frame_lit = syn::LitInt::new(&elem_frame.to_string(), Span::call_site());
             preludes.push(quote! {
@@ -184,8 +192,15 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cb{}_obj{}", i, k))
                 .collect();
-            let (stmts, arg_exprs) =
-                encode_plan_leaves(ext, registry, plan, &obj_idents, &quote!(#cb_arg), &fail);
+            let (stmts, arg_exprs) = encode_plan_leaves(
+                ext,
+                registry,
+                plan,
+                &obj_idents,
+                &quote!(#cb_arg),
+                &fail,
+                emit,
+            );
             preludes.push(stmts);
             total += arg_exprs.len();
             jvalue_exprs.extend(arg_exprs);
@@ -419,7 +434,7 @@ pub(crate) fn reject_vec_of_handle(
                 "JniGen: `Vec<{}>` is unsupported — its elements would be closeable native \
                  handles (jlong) the JVM must free individually. Expose a per-element \
                  accessor instead of returning a `Vec` of handles.",
-                elem.spell(),
+                elem,
             );
         }
     }
@@ -428,9 +443,12 @@ pub(crate) fn reject_vec_of_handle(
 /// Reconstruct the `impl Fn(args...) + Send + Sync + 'static` syn::Type
 /// from a flat slice of arg types. Used by the rank-1/2/3 callback impls
 /// to feed `input_wrapper` the original outer type.
-pub(crate) fn build_fn_type(args: &[crate::api::core::flat::TypeRef]) -> syn::Type {
+pub(crate) fn build_fn_type(
+    args: &[crate::api::core::flat::TypeRef],
+    emit: &crate::api::core::emit::Emit,
+) -> syn::Type {
     // The args as the source spelled them — the callback's Rust type is
     // re-emitted, never re-derived.
-    let arg_iter = args.iter().map(|a| a.spell());
+    let arg_iter = args.iter().map(|a| emit.spell(a));
     syn::parse_quote!(impl Fn( #(#arg_iter),* ) + Send + Sync + 'static)
 }

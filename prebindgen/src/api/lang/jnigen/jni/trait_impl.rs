@@ -91,15 +91,16 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
-        let spelled = rust.spell();
+        let spelled = emit.spell(rust);
         let rust_with_lifetime = match rust.kind() {
             crate::api::core::flat::TypeKind::Ref {
                 lifetime: None,
                 mutable,
                 inner,
             } => {
-                let inner = inner.spell();
+                let inner = emit.spell(inner);
                 let m = if *mutable { quote!(mut) } else { quote!() };
                 quote!(&'env #m #inner)
             }
@@ -163,8 +164,9 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
-        self.build_output_fn_parts(&rust.spell(), wire, body, exc)
+        self.build_output_fn_parts(&emit.spell(rust), wire, body, exc)
     }
 
     pub(crate) fn build_output_fn_parts(
@@ -303,9 +305,10 @@ impl Declarations {
     pub fn opaque_handle_input(
         &self,
         reading: &crate::api::core::flat::TypeRef,
+        emit: &crate::api::core::emit::Emit,
     ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let ty = reading.spell();
+        let ty = emit.spell(reading);
         let name = input_name(&ty, &wire);
         let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
@@ -503,13 +506,14 @@ impl Declarations {
     pub fn opaque_handle_output(
         &self,
         reading: &crate::api::core::flat::TypeRef,
+        emit: &crate::api::core::emit::Emit,
     ) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let body: syn::Expr =
             syn::parse_quote!(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64);
         ConverterImpl {
             subs: vec![],
-            function: self.build_output_fn_of(reading, &wire, &body, None),
+            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
             destination: wire,
             pre_stages: vec![],
             niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
@@ -628,6 +632,7 @@ pub(crate) fn build_signal_domain_error_item() -> syn::Item {
 pub(crate) fn build_handle_destructor_items(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
+    emit: &crate::api::core::emit::Emit,
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
@@ -644,7 +649,7 @@ pub(crate) fn build_handle_destructor_items(
         if registry.input_entry(&reading).is_none() && registry.output_entry(&reading).is_none() {
             continue;
         }
-        let ty = reading.spell();
+        let ty = emit.spell(&reading);
         let class_fqn = cfg
             .name_spec
             .as_ref()
@@ -833,9 +838,9 @@ impl Produced<'_> {
     }
 
     /// The tokens generated Rust spells for this type.
-    fn spell(&self) -> TokenStream {
+    fn spell(&self, emit: &crate::api::core::emit::Emit) -> TokenStream {
         match self {
-            Produced::Reading(r) => r.spell(),
+            Produced::Reading(r) => emit.spell(r),
             Produced::Composed(t) => t.to_token_stream(),
         }
     }
@@ -871,9 +876,10 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
         match produced {
-            Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc),
+            Produced::Reading(r) => self.build_input_fn_of(r, wire, body, exc, emit),
             Produced::Composed(t) => self.build_input_fn_composed(t, wire, body, exc),
         }
     }
@@ -885,9 +891,10 @@ impl Declarations {
         wire: &syn::Type,
         body: &syn::Expr,
         exc: Option<&syn::Type>,
+        emit: &crate::api::core::emit::Emit,
     ) -> syn::ItemFn {
         match produced {
-            Produced::Reading(r) => self.build_output_fn_of(r, wire, body, exc),
+            Produced::Reading(r) => self.build_output_fn_of(r, wire, body, exc, emit),
             Produced::Composed(t) => self.build_output_fn(t, wire, body, exc),
         }
     }
@@ -1074,12 +1081,13 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         let WrapperShape::OptionRef { .. } = shape else {
             return None;
         };
@@ -1097,7 +1105,7 @@ impl Declarations {
         let inner_wire = inner.destination.clone();
         let inner_conv = inner.function.sig.ident.clone();
         let outer_ty = produced.key();
-        let outer_spelled = produced.spell();
+        let outer_spelled = produced.spell(emit);
         let name = input_name(&outer_spelled, &inner_wire);
         let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
@@ -1143,12 +1151,13 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         if shape != WrapperShape::Sequence {
             return None;
         }
@@ -1193,7 +1202,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![],
             pre_stages: vec![],
-            function: self.build_input_fn_produced(produced, &wire, &body, None),
+            function: self.build_input_fn_produced(produced, &wire, &body, None, emit),
             destination: wire,
             niches: Niches::empty(),
             metadata: KotlinMeta {
@@ -1215,18 +1224,19 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         if shape == WrapperShape::Optional {
             let inner = registry.input_entry(t1)?;
             if inner.metadata.is_direct_handle() {
                 let inner_wire = inner.destination.clone();
                 let outer_ty = produced.key();
-                let outer_spelled = produced.spell();
+                let outer_spelled = produced.spell(emit);
                 let build = build_from_canonical(produced, quote::quote!(__v))?;
                 let name = input_name(&outer_spelled, &inner_wire);
                 let gen_allow = generated_converter_attr();
@@ -1282,7 +1292,7 @@ impl Declarations {
         if shape == WrapperShape::Optional {
             let outer_ty = produced.key();
             let build = build_from_canonical(produced, quote::quote!(__v))?;
-            let (wire, inner_body, niches) = option_input(t1, registry)?;
+            let (wire, inner_body, niches) = option_input(t1, registry, emit)?;
             // `option_input` yields the canonical `Option<T>`; the converter
             // yields the spelling.
             let body: syn::Expr = syn::parse_quote!({
@@ -1311,7 +1321,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_produced(produced, &wire, &body, None),
+                function: self.build_input_fn_produced(produced, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {
@@ -1407,7 +1417,7 @@ impl JniGenBuilder {
         let registry = decls
             .declare_into(registry)?
             .validate_with(&decls)?
-            .convert_with(|crossing, built| decls.convert_crossing(crossing, built))?
+            .convert_with(|crossing, built, emit| decls.convert_crossing(crossing, built, emit))?
             .build()?;
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
@@ -1427,6 +1437,7 @@ impl Declarations {
         &self,
         crossing: &Crossing,
         built: &Building<'_, KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let (dir, key) = crossing;
         // The reading the scan already took for this crossing, fetched by the
@@ -1436,7 +1447,7 @@ impl Declarations {
         // there is no spelling to rebuild (#284).
         let reading = built.reading(key)?;
         match dir {
-            Direction::Input => self.select_input_type(&reading, built).or_else(|| {
+            Direction::Input => self.select_input_type(&reading, built, emit).or_else(|| {
                 // `impl Fn(args)` that nothing else claimed. Callback args cross
                 // in the OPPOSITE direction, which is why their required-ness
                 // rides `immediate_edges` rather than this converter's `subs`.
@@ -1447,9 +1458,9 @@ impl Declarations {
                 else {
                     return None;
                 };
-                self.dispatch_fn_input(args, built)
+                self.dispatch_fn_input(args, built, emit)
             }),
-            Direction::Output => self.select_output_type(&reading, built),
+            Direction::Output => self.select_output_type(&reading, built, emit),
         }
     }
 
@@ -1495,7 +1506,7 @@ impl Declarations {
         // fn's return type needs the output twin.
         let mut convert_edges: Vec<(Crossing, Crossing)> = Vec::new();
         for decl in &self.convert_decls {
-            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, &registry) {
+            if let Some(ty) = self.convert_target(&decl.key, &registry, Direction::Input) {
                 registry = registry.cross(Direction::Input, &ty);
                 // The target's conversion chains through this one, and nothing
                 // about the target type says so.
@@ -1504,7 +1515,7 @@ impl Declarations {
                     (Direction::Input, TypeKey::from_type(&ty)),
                 ));
             }
-            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, &registry) {
+            if let Some(ty) = self.convert_target(&decl.key, &registry, Direction::Output) {
                 registry = registry.cross(Direction::Output, &ty);
                 convert_edges.push((
                     (Direction::Output, decl.key.clone()),
@@ -1702,9 +1713,10 @@ impl Declarations {
         &self,
         args: &[crate::api::core::flat::TypeRef],
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args);
-        let (wire, body) = callback_input(self, args, registry)?;
+        let outer_ty = build_fn_type(args, emit);
+        let (wire, body) = callback_input(self, args, registry, emit)?;
         let niches = default_niches_for_wire(&wire);
         // `impl Fn(...)` crosses the extern tier as the erased lambda object
         // (`Any`) — same as the unfold builder / error-sink params. The typed
@@ -1763,11 +1775,8 @@ impl Prebindgen for Declarations {
                         let has_receiver =
                             func.params.iter().any(|p| &peel_receiver_key(&p.ty) == key);
                         if !has_receiver {
-                            let took: Vec<String> = func
-                                .params
-                                .iter()
-                                .map(|p| p.ty.spell().to_string())
-                                .collect();
+                            let took: Vec<String> =
+                                func.params.iter().map(|p| p.ty.to_string()).collect();
                             return Err(format!(
                                 "class `{}` method `{}`: no parameter of type `{}` — an \
                                  instance method's receiver must appear in the signature \
@@ -1798,7 +1807,7 @@ impl Prebindgen for Declarations {
                                 m.rust_ident,
                                 key.as_str(),
                                 key.as_str(),
-                                func.ret.spell()
+                                func.ret
                             ));
                         }
                     }
@@ -1839,8 +1848,7 @@ impl Prebindgen for Declarations {
                              factory can still hand back a handle. Return `{}` directly and \
                              report failure through the error channel, or model the failure \
                              as one of the sum's own variants",
-                            ok.spell(),
-                            ok.spell(),
+                            ok, ok,
                         ));
                     }
                 }
@@ -1886,10 +1894,10 @@ impl Prebindgen for Declarations {
                             // peeled sum, since that is what carries the
                             // declaration. Identical for a bare `E`; they
                             // diverge once it is wrapped.
-                            err_ty.spell(),
-                            core.spell(),
-                            err_ty.spell(),
-                            err_ty.spell(),
+                            err_ty,
+                            core,
+                            err_ty,
+                            err_ty,
                         ));
                     }
                 }
@@ -1919,10 +1927,7 @@ impl Prebindgen for Declarations {
                              those into the foreign list needs the element folder a `Vec<{}>` \
                              RETURN provides; declare the callback over one value \
                              (`impl Fn({})`) or return `Vec<{}>` instead",
-                            elem.spell(),
-                            elem.spell(),
-                            elem.spell(),
-                            elem.spell(),
+                            elem, elem, elem, elem,
                         ));
                     }
                 }
@@ -1951,7 +1956,11 @@ impl Prebindgen for Declarations {
     /// The struct is referenced by an unqualified `OwnedObject` from
     /// the same generated file, so no `use` paths leak into the host
     /// crate's source tree.
-    fn prerequisites(&self, registry: &Registry<KotlinMeta>) -> Vec<syn::Item> {
+    fn prerequisites(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
+    ) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
         // `JniBindingError` String-wrapper. Built-in converter bodies compose
         // their `?` failures into this type via its `From<String>` impl. A
@@ -1975,13 +1984,13 @@ impl Prebindgen for Declarations {
         // Handle destructors — one `extern "C" freePtr<suffix>` per
         // non-suppressed opaque handle (the Rust half of the typed-handle
         // `free()` pair the Kotlin emitter generates).
-        items.extend(build_handle_destructor_items(self, registry));
+        items.extend(build_handle_destructor_items(self, registry, emit));
         // Slice/Vec input helpers — a `…VecNew/Push/Free` trio per flattenable
         // element type a scanned `&[T]`/`Vec<T>` param takes. Kotlin builds the
         // Rust-side `Vec` by pushing each element's decoupled leaves, then passes
         // the handle (see `ParamMode::VecBuild`), avoiding per-element
         // `env.get_field(...)` upcalls on the Rust side.
-        items.extend(build_vec_build_helper_items(self, registry));
+        items.extend(build_vec_build_helper_items(self, registry, emit));
         // Expression constants — one nullary JNI getter extern per
         // `PackageDecl::constant_expr`, its value the binding-defined
         // expression evaluated with a glob import of every source module (so
@@ -2004,7 +2013,7 @@ impl Prebindgen for Declarations {
                 #expr
             });
             let wrapper =
-                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
+                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
             items.push(syn::parse2::<syn::Item>(wrapper).expect(
                 "constant_expr: generated getter wrapper is a single item by construction",
             ));
@@ -2012,7 +2021,12 @@ impl Prebindgen for Declarations {
         items
     }
 
-    fn post_process_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+    fn post_process_item(
+        &self,
+        item: &mut syn::Item,
+        registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
+    ) {
         self.qualify_item(item, registry);
     }
 
@@ -2022,14 +2036,16 @@ impl Prebindgen for Declarations {
         &self,
         f: &crate::api::core::flat::Function,
         registry: &Registry<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
-        emit_jni_function_wrapper(self, f, registry)
+        emit_jni_function_wrapper(self, f, registry, emit)
     }
 
     fn on_struct(
         &self,
         _s: &crate::api::core::flat::Struct,
         _registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         // Struct converter bodies are emitted by the resolver via
         // input_terminal / output_terminal below; no separate
@@ -2041,6 +2057,7 @@ impl Prebindgen for Declarations {
         &self,
         _v: &crate::api::core::flat::Variant,
         _registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -2049,6 +2066,7 @@ impl Prebindgen for Declarations {
         &self,
         _e: &crate::api::core::flat::Enum,
         _registry: &Registry<KotlinMeta>,
+        _emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -2064,14 +2082,16 @@ impl Prebindgen for Declarations {
         &self,
         c: &crate::api::core::flat::Constant,
         registry: &Registry<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> TokenStream {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);
         let const_ident = &c.name;
         let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
-        let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
-        let alias = crate::api::core::const_path_alias(c.origin.as_syn(), &source_module);
+        let wrapper =
+            emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee), emit);
+        let alias = emit.const_alias(c, &source_module);
         quote! {
             #alias
             #wrapper
@@ -2092,6 +2112,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()`: the arms below that ask what
         // a type IS use `reading`, and everything that has to name it in
@@ -2103,21 +2124,21 @@ impl Declarations {
         let key = reading.key();
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
-                return Some(self.opaque_handle_input(reading));
+                return Some(self.opaque_handle_input(reading, emit));
             }
         }
         // Fixed-size array of JNI primitives — dual of the output branch.
         // The `try_into` IS the length check: a JVM array of the wrong size
         // becomes a binding error naming the type, never a panic.
         if let Some(spec) = crate::api::lang::jnigen::jni::prim_array::prim_array_of(reading) {
-            let body = crate::api::lang::jnigen::jni::prim_array::input_body(reading, &spec);
+            let body = crate::api::lang::jnigen::jni::prim_array::input_body(reading, &spec, emit);
             let wire = spec.wire.clone();
             let kotlin_name = self.override_kotlin_name(&reading.key(), Some(spec.kotlin.clone()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2145,7 +2166,7 @@ impl Declarations {
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
-                            function: self.build_input_fn_of(reading, &wire, &body, None),
+                            function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                             destination: wire,
                             niches,
                             metadata: self.framework_meta(kotlin_name),
@@ -2154,7 +2175,7 @@ impl Declarations {
                 }
             }
         }
-        if let Some(conv) = self.lookup_input(reading, registry) {
+        if let Some(conv) = self.lookup_input(reading, registry, emit) {
             return Some(conv);
         }
         // `str` is unsized, so converters can't return it directly.
@@ -2216,7 +2237,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2233,7 +2254,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_input_fn_of(reading, &wire, &body, None),
+                function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata,
@@ -2250,7 +2271,7 @@ impl Declarations {
                 if let Some(crate::api::core::flat::Type::Variant(v)) =
                     registry.flat().declared_type(&name)
                 {
-                    let (wire, body) = sum_input_body(self, v, registry)?;
+                    let (wire, body) = sum_input_body(self, v, registry, emit)?;
                     // The wire's own null niche, exactly as a data class gets
                     // — that is what lets `Option<sum>` fold with JVM null as
                     // `None` instead of needing a boxed wrapper.
@@ -2263,7 +2284,7 @@ impl Declarations {
                     return Some(ConverterImpl {
                         subs: vec![],
                         pre_stages: vec![],
-                        function: self.build_input_fn_of(reading, &wire, &body, None),
+                        function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                         destination: wire,
                         niches,
                         metadata: self.framework_meta(kotlin_name),
@@ -2271,7 +2292,7 @@ impl Declarations {
                 }
             }
             if let Some(s) = registry.flat().struct_type(&name) {
-                let (wire, body) = struct_input_body(self, s, registry)?;
+                let (wire, body) = struct_input_body(self, s, registry, emit)?;
                 let niches = default_niches_for_wire(&wire);
                 // Auto-generated struct: the value-context Kotlin name is
                 // whatever the user pinned via `data_class`. If
@@ -2285,7 +2306,7 @@ impl Declarations {
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_input_fn_of(reading, &wire, &body, None),
+                    function: self.build_input_fn_of(reading, &wire, &body, None, emit),
                     destination: wire,
                     niches,
                     metadata: self.framework_meta(kotlin_name),
@@ -2325,6 +2346,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
             return None;
@@ -2366,7 +2388,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![stripped],
             pre_stages: vec![],
-            function: self.build_output_fn_of(reading, &wire, &body, None),
+            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
             destination: wire,
             niches: entry.niches.clone(),
             // The surface is the inner type's — a wrapper is invisible to the
@@ -2399,6 +2421,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         if reading.erased_wrappers().is_empty() {
             return None;
@@ -2444,7 +2467,7 @@ impl Declarations {
         Some(ConverterImpl {
             subs: vec![stripped],
             pre_stages: vec![],
-            function: self.build_input_fn_of(reading, &wire, &body, None),
+            function: self.build_input_fn_of(reading, &wire, &body, None, emit),
             destination: wire,
             niches: entry.niches.clone(),
             // The surface is the inner type's: a wrapper is invisible to the
@@ -2468,14 +2491,15 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Disjoint shapes (see [`WrapperShape`]), tried in priority order. The
         // borrow/option-ref/vec shapes are mutually exclusive; the two
         // `Optional` sub-cases share a method.
         self.input_borrow(shape, produced, t1, registry)
-            .or_else(|| self.input_option_ref(shape, produced, t1, registry))
-            .or_else(|| self.input_vec(shape, produced, t1, registry))
-            .or_else(|| self.input_option(shape, produced, t1, registry))
+            .or_else(|| self.input_option_ref(shape, produced, t1, registry, emit))
+            .or_else(|| self.input_vec(shape, produced, t1, registry, emit))
+            .or_else(|| self.input_option(shape, produced, t1, registry, emit))
     }
 
     // ── Output converters ────────────────────────────────────────────
@@ -2487,6 +2511,7 @@ impl Declarations {
         &self,
         reading: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // Classify off `kind`, spell with `spell()` — see `input_terminal`.
         // Everything below reads the reading: the identity for a lookup, the
@@ -2495,7 +2520,7 @@ impl Declarations {
         let key = reading.key();
         if let Some(cfg) = self.types.get(&key) {
             if cfg.is_opaque() {
-                return Some(self.opaque_handle_output(reading));
+                return Some(self.opaque_handle_output(reading, emit));
             }
         }
         // Fixed-size array of JNI primitives: `[u8; N]` -> `ByteArray`,
@@ -2509,7 +2534,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2532,7 +2557,7 @@ impl Declarations {
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
-                            function: self.build_output_fn_of(reading, &wire, &body, None),
+                            function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                             destination: wire,
                             niches,
                             metadata: self.framework_meta(kotlin_name),
@@ -2541,7 +2566,7 @@ impl Declarations {
                 }
             }
         }
-        if let Some(conv) = self.lookup_output(reading, registry) {
+        if let Some(conv) = self.lookup_output(reading, registry, emit) {
             return Some(conv);
         }
         // `str` is unsized, so it has no by-value output converter — but it is
@@ -2575,7 +2600,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),
@@ -2602,7 +2627,7 @@ impl Declarations {
             let body: syn::Expr = syn::parse_quote!(v);
             return Some(ConverterImpl {
                 subs: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -2620,7 +2645,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None),
+                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata,
@@ -2638,7 +2663,7 @@ impl Declarations {
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
-                    function: self.build_output_fn_of(reading, &wire, &body, None),
+                    function: self.build_output_fn_of(reading, &wire, &body, None, emit),
                     destination: wire,
                     niches,
                     metadata: self.framework_meta(kotlin_name),
@@ -2657,12 +2682,13 @@ impl Declarations {
         produced: &Produced<'_>,
         t1: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         // `t1`'s spelling, for the parts that ask spelling questions — the
         // canonical form a produced spelling is compared against, and the
         // type ascriptions the generated body writes. Everything else takes
         // the READING itself (#284).
-        let t1_ty = t1.spell();
+        let t1_ty = emit.spell(t1);
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
         // declared opaque handle). Canonical zenoh-flat's `z_*` accessors
         // return *borrowed* handles for the C tier's zero-copy borrows, but
@@ -2680,7 +2706,7 @@ impl Declarations {
                 ) as i64);
                 return Some(ConverterImpl {
                     subs: vec![],
-                    function: self.build_output_fn_produced(produced, &wire, &body, None),
+                    function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
                     destination: wire,
                     pre_stages: vec![],
                     niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
@@ -2742,7 +2768,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_produced(produced, &wire, &body, None),
+                function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {
@@ -2813,7 +2839,7 @@ impl Declarations {
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_produced(produced, &wire, &body, None),
+                function: self.build_output_fn_produced(produced, &wire, &body, None, emit),
                 destination: wire,
                 niches,
                 metadata: KotlinMeta {
@@ -2837,12 +2863,13 @@ impl Declarations {
         &self,
         elem: &crate::api::core::flat::TypeRef,
         registry: &impl Conversions<KotlinMeta>,
+        emit: &crate::api::core::emit::Emit,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let inner = registry.output_entry(elem)?;
         let elem_key = elem.key();
         // The element as the source spelled it — the slice type this converter
         // yields is re-emitted, never re-derived.
-        let elem = elem.spell();
+        let elem = emit.spell(elem);
         // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf
         // fold (typed-handle wrap), bypassing this whole-`ArrayList` converter; a
         // handle's `jlong` wire isn't JObject-shaped, so it returns `None` here.
