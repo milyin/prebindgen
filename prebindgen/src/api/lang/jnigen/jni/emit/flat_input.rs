@@ -293,7 +293,7 @@ pub(crate) fn struct_input_body(
     // refuse both; the per-field name check cannot, because an empty struct
     // has no field to refuse. `Struct::spell` is the dual of the
     // `Alternative::spell` the sum decoder uses for exactly this.
-    let ctor = s.spell(quote!(#struct_module::#struct_ident), &field_init);
+    let ctor = emit.shape(s, quote!(#struct_module::#struct_ident), &field_init);
     let body: syn::Expr = syn::parse_quote!({
         #(#field_preludes)*
         #ctor
@@ -370,7 +370,7 @@ pub(crate) fn sum_input_body(
         // a three-arm `syn::Fields` match here would have had to re-derive
         // that, and `Alternative::is_empty()` cannot: `B`, `B()` and `B {}`
         // are all empty by it.
-        let ctor = alt.spell(quote!(#source_module::#enum_ident::#vident), &inits);
+        let ctor = emit.shape(alt, quote!(#source_module::#enum_ident::#vident), &inits);
         arms.push(quote! {
             if env.is_instance_of(__obj, #jvm_class)
                 .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(

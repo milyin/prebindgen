@@ -192,7 +192,9 @@ fn empty_delimiters_survive_and_spell() {
 
     let spell = |a: &Alternative| {
         let name = &a.name;
-        a.spell(quote::quote!(E::#name), &[]).to_string()
+        crate::api::core::emit::Emit::for_test()
+            .shape(a, quote::quote!(E::#name), &[])
+            .to_string()
     };
     assert_eq!(spell(&v.alternatives[0]), "E :: A");
     assert_eq!(spell(&v.alternatives[1]), "E :: B ()");
@@ -210,7 +212,9 @@ fn empty_delimiters_survive_and_spell() {
     let e = as_enum(&element);
     let spell = |v: &EnumValue| {
         let name = &v.name;
-        v.spell(quote::quote!(F::#name), &[]).to_string()
+        crate::api::core::emit::Emit::for_test()
+            .shape(v, quote::quote!(F::#name), &[])
+            .to_string()
     };
     assert_eq!(spell(&e.values[0]), "F :: A");
     assert_eq!(spell(&e.values[1]), "F :: B ()");
@@ -231,7 +235,9 @@ fn empty_delimiters_survive_and_spell() {
             .map(|f| f.bind(&quote::format_ident!("__f{}", f.index)))
             .collect();
         let name = &a.name;
-        a.spell(quote::quote!(Reading::#name), &parts).to_string()
+        crate::api::core::emit::Emit::for_test()
+            .shape(a, quote::quote!(Reading::#name), &parts)
+            .to_string()
     };
     assert_eq!(bind(&v.alternatives[0]), "Reading :: Exact (__f0)");
     assert_eq!(
@@ -252,7 +258,9 @@ fn struct_delimiters_survive_and_spell() {
         let name = &s.name;
         (
             s.fields.len(),
-            s.spell(quote::quote!(#name), parts).to_string(),
+            crate::api::core::emit::Emit::for_test()
+                .shape(s, quote::quote!(#name), parts)
+                .to_string(),
         )
     };
 

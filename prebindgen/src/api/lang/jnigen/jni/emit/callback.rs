@@ -128,8 +128,15 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
                 .collect();
-            let (leaf_stmts, leaf_args) =
-                encode_plan_leaves(ext, registry, plan, &obj_idents, &quote!(__cb_elem), &fail);
+            let (leaf_stmts, leaf_args) = encode_plan_leaves(
+                ext,
+                registry,
+                plan,
+                &obj_idents,
+                &quote!(__cb_elem),
+                &fail,
+                emit,
+            );
             let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
             let elem_frame_lit = syn::LitInt::new(&elem_frame.to_string(), Span::call_site());
             preludes.push(quote! {
@@ -185,8 +192,15 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cb{}_obj{}", i, k))
                 .collect();
-            let (stmts, arg_exprs) =
-                encode_plan_leaves(ext, registry, plan, &obj_idents, &quote!(#cb_arg), &fail);
+            let (stmts, arg_exprs) = encode_plan_leaves(
+                ext,
+                registry,
+                plan,
+                &obj_idents,
+                &quote!(#cb_arg),
+                &fail,
+                emit,
+            );
             preludes.push(stmts);
             total += arg_exprs.len();
             jvalue_exprs.extend(arg_exprs);

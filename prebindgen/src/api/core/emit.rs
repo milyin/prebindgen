@@ -28,34 +28,37 @@
 //!
 //! [`Prebindgen::on_function`](super::prebindgen::Prebindgen::on_function) and
 //! its four peers, [`prerequisites`](super::prebindgen::Prebindgen::prerequisites),
-//! and [`post_process_item`](super::prebindgen::Prebindgen::post_process_item).
-//! Nothing else *yet*: the converter path — `RegistryBuilder::convert_with`'s
-//! closure, and the selector chains under it — still receives only
-//! `(&Crossing, &Building)`, and threading `&Emit` there is C3's job, together
-//! with moving [`TypeRef::spell`](super::flat::TypeRef::spell) behind this type.
+//! [`post_process_item`](super::prebindgen::Prebindgen::post_process_item), and
+//! the closure [`RegistryBuilder::convert_with`](super::registry::RegistryBuilder::convert_with)
+//! calls — a converter is generated Rust, since `ConverterImpl::function` is a
+//! complete `syn::ItemFn` the adapter writes. Nothing else.
 //!
 //! If a helper needs an `&Emit`, that is the helper saying it emits; if
 //! threading one to it feels wrong, it is probably deciding something and wants
 //! the model instead.
 //!
-//! # What is closed, and what is not
+//! # What is closed
 //!
-//! **Closed as of this stage: every route to a captured *item*.**
-//! `Element::as_syn`, `Type::as_syn` and `Origin::as_syn` are
-//! `pub(in crate::api::core)`, and so is `Origin::spell` — whose tokens
-//! re-parse to the item, which is the same door under another name. The
-//! `compile_fail` examples on [`Emit`] check each of those from outside the
-//! crate, which is where a doctest runs and where the census could never look.
+//! **Every route from the model to captured syntax.** `TypeRef::{as_syn, spell,
+//! stripped_syntax}`, `TypeKind::to_syn`, `Element::as_syn`, `Type::as_syn`,
+//! `Origin::{as_syn, spell}`, `Flat::enum_item` and the three `spell(head,
+//! parts)` shape methods are all `pub(in crate::api::core)`. Eleven
+//! `compile_fail` examples on [`Emit`] check each from outside the crate, and
+//! `flat::surface` fails if a *new* public item in `flat` returns a `syn` type.
 //!
-//! **Closed as of C5: type spellings too.** `TypeRef::spell`,
-//! `TypeRef::stripped_syntax` and `TypeKind::to_syn` are
-//! `pub(in crate::api::core)`. There is no route from the model to captured
-//! syntax outside this type, and the `compile_fail` examples check every one
-//! from outside the crate.
+//! Two things stay public because they are not that:
 //!
-//! `Origin::declared_spelling` stays public: an adapter declaration's
-//! `Origin<syn::Type>` holds a type the **build script** wrote, which was never
-//! captured and which #280 leaves the model no reading for.
+//! * [`Origin::declared_spelling`](super::flat::Origin::declared_spelling) — an
+//!   adapter declaration's `Origin<syn::Type>` holds a type the **build script**
+//!   wrote, never captured, which #280 leaves the model no reading for.
+//! * [`Field::member`](super::flat::Field::member) and
+//!   [`Field::bind`](super::flat::Field::bind) — they read the field's `name`
+//!   and `index`, model facts, no syntax.
+//!
+//! `Display for TypeRef` renders the **identity**, not the spelling: a message
+//! is decision code explaining itself and must not need this capability, and
+//! delegating to `spell()` would have handed the captured tokens back out
+//! through `format!`.
 //!
 //! # What the census did that this does not
 //!
@@ -132,8 +135,38 @@ use super::flat::{Element, EnumValue, Field, Struct, Type, TypeRef};
 /// fn leak(f: &flat::Function) -> proc_macro2::TokenStream { f.origin.spell() }
 /// ```
 ///
-/// A type's spelling, sealed as of C5 — the last route, and the one the census
-/// could only ever *count*:
+/// A type's **node** — the door C5 claimed to have closed and did not, found by
+/// review after the census was already deleted:
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(t: &flat::TypeRef) -> &syn::Type { t.as_syn() }
+/// ```
+///
+/// A declared enum's item, by name:
+///
+/// ```compile_fail
+/// # use prebindgen::core::Flat;
+/// fn leak(f: &Flat) -> Option<&syn::ItemEnum> { f.enum_item("E") }
+/// ```
+///
+/// The delimiters a shape was written with — `S { a }` vs `S(a)` vs `S`:
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(s: &flat::Struct) -> proc_macro2::TokenStream {
+///     s.spell(Default::default(), &[])
+/// }
+/// ```
+///
+/// ```compile_fail
+/// # use prebindgen::core::flat;
+/// fn leak(v: &flat::EnumValue) -> proc_macro2::TokenStream {
+///     v.spell(Default::default(), &[])
+/// }
+/// ```
+///
+/// A type's spelling — the route the census could only ever *count*:
 ///
 /// ```compile_fail
 /// # use prebindgen::core::flat;
@@ -288,26 +321,28 @@ impl Emit {
             .map(|(_, expr)| quote::quote!(#expr))
     }
 
-    /// A struct spelled with the delimiters the source wrote — `S { a: x }`,
-    /// `S(x)`, `S` — for a pattern or a constructor alike.
-    pub fn struct_shape(
+    /// A struct, alternative or enum value spelled with **the delimiters the
+    /// source wrote** — `S { a: x }`, `S(x)`, `S` — for a pattern or a
+    /// constructor alike.
+    ///
+    /// `B` and `B()` are both payload-free and still spelled differently, which
+    /// is why this is a rendering rather than something `kind` could answer.
+    ///
+    /// Note what is *not* here: [`Field::member`](super::flat::Field::member)
+    /// and [`Field::bind`](super::flat::Field::bind) stay ungated, because they
+    /// read the field's `name` and `index` — model facts, no captured syntax.
+    // `Shaped` is deliberately more private than this method: that is the
+    // sealed-trait pattern, and it is what stops the trait itself becoming a
+    // door. An out-of-crate consumer can call `shape` on the three elements
+    // and cannot implement it for anything else, or name it to route around.
+    #[allow(private_bounds)]
+    pub fn shape<S: super::flat::spell::Shaped>(
         &self,
-        s: &Struct,
+        s: &S,
         head: TokenStream,
         parts: &[TokenStream],
     ) -> TokenStream {
-        s.spell(head, parts)
-    }
-
-    /// An alternative spelled with its own delimiters. The [`Alternative`](super::flat::Alternative)
-    /// peer of [`Self::struct_shape`].
-    pub fn alternative_shape(
-        &self,
-        a: &super::flat::Alternative,
-        head: TokenStream,
-        parts: &[TokenStream],
-    ) -> TokenStream {
-        a.spell(head, parts)
+        super::flat::spell::fields(s.shape(), head, parts)
     }
 
     /// How a field is addressed in a pattern or an initializer — by name when

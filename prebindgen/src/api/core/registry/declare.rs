@@ -18,7 +18,7 @@ use super::*;
 /// let registry = Registry::builder(flat)?
 ///     .export(&name)
 ///     .decompose(decompositions)
-///     .convert_with(|crossing, built| my_gen.convert(crossing, built))?
+///     .convert_with(|crossing, built, emit| my_gen.convert(crossing, built, emit))?
 ///     .build()?;
 /// ```
 ///

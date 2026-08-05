@@ -36,6 +36,7 @@ pub(crate) fn emit_unfold_delivery(
     iface: Option<&IfaceSpec>,
     call_expr: &TokenStream,
     on_err: &TokenStream,
+    emit: &crate::api::core::emit::Emit,
 ) -> TokenStream {
     use crate::api::core::unfold::UnfoldShape;
 
@@ -60,7 +61,7 @@ pub(crate) fn emit_unfold_delivery(
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
     // yielding the per-leaf typed jvalue arg expressions.
     let encode_leaves = |value: &TokenStream| -> (TokenStream, Vec<TokenStream>) {
-        encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail)
+        encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail, emit)
     };
 
     // Cached-interface call statics for the builder / folder `run`.
@@ -862,6 +863,7 @@ pub(crate) fn encode_plan_leaves(
     obj_idents: &[syn::Ident],
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
+    emit: &crate::api::core::emit::Emit,
 ) -> (TokenStream, Vec<TokenStream>) {
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
@@ -964,6 +966,7 @@ pub(crate) fn encode_plan_leaves(
             &obj_idents[seg.clone()],
             matched,
             fail,
+            emit,
         );
         // The whole segment — its slot declarations and its `match` — is
         // routed like any other leaf under the same form.

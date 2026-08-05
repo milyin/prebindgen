@@ -110,7 +110,7 @@
 //!     .decompose(self.decompositions())
 //!     // `built` already holds everything this crossing composes from: that is
 //!     // what sorted means.
-//!     .convert_with(|crossing, built| self.convert(crossing, built))?
+//!     .convert_with(|crossing, built, emit| self.convert(crossing, built, emit))?
 //!     .build()?;
 //!
 //! self.emit(&registry, out)   // read-only from here
