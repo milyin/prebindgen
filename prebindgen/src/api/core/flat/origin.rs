@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use quote::ToTokens;
 
+use super::key::TypeKey;
 use crate::SourceLocation;
 
 /// The syntax a node was built from, plus where that syntax came from.
@@ -34,7 +35,7 @@ use crate::SourceLocation;
 ///
 /// `Rc` rather than `Arc`: this holds `syn` values, which are `!Send`, so the
 /// model can never cross a thread boundary and an atomic refcount would only
-/// cost. [`TypeKey`](crate::api::core::registry::TypeKey) made the same call for
+/// cost. [`TypeKey`] made the same call for
 /// the same reason.
 ///
 /// # The rule about origins
@@ -116,8 +117,8 @@ impl Origin<syn::Type> {
     /// identity is not reaching for the node, and it should not have to be
     /// spelled as one — every `TypeKey::from_type(decl.as_syn())` was a keying
     /// operation wearing an escape's clothes.
-    pub fn key(&self) -> crate::api::core::registry::TypeKey {
-        crate::api::core::registry::TypeKey::from_type(&self.syntax)
+    pub fn key(&self) -> TypeKey {
+        TypeKey::from_type(&self.syntax)
     }
 }
 

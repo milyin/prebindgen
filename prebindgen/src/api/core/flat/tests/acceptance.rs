@@ -1954,10 +1954,7 @@ fn the_layer_stack_stops_at_an_out_of_order_layer() {
 /// cannot be handed a disagreement.
 #[test]
 fn a_composed_type_keys_as_its_spelling() {
-    use crate::api::core::{
-        flat::{ScalarKind, TypeKind, TypeRef},
-        registry::TypeKey,
-    };
+    use crate::api::core::flat::{ScalarKind, TypeKey, TypeKind, TypeRef};
 
     let t = lower(quote::quote!(u64)).expect("in the language");
 

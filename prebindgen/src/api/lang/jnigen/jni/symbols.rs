@@ -559,8 +559,9 @@ impl NativeSymbol {
 
 #[cfg(test)]
 mod tests {
+    use kotlin_codegen as kt;
+
     use super::{erase_kt_type, is_valid_kotlin_ident, mangle_kotlin_ident, mangle_package};
-    use crate::api::gen::kotlin as kt;
 
     fn erase(generics: &[&str], ty: kt::KtType) -> String {
         let gs: Vec<String> = generics.iter().map(|s| s.to_string()).collect();

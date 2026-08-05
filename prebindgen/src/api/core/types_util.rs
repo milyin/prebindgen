@@ -46,7 +46,6 @@ fn path_tail_is(ty: &syn::Type, name: &str) -> bool {
 }
 
 /// True when `ty` is `Result<…>` (by last path segment).
-#[cfg(feature = "unstable-cbindgen")]
 pub fn is_result_type(ty: &syn::Type) -> bool {
     path_tail_is(ty, "Result")
 }

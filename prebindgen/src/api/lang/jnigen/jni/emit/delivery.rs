@@ -70,8 +70,8 @@ pub(crate) fn emit_unfold_delivery(
         let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
         quote! {
             #[allow(non_upper_case_globals)]
-            static __CB_MID: ::prebindgen::lang::CachedIfaceMethod =
-                ::prebindgen::lang::CachedIfaceMethod::new();
+            static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+                ::prebindgen_jni_runtime::CachedIfaceMethod::new();
             const __CB_FQN: &str = #fqn_lit;
             const __CB_DESCR: &str = #descr_lit;
         }
@@ -303,7 +303,7 @@ pub(crate) fn cast_wire_to_jobject(
     } else if let Some(helper) = box_helper_for_wire(wire) {
         let on_fail = fail(quote!(__e));
         quote! {
-            match ::prebindgen::lang::#helper(&mut env, #enc) {
+            match ::prebindgen_jni_runtime::#helper(&mut env, #enc) {
                 ::core::result::Result::Ok(__o) => __o,
                 ::core::result::Result::Err(__e) => {
                     #on_fail
@@ -1117,7 +1117,7 @@ pub(crate) fn encode_plan_leaves(
                                 let #handle_ident: jni::sys::jlong =
                                     std::boxed::Box::into_raw(std::boxed::Box::new(#place))
                                         as jni::sys::jlong;
-                                match ::prebindgen::lang::box_jlong(&mut env, #handle_ident) {
+                                match ::prebindgen_jni_runtime::box_jlong(&mut env, #handle_ident) {
                                     ::core::result::Result::Ok(__o) => __o,
                                     ::core::result::Result::Err(__e) => {
                                         #box_fail
@@ -1140,7 +1140,7 @@ pub(crate) fn encode_plan_leaves(
                                         let #handle_ident: jni::sys::jlong =
                                             std::boxed::Box::into_raw(std::boxed::Box::new(__n))
                                                 as jni::sys::jlong;
-                                        match ::prebindgen::lang::box_jlong(&mut env, #handle_ident) {
+                                        match ::prebindgen_jni_runtime::box_jlong(&mut env, #handle_ident) {
                                             ::core::result::Result::Ok(__o) => __o,
                                             ::core::result::Result::Err(__e) => {
                                                 #box_fail
@@ -1188,7 +1188,7 @@ pub(crate) fn encode_plan_leaves(
                                 let __encoded = conv(quote!(#reached));
                                 quote! {{
                                     let #handle_ident: jni::sys::jlong = #__encoded;
-                                    match ::prebindgen::lang::box_jlong(&mut env, #handle_ident) {
+                                    match ::prebindgen_jni_runtime::box_jlong(&mut env, #handle_ident) {
                                         ::core::result::Result::Ok(__o) => __o,
                                         ::core::result::Result::Err(__e) => {
                                             #box_fail
@@ -1236,7 +1236,7 @@ pub(crate) fn encode_plan_leaves(
                                 let __encoded = conv(quote!(*#reached));
                                 quote! {{
                                     let #enc_ident: jni::sys::jlong = #__encoded;
-                                    match ::prebindgen::lang::box_jlong(&mut env, #enc_ident) {
+                                    match ::prebindgen_jni_runtime::box_jlong(&mut env, #enc_ident) {
                                         ::core::result::Result::Ok(__o) => __o,
                                         ::core::result::Result::Err(__e) => {
                                             #box_fail

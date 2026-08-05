@@ -21,17 +21,41 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # `kotlin-codegen` is a sibling path dependency (`../kotlin-codegen`) until it
+  # is published to crates.io, so every job checks it out alongside this repo.
+  #
+  # Pinned to an immutable commit rather than resolved from `main` at run time.
+  # Since the in-tree Kotlin emitter was removed, that external revision is part
+  # of the source needed to reproduce a build: re-running an old commit must
+  # compile the same kotlin-codegen it was tested against, and an unrelated
+  # breaking change there must not turn a green commit red. Bumping this is a
+  # reviewed one-line diff, landed together with whatever compatibility change
+  # it needs.
+  #
+  # Local development still tracks kotlin-codegen `main` (see
+  # download_repositories.sh), matching how the other sibling repos work.
+  KOTLIN_CODEGEN_REV: 201497cc04a12f352e15468a1fd7c1a693c2fc1c
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prebindgen
     strategy:
       matrix:
         rust: [1.85.0, stable]
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - uses: actions/checkout@v4
+      with:
+        repository: milyin/kotlin-codegen
+        ref: ${{ env.KOTLIN_CODEGEN_REV }}
+        path: kotlin-codegen
     - name: Install Rust ${{ matrix.rust }}
       run: |
         rustup toolchain install ${{ matrix.rust }}
@@ -40,30 +64,36 @@ jobs:
     - name: Install Rust toolchain
       run: rustup component add rustfmt clippy
 
-    - name: Run clippy without default features
-      run: cargo clippy --all-targets --no-default-features --all-features -- --deny warnings
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- --deny warnings
 
     - name: Run rustfmt
       run: cargo fmt --check -- --config "unstable_features=true,imports_granularity=Crate,group_imports=StdExternalCrate"
 
     - name: Build
       run: cargo build
-    # `--all-features` is NOT optional here: the whole `lang::Cbindgen` suite is
-    # behind `unstable-cbindgen`, so a bare `cargo test` silently skips ~60
-    # tests. Both lines are kept — the first proves the default feature set
-    # still builds and passes on its own.
+    # `unstable-cbindgen` is gone, so the C adapter's ~60 tests are always
+    # compiled and a single run covers everything.
     - name: Run tests
-      run: |
-        cargo test
-        cargo test --all --all-features
+      run: cargo test --all
 
   covertest:
     # JVM-runtime coverage: regenerate every binding that commits its
     # generated output, fail on drift (the golden-diff invariant), then run
     # the covertest-kotlin assert harness on a real JVM.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prebindgen
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - uses: actions/checkout@v4
+      with:
+        repository: milyin/kotlin-codegen
+        ref: ${{ env.KOTLIN_CODEGEN_REV }}
+        path: kotlin-codegen
     - name: Install Rust
       run: rustup toolchain install stable && rustup default stable
     - uses: actions/setup-java@v4
@@ -73,7 +103,7 @@ jobs:
     - name: Regen check (golden diff of committed generated bindings)
       run: ./examples/regen-check.sh
     - name: Run covertest-kotlin assert harness
-      working-directory: examples/covertest-kotlin
+      working-directory: prebindgen/examples/covertest-kotlin
       run: ./gradlew run --console=plain
 
   smoke-asan:
@@ -81,8 +111,18 @@ jobs:
     # checked by a leak detector rather than by reading `smoke.c`. Its own job
     # so a leak is reported as a leak, not buried in the covertest log.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prebindgen
     steps:
     - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - uses: actions/checkout@v4
+      with:
+        repository: milyin/kotlin-codegen
+        ref: ${{ env.KOTLIN_CODEGEN_REV }}
+        path: kotlin-codegen
     - name: Install Rust
       run: rustup toolchain install stable && rustup default stable
     - name: Run the C smoke test under ASan/LSan/UBSan

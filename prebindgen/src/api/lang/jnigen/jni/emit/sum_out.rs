@@ -307,7 +307,7 @@ pub(crate) fn encode_sum_group(
             } else {
                 let box_fail = fail(quote!(__e));
                 quote! {
-                    #tag_id = match ::prebindgen::lang::box_jint(&mut env, #tag_lit) {
+                    #tag_id = match ::prebindgen_jni_runtime::box_jint(&mut env, #tag_lit) {
                         ::core::result::Result::Ok(__o) => __o,
                         ::core::result::Result::Err(__e) => {
                             #box_fail

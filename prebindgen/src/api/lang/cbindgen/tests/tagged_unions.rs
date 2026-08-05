@@ -765,7 +765,7 @@ fn bool_payload_is_normalised_not_materialised() {
 /// The rule the wire question actually obeys, and a correction to how #292
 /// stated it: "same `kind` ⇒ same wire" is false — a generator owns wire
 /// selection and may legitimately vary it per spelling, absorbing the
-/// difference in the destination-language wrapper (jnigen crosses `&[Payload]`
+/// difference in the destination-language wrapper (the JNI adapter crosses `&[Payload]`
 /// as a `Long` Vec handle and `Vec<Box<Payload>>` as a `JObject`, both surfacing
 /// as `List<Payload>`). What must not vary is **what the destination sees**.
 ///
@@ -776,7 +776,7 @@ fn bool_payload_is_normalised_not_materialised() {
 /// converter-destination rule and was **refused outright** (its output side is a
 /// structural marker whose `()` cannot agree with the input's pointer). So an
 /// erased wrapper decided whether the shape was expressible at all — the same
-/// defect shape as jnigen's declaration lookup in #292.
+/// defect shape as the JNI adapter's declaration lookup in #292.
 ///
 /// The exemption this does *not* touch is [`CbindgenBuilder::repr_c_struct`]: a
 /// zero-copy mirror is reinterpreted from the source struct's bytes, so its C

@@ -2,8 +2,7 @@
 //!
 //! # Experimental API
 //!
-//! This module is a proof of concept. Enable it with the non-default
-//! `prebindgen/unstable-cbindgen` feature. Its Rust builder API may change in a
+//! This module is a proof of concept. Its Rust builder API may change in a
 //! minor release; do not rely on it as part of the stable 0.5 API.
 //!
 //! A [`Prebindgen`] back-end that turns a "flat" `#[prebindgen]` library into a
@@ -110,14 +109,12 @@ use quote::{format_ident, quote, ToTokens};
 pub(crate) use crate::api::core::types_util::{
     is_result_type as is_result, path_tail_ident as type_path_tail, result_parts,
 };
-use crate::api::{
-    core::{
-        flat::{Field, Origin, ScalarKind, TypeKind, TypeRef},
-        niches::{NicheSlot, Niches},
-        prebindgen::{ConverterImpl, Prebindgen},
-        registry::{extract_fn_trait_args, Conversions, Direction, Registry, TypeKey},
-    },
-    lang::jnigen::{ConvertDecl, ConvertSpec},
+use crate::api::core::{
+    decl::{ConvertDecl, ConvertSpec},
+    flat::{Field, Origin, ScalarKind, TypeKind, TypeRef},
+    niches::{NicheSlot, Niches},
+    prebindgen::{ConverterImpl, Prebindgen},
+    registry::{extract_fn_trait_args, Conversions, Direction, Registry, TypeKey},
 };
 
 /// The origin of a type a **build script** wrote: real tokens, and deliberately

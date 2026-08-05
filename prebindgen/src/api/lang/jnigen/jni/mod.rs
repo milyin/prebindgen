@@ -16,12 +16,7 @@
 //!   * `prim` — JNI primitive (un)boxing tables;
 //!   * `kotlin_emit` / `render` / `fold` — the Kotlin source emitters.
 
-pub mod box_helpers;
-pub mod byte_array_helpers;
-pub mod iface_method;
-pub mod jni_binding_error;
 mod metadata;
-pub mod string_helpers;
 pub(crate) mod wire_access;
 
 // Shared imports for this module and all its sibling submodules
@@ -34,19 +29,18 @@ pub(crate) use std::{
     sync::Arc,
 };
 
-pub use box_helpers::{
-    box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
-};
-pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_array};
-pub use iface_method::CachedIfaceMethod;
-pub use jni_binding_error::JniBindingError;
+pub(crate) use kotlin_codegen as kt;
+use kotlin_codegen::WriteKotlinError;
 pub(crate) use metadata::{FoldStrategy, KotlinMeta, NullableKind, Projection, ProjectionKind};
+pub use prebindgen_jni_runtime::{
+    box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
+    decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
+    null_string, CachedIfaceMethod, JniBindingError,
+};
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
-pub use string_helpers::{decode_string, encode_string, null_string};
 
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
-pub(crate) use crate::api::gen::kotlin as kt;
 pub(crate) use crate::api::{
     core::{
         domain::ScalarValue,
@@ -56,7 +50,6 @@ pub(crate) use crate::api::{
         registry::{Direction, Registry, TypeKey},
         types_util::{option_inner_type, vec_inner_type},
     },
-    gen::kotlin::WriteKotlinError,
     lang::jnigen::{
         jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
         util::snake_to_camel,

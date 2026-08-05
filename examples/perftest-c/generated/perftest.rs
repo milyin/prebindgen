@@ -105,7 +105,7 @@ const _: () = {
         "value_opaque: Rust type and opaque counterpart differ in alignment"
     );
 };
-impl ::prebindgen::Transmute for payload_t {
+impl ::prebindgen_c_runtime::Transmute for payload_t {
     type Rust = perftest_flat::Payload;
     #[inline]
     fn from_rust(value: Self::Rust) -> Self {
@@ -131,7 +131,7 @@ impl ::prebindgen::Transmute for payload_t {
 pub unsafe extern "C" fn payload_drop(this_: *mut payload_t) {
     if !this_.is_null() {
         ::core::ptr::drop_in_place(
-            <payload_t as ::prebindgen::Transmute>::as_rust_mut(&mut *this_),
+            <payload_t as ::prebindgen_c_runtime::Transmute>::as_rust_mut(&mut *this_),
         );
     }
 }
@@ -162,7 +162,9 @@ pub(crate) unsafe fn __cbg_in_Payload(
             ::std::string::String::from("null Payload value passed by value"),
         );
     }
-    let __live = <payload_t as ::prebindgen::Transmute>::into_rust(::core::ptr::read(v));
+    let __live = <payload_t as ::prebindgen_c_runtime::Transmute>::into_rust(
+        ::core::ptr::read(v),
+    );
     (*v).label = ::core::ptr::null_mut();
     ::core::result::Result::Ok(__live)
 }
@@ -411,7 +413,7 @@ pub(crate) fn __cbg_in_str() {}
 pub(crate) fn __cbg_inmark_slice_Payload() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Payload(v: perftest_flat::Payload) -> payload_t {
-    <payload_t as ::prebindgen::Transmute>::from_rust(v)
+    <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(v)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_PayloadHandler(

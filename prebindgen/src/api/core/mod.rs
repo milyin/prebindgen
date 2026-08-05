@@ -17,12 +17,16 @@
 //! Secondary artifacts such as C headers or Kotlin sources are produced by the
 //! language adapter after the Rust registry is resolved.
 
+pub mod decl;
 pub mod diagnostics;
 pub mod domain;
-pub mod emit;
 pub mod expand;
 pub mod flat;
-pub mod gravestone;
+/// The `Emit` capability lives with the flat model, because every one of its
+/// methods delegates to a model method that is private to `flat` — that
+/// pairing is what makes `Emit` the only route to a node's syntax. Re-exported
+/// here so `core::emit` keeps naming it.
+pub use self::flat::emit;
 pub mod niches;
 pub mod prebindgen;
 pub mod registry;
@@ -32,11 +36,16 @@ pub mod types_util;
 pub mod unfold;
 pub(crate) mod write;
 
+pub use prebindgen_c_runtime::{Gravestone, Transmute};
+
 pub use self::{
+    decl::{
+        ConvertDecl, ConvertSourceDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FieldsDecl,
+        FunctionDecl,
+    },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
     flat::{Element, Flat},
-    gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
     prebindgen::{ConverterImpl, Prebindgen, Stage},
     registry::{

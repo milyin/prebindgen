@@ -36,8 +36,6 @@
 pub mod jni;
 pub(crate) mod util;
 
-#[cfg(feature = "unstable-cbindgen")]
-pub(crate) use jni::ConvertSpec;
 pub use jni::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
     decode_byte_array, decode_string, encode_byte_array, encode_string, matching, null_byte_array,
@@ -46,9 +44,8 @@ pub use jni::{
     FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, JniGenBuilder, PackageDecl,
     PtrClassDecl, SealedClassDecl, VariantDecl,
 };
-
-// Kotlin emission types now live in the standalone generator module
-// (`api::gen::kotlin`); re-exported here so the public `lang::` surface is
-// unchanged (`KotlinFile` aliases the model's `KtFile`).
-pub use crate::api::gen::kotlin::KtFile as KotlinFile;
-pub use crate::api::gen::kotlin::WriteKotlinError;
+// Kotlin emission types now live in the standalone `kotlin-codegen` crate;
+// re-exported here so the public `lang::` surface is unchanged (`KotlinFile`
+// aliases the model's `KtFile`).
+pub use kotlin_codegen::KtFile as KotlinFile;
+pub use kotlin_codegen::WriteKotlinError;

@@ -289,7 +289,7 @@ impl CbindgenBuilder {
         // answer rather than a gap being swallowed: the niche allocator is
         // reserving values no SIBLING CONVERSION can produce, and a crossing
         // the registry never entered has no conversion to produce one. Spelled
-        // as an explicit `0` — the same answer jnigen's twin gives — so the
+        // as an explicit `0` — the same answer the JNI adapter's twin gives — so the
         // reasoning is in the code instead of in a claim that a `filter_map`
         // silently relied on.
         let demand = registry

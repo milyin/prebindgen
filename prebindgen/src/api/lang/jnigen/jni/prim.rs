@@ -8,8 +8,9 @@
 //! the parallel `match jni_prim_name(..)` tables that used to repeat the
 //! same 8-way classification. The free `jni_unbox_*` / `is_jni_primitive`
 //! functions are kept as thin shims so call sites are unchanged. (The boxing
-//! direction lives in the `box_helpers` runtime module — generated code boxes
-//! via the cached `prebindgen::lang::box_j*` helpers, not inline tables.)
+//! direction lives in the `prebindgen-jni-runtime` crate's `box_helpers`
+//! module — generated code boxes via the cached `box_j*` helpers, not inline
+//! tables.)
 
 /// One of the eight JNI primitive wire types (`jboolean` … `jdouble`).
 #[derive(Clone, Copy, PartialEq, Eq)]

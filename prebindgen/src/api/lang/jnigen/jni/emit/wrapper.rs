@@ -464,8 +464,8 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             (
                 quote! {
                     #[allow(non_upper_case_globals)]
-                    static __DSINK_MID: ::prebindgen::lang::CachedIfaceMethod =
-                        ::prebindgen::lang::CachedIfaceMethod::new();
+                    static __DSINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+                        ::prebindgen_jni_runtime::CachedIfaceMethod::new();
                     const __DSINK_FQN: &str = #dfqn;
                     const __DSINK_DESCR: &str = #ddescr;
                 },
@@ -476,8 +476,8 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     };
     let sinks_setup = quote! {
         #[allow(non_upper_case_globals)]
-        static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod =
-            ::prebindgen::lang::CachedIfaceMethod::new();
+        static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+            ::prebindgen_jni_runtime::CachedIfaceMethod::new();
         const __SINK_FQN: &str = #bsink_fqn_lit;
         const __SINK_DESCR: &str = #bsink_descr_lit;
         #domain_setup
