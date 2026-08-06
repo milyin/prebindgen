@@ -435,11 +435,18 @@ impl IfaceSpec {
         } else {
             format!("<{}>", bare_generics.join(", "))
         };
-        // The extension receiver, in the same verbatim style as the return type
-        // below: both are same-package short names with the generic arguments
-        // already applied. It rides `KtFun::receiver`, not the name, so `asRaw`
-        // stays a plain identifier the Kotlin checker can accept.
-        let recv = KtType::cls(format!("{}{gen_args}", self.name));
+        // Type arguments as a structured list, NOT baked into the name: a
+        // `KtType::Named` whose `fqn` reads `Foo<R>` while its `args` are empty
+        // is a lie about the type, and anything that inspects `args` (JVM
+        // erasure, descriptors) reads it wrong. `generic` with an empty list
+        // renders exactly like `cls`, so the non-generic case needs no branch.
+        let type_args: Vec<KtType> = bare_generics
+            .iter()
+            .map(|g| KtType::var_(g.as_str()))
+            .collect();
+        // The extension receiver rides `KtFun::receiver`, not the name, so
+        // `asRaw` stays a plain identifier the Kotlin checker can accept.
+        let recv = KtType::generic(&self.name, type_args.clone());
         // `run` arguments: per-param `wrap` (1:1 view) or, with `typed_groups`,
         // one expression per group — a whole value reassembled from its leaves
         // via `Class.fromParts(leaves…)`, or a single passthrough leaf's wrap.
@@ -557,7 +564,7 @@ impl IfaceSpec {
         for g in &bare_generics {
             f = f.generic(g);
         }
-        f = f.returns(KtType::cls(format!("{}{gen_args}", self.raw_name())));
+        f = f.returns(KtType::generic(self.raw_name(), type_args));
         f.expr_body(body)
     }
 }
