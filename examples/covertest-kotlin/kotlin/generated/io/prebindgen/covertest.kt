@@ -14,6 +14,7 @@ import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Tagged
+import io.prebindgen.covertest.model.Verdict
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -514,22 +515,29 @@ public fun LedgerCallback.asRaw(): LedgerCallbackRaw =
         ledgerArchived__outcome__found_v0,
         ledgerArchived__outcome__failed_v0,
         ledgerArchived__label ->
-        run(
-            ledgerFiled__summary__count,
-            ledgerFiled__summary__total,
-            ledgerFiled__taken,
-            ledgerFiled__origin__secs,
-            ledgerFiled__origin__nanos,
-            when (ledgerFiled__outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(ledgerFiled__outcome__found_v0!!)); 2 -> Lookup.Failed(ledgerFiled__outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $ledgerFiled__outcome__tag") },
-            ledgerFiled__label,
-            ledgerArchived__summary__count,
-            ledgerArchived__summary__total,
-            ledgerArchived__taken,
-            ledgerArchived__origin__secs,
-            ledgerArchived__origin__nanos,
-            when (ledgerArchived__outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(ledgerArchived__outcome__found_v0!!)); 2 -> Lookup.Failed(ledgerArchived__outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $ledgerArchived__outcome__tag") },
-            ledgerArchived__label
-        )
+        val __own0 = when (ledgerFiled__outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(ledgerFiled__outcome__found_v0!!)); 2 -> Lookup.Failed(ledgerFiled__outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $ledgerFiled__outcome__tag") }
+        val __own1 = when (ledgerArchived__outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(ledgerArchived__outcome__found_v0!!)); 2 -> Lookup.Failed(ledgerArchived__outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $ledgerArchived__outcome__tag") }
+        try {
+            run(
+                ledgerFiled__summary__count,
+                ledgerFiled__summary__total,
+                ledgerFiled__taken,
+                ledgerFiled__origin__secs,
+                ledgerFiled__origin__nanos,
+                __own0,
+                ledgerFiled__label,
+                ledgerArchived__summary__count,
+                ledgerArchived__summary__total,
+                ledgerArchived__taken,
+                ledgerArchived__origin__secs,
+                ledgerArchived__origin__nanos,
+                __own1,
+                ledgerArchived__label,
+            )
+        } finally {
+            __own0?.close()
+            __own1?.close()
+        }
     }
 
 public fun interface StorageCallback {
@@ -1336,6 +1344,8 @@ internal object CovNative {
     ): Any?
 
     external fun unsignedSeries(acc: Any?, fold: Any, errorSink: Any): Any?
+
+    external fun verdictNew(id: Long, count: Long, total: Double, errorSink: Any): Verdict
 
     external fun wrappedFieldsSum(
         wId: Long,

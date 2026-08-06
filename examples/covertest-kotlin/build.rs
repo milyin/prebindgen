@@ -239,8 +239,15 @@ fn main() {
                 .class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
                 // `Lookup` is the sum in RETURN position whose groups own
                 // resources: one alternative carries an opaque handle, one
-                // carries nothing at all.
+                // carries nothing at all. Because it reaches an owned handle it
+                // is emitted `AutoCloseable`, and each variant class overrides
+                // `close()` — that is what lets a container cascade into it
+                // with the same one-liner a handle field gets (#218).
                 .class(sealed_class!(Lookup))
+                // …and `Verdict` is that container: the sum in DATA-CLASS FIELD
+                // position, the third place a handle is reached through.
+                // `Holder` above is the plain-handle field it must match.
+                .class(data_class!(Verdict))
                 // `Report`'s output boundary is DERIVED from its value form
                 // (`.fields_self_into(fields!(report_into_struct))` below) instead of
                 // being restated field by field — #213. The form it names is
@@ -517,6 +524,9 @@ fn main() {
                 // handle-carrying sum arriving through a CALLBACK, and a sum
                 // returned BORROWED (`&E` / `Option<&E>`).
                 .fun(fun!(lookup_each))
+                // #218: the same handle reached through a data-class FIELD, so
+                // the JVM harness can assert the container's cascade closes it.
+                .fun(fun!(verdict_new))
                 // #213: the output boundary DERIVED from the type's value form
                 // rather than restated. `report_each` delivers the decomposed
                 // `Report` in one crossing; the leaf list comes from

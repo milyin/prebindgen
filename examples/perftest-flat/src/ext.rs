@@ -333,13 +333,37 @@ pub fn lookup_of(count: i64, total: f64) -> Lookup {
 /// delivered in `count` order starting at `-1`, so `n >= 3` covers all three:
 /// `Failed` (`i = 0`), `Absent` (`i = 1`), then `Found` with an increasing
 /// count. A live group hands a native resource to the callback while the inert
-/// groups' slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
-/// but not closed by the proxy: it is the callback body's to close, exactly as
-/// for a returned sum.
+/// groups' slots stay defaulted. The proxy closes the reassembled value after
+/// `run` returns — close-unless-taken, exactly as for a handle passed directly
+/// to a callback (#218), so a body that means to outlive the call must `take()`
+/// the payload.
 #[prebindgen]
 pub fn lookup_each(n: i64, total: f64, sink: impl Fn(Lookup) + Send + Sync + 'static) {
     for i in 0..n {
         sink(lookup_of(i - 1, total));
+    }
+}
+
+/// The **third** position a handle can be reached through: a `data_class` field
+/// whose type is a handle-carrying sum. `Holder` covers the plain-handle field
+/// beside it, and the point of this one is that the two behave alike — the
+/// container is `AutoCloseable` and its `close()` cascades either way, because
+/// the field's type is an implementation detail and must not decide who frees
+/// the handle (#218).
+#[prebindgen]
+pub struct Verdict {
+    pub id: i64,
+    /// One alternative carries a `Summary` handle; closing the `Verdict`
+    /// closes it, through `Lookup`'s own `close()`.
+    pub outcome: Lookup,
+}
+
+/// Build a [`Verdict`] whose outcome comes from [`lookup_of`].
+#[prebindgen]
+pub fn verdict_new(id: i64, count: i64, total: f64) -> Verdict {
+    Verdict {
+        id,
+        outcome: lookup_of(count, total),
     }
 }
 

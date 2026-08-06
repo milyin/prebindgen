@@ -601,9 +601,38 @@ impl Declarations {
             .map(|d| format!("{d}\n\n{framework_line}"))
             .unwrap_or(framework_line);
 
+        // A sum whose payload reaches an owned native handle is `AutoCloseable`
+        // (#218): whoever holds the value closes it, exactly as they would a
+        // bare handle in that position, and the `when` over the alternatives is
+        // emitted ONCE — here, in the variant classes — instead of at every
+        // container and callback proxy that touches one. Before this, a handle
+        // reached through a sum was nobody's to close while the same handle in
+        // a plain field was the container's, so the free moved when the field's
+        // type changed.
+        // A variant closes what its own payload owns; the interface is
+        // closeable if any alternative is.
+        let payload_close = |field: &prebindgen_registry::flat::Field| {
+            crate::jni::struct_plan::type_close_strategy(self, registry, &field.ty, 0)
+        };
+        let any_closeable = sum
+            .alternatives
+            .iter()
+            .any(|alt| alt.fields.iter().any(|f| payload_close(f).is_some()));
+
         let mut class = KtClass::sealed_interface(class_name)
             .vis(KtVis::Public)
-            .kdoc(kdoc);
+            .kdoc(if any_closeable {
+                format!(
+                    "{kdoc}\n\nThe live alternative may carry a native handle, so this value is \
+                     `AutoCloseable`: closing it closes whatever the live alternative holds, and \
+                     is a no-op for the alternatives that hold nothing native."
+                )
+            } else {
+                kdoc
+            });
+        if any_closeable {
+            class = class.implements(KtType::cls("AutoCloseable"));
+        }
 
         // Nested variant classes, in declaration (tag) order.
         for alt in &sum.alternatives {
@@ -613,9 +642,13 @@ impl Declarations {
             // alternative is a `data object` with none at all.
             let mut vprops: Vec<(String, KtType)> = Vec::new();
             let mut vparams: Vec<KtCtorParam> = Vec::new();
+            let mut vcloses: Vec<String> = Vec::new();
             for field in &alt.fields {
                 let prop = sum_field_prop_name(&field.member());
                 let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
+                if let Some(strategy) = payload_close(field) {
+                    vcloses.push(render_handle_close(&strategy, &prop));
+                }
                 vprops.push((prop.clone(), ty.clone()));
                 vparams.push(KtCtorParam::new(&prop, ty).val().vis(KtVis::Public));
             }
@@ -647,6 +680,17 @@ impl Declarations {
                 .flatten()
             {
                 vclass = vclass.member(m);
+            }
+            // `close()` on EVERY alternative once the interface is closeable —
+            // Kotlin requires the override, and an alternative holding nothing
+            // native gets the empty body that says so. A `data object` takes an
+            // overridden method as readily as a `data class` does.
+            if any_closeable {
+                let mut body = KtCode::new();
+                for line in &vcloses {
+                    body = body.line(line.clone());
+                }
+                vclass = vclass.member(KtFun::new("close").modifier("override").body(body));
             }
             class = class.member(vclass);
         }
