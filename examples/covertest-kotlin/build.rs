@@ -549,6 +549,12 @@ fn main() {
                 .fun(fun!(boxed_opt_priority_weight))
                 .fun(fun!(boxed_elem_id_sum))
                 .fun(fun!(boxed_run_id_sum))
+                // The two spellings of a borrowed run (#384). One type to the
+                // model, so both take the Vec-build path — and the compiled
+                // binding is what proves the emitter serves both, since the
+                // failure was an `E0308` rather than a wrong answer.
+                .fun(fun!(slice_id_sum))
+                .fun(fun!(ref_vec_id_sum))
                 // The same wrapper over a DECOMPOSED return (#292). `Summary`
                 // has an output expansion, so this return takes no converter to
                 // name the spelling for it — the extern binds the value and

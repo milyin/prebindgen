@@ -1790,6 +1790,39 @@ pub fn boxed_run_id_sum(ps: Box<Vec<Payload>>) -> i64 {
     ps.iter().map(|p| p.id).sum()
 }
 
+/// The **borrowed** run spelled as a slice — the control half of the pair with
+/// [`ref_vec_id_sum`].
+///
+/// Declared as a sum rather than reusing [`crate::storage_put_slice`] so the two
+/// spellings can be weighed against each other directly: same argument, same
+/// answer, or the claim is only that each compiles.
+#[prebindgen]
+pub fn slice_id_sum(ps: &[Payload]) -> i64 {
+    ps.iter().map(|p| p.id).sum()
+}
+
+/// The same borrowed run spelled `&Vec<T>`, which is **one type** to the model:
+/// `sequence_elem` answers for `&[T]` and `&Vec<T>` alike, so both reach the
+/// Vec-build path and the emitter has to serve both.
+///
+/// It did not. The by-ref lowering hands the callee a borrow of the transient
+/// Rust-side `Vec`, and ascribing that borrow `&[T]` coerced it at the `let` —
+/// so this spelling got a `&[Payload]` and the generated crate did not build
+/// (`E0308`; the deref coercion runs `&Vec<T>` → `&[T]`, not back). #384.
+///
+/// Load-bearing, and the only kind of fixture that can be: a lib test emits
+/// tokens and never compiles them, while this crate's binding is `include!`d
+/// and built. Put the ascription back and `cargo build -p covertest-kotlin`
+/// fails here.
+#[prebindgen]
+// A `&Vec` parameter IS the point here — clippy is right that it should be
+// `&[_]`, and that is what makes it a fixture: the two spellings are one type
+// to the model, so the binding must serve both.
+#[allow(clippy::ptr_arg)]
+pub fn ref_vec_id_sum(ps: &Vec<Payload>) -> i64 {
+    ps.iter().map(|p| p.id).sum()
+}
+
 /// Deliver a [`Ledger`] to a callback, so both conditional decompositions cross
 /// in ONE call — including the sum (`Report::outcome`) each one carries, whose
 /// `match` belongs inside the arm that binds the report.

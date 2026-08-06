@@ -607,10 +607,10 @@ fn emit_input_param(
         // single `jlong` handle to a Rust-side `Vec<T>` that the Kotlin
         // wrapper builds by pushing each element's decoupled leaves in a loop
         // (see `build_vec_build_helper_items` + `ParamMode::VecBuild`) — no
-        // per-element `env.get_field(...)`. `&[T]` borrows the boxed Vec;
-        // by-value `Vec<T>` moves it out with `mem::take` (leaving an empty
-        // Vec the Kotlin `finally` frees). Decode is infallible, like the
-        // by-value-handle consume below.
+        // per-element `env.get_field(...)`. A borrowed run — `&[T]` or
+        // `&Vec<T>` — borrows the boxed Vec; by-value `Vec<T>` moves it out
+        // with `mem::take` (leaving an empty Vec the Kotlin `finally` frees).
+        // Decode is infallible, like the by-value-handle consume below.
         InputKind::VecBuild { elem, by_ref } => {
             // Generated Rust spells the reading's own tokens.
             let elem = emit.spell(elem);
@@ -620,9 +620,25 @@ fn emit_input_param(
                 // `vec_build_elem` refuses a wrapped run on this path, so the
                 // borrow is the parameter's own spelling and there is nothing
                 // to put back.
+                //
+                // **No ascription**, for the reason the by-value branch below
+                // gives: the expression already produces the local's type, and
+                // naming it here writes the same fact twice — but here it also
+                // got it WRONG. `&*(.. as *const Vec<T>)` is a `&Vec<T>`, and
+                // ascribing `&[T]` coerced it at the `let`, where only one of
+                // the two spellings the model accepts can come out. A
+                // `&Vec<T>` parameter — which `sequence_elem` answers for
+                // exactly as it does for `&[T]` — was then handed a `&[T]`:
+                // `E0308` in the generated crate, since the deref coercion runs
+                // `&Vec<T>` → `&[T]` and not back (#384).
+                //
+                // Unascribed, the coercion moves to the call site and serves
+                // both: exact for `&Vec<T>`, deref for `&[T]`. `&mut Vec<T>`
+                // stays refused, and by `sequence_elem` returning `None` for a
+                // `Ref` kind rather than by the `mutable: false` guard — that
+                // guard is what refuses `&mut [T]`.
                 prelude.push(quote!(
-                    let #arg_ident: &[#elem] =
-                        unsafe { &*(#handle_ident as *const Vec<#elem>) };
+                    let #arg_ident = unsafe { &*(#handle_ident as *const Vec<#elem>) };
                 ));
             } else {
                 // By value the local is owned, so the run's wrappers go back on

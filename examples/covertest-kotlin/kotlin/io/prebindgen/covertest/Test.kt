@@ -52,6 +52,8 @@ import io.prebindgen.covertest.model.boxedOptPayloadId
 import io.prebindgen.covertest.model.boxedOptPriorityWeight
 import io.prebindgen.covertest.model.boxedPayloadId
 import io.prebindgen.covertest.model.boxedRunIdSum
+import io.prebindgen.covertest.model.refVecIdSum
+import io.prebindgen.covertest.model.sliceIdSum
 import io.prebindgen.covertest.model.holderTagOr
 import io.prebindgen.covertest.model.wrappedFieldsSum
 import io.prebindgen.covertest.model.boxedNoteEcho
@@ -1480,6 +1482,15 @@ fun main() {
         val many = listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null))
         check(boxedElemIdSum(many, boom) == 3L)           // wrapped element
         check(boxedRunIdSum(many, boom) == 3L)            // wrapped run, by value
+
+        // The two spellings of a BORROWED run (#384). `&[Payload]` and
+        // `&Vec<Payload>` are one type to the model, so both take the Vec-build
+        // path and must come out identical — the `&Vec` one used to be handed a
+        // `&[Payload]`, which is an E0308 in the generated crate rather than a
+        // wrong answer. Weighed against each other, not against a literal.
+        check(refVecIdSum(many, boom) == sliceIdSum(many, boom))
+        check(sliceIdSum(many, boom) == 3L)
+        check(refVecIdSum(emptyList(), boom) == 0L)       // …and the empty run
 
         // FIELDS (#289). `boxed: Box<Option<Long>>` and `plain: Option<Long>`
         // are one type to the model, so both cross as `Long?` on the decoupled

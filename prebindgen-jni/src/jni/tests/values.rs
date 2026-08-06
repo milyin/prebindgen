@@ -2024,3 +2024,106 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
          `Box<&Vec<Foo>>` — an E0308 in the generated crate:\n{kotlin}"
     );
 }
+
+/// The two spellings of a **borrowed run** get the same local, and it is the
+/// borrow of the `Vec` rather than a slice of it (#384).
+///
+/// `sequence_elem` answers for `&[T]` and `&Vec<T>` alike — they are one type to
+/// the model — so both reach the Vec-build path. The emitter was not symmetric
+/// with that: it ascribed `&[#elem]` to the local, which coerced
+/// `&*(.. as *const Vec<T>)` at the `let` and could therefore produce only one
+/// of the two. A `&Vec<T>` parameter was then handed a `&[T]`, which does not
+/// coerce back — `E0308` in the generated crate.
+///
+/// Unascribed, the coercion moves to the call site and serves both. What this
+/// test can pin is the **shape**; that it compiles is `covertest-kotlin`'s
+/// `ref_vec_id_sum`/`slice_id_sum` pair, since a lib test emits tokens and never
+/// builds them.
+#[test]
+fn both_spellings_of_a_borrowed_run_get_the_vec_borrow() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_slice(v: &[Foo]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_ref_vec(v: &Vec<Foo>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(prebindgen_registry::fun!(put_slice))
+                .fun(prebindgen_registry::fun!(put_ref_vec)),
+        );
+
+    let dir = unique_test_dir("jnigen_borrowed_run_spellings");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let gen = jni.build_with(registry).expect("resolve");
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+
+    // Both spellings reach the Vec-build path — the premise. `&Vec<Foo>` did
+    // too before the fix, which is exactly why it broke rather than falling
+    // back to the general converter.
+    for f in ["publicfunputSlice(", "publicfunputRefVec("] {
+        let body = kc
+            .split(f)
+            .nth(1)
+            .map(|s| s.split("publicfun").next().unwrap_or(s).to_string())
+            .unwrap_or_default();
+        assert!(
+            body.contains("fooVecNew"),
+            "`{f}` must take the Vec-build path — both spellings are one type to \
+             the model:\n{kotlin}"
+        );
+    }
+
+    // The finding: ONE local, and it is the `Vec` borrow. Counted rather than
+    // merely found, so a per-spelling form cannot pass.
+    assert_eq!(
+        rc.matches("letv=unsafe{&*(v_handleas*constVec<myflat::Foo>)};")
+            .count(),
+        2,
+        "both borrowed runs must get the same unascribed `&Vec<Foo>` local:\n{rust}"
+    );
+    // …and no slice ascription survives, which is the thing that broke.
+    assert!(
+        !rc.contains("letv:&[myflat::Foo]="),
+        "ascribing `&[Foo]` coerces at the `let`, so a `&Vec<Foo>` parameter \
+         gets a `&[Foo]` and the generated crate does not build (E0308):\n{rust}"
+    );
+}
