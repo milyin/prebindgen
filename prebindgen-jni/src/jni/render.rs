@@ -5,7 +5,7 @@
 //! via `use super::*`.
 
 use kotlin_codegen::{
-    KtClass, KtClassKind, KtCode, KtCtorParam, KtEnumEntry, KtFun, KtParam, KtProperty, KtType,
+    KtClass, KtCode, KtCompanion, KtCtorParam, KtEnumEntry, KtFun, KtParam, KtProperty, KtType,
     KtVis,
 };
 use prebindgen_registry::Conversions;
@@ -52,28 +52,31 @@ pub(crate) fn build_enum_class(
         .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    KtClass::new(KtClassKind::Enum(entries), class_name)
+    let mut class = KtClass::enum_(class_name)
         .vis(KtVis::Public)
         .kdoc(enum_kdoc)
         .ctor_param(
             KtCtorParam::new("value", KtType::int())
                 .val()
                 .vis(KtVis::Public),
-        )
-        // `@JvmStatic` exposes `fromInt` as a real static method on the enum
-        // class itself (rather than only on the `Companion` nested class). The
-        // generated struct-encoder calls it via `env.call_static_method`,
-        // which wouldn't find a companion-only method.
-        .companion(
-            KtClass::companion_object().vis(KtVis::Public).member(
-                KtFun::new("fromInt")
-                    .vis(KtVis::Public)
-                    .annotation("JvmStatic")
-                    .param(KtParam::new("value", KtType::int()))
-                    .returns(KtType::cls(class_name))
-                    .expr_body(KtCode::new().line("entries.first { it.value == value }")),
-            ),
-        )
+        );
+    for e in entries {
+        class = class.entry(e);
+    }
+    // `@JvmStatic` exposes `fromInt` as a real static method on the enum
+    // class itself (rather than only on the `Companion` nested class). The
+    // generated struct-encoder calls it via `env.call_static_method`,
+    // which wouldn't find a companion-only method.
+    class.companion(
+        KtCompanion::new().vis(KtVis::Public).member(
+            KtFun::new("fromInt")
+                .vis(KtVis::Public)
+                .annotation("JvmStatic")
+                .param(KtParam::new("value", KtType::int()))
+                .returns(KtType::cls(class_name))
+                .expr_body(KtCode::new().line("entries.first { it.value == value }")),
+        ),
+    )
 }
 
 /// Build the Kotlin `data class` declaration for a `data_class`-declared
@@ -179,7 +182,18 @@ pub(crate) fn build_data_class(
         panic!("render_data_class_source: could not build fromParts factory for `{class_name}`")
     });
 
-    let mut class = KtClass::new(KtClassKind::Data, class_name).vis(KtVis::Public);
+    // Kotlin requires a `data class` to declare at least one constructor
+    // property, so the model takes the first one at construction. A declared
+    // `data_class` with no fields could never have rendered as valid Kotlin.
+    let mut ctor_params = ctor_params.into_iter();
+    let first = ctor_params.next().unwrap_or_else(|| {
+        panic!(
+            "data class `{class_name}`: Rust struct `{}` has no fields — a Kotlin `data class` \
+             must declare at least one constructor property",
+            item_struct.name
+        )
+    });
+    let mut class = KtClass::data(class_name, first).vis(KtVis::Public);
     if let Some(doc) = item_struct.docs() {
         class = class.kdoc(doc);
     }
@@ -197,7 +211,7 @@ pub(crate) fn build_data_class(
     // Supertype clause: a data class with a destructible native-handle field
     // implements `AutoCloseable`; otherwise no supertype.
     if !destructible_fields.is_empty() {
-        class = class.supertype(KtType::cls("AutoCloseable"), None);
+        class = class.implements(KtType::cls("AutoCloseable"));
         // `close()` walks every destructible field via its folded close
         // strategy. `JNINativeHandle.close()` is idempotent
         // (Cleaner.Cleanable.clean() invokes exactly once), so calling
@@ -230,11 +244,7 @@ pub(crate) fn build_data_class(
     for (name, ty) in &factory_params {
         factory = factory.param(KtParam::new(name, ty.clone()));
     }
-    class = class.companion(
-        KtClass::companion_object()
-            .vis(KtVis::Public)
-            .member(factory),
-    );
+    class = class.companion(KtCompanion::new().vis(KtVis::Public).member(factory));
     class
 }
 
@@ -308,10 +318,10 @@ pub(crate) fn build_typed_handle(
     // Companion object: the `@JvmStatic external fun freePtr(ptr: Long)` called
     // by `close()`, plus one **factory** member per `.constructor(f, name)`
     // (a free wrapper — no receiver — returning the class).
-    let mut companion = KtClass::companion_object().vis(KtVis::Public).member(
+    let mut companion = KtCompanion::new().vis(KtVis::Public).member(
         KtFun::new(free_extern.clone())
             .annotation("JvmStatic")
-            .modifier("external")
+            .external()
             .param(KtParam::new("ptr", KtType::long())),
     );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
@@ -339,7 +349,7 @@ pub(crate) fn build_typed_handle(
     // Consumer interfaces (`.implements`) and the generated `<Name>Api`
     // interface (`.interface()`) are attached by `apply_class_interface` in
     // `write_typed_handles` after the class body is built.
-    let mut class = KtClass::new(KtClassKind::Plain, class_name)
+    let mut class = KtClass::class_(class_name)
         .vis(KtVis::Public)
         .kdoc(class_kdoc)
         .ctor_param(KtCtorParam::new("initialPtr", KtType::long()));
@@ -355,7 +365,7 @@ pub(crate) fn build_typed_handle(
             imports.insert(format!("{}.registerGcHandle", ext.package));
         }
         class
-            .supertype(KtType::cls(base_fqn), Some("initialPtr"))
+            .extends(KtType::cls(base_fqn), Some("initialPtr"))
             .member(
                 KtProperty::val("__cleanable")
                     .vis(KtVis::Private)
@@ -388,7 +398,7 @@ pub(crate) fn build_typed_handle(
             )
     } else {
         class
-            .supertype(KtType::cls(base_fqn), Some("initialPtr"))
+            .extends(KtType::cls(base_fqn), Some("initialPtr"))
             .member(
                 KtFun::new("close")
                     .annotation("Synchronized")
@@ -566,7 +576,7 @@ pub(crate) fn render_extern_decl(
         }
     };
 
-    let mut fun = KtFun::new(jni_call).modifier("external");
+    let mut fun = KtFun::new(jni_call).external();
     for p in params {
         fun = fun.param(p);
     }

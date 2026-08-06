@@ -77,7 +77,7 @@ impl JniGenBuilder {
         // directly by many emitters, so mangling at this single storage
         // point keeps every reader consistent; warn here (the raw input is
         // only available now) when a segment was changed.
-        self.decls.package = mangle_package(&trimmed);
+        self.decls.package = mangle_kotlin_package(&trimmed);
         if self.decls.package != trimmed {
             println!(
                 "cargo:warning=prebindgen: package prefix `{trimmed}` sanitized to `{}` \
