@@ -229,3 +229,8 @@ See example projects in the [examples directory](https://github.com/milyin/prebi
 - **prebindgen-registry**: [docs.rs/prebindgen-registry](https://docs.rs/prebindgen-registry)
 - **prebindgen-c**: [docs.rs/prebindgen-c](https://docs.rs/prebindgen-c)
 - **prebindgen-jni**: [docs.rs/prebindgen-jni](https://docs.rs/prebindgen-jni)
+
+## Releasing
+
+Publishing is automated from GitHub Actions, one crate per dispatch and in
+dependency order. See [RELEASING.md](RELEASING.md).
