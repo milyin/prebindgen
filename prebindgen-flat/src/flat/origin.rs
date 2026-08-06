@@ -53,10 +53,10 @@ use super::key::TypeKey;
 /// > **You may output the source. You may not read it.**
 ///
 /// [`spell`](Self::spell) hands out tokens and nothing else, which is all
-/// generated Rust ever needed; `as_syn` hands out the node and
-/// is the **one** way to get one. The field itself is `pub(super)`, so the model
-/// still reads it freely and everything downstream has to say which of the two
-/// it meant.
+/// generated Rust ever needed. The node is reachable only through one
+/// crate-internal accessor, and the field itself is `pub(super)` — so the
+/// model still reads it freely, while everything outside is limited to the
+/// spelling.
 ///
 /// It was a public field returning a `syn` node to anyone who asked.
 /// Outside this crate, captured syntax is reachable only through

@@ -65,7 +65,7 @@
 //! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
 //!
 //! It buys one property: the syntax is **recoverable from the kind**
-//! (`TypeKind::to_syn`, checked over the whole acceptance corpus). Which is
+//! (checked, over the whole acceptance corpus, by rebuilding it). Which is
 //! the difference between a slice that rides along because it is exact, and one
 //! the model cannot do without.
 //!
@@ -107,7 +107,8 @@
 //!
 //! For a **type** the slice is no longer where facts go to survive:
 //! [`TypeKind`] keeps the lifetime, the wrapper and the argument it once
-//! dropped, and `TypeKind::to_syn` is the round-trip that says so. What is
+//! dropped, and rebuilding the syntax from it is the round-trip that says
+//! so. What is
 //! left is the reason a slice beats a reconstruction anywhere — it is what the
 //! source wrote, and it is already there.
 //!
@@ -790,9 +791,9 @@ impl Flat {
     ///
     /// Grammar only, and it **validates by lowering**: an `Err` is a shape the
     /// language cannot express, an `Ok` is the element to admit. Whether the types
-    /// it names are *declared* is a whole-model question (`resolve_references`),
-    /// and a binding-local fn may legitimately name types the source crate never
-    /// did.
+    /// it names are *declared* is a whole-model question, settled when the model
+    /// is built, and a binding-local fn may legitimately name types the source
+    /// crate never did.
     pub fn lower_signature(&self, f: &syn::ItemFn) -> Result<Function, ItemError> {
         // Rebuilt from the model rather than kept: this runs once per local fn,
         // and a stored index would be a second copy of what `constants()` says.

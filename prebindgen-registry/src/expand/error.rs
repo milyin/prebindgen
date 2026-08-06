@@ -1,7 +1,6 @@
 //! Errors produced while resolving constructor-expansion declarations.
 
-/// Errors surfaced while resolving [`Expansions`](super::Expansions) in
-/// `apply`.
+/// Errors surfaced while resolving [`Expansions`](super::Expansions).
 #[derive(Debug)]
 pub enum ExpandError {
     UnknownFunction(syn::Ident),

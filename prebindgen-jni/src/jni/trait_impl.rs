@@ -1933,8 +1933,7 @@ impl Prebindgen for Declarations {
 
     /// The post-resolve validation boundary (issue #90): every bound
     /// function's lowered plan must build, and the split declarations must
-    /// be unambiguous, before ANY artifact writer touches disk — see
-    /// `validate_bindings`.
+    /// be unambiguous, before ANY artifact writer touches disk.
     fn validate_resolved(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
         validate_bindings(self, registry)
     }
@@ -2066,8 +2065,8 @@ impl Prebindgen for Declarations {
         TokenStream::new()
     }
 
-    /// Declared consts only reach here (write gating via
-    /// `declared_consts`): re-emit the const as a path-alias
+    /// Declared consts only reach here (undeclared ones are gated out before
+    /// emission): re-emit the const as a path-alias
     /// to its source-of-truth (initializer tokens are never copied — they
     /// may reference source-crate internals) AND emit its nullary JNI getter
     /// extern. The getter reuses the whole function-wrapper pipeline (so the
@@ -2994,6 +2993,10 @@ impl Declarations {
             .filter(|f| !declared.contains(f))
             .collect()
     }
+    /// Union of every `.constant(...)` list across all [`Self::package`]
+    /// subpackage contexts. `Some` even when empty — [`JniGenBuilder`] HAS a
+    /// const declaration mechanism, so const emission is declared-only and
+    /// undeclared consts get the skip warning.
     pub(crate) fn declared_consts(&self) -> Option<std::collections::HashSet<syn::Ident>> {
         let mut out = std::collections::HashSet::new();
         for pkg in self.packages.values() {
@@ -3007,11 +3010,6 @@ impl Declarations {
     pub(crate) fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_const_idents.clone()
     }
-    /// Union of every `.constant(...)` list across all
-    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGenBuilder
-    /// HAS a const declaration mechanism, so const emission is declared-only
-    /// and undeclared consts get the skip warning (see
-    /// `declared_consts`).
     /// The declared value types of every expression constant
     /// (`ConstDecl::expr`) — they have no `#[prebindgen]` item to
     /// scan, so the resolver is told directly to produce their output

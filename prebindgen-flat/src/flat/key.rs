@@ -5,9 +5,11 @@ use std::fmt;
 use quote::ToTokens;
 
 /// Canonical type-shape key: identity is the token string of the
-/// **normalized** type (`crate::flat::spelling::normalize_type` —
-/// group/paren unwrap, `crate::`/`self::` and std-prelude path reduction;
-/// the complete equivalence rule set is documented there).
+/// **normalized** type. Normalization is a closed rule set — group/paren
+/// unwrap, a `crate::`/`self::`/source-module path reduced to its final
+/// segment, and a prelude path read as the bare name the language knows it
+/// by (`std::vec::Vec<Foo>` ≡ `Vec<Foo>`) — and any spelling it does not
+/// cover is kept verbatim.
 ///
 /// # A key is an identity, and nothing else
 ///
@@ -122,9 +124,8 @@ impl TypeKey {
     /// `a::Foo<u8>::Bar` → `Bar`; `None` when the **last** segment carries
     /// generic arguments (`Vec<u8>` names no bare item) or the key is not a
     /// path.
-    /// Matches [`bare_path_ident`](crate::types_util::bare_path_ident)
-    /// on the same type, which is what
-    /// `key_name_accessors_match_the_syn_walks` pins.
+    /// Matches [`bare_path_ident`](crate::types_util::bare_path_ident) on the
+    /// same type — a correspondence this crate's tests pin.
     ///
     /// **A name is not syntax**, which is why this is the key's business and
     /// producing a `syn::Type` is not. A caller that wants to look a declared

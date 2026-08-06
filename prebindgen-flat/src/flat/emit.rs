@@ -38,10 +38,11 @@
 //! # What is closed
 //!
 //! **Every route from the model to captured syntax, except the ones the
-//! registry pipeline itself needs.** `TypeRef::{as_syn, stripped_syntax}`,
-//! `TypeKind::to_syn`, `Element::as_syn`, `Type::as_syn`, `Origin::as_syn` and
-//! the three `spell(head, parts)` shape methods stay `pub(crate)`
-//! — nothing outside this crate calls them. `TypeRef::spell`, `Origin::spell`
+//! registry pipeline itself needs.** Every accessor that hands out a `syn`
+//! node — a type's own node and its stripped form, an element's item, an
+//! origin's node, the syntax rebuilt from a kind, and the shape-spelling
+//! helpers — is crate-internal; nothing outside this crate calls them.
+//! `TypeRef::spell`, `Origin::spell`
 //! and `Flat::enum_item` are `pub`: the registry pipeline that legitimately
 //! calls them (`write_rust`'s emission, and its own tests) is now the separate
 //! `prebindgen-registry` crate, and a module-path seal cannot reach across a
@@ -254,8 +255,8 @@ impl Emit {
 
     /// The type as the **source spelled it** — what generated Rust must say.
     ///
-    /// Not `TypeKind::to_syn`, which reconstructs a
-    /// canonical form to check the lowering against: this is the crate's own
+    /// Not a canonical form rebuilt from the classification to check the
+    /// lowering against: this is the crate's own
     /// tokens, so a generated signature names the type the way the source crate
     /// does and compiles in its scope.
     pub fn spell(&self, ty: &TypeRef) -> TokenStream {

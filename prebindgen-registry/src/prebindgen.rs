@@ -278,7 +278,7 @@ pub trait Prebindgen {
     ) -> TokenStream;
 
     /// Per-const emission. Default: a named const re-emits as a path-alias
-    /// (see `const_path_alias`) when [`Self::source_module`] is available —
+    /// when [`Self::source_module`] is available —
     /// initializer tokens are never copied, so a const whose initializer
     /// references source-crate internals stays valid in the generated file.
     /// An adapter without a source module passes the const through verbatim.

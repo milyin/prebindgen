@@ -707,10 +707,10 @@ impl<M> Registry<M> {
 
     /// Every reading the table holds in one direction.
     ///
-    /// The adapter-facing view of `Self::type_table`: a back-end asking what
-    /// types crossed, and in what shape, wants the readings — not the cells
-    /// they are stored in. Handing out `TypeCell` instead would make the
-    /// registry's storage part of the public API for the sake of one caller.
+    /// The adapter-facing view of the type table: a back-end asking what types
+    /// crossed, and in what shape, wants the readings — not the cells they are
+    /// stored in. Handing out the cells instead would make the registry's
+    /// storage part of the public API for the sake of one caller.
     pub fn readings(
         &self,
         dir: Direction,

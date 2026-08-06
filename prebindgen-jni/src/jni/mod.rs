@@ -4,17 +4,17 @@
 //! (Rust-side conversion bodies) and provides an inherent
 //! `JniGenBuilder::write_kotlin` for emitting all Kotlin output
 //! (`NativeHandle.kt`, typed-handle classes, `JNIWrappers.kt`).
-//!
-//! The implementation is split across sibling submodules, all sharing this
-//! `jni` module's namespace via the `pub(crate) use …::*` glob re-exports
-//! below (each sibling needs only `use super::*;`):
-//!   * this file — type / metadata definitions ([`JniGenBuilder`], `KotlinMeta`,
-//!     `Projection`, `FoldStrategy`, the config structs) + the shared imports;
-//!   * `builder` — the [`JniGenBuilder`] builder API;
-//!   * `trait_impl` — the [`Prebindgen`] impl + its converter-selector helpers;
-//!   * `emit` — Rust-side `extern "C"` wrapper / converter-body emission;
-//!   * `prim` — JNI primitive (un)boxing tables;
-//!   * `kotlin_emit` / `render` / `fold` — the Kotlin source emitters.
+
+// The implementation is split across sibling submodules, all sharing this
+// `jni` module's namespace via the `pub(crate) use …::*` glob re-exports
+// below (each sibling needs only `use super::*;`):
+//   * this file — type / metadata definitions (JniGenBuilder, KotlinMeta,
+//     Projection, FoldStrategy, the config structs) + the shared imports;
+//   * `builder` — the JniGenBuilder builder API;
+//   * `trait_impl` — the Prebindgen impl + its converter-selector helpers;
+//   * `emit` — Rust-side `extern "C"` wrapper / converter-body emission;
+//   * `prim` — JNI primitive (un)boxing tables;
+//   * `kotlin_emit` / `render` / `fold` — the Kotlin source emitters.
 
 mod metadata;
 pub(crate) mod wire_access;
