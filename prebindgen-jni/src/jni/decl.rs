@@ -849,7 +849,7 @@ impl PackageDecl {
         let trimmed = name.trim_matches('.').trim_matches('/').to_string();
         // Sanitize each subpackage segment to a valid Kotlin identifier
         // (issue #89); a no-op for already-legal names.
-        let name = crate::jni::mangle_package(&trimmed);
+        let name = crate::jni::mangle_kotlin_package(&trimmed);
         if name != trimmed {
             println!(
                 "cargo:warning=prebindgen: subpackage `{trimmed}` sanitized to `{name}` \

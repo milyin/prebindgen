@@ -9,15 +9,19 @@
 //!
 //! ## The "default mangler" design
 //!
-//! [`mangle_kotlin_ident`] is the one deterministic sanitizer that turns any
-//! string into a valid Kotlin identifier. Every DEFAULT (Rust-derived) name
-//! flows through it — the seven name-mangle hooks default to it (see
-//! `builder.rs`) and the four non-hook derived-name sites call it directly —
-//! so the emitter always produces valid names on the default path. The only
-//! ways an invalid name can survive to [`validate_symbols`] are an explicit
-//! `.name()` override or a custom mangle hook; both are author input, so an
-//! invalid one is a hard error the author can correct in build.rs.
+//! [`mangle_kotlin_ident`] — `kotlin_codegen`'s deterministic sanitizer, the
+//! same primitive the Kotlin writer validates against — turns any string into
+//! a valid Kotlin identifier. Every DEFAULT (Rust-derived) name flows through
+//! it: the seven name-mangle hooks default to it (see `builder.rs`) and the
+//! four non-hook derived-name sites call it directly, so the emitter always
+//! produces valid names on the default path. The only ways an invalid name
+//! can survive to [`validate_symbols`] are an explicit `.name()` override or
+//! a custom mangle hook; both are author input, so an invalid one is a hard
+//! error the author can correct in build.rs.
 
+pub(crate) use kotlin_codegen::{
+    is_valid_kotlin_ident, mangle_kotlin_ident, mangle_kotlin_package,
+};
 use kotlin_codegen::{KtFun, KtType};
 
 use super::*;
@@ -245,6 +249,10 @@ pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMet
 
 /// Error when `name` is not a legal Kotlin identifier — reachable only from a
 /// `.name()` override or a custom mangle hook (see [`validate_symbols`]).
+///
+/// Deliberately the plain predicate, not `kotlin_codegen::is_writable_kotlin_ident`:
+/// Kotlin would accept a back-ticked name here, but it can't be a native-symbol
+/// component, so the generator never emits one.
 fn check_ident(name: &str, origin: &str, errors: &mut Vec<String>) {
     if !is_valid_kotlin_ident(name) {
         errors.push(format!(
@@ -319,106 +327,6 @@ fn declared_member_names(
         Type::Variant(v) => Some(v.alternatives.iter().map(|a| a.name.clone()).collect()),
         _ => None,
     }
-}
-
-/// Kotlin **hard keywords** — reserved words that cannot be used as an
-/// identifier even back-ticked. The single source of truth: [`kt_param_name`]
-/// (params) and [`mangle_kotlin_ident`] / [`is_valid_kotlin_ident`] (every
-/// other position) all consult this list.
-pub(crate) const HARD_KEYWORDS: &[&str] = &[
-    "as",
-    "break",
-    "class",
-    "continue",
-    "do",
-    "else",
-    "false",
-    "for",
-    "fun",
-    "if",
-    "in",
-    "interface",
-    "is",
-    "null",
-    "object",
-    "package",
-    "return",
-    "super",
-    "this",
-    "throw",
-    "true",
-    "try",
-    "typealias",
-    "typeof",
-    "val",
-    "var",
-    "when",
-    "while",
-];
-
-/// True when `s` is a legal, non-keyword Kotlin identifier: non-empty, first
-/// char a Unicode letter or `_`, the rest Unicode letters / digits / `_`, and
-/// not a [hard keyword](HARD_KEYWORDS). (Kotlin also permits back-ticked
-/// identifiers with arbitrary content, but those can't be native-symbol
-/// components and don't round-trip everywhere, so the generator does not emit
-/// them.)
-pub(crate) fn is_valid_kotlin_ident(s: &str) -> bool {
-    let mut chars = s.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !(first == '_' || first.is_alphabetic()) {
-        return false;
-    }
-    if !chars.all(|c| c == '_' || c.is_alphanumeric()) {
-        return false;
-    }
-    !HARD_KEYWORDS.contains(&s)
-}
-
-/// Deterministically sanitize `s` into a valid Kotlin identifier
-/// ([`is_valid_kotlin_ident`] holds on the result), idempotently:
-///
-/// * a hard keyword gets a trailing `_` (`object` → `object_`);
-/// * every char that isn't a Kotlin identifier char (Unicode letter / digit /
-///   `_`) becomes `_` (`my-name` → `my_name`);
-/// * a leading digit gets a `_` prefix (`1x` → `_1x`);
-/// * an empty string becomes `_`.
-///
-/// This is the one primitive the whole "default mangler" design rests on.
-pub(crate) fn mangle_kotlin_ident(s: &str) -> String {
-    if is_valid_kotlin_ident(s) {
-        return s.to_string();
-    }
-    let mut out = String::with_capacity(s.len() + 1);
-    for (i, c) in s.chars().enumerate() {
-        if c == '_' || c.is_alphanumeric() {
-            if i == 0 && c.is_numeric() {
-                out.push('_');
-            }
-            out.push(c);
-        } else {
-            out.push('_');
-        }
-    }
-    if out.is_empty() {
-        out.push('_');
-    }
-    if HARD_KEYWORDS.contains(&out.as_str()) {
-        out.push('_');
-    }
-    out
-}
-
-/// Sanitize a dot-separated Kotlin package path by [mangling](mangle_kotlin_ident)
-/// each non-empty segment (`fun.my-pkg` → `fun_.my_pkg`). Empty segments are
-/// dropped (a leading/trailing/double dot). Idempotent.
-pub(crate) fn mangle_package(path: &str) -> String {
-    path.split('.')
-        .filter(|s| !s.is_empty())
-        .map(mangle_kotlin_ident)
-        .collect::<Vec<_>>()
-        .join(".")
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -562,7 +470,7 @@ impl NativeSymbol {
 mod tests {
     use kotlin_codegen as kt;
 
-    use super::{erase_kt_type, is_valid_kotlin_ident, mangle_kotlin_ident, mangle_package};
+    use super::erase_kt_type;
 
     fn erase(generics: &[&str], ty: kt::KtType) -> String {
         let gs: Vec<String> = generics.iter().map(|s| s.to_string()).collect();
@@ -618,56 +526,5 @@ mod tests {
             erase(&[], kt::KtType::cls("io.other.Foo")),
             "distinct FQNs stay distinct"
         );
-    }
-
-    #[test]
-    fn validity_predicate() {
-        assert!(is_valid_kotlin_ident("foo"));
-        assert!(is_valid_kotlin_ident("_foo"));
-        assert!(is_valid_kotlin_ident("fooBar1"));
-        assert!(is_valid_kotlin_ident("Δelta")); // Unicode letter
-        assert!(!is_valid_kotlin_ident("")); // empty
-        assert!(!is_valid_kotlin_ident("1x")); // leading digit
-        assert!(!is_valid_kotlin_ident("my name")); // space
-        assert!(!is_valid_kotlin_ident("my-name")); // dash
-        assert!(!is_valid_kotlin_ident("object")); // hard keyword
-        assert!(!is_valid_kotlin_ident("when")); // hard keyword
-    }
-
-    #[test]
-    fn mangling() {
-        // Valid names pass through unchanged (byte-identity depends on this).
-        assert_eq!(mangle_kotlin_ident("fooBar"), "fooBar");
-        assert_eq!(mangle_kotlin_ident("_x"), "_x");
-        // Keyword → trailing underscore.
-        assert_eq!(mangle_kotlin_ident("object"), "object_");
-        assert_eq!(mangle_kotlin_ident("when"), "when_");
-        // Leading digit → prefix underscore.
-        assert_eq!(mangle_kotlin_ident("1x"), "_1x");
-        // Illegal char → underscore.
-        assert_eq!(mangle_kotlin_ident("my-name"), "my_name");
-        assert_eq!(mangle_kotlin_ident("a b"), "a_b");
-        // Empty → placeholder.
-        assert_eq!(mangle_kotlin_ident(""), "_");
-    }
-
-    #[test]
-    fn mangling_is_idempotent() {
-        for s in ["object", "1x", "my-name", "when", "", "a b", "fooBar"] {
-            let once = mangle_kotlin_ident(s);
-            assert_eq!(mangle_kotlin_ident(&once), once, "not idempotent for {s:?}");
-            assert!(
-                is_valid_kotlin_ident(&once),
-                "mangle produced invalid: {once:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn package_mangles_each_segment() {
-        assert_eq!(mangle_package("io.zenoh.jni"), "io.zenoh.jni");
-        assert_eq!(mangle_package("fun.my-pkg"), "fun_.my_pkg");
-        assert_eq!(mangle_package("a..b"), "a.b"); // empty segments dropped
-        assert_eq!(mangle_package(""), "");
     }
 }

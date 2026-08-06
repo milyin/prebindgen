@@ -21,7 +21,7 @@
 //! builds every memo hit re-derives and asserts equality, so the
 //! determinism is a checked invariant rather than a convention.
 
-use kotlin_codegen::{KtCode, KtDecl, KtFun, KtFunInterface, KtParam, KtType, KtVis};
+use kotlin_codegen::{KtCode, KtDecl, KtFun, KtFunInterface, KtFunSig, KtParam, KtType, KtVis};
 use prebindgen_registry::{
     unfold::{dedup_names, DeconId, LeafSource, UnfoldPlan},
     Conversions,
@@ -383,7 +383,9 @@ impl IfaceSpec {
     /// the `run` parameters are the groups (each a whole reassembled value);
     /// otherwise they are the `params` 1:1 (typed view).
     pub fn to_decl(&self) -> KtFunInterface {
-        let mut m = KtFun::new(IFACE_METHOD).vis(KtVis::Public);
+        // A `KtFunSig`, not a `KtFun`: a SAM interface's one method is abstract
+        // by definition, and a signature has nowhere to put a body.
+        let mut m = KtFunSig::new(IFACE_METHOD).vis(KtVis::Public);
         if self.typed_groups.is_empty() {
             for p in &self.params {
                 m = m.param(KtParam::new(&p.name, p.typed.clone()));
@@ -406,7 +408,7 @@ impl IfaceSpec {
 
     /// The raw-twin declaration (call only when [`Self::needs_raw`]).
     pub fn to_raw_decl(&self) -> KtFunInterface {
-        let mut m = KtFun::new(IFACE_METHOD).vis(KtVis::Public);
+        let mut m = KtFunSig::new(IFACE_METHOD).vis(KtVis::Public);
         for p in &self.params {
             m = m.param(KtParam::new(&p.name, p.raw.clone()));
         }
@@ -433,7 +435,11 @@ impl IfaceSpec {
         } else {
             format!("<{}>", bare_generics.join(", "))
         };
-        let recv = format!("{}{gen_args}.asRaw", self.name);
+        // The extension receiver, in the same verbatim style as the return type
+        // below: both are same-package short names with the generic arguments
+        // already applied. It rides `KtFun::receiver`, not the name, so `asRaw`
+        // stays a plain identifier the Kotlin checker can accept.
+        let recv = KtType::cls(format!("{}{gen_args}", self.name));
         // `run` arguments: per-param `wrap` (1:1 view) or, with `typed_groups`,
         // one expression per group — a whole value reassembled from its leaves
         // via `Class.fromParts(leaves…)`, or a single passthrough leaf's wrap.
@@ -547,7 +553,7 @@ impl IfaceSpec {
                 )
             })
         };
-        let mut f = KtFun::new(recv).vis(KtVis::Public);
+        let mut f = KtFun::new("asRaw").vis(KtVis::Public).receiver(recv);
         for g in &bare_generics {
             f = f.generic(g);
         }

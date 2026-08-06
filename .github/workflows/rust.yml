@@ -34,7 +34,9 @@ env:
   #
   # Local development still tracks kotlin-codegen `main` (see
   # download_repositories.sh), matching how the other sibling repos work.
-  KOTLIN_CODEGEN_REV: 1f2c224aba6de098efd646ac656f0cbdaec87cf8
+  # TODO: re-point to the squash-merge commit of milyin/kotlin-codegen#21 on
+  # `main` before merging this PR — this SHA is that PR's branch head.
+  KOTLIN_CODEGEN_REV: ac69866c8596d526ce45f3177e5d2ad5cd4e99e1
 
 jobs:
   build:
