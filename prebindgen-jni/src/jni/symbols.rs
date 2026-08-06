@@ -18,6 +18,8 @@
 //! `.name()` override or a custom mangle hook; both are author input, so an
 //! invalid one is a hard error the author can correct in build.rs.
 
+use kotlin_codegen::{KtFun, KtType};
+
 use super::*;
 
 /// The whole-artifact Kotlin-identifier + top-level-name validation pass
@@ -58,7 +60,7 @@ pub(crate) fn validate_symbols(ext: &Declarations, registry: &Registry<KotlinMet
     // Kotlin/JVM signature and cannot coexist (a "platform declaration
     // clash"); distinct signatures are legitimate overloads and pass.
     let mut overloads: BTreeMap<(String, String, JvmSignature), String> = BTreeMap::new();
-    let mut add_overload = |scope: &str, f: &kt::KtFun, origin: &str, errors: &mut Vec<String>| {
+    let mut add_overload = |scope: &str, f: &KtFun, origin: &str, errors: &mut Vec<String>| {
         let sig = jvm_signature(f);
         let key = (scope.to_string(), f.name.clone(), sig.clone());
         if let Some(prev) = overloads.insert(key, origin.to_string()) {
@@ -492,7 +494,7 @@ fn boxed_primitive(simple: &str) -> Option<&'static str> {
 /// * a generic type → its raw class (`List<T>` → `List`), arguments erased;
 /// * any other class → its FQN (distinct classes stay distinct);
 /// * a function type → `kotlin.Function<arity>`.
-pub(crate) fn erase_kt_type(generics: &[String], ty: &kt::KtType) -> ErasedJvmType {
+pub(crate) fn erase_kt_type(generics: &[String], ty: &KtType) -> ErasedJvmType {
     use kt::KtType;
     let token = match ty {
         KtType::Function { params, .. } => format!("kotlin.Function{}", params.len()),
@@ -532,7 +534,7 @@ pub(crate) fn erase_kt_type(generics: &[String], ty: &kt::KtType) -> ErasedJvmTy
 /// The [`JvmSignature`] of a generated wrapper (`render_wrapper_fn` /
 /// `render_param_overloads` output): each parameter erased through
 /// [`erase_kt_type`] under the function's own generic type variables.
-pub(crate) fn jvm_signature(f: &kt::KtFun) -> JvmSignature {
+pub(crate) fn jvm_signature(f: &KtFun) -> JvmSignature {
     JvmSignature(
         f.params
             .iter()

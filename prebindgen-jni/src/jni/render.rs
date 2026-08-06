@@ -4,6 +4,10 @@
 //! Carved from the former `jni_kotlin_ext.rs`; shares the `jni` namespace
 //! via `use super::*`.
 
+use kotlin_codegen::{
+    KtClass, KtClassKind, KtCode, KtCtorParam, KtEnumEntry, KtFun, KtParam, KtProperty, KtType,
+    KtVis,
+};
 use prebindgen_registry::Conversions;
 
 use super::*;
@@ -18,11 +22,11 @@ use super::*;
 pub(crate) fn build_enum_class(
     class_name: &str,
     item_enum: &prebindgen_registry::flat::Enum,
-) -> kt::KtClass {
+) -> KtClass {
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree — and it is the
     // model's, which is where "same" stops needing to be maintained.
-    let entries: Vec<kt::KtEnumEntry> = item_enum
+    let entries: Vec<KtEnumEntry> = item_enum
         .discriminant_values()
         .unwrap_or_else(|name| {
             panic!(
@@ -33,7 +37,7 @@ pub(crate) fn build_enum_class(
         })
         .into_iter()
         .map(|(ident, value)| {
-            kt::KtEnumEntry::legacy_args(
+            KtEnumEntry::with_args(
                 mangle_kotlin_ident(&crate::util::camel_to_screaming_snake(&ident.to_string())),
                 value.to_string(),
             )
@@ -48,26 +52,26 @@ pub(crate) fn build_enum_class(
         .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    kt::KtClass::new(kt::ClassKind::Enum(entries), class_name)
-        .vis(kt::Vis::Public)
+    KtClass::new(KtClassKind::Enum(entries), class_name)
+        .vis(KtVis::Public)
         .kdoc(enum_kdoc)
         .ctor_param(
-            kt::KtCtorParam::new("value", kt::KtType::int())
+            KtCtorParam::new("value", KtType::int())
                 .val()
-                .vis(kt::Vis::Public),
+                .vis(KtVis::Public),
         )
         // `@JvmStatic` exposes `fromInt` as a real static method on the enum
         // class itself (rather than only on the `Companion` nested class). The
         // generated struct-encoder calls it via `env.call_static_method`,
         // which wouldn't find a companion-only method.
         .companion(
-            kt::KtClass::companion_object().vis(kt::Vis::Public).member(
-                kt::KtFun::new("fromInt")
-                    .vis(kt::Vis::Public)
+            KtClass::companion_object().vis(KtVis::Public).member(
+                KtFun::new("fromInt")
+                    .vis(KtVis::Public)
                     .annotation("JvmStatic")
-                    .param(kt::KtParam::new("value", kt::KtType::int()))
-                    .returns(kt::KtType::cls(class_name))
-                    .expr_body(kt::Code::new().line("entries.first { it.value == value }")),
+                    .param(KtParam::new("value", KtType::int()))
+                    .returns(KtType::cls(class_name))
+                    .expr_body(KtCode::new().line("entries.first { it.value == value }")),
             ),
         )
 }
@@ -82,7 +86,7 @@ pub(crate) fn build_data_class(
     class_name: &str,
     item_struct: &prebindgen_registry::flat::Struct,
     registry: &Registry<KotlinMeta>,
-) -> kt::KtClass {
+) -> KtClass {
     // A tuple struct is an `Extern` in the model, never a `Struct`, so every
     // field here is named by construction.
     let fields_named = &item_struct.fields;
@@ -101,10 +105,10 @@ pub(crate) fn build_data_class(
         )
     });
 
-    let mut ctor_params: Vec<kt::KtCtorParam> = Vec::new();
+    let mut ctor_params: Vec<KtCtorParam> = Vec::new();
     // Property (name, type) pairs, for the content-equality members an
     // array-backed property needs — see [`equality::content_equality_members`].
-    let mut equality_props: Vec<(String, kt::KtType)> = Vec::new();
+    let mut equality_props: Vec<(String, KtType)> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
     let mut destructible_fields: Vec<(String, crate::jni::FoldStrategy)> = Vec::new();
@@ -149,7 +153,7 @@ pub(crate) fn build_data_class(
 
         let property_type = pf.kind.property_type(&owner);
         equality_props.push((kotlin_field_name.clone(), property_type.clone()));
-        ctor_params.push(kt::KtCtorParam::new(&kotlin_field_name, property_type).val());
+        ctor_params.push(KtCtorParam::new(&kotlin_field_name, property_type).val());
         if let Some(strategy) = pf.kind.destructible() {
             destructible_fields.push((kotlin_field_name, strategy));
         }
@@ -175,7 +179,7 @@ pub(crate) fn build_data_class(
         panic!("render_data_class_source: could not build fromParts factory for `{class_name}`")
     });
 
-    let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
+    let mut class = KtClass::new(KtClassKind::Data, class_name).vis(KtVis::Public);
     if let Some(doc) = item_struct.docs() {
         class = class.kdoc(doc);
     }
@@ -193,7 +197,7 @@ pub(crate) fn build_data_class(
     // Supertype clause: a data class with a destructible native-handle field
     // implements `AutoCloseable`; otherwise no supertype.
     if !destructible_fields.is_empty() {
-        class = class.supertype(kt::KtType::cls("AutoCloseable"), None);
+        class = class.supertype(KtType::cls("AutoCloseable"), None);
         // `close()` walks every destructible field via its folded close
         // strategy. `JNINativeHandle.close()` is idempotent
         // (Cleaner.Cleanable.clean() invokes exactly once), so calling
@@ -201,11 +205,11 @@ pub(crate) fn build_data_class(
         // GC — is safe. NOTE: `data class` copy() shares the handle
         // reference between copies; if you intend to close independently,
         // don't copy this class.
-        let mut body = kt::Code::new();
+        let mut body = KtCode::new();
         for (fname, strategy) in &destructible_fields {
             body = body.line(render_handle_close(strategy, fname));
         }
-        class = class.member(kt::KtFun::new("close").modifier("override").body(body));
+        class = class.member(KtFun::new("close").modifier("override").body(body));
     }
     // `fromParts` factory: native (`struct_output_body`) makes ONE
     // `call_static_method` passing the whole graph's flattened leaf wires;
@@ -214,21 +218,21 @@ pub(crate) fn build_data_class(
     // to `fromParts$<module>`, unresolvable by native (`NoSuchMethodError`).
     // The factory body's raw-text class references (short names) carry their
     // imports on this `Code`, so the whole `data class` is self-contained.
-    let mut factory_body = kt::Code::new().line(factory_reconstruct);
+    let mut factory_body = KtCode::new().line(factory_reconstruct);
     for fqn in factory_imports {
         factory_body = factory_body.import(fqn);
     }
-    let mut factory = kt::KtFun::new("fromParts")
-        .vis(kt::Vis::Public)
+    let mut factory = KtFun::new("fromParts")
+        .vis(KtVis::Public)
         .annotation("JvmStatic")
-        .returns(kt::KtType::cls(class_name))
+        .returns(KtType::cls(class_name))
         .expr_body(factory_body);
     for (name, ty) in &factory_params {
-        factory = factory.param(kt::KtParam::new(name, ty.clone()));
+        factory = factory.param(KtParam::new(name, ty.clone()));
     }
     class = class.companion(
-        kt::KtClass::companion_object()
-            .vis(kt::Vis::Public)
+        KtClass::companion_object()
+            .vis(KtVis::Public)
             .member(factory),
     );
     class
@@ -261,7 +265,7 @@ pub(crate) fn build_typed_handle(
     rust_doc_name: &str,
     key: &TypeKey,
     imports: &mut BTreeSet<String>,
-) -> kt::KtClass {
+) -> KtClass {
     // The typed handle is a pure shell — `ptr` slot + `close()`/`take()` +
     // the `freePtr` extern. All functions are emitted as flat free functions
     // in their namespace package; nothing is promoted onto the class.
@@ -304,11 +308,11 @@ pub(crate) fn build_typed_handle(
     // Companion object: the `@JvmStatic external fun freePtr(ptr: Long)` called
     // by `close()`, plus one **factory** member per `.constructor(f, name)`
     // (a free wrapper — no receiver — returning the class).
-    let mut companion = kt::KtClass::companion_object().vis(kt::Vis::Public).member(
-        kt::KtFun::new(free_extern.clone())
+    let mut companion = KtClass::companion_object().vis(KtVis::Public).member(
+        KtFun::new(free_extern.clone())
             .annotation("JvmStatic")
             .modifier("external")
-            .param(kt::KtParam::new("ptr", kt::KtType::long())),
+            .param(KtParam::new("ptr", KtType::long())),
     );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
         if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
@@ -335,10 +339,10 @@ pub(crate) fn build_typed_handle(
     // Consumer interfaces (`.implements`) and the generated `<Name>Api`
     // interface (`.interface()`) are attached by `apply_class_interface` in
     // `write_typed_handles` after the class body is built.
-    let mut class = kt::KtClass::new(kt::ClassKind::Plain, class_name)
-        .vis(kt::Vis::Public)
+    let mut class = KtClass::new(KtClassKind::Plain, class_name)
+        .vis(KtVis::Public)
         .kdoc(class_kdoc)
-        .ctor_param(kt::KtCtorParam::new("initialPtr", kt::KtType::long()));
+        .ctor_param(KtCtorParam::new("initialPtr", KtType::long()));
     class = if gc_managed {
         // GC-managed lifecycle: the pointer lives in the inherited atomic
         // cell; every release path settles the once-only untagged→tagged
@@ -351,30 +355,30 @@ pub(crate) fn build_typed_handle(
             imports.insert(format!("{}.registerGcHandle", ext.package));
         }
         class
-            .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
+            .supertype(KtType::cls(base_fqn), Some("initialPtr"))
             .member(
-                kt::KtProperty::val("__cleanable")
-                    .vis(kt::Vis::Private)
+                KtProperty::val("__cleanable")
+                    .vis(KtVis::Private)
                     .initializer(format!("registerGcHandle(this) {{ {free_extern}(it) }}")),
             )
             .member(
-                kt::KtFun::new("close")
+                KtFun::new("close")
                     .annotation("Synchronized")
                     .modifier("override")
                     .body(
-                        kt::Code::new()
+                        KtCode::new()
                             .line("val p = releaseCell(cell)")
                             .line(format!("if (p != 0L) {free_extern}(p)"))
                             .line("__cleanable?.clean()"),
                     ),
             )
             .member(
-                kt::KtFun::new("take")
-                    .vis(kt::Vis::Public)
+                KtFun::new("take")
+                    .vis(KtVis::Public)
                     .annotation("Synchronized")
-                    .returns(kt::KtType::cls(class_name))
+                    .returns(KtType::cls(class_name))
                     .body(
-                        kt::Code::new()
+                        KtCode::new()
                             .line("val p = releaseCell(cell)")
                             .line("__cleanable?.clean()")
                             .line(format!(
@@ -384,13 +388,13 @@ pub(crate) fn build_typed_handle(
             )
     } else {
         class
-            .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
+            .supertype(KtType::cls(base_fqn), Some("initialPtr"))
             .member(
-                kt::KtFun::new("close")
+                KtFun::new("close")
                     .annotation("Synchronized")
                     .modifier("override")
                     .body(
-                        kt::Code::new()
+                        KtCode::new()
                             .line("val p = ptr")
                             .blk("if (p != 0L && (p and 1L) == 0L) {", |c| {
                                 c.line("ptr = p or 1L").line(format!("{free_extern}(p)"))
@@ -402,12 +406,12 @@ pub(crate) fn build_typed_handle(
             // that the framework would otherwise `close()` when the callback
             // returns.
             .member(
-                kt::KtFun::new("take")
-                    .vis(kt::Vis::Public)
+                KtFun::new("take")
+                    .vis(KtVis::Public)
                     .annotation("Synchronized")
-                    .returns(kt::KtType::cls(class_name))
+                    .returns(KtType::cls(class_name))
                     .body(
-                        kt::Code::new()
+                        KtCode::new()
                             .line("val p = ptr")
                             .line("ptr = p or 1L")
                             .line(format!("return {class_name}(p)")),
@@ -460,49 +464,46 @@ pub(crate) fn render_extern_decl(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
-) -> Option<kt::KtFun> {
+) -> Option<KtFun> {
     // The name and wire params come straight off the lowered plan — the
     // same classification the Rust extern and the Kotlin call site consume,
     // so the three sites agree on arity, types, and symbol by construction.
     let fplan = ext.fn_plan(registry, f).ok()?;
     let jni_call = &fplan.jni_method;
-    let mut params: Vec<kt::KtParam> = Vec::new();
+    let mut params: Vec<KtParam> = Vec::new();
     for leaf in fplan.leaves() {
         let name = leaf.kt_name.clone();
         match &leaf.kind {
             // Flattenable data_class param → its leaf wire params.
             InputKind::FlattenStruct(plan) => {
                 for l in &plan.leaves {
-                    params.push(kt::KtParam::new(
+                    params.push(KtParam::new(
                         l.kt_name.clone(),
-                        kt::KtType::cls(l.kt_wire_ty.clone()),
+                        KtType::cls(l.kt_wire_ty.clone()),
                     ));
                 }
             }
             // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
             // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire).
             InputKind::OptionScalar(sp) => {
-                params.push(kt::KtParam::new(
-                    sp.present_kt.clone(),
-                    kt::KtType::boolean(),
-                ));
-                params.push(kt::KtParam::new(
+                params.push(KtParam::new(sp.present_kt.clone(), KtType::boolean()));
+                params.push(KtParam::new(
                     sp.value_kt.clone(),
-                    kt::KtType::cls(sp.value_kt_type.clone()),
+                    KtType::cls(sp.value_kt_type.clone()),
                 ));
             }
             // Slice/Vec of a flattenable data_class → a single `jlong`
             // Vec-handle param (the Rust extern decodes the boxed `Vec<T>`).
             // Elements cross through the synthetic `…VecPush` extern.
             InputKind::VecBuild { .. } => {
-                params.push(kt::KtParam::new(name, kt::KtType::long()));
+                params.push(KtParam::new(name, KtType::long()));
             }
             // An opaque-**handle** projection (direct `&T`/`T`, `Option<&T>`,
             // or by-value `Option<T>`) crosses the JNI wire as a primitive
             // `jlong` with `0` encoding `None` — a non-null `Long`; the `?`
             // lives only on the typed-wrapper surface.
             InputKind::Handle { .. } => {
-                params.push(kt::KtParam::new(name, kt::KtType::long()));
+                params.push(KtParam::new(name, KtType::long()));
             }
             InputKind::Callback { .. } | InputKind::Unsigned64 { .. } | InputKind::Plain => {
                 let ty = if leaf.as_enum_value {
@@ -510,7 +511,7 @@ pub(crate) fn render_extern_decl(
                     // `Int`; the wrapper passes `.value` / `?.value`. The Rust
                     // converter unboxes a `java.lang.Integer`, so the extern
                     // declares `Int`/`Int?`, never the enum object.
-                    kt::KtType::int()
+                    KtType::int()
                 } else {
                     leaf.kt_meta.clone()?
                 };
@@ -521,7 +522,7 @@ pub(crate) fn render_extern_decl(
                 } else {
                     ty
                 };
-                params.push(kt::KtParam::new(name, ty));
+                params.push(KtParam::new(name, ty));
             }
         }
     }
@@ -532,23 +533,23 @@ pub(crate) fn render_extern_decl(
         if u.iterable_fold {
             // `acc` is the unbounded accumulator `A` (may be nullable) → `Any?`;
             // `fold` is the non-null adapter callback.
-            params.push(kt::KtParam::new("acc", kt::KtType::any().nullable()));
-            params.push(kt::KtParam::new("fold", kt::KtType::any()));
+            params.push(KtParam::new("acc", KtType::any().nullable()));
+            params.push(KtParam::new("fold", KtType::any()));
         } else {
-            params.push(kt::KtParam::new("build", kt::KtType::any()));
+            params.push(KtParam::new("build", KtType::any()));
         }
     }
     // Trailing error-sink callbacks — the binding channel (`errorSink`) always,
     // then the typed domain channel (`domainSink`) for a fallible-typed fn. Both
     // erased to `Any` (JObject) on the wire; the wrapper passes a capture for
     // each. A domain plan ⇒ `error_plans` has this fn.
-    params.push(kt::KtParam::new("errorSink", kt::KtType::any()));
+    params.push(KtParam::new("errorSink", KtType::any()));
     if registry.error_plans().contains_key(&f.name) {
-        params.push(kt::KtParam::new("domainSink", kt::KtType::any()));
+        params.push(KtParam::new("domainSink", KtType::any()));
     }
 
-    let wire_return: Option<kt::KtType> = match &fplan.output {
-        FnOutputPlan::Unfold(_) => Some(kt::KtType::any().nullable()),
+    let wire_return: Option<KtType> = match &fplan.output {
+        FnOutputPlan::Unfold(_) => Some(KtType::any().nullable()),
         FnOutputPlan::Value(v) => {
             // The plan classified the declared surface once — `convert_out_ty`
             // for a `convert_output` (Return), else the function's own return.
@@ -558,14 +559,14 @@ pub(crate) fn render_extern_decl(
             // (`Int?` under `Option`); everything else is the declared return.
             match &projection {
                 Some(p) => Some(projection_wire_return(p)),
-                None if v.is_enum => Some(kt::KtType::int()),
-                None if v.is_option_enum => Some(kt::KtType::int().nullable()),
+                None if v.is_enum => Some(KtType::int()),
+                None if v.is_option_enum => Some(KtType::int().nullable()),
                 None => kt_return,
             }
         }
     };
 
-    let mut fun = kt::KtFun::new(jni_call).modifier("external");
+    let mut fun = KtFun::new(jni_call).modifier("external");
     for p in params {
         fun = fun.param(p);
     }
@@ -577,7 +578,7 @@ pub(crate) fn render_extern_decl(
 
 struct Param {
     kt_name: String,
-    kt_type: kt::KtType,
+    kt_type: KtType,
     mode: ParamMode,
     /// `true` when the param's Rust type is a `enum_class`-declared enum: the
     /// high-level Kotlin signature uses the typed enum (`Priority`), but the
@@ -685,7 +686,7 @@ pub(crate) fn peel_receiver_key(ty: &prebindgen_registry::flat::TypeRef) -> Type
     }
 }
 
-/// Build a single top-level (free-function) wrapper as a [`kt::KtFun`].
+/// Build a single top-level (free-function) wrapper as a [`KtFun`].
 /// Returns `None` if the function has a parameter whose Kotlin type isn't
 /// registered (in that case we skip the function rather than panicking — the
 /// legacy `JNINative.kt` retains the unwrapped external fun so callers still
@@ -711,7 +712,7 @@ pub(crate) fn peel_receiver_key(ty: &prebindgen_registry::flat::TypeRef) -> Type
 pub(crate) struct WrapperSurface {
     /// The wrapper with its full signature and an empty body. The validator
     /// reads this; [`render_wrapper_fn`] fills the body and adds the KDoc.
-    pub fun: kt::KtFun,
+    pub fun: KtFun,
     // Emission-only internals — computed while assembling the signature,
     // consumed by `render_wrapper_fn`; opaque to the validator.
     params: Vec<Param>,
@@ -755,10 +756,10 @@ pub(crate) fn build_wrapper_surface(
     let (params, receiver_idx) =
         classify_params(ext, &fplan, registry, &mut body_imports, receiver_key)?;
     let out = classify_output(ext, f, &fplan, registry, &mut body_imports)?;
-    let r_ty = out.kt_return.clone().unwrap_or_else(kt::KtType::unit);
+    let r_ty = out.kt_return.clone().unwrap_or_else(KtType::unit);
     let sink = error_sink_parts(f, &fplan, registry, &mut body_imports, &r_ty)?;
 
-    let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
+    let mut fun = KtFun::new(&kt_name).vis(KtVis::Public);
     if let Some(g) = &out.generic {
         fun = fun.generic(g);
     }
@@ -767,7 +768,7 @@ pub(crate) fn build_wrapper_surface(
         if Some(i) == receiver_idx {
             continue;
         }
-        fun = fun.param(kt::KtParam::new(&p.kt_name, p.kt_type.clone()));
+        fun = fun.param(KtParam::new(&p.kt_name, p.kt_type.clone()));
     }
     // The error callbacks — **required**: the generated code never throws; the
     // consumer decides how a failure surfaces (e.g. by throwing its own type).
@@ -777,21 +778,18 @@ pub(crate) fn build_wrapper_surface(
     // builder/fold lambda exists it must stay the **trailing** lambda, so the
     // error params go *before* it — but *after* any non-lambda `builder_lead`
     // (`acc: A`), which is passed positionally.
-    let mut err_params = vec![kt::KtParam::new(
-        &sink.binding_param,
-        sink.binding_type.clone(),
-    )];
+    let mut err_params = vec![KtParam::new(&sink.binding_param, sink.binding_type.clone())];
     if let Some(d) = &sink.domain {
-        err_params.push(kt::KtParam::new("onError", d.onerr_type.clone()));
+        err_params.push(KtParam::new("onError", d.onerr_type.clone()));
     }
     if let Some((bp_name, bp_ty)) = &out.builder_param {
         if let Some((lead_name, lead_ty)) = &out.builder_lead {
-            fun = fun.param(kt::KtParam::new(lead_name, lead_ty.clone()));
+            fun = fun.param(KtParam::new(lead_name, lead_ty.clone()));
         }
         for ep in err_params {
             fun = fun.param(ep);
         }
-        fun = fun.param(kt::KtParam::new(bp_name, bp_ty.clone()));
+        fun = fun.param(KtParam::new(bp_name, bp_ty.clone()));
     } else {
         for ep in err_params {
             fun = fun.param(ep);
@@ -819,7 +817,7 @@ pub(crate) fn render_wrapper_fn(
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
-) -> Option<kt::KtFun> {
+) -> Option<KtFun> {
     let surface = build_wrapper_surface(ext, f, registry, kotlin_name_override, receiver_key)?;
     let WrapperSurface {
         mut fun,
@@ -877,7 +875,7 @@ pub(crate) fn render_const_val(
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
-) -> Option<(kt::KtFun, kt::KtProperty)> {
+) -> Option<(KtFun, KtProperty)> {
     let getter = const_getter_fn(c);
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
@@ -909,7 +907,7 @@ pub(crate) fn render_constant_fn_val(
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
-) -> Option<(kt::KtFun, kt::KtProperty)> {
+) -> Option<(KtFun, KtProperty)> {
     let default = kt_snake_to_camel(&f.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
     let helper = render_wrapper_fn(ext, f, registry, Some(&helper_name), None)?;
@@ -939,7 +937,7 @@ pub(crate) fn render_const_expr_val(
     decl: &crate::jni::decl::ConstExprDecl,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
-) -> Option<(kt::KtFun, kt::KtProperty)> {
+) -> Option<(KtFun, KtProperty)> {
     let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
@@ -969,12 +967,12 @@ pub(crate) fn render_const_expr_val(
 fn render_val_over_helper(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
-    mut helper: kt::KtFun,
+    mut helper: KtFun,
     val_name: String,
     kdoc: String,
     imports: &mut BTreeSet<String>,
-) -> Option<(kt::KtFun, kt::KtProperty)> {
-    helper.vis = kt::Vis::Private;
+) -> Option<(KtFun, KtProperty)> {
+    helper.vis = KtVis::Private;
     let helper_name = helper.name.clone();
     // A constant always carries a value type; a helper with no return would
     // mean the type never resolved — skip like an unresolvable fn.
@@ -984,9 +982,9 @@ fn render_val_over_helper(
     let init = format!(
         "{helper_name}(JniErrorHandler {{ je -> error(je ?: \"const {val_name}: JNI getter failed\") }})"
     );
-    let prop = kt::KtProperty::val(&val_name)
+    let prop = KtProperty::val(&val_name)
         .ty(val_ty)
-        .vis(kt::Vis::Public)
+        .vis(KtVis::Public)
         .delegate(format!("lazy {{ {init} }}"))
         .kdoc(kdoc);
     Some((helper, prop))
@@ -997,14 +995,14 @@ fn render_val_over_helper(
 /// everything the call-expression builder and the signature assembly must
 /// agree on.
 struct OutputPlan {
-    kt_return: Option<kt::KtType>,
+    kt_return: Option<KtType>,
     /// Kotlin-newtype return (opaque handle / `ULong`) — the wrap the
     /// call expression folds around the extern result.
     projection: Option<Projection>,
     /// Trailing **lambda** param (`build` / `fold`) of an output expansion.
-    builder_param: Option<(String, kt::KtType)>,
+    builder_param: Option<(String, KtType)>,
     /// Non-lambda lead param (`acc: A`) — precedes `onError` positionally.
-    builder_lead: Option<(String, kt::KtType)>,
+    builder_lead: Option<(String, KtType)>,
     /// Type variable (`R` / `A`) when the wrapper is generic.
     generic: Option<String>,
     /// Extra call-site args injected before `__cap` (builder/adapter, or
@@ -1029,7 +1027,7 @@ struct ErrorSink {
     /// domain channel is also present, else `"onError"` (the sole channel).
     binding_param: String,
     /// The binding handler's Kotlin type — always `JniErrorHandler<R>`.
-    binding_type: kt::KtType,
+    binding_type: KtType,
     /// Short name of the base per-thread capture (`JniErrorHandlerCapture`).
     binding_capture_short: String,
     /// The single redispatch arg for `<binding_param>.run(...)` — the captured
@@ -1042,7 +1040,7 @@ struct ErrorSink {
 /// The typed domain-error channel: the `onError` handler, its raw capture, and
 /// the wrapped leaf args for the post-call redispatch (no `je`).
 struct DomainSink {
-    onerr_type: kt::KtType,
+    onerr_type: KtType,
     /// Short name of the generated per-thread raw capture holder.
     capture_short: String,
     /// Wrapped ze-leaf args for the post-call `onError.run(...)` redispatch.
@@ -1264,8 +1262,8 @@ fn classify_output(
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
     // `onError` (a defaulted param) so the positional-`acc` call stays valid;
     // the trailing `fold` lambda follows.
-    let mut builder_param: Option<(String, kt::KtType)> = None;
-    let mut builder_lead: Option<(String, kt::KtType)> = None;
+    let mut builder_param: Option<(String, KtType)> = None;
+    let mut builder_lead: Option<(String, KtType)> = None;
     let mut generic: Option<String> = None;
     // Extra call-site args injected before `__sink` (e.g. `build`/adapter, or
     // `acc` + the fold callback/adapter for `Iterable`).
@@ -1310,7 +1308,7 @@ fn classify_output(
             spec.params[1].typed.clone()
         } else {
             let class_fqn = ext.kotlin_fqn(&plan.source.key()).map(|s| s.to_string())?;
-            kt::KtType::cls(class_fqn)
+            KtType::cls(class_fqn)
         };
         let class_short = kt_type_short(&class_ty);
         if u.iterable_fold {
@@ -1326,7 +1324,7 @@ fn classify_output(
             imports.insert(spec.singleton_holder_fqn());
             unfold_call_args.push(format!("ArrayList<{class_short}>()"));
             unfold_call_args.push(format!("{holder}.{field}"));
-            let list_ty = kt::KtType::generic("List", [class_ty]);
+            let list_ty = KtType::generic("List", [class_ty]);
             let kt = if u.optional {
                 list_ty.nullable()
             } else {
@@ -1359,8 +1357,8 @@ fn classify_output(
         // fixed path's null `List`), `Some(empty)` returns `acc` unchanged.
         if u.generic == Some("A") {
             let spec = u.iface.as_deref()?;
-            builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
-            builder_param = Some(("fold".to_string(), spec.kt_ref(vec![kt::KtType::var_("A")])));
+            builder_lead = Some(("acc".to_string(), KtType::var_("A")));
+            builder_param = Some(("fold".to_string(), spec.kt_ref(vec![KtType::var_("A")])));
             unfold_call_args.push("acc".to_string());
             if spec.needs_raw() {
                 imports.insert(format!("{}.asRaw", spec.package));
@@ -1369,14 +1367,14 @@ fn classify_output(
                 unfold_call_args.push("fold".to_string());
             }
             let kt = if u.optional {
-                kt::KtType::var_("A").nullable()
+                KtType::var_("A").nullable()
             } else {
-                kt::KtType::var_("A")
+                KtType::var_("A")
             };
             (Some(kt), None)
         } else {
             let spec = u.iface.as_deref()?;
-            builder_param = Some(("build".to_string(), spec.kt_ref(vec![kt::KtType::var_r()])));
+            builder_param = Some(("build".to_string(), spec.kt_ref(vec![KtType::var_r()])));
             if spec.needs_raw() {
                 imports.insert(format!("{}.asRaw", spec.package));
                 unfold_call_args.push("build.asRaw()".to_string());
@@ -1384,9 +1382,9 @@ fn classify_output(
                 unfold_call_args.push("build".to_string());
             }
             let kt = if u.optional {
-                kt::KtType::var_r().nullable()
+                KtType::var_r().nullable()
             } else {
-                kt::KtType::var_r()
+                KtType::var_r()
             };
             (Some(kt), None)
         }
@@ -1604,7 +1602,7 @@ fn error_sink_parts(
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
-    r_ty: &kt::KtType,
+    r_ty: &KtType,
 ) -> Option<ErrorSink> {
     let ifaces = fplan.onerror_iface.as_ref()?;
     let binding_spec = &ifaces.binding;
@@ -1622,7 +1620,7 @@ fn error_sink_parts(
         // Per ze leaf: (raw capture Kotlin type, raw→typed wrap). The CAPTURE
         // is the raw twin (what the native side calls); the user's handler is
         // the TYPED interface — the redispatch wraps each raw slot.
-        let ze_info: Vec<(kt::KtType, crate::jni::WrapKind)> = domain_spec
+        let ze_info: Vec<(KtType, crate::jni::WrapKind)> = domain_spec
             .params
             .iter()
             .map(|p| {
@@ -1694,8 +1692,8 @@ fn error_sink_parts(
 ///
 /// A binding failure, so it routes through the same channel a closed handle
 /// does — a function-level return, never a throw.
-fn render_alias_preflight(opaques: &[Opaque], binding_param: &str, is_unit: bool) -> kt::Code {
-    let mut guards = kt::Code::new();
+fn render_alias_preflight(opaques: &[Opaque], binding_param: &str, is_unit: bool) -> KtCode {
+    let mut guards = KtCode::new();
     if opaques.len() < 2 || !opaques.iter().any(|o| o.consume_null.is_some()) {
         return guards;
     }
@@ -1748,9 +1746,9 @@ fn render_alias_preflight(opaques: &[Opaque], binding_param: &str, is_unit: bool
 /// return; no throw). Racy: a close between this check and the native call is
 /// caught by the Rust-side converter guard (the tag bit survives the race),
 /// which routes through the same binding channel.
-fn render_prelock_guards(opaques: &[Opaque], binding_param: &str, is_unit: bool) -> kt::Code {
+fn render_prelock_guards(opaques: &[Opaque], binding_param: &str, is_unit: bool) -> KtCode {
     const CLOSED_MSG: &str = "\"Operation on a closed native handle.\"";
-    let mut guards = kt::Code::new();
+    let mut guards = KtCode::new();
     for o in opaques {
         let cond = if o.nullable {
             format!("{t}?.isClosed() == true", t = o.target)
@@ -1772,19 +1770,19 @@ fn render_prelock_guards(opaques: &[Opaque], binding_param: &str, is_unit: bool)
 
 /// The call in statement position, `bind`-prefixed (`""` / `"val __ret = "`),
 /// wrapped in a consume `try/finally` when any handle is consumed.
-fn render_value_stmt(bind: &str, body_expr: &str, opaques: &[Opaque]) -> kt::Code {
+fn render_value_stmt(bind: &str, body_expr: &str, opaques: &[Opaque]) -> KtCode {
     let consume_stmts: Vec<&str> = opaques
         .iter()
         .filter_map(|o| o.consume_null.as_deref())
         .collect();
     if consume_stmts.is_empty() {
-        kt::Code::new().wline(format!("{bind}{body_expr}"))
+        KtCode::new().wline(format!("{bind}{body_expr}"))
     } else {
-        let mut fin = kt::Code::new();
+        let mut fin = KtCode::new();
         for s in consume_stmts {
             fin = fin.line(s);
         }
-        kt::Code::new().try_finally(bind, kt::Code::new().wline(body_expr), fin)
+        KtCode::new().try_finally(bind, KtCode::new().wline(body_expr), fin)
     }
 }
 
@@ -1800,13 +1798,13 @@ fn render_core_stmt(
     body_expr: &str,
     imports: &mut BTreeSet<String>,
     bind: &str,
-) -> kt::Code {
+) -> KtCode {
     // Under-lock pointer reads. The closed-handle check is done pre-lock
     // (`prelock_guards`, → `onError`); these just bind the ptr the call
     // passes. A handle closed after the guard carries the tag bit (odd
     // value), which the Rust-side converter guard rejects — never
     // dereferenced.
-    let mut ptr_binds = kt::Code::new();
+    let mut ptr_binds = KtCode::new();
     for o in opaques {
         ptr_binds = if o.nullable {
             ptr_binds.line(format!(
@@ -1824,7 +1822,7 @@ fn render_core_stmt(
         render_value_stmt(bind, body_expr, opaques)
     } else if !ext.emit_handle_locks {
         // Lock-free mode: ptr binds then the value, wrapped as an expression.
-        kt::Code::new().blk(format!("{bind}run {{"), |c| {
+        KtCode::new().blk(format!("{bind}run {{"), |c| {
             c.push(ptr_binds)
                 .push(render_value_stmt("", body_expr, opaques))
         })
@@ -1854,12 +1852,12 @@ fn render_core_stmt(
                 .map(|o| o.target.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            kt::Code::new().blk(format!("{bind}withSortedHandleLocks({targets}) {{"), |c| {
+            KtCode::new().blk(format!("{bind}withSortedHandleLocks({targets}) {{"), |c| {
                 c.push(ptr_binds)
                     .push(render_value_stmt("", body_expr, opaques))
             })
         } else {
-            let mut adds = kt::Code::new();
+            let mut adds = KtCode::new();
             for o in opaques {
                 adds = if o.nullable {
                     adds.line(format!("{t}?.let {{ __locks.add(it) }}", t = o.target))
@@ -1867,7 +1865,7 @@ fn render_core_stmt(
                     adds.line(format!("__locks.add({t})", t = o.target))
                 };
             }
-            kt::Code::new().blk(format!("{bind}run {{"), |c| {
+            KtCode::new().blk(format!("{bind}run {{"), |c| {
                 c.line("val __locks = ArrayList<NativeHandle>()")
                     .push(adds)
                     .blk("withSortedHandleLocks(__locks) {", |l| {
@@ -1907,7 +1905,7 @@ fn render_body(
     body_expr: &str,
     return_mode: &BodyReturn,
     imports: &mut BTreeSet<String>,
-) -> kt::Code {
+) -> KtCode {
     let is_unit = matches!(return_mode, BodyReturn::Unit);
     let vec_build: Vec<(&String, &String, &Vec<String>)> = params
         .iter()
@@ -1959,7 +1957,7 @@ fn render_body(
         // expression, so for a non-unit fn `__ret` binds to the core call
         // (the block's last expression). A push runs no JVM upcall, so the
         // loop needs no per-element failure check.
-        let mut fill = kt::Code::new();
+        let mut fill = KtCode::new();
         for (name, base, accesses) in &vec_build {
             let push_m = crate::jni::vec_helper_method_name(ext, base, "Push");
             let args = std::iter::once(format!("__vec_{name}"))
@@ -1970,7 +1968,7 @@ fn render_body(
                 c.wline(format!("{native}.{push_m}({args})"))
             });
         }
-        let mut free = kt::Code::new();
+        let mut free = KtCode::new();
         for (name, base, _) in &vec_build {
             let free_m = crate::jni::vec_helper_method_name(ext, base, "Free");
             free = free.wline(format!("{native}.{free_m}(__vec_{name})"));
@@ -2000,7 +1998,7 @@ pub(crate) fn unfold_leaf_kt(
     out_ty: &prebindgen_registry::flat::TypeRef,
     nullable: bool,
     pk: &str,
-) -> Option<(kt::KtType, String, String, bool)> {
+) -> Option<(KtType, String, String, bool)> {
     let proj = registry
         .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.clone());
@@ -2011,7 +2009,7 @@ pub(crate) fn unfold_leaf_kt(
     // builder_kt: enum → Int; otherwise the normal classified type
     // (handle class / String / ByteArray / Long …).
     let builder_kt = if ext.is_kotlin_enum_reading(out_ty) {
-        kt::KtType::int()
+        KtType::int()
     } else {
         classify_return(ext, out_ty, registry)?.0?
     };
@@ -2086,9 +2084,9 @@ pub(crate) fn whole_value_name(ty: &prebindgen_registry::flat::TypeRef, i: usize
 /// Returns the **non-nullable** Kotlin base name — the use site adds
 /// a `?` suffix when the entry's Rust type is `Option<…>` (via
 /// the model), so this helper must not double up.
-pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
+pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<KtType> {
     if let Some(p) = JniPrim::from_wire(wire) {
-        return Some(kt::KtType::cls(p.kotlin_type()));
+        return Some(KtType::cls(p.kotlin_type()));
     }
     if let syn::Type::Path(tp) = wire {
         if let Some(last) = tp.path.segments.last() {
@@ -2098,7 +2096,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
                 "JObject" | "jobject" | "JClass" => "Any",
                 _ => return None,
             };
-            return Some(kt::KtType::cls(kt));
+            return Some(KtType::cls(kt));
         }
     }
     None
@@ -2117,7 +2115,7 @@ pub(crate) fn classify_return(
     ext: &Declarations,
     output: &prebindgen_registry::flat::TypeRef,
     registry: &impl Conversions<KotlinMeta>,
-) -> Option<(Option<kt::KtType>, Option<crate::jni::Projection>)> {
+) -> Option<(Option<KtType>, Option<crate::jni::Projection>)> {
     let (surface, _canonical) = ReturnSurface::classify(ext, registry, output);
     render_return_surface(&surface)
 }
@@ -2130,7 +2128,7 @@ pub(crate) fn classify_return(
 /// always had.
 pub(crate) fn render_return_surface(
     surface: &ReturnSurface,
-) -> Option<(Option<kt::KtType>, Option<crate::jni::Projection>)> {
+) -> Option<(Option<KtType>, Option<crate::jni::Projection>)> {
     match surface {
         ReturnSurface::Skip => None,
         ReturnSurface::Unit => Some((None, None)),
@@ -2146,7 +2144,7 @@ pub(crate) fn render_return_surface(
                 )
             });
             Some((
-                Some(handle_kt_type(&projection.strategy, &kt::KtType::cls(fqn))),
+                Some(handle_kt_type(&projection.strategy, &KtType::cls(fqn))),
                 Some(projection.clone()),
             ))
         }
@@ -2159,7 +2157,7 @@ pub(crate) fn render_return_surface(
 /// elsewhere in the wrapper (the return type). A throwaway `ImportSet`
 /// discards the imports (they come from the AST); the shortening matches what
 /// the file renderer produces for the same type.
-pub(crate) fn kt_type_short(ty: &kt::KtType) -> String {
+pub(crate) fn kt_type_short(ty: &KtType) -> String {
     ty.render(&mut kt::ImportSet::new(""))
 }
 

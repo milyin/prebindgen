@@ -1,6 +1,6 @@
 //! JNI adapter metadata propagated through `TypeEntry`.
 
-use super::kt;
+use kotlin_codegen::KtType;
 
 /// How a `Shape::Optional` fold layer represents `None` over the JNI wire —
 /// the per-layer payload `N` of the JNI adapter's [`FoldStrategy`].
@@ -88,7 +88,7 @@ pub struct Projection {
 /// wrapper machinery rather than a parallel side channel.
 #[derive(Clone, Debug, Default)]
 pub struct KotlinMeta {
-    /// Value-context Kotlin type, structured ([`kt::KtType`]). `Long` for
+    /// Value-context Kotlin type, structured ([`KtType`]). `Long` for
     /// opaque handles (jlong wire mention), the FQN class
     /// (`io.zenoh.jni.JNIEncoding`) for user-declared decoder types whose
     /// wire isn't primitive, a composed `List<ByteArray>` when a wrapper
@@ -96,7 +96,7 @@ pub struct KotlinMeta {
     /// shortens them at render time. `None` only for entries that must not
     /// appear in any Kotlin signature — the emitter treats that as a hard
     /// error.
-    pub kotlin_name: Option<kt::KtType>,
+    pub kotlin_name: Option<KtType>,
     /// For wrapper converters whose Kotlin projection is the *inner*
     /// type's projection (e.g. `ZResult<Publisher>` → `Publisher`),
     /// this carries the inner Rust type — canonicalized — so downstream
@@ -122,7 +122,7 @@ pub struct KotlinMeta {
 impl KotlinMeta {
     pub fn from_name(name: impl Into<String>) -> Self {
         Self {
-            kotlin_name: Some(kt::KtType::cls(name)),
+            kotlin_name: Some(KtType::cls(name)),
             value_rust_type: None,
             projection: None,
         }

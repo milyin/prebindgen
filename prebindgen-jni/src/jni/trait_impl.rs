@@ -4,6 +4,7 @@
 //! Carved from the former monolithic JNI module; shares the `jni`
 //! namespace via `use super::*`.
 
+use kotlin_codegen::KtType;
 use prebindgen_registry::{Building, Conversions, Crossing, RegistryBuilder};
 
 use super::*;
@@ -209,7 +210,7 @@ impl Declarations {
             })?
         });
         let kotlin_name =
-            self.override_kotlin_name(&TypeKey::from_type(&outer_ty), Some(kt::KtType::string()));
+            self.override_kotlin_name(&TypeKey::from_type(&outer_ty), Some(KtType::string()));
         let niches = default_niches_for_wire(&wire);
         ConverterImpl {
             subs: vec![],
@@ -249,7 +250,7 @@ impl Declarations {
                 ))
             })?
         });
-        let kotlin_name = self.override_kotlin_name(&ty.key(), Some(kt::KtType::byte_array()));
+        let kotlin_name = self.override_kotlin_name(&ty.key(), Some(KtType::byte_array()));
         let niches = default_niches_for_wire(&wire);
         Some(ConverterImpl {
             subs: vec![],
@@ -359,7 +360,7 @@ impl Declarations {
                 kind: ProjectionKind::Handle,
                 niche_sentinels: Vec::new(),
             }),
-            ..self.framework_meta(Some(kt::KtType::cls("Long")))
+            ..self.framework_meta(Some(KtType::cls("Long")))
         }
     }
 
@@ -375,7 +376,7 @@ impl Declarations {
                 kind: ProjectionKind::Unsigned64,
                 niche_sentinels: Vec::new(),
             }),
-            ..self.framework_meta(Some(kt::KtType::long()))
+            ..self.framework_meta(Some(KtType::long()))
         }
     }
 
@@ -389,8 +390,8 @@ impl Declarations {
     pub(crate) fn override_kotlin_name(
         &self,
         key: &TypeKey,
-        inherited: Option<kt::KtType>,
-    ) -> Option<kt::KtType> {
+        inherited: Option<KtType>,
+    ) -> Option<KtType> {
         if let Some(cfg) = self.types.get(key) {
             // Opaque-handle entries keep their typed FQN in
             // `name_spec` for FQN-consumers, but the value-context
@@ -398,7 +399,7 @@ impl Declarations {
             // Don't let that FQN leak into a wrapper's metadata.
             if !cfg.is_opaque() {
                 if let Some(spec) = &cfg.name_spec {
-                    return Some(kt::KtType::cls(self.fqn_of(spec)));
+                    return Some(KtType::cls(self.fqn_of(spec)));
                 }
             }
         }
@@ -1195,7 +1196,7 @@ impl Declarations {
         let kotlin_name = self.override_kotlin_name(
             &outer_ty,
             // `List` is auto-imported in Kotlin (default imports).
-            Some(kt::KtType::generic("List", [inner_kotlin])),
+            Some(KtType::generic("List", [inner_kotlin])),
         );
         Some(ConverterImpl {
             subs: vec![],
@@ -1721,7 +1722,7 @@ impl Declarations {
             function: self.build_input_fn_composed(&outer_ty, &wire, &body, None),
             destination: wire,
             niches,
-            metadata: self.framework_meta(Some(kt::KtType::any())),
+            metadata: self.framework_meta(Some(KtType::any())),
         })
     }
 }
@@ -2153,10 +2154,8 @@ impl Declarations {
                     if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
                         let (wire, body) = enum_input_body(self, registry, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg
-                            .name_spec
-                            .as_ref()
-                            .map(|s| kt::KtType::cls(self.fqn_of(s)));
+                        let kotlin_name =
+                            cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
@@ -2190,7 +2189,7 @@ impl Declarations {
             // The unsized `str` yields an OWNED `String` the call site borrows,
             // so this converter's Rust type is not the reading's spelling.
             let rust_ty: syn::Type = syn::parse_quote!(String);
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(kt::KtType::string()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -2226,7 +2225,7 @@ impl Declarations {
                 // The canonical value, then the spelling.
                 ::std::string::String::from(s).into()
             });
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(kt::KtType::string()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -2274,7 +2273,7 @@ impl Declarations {
                         .types
                         .get(&key)
                         .and_then(|c| c.name_spec.as_ref())
-                        .map(|s| kt::KtType::cls(self.fqn_of(s)));
+                        .map(|s| KtType::cls(self.fqn_of(s)));
                     return Some(ConverterImpl {
                         subs: vec![],
                         pre_stages: vec![],
@@ -2296,7 +2295,7 @@ impl Declarations {
                     .types
                     .get(&key)
                     .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| kt::KtType::cls(self.fqn_of(s)));
+                    .map(|s| KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
@@ -2542,10 +2541,8 @@ impl Declarations {
                     if let Some(e) = flat_unit_enum(registry, &name, "enum_class") {
                         let (wire, body) = enum_output_body(self, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg
-                            .name_spec
-                            .as_ref()
-                            .map(|s| kt::KtType::cls(self.fqn_of(s)));
+                        let kotlin_name =
+                            cfg.name_spec.as_ref().map(|s| KtType::cls(self.fqn_of(s)));
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
@@ -2587,7 +2584,7 @@ impl Declarations {
                     <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
                 })?
             });
-            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(kt::KtType::string()));
+            let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
@@ -2651,7 +2648,7 @@ impl Declarations {
                     .types
                     .get(&key)
                     .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| kt::KtType::cls(self.fqn_of(s)));
+                    .map(|s| KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
@@ -2813,7 +2810,7 @@ impl Declarations {
                 // sites (classify_return, data-class fields) prefer
                 // `projection` and render the typed `List<TypedShort>`
                 // instead.
-                Some(kt::KtType::generic("List", [inner_kotlin])),
+                Some(KtType::generic("List", [inner_kotlin])),
             );
             // Fold an Iterable layer over the inner projection (if any), so
             // `Vec<Handle>` carries the full strategy.
@@ -2890,7 +2887,7 @@ impl Declarations {
         let inner_kotlin = inner.metadata.kotlin_name.clone()?;
         let kotlin_name = self.override_kotlin_name(
             &TypeKey::from_type(&outer_ty),
-            Some(kt::KtType::generic("List", [inner_kotlin])),
+            Some(KtType::generic("List", [inner_kotlin])),
         );
         let projection = inner.metadata.projection.clone().map(|h| Projection {
             strategy: FoldStrategy::Iterable(Box::new(h.strategy)),

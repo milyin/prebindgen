@@ -17,6 +17,7 @@
 //! the destination language's vocabulary, so each adapter implements its
 //! own.
 
+use kotlin_codegen::KtFun;
 use prebindgen_registry::Conversions;
 
 use super::*;
@@ -262,9 +263,9 @@ impl Declarations {
     }
 }
 
-/// `fun <generics> name(params): ret` off the public [`kt::KtFun`] fields —
+/// `fun <generics> name(params): ret` off the public [`KtFun`] fields —
 /// the signature only, no body/annotations (they are emission detail).
-fn signature(f: &kt::KtFun) -> String {
+fn signature(f: &KtFun) -> String {
     // The surface carries full-FQN types; render them through a throwaway
     // `ImportSet` so the report shows short names (the imports are discarded).
     let mut imports = kt::ImportSet::new("");

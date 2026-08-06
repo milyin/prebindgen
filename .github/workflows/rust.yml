@@ -34,7 +34,7 @@ env:
   #
   # Local development still tracks kotlin-codegen `main` (see
   # download_repositories.sh), matching how the other sibling repos work.
-  KOTLIN_CODEGEN_REV: 201497cc04a12f352e15468a1fd7c1a693c2fc1c
+  KOTLIN_CODEGEN_REV: 1f2c224aba6de098efd646ac656f0cbdaec87cf8
 
 jobs:
   build:
