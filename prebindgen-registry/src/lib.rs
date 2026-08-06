@@ -96,6 +96,7 @@
 //! `prebindgen-jni` crate, which hands the result to its `JniGenBuilder`.
 
 pub mod decl;
+pub(crate) mod declared_target;
 mod destination;
 pub mod diagnostics;
 pub mod domain;

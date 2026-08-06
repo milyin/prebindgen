@@ -30,7 +30,10 @@ use prebindgen_flat::types_util::ident;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::registry::{Registry, TypeKey};
+use crate::{
+    declared_target::check_declared_target,
+    registry::{Registry, TypeKey},
+};
 
 mod error;
 mod plan;
@@ -347,7 +350,19 @@ fn resolve_constructor<M>(
 
 /// Constructor signature: parameter `(name, type)` pairs, the produced
 /// (`Ok`) target type, and whether it is fallible (`-> Result<_, _>`).
-fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSig, ExpandError> {
+///
+/// `expected` is the type the declaration is *for*, and the returned signature
+/// is one already proven to produce it. Taking it as a parameter rather than
+/// leaving the caller to check afterwards is the point: a declarator cannot
+/// reach a constructor's signature without saying what that constructor is
+/// supposed to build, so the check cannot be the thing a new declarator forgets
+/// (#223). The comparison is [`check_declared_target`], shared with the output
+/// side's accessor lookup.
+fn ctor_signature<M>(
+    registry: &Registry<M>,
+    func: &syn::Ident,
+    expected: &TypeKey,
+) -> Result<CtorSig, ExpandError> {
     // Read off the element rather than re-walked from the signature: `params`
     // and `ret` are the same facts, already decided once — including that an
     // elided return and a written `-> ()` are one thing.
@@ -367,20 +382,14 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
         Some((ok, _)) => (ok.key(), true),
         None => (f.ret.key(), false),
     };
-    Ok(CtorSig {
-        params,
-        target,
-        fallible,
-    })
+    check_declared_target(func, &target, expected)?;
+    Ok(CtorSig { params, fallible })
 }
 
 struct CtorSig {
     /// Readings, not spellings: they come off `Function::params`, and a consumer
     /// that needs the spelling takes it at the point it stores one.
     params: Vec<(syn::Ident, prebindgen_flat::flat::TypeRef)>,
-    /// The type the constructor produces, as an **identity**: every use of it
-    /// is `check_target`, which keyed both sides.
-    target: TypeKey,
     fallible: bool,
 }
 
@@ -439,8 +448,7 @@ fn build_plan<M>(
                 variants: fold_variants,
             });
         };
-        let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, &target.key())?;
+        let sig = ctor_signature(registry, func, &target.key())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
@@ -553,8 +561,7 @@ fn build_core<M>(
 ) -> Result<(Option<usize>, Vec<FoldVariant>), ExpandError> {
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
-        let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, &target.key())?;
+        let sig = ctor_signature(registry, func, &target.key())?;
         let np = sig.params.len();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
@@ -588,8 +595,7 @@ fn build_core<M>(
         for (vi, v) in variants.iter().enumerate() {
             match v {
                 Variant::Ctor(func) => {
-                    let sig = ctor_signature(registry, func)?;
-                    check_target(func, &sig.target, &target.key())?;
+                    let sig = ctor_signature(registry, func, &target.key())?;
                     let np = sig.params.len();
                     let mut args = Vec::new();
                     for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
@@ -715,19 +721,15 @@ fn build_arg<M>(
     }
 }
 
-fn check_target(
-    func: &syn::Ident,
-    produces: &TypeKey,
-    expected: &TypeKey,
-) -> Result<(), ExpandError> {
-    if produces == expected {
-        Ok(())
-    } else {
-        Err(ExpandError::TargetMismatch {
-            ctor: func.to_string(),
-            produces: produces.to_string(),
-            expected: expected.to_string(),
-        })
+/// The shared mismatch, in this direction's vocabulary: an input constructor is
+/// declared to **produce** the parameter's target.
+impl From<crate::declared_target::TargetMismatch> for ExpandError {
+    fn from(m: crate::declared_target::TargetMismatch) -> Self {
+        ExpandError::TargetMismatch {
+            ctor: m.func,
+            produces: m.actual,
+            expected: m.expected,
+        }
     }
 }
 
