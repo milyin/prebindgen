@@ -260,7 +260,7 @@ impl CbindgenBuilder {
     /// behaviour *before* any `match` in this converter could inspect it, which
     /// is why validating an already-materialised enum is not a fix (#158).
     ///
-    /// So the wire is [`::core::mem::MaybeUninit<mirror>`], which is
+    /// So the wire is `::core::mem::MaybeUninit<mirror>`, which is
     /// `#[repr(transparent)]` over the mirror (identical ABI, identical C
     /// spelling — cbindgen renders `MaybeUninit<T>` as `T`) and, unlike the
     /// mirror itself, may legally hold **any** bit pattern. The discriminant is

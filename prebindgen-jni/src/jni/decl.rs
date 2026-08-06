@@ -273,7 +273,7 @@ impl PtrClassDecl {
 
     /// Make instances of this handle class **GC-managed**: an unreachable
     /// handle whose native box was not otherwise released is freed by a
-    /// shared [`java.lang.ref.Cleaner`].
+    /// shared `java.lang.ref.Cleaner`.
     ///
     /// The pointer of a GC-managed handle lives in a separate atomic cell
     /// (tag bit and all) so the cleaner action can settle the release after
