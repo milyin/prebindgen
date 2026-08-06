@@ -4,6 +4,7 @@
 //! Carved from the former `jni_kotlin_ext.rs`; shares the `jni` namespace
 //! via `use super::*`.
 
+use kotlin_codegen::KtType;
 use prebindgen_registry::flat::TypeRef;
 
 use super::*;
@@ -47,7 +48,7 @@ use prebindgen_registry::shape::fold_shape;
 /// [`FoldStrategy`] layers, given the leaf typed-handle type (e.g.
 /// `ZKeyExpr`): `Direct → ZKeyExpr`, `Nullable(inner) → <inner>?`,
 /// `Iterable(inner) → List<<inner>>`.
-pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &kt::KtType) -> kt::KtType {
+pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &KtType) -> KtType {
     fold_shape(
         strategy,
         &|| leaf.clone(),
@@ -55,17 +56,17 @@ pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &kt::KtType) -> kt::
         // is represented over the wire — the wrap fold and the wire-return
         // helper read the kind to handle the wire shape separately.
         &|inner, _kind, _inner_strategy| inner.nullable(),
-        &|inner| kt::KtType::generic("List", [inner]),
+        &|inner| KtType::generic("List", [inner]),
     )
 }
 
 /// Typed Kotlin leaf of a projection. Declared handle projections
 /// take their configured class FQN; the built-in `u64` projection is Kotlin's
 /// stable unsigned scalar type.
-pub(crate) fn projection_leaf_kt(ext: &Declarations, proj: &Projection) -> Option<kt::KtType> {
+pub(crate) fn projection_leaf_kt(ext: &Declarations, proj: &Projection) -> Option<KtType> {
     match proj.kind {
-        ProjectionKind::Handle => ext.kotlin_fqn(&proj.leaf_key).map(kt::KtType::cls),
-        ProjectionKind::Unsigned64 => Some(kt::KtType::cls("ULong")),
+        ProjectionKind::Handle => ext.kotlin_fqn(&proj.leaf_key).map(KtType::cls),
+        ProjectionKind::Unsigned64 => Some(KtType::cls("ULong")),
     }
 }
 
@@ -93,13 +94,13 @@ pub(crate) fn factory_projection_wire_wrap(
     proj: &crate::jni::Projection,
     short: &str,
     name: &str,
-) -> (kt::KtType, String) {
+) -> (KtType, String) {
     use prebindgen_registry::shape::Shape::*;
 
     use crate::jni::{NullableKind, ProjectionKind::*};
     let direct = |kind: &crate::jni::ProjectionKind| match kind {
-        Handle => (kt::KtType::long(), format!("{short}({name})")),
-        Unsigned64 => (kt::KtType::long(), format!("{name}.toULong()")),
+        Handle => (KtType::long(), format!("{short}({name})")),
+        Unsigned64 => (KtType::long(), format!("{name}.toULong()")),
     };
     match &proj.strategy {
         Base => direct(&proj.kind),
@@ -113,7 +114,7 @@ pub(crate) fn factory_projection_wire_wrap(
             match proj.kind {
                 // Handle null rides the `0L` jlong sentinel.
                 Handle => (
-                    kt::KtType::long(),
+                    KtType::long(),
                     format!("if ({name} == 0L) null else {short}({name})"),
                 ),
                 Unsigned64 => match nullable {
@@ -128,14 +129,14 @@ pub(crate) fn factory_projection_wire_wrap(
                             )
                         });
                         (
-                            kt::KtType::long(),
+                            KtType::long(),
                             format!("if ({name} == {sentinel}) null else {name}.toULong()"),
                         )
                     }
                     // Plain `Option<u64>` has no spare bit pattern, so its
                     // primitive wire is boxed and JVM null represents `None`.
                     NullableKind::Boxed => {
-                        (kt::KtType::long().nullable(), format!("{name}?.toULong()"))
+                        (KtType::long().nullable(), format!("{name}?.toULong()"))
                     }
                 },
             }
@@ -150,7 +151,7 @@ pub(crate) fn factory_projection_wire_wrap(
 /// True for the Kotlin types that map to JVM **primitives** (never null over
 /// the JNI boundary). Used to decide which flattened `Option<nested>` leaf
 /// params must be made nullable in the parent factory signature.
-pub(crate) fn is_kotlin_primitive_ty(t: &kt::KtType) -> bool {
+pub(crate) fn is_kotlin_primitive_ty(t: &KtType) -> bool {
     !t.is_nullable()
         && t.leaf_name().is_some_and(|n| {
             matches!(
@@ -182,7 +183,7 @@ pub(crate) fn flatten_struct_factory(
     class_name: &str,
     imports: &mut BTreeSet<String>,
     depth: usize,
-) -> Option<(Vec<(String, kt::KtType)>, String)> {
+) -> Option<(Vec<(String, KtType)>, String)> {
     let plan = build_struct_plan(ext, registry, s, depth)?;
     factory_from_plan(&plan, prefix, class_name, imports)
 }
@@ -194,8 +195,8 @@ fn factory_from_plan(
     prefix: &str,
     class_name: &str,
     imports: &mut BTreeSet<String>,
-) -> Option<(Vec<(String, kt::KtType)>, String)> {
-    let mut params: Vec<(String, kt::KtType)> = Vec::new();
+) -> Option<(Vec<(String, KtType)>, String)> {
+    let mut params: Vec<(String, KtType)> = Vec::new();
     let mut parts: Vec<String> = Vec::new();
 
     for f in &plan.fields {
@@ -223,8 +224,8 @@ fn factory_field(
     kind: &PlanFieldKind,
     base: &str,
     imports: &mut BTreeSet<String>,
-) -> Option<(Vec<(String, kt::KtType)>, String)> {
-    let mut params: Vec<(String, kt::KtType)> = Vec::new();
+) -> Option<(Vec<(String, KtType)>, String)> {
+    let mut params: Vec<(String, KtType)> = Vec::new();
     let mut parts: Vec<String> = Vec::new();
     let base = base.to_string();
     {
@@ -241,7 +242,7 @@ fn factory_field(
             // enum's short name, its FQN collected as a body import).
             PlanFieldKind::Enum { kotlin, .. } => {
                 let short = register_fqn(kotlin.leaf_name()?, imports);
-                params.push((base.clone(), kt::KtType::int()));
+                params.push((base.clone(), KtType::int()));
                 parts.push(format!("{short}.fromInt({base})"));
             }
             // `Option<enum>` leaf: the native encoder delivers the discriminant
@@ -249,7 +250,7 @@ fn factory_field(
             // the factory takes `Int?` and rebuilds the nullable enum.
             PlanFieldKind::OptionEnum { kotlin, .. } => {
                 let short = register_fqn(kotlin.leaf_name()?, imports);
-                params.push((base.clone(), kt::KtType::int().nullable()));
+                params.push((base.clone(), KtType::int().nullable()));
                 parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
             }
             // Data-carrying enum — the tag slot plus every variant's group
@@ -264,9 +265,9 @@ fn factory_field(
                 let iface_short = register_fqn(kotlin_fqn, imports);
                 let flag = format!("{base}__present");
                 if *optional {
-                    params.push((flag.clone(), kt::KtType::boolean()));
+                    params.push((flag.clone(), KtType::boolean()));
                 }
-                params.push((format!("{base}__tag"), kt::KtType::int()));
+                params.push((format!("{base}__tag"), KtType::int()));
 
                 let mut arms: Vec<String> = Vec::new();
                 for (tag, v) in variants.iter().enumerate() {
@@ -329,7 +330,7 @@ fn factory_field(
                     // stay nullable.
                     let flag = format!("{base}__present");
                     let mut fwd_names: Vec<String> = Vec::with_capacity(child_params.len());
-                    params.push((flag.clone(), kt::KtType::boolean()));
+                    params.push((flag.clone(), KtType::boolean()));
                     for (n, t) in &child_params {
                         if is_kotlin_primitive_ty(t) || t.is_nullable() {
                             params.push((n.clone(), t.clone()));
@@ -385,8 +386,8 @@ fn factory_field(
 /// This is the N=1 `Option<nested>` rule (see the `Nested { optional }` arm)
 /// generalized to N groups; both call it so the two paths cannot drift.
 fn nullable_group_part(
-    params: &mut Vec<(String, kt::KtType)>,
-    group_params: Vec<(String, kt::KtType)>,
+    params: &mut Vec<(String, KtType)>,
+    group_params: Vec<(String, KtType)>,
     part: String,
 ) -> String {
     let mut part = part;
@@ -551,11 +552,11 @@ pub(crate) fn fold_projection_wrap(
 /// [`NullableKind`] so the declared wire matches the runtime ABI:
 /// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
 /// represents null); `Niche+object` and `Boxed` add `?`.
-pub(crate) fn projection_wire_return(proj: &crate::jni::Projection) -> kt::KtType {
+pub(crate) fn projection_wire_return(proj: &crate::jni::Projection) -> KtType {
     use crate::jni::{FoldStrategy, NullableKind, ProjectionKind};
     let (inner_wire, inner_is_primitive) = match proj.kind {
-        ProjectionKind::Handle => (kt::KtType::long(), true),
-        ProjectionKind::Unsigned64 => (kt::KtType::long(), true),
+        ProjectionKind::Handle => (KtType::long(), true),
+        ProjectionKind::Unsigned64 => (KtType::long(), true),
     };
     fold_shape(
         &proj.strategy,
@@ -569,7 +570,7 @@ pub(crate) fn projection_wire_return(proj: &crate::jni::Projection) -> kt::KtTyp
                 _ => inner.nullable(),
             }
         },
-        &|inner| kt::KtType::generic("List", [inner]),
+        &|inner| KtType::generic("List", [inner]),
     )
 }
 

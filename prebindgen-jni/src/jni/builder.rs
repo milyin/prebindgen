@@ -11,6 +11,7 @@
 // above), and an explicit import beats a glob — importing the model's would
 // silently retarget the `TypeKind::Sum` / `TypeKind::DataStruct` matches below.
 // One qualifier keeps both names short and says which of the two it is.
+use kotlin_codegen::KtType;
 use prebindgen_registry::{
     flat::{self, TypeRef},
     Conversions,
@@ -1766,7 +1767,7 @@ impl Declarations {
     /// `Vec<_>`, `impl Fn(...)` lambdas). Errors are routed uniformly to the
     /// per-call `signal_error` sink by the extern emitter, so no
     /// per-converter exception metadata is carried.
-    pub(crate) fn framework_meta(&self, kotlin_name: Option<kt::KtType>) -> KotlinMeta {
+    pub(crate) fn framework_meta(&self, kotlin_name: Option<KtType>) -> KotlinMeta {
         KotlinMeta {
             kotlin_name,
             value_rust_type: None,
@@ -1947,7 +1948,7 @@ impl Declarations {
                     .types
                     .get(&key)
                     .and_then(|c| c.name_spec.as_ref())
-                    .map(|s| kt::KtType::cls(self.fqn_of(s)))
+                    .map(|s| KtType::cls(self.fqn_of(s)))
                     .or_else(|| kotlin_for_wire(&ty));
                 let niches = Niches::empty();
                 Some(ConverterImpl {
@@ -2105,7 +2106,7 @@ impl Declarations {
                         .types
                         .get(&key)
                         .and_then(|c| c.name_spec.as_ref())
-                        .map(|s| kt::KtType::cls(self.fqn_of(s)))
+                        .map(|s| KtType::cls(self.fqn_of(s)))
                         .or_else(|| kotlin_for_wire(&ty));
                     (kn, None)
                 };

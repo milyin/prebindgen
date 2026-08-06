@@ -10,6 +10,7 @@
 //! construction. The pattern generalizes [`build_struct_plan`]'s field-level
 //! plan to function granularity; the output side follows in a later stage.
 
+use kotlin_codegen::KtType;
 use prebindgen_registry::{flat::TypeRef, Conversions};
 
 use super::*;
@@ -83,11 +84,11 @@ pub(crate) struct PlanLeaf {
     /// `None` when the metadata lacks a name (the Kotlin wrapper renderer
     /// skips the function — the escape-hatch path) and for [`InputKind::
     /// Callback`] (typed from the interface spec at render time).
-    pub kt_public: Option<kt::KtType>,
+    pub kt_public: Option<KtType>,
     /// The resolved entry's raw `metadata.kotlin_name` — the type the
     /// `JNINative` extern declares for pass-through leaves (for projections
     /// this is the erased wire name, not the typed surface).
-    pub kt_meta: Option<kt::KtType>,
+    pub kt_meta: Option<KtType>,
     /// Whether the leaf crosses as optional, **per the model** — so a wrapped
     /// spelling (`Box<Option<T>>`) answers exactly as the bare one does. Each
     /// site applies its own nullability rule on top (handles stay non-null
@@ -221,7 +222,7 @@ pub(crate) enum ReturnSurface {
     },
     /// Plain return typed by the entry's resolved Kotlin name (unshortened —
     /// the adapter registers/shortens at render time).
-    Plain { kt: kt::KtType },
+    Plain { kt: KtType },
 }
 
 /// Plan construction failure. The validation boundary

@@ -2,7 +2,7 @@
 //!
 //! [`Declarations::write_kotlin`] is the single entry point for every Kotlin
 //! file the JNI back-end emits. Each per-kind emitter builds in-memory
-//! [`kt::KtFile`] *model fragments* (declarations, not strings — the
+//! [`KtFile`] *model fragments* (declarations, not strings — the
 //! `kotlin_codegen` crate owns formatting and imports):
 //!   * the shared `NativeHandle` base + lock helpers (root package, e.g.
 //!     `io.zenoh.jni`).
@@ -26,7 +26,8 @@
 //! warning (the generator's unclaimed-item report); there is no "orphan" bucket.
 
 use kotlin_codegen::{
-    ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis,
+    KtClass, KtClassKind, KtCode, KtCtorParam, KtDecl, KtFile, KtFun, KtParam, KtProperty, KtType,
+    KtVis,
 };
 use prebindgen_registry::Conversions;
 
@@ -55,7 +56,7 @@ pub(crate) struct TypedHandle<'a> {
 impl super::JniGen {
     /// Unified Kotlin emission — the JNI adapter's second artifact,
     /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
-    /// builds in-memory [`kt::KtFile`] model fragments; they are merged
+    /// builds in-memory [`KtFile`] model fragments; they are merged
     /// into one file per package, rendered, and written under
     /// `kotlin_root`. The initial write accepts a missing or empty directory
     /// and marks it generator-owned; later writes replace only marked output
@@ -81,7 +82,7 @@ impl Declarations {
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         // Validation already ran once in `RegistryBuilder::build` — this emitter
         // is a pure consumer of the resolved, validated registry.
-        let mut fragments: Vec<kt::KtFile> = Vec::new();
+        let mut fragments: Vec<KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);
         fragments.extend(self.write_sealed_classes(registry)?);
@@ -118,17 +119,17 @@ impl Declarations {
     /// handle extends, plus the `withSortedHandleLocks` helper that the
     /// generated wrappers use to acquire any number of handle monitors in
     /// one pointer-sorted, deadlock-safe pass.
-    pub(crate) fn write_native_handle(&self) -> kt::KtFile {
+    pub(crate) fn write_native_handle(&self) -> KtFile {
         let handle_ty = KtType::cls("NativeHandle");
         // `body: () -> R` — a zero-param function type.
         let body_param = || KtParam::new("body", KtType::lambda([], KtType::var_r()));
 
-        let mut file = kt::KtFile::new(&self.package)
+        let mut file = KtFile::new(&self.package)
             .import("java.lang.ref.Cleaner")
             .import("java.util.concurrent.atomic.AtomicLong")
             .decl(
-                KtClass::new(ClassKind::Abstract, "NativeHandle")
-                    .vis(Vis::Public)
+                KtClass::new(KtClassKind::Abstract, "NativeHandle")
+                    .vis(KtVis::Public)
                     .kdoc(
                         "Base class for every typed native handle: owns the raw `Box<T>` pointer\n\
                          slot and its monitor. Subclasses add their type-specific `close()` /\n\
@@ -152,42 +153,42 @@ impl Declarations {
                         KtProperty::var("ptr")
                             .ty(KtType::long())
                             .initializer("initialPtr")
-                            .vis(Vis::Internal)
+                            .vis(KtVis::Internal)
                             .modifier("open")
                             .annotation("Volatile"),
                     )
                     .member(
                         KtFun::new("markConsumed")
-                            .vis(Vis::Internal)
+                            .vis(KtVis::Internal)
                             .modifier("open")
                             .kdoc(
                                 "Mark this handle consumed by value — the native side now owns\n\
                                  (and frees) the box; only the closed tag is recorded here. A\n\
                                  GC-managed handle also settles its release ticket.",
                             )
-                            .body(Code::new().line("ptr = ptr or 1L")),
+                            .body(KtCode::new().line("ptr = ptr or 1L")),
                     )
                     .member(
                         KtFun::new("peek")
-                            .vis(Vis::Public)
+                            .vis(KtVis::Public)
                             .kdoc("The live pointer, or `0` if this handle is closed.")
                             .returns(KtType::long())
                             .body(
-                                Code::new()
+                                KtCode::new()
                                     .line("val p = ptr")
                                     .line("return if (p == 0L || (p and 1L) != 0L) 0L else p"),
                             ),
                     )
                     .member(
                         KtFun::new("isClosed")
-                            .vis(Vis::Public)
+                            .vis(KtVis::Public)
                             .returns(KtType::boolean())
-                            .expr_body(Code::new().line("ptr == 0L || (ptr and 1L) != 0L")),
+                            .expr_body(KtCode::new().line("ptr == 0L || (ptr and 1L) != 0L")),
                     ),
             )
             .decl(
-                KtClass::new(ClassKind::Abstract, "GcNativeHandle")
-                    .vis(Vis::Public)
+                KtClass::new(KtClassKind::Abstract, "GcNativeHandle")
+                    .vis(KtVis::Public)
                     .kdoc(
                         "Storage variant for `gc_managed` handle classes: the pointer (tag bit\n\
                          and all) lives in a separate [cell], so the [Cleaner] action the\n\
@@ -211,29 +212,29 @@ impl Declarations {
                         KtProperty::val("cell")
                             .ty(KtType::cls("AtomicLong"))
                             .initializer("AtomicLong(initialPtr)")
-                            .vis(Vis::Internal),
+                            .vis(KtVis::Internal),
                     )
                     .member(
                         KtProperty::var("ptr")
                             .ty(KtType::long())
-                            .vis(Vis::Internal)
+                            .vis(KtVis::Internal)
                             .modifier("final override")
                             .accessors(
-                                Code::new()
+                                KtCode::new()
                                     .line("get() = cell.get()")
                                     .line("set(v) { cell.set(v) }"),
                             ),
                     )
                     .member(
                         KtFun::new("markConsumed")
-                            .vis(Vis::Internal)
+                            .vis(KtVis::Internal)
                             .modifier("final override")
-                            .body(Code::new().line("releaseCell(cell)")),
+                            .body(KtCode::new().line("releaseCell(cell)")),
                     ),
             )
             .decl(
                 KtFun::new("releaseCell")
-                    .vis(Vis::Internal)
+                    .vis(KtVis::Internal)
                     .kdoc(
                         "Win the untagged→tagged release transition of a gc_managed handle's\n\
                          cell: returns the untagged address if the caller now owns the\n\
@@ -243,7 +244,7 @@ impl Declarations {
                     .param(KtParam::new("cell", KtType::cls("AtomicLong")))
                     .returns(KtType::long())
                     .body(
-                        Code::new()
+                        KtCode::new()
                             .line("while (true) {")
                             .line("    val v = cell.get()")
                             .line("    if (v == 0L || (v and 1L) != 0L) return 0L")
@@ -253,7 +254,7 @@ impl Declarations {
             )
             .decl(
                 KtClass::object_("NativeCleaner")
-                    .vis(Vis::Internal)
+                    .vis(KtVis::Internal)
                     .kdoc("Shared [Cleaner] settling gc_managed handles' release tickets.")
                     .member(
                         KtProperty::val("CLEANER")
@@ -264,7 +265,7 @@ impl Declarations {
             )
             .decl(
                 KtFun::new("registerGcHandle")
-                    .vis(Vis::Internal)
+                    .vis(KtVis::Internal)
                     .kdoc(
                         "Register [handle]'s GC release action, capturing only its cell and\n\
                          the class's `freePtr` (never the handle — that would keep it\n\
@@ -277,7 +278,7 @@ impl Declarations {
                     ))
                     .returns(KtType::cls("java.lang.ref.Cleaner.Cleanable").nullable())
                     .body(
-                        Code::new()
+                        KtCode::new()
                             .line("if (handle.isClosed()) return null")
                             .line("val c = handle.cell")
                             .line(
@@ -292,7 +293,7 @@ impl Declarations {
         if self.emit_handle_locks {
             file = file.decl(
                 KtFun::new("withSortedHandleLocks")
-                    .vis(Vis::Internal)
+                    .vis(KtVis::Internal)
                     .kdoc(
                         "Acquire every handle's monitor in one global order — sorted by the\n\
                          immutable address bits (`ptr and -2`; bit 0 is the closed tag and\n\
@@ -311,7 +312,7 @@ impl Declarations {
                     .param(body_param())
                     .returns(KtType::var_r())
                     .body(
-                        Code::new()
+                        KtCode::new()
                             .line("val sorted = handles.sortedBy { it.ptr and -2L }")
                             .line("fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }")
                             .line("return rec(0)"),
@@ -328,18 +329,18 @@ impl Declarations {
             file = file
                 .decl(
                     KtFun::new("withSortedHandleLocks")
-                        .vis(Vis::Internal)
+                        .vis(KtVis::Internal)
                         .modifier("inline")
                         .kdoc("Allocation-free single-handle lock (one monitor, nothing to order).")
                         .generic("R")
                         .param(KtParam::new("a", handle_ty.clone()))
                         .param(body_param())
                         .returns(KtType::var_r())
-                        .expr_body(Code::new().line("synchronized(a) { body() }")),
+                        .expr_body(KtCode::new().line("synchronized(a) { body() }")),
                 )
                 .decl(
                     KtFun::new("withSortedHandleLocks")
-                        .vis(Vis::Internal)
+                        .vis(KtVis::Internal)
                         .modifier("inline")
                         .kdoc("Allocation-free two-handle lock: order by masked address then nest monitors.")
                         .generic("R")
@@ -348,7 +349,7 @@ impl Declarations {
                         .param(body_param())
                         .returns(KtType::var_r())
                         .body(
-                            Code::new()
+                            KtCode::new()
                                 .line("val first: NativeHandle")
                                 .line("val second: NativeHandle")
                                 .line("if ((a.ptr and -2L) <= (b.ptr and -2L)) { first = a; second = b } else { first = b; second = a }")
@@ -357,7 +358,7 @@ impl Declarations {
                 )
                 .decl(
                     KtFun::new("withSortedHandleLocks")
-                        .vis(Vis::Internal)
+                        .vis(KtVis::Internal)
                         .modifier("inline")
                         .kdoc("Allocation-free three-handle lock: 3-compare sorting network, then nest.")
                         .generic("R")
@@ -367,7 +368,7 @@ impl Declarations {
                         .param(body_param())
                         .returns(KtType::var_r())
                         .body(
-                            Code::new()
+                            KtCode::new()
                                 .line("var x = a")
                                 .line("var y = b")
                                 .line("var z = c")
@@ -441,7 +442,7 @@ impl Declarations {
     pub(crate) fn write_enum_classes(
         &self,
         registry: &Registry<KotlinMeta>,
-    ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
+    ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -471,7 +472,7 @@ impl Declarations {
                 None => (String::new(), kotlin_fqn.clone()),
             };
             let mut class = build_enum_class(&class_name, item_enum);
-            let mut file = kt::KtFile::new(package);
+            let mut file = KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
             {
@@ -500,7 +501,7 @@ impl Declarations {
     pub(crate) fn write_sealed_classes(
         &self,
         registry: &Registry<KotlinMeta>,
-    ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
+    ) -> Result<Vec<KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -553,7 +554,7 @@ impl Declarations {
                 None => (String::new(), kotlin_fqn.clone()),
             };
             let mut class = self.build_sealed_class(registry, &class_name, sum, sum_cfg);
-            let mut file = kt::KtFile::new(package);
+            let mut file = KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
             {
@@ -588,19 +589,19 @@ impl Declarations {
             .map(|d| format!("{d}\n\n{framework_line}"))
             .unwrap_or(framework_line);
 
-        let mut class = KtClass::new(ClassKind::SealedInterface, class_name)
-            .vis(Vis::Public)
+        let mut class = KtClass::new(KtClassKind::SealedInterface, class_name)
+            .vis(KtVis::Public)
             .kdoc(kdoc);
 
         // Nested variant classes, in declaration (tag) order.
         for alt in &sum.alternatives {
             let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
             let mut vclass = if alt.is_empty() {
-                KtClass::new(ClassKind::DataObject, &vname)
+                KtClass::new(KtClassKind::DataObject, &vname)
             } else {
-                KtClass::new(ClassKind::Data, &vname)
+                KtClass::new(KtClassKind::Data, &vname)
             }
-            .vis(Vis::Public)
+            .vis(KtVis::Public)
             .supertype(KtType::cls(class_name), None);
             if let Some(doc) = alt.docs() {
                 vclass = vclass.kdoc(doc);
@@ -610,7 +611,7 @@ impl Declarations {
                 let prop = sum_field_prop_name(&field.member());
                 let ty = self.sum_payload_kt_type(registry, &sum.name, &alt.name, &prop, field);
                 vprops.push((prop.clone(), ty.clone()));
-                vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
+                vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(KtVis::Public));
             }
             // An array-backed payload (a `Vec<u8>` variant field) compares by
             // identity otherwise — same rule as a data-class property.
@@ -626,7 +627,7 @@ impl Declarations {
         // `fromParts(tag, …)` — the tag slot plus every variant's slots side
         // by side, in the same order both sides enumerate them.
         let mut factory = KtFun::new("fromParts")
-            .vis(Vis::Public)
+            .vis(KtVis::Public)
             .annotation("JvmStatic")
             .param(KtParam::new("tag", KtType::int()))
             .returns(KtType::cls(class_name));
@@ -638,7 +639,7 @@ impl Declarations {
                 factory = factory.param(KtParam::new(sum_slot_fragment(&vname, &prop), ty));
             }
         }
-        let mut body = Code::new();
+        let mut body = KtCode::new();
         body = body.blk("when (tag) {", |mut w| {
             for alt in &sum.alternatives {
                 let vname = self.sum_variant_class_name(sum_cfg, &alt.name);
@@ -664,7 +665,9 @@ impl Declarations {
 
         // The companion is named only when it has to be (a variant took
         // `Companion`), so ordinary emission keeps the anonymous form.
-        let mut companion = KtClass::companion_object().vis(Vis::Public).member(factory);
+        let mut companion = KtClass::companion_object()
+            .vis(KtVis::Public)
+            .member(factory);
         let companion_name = self.sum_companion_name(sum_cfg, sum);
         if companion_name != "Companion" {
             companion.name = companion_name;
@@ -837,7 +840,7 @@ impl Declarations {
     /// types, so wrappers and data-class declarations stay in sync. A
     /// compatibility-alias fragment is appended when any data class is
     /// renamed relative to its Rust ident.
-    pub(crate) fn write_data_classes(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
+    pub(crate) fn write_data_classes(&self, registry: &Registry<KotlinMeta>) -> Vec<KtFile> {
         let mut written = Vec::new();
         let mut aliases: Vec<(String, String)> = Vec::new();
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -911,7 +914,7 @@ impl Declarations {
                     .companion
                     .take()
                     .map(|c| *c)
-                    .unwrap_or_else(|| KtClass::companion_object().vis(Vis::Public));
+                    .unwrap_or_else(|| KtClass::companion_object().vis(KtVis::Public));
                 for m in ctors {
                     if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
                         if let Some(f) = crate::jni::render_wrapper_fn(
@@ -932,7 +935,7 @@ impl Declarations {
                 }
                 class = class.companion(companion);
             }
-            let mut file = kt::KtFile::new(package);
+            let mut file = KtFile::new(package);
             if let Some(iface) =
                 self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
             {
@@ -945,10 +948,10 @@ impl Declarations {
             // Compatibility aliases for legacy un-mangled data-class references.
             aliases.sort_by(|a, b| a.0.cmp(&b.0));
             aliases.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
-            let mut file = kt::KtFile::new(&self.package);
+            let mut file = KtFile::new(&self.package);
             for (legacy, current) in aliases {
-                file = file.decl(kt::KtDecl::TypeAlias {
-                    vis: Vis::Public,
+                file = file.decl(KtDecl::TypeAlias {
+                    vis: KtVis::Public,
                     name: legacy,
                     target: KtType::cls(current),
                 });
@@ -976,7 +979,7 @@ impl Declarations {
     /// from the declaration's representative plan (`registry.decon_plans`) —
     /// the same source the native emitters read, so all sites agree by
     /// construction (no dedup, no signature reconciliation).
-    pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
+    pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<KtFile> {
         use prebindgen_registry::unfold::{DeconId, Delivery};
 
         // Distinct interface identities in use — [`SpecKey`] (`Ord`, so
@@ -1128,7 +1131,7 @@ impl Declarations {
                 // so `to_decl()` *is* the interface the singleton implements and
                 // JNI calls.
                 let typed_is_dead = fixed.is_some() && s.needs_raw();
-                let mut file = kt::KtFile::new(s.package.clone());
+                let mut file = KtFile::new(s.package.clone());
                 if !typed_is_dead {
                     file = file.decl(s.to_decl());
                 }
@@ -1197,7 +1200,7 @@ impl Declarations {
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
-    ) -> kt::KtDecl {
+    ) -> KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&source.key())
@@ -1215,9 +1218,9 @@ impl Declarations {
             "internal val {val_name}: {builder}<{class_short}> =\n    \
              {builder} {{ {joined} -> {class_short}.fromParts({joined}) }}"
         );
-        kt::KtDecl::Raw {
+        KtDecl::Raw {
             name: val_name,
-            code: kt::Code::raw_reindent(&code),
+            code: KtCode::raw_reindent(&code),
         }
     }
 
@@ -1235,7 +1238,7 @@ impl Declarations {
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
-    ) -> kt::KtDecl {
+    ) -> KtDecl {
         let source = &registry.decon_plans()[decon].source;
         let class_fqn = self
             .kotlin_fqn(&source.key())
@@ -1263,9 +1266,9 @@ impl Declarations {
              {acc}.add({class_short}.fromParts({leaf_args})); {acc} }}\n\
              }}"
         );
-        kt::KtDecl::Raw {
+        KtDecl::Raw {
             name: holder,
-            code: kt::Code::raw_reindent(&code),
+            code: KtCode::raw_reindent(&code),
         }
     }
 
@@ -1285,7 +1288,7 @@ impl Declarations {
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
-    ) -> kt::KtDecl {
+    ) -> KtDecl {
         let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
@@ -1304,11 +1307,11 @@ impl Declarations {
              {builder} {{ {} ->\n    {when}\n}}",
             names.join(", "),
         );
-        let mut body = kt::Code::raw_reindent(&code);
+        let mut body = KtCode::raw_reindent(&code);
         for fqn in imports {
             body = body.import(fqn);
         }
-        kt::KtDecl::Raw {
+        KtDecl::Raw {
             name: val_name,
             code: body,
         }
@@ -1324,7 +1327,7 @@ impl Declarations {
         registry: &Registry<KotlinMeta>,
         spec: &crate::jni::IfaceSpec,
         decon: &prebindgen_registry::unfold::DeconId,
-    ) -> kt::KtDecl {
+    ) -> KtDecl {
         let plan = &registry.decon_plans()[decon];
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
@@ -1349,11 +1352,11 @@ impl Declarations {
              }}",
             names.join(", "),
         );
-        let mut body = kt::Code::raw_reindent(&code);
+        let mut body = KtCode::raw_reindent(&code);
         for fqn in imports {
             body = body.import(fqn);
         }
-        kt::KtDecl::Raw {
+        KtDecl::Raw {
             name: holder,
             code: body,
         }
@@ -1500,7 +1503,7 @@ impl Declarations {
     /// identity for a String. So the list is composed on the Kotlin side and no
     /// Java object is built on the Rust side. The folder's `run` params are
     /// `[acc, element]`.
-    fn whole_value_folder_singleton(&self, spec: &crate::jni::IfaceSpec) -> kt::KtDecl {
+    fn whole_value_folder_singleton(&self, spec: &crate::jni::IfaceSpec) -> KtDecl {
         let folder = spec.raw_name();
         let holder = spec.singleton_holder_name();
         let field = crate::jni::SINGLETON_FIELD;
@@ -1518,9 +1521,9 @@ impl Declarations {
              }}",
             elem = elem.name,
         );
-        kt::KtDecl::Raw {
+        KtDecl::Raw {
             name: holder,
-            code: kt::Code::raw_reindent(&code),
+            code: KtCode::raw_reindent(&code),
         }
     }
 
@@ -1529,9 +1532,9 @@ impl Declarations {
         registry: &Registry<KotlinMeta>,
         subpackage: &str,
         pkg_cfg: &crate::jni::PackageConfig,
-    ) -> kt::KtFile {
+    ) -> KtFile {
         let package = self.package_name(subpackage);
-        let mut file = kt::KtFile::new(&package);
+        let mut file = KtFile::new(&package);
         let mut imports: BTreeSet<String> = BTreeSet::new();
         for entry in &pkg_cfg.functions {
             let item_fn = &registry
@@ -1641,14 +1644,14 @@ impl Declarations {
     /// inside an `init { … }` block here (e.g. a reference to the consumer's
     /// own loader object). Unset, the holder stays free of any loading logic
     /// and the wrapper layer is responsible for loading.
-    pub(crate) fn write_jni_native(&self, registry: &Registry<KotlinMeta>) -> kt::KtFile {
+    pub(crate) fn write_jni_native(&self, registry: &Registry<KotlinMeta>) -> KtFile {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
 
         // Each extern is a `KtFun` member of the object; the AST renderer
         // shortens types, collects imports, and wraps long signatures (no
         // derivation-time import set).
-        let mut externs: Vec<kt::KtFun> = Vec::new();
+        let mut externs: Vec<KtFun> = Vec::new();
         let mut fns: Vec<&prebindgen_registry::flat::Function> =
             registry.flat().functions().collect();
         fns.sort_by(|a, b| a.name.cmp(&b.name));
@@ -1711,35 +1714,35 @@ impl Declarations {
             // `New(cap: Int): Long`, `Push(handle: Long, <leaves…>)`,
             // `Free(handle: Long)`.
             externs.push(
-                kt::KtFun::new(new_m)
+                KtFun::new(new_m)
                     .modifier("external")
-                    .param(kt::KtParam::new("cap", kt::KtType::int()))
-                    .returns(kt::KtType::long()),
+                    .param(KtParam::new("cap", KtType::int()))
+                    .returns(KtType::long()),
             );
-            let mut push = kt::KtFun::new(push_m)
+            let mut push = KtFun::new(push_m)
                 .modifier("external")
-                .param(kt::KtParam::new("handle", kt::KtType::long()));
+                .param(KtParam::new("handle", KtType::long()));
             for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
-                push = push.param(kt::KtParam::new(
+                push = push.param(KtParam::new(
                     leaf.kt_name.clone(),
-                    kt::KtType::cls(leaf.kt_wire_ty.clone()),
+                    KtType::cls(leaf.kt_wire_ty.clone()),
                 ));
             }
             externs.push(push);
             externs.push(
-                kt::KtFun::new(free_m)
+                KtFun::new(free_m)
                     .modifier("external")
-                    .param(kt::KtParam::new("handle", kt::KtType::long())),
+                    .param(KtParam::new("handle", KtType::long())),
             );
         }
 
-        let mut obj = KtClass::object_(class_name).vis(Vis::Internal);
+        let mut obj = KtClass::object_(class_name).vis(KtVis::Internal);
         // Optional native-load trigger: emitted FIRST so the object's static
         // initializer runs the consumer's loader before any extern resolves.
         if let Some(code) = &self.jni_native_init {
-            obj = obj.member(kt::KtDecl::Raw {
+            obj = obj.member(KtDecl::Raw {
                 name: "native_init".to_string(),
-                code: Code::new()
+                code: KtCode::new()
                     .line("init {")
                     .line(format!("    {code}"))
                     .line("}"),
@@ -1750,7 +1753,7 @@ impl Declarations {
         for fun in externs {
             obj = obj.member(fun);
         }
-        kt::KtFile::new(&self.package).decl(obj)
+        KtFile::new(&self.package).decl(obj)
     }
 
     /// Emit one Kotlin file per entry in `handles` — each becomes a
@@ -1779,7 +1782,7 @@ impl Declarations {
         &self,
         registry: &Registry<KotlinMeta>,
         handles: &[TypedHandle<'_>],
-    ) -> Vec<kt::KtFile> {
+    ) -> Vec<KtFile> {
         let mut written = Vec::new();
         for handle in handles {
             let (package, class_name) = match handle.kotlin_fqn.rsplit_once('.') {
@@ -1802,14 +1805,14 @@ impl Declarations {
             // close() is covered by AutoCloseable. The interface extends
             // AutoCloseable so consumers get `close()` too.
             let base = vec![
-                kt::KtFun::new("peek")
-                    .vis(kt::Vis::Default)
-                    .returns(kt::KtType::long()),
-                kt::KtFun::new("isClosed")
-                    .vis(kt::Vis::Default)
-                    .returns(kt::KtType::boolean()),
+                KtFun::new("peek")
+                    .vis(KtVis::Default)
+                    .returns(KtType::long()),
+                KtFun::new("isClosed")
+                    .vis(KtVis::Default)
+                    .returns(KtType::boolean()),
             ];
-            let mut file = kt::KtFile::new(package);
+            let mut file = KtFile::new(package);
             if let Some(iface) = self.apply_class_interface(
                 handle.key,
                 &mut class,
@@ -1878,12 +1881,12 @@ impl Declarations {
     pub(crate) fn apply_class_interface(
         &self,
         key: &TypeKey,
-        class: &mut kt::KtClass,
+        class: &mut KtClass,
         class_short: &str,
         extra_supers: &[&str],
-        base_abstracts: Vec<kt::KtFun>,
+        base_abstracts: Vec<KtFun>,
         include_ctor_props: bool,
-    ) -> Option<kt::KtClass> {
+    ) -> Option<KtClass> {
         let cfg = self.types.get(key)?;
         let interfaces = cfg.interfaces.clone();
         let enabled = cfg.interface_enabled;
@@ -1891,7 +1894,7 @@ impl Declarations {
 
         if !enabled {
             for iface in &interfaces {
-                class.supertypes.push((kt::KtType::cls(iface), None));
+                class.supertypes.push((KtType::cls(iface), None));
             }
             return None;
         }
@@ -1901,10 +1904,9 @@ impl Declarations {
             .unwrap_or_else(|| class_short.to_string());
         let package = class_fqn.rsplit_once('.').map(|(p, _)| p).unwrap_or("");
         let iface_name = self.interface_short_name(package, class_short, name_override.as_deref());
-        let mut iface =
-            kt::KtClass::new(kt::ClassKind::Interface, &iface_name).vis(kt::Vis::Public);
+        let mut iface = KtClass::new(KtClassKind::Interface, &iface_name).vis(KtVis::Public);
         for s in extra_supers {
-            iface = iface.supertype(kt::KtType::cls(*s), None);
+            iface = iface.supertype(KtType::cls(*s), None);
         }
         // Signatures satisfied by an inherited base member.
         for f in base_abstracts {
@@ -1915,9 +1917,9 @@ impl Declarations {
             for p in &mut class.ctor_params {
                 if p.prop.is_some() {
                     iface = iface.member(
-                        kt::KtProperty::val(&p.name)
+                        KtProperty::val(&p.name)
                             .ty(p.ty.clone())
-                            .vis(kt::Vis::Default),
+                            .vis(KtVis::Default),
                     );
                     p.overrides = true;
                 }
@@ -1927,7 +1929,7 @@ impl Declarations {
         // on the class. A member already marked `override` (a ptr class's
         // `close()`, via AutoCloseable) is skipped — already covered.
         for m in &mut class.members {
-            if let kt::KtDecl::Fun(f) = m {
+            if let KtDecl::Fun(f) = m {
                 if f.modifiers.iter().any(|s| s == "override") {
                     continue;
                 }
@@ -1936,9 +1938,9 @@ impl Declarations {
             }
         }
         // The generated interface first, then the user `.implements` list.
-        class.supertypes.push((kt::KtType::cls(&iface_name), None));
+        class.supertypes.push((KtType::cls(&iface_name), None));
         for iface_fqn in &interfaces {
-            class.supertypes.push((kt::KtType::cls(iface_fqn), None));
+            class.supertypes.push((KtType::cls(iface_fqn), None));
         }
         Some(iface)
     }
@@ -1947,8 +1949,8 @@ impl Declarations {
 /// A concrete class member's signature as an abstract interface member:
 /// same name / generics / params / return, no body, no modifiers, no vis
 /// keyword (interface members are public-abstract by default).
-fn abstract_fun_sig(f: &kt::KtFun) -> kt::KtFun {
-    let mut a = kt::KtFun::new(&f.name).vis(kt::Vis::Default);
+fn abstract_fun_sig(f: &KtFun) -> KtFun {
+    let mut a = KtFun::new(&f.name).vis(KtVis::Default);
     for g in &f.generics {
         a = a.generic(g.clone());
     }
