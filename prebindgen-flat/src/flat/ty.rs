@@ -38,7 +38,7 @@ use super::{
 /// [`spell`](Self::spell). It is **not**
 /// where facts go to survive a lossy classification any more — `kind` keeps the
 /// lifetime, the wrapper and the argument it used to drop, and
-/// [`TypeKind::to_syn`] proves it. Keeping the slice anyway is cheap, exact
+/// `TypeKind::to_syn` proves it. Keeping the slice anyway is cheap, exact
 /// (nothing has to reconstruct token for token what the source already wrote),
 /// and it is what makes the proof possible at all.
 ///
@@ -164,7 +164,7 @@ impl TypeRef {
     /// Tokens, not a `syn::Type`: a spelling is for spelling. What the type
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside it,
     /// and a consumer that still has to take the node apart says so with
-    /// [`as_syn`](Self::as_syn).
+    /// `as_syn`.
     pub fn spell(&self) -> proc_macro2::TokenStream {
         self.origin.spell()
     }
@@ -445,7 +445,7 @@ impl TypeRef {
     /// a spelling was erased — which is the question a **refusal** asks — but a
     /// consumer that rebuilds a nested `Box<Cow<'_, T>>` needs every layer, and
     /// asks [`erased_wrappers`](Self::erased_wrappers) for the whole list plus
-    /// [`stripped_syntax`](Self::stripped_syntax) for what sits under it.
+    /// `stripped_syntax` for what sits under it.
     ///
     /// Erased says nothing about **rebuildable**: `Box` reconstructs as
     /// `Box::new(v)`, while `Cow`'s `Owned`/`Borrowed` choice is not determined
@@ -500,7 +500,7 @@ impl TypeRef {
     }
 
     /// This type's identity as a table key with every transparent wrapper
-    /// removed — the key of [`stripped_syntax`](Self::stripped_syntax).
+    /// removed — the key of `stripped_syntax`.
     ///
     /// What [`key`](Self::key) answers for a **spelling**, this answers for the
     /// **type**. The two are different questions and both are legitimate:
@@ -721,8 +721,8 @@ impl TypeRef {
 /// One variant per accepted Rust **form**, not per destination concept. `str`
 /// and `String` are two forms and get two variants; `Box<T>` is a form of its
 /// own and does not disappear into `T`. Nothing here folds two spellings
-/// together, which is what makes [`TypeRef::syntax`] recoverable from this —
-/// see [`TypeKind::to_syn`], the round-trip that checks it.
+/// together, which is what makes [`TypeRef::spell`] recoverable from this —
+/// see `TypeKind::to_syn`, the round-trip that checks it.
 ///
 /// # Why it is only syntax
 ///
@@ -1045,7 +1045,7 @@ pub struct UnsupportedType {
     pub reason: UnsupportedTypeReason,
 }
 
-/// Why [`lower_type`] refused a type.
+/// Why `lower_type` refused a type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UnsupportedTypeReason {
     /// A syntactic form with no place in the language: a raw pointer, a bare
@@ -1076,7 +1076,7 @@ pub enum UnsupportedTypeReason {
     /// Separate from [`WrongGenericArity`](Self::WrongGenericArity) because it
     /// is about the list and not its type-argument count: each of those three
     /// has exactly one type argument, and refusing them is what keeps
-    /// [`TypeKind::to_syn`] able to spell every accepted form back.
+    /// `TypeKind::to_syn` able to spell every accepted form back.
     WrongGenericArguments { expected: &'static str },
     /// A non-empty tuple. Only `()` is in the language: no adapter has ever
     /// lowered a tuple, so accepting one would defer the failure to a late

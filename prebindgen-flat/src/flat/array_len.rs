@@ -36,7 +36,7 @@ pub struct UnsupportedArrayLen {
     pub reason: ArrayLenReason,
 }
 
-/// Why [`lower_array_len`] refused a length.
+/// Why `lower_array_len` refused a length.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ArrayLenReason {
     /// Not a literal and not a plain name: arithmetic, a cast, a call, a block,

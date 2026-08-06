@@ -287,14 +287,14 @@ impl CbindgenBuilder {
     /// **auto-generated visible-field** `#[repr(C)]` C mirror (so C reads the
     /// fields directly) instead of an opaque blob.
     ///
-    /// Every field must be FFI-safe: an [`is_scalar`] primitive, a declared
+    /// Every field must be FFI-safe: an `is_scalar` primitive, a declared
     /// [`Self::enum_type`], or an **opaque pointer** `Option<Box<T>>` / `Box<T>`
     /// where `T` is a declared [`Self::opaque_ptr`] (rendered `*mut t_t`; this is
     /// how a heap `String` rides along — `Option<Box<String>>` → `string_t *`). The
     /// source type **must** be `#[repr(C)]`; a fail-closed `size_of`/`align_of`
     /// assert against the generated mirror proves the reinterpret sound at compile
     /// time. Call after the manglers are configured (the mirror name is resolved
-    /// via [`Self::c_type_ident`]). A `<base>_drop` is generated.
+    /// via `Self::c_type_ident`). A `<base>_drop` is generated.
     ///
     /// **Owned-ness is inferred** from the fields: a struct with an opaque-pointer field
     /// owns external resources, so a by-value consume cleans the moved-from slot (nulls
@@ -532,7 +532,7 @@ impl CbindgenBuilder {
     /// emitted for it. `ty` must be `impl Fn(Args...) + Send + Sync + 'static`.
     /// Identical signatures share one struct. Sets the declaration cursor, so a
     /// following `.base_name("...")` sets the base fed to `mangle_callback` (else
-    /// the args' bases drive [`Self::callback_c_name`]).
+    /// the args' bases drive `Self::callback_c_name`).
     pub fn callback(mut self, ty: syn::Type) -> Self {
         let args = extract_fn_trait_args(&ty).unwrap_or_else(|| {
             panic!(
@@ -551,7 +551,7 @@ impl CbindgenBuilder {
     /// callee may take the value (`z_x_take` moves it out, leaving a gravestone) or
     /// just read it; the trampoline drops it after the call (no-op if taken). The
     /// arg type must be an inline-opaque type ([`Self::opaque_owned_struct`] /
-    /// [`Self::opaque_data_struct`]). Chain after `.callback(...)` (and any `.name(...)`).
+    /// [`Self::opaque_data_struct`]). Chain after `.callback(...)` (and any `.base_name(...)`).
     pub fn takeable_param(mut self, idx: usize) -> Self {
         match &self.current {
             Some(CurrentDecl::Callback(key)) => {

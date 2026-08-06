@@ -1934,7 +1934,7 @@ impl Prebindgen for Declarations {
     /// The post-resolve validation boundary (issue #90): every bound
     /// function's lowered plan must build, and the split declarations must
     /// be unambiguous, before ANY artifact writer touches disk — see
-    /// [`validate_bindings`].
+    /// `validate_bindings`.
     fn validate_resolved(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
         validate_bindings(self, registry)
     }
@@ -2067,7 +2067,7 @@ impl Prebindgen for Declarations {
     }
 
     /// Declared consts only reach here (write gating via
-    /// [`Prebindgen::declared_consts`]): re-emit the const as a path-alias
+    /// `declared_consts`): re-emit the const as a path-alias
     /// to its source-of-truth (initializer tokens are never copied — they
     /// may reference source-crate internals) AND emit its nullary JNI getter
     /// extern. The getter reuses the whole function-wrapper pipeline (so the
@@ -3011,7 +3011,7 @@ impl Declarations {
     /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGenBuilder
     /// HAS a const declaration mechanism, so const emission is declared-only
     /// and undeclared consts get the skip warning (see
-    /// [`Prebindgen::declared_consts`]).
+    /// `declared_consts`).
     /// The declared value types of every expression constant
     /// (`ConstDecl::expr`) — they have no `#[prebindgen]` item to
     /// scan, so the resolver is told directly to produce their output

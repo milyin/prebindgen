@@ -27,7 +27,8 @@ use crate::{
 
 /// Errors surfaced by the file-emission phase.
 ///
-/// Binding validation is NOT here — it runs once in [`Registry::finish`]
+/// Binding validation is NOT here — it runs once in
+/// [`RegistryBuilder::build`](crate::RegistryBuilder::build)
 /// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
 /// before a built generator exists and never reaches a writer.
 #[derive(Debug)]

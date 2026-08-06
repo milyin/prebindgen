@@ -185,7 +185,7 @@ pub enum LeafSource {
     /// The path is a chain of **struct field idents** reached by field access
     /// and cloned: `value.a.b.clone()`. Produced by the synthesized
     /// decomposition of a by-value `data_class` (see
-    /// [`crate::unfold::apply_value_structs`]); the value's own
+    /// `crate::unfold::apply_value_structs`); the value's own
     /// fields cross as decoupled leaves and the foreign side reassembles the
     /// object (so no Java object is built on the Rust side).
     Field,
@@ -193,7 +193,7 @@ pub enum LeafSource {
     /// alternative is live. It is not read off the value at all — the emitter
     /// assigns it per `match` arm — so it has no path. Emitted once, ahead of
     /// the groups it selects between (see
-    /// [`crate::unfold::apply_sum_returns`]).
+    /// `crate::unfold::apply_sum_returns`).
     ///
     /// Its [`out_ty`](UnfoldLeaf::out_ty) is **the sum**, not the `i32` — it
     /// carries *which* sum it chooses between, which is how the emitter finds
@@ -258,7 +258,7 @@ pub struct UnfoldPlan {
     /// callback). `None` for [`Delivery::Callback`].
     pub convert_out_ty: Option<prebindgen_flat::flat::TypeRef>,
     /// `true` for a synthesized by-value `data_class` decomposition (see
-    /// [`crate::unfold::apply_value_structs`]): the builder/folder
+    /// `crate::unfold::apply_value_structs`): the builder/folder
     /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
     /// class (the wrapper takes no caller `build`/`fold` param and is not
     /// generic over `R`/`A` — it returns the concrete type). `false` for the
@@ -357,7 +357,7 @@ impl UnfoldLeaf {
     /// entered the pipeline, a root says the binding asked for it directly, and
     /// an entry says one resolved — three separate claims, and a `SumTag` leaf
     /// makes only the first (#282). See
-    /// [`Registry::reference_output`](crate::registry::Registry::reference_output).
+    /// `Registry::reference_output`.
     pub fn has_converter(&self) -> bool {
         self.source != LeafSource::SumTag
     }

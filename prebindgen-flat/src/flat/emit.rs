@@ -254,7 +254,7 @@ impl Emit {
 
     /// The type as the **source spelled it** — what generated Rust must say.
     ///
-    /// Not [`TypeKind::to_syn`](super::TypeKind::to_syn), which reconstructs a
+    /// Not `TypeKind::to_syn`, which reconstructs a
     /// canonical form to check the lowering against: this is the crate's own
     /// tokens, so a generated signature names the type the way the source crate
     /// does and compiles in its scope.

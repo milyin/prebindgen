@@ -17,7 +17,7 @@
 //! * `Return` — **returns** the single leaf value directly (no callback);
 //!   requires a single-leaf decomposition.
 //!
-//! Resolution is language-agnostic: [`apply`] turns declarations into
+//! Resolution is language-agnostic: `apply` turns declarations into
 //! [`UnfoldPlan`]s (stored on the registry, keyed by function ident) and
 //! registers every leaf's `out_ty` as a required **output** so the resolver
 //! produces its converter (and projection). The jnigen adapter reads the
@@ -200,7 +200,7 @@ pub enum Delivery {
 /// decompose `func`'s return (or error position) via the record list.
 /// Recorded as an explicit decl so the auto-`default` skips it; an
 /// identity-only record list lowers to the raw whole-value return in
-/// [`apply`].
+/// `apply`.
 #[derive(Clone)]
 pub struct OutputDecl {
     pub func: syn::Ident,
@@ -208,7 +208,7 @@ pub struct OutputDecl {
     pub target: DeconTarget,
     pub delivery: Delivery,
     /// The type the per-fn decl was declared for (`expand_return!(T)`) —
-    /// cross-checked against the fn's peeled return type in [`apply`].
+    /// cross-checked against the fn's peeled return type in `apply`.
     /// `None` for internally-synthesized decls (the type comes from the
     /// return itself).
     pub declared_source: Option<TypeKey>,
@@ -217,7 +217,7 @@ pub struct OutputDecl {
 /// Deconstructor / output-expansion declarations gathered from a language
 /// builder — an immutable record set: complete values, no build protocol.
 /// Declaration order is the vector order; leaf order is each record
-/// vector's order. Handed to [`apply`] via
+/// vector's order. Handed to `apply` via
 /// `Prebindgen::deconstructors`; empty or
 /// duplicate declarations are diagnosed there (collected), not at
 /// construction.
@@ -475,7 +475,7 @@ pub(crate) fn apply<M>(
 
 /// A synthesized by-value `data_class` decomposition, produced by the language
 /// adapter (which knows the per-field encoding — projections, enums, nested
-/// classes) and fed to [`apply_value_structs`]. Its [`leaves`](Self::leaves)
+/// classes) and fed to `apply_value_structs`. Its [`leaves`](Self::leaves)
 /// are [`LeafSource::Field`] leaves: each crosses the boundary as its own field
 /// value and the foreign side reassembles the object (no Java object is built
 /// on the Rust side).
@@ -525,7 +525,7 @@ pub(crate) fn apply_value_structs<M>(
 }
 
 /// A synthesized **sum** decomposition, produced by the language adapter (which
-/// knows how each payload encodes) and fed to [`apply_sum_returns`] — the
+/// knows how each payload encodes) and fed to `apply_sum_returns` — the
 /// selector-carrying sibling of [`ValueDecon`].
 ///
 /// Its [`leaves`](Self::leaves) are a [`LeafSource::SumTag`] selector followed

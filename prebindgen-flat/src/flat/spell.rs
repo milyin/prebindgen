@@ -77,7 +77,7 @@ impl Field {
 
     /// The field bound to `bind`, shaped for whichever address it uses —
     /// `id: __f0` for a named field, `__f0` for a positional one. The part
-    /// [`fields`] takes.
+    /// `fields` takes.
     pub fn bind(&self, bind: &impl ToTokens) -> TokenStream {
         match &self.name {
             Some(id) => quote!(#id: #bind),

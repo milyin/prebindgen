@@ -718,8 +718,9 @@ impl ConstDecl {
 
     /// Value source: a **binding-local nullary fn** named by path —
     /// `(stated value type, path)`, the const analog of
-    /// [`ConvertSourceDecl::with`]. The fn lives in the binding crate
-    /// (callable because the generated file compiles inside it):
+    /// [`FunctionDecl::new_local`](prebindgen_registry::FunctionDecl::new_local).
+    /// The fn lives in the binding crate (callable because the generated file
+    /// compiles inside it):
     /// `fn() -> T`.
     pub fn with(self, ty: syn::Type, path: syn::Path) -> Self {
         let expr: syn::Expr = syn::parse_quote!(#path());

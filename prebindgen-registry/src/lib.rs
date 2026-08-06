@@ -2,9 +2,9 @@
 //!
 //! Registry-based, **language-agnostic** converter pipeline for
 //! [`prebindgen`](https://docs.rs/prebindgen). This crate turns a stream of
-//! `#[prebindgen]` items — read through [`prebindgen::Source`] and parsed by
-//! [`flat::Flat`] — into generated Rust FFI bindings plus a fully resolved
-//! table of type converters. It has no knowledge of any particular
+//! `#[prebindgen]` items — read through [`Source`](::prebindgen::Source) and
+//! parsed by [`flat::Flat`] — into generated Rust FFI bindings plus a fully
+//! resolved table of type converters. It has no knowledge of any particular
 //! destination language — C, JNI/Kotlin, Swift, Python, etc. all plug in the
 //! same way.
 //!
@@ -50,10 +50,10 @@
 //!
 //! 1. [`flat::Flat::builder`] parses the declared sources into the model, and
 //!    [`Registry::builder`] starts describing a binding over it.
-//! 2. The generator states that binding, then [`Registry::crossings`] hands
-//!    over every crossing needing a conversion — inner types first, so each one
-//!    can be built from those already done. `convert_with` answers them and
-//!    `build` names any gap.
+//! 2. The generator states that binding, then [`RegistryBuilder::crossings`]
+//!    hands over every crossing needing a conversion — inner types first, so
+//!    each one can be built from those already done. `convert_with` answers
+//!    them and `build` names any gap.
 //! 3. The resolved registry becomes a field of the built generator, whose
 //!    `write_*` methods emit the artifacts — Rust wrappers, and whatever else
 //!    that language needs (a C header, Kotlin sources, …).

@@ -58,6 +58,29 @@ jobs:
     - name: Run tests
       run: cargo test --all
 
+  docs:
+    # `RUSTDOCFLAGS=-D warnings cargo doc` is one of the release checks the
+    # publish workflow runs, and it fails on things no other job looks at: an
+    # intra-doc link to an item that was renamed, moved to another crate, or
+    # is private. The crate split made a lot of those, so run it per PR rather
+    # than discovering them at release time.
+    #
+    # Stable only, matching the publish workflow — rustdoc's lint set moves
+    # with the toolchain, and the MSRV leg would only disagree about which
+    # warnings exist.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - name: Install Rust
+      run: rustup toolchain install stable && rustup default stable
+    - name: Document every crate
+      working-directory: prebindgen
+      env:
+        RUSTDOCFLAGS: -D warnings
+      run: cargo doc --no-deps
+
   package:
     # Catch packaging breakage on the PR that causes it, not at release time.
     # `cargo package` is what the publish workflow runs, and it fails on
