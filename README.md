@@ -90,8 +90,9 @@ the matching runtime crate instead. The generator itself — `syn`, `quote`,
 shipped library's regular dependency graph.
 
 [`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) is a
-general-purpose Kotlin source emitter, developed as a separate, sibling repo
-consumed by `prebindgen-jni` as a path dependency.
+general-purpose Kotlin source emitter, developed in a separate repo on its own
+release cycle and consumed by `prebindgen-jni` from
+[crates.io](https://crates.io/crates/kotlin-codegen) like any other dependency.
 
 ## Usage
 

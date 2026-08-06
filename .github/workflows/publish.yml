@@ -15,7 +15,7 @@ name: Publish to crates.io
 #   7. prebindgen-c            -> prebindgen-registry, prebindgen-c-runtime
 #   8. prebindgen-jni          -> prebindgen-registry, prebindgen-jni-runtime,
 #                                 and kotlin-codegen, which lives in its own
-#                                 repo and must be published from there FIRST
+#                                 repo and is already on crates.io
 #
 # `dry_run` runs every check and `cargo publish --dry-run`, then stops before
 # the registry is touched. It creates no tag and no release. Use it to rehearse
@@ -60,10 +60,6 @@ env:
   CRATES_IO_USER_AGENT: prebindgen-release-workflow (https://github.com/milyin/prebindgen)
   RELEASE_CRATE: ${{ inputs.crate }}
   RELEASE_VERSION: ${{ inputs.version }}
-  # `prebindgen-jni` depends on kotlin-codegen, which lives in its own repo and
-  # is a sibling path dependency until it is published. Keep in step with the
-  # value in ci.yml.
-  KOTLIN_CODEGEN_REV: 201497cc04a12f352e15468a1fd7c1a693c2fc1c
 
 jobs:
   publish:
@@ -78,11 +74,6 @@ jobs:
         with:
           path: prebindgen
           fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: milyin/kotlin-codegen
-          ref: ${{ env.KOTLIN_CODEGEN_REV }}
-          path: kotlin-codegen
 
       - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
 

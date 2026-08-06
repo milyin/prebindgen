@@ -15,6 +15,7 @@
 //! the resulting [`StructPlan`] — so the two sides agree by construction
 //! instead of by hand-synchronized parallel walks.
 
+use kotlin_codegen::KtType;
 use prebindgen_registry::Conversions;
 
 use super::*;
@@ -104,10 +105,10 @@ pub(crate) enum PlanFieldKind {
         fqn: String,
     },
     /// Bare enum → `jint` discriminant (`"I"`); factory calls `fromInt`.
-    Enum { conv: ConvChain, kotlin: kt::KtType },
+    Enum { conv: ConvChain, kotlin: KtType },
     /// `Option<enum>` → `box_jint`-boxed discriminant
     /// (`"Ljava/lang/Integer;"`, JVM null = `None`); factory takes `Int?`.
-    OptionEnum { conv: ConvChain, kotlin: kt::KtType },
+    OptionEnum { conv: ConvChain, kotlin: KtType },
     /// Nested plain data-class: its leaves inline here. `optional` prepends
     /// a `present: Boolean` flag (`"Z"`) and defaults the child slots in the
     /// `None` arm; the factory guards `Child.fromParts(…)` on the flag.
@@ -148,7 +149,7 @@ pub(crate) enum PlanFieldKind {
         form: LeafForm,
         /// JVM descriptor of the slot (must match the factory param's type).
         descriptor: String,
-        kotlin: kt::KtType,
+        kotlin: KtType,
         /// Kotlin-side `?` (an `Option` field whose wire is object-shaped).
         nullable: bool,
     },
@@ -412,13 +413,13 @@ impl PlanFieldKind {
     /// factory parameter.
     ///
     /// `owner` is the dotted path used in diagnostics.
-    pub(crate) fn property_type(&self, owner: &str) -> kt::KtType {
+    pub(crate) fn property_type(&self, owner: &str) -> KtType {
         match self {
             // A projection's typed surface is its folded shape over the leaf
             // class (`ZKeyExpr?`, `List<ZKeyExpr>`, `ULong`), which the plan
             // already resolved into `fqn`.
             PlanFieldKind::Projection { proj, fqn, .. } => {
-                handle_kt_type(&proj.strategy, &kt::KtType::cls(fqn))
+                handle_kt_type(&proj.strategy, &KtType::cls(fqn))
             }
             PlanFieldKind::Enum { kotlin, .. } => kotlin.clone(),
             PlanFieldKind::OptionEnum { kotlin, .. } => kotlin.clone().nullable(),
@@ -433,7 +434,7 @@ impl PlanFieldKind {
                          registered Kotlin class — declare the child type in a package"
                     )
                 });
-                let t = kt::KtType::cls(fqn);
+                let t = KtType::cls(fqn);
                 if *optional {
                     t.nullable()
                 } else {
@@ -445,7 +446,7 @@ impl PlanFieldKind {
                 optional,
                 ..
             } => {
-                let t = kt::KtType::cls(kotlin_fqn);
+                let t = KtType::cls(kotlin_fqn);
                 if *optional {
                     t.nullable()
                 } else {

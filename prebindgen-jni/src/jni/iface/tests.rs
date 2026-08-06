@@ -1,7 +1,9 @@
+use kotlin_codegen::{KtFile, KtType};
+
 use super::*;
 
 fn render_as_raw(spec: IfaceSpec) -> String {
-    kt::KtFile::new(&spec.package)
+    KtFile::new(&spec.package)
         .decl(spec.to_as_raw_fun())
         .render()
 }
@@ -14,11 +16,11 @@ fn as_raw_adapter_is_multiline_even_when_short() {
         type_params: vec![],
         params: vec![IfaceParam {
             name: "handle".to_string(),
-            typed: kt::KtType::cls("io.test.Thing"),
-            raw: kt::KtType::long(),
+            typed: KtType::cls("io.test.Thing"),
+            raw: KtType::long(),
             wrap: WrapKind::Handle("io.test.Thing".to_string()),
         }],
-        ret: kt::KtType::unit(),
+        ret: KtType::unit(),
         descr: "(J)V".to_string(),
         typed_groups: Vec::new(),
         kdoc: None,
@@ -48,26 +50,26 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
         params: vec![
             IfaceParam {
                 name: "replierZid".to_string(),
-                typed: kt::KtType::cls("io.test.ZenohId").nullable(),
-                raw: kt::KtType::long().nullable(),
+                typed: KtType::cls("io.test.ZenohId").nullable(),
+                raw: KtType::long().nullable(),
                 wrap: WrapKind::Handle("io.test.ZenohId".to_string()),
             },
-            IfaceParam::same("replierEid".to_string(), kt::KtType::int()),
-            IfaceParam::same("isOk".to_string(), kt::KtType::boolean()),
+            IfaceParam::same("replierEid".to_string(), KtType::int()),
+            IfaceParam::same("isOk".to_string(), KtType::boolean()),
             IfaceParam {
                 name: "sample__keyExpr".to_string(),
-                typed: kt::KtType::cls("io.test.KeyExpr").nullable(),
-                raw: kt::KtType::long().nullable(),
+                typed: KtType::cls("io.test.KeyExpr").nullable(),
+                raw: KtType::long().nullable(),
                 wrap: WrapKind::Handle("io.test.KeyExpr".to_string()),
             },
             IfaceParam {
                 name: "sample__payload".to_string(),
-                typed: kt::KtType::cls("io.test.ZBytes").nullable(),
-                raw: kt::KtType::long().nullable(),
+                typed: KtType::cls("io.test.ZBytes").nullable(),
+                raw: KtType::long().nullable(),
                 wrap: WrapKind::Handle("io.test.ZBytes".to_string()),
             },
         ],
-        ret: kt::KtType::unit(),
+        ret: KtType::unit(),
         descr: "(Ljava/lang/Long;IZLjava/lang/Long;Ljava/lang/Long;)V".to_string(),
         typed_groups: Vec::new(),
         kdoc: None,

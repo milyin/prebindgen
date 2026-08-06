@@ -23,6 +23,8 @@
 //! be UB — the very hazard that retired the raw-memory value blob this module
 //! replaces.
 
+use kotlin_codegen::KtType;
+
 use super::*;
 
 /// The JNI/Kotlin array pair for one primitive element type.
@@ -32,7 +34,7 @@ pub(crate) struct PrimArray {
     /// JNI element type: `jni::sys::jlong`.
     pub elem_wire: syn::Type,
     /// Kotlin surface: `LongArray`.
-    pub kotlin: kt::KtType,
+    pub kotlin: KtType,
     /// `JNIEnv::new_long_array`.
     pub new_fn: syn::Ident,
     /// `JNIEnv::set_long_array_region`.
@@ -78,7 +80,7 @@ pub(crate) fn prim_array_of(ty: &prebindgen_registry::flat::TypeRef) -> Option<P
     Some(PrimArray {
         wire: syn::parse_quote!(jni::objects::#wire_ident),
         elem_wire: syn::parse_quote!(jni::sys::#elem_wire_ident),
-        kotlin: kt::KtType::cls(format!("{cap}Array")),
+        kotlin: KtType::cls(format!("{cap}Array")),
         new_fn: format_ident!("new_{}_array", letter),
         set_region: format_ident!("set_{}_array_region", letter),
         get_region: format_ident!("get_{}_array_region", letter),

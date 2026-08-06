@@ -29,6 +29,9 @@
 //! Kotlin call sites (both mean absent) and needs a cast — signatures are
 //! still pairwise-distinct per the checks above.
 
+#[cfg(test)]
+use kotlin_codegen::KtVis;
+use kotlin_codegen::{KtBody, KtCode, KtFun, KtParam, KtType};
 use prebindgen_registry::{
     expand::{FoldArg, FoldPlan},
     Conversions,
@@ -156,7 +159,7 @@ fn rust_type_erased(
     let key = peeled.key();
     if ext.types.get(&key).is_some_and(|c| c.name_spec.is_some()) {
         if let Some(fqn) = ext.kotlin_fqn(&key) {
-            return erase_kt_type(&[], &kt::KtType::cls(fqn));
+            return erase_kt_type(&[], &KtType::cls(fqn));
         }
     }
     if let Some(kt) = registry
@@ -205,7 +208,7 @@ struct Split<'a> {
     /// Overloadable arms: original variant index (the selector value) plus the
     /// arm's typed params as `(param, leaf-index-within-block)`. For an
     /// optional param this is the single-leaf subset of the variants.
-    arms: Vec<(usize, Vec<(kt::KtParam, usize)>)>,
+    arms: Vec<(usize, Vec<(KtParam, usize)>)>,
 }
 
 /// Camel-cased Kotlin names of a `#[prebindgen]` constructor's parameters.
@@ -233,11 +236,9 @@ fn prefixed(origin: &str, name: &str) -> String {
 
 /// Clear selector-dispatch nullability (`T?` → `T`). Genuinely optional
 /// constructor parameters bypass this helper and retain their rendered `T?`.
-fn non_null(mut ty: kt::KtType) -> kt::KtType {
+fn non_null(mut ty: KtType) -> KtType {
     match &mut ty {
-        kt::KtType::Named { nullable, .. } | kt::KtType::Function { nullable, .. } => {
-            *nullable = false
-        }
+        KtType::Named { nullable, .. } | KtType::Function { nullable, .. } => *nullable = false,
     }
     ty
 }
@@ -252,10 +253,10 @@ fn variant_typed_params(
     registry: &impl Conversions<KotlinMeta>,
     variant: &prebindgen_registry::expand::FoldVariant,
     origin: &syn::Ident,
-    block: &[kt::KtParam],
+    block: &[KtParam],
     multi: bool,
     optional_plan: bool,
-) -> Option<Vec<(kt::KtParam, usize)>> {
+) -> Option<Vec<(KtParam, usize)>> {
     let origin_kt = kt_param_name(&origin.to_string());
     let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
         Some(cf) => {
@@ -295,14 +296,14 @@ fn variant_typed_params(
         } else {
             non_null(slot.ty.clone())
         };
-        out.push((kt::KtParam::new(&name, ty), *idx));
+        out.push((KtParam::new(&name, ty), *idx));
     }
     Some(out)
 }
 
 /// Locate a param's contiguous leaf block in the selector wrapper's parameter
 /// list, matching by leaf name in order.
-fn find_block(params: &[kt::KtParam], leaf_names: &[String]) -> Option<usize> {
+fn find_block(params: &[KtParam], leaf_names: &[String]) -> Option<usize> {
     if leaf_names.is_empty() || params.len() < leaf_names.len() {
         return None;
     }
@@ -320,7 +321,7 @@ fn find_block(params: &[kt::KtParam], leaf_names: &[String]) -> Option<usize> {
 fn resolve_split<'a>(
     registry: &'a Registry<KotlinMeta>,
     f: &prebindgen_registry::flat::Function,
-    sel_fun: &kt::KtFun,
+    sel_fun: &KtFun,
     param_name: &str,
     multi: bool,
 ) -> Split<'a> {
@@ -366,7 +367,7 @@ fn resolve_split<'a>(
     // single-leaf arms only — the arm's one nullable param doubles as the
     // presence flag (`null` = absent). Multi-leaf arms stay selector-only.
     let optional = plan.produces_option();
-    let arms: Vec<(usize, Vec<(kt::KtParam, usize)>)> = plan
+    let arms: Vec<(usize, Vec<(KtParam, usize)>)> = plan
         .variants
         .iter()
         .enumerate()
@@ -409,8 +410,8 @@ pub(crate) fn render_param_overloads(
     ext: &Declarations,
     f: &prebindgen_registry::flat::Function,
     registry: &Registry<KotlinMeta>,
-    sel_fun: &kt::KtFun,
-) -> Vec<kt::KtFun> {
+    sel_fun: &KtFun,
+) -> Vec<KtFun> {
     // Requested split params for this function, in signature order.
     let requested: Vec<String> = {
         let want: std::collections::HashSet<&str> = ext
@@ -488,7 +489,7 @@ pub(crate) fn render_param_overloads(
     let mut out = Vec::with_capacity(combos.len());
     for combo in &combos {
         // Per-split delegation slots, keyed by block start.
-        let mut params: Vec<kt::KtParam> = Vec::new();
+        let mut params: Vec<KtParam> = Vec::new();
         let mut call_args: Vec<String> = Vec::new();
         let mut pos = 0usize;
         while pos < n {
@@ -535,7 +536,7 @@ pub(crate) fn render_param_overloads(
         out.push(overload_shell(
             sel_fun,
             params,
-            kt::Code::new().line(format!("{}({})", sel_fun.name, call_args.join(", "))),
+            KtCode::new().line(format!("{}({})", sel_fun.name, call_args.join(", "))),
         ));
     }
     out
@@ -547,11 +548,11 @@ pub(crate) fn render_param_overloads(
 /// delivery — keeps its `fun <R> …` declaration, #87); only the parameter
 /// list and the delegating body are replaced. Kdoc stays on the selector
 /// form — overloads are bare.
-fn overload_shell(sel_fun: &kt::KtFun, params: Vec<kt::KtParam>, body: kt::Code) -> kt::KtFun {
+fn overload_shell(sel_fun: &KtFun, params: Vec<KtParam>, body: KtCode) -> KtFun {
     let mut ov = sel_fun.clone();
     ov.params = params;
     ov.kdoc = None;
-    ov.body = kt::KtBody::Expr(kt::ExprSlot::legacy(body));
+    ov.body = KtBody::Expr(body);
     ov
 }
 
@@ -616,8 +617,8 @@ mod tests {
         // Both slots are nullable in the selector wrapper. Only the first is
         // nullable in the constructor's actual signature.
         let block = vec![
-            kt::KtParam::new("expected0", kt::KtType::long().nullable()),
-            kt::KtParam::new("expected1", kt::KtType::cls("Double").nullable()),
+            KtParam::new("expected0", KtType::long().nullable()),
+            KtParam::new("expected1", KtType::cls("Double").nullable()),
         ];
 
         let params = variant_typed_params(
@@ -640,27 +641,27 @@ mod tests {
     /// selector form.
     #[test]
     fn overload_shell_preserves_signature_metadata() {
-        let sel_fun = kt::KtFun::new("storageSummary")
-            .vis(kt::Vis::Public)
+        let sel_fun = KtFun::new("storageSummary")
+            .vis(KtVis::Public)
             .kdoc("Selector-form docs.")
             .generic("R")
             .annotation("Suppress(\"UNCHECKED_CAST\")")
             .modifier("inline")
-            .param(kt::KtParam::new("sSel", kt::KtType::int()))
-            .returns(kt::KtType::cls("R"))
-            .body(kt::Code::new().line("TODO()"));
+            .param(KtParam::new("sSel", KtType::int()))
+            .returns(KtType::cls("R"))
+            .body(KtCode::new().line("TODO()"));
 
         let ov = overload_shell(
             &sel_fun,
-            vec![kt::KtParam::new("count", kt::KtType::long())],
-            kt::Code::new().line("storageSummary(0, count)"),
+            vec![KtParam::new("count", KtType::long())],
+            KtCode::new().line("storageSummary(0, count)"),
         );
 
         assert_eq!(ov.name, sel_fun.name);
         assert_eq!(ov.generics, vec!["R".to_string()]);
         assert_eq!(ov.annotations, sel_fun.annotations);
         assert_eq!(ov.modifiers, sel_fun.modifiers);
-        assert!(matches!(ov.vis, kt::Vis::Public));
+        assert!(matches!(ov.vis, KtVis::Public));
         assert_eq!(
             ov.ret.as_ref().map(|t| t.to_string()),
             Some("R".to_string())
@@ -668,6 +669,6 @@ mod tests {
         assert_eq!(ov.kdoc, None);
         assert_eq!(ov.params.len(), 1);
         assert_eq!(ov.params[0].name, "count");
-        assert!(matches!(ov.body, kt::KtBody::Expr(_)));
+        assert!(matches!(ov.body, KtBody::Expr(_)));
     }
 }

@@ -29,7 +29,7 @@ package.keywords = ["ffi", "bindings", "cbindgen", "csbindgen", "cross-platform"
 package.categories = ["development-tools", "external-ffi-bindings"] 
 
 [workspace.dependencies]
-kotlin-codegen = { path = "../kotlin-codegen", version = "0.1.0" }
+kotlin-codegen = "0.2.0"
 prebindgen = { path = "prebindgen", version = "0.5.0" }
 prebindgen-flat = { path = "prebindgen-flat", version = "0.5.0" }
 prebindgen-registry = { path = "prebindgen-registry", version = "0.5.0" }
