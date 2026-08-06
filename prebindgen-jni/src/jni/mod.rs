@@ -8,8 +8,8 @@
 //! The implementation is split across sibling submodules, all sharing this
 //! `jni` module's namespace via the `pub(crate) use …::*` glob re-exports
 //! below (each sibling needs only `use super::*;`):
-//!   * this file — type / metadata definitions ([`JniGenBuilder`], [`KotlinMeta`],
-//!     [`Projection`], [`FoldStrategy`], the config structs) + the shared imports;
+//!   * this file — type / metadata definitions ([`JniGenBuilder`], `KotlinMeta`,
+//!     `Projection`, `FoldStrategy`, the config structs) + the shared imports;
 //!   * `builder` — the [`JniGenBuilder`] builder API;
 //!   * `trait_impl` — the [`Prebindgen`] impl + its converter-selector helpers;
 //!   * `emit` — Rust-side `extern "C"` wrapper / converter-body emission;

@@ -13,7 +13,7 @@
 //! with [`CbindgenBuilder::function`] / [`CbindgenBuilder::opaque_ptr`] /
 //! [`CbindgenBuilder::data_struct`] / [`CbindgenBuilder::enum_type`] /
 //! [`CbindgenBuilder::tagged_union`]. The C name of a declared
-//! type's generated destructor can be pinned by chaining [`CbindgenBuilder::name`].
+//! type's generated destructor can be pinned by chaining [`CbindgenBuilder::base_name`].
 //!
 //! ## C ABI conventions
 //!

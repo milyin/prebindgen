@@ -60,7 +60,8 @@ pub enum ScanError {
     NotExpressible {
         entries: Vec<NotExpressibleEntry>,
     },
-    /// An adapter-invariant check failed — see [`Prebindgen::validate`].
+    /// An adapter-invariant check failed — see
+    /// [`Prebindgen::validate`](crate::Prebindgen::validate).
     /// The message is adapter-authored and printed verbatim.
     AdapterInvariant {
         message: String,

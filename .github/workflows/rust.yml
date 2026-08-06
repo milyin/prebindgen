@@ -58,6 +58,28 @@ jobs:
     - name: Run tests
       run: cargo test --all
 
+  docs:
+    # A documentation build fails on things no other job looks at: an
+    # intra-doc link to an item that was renamed, moved to another crate, or
+    # is private. The crate split made a lot of those, and nothing caught
+    # them — this is also one of the checks a release has to pass, so failing
+    # here is much cheaper than failing there.
+    #
+    # Stable only: rustdoc's lint set moves with the toolchain, so the MSRV
+    # leg would only disagree about which warnings exist.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - name: Install Rust
+      run: rustup toolchain install stable && rustup default stable
+    - name: Document every crate
+      working-directory: prebindgen
+      env:
+        RUSTDOCFLAGS: -D warnings
+      run: cargo doc --no-deps
+
   covertest:
     # JVM-runtime coverage: regenerate every binding that commits its
     # generated output, fail on drift (the golden-diff invariant), then run

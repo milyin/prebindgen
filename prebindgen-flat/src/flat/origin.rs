@@ -53,7 +53,7 @@ use super::key::TypeKey;
 /// > **You may output the source. You may not read it.**
 ///
 /// [`spell`](Self::spell) hands out tokens and nothing else, which is all
-/// generated Rust ever needed; [`as_syn`](Self::as_syn) hands out the node and
+/// generated Rust ever needed; `as_syn` hands out the node and
 /// is the **one** way to get one. The field itself is `pub(super)`, so the model
 /// still reads it freely and everything downstream has to say which of the two
 /// it meant.

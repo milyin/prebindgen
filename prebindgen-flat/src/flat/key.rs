@@ -5,7 +5,7 @@ use std::fmt;
 use quote::ToTokens;
 
 /// Canonical type-shape key: identity is the token string of the
-/// **normalized** type ([`crate::flat::spelling::normalize_type`] —
+/// **normalized** type (`crate::flat::spelling::normalize_type` —
 /// group/paren unwrap, `crate::`/`self::` and std-prelude path reduction;
 /// the complete equivalence rule set is documented there).
 ///
@@ -14,7 +14,7 @@ use quote::ToTokens;
 /// It is what a table is indexed by. It is **not** a route to `syn::Type`: the
 /// only way to reach a type's syntax is
 /// `Conversions::reading` (in the registry layer above) followed by
-/// [`TypeRef`], because a
+/// [`TypeRef`](super::TypeRef), because a
 /// reading is what pairs a spelling with the classification that vouches for
 /// it.
 ///

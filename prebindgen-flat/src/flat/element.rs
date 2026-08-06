@@ -151,7 +151,7 @@ impl Type {
 ///   thereafter the only way to spell that type inside the flat API, and the
 ///   qualified path stays refused. This declares a name; it is not an equivalence
 ///   between spellings — see
-///   [`normalize_type`](crate::flat::spelling::normalize_type)'s rule 4 for
+///   `normalize_type`'s rule 4 for
 ///   why treating it as one is a category error.
 /// * `#[prebindgen] pub struct X(..);` — a tuple struct, whose fields no adapter
 ///   has ever crossed.
@@ -242,7 +242,7 @@ pub struct Param {
 ///
 /// Whether the fields are named or positional is not recorded: a [`Field`]
 /// already knows its own address, and the delimiters are spelling, read off the
-/// syntax by [`spell::fields`](super::spell::fields).
+/// syntax by `spell::fields`.
 #[derive(Clone, Debug)]
 pub struct Struct {
     pub name: syn::Ident,
@@ -374,7 +374,7 @@ impl Alternative {
     /// True when this alternative carries no payload.
     ///
     /// The *group* question, not the syntax one: `B`, `B()` and `B {}` are all
-    /// empty by this test, and [`spell::fields`](super::spell::fields) is what
+    /// empty by this test, and `spell::fields` is what
     /// keeps their delimiters apart.
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
@@ -559,7 +559,7 @@ fn docs_from(attrs: &[syn::Attribute]) -> Option<String> {
 macro_rules! docs_accessor {
     ($($ty:ident),+ $(,)?) => {$(
         impl $ty {
-            /// This item's `///` documentation — see [`docs_from`].
+            /// This item's `///` documentation — see `docs_from`.
             pub fn docs(&self) -> Option<String> {
                 docs_from(&self.origin.syntax.attrs)
             }
