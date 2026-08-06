@@ -1093,6 +1093,10 @@ internal object CovNative {
 
     external fun priorityWeight(p: Int, errorSink: Any): Int
 
+    external fun probeEach(n: Long, total: Double, sink: Any, errorSink: Any)
+
+    external fun probeNew(seq: Long, count: Long, total: Double, build: Any, errorSink: Any): Any?
+
     external fun readingEach(n: Int, sink: Any, errorSink: Any)
 
     external fun readingMaybe(which: Int, build: Any, errorSink: Any): Any?

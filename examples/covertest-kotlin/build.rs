@@ -246,6 +246,10 @@ fn main() {
                 // being restated field by field — #213. The form it names is
                 // the CONSUMING one, so the fields are moved, not cloned.
                 .class(ptr_class!(Report))
+                // #220: the same derived-boundary idea with an `Option<sum>`
+                // FIELD — the shape that used to be refused on a value form
+                // while a `data_class` accepted it.
+                .class(ptr_class!(Probe))
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
@@ -393,6 +397,11 @@ fn main() {
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
         .expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+        // #220: `ProbeStruct.outcome` is `Option<Lookup>`. Its whole segment
+        // gates together — one tuple bind whose absent arm defaults every slot
+        // — because a sum's leaves are not independent. The selector boxes, so
+        // JVM null is "no sum" and cannot be read as `Lookup.Absent` (tag 0).
+        .expand(expand_return!(Probe).fields(fields!(probe_to_struct)))
         // `Ledger` reaches that same derived boundary through an `Option`, so
         // `Report`'s value form is hoisted CONDITIONALLY — built in the `Some`
         // arm, its leaves (the sum among them) sharing one `match`, null in the
@@ -522,6 +531,11 @@ fn main() {
                 // `Report` in one crossing; the leaf list comes from
                 // `ReportStruct`'s fields, so it cannot drift from it.
                 .fun(fun!(report_each))
+                // #220: the value form whose `outcome` field is `Option<sum>`.
+                // `probe_each` walks the absent case and every alternative, so
+                // one crossing covers the gate and the groups it gates.
+                .fun(fun!(probe_new))
+                .fun(fun!(probe_each))
                 // The same derived boundary reached through an `Option` — a
                 // CONDITIONAL hoist. `ledger_each` delivers both at once, so one
                 // crossing covers the borrowed payload, the owned one, and the

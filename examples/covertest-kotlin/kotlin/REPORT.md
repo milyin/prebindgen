@@ -103,6 +103,9 @@ Base package: `io.prebindgen.covertest`
 - `plain_note_echo` — `fun plainNoteEcho(note: String?, onError: JniErrorHandler<String?>): String?`
 - `priority_or` — `fun priorityOr(p: Priority?, fallback: Priority, onError: JniErrorHandler<Priority>): Priority`
 - `priority_weight` — `fun priorityWeight(p: Priority, onError: JniErrorHandler<Int>): Int`
+- `probe_each` — `fun probeEach(n: Long, total: Double, sink: ProbeCallback, onError: JniErrorHandler<Unit>)`
+- `probe_new` — `fun <R> probeNew(seq: Long, count: Long, total: Double, onError: JniErrorHandler<R>, build: ProbeBuilder<R>): R`
+  - shaped by: return `Probe` decomposed → [seq, outcome__tag, outcome__found_v0, outcome__failed_v0] (Callback delivery)
 - `reading_each` — `fun readingEach(n: Int, sink: ReadingCallback, onError: JniErrorHandler<Unit>)`
 - `reading_maybe` — `fun readingMaybe(which: Int, onError: JniErrorHandler<Reading?>): Reading?`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
@@ -217,6 +220,7 @@ Base package: `io.prebindgen.covertest`
 - `PayloadHandler`: ptr_class → `io.prebindgen.covertest.PayloadHandler` (wire `jni :: sys :: jlong`)
 - `PayloadVecHandler`: ptr_class → `io.prebindgen.covertest.PayloadVecHandler` (wire `jni :: sys :: jlong`)
 - `Priority`: enum_class → `io.prebindgen.covertest.model.Priority` (wire `jni :: sys :: jint`)
+- `Probe`: ptr_class → `io.prebindgen.covertest.model.Probe` (wire `jni :: sys :: jlong`)
 - `Reading`: sealed_class → `io.prebindgen.covertest.model.Reading` (wire `?`)
 - `RepliesConfig`: data_class → `io.prebindgen.covertest.model.RepliesConfig` (wire `jni :: objects :: JObject`)
 - `Report`: ptr_class → `io.prebindgen.covertest.model.Report` (wire `jni :: sys :: jlong`)
