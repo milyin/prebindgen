@@ -26,12 +26,12 @@
 //! language-neutral registry pipeline over the flat model — type resolution,
 //! boundary expansion, Rust emission — ships in the separate
 //! [`prebindgen-registry`](https://docs.rs/prebindgen-registry) crate. The
-//! supported 0.6 surface is that pipeline plus the JNI/Kotlin `JniGenBuilder`
+//! supported 0.5 surface is that pipeline plus the JNI/Kotlin `JniGenBuilder`
 //! adapter, which ships in the separate
 //! [`prebindgen-jni`](https://docs.rs/prebindgen-jni) crate.
 //!
 //! The C / cbindgen adapter is an experimental proof of concept, ships in the
-//! separate `prebindgen-c` crate, and is not covered by the 0.6 semver
+//! separate `prebindgen-c` crate, and is not covered by the 0.5 semver
 //! guarantee.
 //!
 //! ## Usage example
@@ -93,15 +93,15 @@
 //! # example-cbindgen/Cargo.toml
 //! [dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.6"
-//! prebindgen-c-runtime = "0.6"   # the generated converters reference its traits
+//! prebindgen = "0.5"
+//! prebindgen-c-runtime = "0.5"   # the generated converters reference its traits
 //! konst = "0.3"      # the generated file emits a konst feature guard
 //!
 //! [build-dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.6"
-//! prebindgen-registry = "0.6"
-//! prebindgen-c = "0.6"
+//! prebindgen = "0.5"
+//! prebindgen-registry = "0.5"
+//! prebindgen-c = "0.5"
 //! cbindgen = "0.29"
 //! syn = { version = "2", features = ["full"] }
 //! ```

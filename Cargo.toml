@@ -17,7 +17,7 @@ members = [
     "examples/covertest-kotlin",
 ]
 resolver = "2"
-package.version = "0.6.0"
+package.version = "0.5.0"
 package.edition = "2021"
 package.rust-version = "1.85"
 package.license = "MIT OR Apache-2.0"
@@ -30,14 +30,14 @@ package.categories = ["development-tools", "external-ffi-bindings"]
 
 [workspace.dependencies]
 kotlin-codegen = "0.2.0"
-prebindgen = { path = "prebindgen", version = "0.6.0" }
-prebindgen-flat = { path = "prebindgen-flat", version = "0.6.0" }
-prebindgen-registry = { path = "prebindgen-registry", version = "0.6.0" }
-prebindgen-c = { path = "prebindgen-c", version = "0.6.0" }
-prebindgen-jni = { path = "prebindgen-jni", version = "0.6.0" }
-prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.6.0" }
-prebindgen-jni-runtime = { path = "prebindgen-jni-runtime", version = "0.6.0" }
-prebindgen-c-runtime = { path = "prebindgen-c-runtime", version = "0.6.0" }
+prebindgen = { path = "prebindgen", version = "0.5.0" }
+prebindgen-flat = { path = "prebindgen-flat", version = "0.5.0" }
+prebindgen-registry = { path = "prebindgen-registry", version = "0.5.0" }
+prebindgen-c = { path = "prebindgen-c", version = "0.5.0" }
+prebindgen-jni = { path = "prebindgen-jni", version = "0.5.0" }
+prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.5.0" }
+prebindgen-jni-runtime = { path = "prebindgen-jni-runtime", version = "0.5.0" }
+prebindgen-c-runtime = { path = "prebindgen-c-runtime", version = "0.5.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 syn = { version = "2.0", features = ["full", "visit-mut", "extra-traits"] }
