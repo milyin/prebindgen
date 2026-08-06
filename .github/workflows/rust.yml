@@ -59,14 +59,14 @@ jobs:
       run: cargo test --all
 
   docs:
-    # A documentation build fails on things no other job looks at: an
+    # `RUSTDOCFLAGS=-D warnings cargo doc` is one of the release checks
+    # publish.yml runs, and it fails on things no other job looks at: an
     # intra-doc link to an item that was renamed, moved to another crate, or
-    # is private. The crate split made a lot of those, and nothing caught
-    # them — this is also one of the checks a release has to pass, so failing
-    # here is much cheaper than failing there.
+    # is private. The crate split made a lot of those and nothing caught them,
+    # so run it per PR rather than discovering them at release time.
     #
-    # Stable only: rustdoc's lint set moves with the toolchain, so the MSRV
-    # leg would only disagree about which warnings exist.
+    # Stable only, matching publish.yml — rustdoc's lint set moves with the
+    # toolchain, so the MSRV leg would only disagree about which warnings exist.
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -79,6 +79,39 @@ jobs:
       env:
         RUSTDOCFLAGS: -D warnings
       run: cargo doc --no-deps
+
+  package:
+    # Catch packaging breakage on the PR that causes it, not at release time.
+    # `cargo package` is what the publish workflow runs, and it fails on
+    # metadata a normal build never looks at — a missing description or
+    # license, or a path dependency with no version. `--no-verify` skips the
+    # rebuild-from-tarball step the other jobs already cover.
+    #
+    # Example crates are excluded: they are never published, and
+    # `covertest-helpers` deliberately path-depends on an unversioned sibling.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - name: Install Rust
+      run: rustup toolchain install stable && rustup default stable
+    - name: Package every publishable crate
+      working-directory: prebindgen
+      run: |
+        for crate in prebindgen prebindgen-c-runtime prebindgen-jni-runtime \
+                     prebindgen-proc-macro prebindgen-flat prebindgen-registry \
+                     prebindgen-c prebindgen-jni; do
+          echo "== $crate"
+          # Unpublished sibling crates make `cargo package` fail on the
+          # version lookup, which says nothing about this crate's own
+          # metadata. Report that case and keep going; anything else fails.
+          if ! out=$(cargo package -p "$crate" --no-verify --allow-dirty 2>&1); then
+            printf '%s\n' "$out"
+            printf '%s\n' "$out" | grep -qE "no matching package named \`prebindgen(-[a-z-]+)?\`|failed to select a version for the requirement \`prebindgen(-[a-z-]+)?" || exit 1
+            echo "   (unpublished dependency — expected until the release order completes)"
+          fi
+        done
 
   covertest:
     # JVM-runtime coverage: regenerate every binding that commits its

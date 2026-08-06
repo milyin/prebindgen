@@ -1,8 +1,8 @@
 # Splitting `prebindgen` into layered crates
 
-Tracking document for the umbrella branch. Each phase below lands as its own
-stacked PR targeting `umbrella-split-into-layered-crates`; the umbrella merges
-to `main` once the chain is complete.
+Record of the split, which landed on `main` as umbrella #371 — a chain of
+stacked PRs, one per phase. Kept for the reasoning: why the layers sit where
+they do, which predictions turned out wrong, and what the split cost.
 
 ## Why
 
@@ -114,9 +114,9 @@ than a move, nothing is unsound, and no generated output depends on it.
 | **A5** | drop the `unstable-cbindgen` feature | done |
 | **A4** | `Emit` → `flat`; `flat/` reaches zero core-sibling refs | done |
 | **B1** | carve `prebindgen-c` | done |
-| **B2** | carve `prebindgen-jni` | in progress |
+| **B2** | carve `prebindgen-jni` | done |
 | **B3** | carve `prebindgen-registry` | done |
-| **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | todo |
+| **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | done |
 | **C** | workspace manifest, examples, docs, downstream repos | done |
 
 Restoring the `Emit` seal is tracked separately as
@@ -158,8 +158,10 @@ compiler names exactly which items need `pub`.
 
 ### Phase C notes
 
-- workspace version → **0.6.0**; `prebindgen`'s public API shrinks, so this is
-  breaking
+- workspace version stays **0.5.0**. `prebindgen` has never been published, so
+  its shrinking API breaks no released contract and the split is the 0.5 shape
+  rather than a bump away from it. `kotlin-codegen` is independent, released
+  from its own repo, and consumed from crates.io.
 - `examples/{example-cbindgen,perftest-c}` → `prebindgen-c` build-dep;
   `examples/{covertest,perftest}-kotlin` → `prebindgen-jni` build-dep
 - `examples/{example,perftest}-flat` and `covertest-helpers` are **unchanged** —
