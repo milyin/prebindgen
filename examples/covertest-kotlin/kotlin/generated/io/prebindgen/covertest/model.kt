@@ -1731,12 +1731,27 @@ public fun boxedOptPriorityWeight(p: Priority?, onError: JniErrorHandler<Long>):
 }
 
 /**
- * A wrapped **element** in the Vec-build path: the storage is `Vec<Box<Payload>>`
- * and each push wraps its own literal.
+ * A wrapped **element** in the Vec-build path. The storage is the CANONICAL
+ * `Vec<Payload>` — one helper trio per Kotlin class, shared with every other
+ * spelling of the same element — and the `Box` goes back on where the Vec is
+ * consumed, in one pass (#296).
+ *
+ * Load-bearing: the refusal it replaced was silent and cost-only, so nothing
+ * failed while `Vec<Box<Payload>>` fell back to a per-element `JObject` plus a
+ * field read per field. Its generated Rust is the evidence — take the wrap off
+ * the consumption site with this declared and the crate does not build.
  */
 public fun boxedElemIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.boxedElemIdSum(ps, __bcap)
+    val __vec_ps = CovNative.payloadVecNew(ps.size)
+    val __ret = try {
+        for (__e in ps) {
+            CovNative.payloadVecPush(__vec_ps, __e.id, __e.seq, __e.value, __e.flag, __e.label)
+        }
+        CovNative.boxedElemIdSum(__vec_ps, __bcap)
+    } finally {
+        CovNative.payloadVecFree(__vec_ps)
+    }
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
