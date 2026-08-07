@@ -949,6 +949,54 @@ public class Report(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 }
 
+/** Typed handle for a native Zenoh `Span`. */
+public class Span(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Span {
+        val p = ptr
+        ptr = p or 1L
+        return Span(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
+/** Typed handle for a native Zenoh `SpanHolder`. */
+public class SpanHolder(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): SpanHolder {
+        val p = ptr
+        ptr = p or 1L
+        return SpanHolder(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
 public fun interface LookupCallback {
     public fun run(lookup: Lookup)
 }
@@ -1176,6 +1224,24 @@ internal val __ReadingBuilder: ReadingBuilder<Reading> =
 ReadingBuilder { tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0 ->
     when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
 }
+
+public fun interface SpanHolderBuilder<out R> {
+    public fun run(spanHolderSpan__required: ULong?, spanHolderSpan__delay: ULong?): R
+}
+
+public fun interface SpanHolderBuilderRaw<out R> {
+    public fun run(spanHolderSpan__required: Long?, spanHolderSpan__delay: Long?): R
+}
+
+public fun <R> SpanHolderBuilder<R>.asRaw(): SpanHolderBuilderRaw<R> =
+    SpanHolderBuilderRaw<R> {
+        spanHolderSpan__required,
+        spanHolderSpan__delay ->
+        run(
+            spanHolderSpan__required?.toULong(),
+            spanHolderSpan__delay?.let { if (it == -1L) null else it.toULong() }
+        )
+    }
 
 public fun interface StampBuilder<out R> {
     public fun run(secs: Long, nanos: Long): R
@@ -1756,6 +1822,26 @@ public fun ledgerEach(n: Long, sink: LedgerCallback, onError: JniErrorHandler<Un
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.ledgerEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * `None` when `seq` is negative, so the absent case is reachable from the
+ * same argument that drives the present ones.
+ *
+ * The Rust `SpanHolder` result is delivered decomposed: the builder callback receives (`spanHolderSpan__required`, `spanHolderSpan__delay`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <R> spanHolderNew(
+    seq: Long,
+    requiredMs: ULong,
+    delayMs: Long,
+    onError: JniErrorHandler<R>,
+    build: SpanHolderBuilder<R>,
+): R {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.spanHolderNew(seq, requiredMs.toLong(), delayMs, build.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as R
 }
 
 /**

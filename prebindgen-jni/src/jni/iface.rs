@@ -889,8 +889,14 @@ fn leaf_iface_param(
                 // mapping its sentinel to null would both invent an absence the
                 // type does not have and contradict the non-nullable typed view
                 // this same param declares.
+                //
+                // `wrap_sentinel` adds the other half of that rule: an absence
+                // the leaf gets from an ANCESTOR is carried by the `?.` above,
+                // not by a sentinel of its own (#142). It is the same call
+                // `unfold_leaf_kt` makes, so the two derivations of this wrap
+                // cannot disagree.
                 let niche_sentinel = if builder_kt.is_nullable() {
-                    projection_leaf_sentinel(proj?)
+                    wrap_sentinel(proj?, nullable)
                 } else {
                     None
                 };

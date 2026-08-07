@@ -263,6 +263,12 @@ fn main() {
                 // FIELD — the shape that used to be refused on a value form
                 // while a `data_class` accepted it.
                 .class(ptr_class!(Probe))
+                // #142: two bounded-`convert!` leaves — one with a niche of its
+                // own, one without — reached through a CONDITIONAL hoist, so both
+                // are nullable. Only the niche-carrying one keeps a sentinel in
+                // its wrap; the other's absence is the ancestor's `?.`.
+                .class(ptr_class!(Span))
+                .class(ptr_class!(SpanHolder))
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
@@ -410,6 +416,12 @@ fn main() {
         // its `Stamp` fields, `taken` stays one `Stamp?` leaf, and `outcome`
         // decomposes into a selector plus one group per alternative.
         .expand(expand_return!(Report).fields_self_into(fields!(report_into_struct)))
+        // #142: `Span`'s value form is two bounded leaves; `SpanHolder` reaches
+        // it through an `Option`, so both become nullable. `delay` keeps its own
+        // niche sentinel, `required` takes none — a sentinel is the leaf's own
+        // `None`, never an ancestor's.
+        .expand(expand_return!(Span).fields(fields!(span_to_struct)))
+        .expand(expand_return!(SpanHolder).field(fun!(span_holder_span)))
         // #220: `ProbeStruct.outcome` is `Option<Lookup>`. Its whole segment
         // gates together — one tuple bind whose absent arm defaults every slot
         // — because a sum's leaves are not independent. The selector boxes, so
@@ -560,6 +572,8 @@ fn main() {
                 // crossing covers the borrowed payload, the owned one, and the
                 // sum each report carries.
                 .fun(fun!(ledger_each))
+                // #142: the holder whose span is optional.
+                .fun(fun!(span_holder_new))
                 // A transparent wrapper (`Box<Option<String>>`) in and out. The
                 // model erases the `Box`, so this must cross exactly as a
                 // `String?` — and because this crate compiles its generated

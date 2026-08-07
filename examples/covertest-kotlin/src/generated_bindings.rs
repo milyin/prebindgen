@@ -243,6 +243,38 @@ const _: () = {
 };
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_model_SpanHolder_freePtr(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    ptr: jni::sys::jlong,
+) {
+    if ptr != 0 && (ptr & 1) == 0 {
+        drop(Box::from_raw(ptr as *mut perftest_flat::SpanHolder));
+    }
+}
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::SpanHolder>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_model_Span_freePtr(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    ptr: jni::sys::jlong,
+) {
+    if ptr != 0 && (ptr & 1) == 0 {
+        drop(Box::from_raw(ptr as *mut perftest_flat::Span));
+    }
+}
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::Span>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadVecFree(
     _env: jni::JNIEnv,
     _class: jni::objects::JClass,
@@ -9434,6 +9466,44 @@ pub(crate) unsafe fn Result_Summary_String_to_Summary_dfdf7f9e<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn SpanHolder_to_jlong_7ffe9314<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::SpanHolder,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Span_to_jlong_6d59d587<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Span,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Stamp_to_JObject_f6b1e942<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Stamp,
@@ -10810,6 +10880,58 @@ pub(crate) unsafe fn jlong_to_Report_eaed4ba1<'env, 'v>(
         );
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Report) })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn jlong_to_SpanHolder_7ffe9314<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<OwnedObject<perftest_flat::SpanHolder>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
+    Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::SpanHolder) })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn jlong_to_Span_6d59d587<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<OwnedObject<perftest_flat::Span>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
+    Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Span) })
 }
 #[allow(
     non_snake_case,
@@ -18804,6 +18926,195 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_sliceIdSum<'a>(
                 &__e.to_string(),
             );
             0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_spanHolderNew<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    seq: jni::sys::jlong,
+    required_ms: jni::sys::jlong,
+    delay_ms: jni::sys::jlong,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let seq = match jlong_to_i64_fbf9a9bc(&mut env, &seq) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let required_ms = match jlong_to_u64_4384a5d6(&mut env, &required_ms) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let delay_ms = match jlong_to_i64_fbf9a9bc(&mut env, &delay_ms) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/SpanHolderBuilderRaw";
+    const __CB_DESCR: &str = "(Ljava/lang/Long;Ljava/lang/Long;)Ljava/lang/Object;";
+    let __out = perftest_flat::span_holder_new(seq, required_ms, delay_ms);
+    let __vf0 = perftest_flat::span_holder_span(&__out)
+        .map(|__hb0| perftest_flat::span_to_struct(__hb0));
+    let (__obj0, __obj1): (jni::objects::JObject, jni::objects::JObject) = match __vf0 {
+        ::core::option::Option::Some(__u0) => {
+            let __obj0: jni::objects::JObject = {
+                let __enc0 = {
+                    let __cs0_0 = match Duration_to_u64_e3980876(
+                        &mut env,
+                        __u0.required.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    match u64_to_jlong_4384a5d6(&mut env, __cs0_0) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    }
+                };
+                match ::prebindgen_jni_runtime::box_jlong(&mut env, __enc0) {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                }
+            };
+            let __obj1: jni::objects::JObject = {
+                let __enc1 = match Option_Duration_to_jlong_1cfa4d44(
+                    &mut env,
+                    __u0.delay.clone(),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                match ::prebindgen_jni_runtime::box_jlong(&mut env, __enc1) {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                }
+            };
+            (__obj0, __obj1)
+        }
+        ::core::option::Option::None => {
+            (jni::objects::JObject::null(), jni::objects::JObject::null())
+        }
+    };
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[
+                jni::sys::jvalue {
+                    l: __obj0.as_raw(),
+                },
+                jni::sys::jvalue {
+                    l: __obj1.as_raw(),
+                },
+            ],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

@@ -171,6 +171,176 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
 }
 
+/// The four ways a **bounded** `convert!` leaf can meet optionality, in one
+/// fixture — the matrix #142 is about.
+///
+/// Two independent facts decide the wrap: whether the leaf carries a niche of
+/// its own (`Option<Duration>` ⇒ the sentinel IS its `None`), and whether an
+/// **ancestor** can be absent (a conditional value form here, which makes every
+/// leaf below it nullable). They compose, and the sentinel belongs to the first
+/// fact alone:
+///
+/// | ancestor optional | leaf's own type | wire | wrap |
+/// |---|---|---|---|
+/// | no  | `Duration`         | `Long`  | `x.toULong()` |
+/// | no  | `Option<Duration>` | `Long`  | `if (x == -1L) null else x.toULong()` |
+/// | yes | `Duration`         | `Long?` | `x?.toULong()` — **no sentinel** |
+/// | yes | `Option<Duration>` | `Long?` | `x?.let { if (it == -1L) null else it.toULong() }` |
+///
+/// Row 3 is the one that was wrong: `projection_leaf_sentinel` answers off the
+/// declared domain, which `attach_domain_sentinels` puts on the **bare** type's
+/// converter too, so a leaf with no niche encoding at all got a sentinel test
+/// spliced into its wrap. `-1` is outside the declared range so nothing
+/// mis-decoded in practice, but the emitted expression tested for a value its
+/// own encoder can never produce.
+///
+/// Row 4 is the one #142 predicted would be wrong and is not: the two absences
+/// are independent and both collapse to the `ULong?` the typed view declares.
+/// The Rust side boxes any nullable leaf (`leaf_is_prim`), so the nullable wire
+/// is real, and the inner `None` still rides the sentinel inside it.
+#[test]
+fn a_bounded_leaf_takes_its_sentinel_from_its_own_type_not_its_ancestor() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct SpanStruct {
+                    pub required: Duration,
+                    pub delay: Option<Duration>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn duration_from_millis(v: u64) -> Duration {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn duration_to_millis(v: &Duration) -> u64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn span_to_struct(s: &Span) -> SpanStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        // The CONDITIONAL hoist: `Span`'s value form is reached through an
+        // `Option`, so every leaf below it is nullable — rows 3 and 4.
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_span(h: &Holder) -> Option<&Span> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_each(cb: impl Fn(Holder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        // …and the same two leaves NOT under an optional ancestor — rows 1 and 2.
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn span_each(cb: impl Fn(Span) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis))
+                .valid_range(0u64..=1_000_000u64),
+        )
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Span))
+                .class(crate::ptr_class!(Holder))
+                .fun(prebindgen_registry::fun!(span_each))
+                .fun(prebindgen_registry::fun!(holder_each)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Span)
+                .fields(prebindgen_registry::fields!(span_to_struct)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Holder)
+                .field(prebindgen_registry::fun!(holder_span)),
+        );
+    let dir = unique_test_dir("jnigen_niche_matrix");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // Rows 1 and 2 — no optional ancestor. Both wires stay primitive `Long`,
+    // and only the leaf that HAS a niche tests for it.
+    assert!(
+        kc.contains("funrun(required:Long,delay:Long)"),
+        "with no optional ancestor both leaves keep the primitive wire:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("required.toULong()"),
+        "row 1: a bare bounded leaf just converts:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("if(delay==-1L)nullelsedelay.toULong()"),
+        "row 2: the leaf's own niche is tested, unguarded:\n{kotlin}"
+    );
+
+    // Rows 3 and 4 — under the conditional hoist. Both wires widen, because the
+    // Rust side boxes any nullable leaf.
+    assert!(
+        kc.contains("funrun(holderSpan__required:Long?,holderSpan__delay:Long?)"),
+        "under an optional ancestor both leaves box:\n{kotlin}"
+    );
+    // Row 3: the ancestor's `?` is the WHOLE of this leaf's absence. A sentinel
+    // test here would ask about a value the encoder cannot emit.
+    assert!(
+        kc.contains("holderSpan__required?.toULong()"),
+        "row 3: a bare bounded leaf under an optional ancestor takes no \
+         sentinel:\n{kotlin}"
+    );
+    assert!(
+        !kc.contains("holderSpan__required?.let{if(it==-1L)"),
+        "row 3: …and specifically not the doubly-optional shape:\n{kotlin}"
+    );
+    // Row 4: both absences are live and independent — the ancestor's null and
+    // the leaf's own `None` — and both collapse to the declared `ULong?`.
+    assert!(
+        kc.contains("holderSpan__delay?.let{if(it==-1L)nullelseit.toULong()}"),
+        "row 4: an ancestor's `?` does not erase the leaf's own niche:\n{kotlin}"
+    );
+}
+
 #[test]
 fn duration_requires_an_explicit_conversion() {
     let alias: syn::Item =

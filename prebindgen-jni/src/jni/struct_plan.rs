@@ -311,17 +311,24 @@ pub(crate) fn classify_field(
             };
         }
         // Nested plain data-class (optionally under `Option`).
+        //
+        // A `Vec<data class>` does NOT arrive here and needs no guard of its
+        // own (#217). `type_kind` answers `DataStruct` only for a key that is a
+        // single identifier, which a `Vec<_>` key never is — so this branch
+        // cannot be entered with a sequence in hand, and the field falls
+        // through to the simple-leaf arm below. That is the right answer rather
+        // than a missed one: the field stays ONE slot whose own converter is
+        // the element's fixed folder, so the bridge keeps its fixed slot count
+        // and the elements still cross as raw leaves. #217 expected this to
+        // need array codegen — a count slot plus a per-element sub-plan in all
+        // three producers — and it does not, because the sequence never has to
+        // enter the fixed layout at all.
+        //
+        // The `Vec<sum>` refusal above is a different question and stays: a sum
+        // has no converter of its own, so there is no single slot to fall
+        // through to.
         let inner_ty = bare_ref;
         if let TypeKind::DataStruct { st, cfg } = ext.type_kind(registry, &inner_ty.key()) {
-            // `Vec` off the kind — the layer the model names, not a last path
-            // segment that spells it.
-            if matches!(reading.kind(), prebindgen_registry::flat::TypeKind::Vec(_)) {
-                panic!(
-                    "fromParts bridge: `Vec<{}>` data-class field (`{owner}`) is not supported \
-                     (variable arity)",
-                    inner_ty,
-                );
-            }
             let child_fqn = cfg
                 .and_then(|c| c.name_spec.as_ref())
                 .map(|s| ext.fqn_of(s));

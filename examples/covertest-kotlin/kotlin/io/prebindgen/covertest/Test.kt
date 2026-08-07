@@ -64,6 +64,7 @@ import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
+import io.prebindgen.covertest.model.spanHolderNew
 import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.holdEcho
@@ -296,6 +297,27 @@ fun main() {
             durationBoundaryEcho(DurationBoundary(86_400_000uL, 1uL), boom) ==
                 DurationBoundary(86_400_000uL, 1uL),
         )
+
+        // The same two leaves under an OPTIONAL ancestor (#142) — the
+        // combination `DurationBoundary` cannot reach, since its fields are
+        // never absent as a pair. A conditional value form makes both nullable,
+        // which crosses the two facts that decide the wrap: does the leaf carry
+        // a niche of its own (`delay` yes, `required` no), and can an ancestor
+        // be absent (both). Only the first grants a sentinel.
+        //
+        // `0uL` is the value that makes this observable: it is legal in the
+        // declared range AND is what a zero-defaulted slot would carry, so a
+        // wrap that confused the two absences would report it as `null`.
+        check(spanHolderNew(0L, 0uL, 0L, boom) { req, del -> "$req/$del" } == "0/0")
+        // …and the niche-carrying leaf still reads its own `None`, while its
+        // sibling — which has no niche — is unaffected.
+        check(spanHolderNew(0L, 5uL, -1L, boom) { req, del -> "$req/$del" } == "5/null")
+        // Ancestor absent: BOTH leaves are null, through the `?.` alone. The
+        // `required` leaf has no sentinel to be confused by; before #142's fix
+        // its wrap tested `-1L`, a value its own encoder can never produce.
+        check(spanHolderNew(-1L, 9uL, 3L, boom) { req, del -> "$req/$del" } == "null/null")
+        check(spanHolderNew(0L, 86_400_000uL, 12_345L, boom) { req, del -> "$req/$del" }
+            == "86400000/12345")
 
         // A whole-value CALLBACK argument is a third encoder path, independent
         // of the data-class and sum emitters above: the trampoline encodes the

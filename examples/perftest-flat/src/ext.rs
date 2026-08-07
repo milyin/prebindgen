@@ -75,6 +75,17 @@ mod handles {
         pub(super) outcome: Option<Lookup>,
     }
 
+    /// Two bounded-`convert!` leaves, one with a niche of its own and one
+    /// without, behind an `Option` — see [`super::Span`] (#142).
+    pub struct Span {
+        pub(super) required: super::Duration,
+        pub(super) delay: Option<super::Duration>,
+    }
+
+    pub struct SpanHolder {
+        pub(super) span: Option<Span>,
+    }
+
     pub struct EscapeProbe {
         pub(super) value: i64,
     }
@@ -834,6 +845,57 @@ pub struct DurationBoundary {
 #[prebindgen]
 pub fn duration_boundary_echo(value: &DurationBoundary) -> DurationBoundary {
     value.clone()
+}
+
+/// The same two converted leaves under an **optional ancestor** (#142) — the
+/// combination `DurationBoundary` alone cannot reach, because its own fields
+/// are never absent as a pair.
+///
+/// A conditional value form (`Option<&Span>`) makes every leaf below it
+/// nullable, which crosses the two facts that decide a wrap: whether the leaf
+/// carries a niche of its OWN (`delay` does, `required` does not) and whether an
+/// ancestor can be absent (both, here). Only the first grants a sentinel — the
+/// ancestor's absence is carried by `?.`, and testing `required` against `-1`
+/// would ask about a value its own encoder can never produce.
+#[prebindgen]
+pub type Span = handles::Span;
+
+/// [`Span`]'s value form: one bounded leaf with a niche, one without.
+#[prebindgen]
+pub struct SpanStruct {
+    pub required: Duration,
+    pub delay: Option<Duration>,
+}
+
+/// The accessor `expand_return!(Span).fields(fields!(..))` names.
+#[prebindgen]
+pub fn span_to_struct(s: &Span) -> SpanStruct {
+    SpanStruct {
+        required: s.required,
+        delay: s.delay,
+    }
+}
+
+/// The holder whose span is reached **optionally** — the conditional hoist.
+#[prebindgen]
+pub type SpanHolder = handles::SpanHolder;
+
+/// `None` when `seq` is negative, so the absent case is reachable from the
+/// same argument that drives the present ones.
+#[prebindgen]
+pub fn span_holder_new(seq: i64, required_ms: u64, delay_ms: i64) -> SpanHolder {
+    SpanHolder {
+        span: (seq >= 0).then(|| Span {
+            required: Duration::from_millis(required_ms),
+            delay: (delay_ms >= 0).then(|| Duration::from_millis(delay_ms as u64)),
+        }),
+    }
+}
+
+/// The borrowed optional accessor that makes `Span`'s leaves nullable.
+#[prebindgen]
+pub fn span_holder_span(h: &SpanHolder) -> Option<&Span> {
+    h.span.as_ref()
 }
 
 /// Deliver a converted value through the generated typed/raw callback twin —
