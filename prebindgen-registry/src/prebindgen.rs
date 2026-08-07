@@ -142,6 +142,43 @@ pub struct ConverterImpl<M = ()> {
 /// chooses. It is set in each `ConverterImpl::metadata`, propagated by the
 /// resolver into `TypeEntry::metadata`, and read back by the adapter's own
 /// emitter. Adapters that need no extras leave it at the default `()`.
+///
+/// # The rule an adapter must obey
+///
+/// "Classify off [`kind`](crate::flat::TypeRef::kind), spell off the syntax"
+/// tells an adapter where to get each fact. It is silent on the question
+/// adapters actually face — what the **destination language** ends up seeing.
+/// That one has its own answer:
+///
+/// > **Same `kind` ⇒ same destination-language type.** The *wire* is the
+/// > generator's to choose, and may differ per spelling.
+///
+/// The weaker-sounding half is the important one. It is tempting to write "same
+/// `kind` ⇒ same wire", and that is **false** — prebindgen's own adapters
+/// violate it deliberately:
+///
+/// | Rust | `kind` | Kotlin type | wire |
+/// |---|---|---|---|
+/// | `&[Payload]` | `Ref(Slice)` | `List<Payload>` | `Long` — a handle to a Rust-side `Vec` |
+/// | `Vec<Box<Payload>>` | `Vec(Boxed)` | `List<Payload>` | `JObject` — a Java `List<Payload>` |
+///
+/// Two wires, one surface. Choosing a wire is exactly the generator's job, and
+/// the destination-language wrapper absorbs the difference; a caller cannot
+/// tell. What a caller *can* tell — and what
+/// [`unwrapped`](crate::flat::TypeRef::unwrapped) exists to prevent — is the
+/// **type** changing because the source spelled a `Box`.
+///
+/// The rule scopes to **converted** positions: those where a converter stands
+/// between the Rust value and the destination and is therefore free to bridge.
+/// It cannot apply to a **layout mirror**, where the destination type is
+/// reinterpreted from the source struct's bytes and is a *layout* fact rather
+/// than a surface choice — there `Box<T>` (a pointer) genuinely is a different
+/// destination type from `T` (inline), the spelling is load-bearing by
+/// construction, and no erasure can apply. The C adapter's `repr_c_struct` is
+/// the one such position in-tree, and its own documentation carries that half.
+///
+/// Reusing a mirror's spelling test in a converted position is how the rule
+/// gets broken (prebindgen#230, #292).
 pub trait Prebindgen {
     /// Adapter-specific extras every resolved converter carries. The
     /// resolver copies this from each `ConverterImpl` it accepts into

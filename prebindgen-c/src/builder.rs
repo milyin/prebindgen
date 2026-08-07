@@ -303,6 +303,31 @@ impl CbindgenBuilder {
     /// plain data (a by-value crossing is a bitwise copy with no write-back). The source
     /// type needs `Default` **only** if it has a bare `Box<T>` field (whose gravestone
     /// can't be a NULL pointer); `Option<Box<T>>` fields are nulled in place.
+    ///
+    /// # Why the spelling is load-bearing here
+    ///
+    /// This is the one position that is **exempt** from the rule stated on
+    /// [`prebindgen_registry::Prebindgen`] — *same `kind` ⇒ same
+    /// destination-language type* — and the exemption is structural rather than
+    /// a concession. A mirror is not converted; it is **reinterpreted from the
+    /// source struct's bytes**, so its field types are a *layout* fact. `Box<T>`
+    /// is a pointer and `T` is inline: to C they really are different types, and
+    /// the size/align assert above would reject a mirror that pretended
+    /// otherwise. So this path reads the wrapper the model erases —
+    /// [`kind`](prebindgen_registry::flat::TypeRef::kind) rather than
+    /// [`unwrapped`](prebindgen_registry::flat::TypeRef::unwrapped) — on
+    /// purpose. It is the one place the usual "classify off `kind`, spell off
+    /// the syntax" split inverts, and it inverts because the contract is layout
+    /// rather than surface.
+    ///
+    /// That is also why a wrapper the model erases must **not** be refused here
+    /// (prebindgen#230). `Option<Box<String>>` is how a source crate says "this
+    /// field is a nullable pointer" — a layout statement a zero-copy mirror is
+    /// entitled to read, not the source naming a C type. There is no competing
+    /// spelling to prefer: `Option<String>` is a 24-byte niche-optimised value
+    /// with no C representation at all, and declaring one is a hard error naming
+    /// the field. Rejecting the `Box` would leave a nullable-pointer field
+    /// inexpressible.
     pub fn repr_c_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         assert!(
