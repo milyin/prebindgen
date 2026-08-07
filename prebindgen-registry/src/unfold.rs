@@ -27,7 +27,10 @@
 
 use std::collections::HashSet;
 
-use crate::registry::{Registry, TypeKey};
+use crate::{
+    declared_target::check_declared_target,
+    registry::{Registry, TypeKey},
+};
 
 mod error;
 mod plan;
@@ -1416,8 +1419,7 @@ fn flatten<M>(
                 // The value form is called once; every field hangs off that one
                 // call, so the whole record shares a single `Call` step and the
                 // emitter can hoist it.
-                let (takes, _ret) = accessor_signature(registry, func)?;
-                check_takes(func, &takes, &source.key())?;
+                accessor_signature(registry, func, &source.key())?;
                 // The declarator states whether the value is given away; the
                 // signature has to agree, or the emitted call would not compile
                 // in the consumer's crate. Checked rather than inferred so that
@@ -1603,8 +1605,7 @@ fn flatten<M>(
                     DeconRecord::LocalAcc { path, .. } => (DeconRecord::local_ident(path), true),
                     DeconRecord::Identity | DeconRecord::Fields { .. } => unreachable!(),
                 };
-                let (takes, ret) = accessor_signature(registry, &func)?;
-                check_takes(&func, &takes, &source.key())?;
+                let ret = accessor_signature(registry, &func, &source.key())?;
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
@@ -1736,12 +1737,21 @@ pub fn dedup_names(names: &mut [String]) {
     }
 }
 
-/// An accessor `f(&T) -> R`: returns the (peeled) `T` it takes and its return
-/// type `R` as written (a reference where possible).
+/// An accessor `f(&T) -> R`: returns its return type `R` as written (a
+/// reference where possible).
+///
+/// `expected` is the type the deconstructor decomposes, and what comes back is
+/// an accessor already proven to take it. Taking it as a parameter rather than
+/// leaving the caller to check afterwards is the point: a declarator cannot
+/// reach an accessor's signature without saying what that accessor is supposed
+/// to be about, so the check cannot be the thing a new declarator forgets
+/// (#223). The comparison is [`check_declared_target`], shared with the input
+/// side's constructor lookup.
 fn accessor_signature<M>(
     registry: &Registry<M>,
     func: &syn::Ident,
-) -> Result<(TypeKey, prebindgen_flat::flat::TypeRef), UnfoldError> {
+    expected: &TypeKey,
+) -> Result<prebindgen_flat::flat::TypeRef, UnfoldError> {
     let f = registry
         .flat()
         .function(&func)
@@ -1754,13 +1764,14 @@ fn accessor_signature<M>(
         .params
         .first()
         .ok_or_else(|| UnfoldError::UnknownAccessor(func.clone()))?;
-    // The receiver's identity: `accessor_signature`'s one caller compares it,
-    // and `check_takes` keyed both sides to do so.
+    // The receiver's identity, keyed so the comparison below cannot fail on a
+    // spelling difference that does not change which type this is about.
     let takes = match first.ty.borrow_target() {
         Some(inner) => inner.key(),
         None => first.ty.key(),
     };
-    Ok((takes, f.ret.clone()))
+    check_declared_target(func, &takes, expected)?;
+    Ok(f.ret.clone())
 }
 
 /// Whether the value sitting at `path_prefix` is the plan's **to give away**:
@@ -1797,15 +1808,15 @@ fn accessor_consumes<M>(registry: &Registry<M>, func: &syn::Ident) -> bool {
         .is_some_and(|p| p.ty.borrow_target().is_none())
 }
 
-fn check_takes(func: &syn::Ident, takes: &TypeKey, expected: &TypeKey) -> Result<(), UnfoldError> {
-    if takes == expected {
-        Ok(())
-    } else {
-        Err(UnfoldError::AccessorTargetMismatch {
-            accessor: func.to_string(),
-            takes: takes.to_string(),
-            expected: expected.to_string(),
-        })
+/// The shared mismatch, in this direction's vocabulary: an output accessor is
+/// declared to **take** the type the deconstructor decomposes.
+impl From<crate::declared_target::TargetMismatch> for UnfoldError {
+    fn from(m: crate::declared_target::TargetMismatch) -> Self {
+        UnfoldError::AccessorTargetMismatch {
+            accessor: m.func,
+            takes: m.actual,
+            expected: m.expected,
+        }
     }
 }
 
