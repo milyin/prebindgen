@@ -1149,6 +1149,14 @@ internal object CovNative {
 
     external fun sliceIdSum(ps: Long, errorSink: Any): Long
 
+    external fun spanHolderNew(
+        seq: Long,
+        requiredMs: Long,
+        delayMs: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
+
     external fun stampNanos(sSecs: Long, sNanos: Long, errorSink: Any): Long
 
     external fun stampNew(secs: Long, nanos: Long, build: Any, errorSink: Any): Any?
