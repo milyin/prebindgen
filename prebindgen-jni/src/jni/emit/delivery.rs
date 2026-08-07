@@ -977,17 +977,29 @@ pub(crate) fn encode_plan_leaves(
                 // statement of it.
                 let opt_e = fold_steps(&qualify, &path[lead..=k], projected, false);
                 let bind = format_ident!("__sg{}", seg.start);
-                // The tail is empty for every shape that reaches here: a sum
-                // leaf's path stops AT the sum. Stated because two things below
-                // would otherwise be quietly wrong for a non-empty one — a
-                // second optional step would compose `match &Option<..>` against
-                // bare variant patterns, which is the E0308 the deleted
-                // `builder.rs` assert used to pre-empt by name.
-                debug_assert!(
-                    path[k + 1..].is_empty(),
-                    "sum segment: a step after the gated one ({} left) — the tail \
-                     is assumed empty here",
-                    path.len() - k - 1,
+                // ONE optional step is what the gate below handles. A second
+                // one in the tail would compose `match &Option<..>` against bare
+                // variant patterns — the E0308 in the consumer's crate that the
+                // deleted `builder.rs` assert used to pre-empt by name, so the
+                // named diagnostic keeps a home here.
+                //
+                // `assert!`, not `debug_assert!`: a build script inherits the
+                // consumer's profile, so a debug-only check is absent from
+                // exactly the release build where a mis-emission costs the most
+                // to diagnose. Same rule, same phrasing, as the single-return
+                // optional-step assert in `reach_leaf` above.
+                //
+                // The condition is what actually breaks, not the stronger fact
+                // that happens to hold: every sum leaf's path stops AT the sum,
+                // so the tail is empty today, but a NON-optional tail composes
+                // correctly through `fold_steps` — refusing it would refuse a
+                // shape that works.
+                assert!(
+                    !path[k + 1..].iter().any(PathStep::is_optional),
+                    "jnigen unfold: leaf `{}` reaches its sum through TWO optional \
+                     steps — the segment gate has one `None` arm, so the second \
+                     would be matched as if it were the sum itself",
+                    leaf.name,
                 );
                 // What the `match` binds, asked of the step rather than assumed:
                 // the FIELD branch scrutinizes `&Option<_>` (that is what
