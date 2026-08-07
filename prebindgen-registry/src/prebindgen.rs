@@ -160,7 +160,7 @@ pub struct ConverterImpl<M = ()> {
 /// | Rust | `kind` | Kotlin type | wire |
 /// |---|---|---|---|
 /// | `&[Payload]` | `Ref(Slice)` | `List<Payload>` | `Long` — a handle to a Rust-side `Vec` |
-/// | `Vec<Box<Payload>>` | `Vec(Boxed)` | `List<Payload>` | `List<Payload>` — a `JObject` |
+/// | `Vec<Box<Payload>>` | `Vec(Boxed)` | `List<Payload>` | `JObject` — a Java `List<Payload>` |
 ///
 /// Two wires, one surface. Choosing a wire is exactly the generator's job, and
 /// the destination-language wrapper absorbs the difference; a caller cannot
