@@ -348,8 +348,9 @@ fn resolve_constructor<M>(
     }
 }
 
-/// Constructor signature: parameter `(name, type)` pairs, the produced
-/// (`Ok`) target type, and whether it is fallible (`-> Result<_, _>`).
+/// Constructor signature: parameter `(name, type)` pairs and whether it is
+/// fallible (`-> Result<_, _>`). The produced (`Ok`) target type is *checked*
+/// here rather than returned — see below.
 ///
 /// `expected` is the type the declaration is *for*, and the returned signature
 /// is one already proven to produce it. Taking it as a parameter rather than

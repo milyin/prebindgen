@@ -11,8 +11,8 @@
 //! **The comparison is shared here; being *asked* is enforced elsewhere.** A
 //! helper alone would not have prevented that defect — a new declarator could
 //! simply not call it. What prevents it is that the signature lookups
-//! ([`ctor_signature`](crate::expand), `accessor_signature` in
-//! [`crate::unfold`]) take the expected target as a **parameter** and run this
+//! (`expand::ctor_signature` and `unfold::accessor_signature`) take the
+//! expected target as a **parameter** and run this
 //! check themselves. There is no way to obtain a declared function's signature
 //! without naming the type it must match, so the obligation is discharged by
 //! the compiler rather than by remembering.
