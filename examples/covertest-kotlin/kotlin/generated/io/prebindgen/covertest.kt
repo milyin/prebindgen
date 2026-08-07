@@ -949,7 +949,7 @@ internal object CovNative {
 
     external fun boxedDurationEcho(value: Long, errorSink: Any): Long
 
-    external fun boxedElemIdSum(ps: List<Payload>, errorSink: Any): Long
+    external fun boxedElemIdSum(ps: Long, errorSink: Any): Long
 
     external fun boxedLatest(a: Long, build: Any, errorSink: Any): Any?
 

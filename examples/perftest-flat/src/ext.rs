@@ -1771,8 +1771,15 @@ pub fn boxed_opt_priority_weight(p: Box<Option<Priority>>) -> i64 {
     }
 }
 
-/// A wrapped **element** in the Vec-build path: the storage is `Vec<Box<Payload>>`
-/// and each push wraps its own literal.
+/// A wrapped **element** in the Vec-build path. The storage is the CANONICAL
+/// `Vec<Payload>` — one helper trio per Kotlin class, shared with every other
+/// spelling of the same element — and the `Box` goes back on where the Vec is
+/// consumed, in one pass (#296).
+///
+/// Load-bearing: the refusal it replaced was silent and cost-only, so nothing
+/// failed while `Vec<Box<Payload>>` fell back to a per-element `JObject` plus a
+/// field read per field. Its generated Rust is the evidence — take the wrap off
+/// the consumption site with this declared and the crate does not build.
 #[prebindgen]
 pub fn boxed_elem_id_sum(ps: Vec<Box<Payload>>) -> i64 {
     ps.iter().map(|p| p.id).sum()

@@ -13391,27 +13391,19 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedDurationEch
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_boxedElemIdSum<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
-    ps: jni::objects::JObject<'a>,
+    ps_handle: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let ps = match JObject_to_Vec_Box_Payload_ae68babe(&mut env, &ps) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jlong;
-        }
-    };
+    let ps = unsafe {
+        ::core::mem::take(&mut *(ps_handle as *mut Vec<perftest_flat::Payload>))
+    }
+        .into_iter()
+        .map(|__e| ::std::boxed::Box::new(__e))
+        .collect::<Vec<_>>();
     let __out = perftest_flat::boxed_elem_id_sum(ps);
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
