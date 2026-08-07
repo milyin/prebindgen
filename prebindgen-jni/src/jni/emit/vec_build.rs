@@ -7,7 +7,7 @@
 use prebindgen_registry::flat::{self, TypeRef};
 
 use super::*;
-use crate::jni::trait_impl::build_through_erased_wrappers;
+use crate::jni::trait_impl::{build_through_erased_wrappers, build_through_wrappers};
 
 // `slice_or_vec_elem` lived here: it matched `&[T]` / `Vec<T>` off the SPELLING
 // and returned the element. `vec_build_elem` was its only caller and now reads
@@ -17,12 +17,36 @@ use crate::jni::trait_impl::build_through_erased_wrappers;
 // because mutate-back semantics keep the `input_vec` path — survives as the
 // `mutable: false` guard on that match.
 
-/// `Some((element_type, by_ref))` when `arg_ty` is a slice/`Vec` input whose
-/// element is a **flattenable `data_class`** — i.e. it decomposes into the
-/// conservative leaf set [`build_flat_input_plan`] accepts, so each element can
-/// cross as decoupled raw params and be rebuilt on the Rust side with no
-/// `env.get_field(...)`. `None` for any other shape (opaque handles, enums,
-/// nested-`Option` structs), which keep the `input_vec` path.
+/// What a slice/`Vec` parameter contributes to the Vec-build path: the
+/// **canonical** element, whether the run is borrowed, and the element wrappers
+/// the storage does not carry.
+///
+/// A named return rather than a tuple because the third field is only meaningful
+/// against the first: `elem` is the element with every transparent wrapper taken
+/// off, and `elem_wrappers` is what has to go back on. Reading `(a, b, c)` at
+/// three call sites would not say that.
+pub(crate) struct VecBuildElem {
+    /// The element with its transparent wrappers removed — what the helper trio
+    /// stores, what its name is derived from, and what the flatten plan is built
+    /// for. `Vec<Payload>` and `Vec<Box<Payload>>` answer with the same node,
+    /// which is the whole mechanism: one trio per Kotlin class.
+    pub elem: TypeRef,
+    /// The run is a `&[T]`/`&Vec<T>` borrow rather than an owned value.
+    pub by_ref: bool,
+    /// The wrappers taken off the element, outermost first — empty for the
+    /// ordinary case. Applied per element where the Vec is consumed, since the
+    /// storage holds the canonical type. A list and not a `TypeRef`: it is the
+    /// only part a rebuild uses, and it rides in [`InputKind::VecBuild`], whose
+    /// size every variant pays.
+    pub elem_wrappers: Vec<&'static str>,
+}
+
+/// `Some(..)` when `arg_ty` is a slice/`Vec` input whose element is a
+/// **flattenable `data_class`** — i.e. it decomposes into the conservative leaf
+/// set [`build_flat_input_plan`] accepts, so each element can cross as decoupled
+/// raw params and be rebuilt on the Rust side with no `env.get_field(...)`.
+/// `None` for any other shape (opaque handles, enums, nested-`Option` structs),
+/// which keep the `input_vec` path.
 ///
 /// This is the single detection seam shared by `emit_input_param`, the param
 /// classifier, `render_extern_decl`, and the synthetic-extern emitter so all
@@ -31,7 +55,7 @@ pub(crate) fn vec_build_elem(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
     arg: &TypeRef,
-) -> Option<(TypeRef, bool)> {
+) -> Option<VecBuildElem> {
     // The run and its element off the MODEL. `&mut [T]` is still refused —
     // mutate-back semantics keep the `input_vec` path — and that is the one
     // fact the layer accessors do not carry, so the borrow's mutability is read
@@ -81,28 +105,48 @@ pub(crate) fn vec_build_elem(
         build_through_erased_wrappers(run, quote!(__probe))?;
     }
     let elem = run.sequence_elem()?;
-    // A wrapped ELEMENT keeps the general converter path, and the obstruction is
-    // naming rather than typing. The helper trio stores a `Vec<#elem>`, so
-    // `Vec<Payload>` and `Vec<Box<Payload>>` are two different storages needing
-    // two trios — but the trio's base name is derived from the element's
-    // **Kotlin class** (`Payload` → `payloadVec`), which the two share, so both
-    // would emit `payloadVecNew`/`Push`/`Free` and collide.
+    // A wrapped ELEMENT is served here. #294 refused it and called the refusal
+    // definitive; #296 re-read it as reserved and this closes it.
     //
-    // **Reserved, not definitive** (#296). The collision is real; the choice it
-    // seems to force is not. Keying the trio on the CANONICAL element gives one
-    // trio per Kotlin class — storage `Vec<Payload>` — with the element's
-    // wrapper applied where the Vec is consumed
-    // (`.into_iter().map(Box::new).collect()`), so no Rust wrapper reaches a JNI
-    // symbol and nothing collides.
+    // The trio stores a `Vec<#elem>` and its base name comes from the element's
+    // **Kotlin class** (`Payload` → `payloadVec`), so keying it on the SPELLING
+    // would make `Vec<Payload>` and `Vec<Box<Payload>>` two storages wanting one
+    // name. Keying it on the CANONICAL element removes the question: one trio
+    // per Kotlin class, storage `Vec<Payload>`, and the element's wrapper goes
+    // back on where the Vec is CONSUMED — `.into_iter().map(Box::new).collect()`
+    // in `emit_input_param`. No Rust wrapper reaches a JNI symbol, which is the
+    // representation leak this layer exists to prevent, and nothing collides.
     //
-    // The cost of not doing it is not correctness: the general converter serves
-    // the shape (see `input_transparent_bridge`). It is that a `Box` the model
-    // erases silently downgrades the crossing from raw scalar leaves to a
-    // per-element `JObject` plus a field read per field — which is exactly what
-    // this path exists to remove.
-    if !elem.erased_wrappers().is_empty() {
-        return None;
+    // What that buys: a `Box` the model erases no longer downgrades the crossing
+    // from raw scalar leaves to a per-element `JObject` plus a field read per
+    // field. Correctness was never the issue — the general converter serves the
+    // shape (see `input_transparent_bridge`) — the cost was, and it was silent.
+    let elem_wrappers = elem.erased_wrappers();
+    if !elem_wrappers.is_empty() {
+        // **Definitive on the BORROWED path.** By value the local is owned, so
+        // the per-element wrap is one O(n) `Box::new` over a Vec already being
+        // moved. Borrowed, the local is a borrow of the Vec the Kotlin side
+        // owns, and a `Vec<Box<T>>` is not a `Vec<T>` viewed differently — it is
+        // a different allocation. Serving it would mean `mem::take`ing that Vec
+        // and borrowing a fresh one, which turns the single arm whose whole
+        // point is not copying into one that consumes its input.
+        //
+        // So the shapes coincide with the wrapped-run refusal above and the
+        // reasons do not: that one cannot copy without a `T: Clone`, this one
+        // could copy and must not.
+        if by_ref {
+            return None;
+        }
+        // `Cow` still declines, and by its own policy rather than this path's:
+        // `Cow::Owned` is well-typed, and refusing it is what keeps a binding
+        // from silently removing the borrow path. See its `WRAPPER_OPS` row.
+        build_through_wrappers(&elem_wrappers, quote!(__probe))?;
     }
+    // Canonical from here down: the flatten plan, the trio's storage and its
+    // name are all the element's, and the wrapper is the consumption site's
+    // business. `unwrapped` and not `stripped_syntax` because this stays a model
+    // node — it still has to answer `key`, `kind` and its own spelling.
+    let elem = elem.unwrapped();
     // The element must flatten; the probe ident is irrelevant here.
     let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
         .ok()
@@ -119,7 +163,11 @@ pub(crate) fn vec_build_elem(
     {
         return None;
     }
-    Some((elem.clone(), by_ref))
+    Some(VecBuildElem {
+        elem: elem.clone(),
+        by_ref,
+        elem_wrappers,
+    })
 }
 
 /// Every distinct flattenable element type `T` that a scanned, declared function
@@ -127,6 +175,11 @@ pub(crate) fn vec_build_elem(
 /// externs are emitted for (once per type, shared across all such functions).
 /// Deduped by [`TypeKey`] and sorted for deterministic output (mirrors
 /// [`build_handle_destructor_items`]).
+///
+/// The key is the **canonical** element's, since that is what
+/// [`vec_build_elem`] answers with — so `Vec<Payload>` and `Vec<Box<Payload>>`
+/// land on one entry and get one trio, rather than two storages contending for
+/// the name `payloadVec` (#296).
 pub(crate) fn collect_vec_build_elem_types(
     ext: &Declarations,
     registry: &Registry<KotlinMeta>,
@@ -140,8 +193,8 @@ pub(crate) fn collect_vec_build_elem_types(
             continue;
         }
         for p in &f.params {
-            if let Some((elem, _)) = vec_build_elem(ext, registry, &p.ty) {
-                seen.insert(elem.key().as_str().to_string(), elem);
+            if let Some(v) = vec_build_elem(ext, registry, &p.ty) {
+                seen.insert(v.elem.key().as_str().to_string(), v.elem);
             }
         }
     }

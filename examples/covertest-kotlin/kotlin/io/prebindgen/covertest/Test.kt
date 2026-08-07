@@ -1480,6 +1480,14 @@ fun main() {
         val many = listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null))
         check(boxedElemIdSum(many, boom) == 3L)           // wrapped element
         check(boxedRunIdSum(many, boom) == 3L)            // wrapped run, by value
+        // Both now take the push-helper path through the ONE `payloadVec` trio
+        // (#296): the wrapped element is keyed on the canonical `Payload`, and
+        // its `Box` goes back on where the Vec is consumed. Weighed against each
+        // other rather than each against a literal — the claim is that a `Box`
+        // the model erases changes neither the surface nor the answer, and
+        // `boxedRunIdSum` is the bare-element control that always took this path.
+        check(boxedElemIdSum(many, boom) == boxedRunIdSum(many, boom))
+        check(boxedElemIdSum(emptyList(), boom) == 0L)    // …and the empty run
 
         // FIELDS (#289). `boxed: Box<Option<Long>>` and `plain: Option<Long>`
         // are one type to the model, so both cross as `Long?` on the decoupled

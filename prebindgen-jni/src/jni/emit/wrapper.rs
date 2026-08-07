@@ -611,15 +611,21 @@ fn emit_input_param(
         // by-value `Vec<T>` moves it out with `mem::take` (leaving an empty
         // Vec the Kotlin `finally` frees). Decode is infallible, like the
         // by-value-handle consume below.
-        InputKind::VecBuild { elem, by_ref } => {
-            // Generated Rust spells the reading's own tokens.
+        InputKind::VecBuild {
+            elem,
+            by_ref,
+            elem_wrappers,
+        } => {
+            // Generated Rust spells the reading's own tokens. This is the
+            // CANONICAL element, which is what the helper trio stores — so the
+            // cast below and `build_vec_build_helper_items` name one type.
             let elem = emit.spell(elem);
             let handle_ident = format_ident!("{}_handle", arg_ident);
             wire_params.push(quote!(#handle_ident: jni::sys::jlong));
             if *by_ref {
-                // `vec_build_elem` refuses a wrapped run on this path, so the
-                // borrow is the parameter's own spelling and there is nothing
-                // to put back.
+                // `vec_build_elem` refuses a wrapped run OR a wrapped element on
+                // this path, so the borrow is the parameter's own spelling and
+                // there is nothing to put back.
                 prelude.push(quote!(
                     let #arg_ident: &[#elem] =
                         unsafe { &*(#handle_ident as *const Vec<#elem>) };
@@ -630,13 +636,28 @@ fn emit_input_param(
                 // ascription is dropped rather than restated: the wrapped
                 // spelling is what the expression now produces, and naming it
                 // here would be the same fact written twice.
-                let taken = build_through_erased_wrappers(
-                    &leaf.reading,
-                    quote!(unsafe {
-                        ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>))
-                    }),
-                )
-                .expect("vec_build_elem accepted this run spelling");
+                let taken = quote!(unsafe {
+                    ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>))
+                });
+                // The ELEMENT's wrappers, which the storage does not carry
+                // (#296). One O(n) pass over a Vec already being moved, and it
+                // goes INSIDE the run wrap: `Box<Vec<Box<Payload>>>` boxes each
+                // element, collects, then boxes the run. Emitted only when there
+                // are wrappers, so every existing shape keeps its exact tokens.
+                let taken = if elem_wrappers.is_empty() {
+                    taken
+                } else {
+                    let wrapped = build_through_wrappers(elem_wrappers, quote!(__e))
+                        .expect("vec_build_elem accepted this element spelling");
+                    quote!(
+                        #taken
+                            .into_iter()
+                            .map(|__e| #wrapped)
+                            .collect::<Vec<_>>()
+                    )
+                };
+                let taken = build_through_erased_wrappers(&leaf.reading, taken)
+                    .expect("vec_build_elem accepted this run spelling");
                 prelude.push(quote!(let #arg_ident = #taken;));
             }
             (wire_params, prelude, quote!(#arg_ident))
