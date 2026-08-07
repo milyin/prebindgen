@@ -592,6 +592,40 @@ pub(crate) fn projection_leaf_sentinel(proj: &crate::jni::Projection) -> Option<
     kotlin_null_sentinel(&leaf_wire).map(|s| s.to_string())
 }
 
+/// The sentinel a **wrap** should test, given the projection and whether an
+/// ancestor makes the leaf nullable — the one rule both derivations of that
+/// wrap read (`unfold_leaf_kt` in `render.rs`, `leaf_iface_param` in
+/// `iface.rs`), so it cannot drift between them again (#142).
+///
+/// A sentinel is the leaf's **own** `None` representation, so it belongs to the
+/// leaf's own type and to nothing above it. Two independent facts meet here and
+/// only the first one answers:
+///
+/// * the leaf's type carries a niche — `Option<Duration>` over a bounded
+///   `convert!`, whose strategy is `Optional(Niche, _)`. Its `None` IS the
+///   sentinel, and the test stays whatever the ancestor does.
+/// * an **ancestor** can be absent (a conditional value form, an
+///   `Option<sum>`/`Option<nested>` field). That widens the wire — the Rust
+///   side boxes any nullable leaf, see
+///   [`leaf_is_prim`](crate::jni::emit::leaf_is_prim) — and `?.` alone carries
+///   it. It grants no sentinel.
+///
+/// [`projection_leaf_sentinel`] answers off `niche_sentinels`, which
+/// `attach_domain_sentinels` puts on the **bare** type's converter as well as
+/// the `Option` one. Asking it without the `Base` check therefore handed a
+/// sentinel to a leaf that has no niche encoding at all, splicing
+/// `?.let { if (it == -1L) … }` into a wrap whose own encoder can never emit
+/// `-1`. Harmless at runtime — the value is outside the declared range — and
+/// wrong on its face.
+pub(crate) fn wrap_sentinel(proj: &crate::jni::Projection, nullable: bool) -> Option<String> {
+    // `Base` means the leaf has no `Option` of its own: whatever absence it can
+    // express is the ancestor's, and `?.` already expresses that.
+    if nullable && matches!(proj.strategy, crate::jni::FoldStrategy::Base) {
+        return None;
+    }
+    projection_leaf_sentinel(proj)
+}
+
 /// Kotlin literal for the null-sentinel of a primitive wire — used by
 /// [`fold_projection_wrap`] when a `Niche` layer covers a primitive wire and
 /// can't carry JVM null. Mirrors `jni_field_access`'s primitive descriptors.

@@ -111,6 +111,8 @@ Base package: `io.prebindgen.covertest`
 - `reading_series` — `fun readingSeries(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading>`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
 - `report_each` — `fun reportEach(n: Long, sink: ReportCallback, onError: JniErrorHandler<Unit>)`
+- `span_holder_new` — `fun <R> spanHolderNew(seq: Long, requiredMs: ULong, delayMs: Long, onError: JniErrorHandler<R>, build: SpanHolderBuilder<R>): R`
+  - shaped by: return `SpanHolder` decomposed → [spanHolderSpan__required, spanHolderSpan__delay] (Callback delivery)
 - `stamp_new` — `fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp`
   - shaped by: return `Stamp` decomposed → [secs, nanos] (Callback delivery)
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp>`
@@ -220,6 +222,8 @@ Base package: `io.prebindgen.covertest`
 - `Reading`: sealed_class → `io.prebindgen.covertest.model.Reading` (wire `?`)
 - `RepliesConfig`: data_class → `io.prebindgen.covertest.model.RepliesConfig` (wire `jni :: objects :: JObject`)
 - `Report`: ptr_class → `io.prebindgen.covertest.model.Report` (wire `jni :: sys :: jlong`)
+- `Span`: ptr_class → `io.prebindgen.covertest.model.Span` (wire `jni :: sys :: jlong`)
+- `SpanHolder`: ptr_class → `io.prebindgen.covertest.model.SpanHolder` (wire `jni :: sys :: jlong`)
 - `Stamp`: data_class → `io.prebindgen.covertest.model.Stamp` (wire `jni :: objects :: JObject`)
 - `Storage`: ptr_class → `io.prebindgen.covertest.Storage` (wire `jni :: sys :: jlong`)
 - `StorageError`: ptr_class → `io.prebindgen.covertest.errors.StorageError` (wire `jni :: sys :: jlong`)

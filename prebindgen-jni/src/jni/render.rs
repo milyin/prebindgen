@@ -2032,7 +2032,10 @@ pub(crate) fn unfold_leaf_kt(
             .kotlin_fqn(&p.leaf_key)
             .unwrap_or_else(|| p.leaf_key.to_string());
         let short = leaf_fqn.rsplit('.').next().unwrap_or(&leaf_fqn).to_string();
-        let sentinel = projection_leaf_sentinel(p);
+        // The sentinel is the leaf's OWN `None`, so an absence it inherits from
+        // an ancestor grants it none — `wrap_sentinel` is that rule, shared with
+        // `leaf_iface_param`, which derives the same wrap (#142).
+        let sentinel = wrap_sentinel(p, nullable);
         let mut wrap = fold_projection_wrap(&p.strategy, pk, &p.kind, &short, sentinel.as_deref());
         // A `nullable` leaf (an `Option` nesting step on its path) makes the
         // wire nullable even when the strategy itself is `Direct` — guard the
