@@ -15,6 +15,7 @@ members = [
     "examples/perftest-kotlin",
     "examples/covertest-helpers",
     "examples/covertest-kotlin",
+    "examples/emitcheck",
 ]
 resolver = "2"
 package.version = "0.5.0"

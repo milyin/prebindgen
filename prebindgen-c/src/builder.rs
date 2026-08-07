@@ -287,14 +287,14 @@ impl CbindgenBuilder {
     /// **auto-generated visible-field** `#[repr(C)]` C mirror (so C reads the
     /// fields directly) instead of an opaque blob.
     ///
-    /// Every field must be FFI-safe: an [`is_scalar`] primitive, a declared
+    /// Every field must be FFI-safe: a primitive, a declared
     /// [`Self::enum_type`], or an **opaque pointer** `Option<Box<T>>` / `Box<T>`
     /// where `T` is a declared [`Self::opaque_ptr`] (rendered `*mut t_t`; this is
     /// how a heap `String` rides along — `Option<Box<String>>` → `string_t *`). The
     /// source type **must** be `#[repr(C)]`; a fail-closed `size_of`/`align_of`
     /// assert against the generated mirror proves the reinterpret sound at compile
     /// time. Call after the manglers are configured (the mirror name is resolved
-    /// via [`Self::c_type_ident`]). A `<base>_drop` is generated.
+    /// through them). A `<base>_drop` is generated.
     ///
     /// **Owned-ness is inferred** from the fields: a struct with an opaque-pointer field
     /// owns external resources, so a by-value consume cleans the moved-from slot (nulls
@@ -303,6 +303,31 @@ impl CbindgenBuilder {
     /// plain data (a by-value crossing is a bitwise copy with no write-back). The source
     /// type needs `Default` **only** if it has a bare `Box<T>` field (whose gravestone
     /// can't be a NULL pointer); `Option<Box<T>>` fields are nulled in place.
+    ///
+    /// # Why the spelling is load-bearing here
+    ///
+    /// This is the one position that is **exempt** from the rule stated on
+    /// [`prebindgen_registry::Prebindgen`] — *same `kind` ⇒ same
+    /// destination-language type* — and the exemption is structural rather than
+    /// a concession. A mirror is not converted; it is **reinterpreted from the
+    /// source struct's bytes**, so its field types are a *layout* fact. `Box<T>`
+    /// is a pointer and `T` is inline: to C they really are different types, and
+    /// the size/align assert above would reject a mirror that pretended
+    /// otherwise. So this path reads the wrapper the model erases —
+    /// [`kind`](prebindgen_registry::flat::TypeRef::kind) rather than
+    /// [`unwrapped`](prebindgen_registry::flat::TypeRef::unwrapped) — on
+    /// purpose. It is the one place the usual "classify off `kind`, spell off
+    /// the syntax" split inverts, and it inverts because the contract is layout
+    /// rather than surface.
+    ///
+    /// That is also why a wrapper the model erases must **not** be refused here
+    /// (prebindgen#230). `Option<Box<String>>` is how a source crate says "this
+    /// field is a nullable pointer" — a layout statement a zero-copy mirror is
+    /// entitled to read, not the source naming a C type. There is no competing
+    /// spelling to prefer: `Option<String>` is a 24-byte niche-optimised value
+    /// with no C representation at all, and declaring one is a hard error naming
+    /// the field. Rejecting the `Box` would leave a nullable-pointer field
+    /// inexpressible.
     pub fn repr_c_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         assert!(
@@ -531,8 +556,9 @@ impl CbindgenBuilder {
     /// a `#[repr(C)]` closure struct (`{ void *context; call; drop }`) is
     /// emitted for it. `ty` must be `impl Fn(Args...) + Send + Sync + 'static`.
     /// Identical signatures share one struct. Sets the declaration cursor, so a
-    /// following `.base_name("...")` sets the base fed to `mangle_callback` (else
-    /// the args' bases drive [`Self::callback_c_name`]).
+    /// following `.base_name("...")` sets the base fed to
+    /// [`mangle_callback`](Self::mangle_callback) (else the args' bases drive
+    /// the generated name).
     pub fn callback(mut self, ty: syn::Type) -> Self {
         let args = extract_fn_trait_args(&ty).unwrap_or_else(|| {
             panic!(
@@ -551,7 +577,7 @@ impl CbindgenBuilder {
     /// callee may take the value (`z_x_take` moves it out, leaving a gravestone) or
     /// just read it; the trampoline drops it after the call (no-op if taken). The
     /// arg type must be an inline-opaque type ([`Self::opaque_owned_struct`] /
-    /// [`Self::opaque_data_struct`]). Chain after `.callback(...)` (and any `.name(...)`).
+    /// [`Self::opaque_data_struct`]). Chain after `.callback(...)` (and any `.base_name(...)`).
     pub fn takeable_param(mut self, idx: usize) -> Self {
         match &self.current {
             Some(CurrentDecl::Callback(key)) => {

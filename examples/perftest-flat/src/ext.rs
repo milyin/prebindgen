@@ -342,13 +342,66 @@ pub fn lookup_of(count: i64, total: f64) -> Lookup {
 /// delivered in `count` order starting at `-1`, so `n >= 3` covers all three:
 /// `Failed` (`i = 0`), `Absent` (`i = 1`), then `Found` with an increasing
 /// count. A live group hands a native resource to the callback while the inert
-/// groups' slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
-/// but not closed by the proxy: it is the callback body's to close, exactly as
-/// for a returned sum.
+/// groups' slots stay defaulted. The proxy closes the reassembled value after
+/// `run` returns — close-unless-taken, exactly as for a handle passed directly
+/// to a callback (#218), so a body that means to outlive the call must `take()`
+/// the payload.
 #[prebindgen]
 pub fn lookup_each(n: i64, total: f64, sink: impl Fn(Lookup) + Send + Sync + 'static) {
     for i in 0..n {
         sink(lookup_of(i - 1, total));
+    }
+}
+
+/// The **third** position a handle can be reached through: a `data_class` field
+/// whose type is a handle-carrying sum. `Holder` covers the plain-handle field
+/// beside it, and the point of this one is that the two behave alike — the
+/// container is `AutoCloseable` and its `close()` cascades either way, because
+/// the field's type is an implementation detail and must not decide who frees
+/// the handle (#218).
+#[prebindgen]
+pub struct Verdict {
+    pub id: i64,
+    /// One alternative carries a `Summary` handle; closing the `Verdict`
+    /// closes it, through `Lookup`'s own `close()`.
+    pub outcome: Lookup,
+}
+
+/// Build a [`Verdict`] whose outcome comes from [`lookup_of`].
+#[prebindgen]
+pub fn verdict_new(id: i64, count: i64, total: f64) -> Verdict {
+    Verdict {
+        id,
+        outcome: lookup_of(count, total),
+    }
+}
+
+/// The **fourth** position, and the last row of the same table: a `data_class`
+/// field whose type is another `data_class` that carries the handle. Nothing
+/// here is a handle and nothing here is a sum — `Dossier` only *reaches* one,
+/// two levels down, and must still close it (#218).
+///
+/// The cascade this emits is one line, `holder.close()`, which is correct only
+/// because [`Holder`] was independently rendered `AutoCloseable` by its own
+/// pass. An emission test cannot tell: it never compiles the inner class. This
+/// one is exercised from the JVM harness, where a `Dossier` that closed
+/// nothing, or an inner class without a `close()` to call, does not build.
+#[prebindgen]
+pub struct Dossier {
+    pub note: i64,
+    /// A plain data class whose own field is the `Summary` handle.
+    pub holder: Holder,
+}
+
+/// Build a [`Dossier`] over a fresh [`Summary`] — the two-level container.
+#[prebindgen]
+pub fn dossier_new(note: i64, tag: i64, count: i64, total: f64) -> Dossier {
+    Dossier {
+        note,
+        holder: Holder {
+            tag,
+            summary: Summary { count, total },
+        },
     }
 }
 
@@ -1282,7 +1335,8 @@ pub fn storage_shards_opt(count: i64, each: i64) -> Option<Vec<Storage>> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A prepared callback receiving an **owned [`Storage`] handle** (`Fn(Storage)`,
-/// by value). Unlike [`PayloadHandler`] (whose arg is a flattened data class),
+/// by value). Unlike [`PayloadHandler`](crate::PayloadHandler) (whose arg is a
+/// flattened data class),
 /// the handle crosses as a raw pointer and the generated Kotlin proxy wraps it
 /// into a typed `Storage` and `close()`s it after `run` (close-unless-taken).
 #[prebindgen]
@@ -1835,8 +1889,15 @@ pub fn boxed_opt_priority_weight(p: Box<Option<Priority>>) -> i64 {
     }
 }
 
-/// A wrapped **element** in the Vec-build path: the storage is `Vec<Box<Payload>>`
-/// and each push wraps its own literal.
+/// A wrapped **element** in the Vec-build path. The storage is the CANONICAL
+/// `Vec<Payload>` — one helper trio per Kotlin class, shared with every other
+/// spelling of the same element — and the `Box` goes back on where the Vec is
+/// consumed, in one pass (#296).
+///
+/// Load-bearing: the refusal it replaced was silent and cost-only, so nothing
+/// failed while `Vec<Box<Payload>>` fell back to a per-element `JObject` plus a
+/// field read per field. Its generated Rust is the evidence — take the wrap off
+/// the consumption site with this declared and the crate does not build.
 #[prebindgen]
 pub fn boxed_elem_id_sum(ps: Vec<Box<Payload>>) -> i64 {
     ps.iter().map(|p| p.id).sum()
@@ -1852,6 +1913,39 @@ pub fn boxed_elem_id_sum(ps: Vec<Box<Payload>>) -> i64 {
 // the unwrapped type and put the wrapper back.
 #[allow(clippy::boxed_local)]
 pub fn boxed_run_id_sum(ps: Box<Vec<Payload>>) -> i64 {
+    ps.iter().map(|p| p.id).sum()
+}
+
+/// The **borrowed** run spelled as a slice — the control half of the pair with
+/// [`ref_vec_id_sum`].
+///
+/// Declared as a sum rather than reusing [`crate::storage_put_slice`] so the two
+/// spellings can be weighed against each other directly: same argument, same
+/// answer, or the claim is only that each compiles.
+#[prebindgen]
+pub fn slice_id_sum(ps: &[Payload]) -> i64 {
+    ps.iter().map(|p| p.id).sum()
+}
+
+/// The same borrowed run spelled `&Vec<T>`, which is **one type** to the model:
+/// `sequence_elem` answers for `&[T]` and `&Vec<T>` alike, so both reach the
+/// Vec-build path and the emitter has to serve both.
+///
+/// It did not. The by-ref lowering hands the callee a borrow of the transient
+/// Rust-side `Vec`, and ascribing that borrow `&[T]` coerced it at the `let` —
+/// so this spelling got a `&[Payload]` and the generated crate did not build
+/// (`E0308`; the deref coercion runs `&Vec<T>` → `&[T]`, not back). #384.
+///
+/// Load-bearing, and the only kind of fixture that can be: a lib test emits
+/// tokens and never compiles them, while this crate's binding is `include!`d
+/// and built. Put the ascription back and `cargo build -p covertest-kotlin`
+/// fails here.
+#[prebindgen]
+// A `&Vec` parameter IS the point here — clippy is right that it should be
+// `&[_]`, and that is what makes it a fixture: the two spellings are one type
+// to the model, so the binding must serve both.
+#[allow(clippy::ptr_arg)]
+pub fn ref_vec_id_sum(ps: &Vec<Payload>) -> i64 {
     ps.iter().map(|p| p.id).sum()
 }
 

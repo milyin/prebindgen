@@ -261,7 +261,7 @@ pub(crate) unsafe fn Box_String_to_JString_027f6250<'a>(
     v: Box<String>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
-        env.new_string(v.as_str())
+        env.new_string(&*v)
             .map_err(|e| {
                 <__JniErr as ::core::convert::From<
                     String,
@@ -5694,9 +5694,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'
             return ();
         }
     };
-    let payloads: &[perftest_flat::Payload] = unsafe {
-        &*(payloads_handle as *const Vec<perftest_flat::Payload>)
-    };
+    let payloads = unsafe { &*(payloads_handle as *const Vec<perftest_flat::Payload>) };
     let __out = perftest_flat::storage_put_slice(&mut s, payloads);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,

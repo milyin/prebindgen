@@ -116,9 +116,17 @@ pub(crate) enum InputKind {
     Callback { iface: Option<Arc<IfaceSpec>> },
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
-    /// The element as a **reading**: the vec-helper plan and the element key
-    /// are both taken from it, and generated Rust spells `elem.spell()`.
-    VecBuild { elem: TypeRef, by_ref: bool },
+    /// The element as a **reading**, and the CANONICAL one: the vec-helper plan
+    /// and the element key are both taken from it, and generated Rust spells
+    /// `elem.spell()`. `elem_wrappers` is what the storage therefore does not
+    /// carry, put back per element on consumption (#296) — empty for the
+    /// ordinary case, and a list rather than a second `TypeRef` because every
+    /// variant of this enum pays its size.
+    VecBuild {
+        elem: TypeRef,
+        by_ref: bool,
+        elem_wrappers: Vec<&'static str>,
+    },
     /// Bare `Option<primitive>` / `Option<enum>`: a decoupled
     /// `(present: jboolean, value: <wire>)` pair.
     OptionScalar(OptionScalarInputPlan),
@@ -653,11 +661,15 @@ fn classify_leaf(
 
     let flat_plan = build_flat_input_plan(ext, registry, ident, reading)
         .map_err(PlanError::UnflattenableDataClass)?;
-    let kind = if let Some((elem, by_ref)) = (!expanded)
+    let kind = if let Some(v) = (!expanded)
         .then(|| vec_build_elem(ext, registry, reading))
         .flatten()
     {
-        InputKind::VecBuild { elem, by_ref }
+        InputKind::VecBuild {
+            elem: v.elem,
+            by_ref: v.by_ref,
+            elem_wrappers: v.elem_wrappers,
+        }
     } else if let Some(sp) = build_option_scalar_input_plan(ext, registry, ident, reading) {
         InputKind::OptionScalar(sp)
     } else if let Some(plan) = flat_plan {

@@ -381,7 +381,7 @@ impl JniGenBuilder {
     /// "skipping undeclared" warning is suppressed. Global — an ignored
     /// item belongs to no package. One acceptor, the kind carried by the
     /// decl (see [`IgnoreDecl`]): `fun!` / `ty!` / `constant!` for exact
-    /// items, [`matching`](crate::matching) for a name-family
+    /// items, [`matching`] for a name-family
     /// predicate over ANY item kind.
     pub fn ignore(mut self, decl: impl Into<IgnoreDecl>) -> Self {
         match decl.into().0 {

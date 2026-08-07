@@ -2024,3 +2024,254 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
          `Box<&Vec<Foo>>` — an E0308 in the generated crate:\n{kotlin}"
     );
 }
+
+/// The two spellings of a **borrowed run** get the same local, and it is the
+/// borrow of the `Vec` rather than a slice of it (#384).
+///
+/// `sequence_elem` answers for `&[T]` and `&Vec<T>` alike — they are one type to
+/// the model — so both reach the Vec-build path. The emitter was not symmetric
+/// with that: it ascribed `&[#elem]` to the local, which coerced
+/// `&*(.. as *const Vec<T>)` at the `let` and could therefore produce only one
+/// of the two. A `&Vec<T>` parameter was then handed a `&[T]`, which does not
+/// coerce back — `E0308` in the generated crate.
+///
+/// Unascribed, the coercion moves to the call site and serves both. What this
+/// test can pin is the **shape**; that it compiles is `covertest-kotlin`'s
+/// `ref_vec_id_sum`/`slice_id_sum` pair, since a lib test emits tokens and never
+/// builds them.
+#[test]
+fn both_spellings_of_a_borrowed_run_get_the_vec_borrow() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_slice(v: &[Foo]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_ref_vec(v: &Vec<Foo>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(prebindgen_registry::fun!(put_slice))
+                .fun(prebindgen_registry::fun!(put_ref_vec)),
+        );
+
+    let dir = unique_test_dir("jnigen_borrowed_run_spellings");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let gen = jni.build_with(registry).expect("resolve");
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+
+    // Both spellings reach the Vec-build path — the premise. `&Vec<Foo>` did
+    // too before the fix, which is exactly why it broke rather than falling
+    // back to the general converter.
+    for f in ["publicfunputSlice(", "publicfunputRefVec("] {
+        let body = kc
+            .split(f)
+            .nth(1)
+            .map(|s| s.split("publicfun").next().unwrap_or(s).to_string())
+            .unwrap_or_default();
+        assert!(
+            body.contains("fooVecNew"),
+            "`{f}` must take the Vec-build path — both spellings are one type to \
+             the model:\n{kotlin}"
+        );
+    }
+
+    // The finding: ONE local, and it is the `Vec` borrow. Counted rather than
+    // merely found, so a per-spelling form cannot pass.
+    assert_eq!(
+        rc.matches("letv=unsafe{&*(v_handleas*constVec<myflat::Foo>)};")
+            .count(),
+        2,
+        "both borrowed runs must get the same unascribed `&Vec<Foo>` local:\n{rust}"
+    );
+    // …and no slice ascription survives, which is the thing that broke.
+    assert!(
+        !rc.contains("letv:&[myflat::Foo]="),
+        "ascribing `&[Foo]` coerces at the `let`, so a `&Vec<Foo>` parameter \
+         gets a `&[Foo]` and the generated crate does not build (E0308):\n{rust}"
+    );
+}
+
+/// A `Box` on the ELEMENT keeps the push-helper fast path, and the two spellings
+/// share **one** helper trio (#296).
+///
+/// The trio stores a `Vec<#elem>` and takes its name from the element's Kotlin
+/// class, so keying it on the spelling would make `Vec<Foo>` and `Vec<Box<Foo>>`
+/// two storages wanting the one name `fooVec`. That collision is what #294 read
+/// as forcing the refusal. Keying on the CANONICAL element dissolves it: one
+/// storage, one name, and the `Box` goes back on per element where the Vec is
+/// consumed.
+///
+/// The cost of the old refusal was never correctness — the general converter
+/// serves the shape — it was that the crossing silently fell back to a
+/// per-element `JObject` plus a field read per field, which is the entire thing
+/// this path exists to remove. So the assertion is about **which path**, and the
+/// bare twin is carried alongside as the control.
+///
+/// `&[Box<Foo>]` is asserted absent rather than left untested: it is a
+/// deliberate refusal (the by-ref arm borrows the Kotlin-owned Vec, and a
+/// `Vec<Box<Foo>>` is a different allocation rather than a different view), and
+/// an unpinned refusal decays into an accident.
+#[test]
+fn a_wrapped_vec_element_keeps_the_push_path_and_shares_one_trio() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_bare(v: Vec<Foo>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_boxed_elem(v: Vec<Box<Foo>>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_boxed_elem_slice(v: &[Box<Foo>]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(prebindgen_registry::fun!(put_bare))
+                .fun(prebindgen_registry::fun!(put_boxed_elem))
+                .fun(prebindgen_registry::fun!(put_boxed_elem_slice)),
+        );
+
+    let dir = unique_test_dir("jnigen_wrapped_vec_elem");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let gen = jni.build_with(registry).expect("resolve");
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+
+    // The control: the bare `Vec<Foo>` twin takes the Vec-build path, so a
+    // finding below is about the wrapper and not about the fixture failing to
+    // reach the specialized path at all.
+    assert!(
+        kc.contains("val__vec_v=JNINative.fooVecNew(v.size)"),
+        "the bare `Vec<Foo>` must take the Vec-build path — otherwise this test \
+         proves nothing about the wrapped one:\n{kotlin}"
+    );
+    // The finding: the wrapped element takes it too. Split on the wrapper so the
+    // shared `fooVecNew` declarations in `JNINative` cannot be read as this
+    // function's body (the trap the sibling test above documents).
+    let boxed_body = kc
+        .split("publicfunputBoxedElem(")
+        .nth(1)
+        .map(|s| s.split("publicfun").next().unwrap_or(s).to_string())
+        .unwrap_or_default();
+    assert!(
+        boxed_body.contains("fooVecNew"),
+        "`Vec<Box<Foo>>` fell back to the general `JObject` converter — a `Box` \
+         the model erases must not cost the push-helper path (#296):\n{kotlin}"
+    );
+
+    // One trio, not two: the declaration is emitted once for the two spellings.
+    // This is the collision claim, measured rather than argued.
+    assert_eq!(
+        kc.matches("externalfunfooVecNew(cap:Int):Long").count(),
+        1,
+        "the two spellings must share ONE helper trio — a per-spelling trio \
+         would emit `fooVecNew` twice and collide:\n{kotlin}"
+    );
+    // …and the storage is the canonical element on the Rust side, which is what
+    // makes one trio serve both.
+    assert!(
+        rc.contains("Vec::<myflat::Foo>::with_capacity"),
+        "the trio must store the CANONICAL element:\n{rust}"
+    );
+    assert!(
+        rc.contains(".map(|__e|::std::boxed::Box::new(__e))"),
+        "the element wrapper must go back on where the Vec is consumed:\n{rust}"
+    );
+    // The bare twin must NOT gain that pass — the wrap is per-spelling, not
+    // something the emitter adds to every Vec-build param.
+    assert_eq!(
+        rc.matches(".map(|__e|::std::boxed::Box::new(__e))").count(),
+        1,
+        "only the wrapped spelling maps its elements:\n{rust}"
+    );
+
+    // The stated refusal: the by-ref arm borrows the Kotlin-owned `Vec<Foo>`,
+    // and there is no `Vec<Box<Foo>>` to borrow without building one.
+    let slice_body = kc
+        .split("publicfunputBoxedElemSlice(")
+        .nth(1)
+        .map(|s| s.split("publicfun").next().unwrap_or(s).to_string())
+        .unwrap_or_default();
+    assert!(
+        !slice_body.contains("fooVecNew"),
+        "`&[Box<Foo>]` must keep the general converter path — serving it would \
+         mean consuming the Vec the arm exists to borrow:\n{kotlin}"
+    );
+}

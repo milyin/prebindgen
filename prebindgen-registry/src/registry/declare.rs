@@ -255,7 +255,7 @@ impl<M> RegistryBuilder<M> {
 
     /// How this binding's composites cross **in pieces** instead of whole.
     ///
-    /// Stated once, before [`Self::resolve`]. Replaces five separate callbacks
+    /// Stated once, before [`Self::build`]. Replaces five separate callbacks
     /// the registry used to make into the generator; see [`Decompositions`].
     pub fn decompose(mut self, d: Decompositions) -> Self {
         self.registry.declared.decompositions = d;
@@ -348,7 +348,7 @@ impl<M> RegistryBuilder<M> {
     }
 
     /// Every crossing this binding needs a conversion for, **inner types
-    /// first** — see [`Registry::crossings`] for what the order guarantees.
+    /// first** — see [`Self::crossings`] for what the order guarantees.
     ///
     /// Take this when you want to drive the loop yourself and hand the result
     /// back through [`Self::conversions`]. [`Self::convert_with`] is the same
