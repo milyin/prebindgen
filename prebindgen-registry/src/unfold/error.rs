@@ -1,7 +1,7 @@
 //! Errors produced while resolving output-deconstruction declarations.
 
-/// Errors surfaced while resolving [`Deconstructors`](super::Deconstructors) in
-/// [`apply`](super::apply).
+/// Errors surfaced while resolving
+/// [`Deconstructors`](super::Deconstructors).
 #[derive(Debug)]
 pub enum UnfoldError {
     UnknownFunction(syn::Ident),

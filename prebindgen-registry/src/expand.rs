@@ -19,7 +19,7 @@
 //!
 //! Everything here is **language-agnostic**: the fold is pure Rust and the
 //! per-leaf wire encode/decode is delegated to the adapter's existing
-//! converters. [`apply`] resolves declarations into [`FoldPlan`]s (stored on
+//! converters. Resolution turns the declarations into [`FoldPlan`]s (stored on
 //! the registry, keyed by `(fn, param)`) and registers each leaf type as a
 //! required input so the resolver produces its converter. [`emit_fold`]
 //! emits the dispatch expression at the parameter-emission site.
@@ -84,7 +84,7 @@ pub enum ExpandSel {
 /// A per-fn input expansion (`.expand_param(param, expand_param!(T)…)`) —
 /// construct `param` of `func` from the explicit variant list. Recorded as
 /// an explicit decl so the auto-`default` skips it; an identity-only list
-/// lowers to the skip-default plain form in [`apply`]. Not related to the
+/// lowers to the skip-default plain form at resolution. Not related to the
 /// jnigen declaration-DSL type of the same name — this is the lowered core
 /// record.
 #[derive(Clone)]
@@ -92,7 +92,7 @@ pub struct ExpandDecl {
     pub func: syn::Ident,
     pub param: syn::Ident,
     /// The type the per-fn decl was declared for (`expand_param!(T)`) —
-    /// cross-checked against the named param's peeled type in [`apply`].
+    /// cross-checked against the named param's peeled type at resolution.
     /// `None` for the internal `TopLevel` form (the type comes from the
     /// param itself).
     pub declared_target: Option<TypeKey>,
@@ -101,9 +101,9 @@ pub struct ExpandDecl {
 
 /// Constructor / expansion declarations gathered from a language builder —
 /// an immutable record set: complete values, no build protocol. Declaration
-/// order is the vector order. Handed to [`apply`] via
-/// `Prebindgen::expansions`; empty or
-/// duplicate declarations are diagnosed there (collected), not at
+/// order is the vector order. Handed to the registry as
+/// [`Decompositions::expansions`](crate::Decompositions::expansions); empty
+/// or duplicate declarations are diagnosed at resolution (collected), not at
 /// construction.
 #[derive(Clone, Default)]
 pub struct Expansions {
@@ -742,7 +742,7 @@ fn check_target(
 /// The returned expression has type `Result<<shaped> plan.target, String>`
 /// (`Result<Target>`, `Result<Option<Target>>`, …). The adapter routes its
 /// `Err(String)` through its own error channel. Folds the [`FoldShape`] layers
-/// top-down over the shared [core construct](`emit_core_construct`) — the value
+/// top-down over one shared core construct — the value
 /// analog of how `Option<_>`/`Vec<_>` wrappers compose at the wire.
 pub fn emit_fold(
     plan: &FoldPlan,

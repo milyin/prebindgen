@@ -1273,7 +1273,8 @@ pub fn storage_shards_opt(count: i64, each: i64) -> Option<Vec<Storage>> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A prepared callback receiving an **owned [`Storage`] handle** (`Fn(Storage)`,
-/// by value). Unlike [`PayloadHandler`] (whose arg is a flattened data class),
+/// by value). Unlike [`PayloadHandler`](crate::PayloadHandler) (whose arg is a
+/// flattened data class),
 /// the handle crosses as a raw pointer and the generated Kotlin proxy wraps it
 /// into a typed `Storage` and `close()`s it after `run` (close-unless-taken).
 #[prebindgen]

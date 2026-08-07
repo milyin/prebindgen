@@ -261,7 +261,7 @@ pub(crate) unsafe fn Box_String_to_JString_027f6250<'a>(
     v: Box<String>,
 ) -> ::core::result::Result<jni::objects::JString<'a>, __JniErr> {
     Ok({
-        env.new_string(v.as_str())
+        env.new_string(&*v)
             .map_err(|e| {
                 <__JniErr as ::core::convert::From<
                     String,
