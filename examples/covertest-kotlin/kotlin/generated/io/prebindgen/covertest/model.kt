@@ -901,6 +901,30 @@ public data class Verdict(val id: Long, val outcome: Lookup) : AutoCloseable {
     }
 }
 
+/** Typed handle for a native Zenoh `Probe`. */
+public class Probe(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Probe {
+        val p = ptr
+        ptr = p or 1L
+        return Probe(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
 /** Typed handle for a native Zenoh `Report`. */
 public class Report(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -991,6 +1015,33 @@ public fun LookupCallback.asRaw(): LookupCallbackRaw =
             run(__own0)
         } finally {
             __own0.close()
+        }
+    }
+
+public fun interface ProbeCallback {
+    public fun run(seq: Long, outcome: Lookup?)
+}
+
+public fun interface ProbeCallbackRaw {
+    public fun run(
+        seq: Long,
+        outcome__tag: Int?,
+        outcome__found_v0: Long?,
+        outcome__failed_v0: String?,
+    )
+}
+
+public fun ProbeCallback.asRaw(): ProbeCallbackRaw =
+    ProbeCallbackRaw {
+        seq,
+        outcome__tag,
+        outcome__found_v0,
+        outcome__failed_v0 ->
+        val __own0 = when (outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(outcome__found_v0!!)); 2 -> Lookup.Failed(outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $outcome__tag") }
+        try {
+            run(seq, __own0)
+        } finally {
+            __own0?.close()
         }
     }
 
@@ -1124,6 +1175,38 @@ internal val __MarkerBuilder: MarkerBuilder<Marker> =
 MarkerBuilder { tag, ranked_v0 ->
     when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
 }
+
+public fun interface ProbeBuilder<out R> {
+    public fun run(
+        seq: Long,
+        outcome__tag: Int?,
+        outcome__found_v0: Summary?,
+        outcome__failed_v0: String?,
+    ): R
+}
+
+public fun interface ProbeBuilderRaw<out R> {
+    public fun run(
+        seq: Long,
+        outcome__tag: Int?,
+        outcome__found_v0: Long?,
+        outcome__failed_v0: String?,
+    ): R
+}
+
+public fun <R> ProbeBuilder<R>.asRaw(): ProbeBuilderRaw<R> =
+    ProbeBuilderRaw<R> {
+        seq,
+        outcome__tag,
+        outcome__found_v0,
+        outcome__failed_v0 ->
+        run(
+            seq,
+            outcome__tag,
+            outcome__found_v0?.let { Summary(it) },
+            outcome__failed_v0
+        )
+    }
 
 public fun interface ReadingBuilder<out R> {
     public fun run(
@@ -1696,6 +1779,37 @@ public fun dossierNew(
 public fun reportEach(n: Long, sink: ReportCallback, onError: JniErrorHandler<Unit>) {
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.reportEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Probe`]. `count < -1` leaves the outcome absent; anything else
+ * takes it from [`lookup_of`], so all four cases (absent, failed, empty,
+ * found-with-a-handle) are reachable from one argument.
+ *
+ * The Rust `Probe` result is delivered decomposed: the builder callback receives (`seq`, `outcome__tag`, `outcome__found_v0`, `outcome__failed_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <R> probeNew(
+    seq: Long,
+    count: Long,
+    total: Double,
+    onError: JniErrorHandler<R>,
+    build: ProbeBuilder<R>,
+): R {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.probeNew(seq, count, total, build.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as R
+}
+
+/**
+ * Deliver [`Probe`]s to a callback, one per `i` starting at `-2`, so the first
+ * is the ABSENT case and the rest walk `Lookup`'s alternatives.
+ */
+public fun probeEach(n: Long, total: Double, sink: ProbeCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.probeEach(n, total, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 

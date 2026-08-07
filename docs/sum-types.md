@@ -201,6 +201,16 @@ The slots then ride the parent's single `call_static_method("fromParts", …)`. 
 for the sum, and both sides enumerate the same slots in the same order because both walk one
 `StructPlan` — the invariant that module already exists to hold.
 
+**`Option<sum>` gates the same way in both output paths, by two different means** (#220). On the
+`fromParts` bridge it is the separate `<field>__present` flag above; on a **value form**'s leaf list
+it is the selector leaf's own **nullability** — the tag boxes, and JVM `null` means "no sum at all",
+which tag `0` cannot say because that is a real alternative. The leaf list needs no present-flag
+concept for it: a sum's leaves are not independent, so the whole segment binds as one tuple whose
+absent arm carries every slot's wire default — the shape a sum under a *conditional* value form
+already crossed by, applied to an optional step inside the segment's own path
+(`prebindgen-jni/src/jni/emit/delivery.rs`, the sum-segment loop). `Vec<sum>` stays refused in a leaf
+list: variable arity has no fixed layout to lay out.
+
 ### 4.4 Input path (Kotlin → Rust)
 
 `FlatFieldNode::Sum` joins `Value` / `Nested`

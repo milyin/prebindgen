@@ -1081,10 +1081,13 @@ impl Declarations {
                 TypeKind::Sum => {
                     // A sum's leaves are a selector plus one group per
                     // alternative, laid out side by side at a FIXED position.
-                    // A `Vec` of them has variable arity; an `Option` of one
-                    // needs a present flag the unfold leaf list has no notion of
-                    // (the `fromParts` bridge's `PlanFieldKind::Sum` does — a
-                    // data-class field can be `Option<sum>`).
+                    // A `Vec` of them has variable arity, so there is no fixed
+                    // layout to lay out — that one stays refused.
+                    //
+                    // `Option<sum>` does NOT: absence is the selector leaf's own
+                    // nullability, the same mechanism a sum under a conditional
+                    // value form already crosses by (#220). The refusal that
+                    // stood here predated it.
                     assert!(
                         bare.sequence_elem().is_none(),
                         "expand_return!({}).fields(fields!({})): field `{}.{}` is a \
@@ -1095,20 +1098,6 @@ impl Declarations {
                         st.name,
                         dotted,
                         probe,
-                    );
-                    assert!(
-                        field.ty.optional_inner().is_none(),
-                        "expand_return!({}).fields(fields!({})): field `{}.{}` is an \
-                         `Option<{}>` — an optional sum would need a present flag beside its \
-                         tag, which an output leaf list cannot carry. Give the field a \
-                         payload-less alternative instead of wrapping the sum in `Option`, \
-                         or override it with .field(\"{}\", ...)",
-                        key.as_str(),
-                        decl.func(),
-                        st.name,
-                        dotted,
-                        probe,
-                        dotted,
                     );
                     // The name is the reading's, not a path taken apart to
                     // re-derive one.

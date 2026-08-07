@@ -86,6 +86,8 @@ import io.prebindgen.covertest.model.lookupEach
 import io.prebindgen.covertest.model.ledgerEach
 import io.prebindgen.covertest.model.ledgerNew
 import io.prebindgen.covertest.model.reportEach
+import io.prebindgen.covertest.model.probeEach
+import io.prebindgen.covertest.model.probeNew
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
@@ -726,6 +728,61 @@ fun main() {
         check(kept.size == 1)
         kept[0].close()
         check(kept[0].isClosed())
+    }
+
+    // An `Option<sum>` FIELD of a value form (#220) — the shape that used to be
+    // refused here while a `data_class` field of the same type was accepted.
+    //
+    // The gate is the SEGMENT's, not the form's: `seq` beside it is an ordinary
+    // leaf that crosses whether or not the sum is there. And absence rides the
+    // selector's own nullability rather than a present flag beside it, which is
+    // what this pins: `null` and `Lookup.Absent` are different answers, and a
+    // raw `jint` tag could not tell them apart because `Absent` IS tag 0.
+    section("Option<sum> as a value-form field") {
+        val rows = mutableListOf<String>()
+        val kept = mutableListOf<Summary>()
+        probeEach(4L, 5.0, { seq, outcome ->
+            val which = when (outcome) {
+                null -> "none"
+                is Lookup.Failed -> "failed:${outcome.v0}"
+                Lookup.Absent -> "absent"
+                is Lookup.Found -> {
+                    val s = outcome.v0
+                    check(!s.isClosed())
+                    kept.add(s)
+                    "found:${s.count(boom)}"
+                }
+            }
+            rows.add("$seq|$which")
+        }, boom)
+
+        // i = 0 → count -2 → the field itself is absent; the rest walk `Lookup`.
+        // `0|none` vs `1|failed…` is the whole point: the first has no sum at
+        // all, the second has one whose alternative happens to be tag 0's
+        // neighbour. A present flag would have said the same thing; the boxed
+        // selector says it for free.
+        check(
+            rows == listOf(
+                "0|none",
+                "1|failed:negative count",
+                "2|absent",
+                "3|found:1",
+            )
+        ) { "Option<sum> value-form leaves: $rows" }
+
+        check(kept.size == 1)
+        kept[0].close()
+        check(kept[0].isClosed())
+
+        // The same field at a BUILDER position, where the sum stays raw — so the
+        // absent case is readable as a null TAG, ahead of any variant.
+        val absentTag = probeNew(9L, -2L, 0.0, boom) { seq, tag, _, _ -> "$seq:$tag" }
+        check(absentTag == "9:null") { "an absent sum nulls its selector: $absentTag" }
+        // …and the exact collision the boxing exists to prevent: a PRESENT sum
+        // whose alternative is `Lookup.Absent` is tag `0`. A raw `jint` selector
+        // would have made these two calls indistinguishable.
+        val presentTag = probeNew(9L, 0L, 0.0, boom) { seq, tag, _, _ -> "$seq:$tag" }
+        check(presentTag == "9:0") { "a present `Lookup.Absent` is tag 0, not null: $presentTag" }
     }
 
     // The same derived boundary reached through an `Option` — a CONDITIONAL

@@ -949,8 +949,9 @@ pub(crate) fn encode_plan_leaves(
         let leaf = &plan.leaves[seg.start];
         let (base, base_is_ref, path, _) = rebase(leaf);
         // The value to `match` on. The selector's own path reaches the sum
-        // (empty when the sum IS the value); no step on it is optional, since
-        // an optional sum is refused where the leaves are built.
+        // (empty when the sum IS the value), and a step on it MAY be optional:
+        // the refusal that used to guarantee otherwise is gone (#220), which is
+        // what the gate below exists for.
         //
         // A plain field chain is borrowed DIRECTLY (`&base.a.b`) rather than
         // through the base (`&(&base).a.b`). The two are the same value, but
@@ -958,8 +959,63 @@ pub(crate) fn encode_plan_leaves(
         // rejects once a sibling leaf has moved another field out of it — and
         // borrowing this field while sibling fields move is exactly what a
         // consuming value form does.
-        let (matched, lead) = project_leading_fields(&base, base_is_ref, &path);
-        let matched = fold_steps(&qualify, &path[lead..], matched, false);
+        let (projected, lead) = project_leading_fields(&base, base_is_ref, &path);
+        // An `Option<sum>` field gates the WHOLE segment, not each slot (#220).
+        // A sum's leaves are not independent — only one group is live per value
+        // — so absence cannot be the per-leaf `null` `reach_leaf` gives an
+        // ordinary optional field. It is one tuple bind whose `None` arm carries
+        // every slot's default, which is the shape a conditional value form's
+        // hoist already emits below; this applies it to an optional step inside
+        // the segment's own path.
+        let opt_at = (lead..path.len()).find(|&i| path[i].is_optional());
+        let (matched, gate) = match opt_at {
+            None => (fold_steps(&qualify, &path[lead..], projected, false), None),
+            Some(k) => {
+                // Through the optional step INCLUSIVE, then the rest off the
+                // binding — the same split `reach_leaf` makes, so the borrow in
+                // front of it stays the ordinary rule rather than a second
+                // statement of it.
+                let opt_e = fold_steps(&qualify, &path[lead..=k], projected, false);
+                let bind = format_ident!("__sg{}", seg.start);
+                // ONE optional step is what the gate below handles. A second
+                // one in the tail would compose `match &Option<..>` against bare
+                // variant patterns — the E0308 in the consumer's crate that the
+                // deleted `builder.rs` assert used to pre-empt by name, so the
+                // named diagnostic keeps a home here.
+                //
+                // `assert!`, not `debug_assert!`: a build script inherits the
+                // consumer's profile, so a debug-only check is absent from
+                // exactly the release build where a mis-emission costs the most
+                // to diagnose. Same rule, same phrasing, as the single-return
+                // optional-step assert in `reach_leaf` above.
+                //
+                // The condition is what actually breaks, not the stronger fact
+                // that happens to hold: every sum leaf's path stops AT the sum,
+                // so the tail is empty today, but a NON-optional tail composes
+                // correctly through `fold_steps` — refusing it would refuse a
+                // shape that works.
+                assert!(
+                    !path[k + 1..].iter().any(PathStep::is_optional),
+                    "jnigen unfold: leaf `{}` reaches its sum through TWO optional \
+                     steps — the segment gate has one `None` arm, so the second \
+                     would be matched as if it were the sum itself",
+                    leaf.name,
+                );
+                // What the `match` binds, asked of the step rather than assumed:
+                // the FIELD branch scrutinizes `&Option<_>` (that is what
+                // `bind_as_option` is for), so ergonomics binds `&Sum` — a
+                // borrow. Only an owned-yielding CALL binds an owned value. The
+                // literal `true` disagreed with `reach_leaf`, which passes
+                // `false` for its analogous recursion.
+                let inner = fold_steps(
+                    &qualify,
+                    &path[k + 1..],
+                    quote!(#bind),
+                    path[k].yields_owned(),
+                );
+                (inner, Some((k, opt_e, bind)))
+            }
+        };
         let (group_stmts, group_args) = encode_sum_group(
             ext,
             registry,
@@ -969,6 +1025,42 @@ pub(crate) fn encode_plan_leaves(
             fail,
             emit,
         );
+        let group_stmts = match gate {
+            None => group_stmts,
+            Some((k, opt_e, bind)) => {
+                let ids: Vec<&syn::Ident> = obj_idents[seg.clone()].iter().collect();
+                let slots: Vec<Slot> = plan.leaves[seg.clone()]
+                    .iter()
+                    .map(|l| leaf_slot(registry, l))
+                    .collect();
+                let tys = slots.iter().map(|s| &s.ty);
+                let defaults = slots.iter().map(|s| &s.default);
+                // A FIELD step composes to a borrow, so it goes through a
+                // coercion site and the destructure stops caring which
+                // representation the source spelled the optional as (#268). A
+                // CALL yields its own owned value, whose payload downstream may
+                // move, so it keeps the direct match — the same division
+                // `reach_leaf` makes.
+                let (prelude, scrutinee) = if path[k].is_field() {
+                    let opt_bind = format_ident!("__so{}", seg.start);
+                    (bind_as_option(&opt_e, &opt_bind), quote!(#opt_bind))
+                } else {
+                    (TokenStream::new(), opt_e)
+                };
+                quote! {
+                    let (#(#ids,)*): (#(#tys,)*) = {
+                        #prelude
+                        match #scrutinee {
+                            ::core::option::Option::Some(#bind) => {
+                                #group_stmts
+                                (#(#ids,)*)
+                            }
+                            ::core::option::Option::None => (#(#defaults,)*),
+                        }
+                    };
+                }
+            }
+        };
         // The whole segment — its slot declarations and its `match` — is
         // routed like any other leaf under the same form.
         match hoisted.conditional(&leaf.path) {

@@ -470,12 +470,14 @@ fn a_sum_field_crosses_as_its_selector_and_groups() {
     );
 }
 
-/// A sum's slots sit at a FIXED position in the leaf list, so the two shapes
-/// that would move or repeat them are refused by name rather than mis-emitted:
-/// `Vec<sum>` has variable arity, and `Option<sum>` would need a present flag
-/// beside the tag that an output leaf list cannot carry.
+/// A sum's slots sit at a FIXED position in the leaf list, so the shape that
+/// would repeat them is refused by name rather than mis-emitted: `Vec<sum>` has
+/// variable arity and no fixed layout to lay out.
+///
+/// `Option<sum>` used to be refused beside it; it no longer is (#220) — see
+/// [`an_optional_sum_field_gates_its_whole_segment`].
 #[test]
-fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
+fn a_vec_sum_field_is_rejected_by_name() {
     let loc = myflat_loc();
     let build = |field_ty: syn::Type| {
         let items = vec![
@@ -535,23 +537,234 @@ fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
             .map(|g| g.write_rust(dir.join("g.rs")));
     };
 
-    for (ty, want) in [
-        (syn::parse_quote!(Vec<ZOutcome>), "variable arity"),
-        (syn::parse_quote!(Option<ZOutcome>), "present flag"),
-    ] {
-        let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build(ty)))
-            .expect_err("a sum behind Option/Vec must be rejected");
-        let msg = err
-            .downcast_ref::<String>()
-            .cloned()
-            .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
-            .unwrap_or_default();
-        assert!(msg.contains(want), "expected `{want}` in: {msg}");
-        assert!(
-            msg.contains("ZReplyStruct.result"),
-            "the message names the offending field: {msg}"
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        build(syn::parse_quote!(Vec<ZOutcome>))
+    }))
+    .expect_err("a Vec of sums must be rejected");
+    let msg = err
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_default();
+    assert!(
+        msg.contains("variable arity"),
+        "expected the reason in: {msg}"
+    );
+    assert!(
+        msg.contains("ZReplyStruct.result"),
+        "the message names the offending field: {msg}"
+    );
+}
+
+/// `Option<sum>` as a value-form field (#220): the whole segment gates together.
+///
+/// A sum's leaves are not independent — only one group is live per value — so
+/// absence cannot be a per-leaf `null` the way it is for an ordinary optional
+/// field. The segment binds as ONE tuple whose `None` arm carries every slot's
+/// wire default, which is the shape a conditional value form's hoist already
+/// emits, applied to an optional step inside the segment's own path.
+///
+/// The selector is the one slot that must NOT stay a raw `jint`: zero is a real
+/// variant, so an absent sum needs a representation the tag's own domain does
+/// not provide. It boxes, and JVM null means "no value here" — the same rule
+/// that already holds for a sum under a conditional form, and the reason this
+/// needs no present flag beside the tag.
+#[test]
+fn an_optional_sum_field_gates_its_whole_segment() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| {
+        let items = vec![
+            (
+                syn::Item::Enum(syn::parse_quote!(
+                    pub enum ZOutcome {
+                        Empty,
+                        Failed(String),
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct ZReplyStruct {
+                        pub seq: i64,
+                        pub result: #field_ty,
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_reply_to_struct(r: &ZReply) -> ZReplyStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn z_reply_sub(cb: impl Fn(ZReply) + Send + Sync + 'static) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::ptr_class!(ZReply))
+                    .class(crate::sealed_class!(ZOutcome))
+                    .fun(prebindgen_registry::fun!(z_reply_sub)),
+            )
+            .expand(
+                prebindgen_registry::expand_return!(ZReply)
+                    .fields(prebindgen_registry::fields!(z_reply_to_struct)),
+            );
+        let dir = unique_test_dir("jnigen_vf_opt_sum");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = jni.build_with(registry).expect("resolve");
+        let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+            .expect("read rust");
+        let kotlin = gen
+            .write_kotlin(&dir.join("kotlin"))
+            .expect("write_kotlin")
+            .iter()
+            .map(|p| std::fs::read_to_string(p).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        (rust, kotlin)
+    };
+
+    let (rust, kotlin) = build(syn::parse_quote!(Option<ZOutcome>));
+    let rc: String = rust.split_whitespace().collect();
+
+    // The segment is one tuple bind over the field's `Option`, reached through a
+    // coercion site so the destructure does not care how the source spelled it.
+    assert!(
+        rc.contains(":&::core::option::Option<_>=&(&__vf0).result;"),
+        "the optional step is a coercion site over the field:\n{rust}"
+    );
+    assert!(
+        rc.contains("::core::option::Option::None=>{(jni::objects::JObject::null(),jni::objects::JObject::null(),)}"),
+        "the absent arm yields the whole segment's defaults as one tuple:\n{rust}"
+    );
+    // The selector boxes: `0` is `ZOutcome::Empty`, so a raw `jint` has no
+    // spelling left for "absent".
+    assert!(
+        rc.contains("jni::objects::JObject::null()"),
+        "an absent segment defaults its slots, the tag's to JVM null:\n{rust}"
+    );
+    // The live groups still convert exactly as an ungated sum's do.
+    assert!(
+        rust.contains("ZOutcome::Failed") && rust.contains("ZOutcome::Empty"),
+        "every alternative still gets its arm:\n{rust}"
+    );
+    // Kotlin reads absence off the selector, ahead of the real tags.
+    assert!(
+        kotlin.contains("null -> null"),
+        "the reassembly answers `null` for an absent sum, before tag 0:\n{kotlin}"
+    );
+
+    // The plain sibling leaf is unaffected — gating is the segment's, not the
+    // whole form's.
+    assert!(
+        rust.contains("seq"),
+        "a non-sum field beside it still crosses normally:\n{rust}"
+    );
+}
+
+/// The dual: a BARE sum field takes no gate at all, so the optional path is not
+/// entered when there is nothing to gate — the selector stays a raw `jint` and
+/// the segment stays a plain `match` with no tuple bind.
+#[test]
+fn a_bare_sum_field_takes_no_gate() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum ZOutcome {
+                    Empty,
+                    Failed(String),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZReplyStruct {
+                    pub result: ZOutcome,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_reply_to_struct(r: &ZReply) -> ZReplyStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_reply_sub(cb: impl Fn(ZReply) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZReply))
+                .class(crate::sealed_class!(ZOutcome))
+                .fun(prebindgen_registry::fun!(z_reply_sub)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZReply)
+                .fields(prebindgen_registry::fields!(z_reply_to_struct)),
         );
-    }
+    let dir = unique_test_dir("jnigen_vf_bare_sum");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
+        .expect("read rust");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Whitespace-stripped, as the sibling test asserts: `prettyplease` breaks a
+    // tuple-valued arm after the `{`, so `None => (` on one line never appears
+    // in EITHER emission — the assertion would hold whether or not the gate was
+    // emitted, and pin nothing.
+    assert!(
+        !rust
+            .split_whitespace()
+            .collect::<String>()
+            .contains("::core::option::Option::None=>{("),
+        "nothing to gate, so no tuple bind:\n{rust}"
+    );
+    assert!(
+        !kotlin.contains("null -> null"),
+        "the selector carries no absent case:\n{kotlin}"
+    );
+    assert!(
+        rust.contains("ZOutcome::Failed"),
+        "the segment still emits its arms:\n{rust}"
+    );
 }
 
 /// `Vec<data class>` crosses in BOTH positions — as a return and as a value-form

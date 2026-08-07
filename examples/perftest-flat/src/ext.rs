@@ -66,6 +66,15 @@ mod handles {
         pub(super) label: String,
     }
 
+    /// The `Option<sum>` value-form field (#220), kept apart from [`Report`]
+    /// on purpose: `Report` is embedded twice in [`Ledger`], so a field there
+    /// would add three positional slots to `report_each` and six to
+    /// `ledger_each` and bury the shape under signature churn.
+    pub struct Probe {
+        pub(super) seq: i64,
+        pub(super) outcome: Option<Lookup>,
+    }
+
     /// Two bounded-`convert!` leaves, one with a niche of its own and one
     /// without, behind an `Option` — see [`super::Span`] (#142).
     pub struct Span {
@@ -1657,6 +1666,62 @@ pub fn report_each(n: i64, sink: impl Fn(Report) + Send + Sync + 'static) {
             i % 2 == 0,
             format!("r{i}"),
         ));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Probe — a value form with an `Option<sum>` FIELD (#220).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The handle whose boundary is derived from [`ProbeStruct`].
+#[prebindgen]
+pub type Probe = handles::Probe;
+
+/// [`Probe`]'s value form. `outcome` is the shape this exists for: a sum behind
+/// an `Option`, which used to be refused here while the very same field was
+/// accepted on a `data_class`.
+///
+/// Absence rides the **selector's own nullability**, not a present flag beside
+/// it — `Lookup::Absent` is tag `0`, so a raw `jint` has no spelling left for
+/// "no sum at all" and the tag boxes. That is the same rule a sum under a
+/// conditional value form already crosses by, which is why this needed no new
+/// leaf kind.
+#[prebindgen]
+pub struct ProbeStruct {
+    /// A plain leaf beside the gated segment: gating is the segment's, not the
+    /// whole form's.
+    pub seq: i64,
+    /// Absent, or one of `Lookup`'s alternatives — including the one carrying
+    /// an opaque handle.
+    pub outcome: Option<Lookup>,
+}
+
+/// Build a [`Probe`]. `count < -1` leaves the outcome absent; anything else
+/// takes it from [`lookup_of`], so all four cases (absent, failed, empty,
+/// found-with-a-handle) are reachable from one argument.
+#[prebindgen]
+pub fn probe_new(seq: i64, count: i64, total: f64) -> Probe {
+    Probe {
+        seq,
+        outcome: (count >= -1).then(|| lookup_of(count, total)),
+    }
+}
+
+/// The value form accessor `expand_return!(Probe).fields(fields!(..))` names.
+#[prebindgen]
+pub fn probe_to_struct(p: &Probe) -> ProbeStruct {
+    ProbeStruct {
+        seq: p.seq,
+        outcome: p.outcome.clone(),
+    }
+}
+
+/// Deliver [`Probe`]s to a callback, one per `i` starting at `-2`, so the first
+/// is the ABSENT case and the rest walk `Lookup`'s alternatives.
+#[prebindgen]
+pub fn probe_each(n: i64, total: f64, sink: impl Fn(Probe) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(probe_new(i, i - 2, total));
     }
 }
 
