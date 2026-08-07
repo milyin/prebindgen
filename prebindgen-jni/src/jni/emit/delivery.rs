@@ -949,8 +949,9 @@ pub(crate) fn encode_plan_leaves(
         let leaf = &plan.leaves[seg.start];
         let (base, base_is_ref, path, _) = rebase(leaf);
         // The value to `match` on. The selector's own path reaches the sum
-        // (empty when the sum IS the value); no step on it is optional, since
-        // an optional sum is refused where the leaves are built.
+        // (empty when the sum IS the value), and a step on it MAY be optional:
+        // the refusal that used to guarantee otherwise is gone (#220), which is
+        // what the gate below exists for.
         //
         // A plain field chain is borrowed DIRECTLY (`&base.a.b`) rather than
         // through the base (`&(&base).a.b`). The two are the same value, but
@@ -976,7 +977,30 @@ pub(crate) fn encode_plan_leaves(
                 // statement of it.
                 let opt_e = fold_steps(&qualify, &path[lead..=k], projected, false);
                 let bind = format_ident!("__sg{}", seg.start);
-                let inner = fold_steps(&qualify, &path[k + 1..], quote!(#bind), true);
+                // The tail is empty for every shape that reaches here: a sum
+                // leaf's path stops AT the sum. Stated because two things below
+                // would otherwise be quietly wrong for a non-empty one — a
+                // second optional step would compose `match &Option<..>` against
+                // bare variant patterns, which is the E0308 the deleted
+                // `builder.rs` assert used to pre-empt by name.
+                debug_assert!(
+                    path[k + 1..].is_empty(),
+                    "sum segment: a step after the gated one ({} left) — the tail \
+                     is assumed empty here",
+                    path.len() - k - 1,
+                );
+                // What the `match` binds, asked of the step rather than assumed:
+                // the FIELD branch scrutinizes `&Option<_>` (that is what
+                // `bind_as_option` is for), so ergonomics binds `&Sum` — a
+                // borrow. Only an owned-yielding CALL binds an owned value. The
+                // literal `true` disagreed with `reach_leaf`, which passes
+                // `false` for its analogous recursion.
+                let inner = fold_steps(
+                    &qualify,
+                    &path[k + 1..],
+                    quote!(#bind),
+                    path[k].yields_owned(),
+                );
                 (inner, Some((k, opt_e, bind)))
             }
         };

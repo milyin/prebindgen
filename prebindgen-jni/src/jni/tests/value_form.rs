@@ -746,8 +746,15 @@ fn a_bare_sum_field_takes_no_gate() {
         .collect::<Vec<_>>()
         .join("\n");
 
+    // Whitespace-stripped, as the sibling test asserts: `prettyplease` breaks a
+    // tuple-valued arm after the `{`, so `None => (` on one line never appears
+    // in EITHER emission — the assertion would hold whether or not the gate was
+    // emitted, and pin nothing.
     assert!(
-        !rust.contains("::core::option::Option::None => ("),
+        !rust
+            .split_whitespace()
+            .collect::<String>()
+            .contains("::core::option::Option::None=>{("),
         "nothing to gate, so no tuple bind:\n{rust}"
     );
     assert!(
