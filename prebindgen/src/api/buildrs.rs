@@ -16,12 +16,15 @@ use crate::{CRATE_NAME_FILE, FEATURES_FILE};
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// // build.rs
 /// fn main() {
 ///     prebindgen::init_prebindgen_out_dir();
 /// }
 /// ```
+// The `fn main` above is the subject of the example, not boilerplate rustdoc
+// would supply: this shows a whole `build.rs`, and where the call sits in it.
+#[allow(clippy::needless_doctest_main)]
 pub fn init_prebindgen_out_dir() {
     env::var("OUT_DIR").expect(
         "OUT_DIR environment variable not set. This function should be called from build.rs.",
