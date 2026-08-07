@@ -2565,9 +2565,10 @@ impl Declarations {
             return Some(self.str_ref_output());
         }
         // An owned string in any representation the model erases — `Box<String>`,
-        // `Cow<'_, str>`. It classifies each of them `Str`, and the body was
-        // already representation-agnostic: `v.as_str()` reaches through any of
-        // them by `Deref`. Only the *dispatch* was spelling-keyed, as one
+        // `Cow<'_, str>`. It classifies each of them `Str`, and the body is
+        // representation-agnostic: `&*v` reaches through any of them by `Deref`
+        // to something `new_string` accepts (`&String` through a `Box`, `&str`
+        // through a `Cow`). Only the *dispatch* was spelling-keyed, as one
         // hardcoded `TypeKey == "Box < String >"` arm (#270).
         //
         // Plain `String` keeps its own earlier arm in `primitive_output`, whose
@@ -2579,16 +2580,28 @@ impl Declarations {
         ) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
-                env.new_string(v.as_str()).map_err(|e| {
+                env.new_string(&*v).map_err(|e| {
                     <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
                 })?
             });
             let kotlin_name = self.override_kotlin_name(&reading.key(), Some(KtType::string()));
             let niches = default_niches_for_wire(&wire);
+            // A `Cow` accessor may spell its own path any way it likes, but the
+            // generated fn's param type has to resolve with no imports in the
+            // consumer crate — normalize it, exactly as the `Cow<'_, [u8]>` arm
+            // below does. Every other spelling here (`String`, `Box<String>`)
+            // is already prelude-resolvable, so it keeps its own.
+            let function = match reading.kind() {
+                prebindgen_registry::flat::TypeKind::Cow { .. } => {
+                    let norm: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, str>);
+                    self.build_output_fn(&norm, &wire, &body, None)
+                }
+                _ => self.build_output_fn_of(reading, &wire, &body, None, emit),
+            };
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
-                function: self.build_output_fn_of(reading, &wire, &body, None, emit),
+                function,
                 destination: wire,
                 niches,
                 metadata: self.framework_meta(kotlin_name),

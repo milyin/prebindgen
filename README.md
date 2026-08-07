@@ -220,6 +220,7 @@ See example projects in the [examples directory](https://github.com/milyin/prebi
 - **example-cbindgen**: experimental C proof of concept using `prebindgen-c`'s `CbindgenBuilder` + cbindgen for C headers
 - **perftest-flat** / **perftest-c** / **perftest-kotlin**: A shared flat library and its performance-oriented C and Kotlin/JNI bindings
 - **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `prebindgen-jni` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
+- **emitcheck**: A binding with no JVM side whose only job is to *compile* the emitted Rust, for the type spellings the adapter unit tests reach and the examples above do not (`Box<Option<T>>`, `Cow<'_, str>`, …). Success is `cargo build`.
 
 ## Documentation
 
