@@ -110,7 +110,9 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
 - `reading_series` — `fun readingSeries(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading>`
   - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
+- `ref_vec_id_sum` — `fun refVecIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `report_each` — `fun reportEach(n: Long, sink: ReportCallback, onError: JniErrorHandler<Unit>)`
+- `slice_id_sum` — `fun sliceIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `stamp_new` — `fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp`
   - shaped by: return `Stamp` decomposed → [secs, nanos] (Callback delivery)
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp>`

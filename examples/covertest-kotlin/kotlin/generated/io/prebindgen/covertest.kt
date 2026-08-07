@@ -1101,7 +1101,11 @@ internal object CovNative {
 
     external fun readingSeries(n: Int, acc: Any?, fold: Any, errorSink: Any): Any?
 
+    external fun refVecIdSum(ps: Long, errorSink: Any): Long
+
     external fun reportEach(n: Long, sink: Any, errorSink: Any)
+
+    external fun sliceIdSum(ps: Long, errorSink: Any): Long
 
     external fun stampNanos(sSecs: Long, sNanos: Long, errorSink: Any): Long
 

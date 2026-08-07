@@ -1778,6 +1778,59 @@ public fun boxedRunIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Lon
 }
 
 /**
+ * The **borrowed** run spelled as a slice — the control half of the pair with
+ * [`ref_vec_id_sum`].
+ *
+ * Declared as a sum rather than reusing [`crate::storage_put_slice`] so the two
+ * spellings can be weighed against each other directly: same argument, same
+ * answer, or the claim is only that each compiles.
+ */
+public fun sliceIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __vec_ps = CovNative.payloadVecNew(ps.size)
+    val __ret = try {
+        for (__e in ps) {
+            CovNative.payloadVecPush(__vec_ps, __e.id, __e.seq, __e.value, __e.flag, __e.label)
+        }
+        CovNative.sliceIdSum(__vec_ps, __bcap)
+    } finally {
+        CovNative.payloadVecFree(__vec_ps)
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * The same borrowed run spelled `&Vec<T>`, which is **one type** to the model:
+ * `sequence_elem` answers for `&[T]` and `&Vec<T>` alike, so both reach the
+ * Vec-build path and the emitter has to serve both.
+ *
+ * It did not. The by-ref lowering hands the callee a borrow of the transient
+ * Rust-side `Vec`, and ascribing that borrow `&[T]` coerced it at the `let` —
+ * so this spelling got a `&[Payload]` and the generated crate did not build
+ * (`E0308`; the deref coercion runs `&Vec<T>` → `&[T]`, not back). #384.
+ *
+ * Load-bearing, and the only kind of fixture that can be: a lib test emits
+ * tokens and never compiles them, while this crate's binding is `include!`d
+ * and built. Put the ascription back and `cargo build -p covertest-kotlin`
+ * fails here.
+ */
+public fun refVecIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __vec_ps = CovNative.payloadVecNew(ps.size)
+    val __ret = try {
+        for (__e in ps) {
+            CovNative.payloadVecPush(__vec_ps, __e.id, __e.seq, __e.value, __e.flag, __e.label)
+        }
+        CovNative.refVecIdSum(__vec_ps, __bcap)
+    } finally {
+        CovNative.payloadVecFree(__vec_ps)
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * A transparent wrapper over a **decomposed** return — the shape `boxed_note_echo`
  * does not reach.
  *
