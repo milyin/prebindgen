@@ -1763,7 +1763,8 @@ public fun boxedRunIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Lon
 }
 
 /**
- * The **borrowed** run, spelled as a slice — the control for the pair below.
+ * The **borrowed** run spelled as a slice — the control half of the pair with
+ * [`ref_vec_id_sum`].
  *
  * Declared as a sum rather than reusing [`crate::storage_put_slice`] so the two
  * spellings can be weighed against each other directly: same argument, same
