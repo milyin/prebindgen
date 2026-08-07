@@ -554,6 +554,142 @@ fn a_sum_field_behind_option_or_vec_is_rejected_by_name() {
     }
 }
 
+/// `Vec<data class>` crosses in BOTH positions — as a return and as a value-form
+/// **field** — with its elements folded from raw leaves either way (#217).
+///
+/// #217 reported the field position as a hard panic ("variable arity"), on the
+/// reasoning that the `fromParts` bridge is fixed-layout: `encode_plan`,
+/// `flatten_struct_factory` and `build_data_class` enumerate identical slots in
+/// identical order, and a runtime length breaks that agreement. That was true,
+/// and the resolution was not the array codegen the issue anticipated — it is
+/// that the field never needs to enter the fixed layout at all. It stays **one**
+/// slot whose own converter is the element's leaf-vec fold, so the slot count is
+/// still fixed and the elements still cross as raw leaves.
+///
+/// So the guard the issue names is now unreachable: it sits inside
+/// `classify_field`'s `TypeKind::DataStruct` branch, and `type_kind` answers
+/// `DataStruct` only for a key that is a single identifier — which a `Vec<_>`
+/// key never is. The `Vec<sum>` guard beside it is a different question and
+/// stays live (see
+/// [`a_sum_field_behind_option_or_vec_is_rejected_by_name`]).
+///
+/// **The raw-leaf fold is asserted separately, and that is the point.** #217's
+/// standing warning is that silently degrading the field to a whole-object
+/// crossing would reintroduce the per-value JVM object the bridge exists to
+/// avoid. Such a degradation would still surface as `List<Rec>` and still build
+/// through `fromParts` — it would pass every other assertion here. Only the
+/// folder assertion would catch it.
+#[test]
+fn a_vec_of_data_classes_crosses_as_a_return_and_as_a_field() {
+    let loc = myflat_loc();
+    // `field` = the value form's field type. `None` builds only the control
+    // (the `Vec<Rec>` return), so the two claims do not share a failure mode.
+    let build = |field: Option<syn::Type>| {
+        let mut items = vec![
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct Rec {
+                        pub id: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+            // The CONTROL: the same `Vec<Rec>`, in the position that works.
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn stack_records(n: i64) -> Vec<Rec> {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let has_field = field.is_some();
+        if let Some(field) = field {
+            items.push((
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct StackStruct {
+                        pub records: #field,
+                    }
+                )),
+                loc.clone(),
+            ));
+            // Returning the struct by value is what BUILDS the flattened
+            // bridge (`wire_fixed_returns` → `build_struct_plan`). Declaring
+            // the data class alone only renders it, with a whole-object
+            // `fromParts`, and never asks `classify_field` anything.
+            items.push((
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn stack_struct_of(n: i64) -> StackStruct {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ));
+        }
+        let registry =
+            crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let mut jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::data_class!(Rec))
+                    .fun(prebindgen_registry::fun!(stack_records)),
+            );
+        if has_field {
+            jni = jni.package(
+                crate::package!()
+                    .class(crate::data_class!(StackStruct))
+                    .fun(prebindgen_registry::fun!(stack_struct_of)),
+            );
+        }
+        let dir = unique_test_dir("jnigen_vec_dataclass_field");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = jni.build_with(registry).expect("resolve");
+        let kdir = dir.join("kotlin");
+        let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+        gen.write_rust(dir.join("g.rs")).expect("write_rust");
+        paths
+            .iter()
+            .map(|p| std::fs::read_to_string(p).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    // 1. The control. Without this the refusal below says nothing about
+    //    POSITION — it would be satisfied by `Vec<Rec>` failing everywhere.
+    let kotlin = build(None);
+    let kc: String = kotlin.split_whitespace().collect();
+    assert!(
+        kc.contains("stackRecords") && kc.contains("List<Rec>"),
+        "`Vec<Rec>` must cross as `List<Rec>` in the RETURN position — that is \
+         the half of the asymmetry that works:\n{kotlin}"
+    );
+
+    // 2. The same element type as a FIELD of a value form. This is the
+    //    position #217 reported as a hard panic; it crosses.
+    let kotlin = build(Some(syn::parse_quote!(Vec<Rec>)));
+    let kc: String = kotlin.split_whitespace().collect();
+    assert!(
+        kc.contains("publicdataclassStackStruct(valrecords:List<Rec>)"),
+        "the `Vec<Rec>` FIELD must surface as `List<Rec>`:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("StackStructBuilder{records->StackStruct.fromParts(records)}"),
+        "the field is delivered as one builder slot:\n{kotlin}"
+    );
+    // The property the guard existed to protect: elements are rebuilt Kotlin-side
+    // from RAW leaves, so no per-element JVM object crosses the boundary. A
+    // whole-object degradation would satisfy the two assertions above and fail
+    // this one, which is why it is asserted separately.
+    assert!(
+        kc.contains("RecFolderRaw{acc,id->acc.add(Rec.fromParts(id));acc}"),
+        "each element must be folded from its raw leaves, not crossed as an \
+         object — that is what the fixed bridge exists to avoid:\n{kotlin}"
+    );
+}
+
 /// A field's optional-ness is read off `kind`; **how Rust spells it is the
 /// source's business**, and the emitter must accept any of the spellings.
 ///
