@@ -2,6 +2,7 @@
 package io.prebindgen.covertest.model
 
 import io.prebindgen.covertest.CovNative
+import io.prebindgen.covertest.Dossier
 import io.prebindgen.covertest.DurationCallback
 import io.prebindgen.covertest.Holder
 import io.prebindgen.covertest.JniErrorHandler
@@ -80,19 +81,31 @@ public sealed interface Hold {
  * is never wrapped.
  *
  * JVM-side surface for the native Rust `Lookup` sum: exactly one alternative is live.
+ *
+ * The live alternative may carry a native handle, so this value is `AutoCloseable`: closing it closes whatever the live alternative holds, and is a no-op for the alternatives that hold nothing native.
  */
-public sealed interface Lookup {
+public sealed interface Lookup : AutoCloseable {
     /** Nothing matched — only the tag is live. */
-    public data object Absent : Lookup
+    public data object Absent : Lookup {
+        override fun close() {
+        }
+    }
 
     /** What matched, as a handle the caller owns (and must close). */
-    public data class Found(public val v0: Summary) : Lookup
+    public data class Found(public val v0: Summary) : Lookup {
+        override fun close() {
+            v0.close()
+        }
+    }
 
     /**
      * Why the lookup could not run — a `String` beside the handle group, so an
      * inert object slot is exercised alongside an inert primitive one.
      */
-    public data class Failed(public val v0: String) : Lookup
+    public data class Failed(public val v0: String) : Lookup {
+        override fun close() {
+        }
+    }
 
     public companion object {
         @JvmStatic
@@ -864,6 +877,30 @@ public data class Unsigned(val byte: Int, val short: Int, val int: Long, val lon
     }
 }
 
+/**
+ * The **third** position a handle can be reached through: a `data_class` field
+ * whose type is a handle-carrying sum. `Holder` covers the plain-handle field
+ * beside it, and the point of this one is that the two behave alike — the
+ * container is `AutoCloseable` and its `close()` cascades either way, because
+ * the field's type is an implementation detail and must not decide who frees
+ * the handle (#218).
+ */
+public data class Verdict(val id: Long, val outcome: Lookup) : AutoCloseable {
+    override fun close() {
+        outcome.close()
+    }
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            outcome__tag: Int,
+            outcome_found_v0: Long,
+            outcome_failed_v0: String?,
+        ): Verdict = Verdict(id, when (outcome__tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(outcome_found_v0)); 2 -> Lookup.Failed(outcome_failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $outcome__tag") })
+    }
+}
+
 /** Typed handle for a native Zenoh `Report`. */
 public class Report(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -901,9 +938,12 @@ public fun LookupCallback.asRaw(): LookupCallbackRaw =
         tag,
         found_v0,
         failed_v0 ->
-        run(
-            when (tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(found_v0)); 2 -> Lookup.Failed(failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $tag") }
-        )
+        val __own0 = when (tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(found_v0)); 2 -> Lookup.Failed(failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $tag") }
+        try {
+            run(__own0)
+        } finally {
+            __own0.close()
+        }
     }
 
 public fun interface ReadingCallback {
@@ -973,15 +1013,12 @@ public fun ReportCallback.asRaw(): ReportCallbackRaw =
         outcome__found_v0,
         outcome__failed_v0,
         label ->
-        run(
-            summary__count,
-            summary__total,
-            taken,
-            origin__secs,
-            origin__nanos,
-            when (outcome__tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(outcome__found_v0)); 2 -> Lookup.Failed(outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $outcome__tag") },
-            label
-        )
+        val __own0 = when (outcome__tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(outcome__found_v0)); 2 -> Lookup.Failed(outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $outcome__tag") }
+        try {
+            run(summary__count, summary__total, taken, origin__secs, origin__nanos, __own0, label)
+        } finally {
+            __own0.close()
+        }
     }
 
 public fun interface ArraysBuilder<out R> {
@@ -1547,14 +1584,42 @@ public fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>
  * delivered in `count` order starting at `-1`, so `n >= 3` covers all three:
  * `Failed` (`i = 0`), `Absent` (`i = 1`), then `Found` with an increasing
  * count. A live group hands a native resource to the callback while the inert
- * groups' slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
- * but not closed by the proxy: it is the callback body's to close, exactly as
- * for a returned sum.
+ * groups' slots stay defaulted. The proxy closes the reassembled value after
+ * `run` returns — close-unless-taken, exactly as for a handle passed directly
+ * to a callback (#218), so a body that means to outlive the call must `take()`
+ * the payload.
  */
 public fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: JniErrorHandler<Unit>) {
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.lookupEach(n, total, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/** Build a [`Verdict`] whose outcome comes from [`lookup_of`]. */
+public fun verdictNew(
+    id: Long,
+    count: Long,
+    total: Double,
+    onError: JniErrorHandler<Verdict>,
+): Verdict {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.verdictNew(id, count, total, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Build a [`Dossier`] over a fresh [`Summary`] — the two-level container. */
+public fun dossierNew(
+    note: Long,
+    tag: Long,
+    count: Long,
+    total: Double,
+    onError: JniErrorHandler<Dossier>,
+): Dossier {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.dossierNew(note, tag, count, total, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
 }
 
 /**

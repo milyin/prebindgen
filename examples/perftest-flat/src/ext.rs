@@ -333,13 +333,66 @@ pub fn lookup_of(count: i64, total: f64) -> Lookup {
 /// delivered in `count` order starting at `-1`, so `n >= 3` covers all three:
 /// `Failed` (`i = 0`), `Absent` (`i = 1`), then `Found` with an increasing
 /// count. A live group hands a native resource to the callback while the inert
-/// groups' slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
-/// but not closed by the proxy: it is the callback body's to close, exactly as
-/// for a returned sum.
+/// groups' slots stay defaulted. The proxy closes the reassembled value after
+/// `run` returns — close-unless-taken, exactly as for a handle passed directly
+/// to a callback (#218), so a body that means to outlive the call must `take()`
+/// the payload.
 #[prebindgen]
 pub fn lookup_each(n: i64, total: f64, sink: impl Fn(Lookup) + Send + Sync + 'static) {
     for i in 0..n {
         sink(lookup_of(i - 1, total));
+    }
+}
+
+/// The **third** position a handle can be reached through: a `data_class` field
+/// whose type is a handle-carrying sum. `Holder` covers the plain-handle field
+/// beside it, and the point of this one is that the two behave alike — the
+/// container is `AutoCloseable` and its `close()` cascades either way, because
+/// the field's type is an implementation detail and must not decide who frees
+/// the handle (#218).
+#[prebindgen]
+pub struct Verdict {
+    pub id: i64,
+    /// One alternative carries a `Summary` handle; closing the `Verdict`
+    /// closes it, through `Lookup`'s own `close()`.
+    pub outcome: Lookup,
+}
+
+/// Build a [`Verdict`] whose outcome comes from [`lookup_of`].
+#[prebindgen]
+pub fn verdict_new(id: i64, count: i64, total: f64) -> Verdict {
+    Verdict {
+        id,
+        outcome: lookup_of(count, total),
+    }
+}
+
+/// The **fourth** position, and the last row of the same table: a `data_class`
+/// field whose type is another `data_class` that carries the handle. Nothing
+/// here is a handle and nothing here is a sum — `Dossier` only *reaches* one,
+/// two levels down, and must still close it (#218).
+///
+/// The cascade this emits is one line, `holder.close()`, which is correct only
+/// because [`Holder`] was independently rendered `AutoCloseable` by its own
+/// pass. An emission test cannot tell: it never compiles the inner class. This
+/// one is exercised from the JVM harness, where a `Dossier` that closed
+/// nothing, or an inner class without a `close()` to call, does not build.
+#[prebindgen]
+pub struct Dossier {
+    pub note: i64,
+    /// A plain data class whose own field is the `Summary` handle.
+    pub holder: Holder,
+}
+
+/// Build a [`Dossier`] over a fresh [`Summary`] — the two-level container.
+#[prebindgen]
+pub fn dossier_new(note: i64, tag: i64, count: i64, total: f64) -> Dossier {
+    Dossier {
+        note,
+        holder: Holder {
+            tag,
+            summary: Summary { count, total },
+        },
     }
 }
 

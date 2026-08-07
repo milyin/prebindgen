@@ -185,9 +185,9 @@ public data class RecoveryConfig(val mode: RecoveryMode?, val retentionPeriod: L
 ### 4.3 Output path (Rust → Kotlin)
 
 `PlanFieldKind::Sum { tag_slot, variants }` joins the shared bridge plan
-(`prebindgen/src/api/lang/jnigen/jni/struct_plan.rs`). The Rust encoder emits **one `match`**
+(`prebindgen-jni/src/jni/struct_plan.rs`). The Rust encoder emits **one `match`**
 binding the tag and every slot, inert slots filled by the existing
-`primitive_default_for_descriptor` (`prebindgen/src/api/lang/jnigen/jni/emit/struct_out.rs:51`):
+`primitive_default_for_descriptor` (`prebindgen-jni/src/jni/emit/struct_out.rs`):
 
 ```rust
 let (mode__present, mode__tag, mode_periodic_queries_period) = match &v.mode {
@@ -204,7 +204,7 @@ for the sum, and both sides enumerate the same slots in the same order because b
 ### 4.4 Input path (Kotlin → Rust)
 
 `FlatFieldNode::Sum` joins `Value` / `Nested`
-(`prebindgen/src/api/lang/jnigen/jni/emit/flat_input.rs:349`), and `FlatInputPlan.root` generalizes
+(`prebindgen-jni/src/jni/emit/flat_input.rs`), and `FlatInputPlan.root` generalizes
 from `FlatStructNode` to a struct-or-sum root so a **sum-typed parameter** flattens too. Extern
 signature:
 
@@ -303,21 +303,42 @@ re-asserted inside its own live arm. Primitive slots keep their `0`/`false` defa
 handle payload rides its raw `jlong`, so an inert handle group is the `0L` sentinel that is simply
 never wrapped.
 
-**Who closes a handle payload: the receiver, in both positions.** A sum payload is a plan **leaf**,
-so it takes `WrapKind::Handle` — the generated code wraps the pointer into its typed handle class
-and stops there. It does *not* take the `WrapKind::HandleOwned` contract that a plan-less
-`impl Fn(Handle)` argument gets, where the proxy also `close()`s the handle in a `finally`
-(close-unless-taken). So:
+**Who closes a handle payload: whoever would close a bare handle in the same position.** A sum that
+reaches an owned handle is itself `AutoCloseable` — the generated `sealed interface` declares it and
+each variant class overrides `close()`, closing its own payload or doing nothing. So the `when` over
+the alternatives is emitted **once**, in the sum, and every position that holds one just calls
+`close()`:
 
-- a **returned** sum hands over a handle the caller owns and must `close()`;
-- a sum delivered to a **callback** does the same — the handle is live for the duration of `run` and
-  stays live after it returns, and closing it is the receiver's job.
+- a **returned** sum hands over a value the caller owns and must `close()` — as a returned handle does;
+- a sum delivered to a **callback** is closed by the `asRaw` proxy in a `finally` after `run`
+  (close-unless-taken: a no-op if the receiver `take()`-ed the payload) — as a plan-less
+  `impl Fn(Handle)` argument is;
+- a sum held in a **data-class field** is closed by the container's own `close()` cascade — as a
+  handle-typed field is;
+- an **element of a fold** (`fold(acc) { acc, element -> … }` over a sequence of such values) is a
+  callback argument like any other, so it is closed after each `run` — which means a folder that
+  accumulates its elements (`{ acc, e -> acc + e }`, the most natural body there is) accumulates
+  closed handles unless it `take()`s each one. This is the same rule, but it is **not** a sum-only
+  rule: it applies to any element type that reaches a handle, a nested `data_class` included.
 
-The two positions agree, which is the point: the reassembly comes from one derivation, so the
-ownership contract cannot differ between them. Both are exercised on the JVM in
-`examples/covertest-kotlin` ("sum return with a handle payload", "sum with a handle payload
-delivered to a callback"), the latter asserting the handle is usable inside `run` and still
-closeable afterwards.
+The three positions agree, which is the point, and the agreement is now with the *bare handle* in
+each of them rather than only with each other. Before #218 a sum payload took `WrapKind::Handle` and
+stopped there, so in the callback and data-class positions the handle was the receiver's to close
+while the same handle passed directly was not — ownership moved when a field or argument changed
+spelling, with nothing in the generated Kotlin saying so. Since the reassembly comes from one
+derivation, that difference could never have been a deliberate contract.
+
+The same rule reaches a handle held through a **nested data class**, which had the identical gap and
+no issue of its own.
+
+Every row is exercised on the JVM in `examples/covertest-kotlin`: "sum return with a handle
+payload", "sum with a handle payload delivered to a callback" (which asserts the payload is usable
+inside `run`, closed once `run` returns, and kept alive across the boundary by `take()`), "a
+data-class field reaching a handle through a sum cascades", and "…through a nested data class
+cascades". The last one earns its place by *compiling*: its container's cascade is a one-line
+`holder.close()` that frees something only because the inner class was independently rendered
+`AutoCloseable`, and an emission test — which never compiles the inner class — cannot tell the
+difference.
 
 **A borrowed sum return (`&E`, `Option<&E>`) crosses like an owned one.** `unfold::returns_type`
 peels the leading `&` and `wire_fixed_returns` records `by_ref`, so the encoder matches *through*

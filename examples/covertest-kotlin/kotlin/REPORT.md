@@ -74,6 +74,7 @@ Base package: `io.prebindgen.covertest`
 - `boxed_run_id_sum` — `fun boxedRunIdSum(ps: List<Payload>, onError: JniErrorHandler<Long>): Long`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
+- `dossier_new` — `fun dossierNew(note: Long, tag: Long, count: Long, total: Double, onError: JniErrorHandler<Dossier>): Dossier`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`
   - shaped by: return `DurationBoundary` decomposed → [required, delay] (Callback delivery)
 - `duration_emit` — `fun durationEmit(value: ULong, f: DurationCallback, onError: JniErrorHandler<Unit>)`
@@ -126,6 +127,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Unsigned` decomposed → [byte, short, int, long, maybeLong] (Callback delivery)
 - `unsigned_series` — `fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong>`
   - shaped by: return `u64` decomposed → [] (Callback delivery)
+- `verdict_new` — `fun verdictNew(id: Long, count: Long, total: Double, onError: JniErrorHandler<Verdict>): Verdict`
 - `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`
 
 ## package `io.prebindgen.covertest.storage`
@@ -198,6 +200,7 @@ Base package: `io.prebindgen.covertest`
 - `Arrays`: data_class → `io.prebindgen.covertest.model.Arrays` (wire `jni :: objects :: JObject`)
 - `BlobValue`: data_class → `io.prebindgen.covertest.model.BlobValue` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `CacheConfig`: data_class → `io.prebindgen.covertest.model.CacheConfig` (wire `jni :: objects :: JObject`)
+- `Dossier`: data_class → `io.prebindgen.covertest.Dossier` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
@@ -229,6 +232,7 @@ Base package: `io.prebindgen.covertest`
 - `Summary`: ptr_class → `io.prebindgen.covertest.analytics.Summary` (wire `jni :: sys :: jlong`)
 - `Tagged`: data_class → `io.prebindgen.covertest.model.Tagged` (wire `jni :: objects :: JObject`)
 - `Unsigned`: data_class → `io.prebindgen.covertest.model.Unsigned` (wire `jni :: objects :: JObject`)
+- `Verdict`: data_class → `io.prebindgen.covertest.model.Verdict` (wire `jni :: objects :: JObject`)
 - `WrappedFields`: data_class → `io.prebindgen.covertest.WrappedFields` (wire `jni :: objects :: JObject`)
 
 ## conversions
