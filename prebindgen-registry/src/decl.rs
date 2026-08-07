@@ -102,7 +102,7 @@ macro_rules! sig {
 }
 
 /// Build a `syn::Type` from a bare Rust type token: `ty!(i32)`. The type
-/// argument of decl methods like [`ConvertSourceDecl::error`] — always
+/// argument of decl methods like [`ConvertSourceDecl::from_type`] — always
 /// yields the concrete `syn::Type`, so no inference context is needed (see
 /// [`ident!`](crate::ident) for the E0283 background).
 #[macro_export]
@@ -113,7 +113,8 @@ macro_rules! ty {
 }
 
 /// Build a `syn::Path` from a bare path token: `path!(crate::conv::f)`. The
-/// callable argument of [`ConvertSourceDecl::with`] and [`ConstDecl::with`].
+/// callable argument of [`FunctionDecl::new_local`] and of an adapter's
+/// `ConstDecl::with`.
 #[macro_export]
 macro_rules! path {
     ($p:path) => {
@@ -122,8 +123,8 @@ macro_rules! path {
 }
 
 /// Build a `syn::Expr` from an expression token: `expr!(format!("{A}:{B}"))`.
-/// The initializer argument of [`ConstDecl::expr`] — allowed only for
-/// constants, where the expression binds no arguments.
+/// The initializer argument of an adapter's `ConstDecl::expr` — allowed only
+/// for constants, where the expression binds no arguments.
 #[macro_export]
 macro_rules! expr {
     ($e:expr) => {
@@ -133,7 +134,7 @@ macro_rules! expr {
 
 /// Build a [`ConvertDecl`] directly from a bare Rust type:
 /// `convert!(Millis)` is `ConvertDecl::new(<Millis as syn::Type>)`.
-/// See [`ptr_class!`] for the parsing mechanics.
+/// See `ptr_class!` for the parsing mechanics.
 #[macro_export]
 macro_rules! convert {
     ($t:ty) => {
@@ -143,7 +144,7 @@ macro_rules! convert {
 
 /// Build a [`ExpandParamDecl`] directly from a bare Rust type:
 /// `expand_param!(KeyExpr)` is `ExpandParamDecl::new(<KeyExpr as syn::Type>)`.
-/// See [`ptr_class!`] for the parsing mechanics.
+/// See `ptr_class!` for the parsing mechanics.
 #[macro_export]
 macro_rules! expand_param {
     ($t:ty) => {
@@ -203,7 +204,7 @@ macro_rules! try_into {
 
 /// Build a [`ExpandReturnDecl`] directly from a bare Rust type:
 /// `expand_return!(Sample)` is `ExpandReturnDecl::new(<Sample as syn::Type>)`.
-/// See [`ptr_class!`] for the parsing mechanics.
+/// See `ptr_class!` for the parsing mechanics.
 #[macro_export]
 macro_rules! expand_return {
     ($t:ty) => {
@@ -233,7 +234,7 @@ macro_rules! fields {
 ///
 /// Build one with [`expand_param!`](crate::expand_param), add arms with
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
-/// it to [`JniGenBuilder::expand`].
+/// it to the adapter's `expand` declaration.
 ///
 /// **Generated shape** — at the wire tier this is a selector dispatch: with
 /// more than one arm the parameter crosses as a selector `Int` plus one
@@ -380,7 +381,7 @@ impl ExpandParamDecl {
 ///
 /// Build one with [`expand_return!`](crate::expand_return), add fields with
 /// [`field`](Self::field) / [`field_self`](Self::field_self), and hand it to
-/// [`JniGenBuilder::expand`].
+/// the adapter's `expand` declaration.
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: every returned /
@@ -450,7 +451,7 @@ impl ExpandReturnDecl {
     ///
     /// The Kotlin field name is uniform for both: an explicit `.name(...)`
     /// on the `fun!`; else the Kotlin name of the class member if the same
-    /// fn is declared via [`PtrClassDecl::method`] on this type (so a getter
+    /// fn is also declared as a method on this type's class (so a getter
     /// that is both a method and a field is named once); else the
     /// camel-cased fn ident (a path's LAST segment).
     ///
@@ -737,8 +738,9 @@ impl FieldsDecl {
     }
 }
 
-/// Unifies the two boundary decls into one type so [`JniGenBuilder::expand`] can
-/// expose a single entry point — the boundary-decl peer of [`ClassDecl`].
+/// Unifies the two boundary decls into one type so an adapter's `expand` can
+/// expose a single entry point — the boundary-decl peer of its class
+/// declarator.
 /// Deliberately **no** `impl From<syn::Type> for ExpandDecl` — a bare
 /// `syn::Type` alone doesn't say which direction it describes, so every
 /// declaration names its direction via the matching constructor macro:
@@ -764,15 +766,14 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 // Function decl
 // ──────────────────────────────────────────────────────────────────────
 
-/// Declares one `#[prebindgen]` function to export. Add it to a package with
-/// [`PackageDecl::fun`], or attach it to a class as a method/factory with
-/// [`PtrClassDecl::method`] / [`PtrClassDecl::constructor`].
+/// Declares one `#[prebindgen]` function to export. The adapter either adds it
+/// to a package or attaches it to a class as a method or a factory.
 ///
 /// Build it from a bare Rust name with [`fun!`](crate::fun) and chain
 /// [`name`](Self::name) to set its Kotlin name.
 /// [`expand_param`](Self::expand_param) / [`expand_return`](Self::expand_return)
 /// **override, for this one function**, the boundary defaults its
-/// parameter/return types declare at the generator level ([`JniGenBuilder::expand`])
+/// parameter/return types declare at the generator level
 /// — using the very same decl objects, so the complete-set rule is identical
 /// at both scopes.
 pub struct FunctionDecl {
