@@ -160,6 +160,29 @@ internal inline fun <R> withSortedHandleLocks(
 }
 
 /**
+ * The **fourth** position, and the last row of the same table: a `data_class`
+ * field whose type is another `data_class` that carries the handle. Nothing
+ * here is a handle and nothing here is a sum — `Dossier` only *reaches* one,
+ * two levels down, and must still close it (#218).
+ *
+ * The cascade this emits is one line, `holder.close()`, which is correct only
+ * because [`Holder`] was independently rendered `AutoCloseable` by its own
+ * pass. An emission test cannot tell: it never compiles the inner class. This
+ * one is exercised from the JVM harness, where a `Dossier` that closed
+ * nothing, or an inner class without a `close()` to call, does not build.
+ */
+public data class Dossier(val note: Long, val holder: Holder) : AutoCloseable {
+    override fun close() {
+        holder.close()
+    }
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(note: Long, holder_tag: Long, holder_summary: Long): Dossier = Dossier(note, Holder.fromParts(holder_tag, holder_summary))
+    }
+}
+
+/**
  * An `Option<data class>` whose data class has a **required handle** field.
  *
  * The shape that proves an optional node's field decodes stay **inside** its
@@ -516,27 +539,30 @@ public fun LedgerCallback.asRaw(): LedgerCallbackRaw =
         ledgerArchived__outcome__failed_v0,
         ledgerArchived__label ->
         val __own0 = when (ledgerFiled__outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(ledgerFiled__outcome__found_v0!!)); 2 -> Lookup.Failed(ledgerFiled__outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $ledgerFiled__outcome__tag") }
-        val __own1 = when (ledgerArchived__outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(ledgerArchived__outcome__found_v0!!)); 2 -> Lookup.Failed(ledgerArchived__outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $ledgerArchived__outcome__tag") }
         try {
-            run(
-                ledgerFiled__summary__count,
-                ledgerFiled__summary__total,
-                ledgerFiled__taken,
-                ledgerFiled__origin__secs,
-                ledgerFiled__origin__nanos,
-                __own0,
-                ledgerFiled__label,
-                ledgerArchived__summary__count,
-                ledgerArchived__summary__total,
-                ledgerArchived__taken,
-                ledgerArchived__origin__secs,
-                ledgerArchived__origin__nanos,
-                __own1,
-                ledgerArchived__label,
-            )
+            val __own1 = when (ledgerArchived__outcome__tag) { null -> null; 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(ledgerArchived__outcome__found_v0!!)); 2 -> Lookup.Failed(ledgerArchived__outcome__failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $ledgerArchived__outcome__tag") }
+            try {
+                run(
+                    ledgerFiled__summary__count,
+                    ledgerFiled__summary__total,
+                    ledgerFiled__taken,
+                    ledgerFiled__origin__secs,
+                    ledgerFiled__origin__nanos,
+                    __own0,
+                    ledgerFiled__label,
+                    ledgerArchived__summary__count,
+                    ledgerArchived__summary__total,
+                    ledgerArchived__taken,
+                    ledgerArchived__origin__secs,
+                    ledgerArchived__origin__nanos,
+                    __own1,
+                    ledgerArchived__label,
+                )
+            } finally {
+                __own1?.close()
+            }
         } finally {
             __own0?.close()
-            __own1?.close()
         }
     }
 
@@ -997,6 +1023,14 @@ internal object CovNative {
     external fun celsiusDouble(c: Int, errorSink: Any): Int
 
     external fun coverTagRuntime(errorSink: Any): String
+
+    external fun dossierNew(
+        note: Long,
+        tag: Long,
+        count: Long,
+        total: Double,
+        errorSink: Any,
+    ): Dossier
 
     external fun durationBoundaryEcho(value: DurationBoundary, build: Any, errorSink: Any): Any?
 

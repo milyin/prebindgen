@@ -484,8 +484,8 @@ impl PlanFieldKind {
     /// The wrapped cases fold as `Base`/`Optional` over the field itself rather
     /// than over the handle inside it, because the field's own generated type
     /// is `AutoCloseable` too — a sum's `close()` is the `when` over its
-    /// alternatives ([`write_sealed_interface`](super::JniGen::write_sealed_interface)),
-    /// a nested data class's is this same cascade one level down. So every
+    /// alternatives (`Declarations::build_sealed_class`), a nested data
+    /// class's is this same cascade one level down. So every
     /// container emits the same plain `field.close()`, and the walk into the
     /// wrapper lives once, in the wrapped type, instead of at each use site.
     pub(crate) fn destructible(&self) -> Option<FoldStrategy> {
@@ -495,13 +495,16 @@ impl PlanFieldKind {
             {
                 Some(proj.strategy.clone())
             }
+            // `sequence: false` is `classify_field`'s guarantee, not an
+            // assumption: it rejects `Vec<sum>` and `Vec<data class>` outright,
+            // so a classified field of either kind is never a sequence.
             PlanFieldKind::Sum {
                 optional, variants, ..
             } if variants.iter().any(SumPlanVariant::destructible) => {
-                Some(whole_value_close(*optional))
+                Some(whole_value_close(*optional, false))
             }
             PlanFieldKind::Nested { optional, plan, .. } if plan.destructible() => {
-                Some(whole_value_close(*optional))
+                Some(whole_value_close(*optional, false))
             }
             _ => None,
         }
@@ -526,14 +529,23 @@ impl SumPlanVariant {
 }
 
 /// The fold of a wrapper that closes itself: the value is closed as a whole,
-/// `?.`-guarded when it is optional. Shared by the two forms of the
-/// reaches-a-handle question below so they cannot answer differently.
-fn whole_value_close(optional: bool) -> FoldStrategy {
-    if optional {
-        FoldStrategy::Optional(NullableKind::Boxed, Box::new(FoldStrategy::Base))
-    } else {
-        FoldStrategy::Base
+/// `?.`-guarded when it is optional and `forEach`-ed when it is a sequence.
+/// Shared by the two forms of the reaches-a-handle question below so they
+/// cannot answer differently.
+///
+/// [`NullableKind::Boxed`] is not a guess here. The receiver is always a
+/// generated Kotlin *reference* — a sum or a data class — whose absent form is
+/// a JVM null; a niche encoding is a wire fact of a handle projection, and
+/// those come back carrying their own strategy without passing through this.
+fn whole_value_close(optional: bool, sequence: bool) -> FoldStrategy {
+    let mut fold = FoldStrategy::Base;
+    if sequence {
+        fold = FoldStrategy::Iterable(Box::new(fold));
     }
+    if optional {
+        fold = FoldStrategy::Optional(NullableKind::Boxed, Box::new(fold));
+    }
+    fold
 }
 
 /// How to close a value of this type, or `None` when it **reaches** no owned
@@ -545,26 +557,44 @@ fn whole_value_close(optional: bool) -> FoldStrategy {
 /// plan: the sealed-interface emitter, deciding whether a sum is
 /// `AutoCloseable` and what each variant class's `close()` body does; and the
 /// callback interface builder, deciding whether a reassembled whole value is
-/// the proxy's to close after `run`. The two forms answer alike by
-/// construction — this walks the model's own alternatives and fields, which is
-/// the same tree [`classify_field`] walks to build the plan.
+/// the proxy's to close after `run`.
 ///
-/// Deliberately **total**: unlike `classify_field` it refuses nothing and
-/// panics on nothing, because "is there anything to close" has a defensible
-/// answer for every type, and a shape the bridge would reject is not this
-/// predicate's to diagnose — the plan builders report those, with the path.
+/// The two forms must **agree wherever both answer**, and that is a tested
+/// invariant, not a structural one: `a_types_close_answer_matches_its_plans`
+/// asserts `type_close_strategy(ty).is_some() == plan(ty).destructible()` over
+/// every field of every declared shape in a set covering all the ways one can
+/// reach a handle. It is worth pinning because the walks are not identical.
+/// Two places they differ:
+///
+/// * **Order.** [`classify_field`] classifies a `Sum` *before* it consults
+///   `output_entry` (deliberately — see its comment); this asks `output_entry`
+///   first. Safe only while sums carry no converter of their own, which is a
+///   precondition rather than a construction.
+/// * **Totality.** A field [`classify_field`] refuses collapses the whole
+///   struct's plan to `None`, while this refuses nothing. So on a subtree the
+///   bridge rejects, the two answer differently *by design* — the plan
+///   builders are what diagnose those, with the path, and "is there anything
+///   to close" still has a defensible answer for every type.
+///
+/// A disagreement costs a Kotlin compile error in one direction and a silent
+/// leak — #218 again, at this seam — in the other.
 ///
 /// `depth` bounds the same recursion `build_struct_plan` and `sum_plan_kind`
-/// bound; a cycle answers `None` rather than hanging.
+/// bound, and asserts on the same bound rather than answering: a cycle deep
+/// enough to trip this is a declaration the plan builders already refuse
+/// loudly, and returning `None` for it would report "nothing to close" — the
+/// leak direction — for a shape nobody can compile anyway.
 pub(crate) fn type_close_strategy(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     ty: &prebindgen_registry::flat::TypeRef,
     depth: usize,
 ) -> Option<FoldStrategy> {
-    if depth > 16 {
-        return None;
-    }
+    assert!(
+        depth <= 16,
+        "close-strategy walk: recursion too deep at type `{}` (cyclic data_class?)",
+        ty.spell()
+    );
     // An owned `Handle` projection is the one thing that actually owns
     // something: a `ULong` owns nothing, and a borrowed handle is not ours to
     // release. Asked of the whole reading, so the `Option`/`Vec` folds the
@@ -601,10 +631,17 @@ pub(crate) fn type_close_strategy(
             .any(|f| type_close_strategy(ext, registry, &f.ty, depth + 1).is_some()),
         TypeKind::Handle | TypeKind::Enum | TypeKind::Other => false,
     };
-    // A `Vec` of such values has no close cascade to fold over: the bridge
-    // already rejects `Vec<sum>` and `Vec<data class>` fields, so the shape
-    // cannot reach a container that would need one.
-    reaches.then(|| whole_value_close(ty.optional_inner().is_some()))
+    // Put back exactly the layers peeled above. `reaches` was answered about
+    // the ELEMENT, so a `Vec<sum-that-reaches-a-handle>` must close each
+    // element — `close()` on the `List` itself would not compile. The field
+    // bridge rejects that shape, but this predicate exists precisely for the
+    // callers that hold no plan and so meet no rejection.
+    reaches.then(|| {
+        whole_value_close(
+            ty.optional_inner().is_some(),
+            bare.sequence_elem().is_some(),
+        )
+    })
 }
 
 /// Build the [`PlanFieldKind::Sum`] for a `sealed_class`-declared enum: one

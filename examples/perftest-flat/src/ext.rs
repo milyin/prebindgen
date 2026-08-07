@@ -367,6 +367,35 @@ pub fn verdict_new(id: i64, count: i64, total: f64) -> Verdict {
     }
 }
 
+/// The **fourth** position, and the last row of the same table: a `data_class`
+/// field whose type is another `data_class` that carries the handle. Nothing
+/// here is a handle and nothing here is a sum — `Dossier` only *reaches* one,
+/// two levels down, and must still close it (#218).
+///
+/// The cascade this emits is one line, `holder.close()`, which is correct only
+/// because [`Holder`] was independently rendered `AutoCloseable` by its own
+/// pass. An emission test cannot tell: it never compiles the inner class. This
+/// one is exercised from the JVM harness, where a `Dossier` that closed
+/// nothing, or an inner class without a `close()` to call, does not build.
+#[prebindgen]
+pub struct Dossier {
+    pub note: i64,
+    /// A plain data class whose own field is the `Summary` handle.
+    pub holder: Holder,
+}
+
+/// Build a [`Dossier`] over a fresh [`Summary`] — the two-level container.
+#[prebindgen]
+pub fn dossier_new(note: i64, tag: i64, count: i64, total: f64) -> Dossier {
+    Dossier {
+        note,
+        holder: Holder {
+            tag,
+            summary: Summary { count, total },
+        },
+    }
+}
+
 /// Which alternative an [`Observation`]'s `reading` holds, by declaration
 /// order — the sum crossing back **in** as part of a data-class parameter.
 #[prebindgen]

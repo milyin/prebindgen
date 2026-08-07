@@ -314,7 +314,12 @@ the alternatives is emitted **once**, in the sum, and every position that holds 
   (close-unless-taken: a no-op if the receiver `take()`-ed the payload) — as a plan-less
   `impl Fn(Handle)` argument is;
 - a sum held in a **data-class field** is closed by the container's own `close()` cascade — as a
-  handle-typed field is.
+  handle-typed field is;
+- an **element of a fold** (`fold(acc) { acc, element -> … }` over a sequence of such values) is a
+  callback argument like any other, so it is closed after each `run` — which means a folder that
+  accumulates its elements (`{ acc, e -> acc + e }`, the most natural body there is) accumulates
+  closed handles unless it `take()`s each one. This is the same rule, but it is **not** a sum-only
+  rule: it applies to any element type that reaches a handle, a nested `data_class` included.
 
 The three positions agree, which is the point, and the agreement is now with the *bare handle* in
 each of them rather than only with each other. Before #218 a sum payload took `WrapKind::Handle` and
@@ -326,9 +331,14 @@ derivation, that difference could never have been a deliberate contract.
 The same rule reaches a handle held through a **nested data class**, which had the identical gap and
 no issue of its own.
 
-Two of the three are exercised on the JVM in `examples/covertest-kotlin` ("sum return with a handle
-payload", "sum with a handle payload delivered to a callback"); the latter asserts the payload is
-usable inside `run`, closed once `run` returns, and kept alive across the boundary by `take()`.
+Every row is exercised on the JVM in `examples/covertest-kotlin`: "sum return with a handle
+payload", "sum with a handle payload delivered to a callback" (which asserts the payload is usable
+inside `run`, closed once `run` returns, and kept alive across the boundary by `take()`), "a
+data-class field reaching a handle through a sum cascades", and "…through a nested data class
+cascades". The last one earns its place by *compiling*: its container's cascade is a one-line
+`holder.close()` that frees something only because the inner class was independently rendered
+`AutoCloseable`, and an emission test — which never compiles the inner class — cannot tell the
+difference.
 
 **A borrowed sum return (`&E`, `Option<&E>`) crosses like an owned one.** `unfold::returns_type`
 peels the leading `&` and `wire_fixed_returns` records `by_ref`, so the encoder matches *through*

@@ -85,6 +85,7 @@ import io.prebindgen.covertest.model.ledgerNew
 import io.prebindgen.covertest.model.reportEach
 import io.prebindgen.covertest.model.lookupOf
 import io.prebindgen.covertest.model.verdictNew
+import io.prebindgen.covertest.model.dossierNew
 import io.prebindgen.covertest.model.archiveReading
 import io.prebindgen.covertest.model.archiveReadingMaybe
 import io.prebindgen.covertest.model.archiveSetReading
@@ -629,6 +630,26 @@ fun main() {
         val absent = verdictNew(8L, 0L, 0.0, boom)
         check(absent.outcome === Lookup.Absent)
         absent.close()
+    }
+
+    // The FOURTH position, and the row an emission test cannot cover: the field
+    // is a plain data class that itself carries the handle. `Dossier`'s cascade
+    // is the one-liner `holder.close()`, which only frees anything because
+    // `Holder` was independently rendered `AutoCloseable` by its own pass —
+    // two decisions, in two places, that nothing but a compiled run ties
+    // together. This section IS that tie: it would not compile if `Holder` had
+    // no `close()`, and the last check fails if `Dossier` had none.
+    section("a data-class field reaching a handle through a nested data class cascades") {
+        val d = dossierNew(5L, 3L, 4L, 2.0, boom)
+        check(d.note == 5L)
+        check(d.holder.tag == 3L)
+        val summary = d.holder.summary
+        check(!summary.isClosed())
+        check(summary.count(boom) == 4L)
+
+        // Two levels down, closed by one `close()` at the top.
+        d.close()
+        check(summary.isClosed())
     }
 
     // An output boundary DERIVED from the type's value form

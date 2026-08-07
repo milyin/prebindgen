@@ -212,6 +212,12 @@ fn main() {
         // inside the presence gate or `null` becomes a binding error instead of
         // `None` (PR#294 review).
         .package(package!().class(data_class!(Holder)))
+        // #218's last row: a data class that only REACHES a handle, through
+        // another data class. `Dossier`'s cascade is a one-liner that assumes
+        // `Holder` above was independently made `AutoCloseable` — the JVM
+        // harness is what ties the two decisions together, since an emission
+        // test never compiles the inner class.
+        .package(package!().class(data_class!(Dossier)))
         // A data class whose FIELDS carry transparent wrappers (#289 + #292):
         // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
         // does — the decoupled `(present, value)` pair — with the `Box` put back
@@ -527,6 +533,9 @@ fn main() {
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
                 .fun(fun!(verdict_new))
+                // …and reached one level deeper still, through a nested data
+                // class rather than a sum.
+                .fun(fun!(dossier_new))
                 // #213: the output boundary DERIVED from the type's value form
                 // rather than restated. `report_each` delivers the decomposed
                 // `Report` in one crossing; the leaf list comes from

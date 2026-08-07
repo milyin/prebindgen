@@ -152,13 +152,62 @@ pub(crate) struct TypedGroup {
     pub imports: Vec<String>,
     /// Number of consecutive `params` (raw leaves) this group consumes.
     pub leaf_count: usize,
-    /// The reassembled value reaches an owned native handle, so the `asRaw`
-    /// proxy binds it to a local and `close()`s it after `run` — the same
-    /// close-unless-taken contract [`WrapKind::HandleOwned`] gives a plan-less
-    /// handle arg. Without it a handle reached through a sum or a nested data
-    /// class was nobody's to close, while the same handle passed directly was
-    /// the proxy's, so the owner changed with the argument's spelling (#218).
-    pub owned: bool,
+    /// How the `asRaw` proxy closes this value after `run`, or `None` when it
+    /// reaches nothing owned — [`type_close_strategy`](crate::jni::struct_plan::type_close_strategy)'s
+    /// answer, carried rather than collapsed to a bool, so the proxy renders it
+    /// through the same [`render_handle_close`] the sealed classes use instead
+    /// of hand-rolling `x.close()` and assuming the answer is `Base`.
+    ///
+    /// Closing at all is the same close-unless-taken contract
+    /// [`WrapKind::HandleOwned`] gives a plan-less handle arg. Without it a
+    /// handle reached through a sum or a nested data class was nobody's to
+    /// close, while the same handle passed directly was the proxy's, so the
+    /// owner changed with the argument's spelling (#218).
+    pub close: Option<FoldStrategy>,
+}
+
+/// One `val` the `asRaw` proxy binds before calling `run`, and how it is
+/// released afterwards. `close: None` is a value bound only to keep a raw
+/// reassembly expression off the argument list.
+struct Bind {
+    line: String,
+    close: Option<String>,
+}
+
+/// Render the bindings and the `run(…)` call, nesting a `try`/`finally` per
+/// closeable one so everything bound after it happens **inside** its `try`.
+///
+/// Reverse order comes out of the nesting for free: the innermost `finally`
+/// runs first, which is the order the locals were taken in, reversed.
+fn nest_binds(mut code: KtCode, binds: &[Bind], call_args: &str) -> KtCode {
+    let Some((first, rest)) = binds.split_first() else {
+        return code.wline(format!("run({call_args})"));
+    };
+    // `line`, not `wline`: the bound value is a reassembly expression rendered
+    // as one piece of raw text (a `when` over the tag), and width-breaking it
+    // splits the arms mid-expression into something valid but unreadable.
+    code = code.line(first.line.clone());
+    match &first.close {
+        Some(close) => code.try_finally(
+            "",
+            nest_binds(KtCode::new(), rest, call_args),
+            KtCode::new().line(close.clone()),
+        ),
+        None => nest_binds(code, rest, call_args),
+    }
+}
+
+/// A close strategy for a receiver whose Kotlin type is nullable for a reason
+/// the *type* does not name: a sum under a conditional value form reconstructs
+/// to `null` where the form was absent, so its selector — not its type — is
+/// what makes the local `T?`. `Optional` already renders as `?.`, so a strategy
+/// that carries one needs nothing added.
+fn nullable_close(strategy: FoldStrategy, nullable: bool) -> FoldStrategy {
+    match strategy {
+        FoldStrategy::Optional(..) => strategy,
+        inner if nullable => FoldStrategy::Optional(NullableKind::Boxed, Box::new(inner)),
+        inner => inner,
+    }
 }
 
 /// Substitute a [`TypedGroup::reassemble`] expression's `$k` placeholders with
@@ -461,7 +510,11 @@ impl IfaceSpec {
         // `close()`-d after `run` (close-unless-taken), so track it per arg.
         struct RunArg {
             expr: String,
-            owned: bool,
+            /// How to close it after `run`, or `None` when it is not ours.
+            close: Option<FoldStrategy>,
+            /// Whether the Kotlin receiver is nullable — which for a
+            /// reassembled sum is a fact about its SELECTOR, not about its
+            /// type, so `close` cannot be asked for it. See [`nullable_close`].
             nullable: bool,
             /// A whole value rebuilt from its leaves (`Class.fromParts(…)`, a
             /// `when` over a tag) rather than one wrapped leaf. Rendered as one
@@ -476,7 +529,9 @@ impl IfaceSpec {
                 .iter()
                 .map(|p| RunArg {
                     expr: p.wrap.wrap_expr(&p.name, p.raw.is_nullable()),
-                    owned: p.wrap.is_owned_handle(),
+                    // A wrapped handle leaf closes as itself; its nullability
+                    // rides `nullable` below, exactly as for a group.
+                    close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
                     nullable: p.raw.is_nullable(),
                     reassembled: false,
                 })
@@ -492,7 +547,7 @@ impl IfaceSpec {
                 match &g.reassemble {
                     Some(expr) => args.push(RunArg {
                         expr: fill_placeholders(expr, &names),
-                        owned: g.owned,
+                        close: g.close.clone(),
                         // The reassembled value is closed through its own
                         // generated `close()`, which is declared on a
                         // non-nullable receiver; a group whose typed view is
@@ -504,7 +559,7 @@ impl IfaceSpec {
                         let p = &self.params[at];
                         args.push(RunArg {
                             expr: p.wrap.wrap_expr(&p.name, p.raw.is_nullable()),
-                            owned: p.wrap.is_owned_handle(),
+                            close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
                             nullable: p.raw.is_nullable(),
                             reassembled: false,
                         });
@@ -514,7 +569,7 @@ impl IfaceSpec {
             }
             args
         };
-        let any_owned = run_args.iter().any(|a| a.owned);
+        let any_owned = run_args.iter().any(|a| a.close.is_some());
         let lambda_open = format!("{}{gen_args} {{", self.raw_name());
         let body = if self.params.is_empty() {
             KtCode::new().blk(lambda_open, |c| c.line("run()"))
@@ -543,26 +598,37 @@ impl IfaceSpec {
             // locals, and `close()` every owned local in a `finally` so the
             // per-invocation handle's `Box` is freed even if `run` threw — a
             // no-op when the consumer `take()`-ed it (its `ptr` is then 0).
-            let mut lines: Vec<String> = Vec::new();
+            //
+            // Each owned local opens its OWN try/finally and everything after
+            // it is bound INSIDE that try: with one flat `try` around `run`
+            // only, a later reassembly that throws (a `when` over an invalid
+            // tag) would strand every handle already taken by an earlier one.
+            let mut binds: Vec<Bind> = Vec::new();
             let mut call_args: Vec<String> = Vec::with_capacity(run_args.len());
-            let mut closes: Vec<String> = Vec::new();
             let mut owned_idx = 0usize;
             let mut val_idx = 0usize;
             for a in &run_args {
-                if a.owned {
+                if let Some(strategy) = &a.close {
                     let local = format!("__own{owned_idx}");
                     owned_idx += 1;
-                    lines.push(format!("val {local} = {}", a.expr));
                     call_args.push(local.clone());
-                    let dot = if a.nullable { "?." } else { "." };
-                    closes.push(format!("{local}{dot}close()"));
+                    binds.push(Bind {
+                        line: format!("val {local} = {}", a.expr),
+                        close: Some(render_handle_close(
+                            &nullable_close(strategy.clone(), a.nullable),
+                            &local,
+                        )),
+                    });
                 } else if a.reassembled {
                     // Not ours to close, but still one piece of raw text that
                     // must not be broken up inside the nested `run(…)`.
                     let local = format!("__val{val_idx}");
                     val_idx += 1;
-                    lines.push(format!("val {local} = {}", a.expr));
-                    call_args.push(local);
+                    call_args.push(local.clone());
+                    binds.push(Bind {
+                        line: format!("val {local} = {}", a.expr),
+                        close: None,
+                    });
                 } else {
                     call_args.push(a.expr.clone());
                 }
@@ -580,22 +646,7 @@ impl IfaceSpec {
                     };
                     c = c.line(format!("{name}{suffix}"));
                 }
-                for l in &lines {
-                    // `line`, not `wline`: the bound value is a reassembly
-                    // expression rendered as one piece of raw text (a `when`
-                    // over the tag), and width-breaking it splits the arms
-                    // mid-expression into something valid but unreadable.
-                    c = c.line(l.clone());
-                }
-                let mut fin = KtCode::new();
-                for cl in &closes {
-                    fin = fin.line(cl.clone());
-                }
-                c.try_finally(
-                    "",
-                    KtCode::new().wline(format!("run({})", call_args.join(", "))),
-                    fin,
-                )
+                nest_binds(c, &binds, &call_args.join(", "))
             })
         };
         let mut f = KtFun::new("asRaw").vis(KtVis::Public).receiver(recv);
@@ -1163,11 +1214,11 @@ pub(crate) fn callback_iface_spec(
         reassemble: Option<String>,
         imports: Vec<String>,
         leaf_count: usize,
-        /// The reassembled value reaches an owned native handle, so the proxy
-        /// closes it after `run` — the close-unless-taken contract a plan-less
-        /// handle arg already had (#218). Always `false` for a passthrough
-        /// group, whose own [`IfaceParam::wrap`] answers instead.
-        owned: bool,
+        /// How the proxy closes the reassembled value after `run`, or `None`
+        /// when it reaches nothing owned — the close-unless-taken contract a
+        /// plan-less handle arg already had (#218). Always `None` for a
+        /// passthrough group, whose own [`IfaceParam::wrap`] answers instead.
+        close: Option<FoldStrategy>,
     }
     /// One flattened `run` parameter before naming/dedup. A **plan** leaf keeps
     /// the leaf itself, so it classifies through the shared
@@ -1225,8 +1276,7 @@ pub(crate) fn callback_iface_spec(
                     reassemble: Some(reassemble),
                     imports,
                     leaf_count: plan.leaves.len(),
-                    owned: crate::jni::struct_plan::type_close_strategy(ext, registry, core, 0)
-                        .is_some(),
+                    close: crate::jni::struct_plan::type_close_strategy(ext, registry, core, 0),
                 });
             } else {
                 // Accessor-plan arg: each leaf is its own passthrough group, so
@@ -1277,13 +1327,12 @@ pub(crate) fn callback_iface_spec(
                             reassemble: Some(reassemble),
                             imports,
                             leaf_count: seg - k,
-                            owned: crate::jni::struct_plan::type_close_strategy(
+                            close: crate::jni::struct_plan::type_close_strategy(
                                 ext,
                                 registry,
                                 &leaf.out_ty,
                                 0,
-                            )
-                            .is_some(),
+                            ),
                         });
                     } else {
                         groups.push(GroupDesc {
@@ -1292,7 +1341,7 @@ pub(crate) fn callback_iface_spec(
                             reassemble: None,
                             imports: Vec::new(),
                             leaf_count: 1,
-                            owned: false,
+                            close: None,
                         });
                     }
                     k = seg;
@@ -1318,7 +1367,7 @@ pub(crate) fn callback_iface_spec(
                 reassemble: None,
                 imports: Vec::new(),
                 leaf_count: 1,
-                owned: false,
+                close: None,
             });
         }
     }
@@ -1357,7 +1406,7 @@ pub(crate) fn callback_iface_spec(
                 reassemble: g.reassemble.clone(),
                 imports: g.imports.clone(),
                 leaf_count: g.leaf_count,
-                owned: g.owned,
+                close: g.close.clone(),
             });
             at += g.leaf_count;
         }
@@ -1522,7 +1571,7 @@ pub(crate) fn fixed_folder_typed_groups(
             leaf_count: 1,
             // The accumulator is the consumer's own value, of the consumer's
             // own type variable — never ours to close.
-            owned: false,
+            close: None,
         },
         TypedGroup {
             name: "element".to_string(),
@@ -1530,12 +1579,18 @@ pub(crate) fn fixed_folder_typed_groups(
             reassemble: Some(reassemble),
             imports,
             leaf_count: spec.leaves.len(),
-            // Same rule as every other reassembled value. A fold over a
-            // BORROWED run never trips it: a borrowed handle projection carries
-            // `owned: false`, so the element reaches nothing to release and the
-            // per-iteration close that would double-free is not emitted.
-            owned: crate::jni::struct_plan::type_close_strategy(ext, registry, &spec.source, 0)
-                .is_some(),
+            // Same rule as every other reassembled value — and BREAKING for a
+            // fold whose element reaches a handle: the element is now closed
+            // after each `run`, so a body that accumulates its elements
+            // (`{ acc, e -> acc + e }`) accumulates closed handles unless it
+            // `take()`s each one. Note this is not a sum-only rule; a nested
+            // `data_class` element lands here too.
+            //
+            // A fold over a BORROWED run never trips it: a borrowed handle
+            // projection carries `owned: false`, so the element reaches nothing
+            // to release and the per-iteration close that would double-free is
+            // not emitted.
+            close: crate::jni::struct_plan::type_close_strategy(ext, registry, &spec.source, 0),
         },
     ])
 }

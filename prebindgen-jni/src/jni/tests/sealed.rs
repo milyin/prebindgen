@@ -2078,3 +2078,161 @@ fn empty_sum_alternatives_keep_their_own_pattern_delimiters() {
         "neither empty alternative may be matched bare:\n{rust}"
     );
 }
+
+/// The invariant the whole #218 fix rests on: the **two forms** of "does this
+/// reach an owned handle" must agree.
+///
+/// [`PlanFieldKind::destructible`] answers for a classified plan field;
+/// [`type_close_strategy`] answers for a bare type, because two callers (the
+/// sealed emitter, the callback proxy) hold no plan. They are two independent
+/// walks over the same tree, and the doc-comment's "same tree" is a claim, not
+/// a construction — `classify_field` classifies a `Sum` *before* consulting
+/// `output_entry` while `type_close_strategy` asks `output_entry` first, and
+/// only one of them refuses anything.
+///
+/// A disagreement is a Kotlin compile error in one direction (`field.close()`
+/// on a type that is not `AutoCloseable`) and a silent leak in the other — #218
+/// reappearing at the seam its own fix introduced. So this asserts equality
+/// over every field of every declared type in a set covering all the shapes
+/// that can reach a handle: direct, through a sum, through a nested data class,
+/// optional, sequence, borrowed, and none of the above.
+#[test]
+fn a_types_close_answer_matches_its_plans() {
+    use crate::jni::struct_plan::{classify_field, type_close_strategy};
+
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Lookup {
+                    Absent,
+                    Found(Probe),
+                    Failed(String),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Tally {
+                    None,
+                    Count(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Inner {
+                    pub probe: Probe,
+                }
+            )),
+            loc.clone(),
+        ),
+        // Every field position at once: a handle direct and optional, a sum
+        // that reaches one and a sum that does not, a nested data class that
+        // reaches one, and plain scalars that reach nothing.
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Everything {
+                    pub id: i64,
+                    pub probe: Probe,
+                    pub maybe_probe: Option<Probe>,
+                    pub outcome: Lookup,
+                    pub tally: Tally,
+                    pub inner: Inner,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn everything_new(id: i64) -> Everything {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Probe))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::sealed_class!(Tally))
+                .class(crate::data_class!(Inner))
+                .class(crate::data_class!(Everything))
+                .fun(prebindgen_registry::fun!(everything_new)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    let (ext, registry) = (&gen.decls, &gen.registry);
+
+    // Every field of every declared type — struct fields and sum payloads
+    // alike, since a payload goes through the same `classify_field`.
+    let mut checked = 0usize;
+    for ty in registry.flat().types() {
+        let (owner, fields): (&syn::Ident, Vec<&prebindgen_registry::flat::Field>) = match ty {
+            prebindgen_registry::flat::Type::Struct(st) => (&st.name, st.fields.iter().collect()),
+            prebindgen_registry::flat::Type::Variant(sum) => (
+                &sum.name,
+                sum.alternatives
+                    .iter()
+                    .flat_map(|a| a.fields.iter())
+                    .collect(),
+            ),
+            _ => continue,
+        };
+        for field in fields {
+            let path = format!("{owner}.{}", field.member().to_token_stream());
+            // A field `classify_field` refuses has no plan answer to compare
+            // against — the documented, deliberate asymmetry.
+            let Some(kind) = classify_field(ext, registry, &field.ty, &path, 0) else {
+                continue;
+            };
+            assert_eq!(
+                kind.destructible().is_some(),
+                type_close_strategy(ext, registry, &field.ty, 0).is_some(),
+                "the two forms disagree about `{path}`: a plan field and its \
+                 bare type must reach the same handles",
+            );
+            checked += 1;
+        }
+    }
+    // The loop asserting nothing would pass vacuously.
+    assert!(
+        checked >= 10,
+        "expected every declared field to be compared, saw {checked}"
+    );
+    // …and the fixture must actually contain both answers, or agreement is
+    // trivial.
+    let everything = match registry
+        .flat()
+        .declared_type("Everything")
+        .expect("Everything is declared")
+    {
+        prebindgen_registry::flat::Type::Struct(st) => st,
+        _ => panic!("Everything is a struct"),
+    };
+    let closes: Vec<String> = everything
+        .fields
+        .iter()
+        .filter(|f| type_close_strategy(ext, registry, &f.ty, 0).is_some())
+        .map(|f| f.name.as_ref().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        closes,
+        vec!["probe", "maybe_probe", "outcome", "inner"],
+        "the fixture must cover reaching a handle four ways AND not reaching one"
+    );
+}

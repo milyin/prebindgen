@@ -2,6 +2,7 @@
 package io.prebindgen.covertest.model
 
 import io.prebindgen.covertest.CovNative
+import io.prebindgen.covertest.Dossier
 import io.prebindgen.covertest.DurationCallback
 import io.prebindgen.covertest.Holder
 import io.prebindgen.covertest.JniErrorHandler
@@ -1603,6 +1604,20 @@ public fun verdictNew(
 ): Verdict {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.verdictNew(id, count, total, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Build a [`Dossier`] over a fresh [`Summary`] — the two-level container. */
+public fun dossierNew(
+    note: Long,
+    tag: Long,
+    count: Long,
+    total: Double,
+    onError: JniErrorHandler<Dossier>,
+): Dossier {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.dossierNew(note, tag, count, total, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
