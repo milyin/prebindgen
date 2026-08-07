@@ -12,8 +12,8 @@
 //!   (syn::Item)          validate              elements      spell with `spell()`
 //! ```
 //!
-//! [`Flat::source`] folds the first arrow in for the common case, so a build
-//! script names one directory and gets elements; [`Flat::items`] keeps the
+//! [`FlatBuilder::source`] folds the first arrow in for the common case, so a build
+//! script names one directory and gets elements; [`FlatBuilder::items`] keeps the
 //! arrow itself, for a stream that needs shaping first.
 //!
 //! # What an element is
@@ -65,7 +65,7 @@
 //! | `*const T` | *rejected* | a source crate is idiomatic Rust; the adapter owns pointers |
 //!
 //! It buys one property: the syntax is **recoverable from the kind**
-//! ([`TypeKind::to_syn`], checked over the whole acceptance corpus). Which is
+//! (checked, over the whole acceptance corpus, by rebuilding it). Which is
 //! the difference between a slice that rides along because it is exact, and one
 //! the model cannot do without.
 //!
@@ -107,7 +107,8 @@
 //!
 //! For a **type** the slice is no longer where facts go to survive:
 //! [`TypeKind`] keeps the lifetime, the wrapper and the argument it once
-//! dropped, and [`TypeKind::to_syn`] is the round-trip that says so. What is
+//! dropped, and rebuilding the syntax from it is the round-trip that says
+//! so. What is
 //! left is the reason a slice beats a reconstruction anywhere — it is what the
 //! source wrote, and it is already there.
 //!
@@ -685,7 +686,7 @@ impl Flat {
     /// it is one the binding invented, and there is nothing for the frontend to
     /// have decided about it.
     ///
-    /// The argument is normalized the way [`TypeKey`](crate::TypeKey) does
+    /// The argument is normalized the way [`TypeKey`] does
     /// before lookup, so an adapter-authored spelling finds the same entry a
     /// captured one does.
     pub fn type_ref(&self, ty: &syn::Type) -> Option<&TypeRef> {
@@ -790,9 +791,9 @@ impl Flat {
     ///
     /// Grammar only, and it **validates by lowering**: an `Err` is a shape the
     /// language cannot express, an `Ok` is the element to admit. Whether the types
-    /// it names are *declared* is a whole-model question ([`resolve_references`]),
-    /// and a binding-local fn may legitimately name types the source crate never
-    /// did.
+    /// it names are *declared* is a whole-model question, settled when the model
+    /// is built, and a binding-local fn may legitimately name types the source
+    /// crate never did.
     pub fn lower_signature(&self, f: &syn::ItemFn) -> Result<Function, ItemError> {
         // Rebuilt from the model rather than kept: this runs once per local fn,
         // and a stored index would be a second copy of what `constants()` says.

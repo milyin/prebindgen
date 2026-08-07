@@ -19,7 +19,7 @@
 //!
 //! Everything here is **language-agnostic**: the fold is pure Rust and the
 //! per-leaf wire encode/decode is delegated to the adapter's existing
-//! converters. [`apply`] resolves declarations into [`FoldPlan`]s (stored on
+//! converters. Resolution turns the declarations into [`FoldPlan`]s (stored on
 //! the registry, keyed by `(fn, param)`) and registers each leaf type as a
 //! required input so the resolver produces its converter. [`emit_fold`]
 //! emits the dispatch expression at the parameter-emission site.
@@ -30,7 +30,10 @@ use prebindgen_flat::types_util::ident;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::registry::{Registry, TypeKey};
+use crate::{
+    declared_target::check_declared_target,
+    registry::{Registry, TypeKey},
+};
 
 mod error;
 mod plan;
@@ -84,7 +87,7 @@ pub enum ExpandSel {
 /// A per-fn input expansion (`.expand_param(param, expand_param!(T)…)`) —
 /// construct `param` of `func` from the explicit variant list. Recorded as
 /// an explicit decl so the auto-`default` skips it; an identity-only list
-/// lowers to the skip-default plain form in [`apply`]. Not related to the
+/// lowers to the skip-default plain form at resolution. Not related to the
 /// jnigen declaration-DSL type of the same name — this is the lowered core
 /// record.
 #[derive(Clone)]
@@ -92,7 +95,7 @@ pub struct ExpandDecl {
     pub func: syn::Ident,
     pub param: syn::Ident,
     /// The type the per-fn decl was declared for (`expand_param!(T)`) —
-    /// cross-checked against the named param's peeled type in [`apply`].
+    /// cross-checked against the named param's peeled type at resolution.
     /// `None` for the internal `TopLevel` form (the type comes from the
     /// param itself).
     pub declared_target: Option<TypeKey>,
@@ -101,9 +104,9 @@ pub struct ExpandDecl {
 
 /// Constructor / expansion declarations gathered from a language builder —
 /// an immutable record set: complete values, no build protocol. Declaration
-/// order is the vector order. Handed to [`apply`] via
-/// `Prebindgen::expansions`; empty or
-/// duplicate declarations are diagnosed there (collected), not at
+/// order is the vector order. Handed to the registry as
+/// [`Decompositions::expansions`](crate::Decompositions::expansions); empty
+/// or duplicate declarations are diagnosed at resolution (collected), not at
 /// construction.
 #[derive(Clone, Default)]
 pub struct Expansions {
@@ -345,9 +348,22 @@ fn resolve_constructor<M>(
     }
 }
 
-/// Constructor signature: parameter `(name, type)` pairs, the produced
-/// (`Ok`) target type, and whether it is fallible (`-> Result<_, _>`).
-fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSig, ExpandError> {
+/// Constructor signature: parameter `(name, type)` pairs and whether it is
+/// fallible (`-> Result<_, _>`). The produced (`Ok`) target type is *checked*
+/// here rather than returned — see below.
+///
+/// `expected` is the type the declaration is *for*, and the returned signature
+/// is one already proven to produce it. Taking it as a parameter rather than
+/// leaving the caller to check afterwards is the point: a declarator cannot
+/// reach a constructor's signature without saying what that constructor is
+/// supposed to build, so the check cannot be the thing a new declarator forgets
+/// (#223). The comparison is [`check_declared_target`], shared with the output
+/// side's accessor lookup.
+fn ctor_signature<M>(
+    registry: &Registry<M>,
+    func: &syn::Ident,
+    expected: &TypeKey,
+) -> Result<CtorSig, ExpandError> {
     // Read off the element rather than re-walked from the signature: `params`
     // and `ret` are the same facts, already decided once — including that an
     // elided return and a written `-> ()` are one thing.
@@ -367,20 +383,14 @@ fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSi
         Some((ok, _)) => (ok.key(), true),
         None => (f.ret.key(), false),
     };
-    Ok(CtorSig {
-        params,
-        target,
-        fallible,
-    })
+    check_declared_target(func, &target, expected)?;
+    Ok(CtorSig { params, fallible })
 }
 
 struct CtorSig {
     /// Readings, not spellings: they come off `Function::params`, and a consumer
     /// that needs the spelling takes it at the point it stores one.
     params: Vec<(syn::Ident, prebindgen_flat::flat::TypeRef)>,
-    /// The type the constructor produces, as an **identity**: every use of it
-    /// is `check_target`, which keyed both sides.
-    target: TypeKey,
     fallible: bool,
 }
 
@@ -439,8 +449,7 @@ fn build_plan<M>(
                 variants: fold_variants,
             });
         };
-        let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, &target.key())?;
+        let sig = ctor_signature(registry, func, &target.key())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
             leaves.push(FoldLeaf {
@@ -553,8 +562,7 @@ fn build_core<M>(
 ) -> Result<(Option<usize>, Vec<FoldVariant>), ExpandError> {
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
-        let sig = ctor_signature(registry, func)?;
-        check_target(func, &sig.target, &target.key())?;
+        let sig = ctor_signature(registry, func, &target.key())?;
         let np = sig.params.len();
         let mut args = Vec::new();
         for (pname, pty) in &sig.params {
@@ -588,8 +596,7 @@ fn build_core<M>(
         for (vi, v) in variants.iter().enumerate() {
             match v {
                 Variant::Ctor(func) => {
-                    let sig = ctor_signature(registry, func)?;
-                    check_target(func, &sig.target, &target.key())?;
+                    let sig = ctor_signature(registry, func, &target.key())?;
                     let np = sig.params.len();
                     let mut args = Vec::new();
                     for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
@@ -715,19 +722,15 @@ fn build_arg<M>(
     }
 }
 
-fn check_target(
-    func: &syn::Ident,
-    produces: &TypeKey,
-    expected: &TypeKey,
-) -> Result<(), ExpandError> {
-    if produces == expected {
-        Ok(())
-    } else {
-        Err(ExpandError::TargetMismatch {
-            ctor: func.to_string(),
-            produces: produces.to_string(),
-            expected: expected.to_string(),
-        })
+/// The shared mismatch, in this direction's vocabulary: an input constructor is
+/// declared to **produce** the parameter's target.
+impl From<crate::declared_target::TargetMismatch> for ExpandError {
+    fn from(m: crate::declared_target::TargetMismatch) -> Self {
+        ExpandError::TargetMismatch {
+            ctor: m.func,
+            produces: m.actual,
+            expected: m.expected,
+        }
     }
 }
 
@@ -742,7 +745,7 @@ fn check_target(
 /// The returned expression has type `Result<<shaped> plan.target, String>`
 /// (`Result<Target>`, `Result<Option<Target>>`, …). The adapter routes its
 /// `Err(String)` through its own error channel. Folds the [`FoldShape`] layers
-/// top-down over the shared [core construct](`emit_core_construct`) — the value
+/// top-down over one shared core construct — the value
 /// analog of how `Option<_>`/`Vec<_>` wrappers compose at the wire.
 pub fn emit_fold(
     plan: &FoldPlan,

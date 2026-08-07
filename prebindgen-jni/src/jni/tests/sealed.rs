@@ -1250,13 +1250,14 @@ fn sum_return_group_can_own_a_handle() {
 /// Two consequences of this position, both asserted below so they cannot
 /// change silently:
 ///
-/// * The container is **not** `AutoCloseable` — `destructible()` matches only
-///   a `Projection` field, never a `Sum` one. That follows the documented
-///   ownership rule for sum payloads ("who closes a handle payload: the
-///   receiver"), but it does differ from a plain handle field, which *does*
-///   make its class closeable and cascades. The handle stays reachable and
-///   closeable through the variant (`(h.outcome as Lookup.Found).v0.close()`);
-///   what is absent is the cascade.
+/// * The container **is** `AutoCloseable` and cascades, exactly as it does for
+///   a plain handle field (#218). It did not, until the field's type stopped
+///   deciding who frees the handle: `destructible()` matched only a
+///   `Projection`, so the same handle was the container's to close when the
+///   field was spelled `Probe` and nobody's when it was spelled `Lookup`. What
+///   makes the two spellings agree is that `Lookup` is itself `AutoCloseable`
+///   — the `when` over the alternatives lives in the sum, so the container
+///   emits the same one-line cascade either way.
 /// * A sum field takes its parent off the fixed-builder path onto the
 ///   whole-value `fromParts` bridge (`synth_value_struct_leaves` declines
 ///   `TypeKind::Sum`), so the value costs a JVM object — a slower shape, not a
@@ -1339,14 +1340,205 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
         kotlin.contains("public data class Holder(val id: Long, val outcome: Lookup)"),
         "the field surfaces as the typed sum:\n{kotlin}"
     );
+    // The cascade, exactly as a plain handle field gets — the container closes
+    // what its field reaches (#218). The `when` is NOT here: `Lookup` closes
+    // itself, so the container's body is the same one line it would emit for a
+    // handle-typed field.
+    let kc: String = kotlin.split_whitespace().collect();
     assert!(
-        !kotlin.contains("Holder(val id: Long, val outcome: Lookup) : AutoCloseable"),
-        "a sum-carried handle is the RECEIVER's to close — the container does \
-         not cascade, unlike a plain handle field:\n{kotlin}"
+        kotlin.contains(
+            "public data class Holder(val id: Long, val outcome: Lookup) : AutoCloseable"
+        ),
+        "a sum-carried handle is the container's to close, like a plain handle \
+         field:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("overridefunclose(){outcome.close()}"),
+        "the container closes the field as a whole; the walk into the \
+         alternatives lives in `Lookup`:\n{kotlin}"
+    );
+    // And that walk: the sum is itself `AutoCloseable`, its handle-carrying
+    // alternative closes the payload, the others are no-ops.
+    assert!(
+        kc.contains("publicsealedinterfaceLookup:AutoCloseable"),
+        "the sum owns the cascade its containers delegate to:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("dataclassFound(publicvalv0:Probe):Lookup{overridefunclose(){v0.close()}}"),
+        "the live alternative closes its payload:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("dataobjectAbsent:Lookup{overridefunclose(){}}"),
+        "an alternative holding nothing native overrides with an empty body — \
+         Kotlin requires the member, and the emptiness is the statement:\n{kotlin}"
     );
     assert!(
         rust.contains("Lookup::Found") && rust.contains("Lookup::Absent"),
         "Rust matches the field's sum, filling every group's slots:\n{rust}"
+    );
+}
+
+/// The **third** spelling of the same handle: reached through a nested data
+/// class rather than through a sum or directly. Unfiled alongside #218 but the
+/// same `_ => None`, and the same argument settles it — swapping a field's type
+/// for a struct that holds the handle must not move the free onto the consumer.
+///
+/// Nothing here is special-cased: `Inner` is `AutoCloseable` because its own
+/// field is a handle, and `Outer` cascades into it with the same one-liner it
+/// would emit for a handle field. The recursion is one level of
+/// [`PlanFieldKind::destructible`], not a second mechanism.
+#[test]
+fn a_data_class_field_may_be_a_nested_data_class_carrying_a_handle() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Inner {
+                    pub probe: Probe,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Outer {
+                    pub id: i64,
+                    pub inner: Inner,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn outer_new(id: i64) -> Outer {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Probe))
+                .class(crate::data_class!(Inner))
+                .class(crate::data_class!(Outer))
+                .fun(prebindgen_registry::fun!(outer_new)),
+        );
+    let dir = unique_test_dir("jnigen_nested_handle_field");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    assert!(
+        kc.contains(
+            "dataclassInner(valprobe:Probe):AutoCloseable{overridefunclose(){probe.close()}"
+        ),
+        "the direct handle field cascades, as it always did:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("dataclassOuter(valid:Long,valinner:Inner):AutoCloseable"),
+        "…and so does the container that only REACHES the handle:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("overridefunclose(){inner.close()}"),
+        "the outer closes the field as a whole — the walk is the inner \
+         class's:\n{kotlin}"
+    );
+}
+
+/// The predicate must not over-fire: a sum whose alternatives own nothing
+/// native stays a plain `sealed interface`, with no `AutoCloseable` and no
+/// `close()` on its variant classes. Otherwise every sum in every binding would
+/// grow a lifecycle it has no use for.
+#[test]
+fn a_sum_owning_nothing_native_is_not_closeable() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Gauge {
+                    pub id: i64,
+                    pub reading: Reading,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn gauge_new(id: i64) -> Gauge {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .class(crate::data_class!(Gauge))
+                .fun(prebindgen_registry::fun!(gauge_new)),
+        );
+    let dir = unique_test_dir("jnigen_sum_no_handle");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    assert!(
+        kc.contains("publicsealedinterfaceReading{"),
+        "an `i64` payload owns nothing, so the sum takes no lifecycle:\n{kotlin}"
+    );
+    assert!(
+        !kc.contains("interfaceReading:AutoCloseable"),
+        "…and does not implement `AutoCloseable`:\n{kotlin}"
+    );
+    assert!(
+        !kc.contains("Exact(publicvalv0:Long):Reading{overridefunclose"),
+        "…so its variant classes carry no `close()` either:\n{kotlin}"
+    );
+    assert!(
+        !kc.contains("Gauge(valid:Long,valreading:Reading):AutoCloseable"),
+        "and the container holding it stays non-closeable:\n{kotlin}"
     );
 }
 
@@ -1429,16 +1621,33 @@ fn two_sum_callback_args_keep_their_own_selectors() {
         "each sum contributes its own selector:\n{kotlin}"
     );
     // Each `when` reads ITS OWN selector — in the dispatch and in the message.
+    // Compared whitespace-insensitively: `Lookup` carries a handle, so its
+    // reassembly is bound to a local and the call moves inside a `try` (below).
+    let kc: String = kotlin.split_whitespace().collect();
     assert!(
-        kotlin.contains("when (tag) { 0 -> Reading.Missing;")
+        kc.contains("when(tag){0->Reading.Missing;")
             && kotlin.contains(r#"IllegalArgumentException("Reading: invalid tag $tag")"#),
         "{kotlin}"
     );
     assert!(
-        kotlin.contains("when (tag2) { 0 -> Lookup.Absent;")
+        kc.contains("when(tag2){0->Lookup.Absent;")
             && kotlin.contains(r#"IllegalArgumentException("Lookup: invalid tag $tag2")"#),
         "the second sum's reassembly must follow its renamed selector, template \
          included:\n{kotlin}"
+    );
+    // …and exactly the sum that reaches a handle is the proxy's to close after
+    // `run` (#218). `Reading`'s payload is an `i64`, so it stays inline in the
+    // call and nothing closes it; `Lookup.Found` carries a `Probe`, so it binds
+    // to a local closed in a `finally` — the close-unless-taken contract a
+    // handle passed DIRECTLY to a callback has always had.
+    assert!(
+        kc.contains("val__own0=when(tag2)") && kc.contains("finally{__own0.close()}"),
+        "a handle reached through a sum arg is closed after `run`, exactly as a \
+         handle arg is:\n{kotlin}"
+    );
+    assert!(
+        !kc.contains("__own1"),
+        "a sum whose payload owns nothing native is not bound and not closed:\n{kotlin}"
     );
 }
 
@@ -1867,5 +2076,163 @@ fn empty_sum_alternatives_keep_their_own_pattern_delimiters() {
     assert!(
         !rc.contains("myflat::Shape::Parens=>") && !rc.contains("myflat::Shape::Braces=>"),
         "neither empty alternative may be matched bare:\n{rust}"
+    );
+}
+
+/// The invariant the whole #218 fix rests on: the **two forms** of "does this
+/// reach an owned handle" must agree.
+///
+/// [`PlanFieldKind::destructible`] answers for a classified plan field;
+/// [`type_close_strategy`] answers for a bare type, because two callers (the
+/// sealed emitter, the callback proxy) hold no plan. They are two independent
+/// walks over the same tree, and the doc-comment's "same tree" is a claim, not
+/// a construction — `classify_field` classifies a `Sum` *before* consulting
+/// `output_entry` while `type_close_strategy` asks `output_entry` first, and
+/// only one of them refuses anything.
+///
+/// A disagreement is a Kotlin compile error in one direction (`field.close()`
+/// on a type that is not `AutoCloseable`) and a silent leak in the other — #218
+/// reappearing at the seam its own fix introduced. So this asserts equality
+/// over every field of every declared type in a set covering all the shapes
+/// that can reach a handle: direct, through a sum, through a nested data class,
+/// optional, sequence, borrowed, and none of the above.
+#[test]
+fn a_types_close_answer_matches_its_plans() {
+    use crate::jni::struct_plan::{classify_field, type_close_strategy};
+
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Lookup {
+                    Absent,
+                    Found(Probe),
+                    Failed(String),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Tally {
+                    None,
+                    Count(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Inner {
+                    pub probe: Probe,
+                }
+            )),
+            loc.clone(),
+        ),
+        // Every field position at once: a handle direct and optional, a sum
+        // that reaches one and a sum that does not, a nested data class that
+        // reaches one, and plain scalars that reach nothing.
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Everything {
+                    pub id: i64,
+                    pub probe: Probe,
+                    pub maybe_probe: Option<Probe>,
+                    pub outcome: Lookup,
+                    pub tally: Tally,
+                    pub inner: Inner,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn everything_new(id: i64) -> Everything {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Probe))
+                .class(crate::sealed_class!(Lookup))
+                .class(crate::sealed_class!(Tally))
+                .class(crate::data_class!(Inner))
+                .class(crate::data_class!(Everything))
+                .fun(prebindgen_registry::fun!(everything_new)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    let (ext, registry) = (&gen.decls, &gen.registry);
+
+    // Every field of every declared type — struct fields and sum payloads
+    // alike, since a payload goes through the same `classify_field`.
+    let mut checked = 0usize;
+    for ty in registry.flat().types() {
+        let (owner, fields): (&syn::Ident, Vec<&prebindgen_registry::flat::Field>) = match ty {
+            prebindgen_registry::flat::Type::Struct(st) => (&st.name, st.fields.iter().collect()),
+            prebindgen_registry::flat::Type::Variant(sum) => (
+                &sum.name,
+                sum.alternatives
+                    .iter()
+                    .flat_map(|a| a.fields.iter())
+                    .collect(),
+            ),
+            _ => continue,
+        };
+        for field in fields {
+            let path = format!("{owner}.{}", field.member().to_token_stream());
+            // A field `classify_field` refuses has no plan answer to compare
+            // against — the documented, deliberate asymmetry.
+            let Some(kind) = classify_field(ext, registry, &field.ty, &path, 0) else {
+                continue;
+            };
+            assert_eq!(
+                kind.destructible().is_some(),
+                type_close_strategy(ext, registry, &field.ty, 0).is_some(),
+                "the two forms disagree about `{path}`: a plan field and its \
+                 bare type must reach the same handles",
+            );
+            checked += 1;
+        }
+    }
+    // The loop asserting nothing would pass vacuously.
+    assert!(
+        checked >= 10,
+        "expected every declared field to be compared, saw {checked}"
+    );
+    // …and the fixture must actually contain both answers, or agreement is
+    // trivial.
+    let everything = match registry
+        .flat()
+        .declared_type("Everything")
+        .expect("Everything is declared")
+    {
+        prebindgen_registry::flat::Type::Struct(st) => st,
+        _ => panic!("Everything is a struct"),
+    };
+    let closes: Vec<String> = everything
+        .fields
+        .iter()
+        .filter(|f| type_close_strategy(ext, registry, &f.ty, 0).is_some())
+        .map(|f| f.name.as_ref().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        closes,
+        vec!["probe", "maybe_probe", "outcome", "inner"],
+        "the fixture must cover reaching a handle four ways AND not reaching one"
     );
 }

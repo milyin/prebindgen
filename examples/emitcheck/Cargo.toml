@@ -1,0 +1,23 @@
+[package]
+name = "emitcheck"
+version = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+publish = false
+
+[lib]
+name = "emitcheck"
+
+[dependencies]
+# Exactly what generated JNI code calls into. No `prebindgen`, no source crate:
+# the flat surface is `src/myflat.rs`, compiled as part of this crate.
+prebindgen-jni-runtime = { workspace = true }
+jni = "0.21.1"
+# The generated JNI error path logs via `tracing::error!`.
+tracing = "0.1"
+
+[build-dependencies]
+prebindgen = { workspace = true }
+prebindgen-registry = { workspace = true }
+prebindgen-jni = { workspace = true }
+syn = { workspace = true }

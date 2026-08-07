@@ -23,6 +23,7 @@ cd "$repo_root"
 
 # Committed generated outputs, per example crate.
 generated_paths=(
+    examples/emitcheck/src/generated_bindings.rs
     examples/covertest-kotlin/src/generated_bindings.rs
     examples/covertest-kotlin/kotlin/generated
     examples/perftest-kotlin/src/generated_bindings.rs
@@ -35,6 +36,7 @@ generated_paths=(
 
 echo "== regenerating in-repo bindings (cargo build)"
 cargo build --release \
+    -p emitcheck \
     -p covertest-kotlin \
     -p perftest-kotlin \
     -p perftest-c \

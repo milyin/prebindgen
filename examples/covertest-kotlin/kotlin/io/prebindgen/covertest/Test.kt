@@ -52,6 +52,8 @@ import io.prebindgen.covertest.model.boxedOptPayloadId
 import io.prebindgen.covertest.model.boxedOptPriorityWeight
 import io.prebindgen.covertest.model.boxedPayloadId
 import io.prebindgen.covertest.model.boxedRunIdSum
+import io.prebindgen.covertest.model.refVecIdSum
+import io.prebindgen.covertest.model.sliceIdSum
 import io.prebindgen.covertest.model.holderTagOr
 import io.prebindgen.covertest.model.wrappedFieldsSum
 import io.prebindgen.covertest.model.boxedNoteEcho
@@ -85,6 +87,8 @@ import io.prebindgen.covertest.model.ledgerEach
 import io.prebindgen.covertest.model.ledgerNew
 import io.prebindgen.covertest.model.reportEach
 import io.prebindgen.covertest.model.lookupOf
+import io.prebindgen.covertest.model.verdictNew
+import io.prebindgen.covertest.model.dossierNew
 import io.prebindgen.covertest.model.archiveReading
 import io.prebindgen.covertest.model.archiveReadingMaybe
 import io.prebindgen.covertest.model.archiveSetReading
@@ -581,14 +585,14 @@ fun main() {
     }
 
     // The same handle-carrying sum arriving through a CALLBACK rather than as a
-    // return. A sum payload is a plan LEAF, so the generated proxy WRAPS the
-    // pointer but does not `close()` it — unlike a plan-less `impl Fn(Handle)`
-    // arg, which closes in a `finally`. So the handle is live for as long as the
-    // receiver keeps it and is the caller's to close, exactly as for a returned
-    // sum. That contract is what this pins (#161).
+    // return. The proxy binds the reassembled value to a local and `close()`s it
+    // in a `finally` after `run` — the SAME close-unless-taken contract a
+    // plan-less `impl Fn(Handle)` arg has always had, so the payload's lifetime
+    // does not depend on whether it arrived bare or inside a sum (#218,
+    // originally pinned the other way by #161).
     section("sum with a handle payload delivered to a callback") {
         val seen = mutableListOf<String>()
-        val kept = mutableListOf<Summary>()
+        val escaped = mutableListOf<Summary>()
         lookupEach(3L, 2.5, { lookup ->
             when (lookup) {
                 is Lookup.Failed -> seen.add("failed:${lookup.v0}")
@@ -600,20 +604,76 @@ fun main() {
                     check(!s.isClosed())
                     check(s.total(boom) == 2.5)
                     seen.add("found:${s.count(boom)}")
-                    kept.add(s)
+                    escaped.add(s)
                 }
             }
         }, boom)
         check(seen == listOf("failed:negative count", "absent", "found:1"))
 
-        // Still live AFTER the call returns — the proxy did not close it — and
-        // closeable by the receiver that kept it.
+        // Closed once `run` returned: a body that merely kept the reference gets
+        // a closed handle, which is exactly what the bare-handle arg does.
+        check(escaped.size == 1)
+        check(escaped[0].isClosed())
+
+        // `take()` is how a body means to outlive the call — it moves the
+        // pointer out, so the proxy's `close()` finds nothing to free.
+        val kept = mutableListOf<Summary>()
+        lookupEach(3L, 4.0, { lookup ->
+            if (lookup is Lookup.Found) kept.add(lookup.v0.take())
+        }, boom)
         check(kept.size == 1)
         val s = kept[0]
         check(!s.isClosed())
         check(s.count(boom) == 1L)
         s.close()
         check(s.isClosed())
+    }
+
+    // The THIRD position the same handle can be reached through: a data-class
+    // FIELD whose type is the sum. `Holder` (a plain handle field) and `Verdict`
+    // (a sum field) must behave alike — that is the whole of #218. The container
+    // is `AutoCloseable` either way and its `close()` cascades either way; the
+    // walk into the alternatives lives in `Lookup`, not in `Verdict`.
+    section("a data-class field reaching a handle through a sum cascades") {
+        val v = verdictNew(7L, 3L, 1.5, boom)
+        check(v.id == 7L)
+        val found = v.outcome
+        check(found is Lookup.Found)
+        val summary = (found as Lookup.Found).v0
+        check(!summary.isClosed())
+        check(summary.count(boom) == 3L)
+
+        // Closing the CONTAINER closes the handle the sum holds — no
+        // `(v.outcome as Lookup.Found).v0.close()` at the call site.
+        v.close()
+        check(summary.isClosed())
+
+        // …and an alternative owning nothing native closes to a no-op, so the
+        // cascade is safe for every value of the field, not just the live-handle
+        // one.
+        val absent = verdictNew(8L, 0L, 0.0, boom)
+        check(absent.outcome === Lookup.Absent)
+        absent.close()
+    }
+
+    // The FOURTH position, and the row an emission test cannot cover: the field
+    // is a plain data class that itself carries the handle. `Dossier`'s cascade
+    // is the one-liner `holder.close()`, which only frees anything because
+    // `Holder` was independently rendered `AutoCloseable` by its own pass —
+    // two decisions, in two places, that nothing but a compiled run ties
+    // together. This section IS that tie: it would not compile if `Holder` had
+    // no `close()`, and the last check fails if `Dossier` had none.
+    section("a data-class field reaching a handle through a nested data class cascades") {
+        val d = dossierNew(5L, 3L, 4L, 2.0, boom)
+        check(d.note == 5L)
+        check(d.holder.tag == 3L)
+        val summary = d.holder.summary
+        check(!summary.isClosed())
+        check(summary.count(boom) == 4L)
+
+        // Two levels down, closed by one `close()` at the top.
+        d.close()
+        check(summary.isClosed())
     }
 
     // An output boundary DERIVED from the type's value form
@@ -715,8 +775,9 @@ fun main() {
                 "an absent report must reconstruct its sum as null, not as a variant"
             }
             check((aOutcome == null) == (aLabel == null))
-            (fOutcome as? Lookup.Found)?.v0?.close()
-            (aOutcome as? Lookup.Found)?.v0?.close()
+            // No `(fOutcome as? Lookup.Found)?.v0?.close()` here any more: an
+            // OPTIONAL sum arg is closed by the proxy too, under the `?.` its
+            // nullability earns (#218).
             seen.add("${fLabel ?: "-"}|${aLabel ?: "-"}")
         }, boom)
         check(seen == listOf("-|-", "l1|-", "-|l2", "l1|l2")) {
@@ -1502,6 +1563,23 @@ fun main() {
         val many = listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null))
         check(boxedElemIdSum(many, boom) == 3L)           // wrapped element
         check(boxedRunIdSum(many, boom) == 3L)            // wrapped run, by value
+        // Both now take the push-helper path through the ONE `payloadVec` trio
+        // (#296): the wrapped element is keyed on the canonical `Payload`, and
+        // its `Box` goes back on where the Vec is consumed. Weighed against each
+        // other rather than each against a literal — the claim is that a `Box`
+        // the model erases changes neither the surface nor the answer, and
+        // `boxedRunIdSum` is the bare-element control that always took this path.
+        check(boxedElemIdSum(many, boom) == boxedRunIdSum(many, boom))
+        check(boxedElemIdSum(emptyList(), boom) == 0L)    // …and the empty run
+
+        // The two spellings of a BORROWED run (#384). `&[Payload]` and
+        // `&Vec<Payload>` are one type to the model, so both take the Vec-build
+        // path and must come out identical — the `&Vec` one used to be handed a
+        // `&[Payload]`, which is an E0308 in the generated crate rather than a
+        // wrong answer. Weighed against each other, not against a literal.
+        check(refVecIdSum(many, boom) == sliceIdSum(many, boom))
+        check(sliceIdSum(many, boom) == 3L)
+        check(refVecIdSum(emptyList(), boom) == 0L)       // …and the empty run
 
         // FIELDS (#289). `boxed: Box<Option<Long>>` and `plain: Option<Long>`
         // are one type to the model, so both cross as `Long?` on the decoupled

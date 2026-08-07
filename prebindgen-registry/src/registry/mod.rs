@@ -407,9 +407,9 @@ pub struct Decompositions {
     /// plans are applied its own direct converter is genuinely not needed — for
     /// a type with no destination representation, not even resolvable.
     ///
-    /// Carries each declaration's own spelling for the same reason
-    /// [`Declared::types`] does — these are build-script-authored types the scan
-    /// diagnoses before anything has classified them.
+    /// Carries each declaration's own spelling for the same reason the declared
+    /// types do — these are build-script-authored types the scan diagnoses
+    /// before anything has classified them.
     pub replaces: HashMap<TypeKey, Origin<syn::Type>>,
 }
 

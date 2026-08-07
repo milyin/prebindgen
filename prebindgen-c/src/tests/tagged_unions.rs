@@ -762,26 +762,18 @@ fn bool_payload_is_normalised_not_materialised() {
 /// **Same `kind` ⇒ same destination-language type.** Three spellings of one
 /// optional handle present one C type.
 ///
-/// The rule the wire question actually obeys, and a correction to how #292
-/// stated it: "same `kind` ⇒ same wire" is false — a generator owns wire
-/// selection and may legitimately vary it per spelling, absorbing the
-/// difference in the destination-language wrapper (the JNI adapter crosses `&[Payload]`
-/// as a `Long` Vec handle and `Vec<Box<Payload>>` as a `JObject`, both surfacing
-/// as `List<Payload>`). What must not vary is **what the destination sees**.
+/// The rule itself is stated on [`prebindgen_registry::Prebindgen`], and the
+/// layout-mirror exemption on [`CbindgenBuilder::repr_c_struct`]; this pins the
+/// **converted** case in C.
 ///
-/// A union payload is the position where that bites in C, because it is
-/// *converted* — rebuilt arm by arm — so nothing about the Rust layout is
-/// forced on the C type. `Option<Box<Handle>>` took an opaque-pointer arm keyed
-/// on the `Box` in the spelling, while `Option<Handle>` fell through to the
-/// converter-destination rule and was **refused outright** (its output side is a
+/// A union payload is where the rule bites here, because it is *converted* —
+/// rebuilt arm by arm — so nothing about the Rust layout is forced on the C
+/// type. `Option<Box<Handle>>` took an opaque-pointer arm keyed on the `Box` in
+/// the spelling, while `Option<Handle>` fell through to the converter-
+/// destination rule and was **refused outright** (its output side is a
 /// structural marker whose `()` cannot agree with the input's pointer). So an
 /// erased wrapper decided whether the shape was expressible at all — the same
 /// defect shape as the JNI adapter's declaration lookup in #292.
-///
-/// The exemption this does *not* touch is [`CbindgenBuilder::repr_c_struct`]: a
-/// zero-copy mirror is reinterpreted from the source struct's bytes, so its C
-/// type is a **layout** fact and `Box<T>` (a pointer) really is a different C
-/// type from `T` (inline). There the spelling is load-bearing by construction.
 #[test]
 fn one_kind_presents_one_c_type_however_it_is_spelled() {
     let loc = SourceLocation::default();
