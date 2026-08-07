@@ -16,7 +16,7 @@ use crate::{CRATE_NAME_FILE, FEATURES_FILE};
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// // build.rs
 /// fn main() {
 ///     prebindgen::init_prebindgen_out_dir();

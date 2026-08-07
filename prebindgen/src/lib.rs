@@ -58,7 +58,7 @@
 //! ordinary types returned by value, fallible calls return `Result<T, E>`; the
 //! language adapter does the C-ABI lowering, so there is no `#[repr(C)]` here.
 //!
-//! ```rust,ignore
+//! ```rust
 //! // example-flat/src/lib.rs
 //! use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 //!

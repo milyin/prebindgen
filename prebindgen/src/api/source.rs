@@ -42,9 +42,9 @@ thread_local! {
 /// The `PREBINDGEN_OUT_DIR` constant is defined in the source FFI crate using the
 /// `prebindgen_out_dir!()` macro:
 ///
-/// ```ignore
+/// ```rust
 /// // In source_ffi/src/lib.rs
-/// use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
+/// use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 ///
 /// pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
 /// pub const FEATURES: &str = features!();
@@ -482,7 +482,7 @@ impl Builder {
     /// Filtering is enabled by default; the default constant name is `FEATURES`.
     ///
     /// The features constant should be defined in the source crate as follows:
-    /// ```rust,ignore
+    /// ```rust
     /// const FEATURES: &str = prebindgen_proc_macro::features!();
     /// ```
     #[roxygen]
@@ -521,7 +521,7 @@ impl Builder {
     /// for correct code generation it's necessary to inform the underlying "ffi"
     /// crate about the real target in a way like this:
     ///
-    /// ```ignore
+    /// ```sh
     /// CROSS_TARGET=x86_64-pc-windows-gnu cargo build --target x86_64-pc-windows-gnu
     /// ```
     ///

@@ -191,7 +191,8 @@ fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
 ///
 /// # Usage
 ///
-/// ```rust,ignore
+/// ```rust
+/// # use prebindgen_proc_macro::prebindgen;
 /// // Use with explicit group name
 /// #[prebindgen("group_name")]
 /// #[repr(C)]
@@ -360,7 +361,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use prebindgen_proc_macro::prebindgen_out_dir;
 ///
 /// // Create a public constant for use by binding crates
@@ -397,7 +398,7 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use prebindgen_proc_macro::features;
 ///
 /// pub const ENABLED_FEATURES: &str = features!();
@@ -425,7 +426,7 @@ pub fn features(_input: TokenStream) -> TokenStream {
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use prebindgen_proc_macro::manifest_dir;
 ///
 /// // Create a public constant for use by binding crates

@@ -37,6 +37,12 @@ testing = []
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+# Path-only, deliberately: this is a dev-dependency *cycle* (prebindgen-proc-macro
+# depends on prebindgen), which Cargo allows, but a `version` here would make
+# `cargo publish` demand a crates.io release that does not exist yet. Without one,
+# Cargo strips the dev-dep from the published manifest. Needed so the crate-level
+# and `Source` doctests can actually run `#[prebindgen]` instead of being ```ignore.
+prebindgen-proc-macro = { path = "../prebindgen-proc-macro" }
 
 [package.metadata.docs.rs]
 all-features = true
