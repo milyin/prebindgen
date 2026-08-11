@@ -203,7 +203,9 @@ static void correctness(struct storage_t *s) {
  * pattern); for a null label there is nothing to re-provide and `p` is reused as-is. */
 static double bench_put_by_take(struct storage_t *s, const char *label, uint64_t *sink) {
     (void)sink;
-    struct payload_t p = make_payload(42, 7, label);
+    /* NULL label even in the `.str` variant: the loop provides one per iteration, so
+     * seeding a string here would just be overwritten unfreed on the first iteration. */
+    struct payload_t p = make_payload(42, 7, NULL);
     double t0 = now_ns();
     for (uint64_t i = 0; i < g_n; i++) {
         if (label) p.label = string_new(label); /* re-provide the moved-out string */
