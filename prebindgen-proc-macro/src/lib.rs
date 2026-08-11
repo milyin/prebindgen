@@ -36,7 +36,11 @@
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
-use std::{collections::HashMap, fs::OpenOptions};
+use std::{
+    collections::HashSet,
+    hash::{Hash, Hasher},
+    sync::{Mutex, OnceLock},
+};
 
 use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
@@ -135,51 +139,59 @@ impl Parse for PrebindgenArgs {
     }
 }
 
-thread_local! {
-    static THREAD_ID: std::cell::RefCell<Option<u64>> = const { std::cell::RefCell::new(None) };
-    static JSONL_PATHS: std::cell::RefCell<HashMap<String, std::path::PathBuf>> = std::cell::RefCell::new(HashMap::new());
+/// Groups whose JSONL file this process has already reset.
+static STARTED_GROUPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+/// Identify the compilation unit this expansion belongs to.
+///
+/// `build.rs` clears the prebindgen directory, but only when Cargo re-runs the
+/// build script — plain `cargo check` / `build` / `test` / `clippy` cycles
+/// re-run *rustc* against an untouched directory. A per-process file name would
+/// therefore leave one stale JSONL file behind per rustc invocation, forever
+/// (#201). The id has to be stable across rebuilds of the same unit (so the
+/// file is overwritten) yet differ between units built concurrently, e.g. lib
+/// vs. test: rustc's own `-C metadata` hash is exactly that. rustdoc, which
+/// compiles doctests without `-C metadata`, gets a hash of its command line
+/// instead — equally stable per unit.
+fn unit_id() -> &'static str {
+    static UNIT_ID: OnceLock<String> = OnceLock::new();
+    UNIT_ID.get_or_init(|| {
+        let args: Vec<String> = std::env::args().collect();
+        if let Some(metadata) =
+            args.iter()
+                .enumerate()
+                .find_map(|(i, arg)| match arg.strip_prefix("-C") {
+                    Some("") => args.get(i + 1)?.strip_prefix("metadata="),
+                    Some(rest) => rest.strip_prefix("metadata="),
+                    None => None,
+                })
+        {
+            return metadata.to_string();
+        }
+        if args.is_empty() {
+            // No command line to key off at all — stay unique per process.
+            return format!("{}_{}", std::process::id(), rand::random::<u64>());
+        }
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        args.hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
+    })
 }
 
-/// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
+/// Get the full path to `{group}_{unit_id}.jsonl` in OUT_DIR, truncating it on
+/// the first write of this process so re-running the same unit replaces its
+/// records instead of appending them again.
 fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
-    if let Some(p) = JSONL_PATHS.with(|path| path.borrow().get(group).cloned()) {
-        return p;
+    let path = get_prebindgen_out_dir().join(format!("{group}_{}.jsonl", unit_id()));
+    let first_write = STARTED_GROUPS
+        .get_or_init(Mutex::default)
+        .lock()
+        .map(|mut started| started.insert(group.to_string()))
+        .unwrap_or(false);
+    if first_write {
+        let _ = std::fs::remove_file(&path);
     }
-    let process_id = std::process::id();
-    let thread_id = if let Some(in_thread_id) = THREAD_ID.with(|id| *id.borrow()) {
-        in_thread_id
-    } else {
-        let new_id = rand::random::<u64>();
-        THREAD_ID.with(|id| *id.borrow_mut() = Some(new_id));
-        new_id
-    };
-    let mut random_value = None;
-    // Try to really create file and repeat until success
-    // to avoid collisions in extremely rare case when two threads got
-    // the same random value
-    let new_path = loop {
-        let postfix = if let Some(rv) = random_value {
-            format!("_{rv}")
-        } else {
-            "".to_string()
-        };
-        let path = get_prebindgen_out_dir()
-            .join(format!("{group}_{process_id}_{thread_id}{postfix}.jsonl"));
-        if OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&path)
-            .is_ok()
-        {
-            break path;
-        }
-        random_value = Some(rand::random::<u32>());
-    };
-    JSONL_PATHS.with(|path| {
-        path.borrow_mut()
-            .insert(group.to_string(), new_path.clone());
-    });
-    new_path
+    path
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
@@ -438,4 +450,37 @@ pub fn manifest_dir(_input: TokenStream) -> TokenStream {
         .expect("CARGO_MANIFEST_DIR environment variable not set");
     let lit = syn::LitStr::new(&dir, proc_macro2::Span::call_site());
     TokenStream::from(quote! { #lit })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_prebindgen_jsonl_path;
+
+    /// The same unit must reuse one file: dropped what a previous run of this
+    /// unit left there, then appended to within the run.
+    #[test]
+    fn jsonl_file_is_reset_once_per_run() {
+        let out_dir = std::env::temp_dir().join(format!("prebindgen-test-{}", std::process::id()));
+        std::fs::create_dir_all(out_dir.join("prebindgen")).unwrap();
+        std::env::set_var("OUT_DIR", &out_dir);
+
+        let stale = out_dir
+            .join("prebindgen")
+            .join(format!("test_group_{}.jsonl", super::unit_id()));
+        std::fs::write(&stale, "from a previous run\n").unwrap();
+
+        let path = get_prebindgen_jsonl_path("test_group");
+        assert_eq!(path, stale);
+        assert!(!path.exists(), "records of the previous run were kept");
+
+        std::fs::write(&path, "first record\n").unwrap();
+        assert_eq!(get_prebindgen_jsonl_path("test_group"), path);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "first record\n",
+            "records of this run were dropped"
+        );
+
+        std::fs::remove_dir_all(&out_dir).unwrap();
+    }
 }

@@ -17,12 +17,14 @@ pub fn write_to_jsonl_file<P: AsRef<Path>, R: Borrow<Record>>(
     let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) else {
         return Err("Failed to open file".into());
     };
-    // Check if file is empty (just created or was deleted)
+    // One write for the whole batch: several rustc threads can append to the
+    // same file, and a line split across writes would interleave into garbage.
+    let mut buf = String::new();
     for record in records {
-        let json_line = record.borrow().to_jsonl_string()?;
-        writeln!(file, "{json_line}")?;
+        buf.push_str(&record.borrow().to_jsonl_string()?);
+        buf.push('\n');
     }
-    file.flush()?;
+    file.write_all(buf.as_bytes())?;
     Ok(())
 }
 
