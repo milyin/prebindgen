@@ -45,7 +45,7 @@ not a rewrite.
 |---|---|---|
 | 1 | The enumerator, both targets, committed report + regen gate | **landed** ([#400](https://github.com/milyin/prebindgen/pull/400)) |
 | 2 | Receipts: rustc accepts the emitted Rust | **landed** ([#403](https://github.com/milyin/prebindgen/pull/403)) |
-| 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#404](https://github.com/milyin/prebindgen/pull/404)) |
+| 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#405](https://github.com/milyin/prebindgen/pull/405)) |
 | 2c | The Kotlin compiler, and `RuntimeExercised` | not started |
 | 3 | The minimum-guarantees table | not started |
 | 4 | Multi-parameter aliasing fixtures | not started |
