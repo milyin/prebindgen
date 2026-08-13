@@ -16,6 +16,7 @@ members = [
     "examples/covertest-helpers",
     "examples/covertest-kotlin",
     "examples/emitcheck",
+    "examples/shape-matrix",
 ]
 resolver = "2"
 package.version = "0.5.0"
