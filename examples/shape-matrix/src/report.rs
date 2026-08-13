@@ -9,6 +9,7 @@ use std::fmt::Write as _;
 use crate::{
     check::{self, Unit},
     corpus::{Position, Shape, SHAPES},
+    header::{self, Header},
     run::{declarations, run, ClassKind, State, Target},
     tag::TypeTag,
 };
@@ -40,6 +41,11 @@ struct Cell {
     /// to check — the generator refused the cell, or the check could not run at
     /// all, which is not a verdict about the cell either.
     compiled: Option<bool>,
+    /// What cbindgen made of it. `None` for every JNI cell — that target's next
+    /// stage is the Kotlin compiler, which this crate does not run — and for
+    /// any cell whose Rust did not compile, since there would be nothing sound
+    /// to hand on.
+    header: Option<Header>,
 }
 
 impl Cell {
@@ -54,13 +60,30 @@ impl Cell {
         )
     }
 
-    /// What the table prints.
+    /// What the table prints: the furthest stage this cell reached.
+    ///
+    /// The ladders differ by target and say so, rather than being levelled to
+    /// the shorter one: C runs one stage further than JNI does here, and
+    /// printing `rustc` for a C cell whose header is fine would throw away the
+    /// stronger evidence.
     fn text(&self) -> String {
         match (&self.state, self.compiled) {
-            (State::PlanSupported, Some(true)) => "rustc".to_string(),
+            (State::PlanSupported, Some(true)) => match &self.header {
+                None => "rustc".to_string(),
+                Some(Header::Declared) => "header".to_string(),
+                Some(Header::Missing) => "**no decl**".to_string(),
+                Some(Header::Failed(_)) => "**bad header**".to_string(),
+            },
             (State::PlanSupported, Some(false)) => "**bad rust**".to_string(),
             (state, _) => state.cell(),
         }
+    }
+
+    /// The line the diagnostics list carries for this cell, if any.
+    fn detail(&self) -> Option<String> {
+        self.state
+            .detail()
+            .or_else(|| self.header.as_ref().and_then(Header::detail))
     }
 }
 
@@ -82,6 +105,7 @@ fn run_all() -> Vec<Cell> {
                     target: *target,
                     state: outcome.state,
                     compiled: None,
+                    header: None,
                 };
                 if let Some(emitted) = outcome.emitted {
                     units.push(Unit {
@@ -107,6 +131,18 @@ fn run_all() -> Vec<Cell> {
                     cell.compiled = Some(checked.compiled.contains(&cell.id()));
                 }
             }
+            // Only what compiles goes on to cbindgen: a header derived from
+            // Rust that does not build says nothing about the cell.
+            for cell in &mut cells {
+                if cell.target == Target::C && cell.compiled == Some(true) {
+                    let emitted = units
+                        .iter()
+                        .find(|u| u.id == cell.id())
+                        .map(|u| u.emitted.as_str())
+                        .unwrap_or_default();
+                    cell.header = Some(header::generate(emitted, crate::run::PROBE_FN));
+                }
+            }
             for (id, messages) in &checked.failed {
                 eprintln!("shape-matrix: {id} emitted Rust that does not compile:");
                 for message in messages {
@@ -122,8 +158,8 @@ fn run_all() -> Vec<Cell> {
 
 fn render_summary(out: &mut String, results: &[Cell]) {
     out.push_str("## Summary\n\n");
-    out.push_str("| Target | rustc | bad rust | plan only | rejected | panic | n/a |\n");
-    out.push_str("|---|---:|---:|---:|---:|---:|---:|\n");
+    out.push_str("| Target | header | rustc | bad header | bad rust | rejected | panic | n/a |\n");
+    out.push_str("|---|---:|---:|---:|---:|---:|---:|---:|\n");
     for target in Target::ALL {
         let of = |f: fn(&Cell) -> bool| {
             results
@@ -133,16 +169,23 @@ fn render_summary(out: &mut String, results: &[Cell]) {
         };
         let _ = writeln!(
             out,
-            "| {} | {} | {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {} | {} | {} |",
             target.as_str(),
-            of(|c| c.compiled == Some(true)),
+            of(|c| c.header.as_ref().is_some_and(Header::is_ok)),
+            of(|c| c.compiled == Some(true) && c.header.is_none()),
+            of(|c| c.header.as_ref().is_some_and(|h| !h.is_ok())),
             of(|c| c.compiled == Some(false)),
-            of(|c| matches!(c.state, State::PlanSupported) && c.compiled.is_none()),
             of(|c| matches!(c.state, State::Rejected(_))),
             of(|c| matches!(c.state, State::Panicked(_))),
             of(|c| matches!(c.state, State::NotApplicable(_))),
         );
     }
+    out.push_str(
+        "\nThe two targets stop at different stages: a C cell goes on to cbindgen, \
+         a Kotlin/JNI cell stops at rustc because this crate does not run the Kotlin \
+         compiler. `rustc` is therefore the top state for JNI and an intermediate \
+         one for C.\n",
+    );
     out.push('\n');
 }
 
@@ -173,7 +216,7 @@ fn render_position(out: &mut String, results: &[Cell], position: Position) {
 
     let mut notes: Vec<String> = Vec::new();
     for cell in results.iter().filter(|c| c.position == position) {
-        if let Some(detail) = cell.state.detail() {
+        if let Some(detail) = cell.detail() {
             notes.push(format!(
                 "- `{}` / {}: {}",
                 cell.shape.id,
@@ -272,7 +315,10 @@ never by a hand-written list of what is supposed to work. See
 
 | Cell | Meaning |
 |---|---|
-| `rustc` | the generator produced Rust **and rustc accepted it**. Neither cbindgen nor the Kotlin compiler has seen it. |
+| `header` | C only: rustc accepted the Rust **and cbindgen declared the wrapper in a header**. The furthest any cell gets today. |
+| `rustc` | the generator produced Rust and rustc accepted it. For JNI this is the top of the ladder — the Kotlin compiler does not run here, though the Kotlin **is** generated, and a cell whose Kotlin cannot be written is `rejected`. |
+| **`no decl`** | cbindgen produced a header that does not declare the wrapper — nothing a C program can call. |
+| **`bad header`** | cbindgen refused the emitted Rust, or panicked on it. |
 | **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. |
 | `plan` | generation succeeded and the compile check did not run (see the run\'s stderr). |
 | `rejected` | the generator refused the shape **and said why**. The intended outcome for anything unsupported. |
