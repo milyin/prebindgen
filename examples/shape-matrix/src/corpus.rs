@@ -46,15 +46,20 @@ impl Need {
             // Both targets need a way to render an error, so the accessor is
             // part of the declaration rather than something a cell goes
             // without.
-            // An error type is `Clone` and `Display` because that is what an
-            // error type is; a fixture without them spends its fallible cells
-            // measuring that requirement instead of whether the shape crosses.
+            // An error type is `Clone`, `Display` and `From<String>` because
+            // that is what an error type is here: the C binding routes its own
+            // messages — an alias rejection, a null handle — through the
+            // declared error type, so `From<String>` is a requirement of the
+            // channel and not of any one shape. A fixture without these spends
+            // its fallible cells measuring them instead.
             Need::Error => {
-                "#[derive(Clone)] pub struct ZError { pub code: u64 }\n\
+                "#[derive(Clone)] pub struct ZError { pub code: u64, pub message: String }\n\
                  impl std::fmt::Display for ZError {\n\
                  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n\
-                 write!(f, \"error {}\", self.code) } }\n\
-                 pub fn zerror_message(e: &ZError) -> String { unimplemented!() }"
+                 write!(f, \"{}\", self.message) } }\n\
+                 impl From<String> for ZError {\n\
+                 fn from(message: String) -> Self { ZError { code: 1, message } } }\n\
+                 pub fn zerror_message(e: &ZError) -> String { e.to_string() }"
             }
         }
     }
@@ -203,6 +208,13 @@ pub struct Call {
     pub id: &'static str,
     /// The parameter types, in order.
     pub params: &'static [&'static str],
+    /// The return type, if the call has one.
+    ///
+    /// It matters for more than the return position: a C binding whose inputs
+    /// can fail must say what happens when they do, and a function returning
+    /// `Result` says it by reporting an error where a `()` one can only abort.
+    /// So the same parameters answer differently depending on this.
+    pub ret: Option<&'static str>,
     pub needs: &'static [Need],
 }
 
@@ -217,6 +229,7 @@ pub const CALLS: &[Call] = &[
     Call {
         id: "consume_consume",
         params: &["Handle", "Handle"],
+        ret: None,
         needs: &[Need::Handle],
     },
     // A consume beside a borrow: the borrow dangles the moment the consume
@@ -224,6 +237,7 @@ pub const CALLS: &[Call] = &[
     Call {
         id: "consume_borrow",
         params: &["Handle", "&Handle"],
+        ret: None,
         needs: &[Need::Handle],
     },
     // Two shared borrows of one resource are legal Rust and legal C, so this
@@ -231,6 +245,7 @@ pub const CALLS: &[Call] = &[
     Call {
         id: "borrow_borrow",
         params: &["&Handle", "&Handle"],
+        ret: None,
         needs: &[Need::Handle],
     },
     // A consume beside an optional handle: the same domain through a different
@@ -239,12 +254,14 @@ pub const CALLS: &[Call] = &[
     Call {
         id: "consume_optional",
         params: &["Handle", "Option<Handle>"],
+        ret: None,
         needs: &[Need::Handle],
     },
     // A handle beside a value struct — different domains, nothing to alias.
     Call {
         id: "handle_and_record",
         params: &["Handle", "Rec"],
+        ret: None,
         needs: &[Need::Handle, Need::Record],
     },
     // A handle beside a sum, whose payload is not a handle: the pair a
@@ -252,6 +269,7 @@ pub const CALLS: &[Call] = &[
     Call {
         id: "handle_and_sum",
         params: &["Handle", "Sum"],
+        ret: None,
         needs: &[Need::Handle, Need::Sum],
     },
     // No handles at all — the control: whatever the preflight does, it has
@@ -259,13 +277,32 @@ pub const CALLS: &[Call] = &[
     Call {
         id: "two_records",
         params: &["Rec", "Rec"],
+        ret: None,
         needs: &[Need::Record],
     },
     // Three, with the consume last: position within the call must not matter.
     Call {
         id: "borrow_borrow_consume",
         params: &["&Handle", "&Handle", "Handle"],
+        ret: None,
         needs: &[Need::Handle],
+    },
+    // The same pairs, fallible. A C binding whose inputs can fail must say what
+    // happens when they do: a `()` function can only abort — a panic cannot
+    // cross `extern "C"` — while one returning `Result` reports an error the
+    // caller can act on. The alias guard rides that same channel, so these are
+    // the shapes whose rejection is observable rather than fatal.
+    Call {
+        id: "consume_consume_fallible",
+        params: &["Handle", "Handle"],
+        ret: Some("Result<(), ZError>"),
+        needs: &[Need::Handle, Need::Error],
+    },
+    Call {
+        id: "borrow_borrow_fallible",
+        params: &["&Handle", "&Handle"],
+        ret: Some("Result<(), ZError>"),
+        needs: &[Need::Handle, Need::Error],
     },
 ];
 

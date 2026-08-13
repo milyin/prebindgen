@@ -33,8 +33,8 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Target | header | rustc | bad header | bad rust | rejected | panic | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| C | 63 | 0 | 0 | 5 | 42 | 32 | 22 |
-| Kotlin/JNI | 0 | 93 | 0 | 6 | 34 | 9 | 22 |
+| C | 65 | 0 | 0 | 5 | 42 | 32 | 22 |
+| Kotlin/JNI | 0 | 95 | 0 | 6 | 34 | 9 | 22 |
 
 The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin/JNI cell stops at rustc because this crate does not run the Kotlin compiler. `rustc` is therefore the top state for JNI and an intermediate one for C.
 
@@ -352,6 +352,22 @@ What this table says is whether such a call can be expressed. Whether the guard 
 | `handle_and_sum` | `(Handle, Sum)` | header | rustc |
 | `two_records` | `(Rec, Rec)` | header | rustc |
 | `borrow_borrow_consume` | `(&Handle, &Handle, Handle)` | header | rustc |
+| `consume_consume_fallible` | `(Handle, Handle)` | header | rustc |
+| `borrow_borrow_fallible` | `(&Handle, &Handle)` | header | rustc |
+
+## Runtime
+
+The claims the call axis could not make. Every stage above asks whether something could be *produced*; these ask what the produced code **does**, by calling it — the C target's `extern "C"` wrappers are ordinary Rust functions, so this needs no C toolchain and no JVM. A case counts as holding only when its generated test executed and passed.
+
+They are a discrimination set, not a wish list: a guard that fires on everything passes the first and fails the second, and one that fires on nothing does the reverse.
+
+| Case | Proves | Outcome |
+|---|---|---|
+| `aliased_consume_is_rejected` | a call naming one resource twice is rejected, and neither conversion runs | holds |
+| `distinct_resources_are_spared` | two distinct resources in the same call are not flagged | holds |
+| `shared_borrows_of_one_resource_are_legal` | two shared borrows of one resource are accepted — legal Rust, legal C | holds |
+
+Kotlin/JNI has no equivalent here: its wrappers are entered from a JVM, and reaching them needs one.
 
 ## Declaration policy
 

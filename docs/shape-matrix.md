@@ -46,7 +46,8 @@ not a rewrite.
 | 1 | The enumerator, both targets, committed report + regen gate | **landed** ([#400](https://github.com/milyin/prebindgen/pull/400)) |
 | 2 | Receipts: rustc accepts the emitted Rust | **landed** ([#403](https://github.com/milyin/prebindgen/pull/403)) |
 | 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#405](https://github.com/milyin/prebindgen/pull/405)) |
-| 2c | The Kotlin compiler, and `RuntimeExercised` | not started |
+| 2c | The runtime — C side, in pure Rust | **landed** ([#409](https://github.com/milyin/prebindgen/pull/409)) |
+| 2d | The Kotlin compiler and the JVM runtime | not started — needs kotlinc and a JVM in CI |
 | 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
 | 4 | The call axis | **landed** ([#407](https://github.com/milyin/prebindgen/pull/407)) |
 | 5 | The declaration-policy axis | **landed** for the JNI vocabulary ([#408](https://github.com/milyin/prebindgen/pull/408)); C's own declarators blocked |
@@ -107,14 +108,24 @@ The header receipt is that the wrapper is *declared*, not that cbindgen returned
 The ladders differ by target now, and the report says so rather than levelling to
 the shorter one: `header` for C, `rustc` for JNI.
 
-### 2c. The Kotlin compiler, and the runtime
+### 2c. The runtime, C side — landed
 
-The Kotlin emitted in 2b is written but never compiled, so the JNI ladder still
-ends one stage short of C's; closing it needs kotlinc in CI.
-`RuntimeExercised` needs the JVM covertest and the C smoke tests, under the same
-receipt rule — a fixture emits its cell id only *after* the relevant assertion
-has executed, and a cell with no receipt keeps the weaker state whatever any
-table claims.
+The C target's `extern "C"` wrappers are ordinary Rust functions, so running them
+needs no C toolchain and no CI change: it is a `cargo test`. Three cases settle
+what the call axis could not — the alias guard fires, spares, and runs *before*
+ownership moves, the last proven by reclaiming the resource afterwards, which
+would be a double free if a converter had run.
+
+Two shapes of C binding are now in the corpus because the difference is
+load-bearing: a `()`-returning one **aborts** on rejection (a panic cannot cross
+`extern "C"`), while a fallible one reports through the error out-param. Only the
+second is observable in-process, and only the second is what a real C API does.
+
+### 2d. The Kotlin compiler and the JVM runtime
+
+Still open, and the first step in this sequence that is not self-contained: the
+Kotlin emitted in 2b is written but never compiled, and its wrappers are entered
+from a JVM. Both need toolchains in CI.
 
 ### 3. The guarantee ratchet — landed
 
