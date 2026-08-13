@@ -37,6 +37,7 @@ pub fn render() -> String {
         render_position(&mut out, results, *position);
     }
     render_calls(&mut out, results);
+    render_runtime(&mut out);
     render_policies(&mut out, results);
     render_coverage(&mut out);
     render_class_coverage(&mut out);
@@ -387,6 +388,45 @@ fn render_calls(out: &mut String, results: &[Cell]) {
         }
         out.push_str("\n</details>\n\n");
     }
+}
+
+fn render_runtime(out: &mut String) {
+    out.push_str("## Runtime\n\n");
+    out.push_str(
+        "The claims the call axis could not make. Every stage above asks whether \
+         something could be *produced*; these ask what the produced code **does**, by \
+         calling it — the C target's `extern \"C\"` wrappers are ordinary Rust \
+         functions, so this needs no C toolchain and no JVM. A case counts as holding \
+         only when its generated test executed and passed.\n\nThey are a discrimination \
+         set, not a wish list: a guard that fires on everything passes the first and \
+         fails the second, and one that fires on nothing does the reverse.\n\n",
+    );
+    out.push_str("| Case | Proves | Outcome |\n|---|---|---|\n");
+
+    let outcomes = match crate::runtime::exercise() {
+        Ok(outcomes) => outcomes,
+        Err(err) => {
+            eprintln!("shape-matrix: the runtime stage did not run: {err}");
+            Default::default()
+        }
+    };
+    for case in crate::runtime::CASES {
+        let outcome = outcomes
+            .get(case.id)
+            .copied()
+            .unwrap_or(crate::runtime::Outcome::NotRun);
+        let _ = writeln!(
+            out,
+            "| `{}` | {} | {} |",
+            case.id,
+            case.proves,
+            outcome.cell()
+        );
+    }
+    out.push_str(
+        "\nKotlin/JNI has no equivalent here: its wrappers are entered from a JVM, and \
+         reaching them needs one.\n\n",
+    );
 }
 
 fn render_policies(out: &mut String, results: &[Cell]) {

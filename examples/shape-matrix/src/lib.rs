@@ -47,6 +47,11 @@
 //! answer moved"*; the floor says *"an answer moved **down**"*, which is the
 //! half that does not need a reviewer to catch it.
 //!
+//! Three cases go one stage further and are [run](runtime): the C target's
+//! `extern "C"` wrappers are ordinary Rust functions, so whether the alias guard
+//! fires, spares, and runs before ownership moves can be established by calling
+//! them — no C toolchain, no JVM.
+//!
 //! Run it with `cargo run -p shape-matrix`, which rewrites `REPORT.md`; add
 //! `-- --update-guarantees` to raise the floors to what the run achieved.
 
@@ -56,6 +61,7 @@ pub mod guarantees;
 pub mod header;
 pub mod report;
 pub mod run;
+pub mod runtime;
 pub mod tag;
 
 use corpus::{Need, Shape, SHAPES};

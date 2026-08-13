@@ -217,7 +217,16 @@ pub fn call_fixture_source(call: &Call) -> String {
         .map(|n| format!("let _ = p{n};"))
         .collect::<Vec<_>>()
         .join(" ");
-    items.push(format!("pub fn {PROBE_FN}({params}) {{ {uses} }}"));
+    let ret = call.ret.map(|r| format!(" -> {r}")).unwrap_or_default();
+    let body = match call.ret {
+        // A fallible call must actually return: its failure path is the thing
+        // under test, and a body that panicked would abort instead — a panic
+        // cannot cross `extern "C"`.
+        Some(ret) if ret.starts_with("Result<()") => format!("{uses} Ok(())"),
+        Some(_) => format!("{uses} unimplemented!()"),
+        None => uses,
+    };
+    items.push(format!("pub fn {PROBE_FN}({params}){ret} {{ {body} }}"));
     items.join("\n")
 }
 

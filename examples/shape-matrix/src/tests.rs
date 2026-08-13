@@ -5,6 +5,7 @@ use crate::{
     corpus::{Position, CALLS, POLICIES, SHAPES},
     guarantees, header,
     run::{declarations, kind_of, not_applicable, ClassKind, Target},
+    runtime,
 };
 
 /// The gate this crate exists to hold.
@@ -138,6 +139,27 @@ fn every_policy_varies_a_declaration() {
             policy.position.as_str()
         );
     }
+}
+
+/// A runtime case must name a call the corpus defines, and no two cases may
+/// share an id: the id is the test's name, and the harness's result line for
+/// that name is the only thing that says the case holds.
+#[test]
+fn every_runtime_case_names_a_live_call() {
+    let mut ids: Vec<&str> = Vec::new();
+    for case in runtime::CASES {
+        assert!(
+            CALLS.iter().any(|c| c.id == case.call),
+            "runtime case `{}` names unknown call `{}`",
+            case.id,
+            case.call
+        );
+        ids.push(case.id);
+    }
+    let before = ids.len();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(before, ids.len(), "two runtime cases share an id");
 }
 
 /// A cell id is a file name, a receipt key and a guarantee key at once, so a

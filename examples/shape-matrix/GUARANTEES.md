@@ -32,12 +32,16 @@ this crate does not run the Kotlin compiler yet.
 | `borrow_borrow__call__jni` | `compiles` |
 | `borrow_borrow_consume__call__c` | `header` |
 | `borrow_borrow_consume__call__jni` | `compiles` |
+| `borrow_borrow_fallible__call__c` | `header` |
+| `borrow_borrow_fallible__call__jni` | `compiles` |
 | `callback__param__jni` | `compiles` |
 | `callback_handle__param__jni` | `compiles` |
 | `consume_borrow__call__c` | `header` |
 | `consume_borrow__call__jni` | `compiles` |
 | `consume_consume__call__c` | `header` |
 | `consume_consume__call__jni` | `compiles` |
+| `consume_consume_fallible__call__c` | `header` |
+| `consume_consume_fallible__call__jni` | `compiles` |
 | `consume_optional__call__c` | `header` |
 | `consume_optional__call__jni` | `compiles` |
 | `cow_str__field__jni` | `generates` |
