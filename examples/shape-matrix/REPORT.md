@@ -14,7 +14,7 @@ never by a hand-written list of what is supposed to work. See
 | `rustc` | the generator produced Rust and rustc accepted it. For JNI this is the top of the ladder — the Kotlin compiler does not run here, though the Kotlin **is** generated, and a cell whose Kotlin cannot be written is `rejected`. |
 | **`no decl`** | cbindgen produced a header that does not declare the wrapper — nothing a C program can call. |
 | **`bad header`** | cbindgen refused the emitted Rust, or panicked on it. |
-| **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. |
+| **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. It also covers a refusal the generator *chose* to make at compile time, through a generated assertion with its own message: same user-visible outcome, and a refusal arriving as a compile error rather than as a named rejection at declaration time is [#191](https://github.com/milyin/prebindgen/issues/191)'s subject. The run's stderr distinguishes them. |
 | `plan` | generation succeeded and the compile check did not run (see the run's stderr). |
 | `rejected` | the generator refused the shape **and said why**. The intended outcome for anything unsupported. |
 | **`panic`** | the generator refused it without a diagnosis — the user gets a stack trace instead of a sentence ([#191](https://github.com/milyin/prebindgen/issues/191)). |
@@ -33,8 +33,8 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Target | header | rustc | bad header | bad rust | rejected | panic | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| C | 53 | 0 | 0 | 5 | 41 | 31 | 22 |
-| Kotlin/JNI | 0 | 83 | 0 | 5 | 34 | 8 | 22 |
+| C | 63 | 0 | 0 | 5 | 42 | 32 | 22 |
+| Kotlin/JNI | 0 | 93 | 0 | 6 | 34 | 9 | 22 |
 
 The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin/JNI cell stops at rustc because this crate does not run the Kotlin compiler. `rustc` is therefore the top state for JNI and an intermediate one for C.
 
@@ -352,6 +352,35 @@ What this table says is whether such a call can be expressed. Whether the guard 
 | `handle_and_sum` | `(Handle, Sum)` | header | rustc |
 | `two_records` | `(Rec, Rec)` | header | rustc |
 | `borrow_borrow_consume` | `(&Handle, &Handle, Handle)` | header | rustc |
+
+## Declaration policy
+
+The same Rust, in the same position, with its declared type declared as something else. A binding author chooses this — a struct can cross by value or as an opaque handle — and while every type is declared exactly one way, whether the choice decides the answer is invisible.
+
+Each row shows the canonical answer beside the varied one, because the difference is the point.
+
+| Shape | Position | Declared as | C | C canonical | Kotlin/JNI | JNI canonical |
+|---|---|---|---|---|---|---|
+| `record` | parameter | opaque handle | header | header | rustc | rustc |
+| `record` | return | opaque handle | header | header | rustc | rustc |
+| `record` | struct field | opaque handle | **panic** | **panic** | rustc | rustc |
+| `record` | enum payload | opaque handle | header | header | rustc | rustc |
+| `handle` | parameter | value struct | header | header | rustc | rustc |
+| `handle` | return | value struct | header | header | rustc | rustc |
+| `sum` | parameter | opaque handle | header | header | rustc | rustc |
+| `sum` | return | opaque handle | header | header | rustc | rustc |
+| `unit_enum` | return | opaque handle | header | header | **bad rust** | rustc |
+| `vec_record` | return | opaque handle | header | header | rustc | rustc |
+| `vec_record` | parameter | opaque handle | rejected | rejected | **panic** | rustc |
+| `opt_record` | parameter | opaque handle | header | **bad rust** | rustc | rustc |
+
+<details><summary>What the generators said</summary>
+
+- `record__field_as_ptr__c` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Rec`
+- `vec_record__param_as_ptr__c` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `Vec < Rec >`
+- `vec_record__param_as_ptr__jni` / Kotlin/JNI: JniGen: `Vec<Rec>` is unsupported — its elements would be closeable native handles (jlong) the JVM must free individually. Expose a per-element accessor instead of returning a `Vec` of handles.
+
+</details>
 
 ## Type-form coverage
 
