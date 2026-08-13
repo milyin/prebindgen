@@ -1,0 +1,187 @@
+//! Rendering the table.
+//!
+//! The output is committed and diffed in CI, so it must be a pure function of
+//! the corpus and the generators: no timestamps, no paths, no iteration order
+//! that depends on a hash map.
+
+use std::fmt::Write as _;
+
+use crate::corpus::{Position, Shape, SHAPES};
+use crate::run::{run, State, Target};
+use crate::tag::TypeTag;
+
+/// The whole report.
+pub fn render() -> String {
+    let mut out = String::new();
+    out.push_str(HEADER);
+
+    let results = run_all();
+
+    render_summary(&mut out, &results);
+    for position in Position::ALL {
+        render_position(&mut out, &results, *position);
+    }
+    render_coverage(&mut out);
+
+    out
+}
+
+/// One row of the run: every cell, in corpus order.
+struct Cell {
+    shape: &'static Shape,
+    position: Position,
+    target: Target,
+    state: State,
+}
+
+fn run_all() -> Vec<Cell> {
+    // A generator that panics is being asked a question it cannot answer; the
+    // default hook would print a backtrace per cell and bury the report.
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+
+    let mut cells = Vec::new();
+    for shape in SHAPES {
+        for position in Position::ALL {
+            for target in Target::ALL {
+                cells.push(Cell {
+                    shape,
+                    position: *position,
+                    target: *target,
+                    state: run(shape, *position, *target),
+                });
+            }
+        }
+    }
+
+    std::panic::set_hook(previous);
+    cells
+}
+
+fn render_summary(out: &mut String, results: &[Cell]) {
+    out.push_str("## Summary\n\n");
+    out.push_str("| Target | plan | rejected | panic | n/a |\n");
+    out.push_str("|---|---:|---:|---:|---:|\n");
+    for target in Target::ALL {
+        let of = |f: fn(&State) -> bool| {
+            results
+                .iter()
+                .filter(|c| c.target == *target && f(&c.state))
+                .count()
+        };
+        let _ = writeln!(
+            out,
+            "| {} | {} | {} | {} | {} |",
+            target.as_str(),
+            of(|s| matches!(s, State::PlanSupported)),
+            of(|s| matches!(s, State::Rejected(_))),
+            of(|s| matches!(s, State::Panicked(_))),
+            of(|s| matches!(s, State::NotApplicable(_))),
+        );
+    }
+    out.push('\n');
+}
+
+fn render_position(out: &mut String, results: &[Cell], position: Position) {
+    let _ = writeln!(out, "## Position: {}\n", position.as_str());
+    out.push_str("| Shape | Rust | C | Kotlin/JNI |\n|---|---|---|---|\n");
+
+    for shape in SHAPES {
+        let state_of = |target: Target| {
+            results
+                .iter()
+                .find(|c| {
+                    std::ptr::eq(c.shape, shape) && c.position == position && c.target == target
+                })
+                .map(|c| c.state.cell())
+                .unwrap_or_default()
+        };
+        let _ = writeln!(
+            out,
+            "| `{}` | `{}` | {} | {} |",
+            shape.id,
+            shape.spelling,
+            state_of(Target::C),
+            state_of(Target::Jni),
+        );
+    }
+    out.push('\n');
+
+    let mut notes: Vec<String> = Vec::new();
+    for cell in results.iter().filter(|c| c.position == position) {
+        if let Some(detail) = cell.state.detail() {
+            notes.push(format!(
+                "- `{}` / {}: {}",
+                cell.shape.id,
+                cell.target.as_str(),
+                detail
+            ));
+        }
+    }
+    if !notes.is_empty() {
+        out.push_str("<details><summary>What the generators said</summary>\n\n");
+        for note in notes {
+            let _ = writeln!(out, "{note}");
+        }
+        out.push_str("\n</details>\n\n");
+    }
+}
+
+fn render_coverage(out: &mut String) {
+    out.push_str("## Type-form coverage\n\n");
+    out.push_str(
+        "Every form `TypeKind` accepts, and the shapes that write one. Enforced by \
+         `every_type_form_is_covered`; a new form cannot be added to the model without \
+         breaking `tag_of` first.\n\n",
+    );
+    out.push_str("| Form | Covered by |\n|---|---|\n");
+
+    let classified = crate::classify_corpus();
+    for tag in TypeTag::ALL {
+        let mut covering: Vec<&str> = classified
+            .iter()
+            .filter(|(_, tags)| tags.contains(tag))
+            .map(|(shape, _)| shape.id)
+            .collect();
+        covering.sort_unstable();
+        let _ = writeln!(
+            out,
+            "| `{}` | {} |",
+            tag.as_str(),
+            if covering.is_empty() {
+                "**nothing**".to_string()
+            } else {
+                covering
+                    .iter()
+                    .map(|id| format!("`{id}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        );
+    }
+    out.push('\n');
+}
+
+const HEADER: &str = "\
+<!-- Generated by `cargo run -p shape-matrix`. Do not edit by hand. -->
+# Shape matrix
+
+Which Rust shapes cross the boundary, in which position, for each target
+language — enumerated by running the real generators over synthesized fixtures,
+never by a hand-written list of what is supposed to work. See
+[#198](https://github.com/milyin/prebindgen/issues/198).
+
+**How to read a cell**
+
+| Cell | Meaning |
+|---|---|
+| `plan` | generation succeeded. Nothing here compiled, linked or ran the result. |
+| `rejected` | the generator refused the shape **and said why**. The intended outcome for anything unsupported. |
+| **`panic`** | the generator refused it without a diagnosis — the user gets a stack trace instead of a sentence ([#191](https://github.com/milyin/prebindgen/issues/191)). |
+| `—` | the placement is not legal Rust, so there is nothing to ask. |
+
+`plan` is evidence, not a guarantee: `ToolchainCompiled` and `RuntimeExercised`
+are the states that require a compiler and a runtime, and neither is collected
+yet.
+
+";
