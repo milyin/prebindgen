@@ -6,7 +6,7 @@
 //! (a field has no line of its own), but the shape does not change with the
 //! level, so nothing has to copy a piece of provenance downward by hand.
 
-use std::{fmt, rc::Rc};
+use std::rc::Rc;
 
 use prebindgen::SourceLocation;
 use quote::ToTokens;
@@ -48,21 +48,18 @@ use super::key::TypeKey;
 /// in one flat namespace. [`ConstId`](super::ConstId) is not an exception — the
 /// crate it records is the const's *declaring* crate, obtained by lookup, and
 /// that is exactly what lets an array extent refuse a const from another source.
-/// # The syntax is sealed
-///
-/// > **You may output the source. You may not read it.**
+/// # Structured syntax access is sealed
 ///
 /// The crate-private `spell` operation produces tokens and nothing else, which is all
-/// generated Rust ever needed. The node is reachable only through one
-/// crate-internal accessor, and the field itself is `pub(super)` — so the
-/// model still reads it freely, while everything outside is limited to the
-/// spelling.
+/// generated Rust ever needed. The typed node is reachable only inside this crate,
+/// and the field itself is `pub(super)`. Derived `Debug` remains available for
+/// diagnostics; it is not a stable or structured syntax API.
 ///
 /// It was a public field returning a `syn` node to anyone who asked.
 /// Outside this crate, rendering requires an explicit
 /// [`RustEmitter`](crate::RustEmitter) implementation; no raw syntax accessor is
 /// public.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
     ///
@@ -74,15 +71,6 @@ pub struct Origin<S> {
     pub location: Rc<SourceLocation>,
 }
 
-impl<S> fmt::Debug for Origin<S> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Origin")
-            .field("syntax", &"<sealed>")
-            .field("location", &self.location)
-            .finish()
-    }
-}
-
 impl<S> Origin<S> {
     pub fn new(syntax: S, location: Rc<SourceLocation>) -> Self {
         Self { syntax, location }
@@ -90,9 +78,9 @@ impl<S> Origin<S> {
 
     /// The node as `syn` — **the escape**.
     ///
-    /// Every place that takes the source apart instead of asking the model
-    /// comes through here, and `pub(crate)` is what keeps that
-    /// list short: only [`RustEmitter`](crate::RustEmitter) can reach it.
+    /// Every place that takes the source apart instead of asking the model comes
+    /// through here, and `pub(crate)` keeps it inside the flat model and its
+    /// rendering protocol.
     ///
     /// Naming it is not an accusation. An emitter assembling a `syn::Item`, or a
     /// signature the generated crate must restate node for node, legitimately
@@ -171,26 +159,5 @@ impl Origin<syn::Type> {
     /// do it to splice `#target` into generated Rust.
     pub fn declared_spelling(&self) -> proc_macro2::TokenStream {
         self.spell()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn debug_does_not_expose_captured_syntax() {
-        let origin: Origin<syn::ItemFn> = Origin::new(
-            syn::parse_quote!(
-                fn hidden_body() {
-                    secret_call()
-                }
-            ),
-            Rc::new(SourceLocation::default()),
-        );
-        let debug = format!("{origin:?}");
-        assert!(debug.contains("<sealed>"));
-        assert!(!debug.contains("hidden_body"));
-        assert!(!debug.contains("secret_call"));
     }
 }

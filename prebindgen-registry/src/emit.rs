@@ -16,19 +16,21 @@ use std::ops::Deref;
 ///
 /// ```compile_fail
 /// use prebindgen_registry::Emit;
-/// let emit = Emit { _key: () };
+/// let emit = Emit(());
+/// ```
+///
+/// A registry-only adapter cannot name the flat rendering protocol through
+/// the registry's model re-export:
+///
+/// ```compile_fail
+/// use prebindgen_registry::flat::emit::RustEmitter;
 /// ```
 #[derive(Debug)]
-pub struct Emit {
-    _key: Key,
-}
-
-#[derive(Debug)]
-struct Key;
+pub struct Emit(());
 
 impl Emit {
     pub(crate) fn new() -> Self {
-        Self { _key: Key }
+        Self(())
     }
 
     /// Construct an emission key for an out-of-crate adapter test.

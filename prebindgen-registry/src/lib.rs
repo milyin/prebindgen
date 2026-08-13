@@ -114,7 +114,9 @@ pub mod write;
 
 /// The flat model itself lives in the separate `prebindgen-flat` crate —
 /// re-exported here so an adapter names one crate root for the whole
-/// pipeline.
+/// pipeline. `RustEmitter` is deliberately omitted: registry-only adapters
+/// receive rendering authority as [`Emit`] in callbacks. A different collector
+/// depends on `prebindgen-flat` directly to implement its own key.
 pub use ::prebindgen_flat::{flat, shape, types_util};
 pub use ::prebindgen_flat::{Element, Flat};
 

@@ -14,7 +14,8 @@
 //!
 //! A different collector can use `prebindgen-flat` independently and
 //! deliberately implement `RustEmitter` for its own callback key. Merely
-//! holding a flat model node does not reveal captured syntax.
+//! holding a flat model node does not reveal captured syntax without explicitly
+//! establishing another rendering boundary.
 //!
 //! # Direct syntax doors remain closed
 //!

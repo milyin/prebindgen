@@ -37,14 +37,15 @@
 //!
 //! > **Classify off `kind`, spell through the callback's [`RustEmitter`](crate::RustEmitter).**
 //!
-//! And the model enforces it rather than asking. [`Origin`]'s syntax is
-//! private, and every route to it — `spell()`, `as_syn()` — is visible only
-//! inside this crate. Matching a `syn::Type` or `syn::Expr` variant outside
-//! this module is a classifier, and issue #211 says classification lives here
-//! alone; the visibility is what makes that hold rather than a convention
-//! anyone has to remember. Code whose job *is* producing Rust reaches the syntax through a
-//! pipeline-owned [`RustEmitter`](crate::RustEmitter) key. The registry pipeline
-//! hands its concrete key only to emission callbacks.
+//! The model enforces the classification half rather than asking: [`Origin`]'s
+//! syntax is private, and every direct route to it — `spell()`, `as_syn()` —
+//! is visible only inside this crate. Matching a `syn::Type` or `syn::Expr`
+//! variant outside this module is a classifier, and issue #211 says
+//! classification lives here.
+//!
+//! Rendering is an explicit collector boundary. Code whose job *is* producing
+//! Rust receives a collector-owned [`RustEmitter`](crate::RustEmitter) key; the
+//! registry exposes its key only in emission callbacks.
 //!
 //! # What earns a variant
 //!
@@ -186,7 +187,7 @@ use quote::ToTokens;
 
 mod array_len;
 mod element;
-pub mod emit;
+pub(crate) mod emit;
 mod key;
 mod origin;
 pub(crate) mod spell;

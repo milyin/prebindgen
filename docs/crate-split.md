@@ -101,17 +101,29 @@ prebindgen -> prebindgen-flat -> prebindgen-registry -> prebindgen-{c,jni}
   extract          parse              collect              convert
 ```
 
-It also preserves independent use. A different collector can depend on
-`prebindgen-flat` alone and deliberately implement `RustEmitter` for a key
-that it owns. The trait is intentionally not sealed: establishing a separate
-emission boundary is collector API, while an adapter using the registry cannot
-construct the registry key.
+It also preserves independent use. A different collector can depend directly
+on `prebindgen-flat` and deliberately implement `RustEmitter` for a key that
+it owns. The trait is intentionally not sealed: establishing a separate
+emission boundary is collector API.
 
-The accidental doors introduced by the split are closed again:
+The registry's default path is compiler-checked. `prebindgen-registry` does
+not re-export `RustEmitter` through its `flat` model path, so an adapter that
+depends only on the registry cannot name the protocol or construct
+`prebindgen-registry::Emit`; it can render only after receiving `&Emit` in
+an emission callback. A compile-fail doctest pins both restrictions.
+
+Rust cannot prevent an adapter from deliberately adding a direct
+`prebindgen-flat` dependency and implementing the public protocol for a new
+key. That is the unavoidable residual of keeping the flat layer independently
+usable, but it is explicit in both the manifest and an `impl RustEmitter`.
+Workspace CI rejects such implementations in `prebindgen-c` and
+`prebindgen-jni`.
+
+The accidental direct doors introduced by the split are closed:
 `TypeRef::spell` and `Origin::spell` are crate-private, the test-only
 `Flat::enum_item` syntax accessor is gone, and raw `syn` access remains
-private. Captured syntax is also redacted from `Debug`. Compile-fail doctests
-cover direct spelling, raw-node access, and registry-key construction.
+private. Compile-fail doctests cover direct spelling, raw-node access,
+registry-key construction, and the hidden registry-to-flat protocol path.
 
 The other widened methods are intentional flat-model API rather than emission
 doors. `Flat::classify`, `Flat::add_local_function`,
@@ -119,7 +131,7 @@ doors. `Flat::classify`, `Flat::add_local_function`,
 independent parser or collector build and compose the representation without
 depending on the registry.
 
-This resolves [#375](https://github.com/milyin/prebindgen/issues/375) without
+This addresses [#375](https://github.com/milyin/prebindgen/issues/375) without
 reversing the crate dependency.
 
 ## Phases
