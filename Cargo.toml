@@ -30,7 +30,12 @@ package.keywords = ["ffi", "bindings", "cbindgen", "csbindgen", "cross-platform"
 package.categories = ["development-tools", "external-ffi-bindings"] 
 
 [workspace.dependencies]
-kotlin-codegen = "0.3.0"
+# TEMPORARY: 0.3.0 (`KtClass::ctor_vis`, `KtFile::file_annotation`) is not on
+# crates.io yet — milyin/kotlin-codegen#23. `version` alongside `git` is what
+# keeps `cargo package` working and is what a published prebindgen would carry.
+# Drop the git/branch keys once 0.3.0 is released; the branch disappears on
+# merge, so CI will say so.
+kotlin-codegen = { version = "0.3.0", git = "https://github.com/milyin/kotlin-codegen.git", branch = "ctor-vis-and-file-annotations" }
 prebindgen = { path = "prebindgen", version = "0.5.0" }
 prebindgen-flat = { path = "prebindgen-flat", version = "0.5.0" }
 prebindgen-registry = { path = "prebindgen-registry", version = "0.5.0" }
