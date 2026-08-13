@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, env, fs, path::Path};
 
-use crate::{CRATE_NAME_FILE, FEATURES_FILE};
+use crate::capture_protocol::{self, CRATE_NAME_FILE, FEATURES_FILE, PREBINDGEN_DIR};
 
 /// Initialize the prebindgen output directory for the current crate
 ///
@@ -26,7 +26,7 @@ use crate::{CRATE_NAME_FILE, FEATURES_FILE};
 // would supply: this shows a whole `build.rs`, and where the call sits in it.
 #[allow(clippy::needless_doctest_main)]
 pub fn init_prebindgen_out_dir() {
-    env::var("OUT_DIR").expect(
+    let out_dir = env::var("OUT_DIR").expect(
         "OUT_DIR environment variable not set. This function should be called from build.rs.",
     );
     // Get the crate name from CARGO_PKG_NAME or use fallback
@@ -81,6 +81,15 @@ pub fn init_prebindgen_out_dir() {
             e
         );
     });
+
+    // These alternating state files become rustc input dependencies through
+    // the proc-macro expansion. Scoped cleanup advances the inactive slot
+    // before removing this directory, making the exact producer unit stale and
+    // giving the macro enough state to reconstruct the directory. Do not emit
+    // `cargo:rerun-if-changed` here: any such directive would disable Cargo's
+    // default package-wide build-script change tracking.
+    capture_protocol::initialize_state(Path::new(&out_dir), &crate_name, &features)
+        .unwrap_or_else(|error| panic!("Failed to initialize prebindgen capture state: {error}"));
 
     // Export features list to the main crate as an env variable
     // Accessible via env!("PREBINDGEN_FEATURES") or std::env::var at compile time/runtime
@@ -163,9 +172,6 @@ pub fn get_enabled_features() -> BTreeSet<String> {
         .filter(|f| is_feature_enabled(f))
         .collect()
 }
-
-/// Name of the prebindgen output directory
-const PREBINDGEN_DIR: &str = "prebindgen";
 
 /// Get the full path to the prebindgen output directory in OUT_DIR.
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {

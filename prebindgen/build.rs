@@ -4,29 +4,41 @@
 // the package has a build script. Without this, the crate-level and `Source`
 // examples had to be ```ignore — never compiled, free to rot.
 //
-// This is *not* `init_prebindgen_out_dir` in miniature. That function also
-// cleans the output directory, writes `crate_name.txt` and `features.txt`, and
-// exports the crate's real feature list — all of which exist so a *downstream*
-// crate can later read this one's captured surface through `Source`. Nothing
-// reads prebindgen's own output, so this supplies only the two things macro
-// expansion itself touches:
+// This cannot delegate to `init_prebindgen_out_dir` because a crate cannot take
+// itself as a build-dependency. Keep this bootstrap deliberately small, but
+// initialize the same files macro expansion requires:
 //
-//   - the `prebindgen` subdirectory, which `#[prebindgen]` opens with
-//     `create_new` to write its JSONL into;
-//   - `PREBINDGEN_FEATURES`, which `features!()` reads. Empty is correct here:
-//     the doctests assert nothing about its contents.
-//
-// It cannot delegate to `init_prebindgen_out_dir` in any case, because a crate
-// cannot take itself as a build-dependency.
+//   - `prebindgen/{crate_name,features}.txt` for capture recovery;
+//   - both versioned state slots tracked by rustc;
+//   - `PREBINDGEN_FEATURES`, empty because these doctests do not assert it.
 fn main() {
-    let out_dir =
-        std::env::var("OUT_DIR").expect("OUT_DIR is not set; this build script requires Cargo");
-    let prebindgen_dir = std::path::PathBuf::from(out_dir).join("prebindgen");
-    std::fs::create_dir_all(&prebindgen_dir).unwrap_or_else(|e| {
+    let out_dir = std::path::PathBuf::from(
+        std::env::var_os("OUT_DIR").expect("OUT_DIR is not set; this build script requires Cargo"),
+    );
+    let prebindgen_dir = out_dir.join("prebindgen");
+    std::fs::create_dir_all(&prebindgen_dir).unwrap_or_else(|error| {
         panic!(
-            "failed to create the prebindgen output directory {}: {e}",
+            "failed to create the prebindgen output directory {}: {error}",
             prebindgen_dir.display()
         )
     });
+
+    let crate_name = std::env::var("CARGO_PKG_NAME")
+        .expect("CARGO_PKG_NAME is not set; this build script requires Cargo");
+    std::fs::write(prebindgen_dir.join("crate_name.txt"), &crate_name)
+        .expect("failed to write doctest crate_name.txt");
+    std::fs::write(prebindgen_dir.join("features.txt"), [])
+        .expect("failed to write doctest features.txt");
+
+    let state = format!(
+        "{{\"protocol\":\"prebindgen-capture-v1\",\"generation\":0,\"crate_name\":\"{crate_name}\",\"features\":[]}}\n"
+    );
+    for slot in [
+        ".prebindgen-capture-state-v1-a.json",
+        ".prebindgen-capture-state-v1-b.json",
+    ] {
+        std::fs::write(out_dir.join(slot), &state)
+            .expect("failed to write doctest prebindgen capture state");
+    }
     println!("cargo:rustc-env=PREBINDGEN_FEATURES=");
 }

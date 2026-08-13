@@ -52,3 +52,5 @@ itertools = "0.14.0"
 if_rust_version = "1.0"
 konst = "0.3.0" # consumer crates need konst too: the generated file emits a konst::assertc_eq! guard
 toml = "0.9.5"
+fs2 = "0.4.3"
+libc = "0.2"

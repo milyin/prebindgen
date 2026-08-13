@@ -161,16 +161,12 @@
 //! `prebindgen-jni` crate, which hands the result to its `JniGenBuilder`.
 //!
 
-/// File name for storing the crate name
-const CRATE_NAME_FILE: &str = "crate_name.txt";
-
-/// File name for storing enabled Cargo features collected in build.rs
-const FEATURES_FILE: &str = "features.txt";
-
 /// Default group name for items without explicit group name
 pub const DEFAULT_GROUP_NAME: &str = "default";
 
 pub(crate) mod api;
+#[doc(hidden)]
+pub mod capture_protocol;
 pub(crate) mod codegen;
 
 pub use crate::api::{

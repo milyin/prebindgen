@@ -149,6 +149,51 @@ fn main() {
 }
 ```
 
+#### Cleaning stale Cargo build hashes
+
+Cargo may retain several legitimate `target/<profile>/build/<package>-<hash>`
+directories for different features, targets, profiles, toolchains, or dependency
+fingerprints. Prebindgen does not delete sibling hashes from `build.rs` because
+another Cargo build may still be using them.
+
+Install the package's Cargo subcommand and invoke cleanup explicitly:
+
+```console
+cargo install prebindgen
+cargo prebindgen clean --dry-run
+cargo prebindgen clean
+```
+
+Cleanup has no age or “newest hash” heuristic. It discovers every profile below
+Cargo's target directory, acquires all of their build locks before changing
+anything, then removes only state-validated `out/prebindgen` directories. If
+any profile is active, the whole operation exits without deleting a capture.
+NFS detected on Linux is rejected because Cargo itself skips its build locks
+there; on other platforms, use cleanup only on filesystems with reliable local
+advisory locks.
+
+Before each removal, cleanup durably advances one of two small state files in
+the parent `OUT_DIR`. Those files are rustc input dependencies, so selecting a
+cleaned feature/target/toolchain variant later recompiles that exact producer
+and recreates its capture before a downstream `Source` can read it. The
+alternating slots also leave one valid state if cleanup is interrupted while
+writing the other. The slots intentionally remain after cleanup; Cargo owns the
+surrounding build-hash directory.
+
+Useful options:
+
+- `--target-dir <path>` scans an explicit Cargo target directory.
+- `--build-dir <path>` scans a separately configured Cargo build directory and
+  may be repeated.
+- `--manifest-path <path>` selects the workspace used by `cargo metadata`.
+- `--dry-run` takes the same locks and performs the same validation without
+  changing files.
+
+Capture directories made by older prebindgen versions do not have the two
+state slots and are deliberately skipped: deleting one could leave Cargo's
+producer artifact falsely fresh. Use a one-time ordinary `cargo clean` for
+those legacy, untracked captures.
+
 ### 2. Experimental C Binding Crate (e.g., `example-cbindgen`)
 
 Add the source FFI library and `prebindgen-c-runtime` as regular dependencies

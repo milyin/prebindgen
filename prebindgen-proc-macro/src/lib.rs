@@ -44,7 +44,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
+use prebindgen::{Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
@@ -201,9 +201,33 @@ fn hash_unit_id(value: &(impl Hash + ?Sized)) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+fn capture_output_dir() -> std::result::Result<&'static PathBuf, String> {
+    static CAPTURE_OUTPUT_DIR: OnceLock<std::result::Result<PathBuf, String>> = OnceLock::new();
+    match CAPTURE_OUTPUT_DIR.get_or_init(|| {
+        prebindgen::capture_protocol::ensure_capture_dir()
+            .map_err(|error| format!("failed to prepare prebindgen capture directory: {error}"))
+    }) {
+        Ok(path) => Ok(path),
+        Err(error) => Err(error.clone()),
+    }
+}
+
+fn capture_dependency_tokens() -> std::result::Result<proc_macro2::TokenStream, String> {
+    let [a, b] = prebindgen::capture_protocol::get_state_slot_paths()
+        .map_err(|error| format!("failed to locate prebindgen capture state: {error}"))?;
+    let a = syn::LitStr::new(&a.to_string_lossy(), proc_macro2::Span::call_site());
+    let b = syn::LitStr::new(&b.to_string_lossy(), proc_macro2::Span::call_site());
+    Ok(quote! {
+        const _: (&[u8], &[u8]) = (
+            include_bytes!(#a),
+            include_bytes!(#b),
+        );
+    })
+}
+
 /// Get the full path to `{group}_{unit_id}.jsonl` in OUT_DIR.
-fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
-    get_prebindgen_out_dir().join(format!("{group}_{}.jsonl", unit_id()))
+fn get_prebindgen_jsonl_path(group: &str) -> std::result::Result<PathBuf, String> {
+    Ok(capture_output_dir()?.join(format!("{group}_{}.jsonl", unit_id())))
 }
 
 fn capture_state(file_path: &Path) -> std::result::Result<SharedCaptureState, String> {
@@ -373,18 +397,23 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         parsed_args.cfg.clone(),
     );
 
-    let file_path = get_prebindgen_jsonl_path(&group);
+    let file_path = match get_prebindgen_jsonl_path(&group) {
+        Ok(path) => path,
+        Err(error) => return syn::Error::new(span, error).to_compile_error().into(),
+    };
     if let Err(error) = write_capture_record(&file_path, &new_record) {
         return syn::Error::new(span, error).to_compile_error().into();
     }
+    let capture_dependency = match capture_dependency_tokens() {
+        Ok(tokens) => tokens,
+        Err(error) => return syn::Error::new(span, error).to_compile_error().into(),
+    };
 
     // Re-emit the original item, optionally prepending `#[cfg(...)]` (from the
-    // macro argument) and `#[inline]` (when the `inline` feature is on, functions
-    // only). When neither applies, the original tokens are returned unchanged.
+    // macro argument) and `#[inline]` (when the `inline` feature is on,
+    // functions only). The anonymous const makes both state slots rustc input
+    // dependencies without changing the item's public surface.
     let add_inline = cfg!(feature = "inline") && is_function;
-    if parsed_args.cfg.is_none() && !add_inline {
-        return input_clone;
-    }
     let inline_attr = if add_inline {
         quote! { #[inline] }
     } else {
@@ -403,6 +432,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         #cfg_attr
         #inline_attr
         #original_tokens
+        #capture_dependency
     }
     .into()
 }
@@ -432,16 +462,14 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro]
 pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
-    let out_dir = std::env::var("OUT_DIR")
-        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    let file_path = std::path::Path::new(&out_dir).join("prebindgen");
-    let path_str = file_path.to_string_lossy();
+    let file_path = capture_output_dir().unwrap_or_else(|error| panic!("{error}"));
+    let path = syn::LitStr::new(&file_path.to_string_lossy(), proc_macro2::Span::call_site());
+    let capture_dependency = capture_dependency_tokens().unwrap_or_else(|error| panic!("{error}"));
 
-    let expanded = quote! {
-        #path_str
-    };
-
-    TokenStream::from(expanded)
+    TokenStream::from(quote! {{
+        #capture_dependency
+        #path
+    }})
 }
 
 /// Proc macro that returns the enabled features, joined by commas, as a string literal.
@@ -468,11 +496,16 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro]
 pub fn features(_input: TokenStream) -> TokenStream {
+    capture_output_dir().unwrap_or_else(|error| panic!("{error}"));
+    let capture_dependency = capture_dependency_tokens().unwrap_or_else(|error| panic!("{error}"));
     let features = std::env::var("PREBINDGEN_FEATURES").expect(
         "PREBINDGEN_FEATURES environment variable not set. Ensure prebindgen::init_prebindgen_out_dir() is called in build.rs",
     );
     let lit = syn::LitStr::new(&features, proc_macro2::Span::call_site());
-    TokenStream::from(quote! { #lit })
+    TokenStream::from(quote! {{
+        #capture_dependency
+        #lit
+    }})
 }
 
 /// Proc macro that returns the **source crate's** manifest directory as a string

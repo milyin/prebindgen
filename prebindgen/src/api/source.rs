@@ -10,7 +10,8 @@ use roxygen::roxygen;
 
 use crate::{
     api::{batching::cfg_filter, record::Record, utils::jsonl::read_jsonl_file},
-    SourceLocation, TargetTriple, CRATE_NAME_FILE, FEATURES_FILE,
+    capture_protocol::{CRATE_NAME_FILE, FEATURES_FILE},
+    SourceLocation, TargetTriple,
 };
 
 /// File extension for data files
