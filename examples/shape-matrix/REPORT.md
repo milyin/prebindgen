@@ -10,62 +10,69 @@ never by a hand-written list of what is supposed to work. See
 
 | Cell | Meaning |
 |---|---|
-| `plan` | generation succeeded. Nothing here compiled, linked or ran the result. |
+| `rustc` | the generator produced Rust **and rustc accepted it**. Neither cbindgen nor the Kotlin compiler has seen it. |
+| **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. |
+| `plan` | generation succeeded and the compile check did not run (see the run's stderr). |
 | `rejected` | the generator refused the shape **and said why**. The intended outcome for anything unsupported. |
 | **`panic`** | the generator refused it without a diagnosis — the user gets a stack trace instead of a sentence ([#191](https://github.com/milyin/prebindgen/issues/191)). |
 | `—` | the placement is not legal Rust, so there is nothing to ask. |
 
-`plan` is evidence, not a guarantee: `ToolchainCompiled` and `RuntimeExercised`
-are the states that require a compiler and a runtime, and neither is collected
-yet.
+`rustc` is evidence, not a guarantee. It is the Rust half of
+`ToolchainCompiled`: the emitted Rust type-checks against the fixture the way a
+binding crate compiles it. The C header, the Kotlin classes and every
+`RuntimeExercised` cell still require toolchains this stage does not run.
+
+Compiler messages are deliberately **not** in this file — they vary by
+toolchain, and the report has to be identical on every one that builds it. A
+failing cell prints its diagnostics on the run's stderr.
 
 ## Summary
 
-| Target | plan | rejected | panic | n/a |
-|---|---:|---:|---:|---:|
-| C | 50 | 41 | 35 | 18 |
-| Kotlin/JNI | 82 | 34 | 10 | 18 |
+| Target | rustc | bad rust | plan only | rejected | panic | n/a |
+|---|---:|---:|---:|---:|---:|---:|
+| C | 45 | 5 | 0 | 41 | 31 | 22 |
+| Kotlin/JNI | 75 | 5 | 0 | 34 | 8 | 22 |
 
 ## Position: parameter
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | plan | plan |
-| `bool` | `bool` | plan | plan |
+| `scalar` | `u64` | rustc | rustc |
+| `bool` | `bool` | rustc | rustc |
 | `unit` | `()` | rejected | rejected |
-| `string` | `String` | plan | plan |
-| `str_ref` | `&str` | plan | plan |
-| `record` | `Rec` | plan | plan |
-| `handle` | `Handle` | plan | plan |
-| `sum` | `Sum` | plan | plan |
-| `unit_enum` | `Mode` | plan | plan |
-| `shared_ref` | `&Rec` | rejected | plan |
-| `exclusive_ref` | `&mut Rec` | rejected | plan |
-| `handle_ref` | `&Handle` | plan | plan |
-| `out_param` | `&mut MaybeUninit<u64>` | rejected | plan |
-| `opt_scalar` | `Option<u64>` | plan | plan |
+| `string` | `String` | rustc | rustc |
+| `str_ref` | `&str` | rustc | rustc |
+| `record` | `Rec` | rustc | rustc |
+| `handle` | `Handle` | rustc | rustc |
+| `sum` | `Sum` | rustc | rustc |
+| `unit_enum` | `Mode` | rustc | rustc |
+| `shared_ref` | `&Rec` | rejected | rustc |
+| `exclusive_ref` | `&mut Rec` | rejected | **bad rust** |
+| `handle_ref` | `&Handle` | rustc | rustc |
+| `out_param` | `&mut MaybeUninit<u64>` | rejected | **bad rust** |
+| `opt_scalar` | `Option<u64>` | rustc | rustc |
 | `vec_scalar` | `Vec<u64>` | rejected | rejected |
-| `slice_scalar` | `&[u64]` | plan | rejected |
+| `slice_scalar` | `&[u64]` | rustc | rejected |
 | `slice_mut_scalar` | `&mut [u64]` | rejected | rejected |
-| `array_scalar` | `[u8; 4]` | rejected | plan |
+| `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
-| `cow_str` | `Cow<'static, str>` | rejected | plan |
-| `opt_record` | `Option<Rec>` | plan | plan |
-| `opt_handle` | `Option<Handle>` | plan | plan |
-| `opt_ref` | `Option<&Handle>` | plan | plan |
-| `vec_record` | `Vec<Rec>` | rejected | plan |
+| `cow_str` | `Cow<'static, str>` | rejected | **bad rust** |
+| `opt_record` | `Option<Rec>` | **bad rust** | rustc |
+| `opt_handle` | `Option<Handle>` | rustc | rustc |
+| `opt_ref` | `Option<&Handle>` | rustc | rustc |
+| `vec_record` | `Vec<Rec>` | rejected | rustc |
 | `vec_handle` | `Vec<Handle>` | rejected | **panic** |
 | `vec_ref` | `Vec<&Handle>` | rejected | **panic** |
-| `vec_sum` | `Vec<Sum>` | rejected | plan |
-| `opt_sum` | `Option<Sum>` | plan | plan |
+| `vec_sum` | `Vec<Sum>` | rejected | rustc |
+| `opt_sum` | `Option<Sum>` | **bad rust** | rustc |
 | `array_record` | `[Rec; 2]` | rejected | rejected |
 | `opt_vec` | `Option<Vec<u64>>` | rejected | rejected |
-| `vec_opt` | `Vec<Option<u64>>` | rejected | plan |
+| `vec_opt` | `Vec<Option<u64>>` | rejected | rustc |
 | `result_scalar` | `Result<u64, ZError>` | rejected | rejected |
 | `result_handle` | `Result<Handle, ZError>` | rejected | rejected |
 | `result_sum_err` | `Result<u64, Sum>` | rejected | rejected |
-| `callback` | `impl Fn(u64) + Send + Sync + 'static` | rejected | plan |
-| `callback_handle` | `impl Fn(Handle) + Send + Sync + 'static` | rejected | plan |
+| `callback` | `impl Fn(u64) + Send + Sync + 'static` | rejected | rustc |
+| `callback_handle` | `impl Fn(Handle) + Send + Sync + 'static` | rejected | rustc |
 
 <details><summary>What the generators said</summary>
 
@@ -109,55 +116,55 @@ yet.
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | plan | plan |
-| `bool` | `bool` | plan | plan |
-| `unit` | `()` | plan | plan |
-| `string` | `String` | plan | plan |
-| `str_ref` | `&str` | rejected | plan |
-| `record` | `Rec` | plan | plan |
-| `handle` | `Handle` | plan | plan |
-| `sum` | `Sum` | plan | plan |
-| `unit_enum` | `Mode` | plan | plan |
+| `scalar` | `u64` | rustc | rustc |
+| `bool` | `bool` | rustc | rustc |
+| `unit` | `()` | rustc | rustc |
+| `string` | `String` | rustc | rustc |
+| `str_ref` | `&str` | rejected | rustc |
+| `record` | `Rec` | rustc | rustc |
+| `handle` | `Handle` | rustc | rustc |
+| `sum` | `Sum` | rustc | rustc |
+| `unit_enum` | `Mode` | rustc | rustc |
 | `shared_ref` | `&Rec` | rejected | rejected |
 | `exclusive_ref` | `&mut Rec` | rejected | rejected |
-| `handle_ref` | `&Handle` | plan | plan |
+| `handle_ref` | `&Handle` | rustc | rustc |
 | `out_param` | `&mut MaybeUninit<u64>` | rejected | rejected |
-| `opt_scalar` | `Option<u64>` | plan | plan |
-| `vec_scalar` | `Vec<u64>` | plan | plan |
-| `slice_scalar` | `&[u64]` | plan | rejected |
+| `opt_scalar` | `Option<u64>` | rustc | rustc |
+| `vec_scalar` | `Vec<u64>` | rustc | rustc |
+| `slice_scalar` | `&[u64]` | **bad rust** | rejected |
 | `slice_mut_scalar` | `&mut [u64]` | rejected | rejected |
-| `array_scalar` | `[u8; 4]` | rejected | plan |
+| `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
-| `cow_str` | `Cow<'static, str>` | rejected | plan |
-| `opt_record` | `Option<Rec>` | plan | plan |
-| `opt_handle` | `Option<Handle>` | plan | plan |
-| `opt_ref` | `Option<&Handle>` | plan | plan |
-| `vec_record` | `Vec<Rec>` | plan | plan |
-| `vec_handle` | `Vec<Handle>` | plan | plan |
-| `vec_ref` | `Vec<&Handle>` | plan | plan |
-| `vec_sum` | `Vec<Sum>` | plan | plan |
-| `opt_sum` | `Option<Sum>` | plan | plan |
+| `cow_str` | `Cow<'static, str>` | rejected | rustc |
+| `opt_record` | `Option<Rec>` | rustc | rustc |
+| `opt_handle` | `Option<Handle>` | rustc | rustc |
+| `opt_ref` | `Option<&Handle>` | rustc | rustc |
+| `vec_record` | `Vec<Rec>` | rustc | rustc |
+| `vec_handle` | `Vec<Handle>` | rustc | rustc |
+| `vec_ref` | `Vec<&Handle>` | **bad rust** | rustc |
+| `vec_sum` | `Vec<Sum>` | rustc | rustc |
+| `opt_sum` | `Option<Sum>` | rustc | rustc |
 | `array_record` | `[Rec; 2]` | rejected | rejected |
-| `opt_vec` | `Option<Vec<u64>>` | plan | plan |
-| `vec_opt` | `Vec<Option<u64>>` | **panic** | plan |
-| `result_scalar` | `Result<u64, ZError>` | plan | plan |
-| `result_handle` | `Result<Handle, ZError>` | plan | plan |
+| `opt_vec` | `Option<Vec<u64>>` | rustc | rustc |
+| `vec_opt` | `Vec<Option<u64>>` | **panic** | rustc |
+| `result_scalar` | `Result<u64, ZError>` | rustc | rustc |
+| `result_handle` | `Result<Handle, ZError>` | rustc | rustc |
 | `result_sum_err` | `Result<u64, Sum>` | **panic** | rejected |
 | `callback` | `impl Fn(u64) + Send + Sync + 'static` | rejected | rejected |
 | `callback_handle` | `impl Fn(Handle) + Send + Sync + 'static` | rejected | rejected |
 
 <details><summary>What the generators said</summary>
 
-- `str_ref` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen output type `& str` — error: unresolved prebindgen output type `str`
-- `shared_ref` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& Rec`
-- `shared_ref` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& Rec`
-- `exclusive_ref` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& mut Rec`
-- `exclusive_ref` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& mut Rec`
-- `out_param` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& mut MaybeUninit < u64 >`
-- `out_param` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& mut MaybeUninit < u64 >`
-- `slice_scalar` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen output type `& [u64]` — error: unresolved prebindgen output type `[u64]`
-- `slice_mut_scalar` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& mut [u64]`
-- `slice_mut_scalar` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen output type `& mut [u64]` — error: unresolved prebindgen output type `[u64]`
+- `str_ref` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static str` — error: unresolved prebindgen output type `str`
+- `shared_ref` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static Rec`
+- `shared_ref` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static Rec`
+- `exclusive_ref` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static mut Rec`
+- `exclusive_ref` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static mut Rec`
+- `out_param` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static mut MaybeUninit < u64 >`
+- `out_param` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static mut MaybeUninit < u64 >`
+- `slice_scalar` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static [u64]` — error: unresolved prebindgen output type `[u64]`
+- `slice_mut_scalar` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static mut [u64]`
+- `slice_mut_scalar` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen output type `& 'static mut [u64]` — error: unresolved prebindgen output type `[u64]`
 - `array_scalar` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `[u8 ; 4]`
 - `boxed_scalar` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `Box < u64 >`
 - `boxed_scalar` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `Box < u64 >`
@@ -178,34 +185,34 @@ yet.
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | plan | plan |
-| `bool` | `bool` | plan | plan |
+| `scalar` | `u64` | rustc | rustc |
+| `bool` | `bool` | rustc | rustc |
 | `unit` | `()` | **panic** | rejected |
-| `string` | `String` | plan | plan |
+| `string` | `String` | rustc | rustc |
 | `str_ref` | `&str` | — | — |
-| `record` | `Rec` | **panic** | plan |
-| `handle` | `Handle` | **panic** | plan |
-| `sum` | `Sum` | plan | plan |
-| `unit_enum` | `Mode` | **panic** | plan |
+| `record` | `Rec` | **panic** | rustc |
+| `handle` | `Handle` | **panic** | rustc |
+| `sum` | `Sum` | rustc | rustc |
+| `unit_enum` | `Mode` | **panic** | rustc |
 | `shared_ref` | `&Rec` | — | — |
 | `exclusive_ref` | `&mut Rec` | — | — |
 | `handle_ref` | `&Handle` | — | — |
 | `out_param` | `&mut MaybeUninit<u64>` | — | — |
-| `opt_scalar` | `Option<u64>` | **panic** | plan |
+| `opt_scalar` | `Option<u64>` | **panic** | rustc |
 | `vec_scalar` | `Vec<u64>` | **panic** | rejected |
 | `slice_scalar` | `&[u64]` | — | — |
 | `slice_mut_scalar` | `&mut [u64]` | — | — |
-| `array_scalar` | `[u8; 4]` | **panic** | plan |
+| `array_scalar` | `[u8; 4]` | **panic** | rustc |
 | `boxed_scalar` | `Box<u64>` | **panic** | rejected |
-| `cow_str` | `Cow<'static, str>` | **panic** | plan |
-| `opt_record` | `Option<Rec>` | **panic** | plan |
-| `opt_handle` | `Option<Handle>` | **panic** | plan |
-| `opt_ref` | `Option<&Handle>` | **panic** | plan |
-| `vec_record` | `Vec<Rec>` | **panic** | plan |
+| `cow_str` | `Cow<'static, str>` | **panic** | **bad rust** |
+| `opt_record` | `Option<Rec>` | **panic** | rustc |
+| `opt_handle` | `Option<Handle>` | **panic** | rustc |
+| `opt_ref` | `Option<&Handle>` | — | — |
+| `vec_record` | `Vec<Rec>` | **panic** | rustc |
 | `vec_handle` | `Vec<Handle>` | **panic** | **panic** |
-| `vec_ref` | `Vec<&Handle>` | **panic** | **panic** |
+| `vec_ref` | `Vec<&Handle>` | — | — |
 | `vec_sum` | `Vec<Sum>` | **panic** | **panic** |
-| `opt_sum` | `Option<Sum>` | **panic** | plan |
+| `opt_sum` | `Option<Sum>` | **panic** | rustc |
 | `array_record` | `[Rec; 2]` | **panic** | rejected |
 | `opt_vec` | `Option<Vec<u64>>` | **panic** | rejected |
 | `vec_opt` | `Vec<Option<u64>>` | **panic** | **panic** |
@@ -231,12 +238,9 @@ yet.
 - `cow_str` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Cow < 'static , str >`
 - `opt_record` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Option < Rec >`
 - `opt_handle` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Option < Handle >`
-- `opt_ref` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Option < & Handle >`
 - `vec_record` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Vec < Rec >`
 - `vec_handle` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Vec < Handle >`
 - `vec_handle` / Kotlin/JNI: JniGen: `Vec<Handle>` is unsupported — its elements would be closeable native handles (jlong) the JVM must free individually. Expose a per-element accessor instead of returning a `Vec` of handles.
-- `vec_ref` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Vec < & Handle >`
-- `vec_ref` / Kotlin/JNI: JniGen: `Vec<& Handle>` is unsupported — its elements would be closeable native handles (jlong) the JVM must free individually. Expose a per-element accessor instead of returning a `Vec` of handles.
 - `vec_sum` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Vec < Sum >`
 - `vec_sum` / Kotlin/JNI: fromParts bridge: `Vec<Sum>` sealed-class field (`Probe.v`) is not supported (variable arity)
 - `opt_sum` / C: Cbindgen: field `v` of data struct `Probe` has unsupported type `Option < Sum >`
@@ -259,40 +263,40 @@ yet.
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | plan | plan |
-| `bool` | `bool` | plan | plan |
+| `scalar` | `u64` | rustc | rustc |
+| `bool` | `bool` | rustc | rustc |
 | `unit` | `()` | rejected | **panic** |
-| `string` | `String` | plan | plan |
+| `string` | `String` | rustc | rustc |
 | `str_ref` | `&str` | — | — |
-| `record` | `Rec` | plan | plan |
-| `handle` | `Handle` | plan | plan |
-| `sum` | `Sum` | plan | **panic** |
-| `unit_enum` | `Mode` | plan | plan |
+| `record` | `Rec` | rustc | rustc |
+| `handle` | `Handle` | rustc | rustc |
+| `sum` | `Sum` | rustc | **panic** |
+| `unit_enum` | `Mode` | rustc | rustc |
 | `shared_ref` | `&Rec` | — | — |
 | `exclusive_ref` | `&mut Rec` | — | — |
 | `handle_ref` | `&Handle` | — | — |
 | `out_param` | `&mut MaybeUninit<u64>` | — | — |
-| `opt_scalar` | `Option<u64>` | **panic** | plan |
+| `opt_scalar` | `Option<u64>` | **panic** | rustc |
 | `vec_scalar` | `Vec<u64>` | **panic** | rejected |
 | `slice_scalar` | `&[u64]` | — | — |
 | `slice_mut_scalar` | `&mut [u64]` | — | — |
-| `array_scalar` | `[u8; 4]` | rejected | plan |
+| `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
-| `cow_str` | `Cow<'static, str>` | rejected | plan |
-| `opt_record` | `Option<Rec>` | **panic** | plan |
-| `opt_handle` | `Option<Handle>` | plan | plan |
-| `opt_ref` | `Option<&Handle>` | **panic** | plan |
-| `vec_record` | `Vec<Rec>` | **panic** | plan |
+| `cow_str` | `Cow<'static, str>` | rejected | **bad rust** |
+| `opt_record` | `Option<Rec>` | **panic** | rustc |
+| `opt_handle` | `Option<Handle>` | **bad rust** | rustc |
+| `opt_ref` | `Option<&Handle>` | — | — |
+| `vec_record` | `Vec<Rec>` | **panic** | rustc |
 | `vec_handle` | `Vec<Handle>` | **panic** | **panic** |
-| `vec_ref` | `Vec<&Handle>` | **panic** | **panic** |
+| `vec_ref` | `Vec<&Handle>` | — | — |
 | `vec_sum` | `Vec<Sum>` | **panic** | rejected |
 | `opt_sum` | `Option<Sum>` | **panic** | rejected |
 | `array_record` | `[Rec; 2]` | rejected | rejected |
 | `opt_vec` | `Option<Vec<u64>>` | rejected | rejected |
-| `vec_opt` | `Vec<Option<u64>>` | **panic** | plan |
-| `result_scalar` | `Result<u64, ZError>` | rejected | plan |
-| `result_handle` | `Result<Handle, ZError>` | rejected | plan |
-| `result_sum_err` | `Result<u64, Sum>` | rejected | plan |
+| `vec_opt` | `Vec<Option<u64>>` | **panic** | rustc |
+| `result_scalar` | `Result<u64, ZError>` | rejected | rustc |
+| `result_handle` | `Result<Handle, ZError>` | rejected | rustc |
+| `result_sum_err` | `Result<u64, Sum>` | rejected | rustc |
 | `callback` | `impl Fn(u64) + Send + Sync + 'static` | — | — |
 | `callback_handle` | `impl Fn(Handle) + Send + Sync + 'static` | — | — |
 
@@ -309,12 +313,9 @@ yet.
 - `boxed_scalar` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `Box < u64 >`
 - `cow_str` / C: 4 required type(s) could not be resolved: — error: unresolved prebindgen input type `Probe` — error: unresolved prebindgen output type `Probe` — error: unresolved prebindgen input type `Cow < 'static , str >` — error: unresolved prebindg…
 - `opt_record` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Option < Rec >` cannot cross: its input and output converters disagree on the wire (`* const rec` in, `()` out) and one union field serves both directions
-- `opt_ref` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Option < & Handle >` cannot cross: its input and output converters disagree on the wire (`* const handle` in, `()` out) and one union field serves both directions
 - `vec_record` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Vec < Rec >` cannot cross: a `Vec` needs TWO C wires (pointer + length) and one union field carries only one, so its length would be silently dropped — hand the sequence over thro…
 - `vec_handle` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Vec < Handle >` cannot cross: a `Vec` needs TWO C wires (pointer + length) and one union field carries only one, so its length would be silently dropped — hand the sequence over t…
 - `vec_handle` / Kotlin/JNI: JniGen: `Vec<Handle>` is unsupported — its elements would be closeable native handles (jlong) the JVM must free individually. Expose a per-element accessor instead of returning a `Vec` of handles.
-- `vec_ref` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Vec < & Handle >` cannot cross: a `Vec` needs TWO C wires (pointer + length) and one union field carries only one, so its length would be silently dropped — hand the sequence over…
-- `vec_ref` / Kotlin/JNI: JniGen: `Vec<& Handle>` is unsupported — its elements would be closeable native handles (jlong) the JVM must free individually. Expose a per-element accessor instead of returning a `Vec` of handles.
 - `vec_sum` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Vec < Sum >` cannot cross: a `Vec` needs TWO C wires (pointer + length) and one union field carries only one, so its length would be silently dropped — hand the sequence over thro…
 - `vec_sum` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen output type `Vec < Sum >` — error: unresolved prebindgen output type `Sum`
 - `opt_sum` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Option < Sum >` cannot cross: its input and output converters disagree on the wire (`* const :: core :: mem :: MaybeUninit < sum >` in, `()` out) and one union field serves both d…

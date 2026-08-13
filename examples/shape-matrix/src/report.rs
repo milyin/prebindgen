@@ -7,6 +7,7 @@
 use std::fmt::Write as _;
 
 use crate::{
+    check::{self, Unit},
     corpus::{Position, Shape, SHAPES},
     run::{declarations, run, ClassKind, State, Target},
     tag::TypeTag,
@@ -35,6 +36,32 @@ struct Cell {
     position: Position,
     target: Target,
     state: State,
+    /// Whether rustc accepted the emitted Rust. `None` when there was nothing
+    /// to check — the generator refused the cell, or the check could not run at
+    /// all, which is not a verdict about the cell either.
+    compiled: Option<bool>,
+}
+
+impl Cell {
+    /// `<shape>__<position>__<target>` — the receipt key, and the name of the
+    /// file rustc reports against.
+    fn id(&self) -> String {
+        format!(
+            "{}__{}__{}",
+            self.shape.id,
+            self.position.slug(),
+            self.target.slug()
+        )
+    }
+
+    /// What the table prints.
+    fn text(&self) -> String {
+        match (&self.state, self.compiled) {
+            (State::PlanSupported, Some(true)) => "rustc".to_string(),
+            (State::PlanSupported, Some(false)) => "**bad rust**".to_string(),
+            (state, _) => state.cell(),
+        }
+    }
 }
 
 fn run_all() -> Vec<Cell> {
@@ -44,42 +71,76 @@ fn run_all() -> Vec<Cell> {
     std::panic::set_hook(Box::new(|_| {}));
 
     let mut cells = Vec::new();
+    let mut units = Vec::new();
     for shape in SHAPES {
         for position in Position::ALL {
             for target in Target::ALL {
-                cells.push(Cell {
+                let outcome = run(shape, *position, *target);
+                let cell = Cell {
                     shape,
                     position: *position,
                     target: *target,
-                    state: run(shape, *position, *target),
-                });
+                    state: outcome.state,
+                    compiled: None,
+                };
+                if let Some(emitted) = outcome.emitted {
+                    units.push(Unit {
+                        id: cell.id(),
+                        fixture: crate::run::fixture_source(shape, *position),
+                        emitted,
+                    });
+                }
+                cells.push(cell);
             }
         }
     }
 
     std::panic::set_hook(previous);
+
+    // A check that could not run is reported as such and leaves every cell
+    // uncompiled, rather than being folded into the cells as a verdict they did
+    // not earn.
+    match check::check("cells", &units) {
+        Ok(checked) => {
+            for cell in &mut cells {
+                if matches!(cell.state, State::PlanSupported) {
+                    cell.compiled = Some(checked.compiled.contains(&cell.id()));
+                }
+            }
+            for (id, messages) in &checked.failed {
+                eprintln!("shape-matrix: {id} emitted Rust that does not compile:");
+                for message in messages {
+                    eprintln!("    {message}");
+                }
+            }
+        }
+        Err(err) => eprintln!("shape-matrix: the compile check did not run: {err}"),
+    }
+
     cells
 }
 
 fn render_summary(out: &mut String, results: &[Cell]) {
     out.push_str("## Summary\n\n");
-    out.push_str("| Target | plan | rejected | panic | n/a |\n");
-    out.push_str("|---|---:|---:|---:|---:|\n");
+    out.push_str("| Target | rustc | bad rust | plan only | rejected | panic | n/a |\n");
+    out.push_str("|---|---:|---:|---:|---:|---:|---:|\n");
     for target in Target::ALL {
-        let of = |f: fn(&State) -> bool| {
+        let of = |f: fn(&Cell) -> bool| {
             results
                 .iter()
-                .filter(|c| c.target == *target && f(&c.state))
+                .filter(|c| c.target == *target && f(c))
                 .count()
         };
         let _ = writeln!(
             out,
-            "| {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {} | {} |",
             target.as_str(),
-            of(|s| matches!(s, State::PlanSupported)),
-            of(|s| matches!(s, State::Rejected(_))),
-            of(|s| matches!(s, State::Panicked(_))),
-            of(|s| matches!(s, State::NotApplicable(_))),
+            of(|c| c.compiled == Some(true)),
+            of(|c| c.compiled == Some(false)),
+            of(|c| matches!(c.state, State::PlanSupported) && c.compiled.is_none()),
+            of(|c| matches!(c.state, State::Rejected(_))),
+            of(|c| matches!(c.state, State::Panicked(_))),
+            of(|c| matches!(c.state, State::NotApplicable(_))),
         );
     }
     out.push('\n');
@@ -96,7 +157,7 @@ fn render_position(out: &mut String, results: &[Cell], position: Position) {
                 .find(|c| {
                     std::ptr::eq(c.shape, shape) && c.position == position && c.target == target
                 })
-                .map(|c| c.state.cell())
+                .map(|c| c.text())
                 .unwrap_or_default()
         };
         let _ = writeln!(
@@ -211,13 +272,20 @@ never by a hand-written list of what is supposed to work. See
 
 | Cell | Meaning |
 |---|---|
-| `plan` | generation succeeded. Nothing here compiled, linked or ran the result. |
+| `rustc` | the generator produced Rust **and rustc accepted it**. Neither cbindgen nor the Kotlin compiler has seen it. |
+| **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. |
+| `plan` | generation succeeded and the compile check did not run (see the run\'s stderr). |
 | `rejected` | the generator refused the shape **and said why**. The intended outcome for anything unsupported. |
 | **`panic`** | the generator refused it without a diagnosis — the user gets a stack trace instead of a sentence ([#191](https://github.com/milyin/prebindgen/issues/191)). |
 | `—` | the placement is not legal Rust, so there is nothing to ask. |
 
-`plan` is evidence, not a guarantee: `ToolchainCompiled` and `RuntimeExercised`
-are the states that require a compiler and a runtime, and neither is collected
-yet.
+`rustc` is evidence, not a guarantee. It is the Rust half of
+`ToolchainCompiled`: the emitted Rust type-checks against the fixture the way a
+binding crate compiles it. The C header, the Kotlin classes and every
+`RuntimeExercised` cell still require toolchains this stage does not run.
+
+Compiler messages are deliberately **not** in this file — they vary by
+toolchain, and the report has to be identical on every one that builds it. A
+failing cell prints its diagnostics on the run\'s stderr.
 
 ";

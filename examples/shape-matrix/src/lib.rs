@@ -36,8 +36,13 @@
 //!   legitimately answer differently, and one combined verdict would hide
 //!   exactly the gaps this exists to find.
 //!
+//! Every cell that produces Rust is then handed to rustc ([`check`]), because
+//! "the generator produced a file" and "the file compiles" are different claims
+//! and only the second is worth much.
+//!
 //! Run it with `cargo run -p shape-matrix`, which rewrites `REPORT.md`.
 
+pub mod check;
 pub mod corpus;
 pub mod report;
 pub mod run;
