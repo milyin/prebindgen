@@ -73,7 +73,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // Every callback below is handed a borrow; nothing else in the pipeline is.
     // See `prebindgen_flat::flat::emit` for what that buys and what it
     // deliberately does not.
-    let emit = prebindgen_flat::Emit::new();
+    let emit = crate::Emit::new();
     let mut items: Vec<syn::Item> = Vec::new();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,

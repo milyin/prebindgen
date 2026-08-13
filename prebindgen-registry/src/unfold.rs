@@ -316,10 +316,7 @@ pub(crate) fn apply<M>(
                 return Err(UnfoldError::ReturnTypeMismatch {
                     func: ed.func.clone(),
                     declared: declared.as_str().to_string(),
-                    actual: {
-                        let s = ret.spell();
-                        quote::quote!(#s).to_string()
-                    },
+                    actual: { ret.to_string() },
                 });
             }
         }

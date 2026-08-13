@@ -118,3 +118,15 @@ pub(crate) fn unique_test_dir(prefix: &str) -> PathBuf {
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), seq))
 }
+
+/// Test-only adapter preserving the concise spelling assertions while routing
+/// them through the same registry-owned key as production callbacks.
+pub(crate) trait SpellForTest {
+    fn spell(&self) -> proc_macro2::TokenStream;
+}
+
+impl SpellForTest for prebindgen_flat::flat::TypeRef {
+    fn spell(&self) -> proc_macro2::TokenStream {
+        crate::Emit::for_test().spell(self)
+    }
+}

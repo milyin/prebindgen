@@ -273,7 +273,7 @@ pub(crate) fn encode_sum_group(
                 .zip(&binds)
                 .map(|(f, b)| f.bind(b))
                 .collect();
-            let pattern = emit.shape(alt, quote!(#source::#vident), &parts);
+            let pattern = emit.shape_alternative(alt, quote!(#source::#vident), &parts);
             // The live group: convert each payload through its own output
             // converter, exactly as a struct field of the same type would be.
             let live: TokenStream = group

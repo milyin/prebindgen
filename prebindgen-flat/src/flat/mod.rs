@@ -9,7 +9,7 @@
 //! ```text
 //! Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
 //!   raw records          parse +               indexes       classify off `kind`
-//!   (syn::Item)          validate              elements      spell with `spell()`
+//!   (syn::Item)          validate              elements      spell through a callback key
 //! ```
 //!
 //! [`FlatBuilder::source`] folds the first arrow in for the common case, so a build
@@ -35,17 +35,16 @@
 //!
 //! So the rule for every consumer is:
 //!
-//! > **Classify off `kind`, spell with [`spell()`](Origin::spell).**
+//! > **Classify off `kind`, spell through the callback's [`RustEmitter`](crate::RustEmitter).**
 //!
 //! And the model enforces it rather than asking. [`Origin`]'s syntax is
 //! private, and every route to it — `spell()`, `as_syn()` — is visible only
 //! inside this crate. Matching a `syn::Type` or `syn::Expr` variant outside
 //! this module is a classifier, and issue #211 says classification lives here
 //! alone; the visibility is what makes that hold rather than a convention
-//! anyone has to remember. Code whose job *is* producing Rust reaches the
-//! syntax through [`Emit`](crate::Emit), which the registry pipeline
-//! (`prebindgen-registry`'s `write_rust`) hands only to the emission
-//! callbacks.
+//! anyone has to remember. Code whose job *is* producing Rust reaches the syntax through a
+//! pipeline-owned [`RustEmitter`](crate::RustEmitter) key. The registry pipeline
+//! hands its concrete key only to emission callbacks.
 //!
 //! # What earns a variant
 //!
@@ -638,29 +637,6 @@ impl Flat {
         }
     }
 
-    /// The `syn::ItemEnum` behind **either** enum shape.
-    ///
-    /// A sum and a C-style enum are different elements — numbered differently
-    /// and consumed as different constructs — but both were spelled `enum` in
-    /// Rust and both keep that item. A consumer re-emitting the source wants the
-    /// item without caring which shape it is; one that acts on the distinction
-    /// reaches for [`Self::declared_type`].
-    // Test-only since S42: `unit_enum`, `payload_enum`, `enum_alternatives` and
-    // `declared_member_names` each ask the model which shape a declared enum is
-    // and get the element that answers, so nothing in a built crate needs the
-    // item. The registry pipeline's own tests (now in the separate
-    // `prebindgen-registry` crate) still exercise it, which is why this is
-    // `pub` rather than `pub(crate)` — see `TypeRef`'s doc for
-    // why that seal is now a convention rather than a compiler check.
-    #[allow(dead_code)]
-    pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
-        match self.declared_type(name)? {
-            Type::Variant(v) => Some(v.origin.as_syn()),
-            Type::Enum(e) => Some(e.origin.as_syn()),
-            _ => None,
-        }
-    }
-
     /// Module name of every captured source, in first-seen order.
     ///
     /// The first entry is the default module for a reference with no recorded
@@ -725,15 +701,10 @@ impl Flat {
     /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
     /// about a type the *binding* built, not a cache miss.
     ///
-    /// **`pub`, not `pub(crate)`.** The registry pipeline that is
-    /// this method's sole legitimate caller now lives in the separate
-    /// `prebindgen-registry` crate, so a module-path seal can no longer express
-    /// "the pipeline, and nothing else" — there is no path inside this crate for
-    /// it to name. The seal is now a documented convention (this doc comment)
-    /// rather than a compiler-enforced one; #280's intent (an adapter must not
-    /// mint a `TypeRef` from tokens of its own) is no longer structurally
-    /// guaranteed and would need a real API (e.g. a sealed trait token minted
-    /// only by `prebindgen-registry`) to restore.
+    /// This is public flat-parser API. An independent parser or collector may
+    /// lower adapter-authored Rust syntax into the same closed model without
+    /// depending on the registry. The private `TypeRef` fields still ensure
+    /// that every successful result has a matching classification and origin.
     pub fn classify(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
         if let Some(indexed) = self.type_ref(ty) {
             return Ok(indexed.clone());

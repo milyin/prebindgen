@@ -576,7 +576,7 @@ impl<M> Registry<M> {
     /// Put a crossing in the table with its conversion already decided — the
     /// fixture form of "this type crosses, and here is how".
     ///
-    /// Goes through [`Self::ensure_entry`] rather than building a cell beside it,
+    /// Goes through `Self::ensure_entry` rather than building a cell beside it,
     /// so a fixture table is reached the same way a real one is and a hand-written
     /// key is held to the same grammar. A test that wants the whole scan builds its
     /// registry from items instead; this is for the ones that need a specific table
