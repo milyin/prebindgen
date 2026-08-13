@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     corpus::{Position, SHAPES},
+    header,
     run::{declarations, kind_of, not_applicable, ClassKind, Target},
 };
 
@@ -183,6 +184,28 @@ fn the_compile_check_separates_good_from_bad() {
         checked.failed.contains_key("selftest_bad__param__jni"),
         "the failing unit produced no attributed diagnostic, so nothing links a \
          compiler error to the cell it belongs to"
+    );
+}
+
+/// The header stage must discriminate, and on the right thing.
+///
+/// "cbindgen returned `Ok`" would pass for a header declaring nothing at all,
+/// so the receipt is that the wrapper is *declared*. The negative control is
+/// the same Rust with the `extern "C"` removed: still valid Rust, still parsed
+/// happily, and of no use whatsoever to a C caller.
+#[test]
+fn the_header_stage_requires_a_declaration() {
+    let exported = r#"#[no_mangle] pub unsafe extern "C" fn probe(v: u64) -> u64 { v }"#;
+    assert!(
+        header::generate(exported, "probe").is_ok(),
+        "an exported wrapper was not found in the header cbindgen produced"
+    );
+
+    let not_exported = "pub fn probe(v: u64) -> u64 { v }";
+    assert!(
+        !header::generate(not_exported, "probe").is_ok(),
+        "a function C cannot call was reported as declared — the stage is \
+         reporting a state it did not establish"
     );
 }
 

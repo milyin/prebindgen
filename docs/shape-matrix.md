@@ -45,7 +45,8 @@ not a rewrite.
 |---|---|---|
 | 1 | The enumerator, both targets, committed report + regen gate | **landed** ([#400](https://github.com/milyin/prebindgen/pull/400)) |
 | 2 | Receipts: rustc accepts the emitted Rust | **landed** ([#403](https://github.com/milyin/prebindgen/pull/403)) |
-| 2b | The rest of `ToolchainCompiled`, and `RuntimeExercised` | not started |
+| 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#405](https://github.com/milyin/prebindgen/pull/405)) |
+| 2c | The Kotlin compiler, and `RuntimeExercised` | not started |
 | 3 | The minimum-guarantees table | not started |
 | 4 | Multi-parameter aliasing fixtures | not started |
 | 5 | The adapter-policy axis | JNI half ready; C half blocked |
@@ -92,13 +93,28 @@ compile, and three defects in this harness — each of which had been reporting 
 confident wrong answer. That is the argument for this step in one sentence:
 `plan` was worth less than it looked.
 
-### 2b. The rest of the toolchain
+### 2b. Both halves, and the header — landed
 
-`cbindgen` does not run, so a C cell that compiles has not been shown to produce
-a valid header; the Kotlin compiler does not run either. `RuntimeExercised` needs
-the JVM covertest and the C smoke tests, and the same receipt rule applies — a
-fixture emits its cell id only *after* the relevant assertion has executed, and a
-cell with no receipt keeps the weaker state whatever any table claims.
+Two stages cells were passing without reaching. **JNI produced no Kotlin at all**
+— the driver wrote the Rust and stopped, so a passing cell had shown the half a
+Kotlin caller never sees. And **C stopped at rustc**, which is the wrong finish
+line: what a C consumer gets is a header, and a signature rustc accepts can be
+one cbindgen skips or cannot name.
+
+The header receipt is that the wrapper is *declared*, not that cbindgen returned
+`Ok` — it returns `Ok` for a header declaring nothing.
+
+The ladders differ by target now, and the report says so rather than levelling to
+the shorter one: `header` for C, `rustc` for JNI.
+
+### 2c. The Kotlin compiler, and the runtime
+
+The Kotlin emitted in 2b is written but never compiled, so the JNI ladder still
+ends one stage short of C's; closing it needs kotlinc in CI.
+`RuntimeExercised` needs the JVM covertest and the C smoke tests, under the same
+receipt rule — a fixture emits its cell id only *after* the relevant assertion
+has executed, and a cell with no receipt keeps the weaker state whatever any
+table claims.
 
 ### 3. The minimum-guarantees table
 

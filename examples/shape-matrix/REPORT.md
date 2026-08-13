@@ -10,7 +10,10 @@ never by a hand-written list of what is supposed to work. See
 
 | Cell | Meaning |
 |---|---|
-| `rustc` | the generator produced Rust **and rustc accepted it**. Neither cbindgen nor the Kotlin compiler has seen it. |
+| `header` | C only: rustc accepted the Rust **and cbindgen declared the wrapper in a header**. The furthest any cell gets today. |
+| `rustc` | the generator produced Rust and rustc accepted it. For JNI this is the top of the ladder — the Kotlin compiler does not run here, though the Kotlin **is** generated, and a cell whose Kotlin cannot be written is `rejected`. |
+| **`no decl`** | cbindgen produced a header that does not declare the wrapper — nothing a C program can call. |
+| **`bad header`** | cbindgen refused the emitted Rust, or panicked on it. |
 | **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. |
 | `plan` | generation succeeded and the compile check did not run (see the run's stderr). |
 | `rejected` | the generator refused the shape **and said why**. The intended outcome for anything unsupported. |
@@ -28,38 +31,40 @@ failing cell prints its diagnostics on the run's stderr.
 
 ## Summary
 
-| Target | rustc | bad rust | plan only | rejected | panic | n/a |
-|---|---:|---:|---:|---:|---:|---:|
-| C | 45 | 5 | 0 | 41 | 31 | 22 |
-| Kotlin/JNI | 75 | 5 | 0 | 34 | 8 | 22 |
+| Target | header | rustc | bad header | bad rust | rejected | panic | n/a |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| C | 45 | 0 | 0 | 5 | 41 | 31 | 22 |
+| Kotlin/JNI | 0 | 75 | 0 | 5 | 34 | 8 | 22 |
+
+The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin/JNI cell stops at rustc because this crate does not run the Kotlin compiler. `rustc` is therefore the top state for JNI and an intermediate one for C.
 
 ## Position: parameter
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | rustc | rustc |
-| `bool` | `bool` | rustc | rustc |
+| `scalar` | `u64` | header | rustc |
+| `bool` | `bool` | header | rustc |
 | `unit` | `()` | rejected | rejected |
-| `string` | `String` | rustc | rustc |
-| `str_ref` | `&str` | rustc | rustc |
-| `record` | `Rec` | rustc | rustc |
-| `handle` | `Handle` | rustc | rustc |
-| `sum` | `Sum` | rustc | rustc |
-| `unit_enum` | `Mode` | rustc | rustc |
+| `string` | `String` | header | rustc |
+| `str_ref` | `&str` | header | rustc |
+| `record` | `Rec` | header | rustc |
+| `handle` | `Handle` | header | rustc |
+| `sum` | `Sum` | header | rustc |
+| `unit_enum` | `Mode` | header | rustc |
 | `shared_ref` | `&Rec` | rejected | rustc |
 | `exclusive_ref` | `&mut Rec` | rejected | **bad rust** |
-| `handle_ref` | `&Handle` | rustc | rustc |
+| `handle_ref` | `&Handle` | header | rustc |
 | `out_param` | `&mut MaybeUninit<u64>` | rejected | **bad rust** |
-| `opt_scalar` | `Option<u64>` | rustc | rustc |
+| `opt_scalar` | `Option<u64>` | header | rustc |
 | `vec_scalar` | `Vec<u64>` | rejected | rejected |
-| `slice_scalar` | `&[u64]` | rustc | rejected |
+| `slice_scalar` | `&[u64]` | header | rejected |
 | `slice_mut_scalar` | `&mut [u64]` | rejected | rejected |
 | `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
 | `cow_str` | `Cow<'static, str>` | rejected | **bad rust** |
 | `opt_record` | `Option<Rec>` | **bad rust** | rustc |
-| `opt_handle` | `Option<Handle>` | rustc | rustc |
-| `opt_ref` | `Option<&Handle>` | rustc | rustc |
+| `opt_handle` | `Option<Handle>` | header | rustc |
+| `opt_ref` | `Option<&Handle>` | header | rustc |
 | `vec_record` | `Vec<Rec>` | rejected | rustc |
 | `vec_handle` | `Vec<Handle>` | rejected | **panic** |
 | `vec_ref` | `Vec<&Handle>` | rejected | **panic** |
@@ -116,39 +121,39 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | rustc | rustc |
-| `bool` | `bool` | rustc | rustc |
-| `unit` | `()` | rustc | rustc |
-| `string` | `String` | rustc | rustc |
+| `scalar` | `u64` | header | rustc |
+| `bool` | `bool` | header | rustc |
+| `unit` | `()` | header | rustc |
+| `string` | `String` | header | rustc |
 | `str_ref` | `&str` | rejected | rustc |
-| `record` | `Rec` | rustc | rustc |
-| `handle` | `Handle` | rustc | rustc |
-| `sum` | `Sum` | rustc | rustc |
-| `unit_enum` | `Mode` | rustc | rustc |
+| `record` | `Rec` | header | rustc |
+| `handle` | `Handle` | header | rustc |
+| `sum` | `Sum` | header | rustc |
+| `unit_enum` | `Mode` | header | rustc |
 | `shared_ref` | `&Rec` | rejected | rejected |
 | `exclusive_ref` | `&mut Rec` | rejected | rejected |
-| `handle_ref` | `&Handle` | rustc | rustc |
+| `handle_ref` | `&Handle` | header | rustc |
 | `out_param` | `&mut MaybeUninit<u64>` | rejected | rejected |
-| `opt_scalar` | `Option<u64>` | rustc | rustc |
-| `vec_scalar` | `Vec<u64>` | rustc | rustc |
+| `opt_scalar` | `Option<u64>` | header | rustc |
+| `vec_scalar` | `Vec<u64>` | header | rustc |
 | `slice_scalar` | `&[u64]` | **bad rust** | rejected |
 | `slice_mut_scalar` | `&mut [u64]` | rejected | rejected |
 | `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
 | `cow_str` | `Cow<'static, str>` | rejected | rustc |
-| `opt_record` | `Option<Rec>` | rustc | rustc |
-| `opt_handle` | `Option<Handle>` | rustc | rustc |
-| `opt_ref` | `Option<&Handle>` | rustc | rustc |
-| `vec_record` | `Vec<Rec>` | rustc | rustc |
-| `vec_handle` | `Vec<Handle>` | rustc | rustc |
+| `opt_record` | `Option<Rec>` | header | rustc |
+| `opt_handle` | `Option<Handle>` | header | rustc |
+| `opt_ref` | `Option<&Handle>` | header | rustc |
+| `vec_record` | `Vec<Rec>` | header | rustc |
+| `vec_handle` | `Vec<Handle>` | header | rustc |
 | `vec_ref` | `Vec<&Handle>` | **bad rust** | rustc |
-| `vec_sum` | `Vec<Sum>` | rustc | rustc |
-| `opt_sum` | `Option<Sum>` | rustc | rustc |
+| `vec_sum` | `Vec<Sum>` | header | rustc |
+| `opt_sum` | `Option<Sum>` | header | rustc |
 | `array_record` | `[Rec; 2]` | rejected | rejected |
-| `opt_vec` | `Option<Vec<u64>>` | rustc | rustc |
+| `opt_vec` | `Option<Vec<u64>>` | header | rustc |
 | `vec_opt` | `Vec<Option<u64>>` | **panic** | rustc |
-| `result_scalar` | `Result<u64, ZError>` | rustc | rustc |
-| `result_handle` | `Result<Handle, ZError>` | rustc | rustc |
+| `result_scalar` | `Result<u64, ZError>` | header | rustc |
+| `result_handle` | `Result<Handle, ZError>` | header | rustc |
 | `result_sum_err` | `Result<u64, Sum>` | **panic** | rejected |
 | `callback` | `impl Fn(u64) + Send + Sync + 'static` | rejected | rejected |
 | `callback_handle` | `impl Fn(Handle) + Send + Sync + 'static` | rejected | rejected |
@@ -185,14 +190,14 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | rustc | rustc |
-| `bool` | `bool` | rustc | rustc |
+| `scalar` | `u64` | header | rustc |
+| `bool` | `bool` | header | rustc |
 | `unit` | `()` | **panic** | rejected |
-| `string` | `String` | rustc | rustc |
+| `string` | `String` | header | rustc |
 | `str_ref` | `&str` | — | — |
 | `record` | `Rec` | **panic** | rustc |
 | `handle` | `Handle` | **panic** | rustc |
-| `sum` | `Sum` | rustc | rustc |
+| `sum` | `Sum` | header | rustc |
 | `unit_enum` | `Mode` | **panic** | rustc |
 | `shared_ref` | `&Rec` | — | — |
 | `exclusive_ref` | `&mut Rec` | — | — |
@@ -263,15 +268,15 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Shape | Rust | C | Kotlin/JNI |
 |---|---|---|---|
-| `scalar` | `u64` | rustc | rustc |
-| `bool` | `bool` | rustc | rustc |
+| `scalar` | `u64` | header | rustc |
+| `bool` | `bool` | header | rustc |
 | `unit` | `()` | rejected | **panic** |
-| `string` | `String` | rustc | rustc |
+| `string` | `String` | header | rustc |
 | `str_ref` | `&str` | — | — |
-| `record` | `Rec` | rustc | rustc |
-| `handle` | `Handle` | rustc | rustc |
-| `sum` | `Sum` | rustc | **panic** |
-| `unit_enum` | `Mode` | rustc | rustc |
+| `record` | `Rec` | header | rustc |
+| `handle` | `Handle` | header | rustc |
+| `sum` | `Sum` | header | **panic** |
+| `unit_enum` | `Mode` | header | rustc |
 | `shared_ref` | `&Rec` | — | — |
 | `exclusive_ref` | `&mut Rec` | — | — |
 | `handle_ref` | `&Handle` | — | — |
@@ -303,8 +308,8 @@ failing cell prints its diagnostics on the run's stderr.
 <details><summary>What the generators said</summary>
 
 - `unit` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `Probe` — error: unresolved prebindgen input type `()`
-- `unit` / Kotlin/JNI: builder interface spec derivable for a registered declaration
-- `sum` / Kotlin/JNI: builder interface spec derivable for a registered declaration
+- `unit` / Kotlin/JNI: sealed_class!(Probe) payload `Carried.v0`: `()` has no Kotlin type mapping on its output converter
+- `sum` / Kotlin/JNI: sealed_class!(Probe) payload `Carried.v0`: `Sum` has no resolved OUTPUT converter, so the Kotlin surface for it cannot be derived — register converters for the payload type before declaring the sealed class
 - `opt_scalar` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Option < u64 >` cannot cross: its input and output converters disagree on the wire (`* const u64` in, `()` out) and one union field serves both directions
 - `vec_scalar` / C: Cbindgen::tagged_union: payload `Probe::Carried` of type `Vec < u64 >` cannot cross: a `Vec` needs TWO C wires (pointer + length) and one union field carries only one, so its length would be silently dropped — hand the sequence over thro…
 - `vec_scalar` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen output type `Vec < u64 >`

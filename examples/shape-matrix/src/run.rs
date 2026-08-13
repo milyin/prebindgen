@@ -25,8 +25,9 @@ use crate::corpus::{Need, Position, Shape};
 /// out by conflating them.
 pub const SOURCE_CRATE: &str = "flat";
 
-/// The function every fixture declares to the target.
-const PROBE_FN: &str = "probe";
+/// The function every fixture declares to the target, and — since neither
+/// binding renames it — the symbol a C caller links against.
+pub const PROBE_FN: &str = "probe";
 
 /// The struct or enum a `Field` / `Payload` fixture wraps the shape in.
 const PROBE_TY: &str = "Probe";
@@ -448,6 +449,17 @@ fn run_jni(source: &str, decls: &[Decl]) -> Result<String, String> {
         builder = builder.expand(decl);
     }
     let generation = builder.build().map_err(|e| e.to_string())?;
+
+    // Kotlin is half of what this target produces, and until it is asked for,
+    // a cell reporting success has shown only the Rust half. A binding whose
+    // Kotlin cannot be written is not a binding.
+    let kotlin_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let written = generation
+        .write_kotlin(kotlin_dir.path())
+        .map_err(|e| e.to_string())?;
+    if written.is_empty() {
+        return Err("the binding produced no Kotlin at all".to_string());
+    }
 
     read_back(|path| generation.write_rust(path).map_err(|e| e.to_string()))
 }

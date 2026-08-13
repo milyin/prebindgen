@@ -38,12 +38,15 @@
 //!
 //! Every cell that produces Rust is then handed to rustc ([`check`]), because
 //! "the generator produced a file" and "the file compiles" are different claims
-//! and only the second is worth much.
+//! and only the second is worth much. For the C target there is a third:
+//! [`header`] asks cbindgen whether that file becomes a header actually
+//! declaring the wrapper, since a header is what a C caller is given.
 //!
 //! Run it with `cargo run -p shape-matrix`, which rewrites `REPORT.md`.
 
 pub mod check;
 pub mod corpus;
+pub mod header;
 pub mod report;
 pub mod run;
 pub mod tag;
