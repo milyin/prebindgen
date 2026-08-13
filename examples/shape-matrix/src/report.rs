@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 
 use crate::{
     corpus::{Position, Shape, SHAPES},
-    run::{run, State, Target},
+    run::{declarations, run, ClassKind, State, Target},
     tag::TypeTag,
 };
 
@@ -24,6 +24,7 @@ pub fn render() -> String {
         render_position(&mut out, &results, *position);
     }
     render_coverage(&mut out);
+    render_class_coverage(&mut out);
 
     out
 }
@@ -160,6 +161,39 @@ fn render_coverage(out: &mut String) {
                     .join(", ")
             }
         );
+    }
+    out.push('\n');
+}
+
+fn render_class_coverage(out: &mut String) {
+    out.push_str("## Declaration-kind coverage\n\n");
+    out.push_str(
+        "What a declared type can be declared **as**, and the positions that exercise each. \
+         The vocabulary is the JNI adapter\'s own `ClassDecl`, matched exhaustively by \
+         `kind_of`, so a fifth class kind stops this crate compiling; the C side is a \
+         translation of the same axis, since its build-script API has no closed kind \
+         vocabulary yet.\n\n",
+    );
+    out.push_str("| Declared as | Exercised by |\n|---|---|\n");
+
+    for kind in ClassKind::ALL {
+        let mut users: Vec<String> = Vec::new();
+        for shape in SHAPES {
+            for position in Position::ALL {
+                let used = declarations(shape, *position)
+                    .iter()
+                    .any(|d| d.class == *kind);
+                if used {
+                    users.push(format!("`{}` ({})", shape.id, position.as_str()));
+                }
+            }
+        }
+        let summary = if users.is_empty() {
+            "**nothing**".to_string()
+        } else {
+            format!("{} cells, e.g. {}", users.len(), users[0])
+        };
+        let _ = writeln!(out, "| {} | {} |", kind.as_str(), summary);
     }
     out.push('\n');
 }

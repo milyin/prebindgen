@@ -24,7 +24,13 @@
 //!   language breaks this crate until the form has a fixture.
 //! * **Declarations** are a separate axis, because the model records a field's
 //!   type as *"a named type called `Rec`"* and stops. A cell about a struct
-//!   field has to emit a struct.
+//!   field has to emit a struct. This axis has the same kind of gate:
+//!   [`run::kind_of`] is exhaustive over the JNI adapter's own
+//!   [`ClassDecl`](prebindgen_jni::ClassDecl), so a fifth class kind also stops
+//!   this crate compiling. The C build-script API has no closed kind vocabulary
+//!   to gate against and is due to be reworked in the JNI style (#192), so
+//!   [`run::to_c`] translates this axis onto it and nothing else here is shaped
+//!   around C's current spelling.
 //! * **Positions** are parameter, return, struct field and enum payload.
 //! * **Targets** are enumerated separately and never merged — C and Kotlin
 //!   legitimately answer differently, and one combined verdict would hide

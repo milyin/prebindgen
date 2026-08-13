@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     corpus::{Position, SHAPES},
-    run::{not_applicable, Target},
+    run::{declarations, kind_of, not_applicable, ClassKind, Target},
 };
 
 /// The gate this crate exists to hold.
@@ -40,6 +40,54 @@ fn every_shape_classifies() {
             shape.id
         );
     }
+}
+
+/// The same gate, one axis over: this crate's declaration vocabulary **is** the
+/// adapter's, not a copy of it.
+///
+/// `kind_of` is exhaustive over `prebindgen_jni::ClassDecl`, so a fifth class
+/// kind is a compile error; the round trip here is what stops the two drifting
+/// in the other direction, by proving each kind builds the declaration it
+/// claims to. The C side is deliberately not gated this way — its build-script
+/// API has no closed kind vocabulary to match on, and is due to be reworked in
+/// the JNI style (#192), so `to_c` translates rather than defines.
+#[test]
+fn class_kind_vocabulary_matches_the_adapter() {
+    let probe: syn::Type = syn::parse_quote!(Probe);
+    for kind in ClassKind::ALL {
+        assert_eq!(
+            *kind,
+            kind_of(&kind.decl(probe.clone())),
+            "`{}` does not build the declaration it names",
+            kind.as_str()
+        );
+    }
+}
+
+/// A vocabulary nothing exercises is not coverage. The compile-time half is
+/// `kind_of`; this is the half that makes a newly added kind fail until some
+/// cell actually declares a type as one.
+#[test]
+fn every_class_kind_is_exercised() {
+    let missing: Vec<&str> = ClassKind::ALL
+        .iter()
+        .filter(|kind| {
+            !SHAPES.iter().any(|shape| {
+                Position::ALL.iter().any(|position| {
+                    declarations(shape, *position)
+                        .iter()
+                        .any(|d| d.class == **kind)
+                })
+            })
+        })
+        .map(|kind| kind.as_str())
+        .collect();
+
+    assert!(
+        missing.is_empty(),
+        "no cell declares a type as: {missing:?}\n\
+         Add a `Need` to `corpus` that declares one."
+    );
 }
 
 /// Shape ids are the receipt key a cell is reported under, so they have to be

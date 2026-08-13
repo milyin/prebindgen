@@ -352,3 +352,14 @@ Every form `TypeKind` accepts, and the shapes that write one. Enforced by `every
 | `impl Fn(..)` | `callback`, `callback_handle` |
 | `()` | `unit` |
 
+## Declaration-kind coverage
+
+What a declared type can be declared **as**, and the positions that exercise each. The vocabulary is the JNI adapter's own `ClassDecl`, matched exhaustively by `kind_of`, so a fifth class kind stops this crate compiling; the C side is a translation of the same axis, since its build-script API has no closed kind vocabulary yet.
+
+| Declared as | Exercised by |
+|---|---|
+| opaque handle | 36 cells, e.g. `handle` (parameter) |
+| value struct | 54 cells, e.g. `scalar` (struct field) |
+| enum with payloads | 48 cells, e.g. `scalar` (enum payload) |
+| fieldless enum | 4 cells, e.g. `unit_enum` (parameter) |
+

@@ -9,7 +9,9 @@ use std::panic::AssertUnwindSafe;
 
 use prebindgen::SourceLocation;
 use prebindgen_c::Cbindgen;
-use prebindgen_jni::{DataClassDecl, EnumClassDecl, JniGen, PtrClassDecl, SealedClassDecl};
+use prebindgen_jni::{
+    ClassDecl, DataClassDecl, EnumClassDecl, JniGen, PtrClassDecl, SealedClassDecl,
+};
 use prebindgen_registry::{ExpandReturnDecl, FunctionDecl};
 
 use crate::corpus::{Need, Position, Shape};
@@ -153,46 +155,120 @@ pub fn fixture_source(shape: &Shape, position: Position) -> String {
     items.join("\n")
 }
 
-/// How a declared type is presented to the targets.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Kind {
-    Value,
-    Handle,
-    Sum,
-    UnitEnum,
-    /// The `E` of a `Result`. Declared the way both targets document it — C
-    /// takes an opaque error plus the function that renders its message, JNI
-    /// takes a handle whose declared return fields feed the generated error
-    /// handler. Anything less would make every fallible cell a measurement of
-    /// this harness rather than of the generator.
-    Error,
+/// The declaration axis: what a declared type is declared **as**.
+///
+/// Named in the JNI adapter's vocabulary on purpose. Its class kinds are a
+/// closed, public enum ([`ClassDecl`]), so [`kind_of`] can be exhaustive over
+/// it and a fifth kind stops this crate compiling — the same chain
+/// [`tag_of`](crate::tag::tag_of) gives the type axis.
+///
+/// The C build-script API has no such closure: eleven declarator methods and no
+/// type unifying them. It is the older surface and is to be reworked in this
+/// style (#192, #399), so the harness models the JNI vocabulary and
+/// [translates](to_c) to C. Building the harness around C's current shape would
+/// bake a quirk of the API being replaced into the thing meant to outlive it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ClassKind {
+    /// An opaque handle the foreign side owns and releases.
+    Ptr,
+    /// A product of fields, crossing by value.
+    Data,
+    /// An enum whose alternatives carry payloads.
+    Sealed,
+    /// An enum whose alternatives are all fieldless.
+    Enum,
 }
 
-impl Kind {
-    fn of(need: Need) -> Kind {
-        match need {
-            Need::Record => Kind::Value,
-            Need::Handle => Kind::Handle,
-            Need::Error => Kind::Error,
-            Need::Sum => Kind::Sum,
-            Need::UnitEnum => Kind::UnitEnum,
+impl ClassKind {
+    pub const ALL: &'static [ClassKind] = &[
+        ClassKind::Ptr,
+        ClassKind::Data,
+        ClassKind::Sealed,
+        ClassKind::Enum,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ClassKind::Ptr => "opaque handle",
+            ClassKind::Data => "value struct",
+            ClassKind::Sealed => "enum with payloads",
+            ClassKind::Enum => "fieldless enum",
+        }
+    }
+
+    /// This kind as the JNI adapter's own declaration.
+    pub fn decl(self, ty: syn::Type) -> ClassDecl {
+        match self {
+            ClassKind::Ptr => PtrClassDecl::new(ty).into(),
+            ClassKind::Data => DataClassDecl::new(ty).into(),
+            ClassKind::Sealed => SealedClassDecl::new(ty).into(),
+            ClassKind::Enum => EnumClassDecl::new(ty).into(),
+        }
+    }
+}
+
+/// The gate on the declaration axis.
+///
+/// Exhaustive over the adapter's [`ClassDecl`], so a fifth class kind is a
+/// compile error here, and `class_kind_vocabulary_matches_the_adapter` then
+/// fails until this crate enumerates it.
+pub fn kind_of(decl: &ClassDecl) -> ClassKind {
+    match decl {
+        ClassDecl::Ptr(_) => ClassKind::Ptr,
+        ClassDecl::Data(_) => ClassKind::Data,
+        ClassDecl::Sealed(_) => ClassKind::Sealed,
+        ClassDecl::Enum(_) => ClassKind::Enum,
+    }
+}
+
+/// One type the fixture declares.
+#[derive(Clone)]
+pub struct Decl {
+    pub name: String,
+    pub class: ClassKind,
+    /// True for the `E` of a `Result`, which is not a fifth class kind but a
+    /// **role** a declared type plays. Each target states it its own way — a
+    /// handle whose declared return fields feed the generated error handler,
+    /// or an opaque error plus the function that renders its message — and
+    /// stating neither would make every fallible cell a measurement of this
+    /// harness rather than of the generator.
+    pub error: bool,
+}
+
+impl Decl {
+    fn of(need: Need) -> Decl {
+        let (class, error) = match need {
+            Need::Record => (ClassKind::Data, false),
+            Need::Handle => (ClassKind::Ptr, false),
+            Need::Sum => (ClassKind::Sealed, false),
+            Need::UnitEnum => (ClassKind::Enum, false),
+            Need::Error => (ClassKind::Ptr, true),
+        };
+        Decl {
+            name: need.type_name().to_string(),
+            class,
+            error,
         }
     }
 }
 
 /// Every type the fixture declares, with the kind each target is told to treat
-/// it as. One canonical declaration per kind — the adapter-policy axis is a
-/// separate expansion of this table, not something to vary silently here.
-fn declarations(shape: &Shape, position: Position) -> Vec<(String, Kind)> {
-    let mut decls: Vec<(String, Kind)> = shape
-        .needs
-        .iter()
-        .map(|n| (n.type_name().to_string(), Kind::of(*n)))
-        .collect();
-    match position {
-        Position::Field => decls.push((PROBE_TY.to_string(), Kind::Value)),
-        Position::Payload => decls.push((PROBE_TY.to_string(), Kind::Sum)),
-        Position::Param | Position::Return => {}
+/// it as. One canonical declaration per kind — varying the declaration of a
+/// given type is the adapter-policy axis, a separate expansion of this table
+/// rather than something to change silently here.
+pub fn declarations(shape: &Shape, position: Position) -> Vec<Decl> {
+    let mut decls: Vec<Decl> = shape.needs.iter().map(|n| Decl::of(*n)).collect();
+    let wrapper = match position {
+        Position::Field => Some(ClassKind::Data),
+        Position::Payload => Some(ClassKind::Sealed),
+        Position::Param | Position::Return => None,
+    };
+    if let Some(class) = wrapper {
+        decls.push(Decl {
+            name: PROBE_TY.to_string(),
+            class,
+            error: false,
+        });
     }
     decls
 }
@@ -250,24 +326,21 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-fn run_jni(source: &str, decls: &[(String, Kind)]) -> Result<(), String> {
+fn run_jni(source: &str, decls: &[Decl]) -> Result<(), String> {
     let mut pkg = prebindgen_jni::package!().fun(FunctionDecl::new(ident(PROBE_FN)));
     let mut error_decls: Vec<ExpandReturnDecl> = Vec::new();
-    for (name, kind) in decls {
-        pkg = match kind {
-            Kind::Value => pkg.class(DataClassDecl::new(ty(name))),
-            Kind::Handle => pkg.class(PtrClassDecl::new(ty(name))),
-            Kind::Sum => pkg.class(SealedClassDecl::new(ty(name))),
-            Kind::UnitEnum => pkg.class(EnumClassDecl::new(ty(name))),
-            Kind::Error => {
-                error_decls.push(
-                    ExpandReturnDecl::new(ty(name))
-                        .field(FunctionDecl::new(ident(ERROR_MESSAGE_FN))),
-                );
-                pkg.class(
-                    PtrClassDecl::new(ty(name)).method(FunctionDecl::new(ident(ERROR_MESSAGE_FN))),
-                )
-            }
+    for decl in decls {
+        pkg = if decl.error {
+            error_decls.push(
+                ExpandReturnDecl::new(ty(&decl.name))
+                    .field(FunctionDecl::new(ident(ERROR_MESSAGE_FN))),
+            );
+            pkg.class(
+                PtrClassDecl::new(ty(&decl.name))
+                    .method(FunctionDecl::new(ident(ERROR_MESSAGE_FN))),
+            )
+        } else {
+            pkg.class(decl.class.decl(ty(&decl.name)))
         };
     }
     let mut builder = JniGen::builder()
@@ -286,7 +359,29 @@ fn run_jni(source: &str, decls: &[(String, Kind)]) -> Result<(), String> {
     Ok(())
 }
 
-fn run_c(source: &str, decls: &[(String, Kind)]) -> Result<(), String> {
+/// The declaration axis, spoken to the C builder.
+///
+/// A **translation**, and deliberately not the model. The C build-script API is
+/// the older of the two: a declarator per shape, no closed kind vocabulary to
+/// match on, and a rework in the JNI style is planned (#192, #399). So this
+/// function is the one place that knows C's current spelling, and it is
+/// expected to be rewritten wholesale when that lands — nothing else in the
+/// crate is shaped around it.
+pub fn to_c(cbindgen: prebindgen_c::CbindgenBuilder, decl: &Decl) -> prebindgen_c::CbindgenBuilder {
+    if decl.error {
+        return cbindgen
+            .opaque_error(ty(&decl.name), ident(ERROR_MESSAGE_FN))
+            .ignore_function(ident(ERROR_MESSAGE_FN));
+    }
+    match decl.class {
+        ClassKind::Ptr => cbindgen.opaque_ptr(ty(&decl.name)),
+        ClassKind::Data => cbindgen.data_struct(ty(&decl.name)),
+        ClassKind::Sealed => cbindgen.tagged_union(ty(&decl.name)),
+        ClassKind::Enum => cbindgen.enum_type(ty(&decl.name)),
+    }
+}
+
+fn run_c(source: &str, decls: &[Decl]) -> Result<(), String> {
     let mut cbindgen = Cbindgen::builder()
         .items(items(source))
         .source_module(syn::parse_str(SOURCE_CRATE).expect("crate name is a path"))
@@ -297,16 +392,8 @@ fn run_c(source: &str, decls: &[(String, Kind)]) -> Result<(), String> {
         // documented answer for exactly that shape; without it every cell with
         // a fallible input would report this harness\'s omission.
         .panic();
-    for (name, kind) in decls {
-        cbindgen = match kind {
-            Kind::Value => cbindgen.data_struct(ty(name)),
-            Kind::Handle => cbindgen.opaque_ptr(ty(name)),
-            Kind::Sum => cbindgen.tagged_union(ty(name)),
-            Kind::UnitEnum => cbindgen.enum_type(ty(name)),
-            Kind::Error => cbindgen
-                .opaque_error(ty(name), ident(ERROR_MESSAGE_FN))
-                .ignore_function(ident(ERROR_MESSAGE_FN)),
-        };
+    for decl in decls {
+        cbindgen = to_c(cbindgen, decl);
     }
     let generation = cbindgen.build().map_err(|e| e.to_string())?;
 
