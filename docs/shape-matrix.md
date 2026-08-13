@@ -49,7 +49,7 @@ not a rewrite.
 | 2c | The Kotlin compiler, and `RuntimeExercised` | not started |
 | 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
 | 4 | The call axis | **landed** ([#407](https://github.com/milyin/prebindgen/pull/407)) |
-| 5 | The adapter-policy axis | JNI half ready; C half blocked |
+| 5 | The declaration-policy axis | **landed** for the JNI vocabulary ([#408](https://github.com/milyin/prebindgen/pull/408)); C's own declarators blocked |
 | 6 | Plan-level invariants | blocked |
 
 ### 1. The enumerator — landed
@@ -152,19 +152,29 @@ an earlier one would already have been consumed. None of these is asserted
 against emitted text: a grep establishes that the text contains a guard, which is
 not the property anyone cares about.
 
-### 5. The adapter-policy axis
+### 5. The declaration-policy axis — landed for the JNI vocabulary
 
-Vary *how* a type is declared, not just what it is: the same struct as a handle
-and as a value type answers differently, and that difference is currently
-invisible.
+The same Rust, in the same position, with its declared type declared as something
+else. Twelve curated cases, each printing the varied answer beside the canonical
+one.
 
-The JNI half is available now — its class kinds are a closed enum. The C half is
-**blocked on the build-API rework** ([#192](https://github.com/milyin/prebindgen/issues/192)):
-that API has eleven declarator methods and no type unifying them, so there is
-nothing to enumerate against. Hand-writing a list of C declarators in the harness
-would recreate precisely the drift the type axis exists to prevent, so the
-harness models the JNI vocabulary and translates to C in one function, which the
-rework is expected to rewrite wholesale.
+Three rows where the policy decides the answer: `Vec<Rec>` as a parameter crosses
+by value and is refused as handles; `Option<Rec>` as a C parameter emits broken
+Rust by value and works as a handle, so that defect belongs to the by-value path;
+and a fieldless enum returned as a handle is refused at compile time because the
+tagged-pointer representation needs alignment ≥ 2.
+
+That last one exposed a gap in this report's vocabulary rather than in the
+generator: a *deliberate* compile-time refusal and genuinely broken output both
+read as `bad rust`. The legend now says so and points at #191, whose subject is
+exactly a refusal arriving later than declaration time.
+
+**C's own declarators remain blocked** on the build-API rework
+([#192](https://github.com/milyin/prebindgen/issues/192)). The four kinds varied
+here are the JNI adapter's closed vocabulary, which is what makes them
+enumerable; C is measured through the same four by translation, so its rows are
+real but its coverage is not — `repr_c_struct`, `opaque_data_struct`, `callback`
+and the rest have nothing to enumerate against.
 
 ### 6. Plan-level invariants
 
