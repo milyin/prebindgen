@@ -8,9 +8,9 @@ use std::fmt::Write as _;
 
 use crate::{
     check::{self, Unit},
-    corpus::{Call, Position, Shape, CALLS, SHAPES},
+    corpus::{Call, Policy, Position, Shape, CALLS, POLICIES, SHAPES},
     header::{self, Header},
-    run::{declarations, run, run_call, ClassKind, State, Target},
+    run::{declarations, run, run_call, run_policy, ClassKind, State, Target},
     tag::TypeTag,
 };
 
@@ -37,6 +37,7 @@ pub fn render() -> String {
         render_position(&mut out, results, *position);
     }
     render_calls(&mut out, results);
+    render_policies(&mut out, results);
     render_coverage(&mut out);
     render_class_coverage(&mut out);
 
@@ -53,14 +54,20 @@ pub enum Subject {
     /// Several values crossing together — the axis a per-value cell cannot
     /// express, because aliasing is a property of the call.
     Call(&'static Call),
+    /// The same value, in the same position, declared as something else.
+    Policy(&'static Policy),
 }
 
 impl Subject {
     /// The two parts of a cell id that come from the subject.
-    fn id_parts(&self) -> (&'static str, &'static str) {
+    fn id_parts(&self) -> (&'static str, String) {
         match self {
-            Subject::Value { shape, position } => (shape.id, position.slug()),
-            Subject::Call(call) => (call.id, "call"),
+            Subject::Value { shape, position } => (shape.id, position.slug().to_string()),
+            Subject::Call(call) => (call.id, "call".to_string()),
+            Subject::Policy(policy) => (
+                policy.shape,
+                format!("{}_as_{}", policy.position.slug(), policy.class.slug()),
+            ),
         }
     }
 }
@@ -190,6 +197,18 @@ fn run_all() -> Vec<Cell> {
             );
         }
     }
+    for policy in POLICIES {
+        let shape = policy.shape();
+        for target in Target::ALL {
+            let outcome = run_policy(shape, policy.position, policy.class, *target);
+            record(
+                Subject::Policy(policy),
+                *target,
+                outcome,
+                crate::run::fixture_source(shape, policy.position),
+            );
+        }
+    }
 
     std::panic::set_hook(previous);
 
@@ -274,7 +293,7 @@ fn render_position(out: &mut String, results: &[Cell], position: Position) {
                         shape: s,
                         position: p,
                     } => std::ptr::eq(s, shape) && p == position && c.target == target,
-                    Subject::Call(_) => false,
+                    Subject::Call(_) | Subject::Policy(_) => false,
                 })
                 .map(|c| c.text())
                 .unwrap_or_default()
@@ -331,7 +350,7 @@ fn render_calls(out: &mut String, results: &[Cell]) {
                 .iter()
                 .find(|c| match c.subject {
                     Subject::Call(k) => std::ptr::eq(k, call) && c.target == target,
-                    Subject::Value { .. } => false,
+                    Subject::Value { .. } | Subject::Policy(_) => false,
                 })
                 .map(|c| c.text())
                 .unwrap_or_default()
@@ -356,6 +375,81 @@ fn render_calls(out: &mut String, results: &[Cell]) {
             notes.push(format!(
                 "- `{}` / {}: {}",
                 cell.subject.id_parts().0,
+                cell.target.as_str(),
+                detail
+            ));
+        }
+    }
+    if !notes.is_empty() {
+        out.push_str("<details><summary>What the generators said</summary>\n\n");
+        for note in notes {
+            let _ = writeln!(out, "{note}");
+        }
+        out.push_str("\n</details>\n\n");
+    }
+}
+
+fn render_policies(out: &mut String, results: &[Cell]) {
+    out.push_str("## Declaration policy\n\n");
+    out.push_str(
+        "The same Rust, in the same position, with its declared type declared as \
+         something else. A binding author chooses this — a struct can cross by value or \
+         as an opaque handle — and while every type is declared exactly one way, whether \
+         the choice decides the answer is invisible.\n\nEach row shows the canonical \
+         answer beside the varied one, because the difference is the point.\n\n",
+    );
+    out.push_str(
+        "| Shape | Position | Declared as | C | C canonical | Kotlin/JNI | JNI canonical |\n|---|---|---|---|---|---|---|\n",
+    );
+
+    for policy in POLICIES {
+        let varied = |target: Target| {
+            results
+                .iter()
+                .find(|c| match c.subject {
+                    Subject::Policy(p) => std::ptr::eq(p, policy) && c.target == target,
+                    _ => false,
+                })
+                .map(|c| c.text())
+                .unwrap_or_default()
+        };
+        let canonical = |target: Target| {
+            results
+                .iter()
+                .find(|c| match c.subject {
+                    Subject::Value { shape, position } => {
+                        shape.id == policy.shape
+                            && position == policy.position
+                            && c.target == target
+                    }
+                    _ => false,
+                })
+                .map(|c| c.text())
+                .unwrap_or_default()
+        };
+        let _ = writeln!(
+            out,
+            "| `{}` | {} | {} | {} | {} | {} | {} |",
+            policy.shape,
+            policy.position.as_str(),
+            policy.class.as_str(),
+            varied(Target::C),
+            canonical(Target::C),
+            varied(Target::Jni),
+            canonical(Target::Jni),
+        );
+    }
+    out.push('\n');
+
+    let mut notes: Vec<String> = Vec::new();
+    for cell in results
+        .iter()
+        .filter(|c| matches!(c.subject, Subject::Policy(_)))
+    {
+        if let Some(detail) = cell.detail() {
+            notes.push(format!(
+                "- `{}` / {}: {}",
+                cell.id(),
                 cell.target.as_str(),
                 detail
             ));
@@ -455,7 +549,7 @@ never by a hand-written list of what is supposed to work. See
 | `rustc` | the generator produced Rust and rustc accepted it. For JNI this is the top of the ladder — the Kotlin compiler does not run here, though the Kotlin **is** generated, and a cell whose Kotlin cannot be written is `rejected`. |
 | **`no decl`** | cbindgen produced a header that does not declare the wrapper — nothing a C program can call. |
 | **`bad header`** | cbindgen refused the emitted Rust, or panicked on it. |
-| **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. |
+| **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. It also covers a refusal the generator *chose* to make at compile time, through a generated assertion with its own message: same user-visible outcome, and a refusal arriving as a compile error rather than as a named rejection at declaration time is [#191](https://github.com/milyin/prebindgen/issues/191)'s subject. The run's stderr distinguishes them. |
 | `plan` | generation succeeded and the compile check did not run (see the run\'s stderr). |
 | `rejected` | the generator refused the shape **and said why**. The intended outcome for anything unsupported. |
 | **`panic`** | the generator refused it without a diagnosis — the user gets a stack trace instead of a sentence ([#191](https://github.com/milyin/prebindgen/issues/191)). |

@@ -268,6 +268,17 @@ impl ClassKind {
         }
     }
 
+    /// The part of a cell id this kind contributes. See
+    /// [`Position::slug`](crate::corpus::Position::slug).
+    pub fn slug(self) -> &'static str {
+        match self {
+            ClassKind::Ptr => "ptr",
+            ClassKind::Data => "data",
+            ClassKind::Sealed => "sealed",
+            ClassKind::Enum => "enum",
+        }
+    }
+
     /// This kind as the JNI adapter's own declaration.
     pub fn decl(self, ty: syn::Type) -> ClassDecl {
         match self {
@@ -407,6 +418,35 @@ pub fn run(shape: &Shape, position: Position, target: Target) -> Outcome {
         &declarations(shape, position),
         target,
     )
+}
+
+/// Run one value cell with its declared types declared **differently**.
+///
+/// The same Rust, the same position, one declaration changed — which is the
+/// only way to see whether an answer belongs to the shape or to the policy. A
+/// `Rec` declared as a value struct and the same `Rec` declared as an opaque
+/// handle are the same source code and, quite often, not the same answer.
+///
+/// The override applies to the shape's supporting types and not to the wrapper
+/// a field or payload fixture declares: the question is how the *subject*
+/// crosses, and re-declaring its container would ask a different one.
+pub fn run_policy(shape: &Shape, position: Position, class: ClassKind, target: Target) -> Outcome {
+    if let Some(reason) = not_applicable(shape, position) {
+        return Outcome {
+            state: State::NotApplicable(reason),
+            emitted: None,
+        };
+    }
+    let mut decls = declarations(shape, position);
+    for decl in &mut decls {
+        // An error type keeps its role: the `E` of a `Result` is declared the
+        // way each target documents, and overriding that would measure the
+        // error channel rather than the policy.
+        if !decl.error && shape.needs.iter().any(|n| n.type_name() == decl.name) {
+            decl.class = class;
+        }
+    }
+    generate(&fixture_source(shape, position), &decls, target)
 }
 
 /// Run one call shape. Same driver, different fixture: a call is a second axis

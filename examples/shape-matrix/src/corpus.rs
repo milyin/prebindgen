@@ -80,6 +80,110 @@ pub struct Shape {
     pub needs: &'static [Need],
 }
 
+/// One value cell, with its declared type declared as something else.
+///
+/// The declaration is a decision a binding author makes, separately from the
+/// Rust: the same struct can cross as a value or as an opaque handle. Whether
+/// that decision changes the answer is invisible while every type is declared
+/// exactly one way, which is how the rest of this matrix runs.
+pub struct Policy {
+    /// The shape whose supporting types are re-declared — a [`Shape::id`].
+    pub shape: &'static str,
+    pub position: Position,
+    /// What they are declared as instead of their canonical kind.
+    pub class: crate::run::ClassKind,
+}
+
+impl Policy {
+    /// The shape this case re-declares. Panics if the id names nothing — the
+    /// cases are a const table in this file, so a typo is a bug in the same
+    /// file rather than something to report at runtime.
+    pub fn shape(&self) -> &'static Shape {
+        SHAPES
+            .iter()
+            .find(|s| s.id == self.shape)
+            .unwrap_or_else(|| panic!("policy case names an unknown shape `{}`", self.shape))
+    }
+}
+
+/// The policy cases.
+///
+/// Curated rather than exhaustive: a full product of shape × position × kind
+/// would quadruple the matrix to ask a question that is only interesting where
+/// a real binding has a real choice. These are those places.
+pub const POLICIES: &[Policy] = &[
+    // A product of scalars is the archetypal choice: cross it by value, or hand
+    // the foreign side a handle to it.
+    Policy {
+        shape: "record",
+        position: Position::Param,
+        class: crate::run::ClassKind::Ptr,
+    },
+    Policy {
+        shape: "record",
+        position: Position::Return,
+        class: crate::run::ClassKind::Ptr,
+    },
+    Policy {
+        shape: "record",
+        position: Position::Field,
+        class: crate::run::ClassKind::Ptr,
+    },
+    Policy {
+        shape: "record",
+        position: Position::Payload,
+        class: crate::run::ClassKind::Ptr,
+    },
+    // And the reverse: a type this matrix declares as a handle everywhere else,
+    // crossing by value instead.
+    Policy {
+        shape: "handle",
+        position: Position::Param,
+        class: crate::run::ClassKind::Data,
+    },
+    Policy {
+        shape: "handle",
+        position: Position::Return,
+        class: crate::run::ClassKind::Data,
+    },
+    // A sum handed over as an opaque handle rather than a mirrored hierarchy —
+    // the escape hatch when a payload will not cross.
+    Policy {
+        shape: "sum",
+        position: Position::Param,
+        class: crate::run::ClassKind::Ptr,
+    },
+    Policy {
+        shape: "sum",
+        position: Position::Return,
+        class: crate::run::ClassKind::Ptr,
+    },
+    // A fieldless enum as a handle: legal to declare, and worth knowing.
+    Policy {
+        shape: "unit_enum",
+        position: Position::Return,
+        class: crate::run::ClassKind::Ptr,
+    },
+    // The one where the policy is known to decide the answer: a `Vec` of values
+    // crosses, a `Vec` of handles is refused. Same Rust either way.
+    Policy {
+        shape: "vec_record",
+        position: Position::Return,
+        class: crate::run::ClassKind::Ptr,
+    },
+    Policy {
+        shape: "vec_record",
+        position: Position::Param,
+        class: crate::run::ClassKind::Ptr,
+    },
+    // An optional, where the presence gate and the handle representation meet.
+    Policy {
+        shape: "opt_record",
+        position: Position::Param,
+        class: crate::run::ClassKind::Ptr,
+    },
+];
+
 /// A **call**: several values crossing together.
 ///
 /// A separate axis because aliasing is a property of a call and not of a value.

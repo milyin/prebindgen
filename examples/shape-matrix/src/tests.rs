@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::{
-    corpus::{Position, CALLS, SHAPES},
+    corpus::{Position, CALLS, POLICIES, SHAPES},
     guarantees, header,
     run::{declarations, kind_of, not_applicable, ClassKind, Target},
 };
@@ -109,6 +109,34 @@ fn every_call_parameter_classifies() {
                 call.id
             );
         }
+    }
+}
+
+/// A policy case must name a shape that exists and must actually vary
+/// something: a case whose override matches the canonical declaration is a row
+/// duplicating the one beside it, proving nothing while looking like evidence.
+#[test]
+fn every_policy_varies_a_declaration() {
+    for policy in POLICIES {
+        let shape = SHAPES
+            .iter()
+            .find(|s| s.id == policy.shape)
+            .unwrap_or_else(|| panic!("policy case names unknown shape `{}`", policy.shape));
+        assert!(
+            !shape.needs.is_empty(),
+            "policy case `{}` re-declares a shape that declares no types",
+            policy.shape
+        );
+        let canonical = crate::run::declarations(shape, policy.position);
+        assert!(
+            canonical
+                .iter()
+                .any(|d| !d.error && d.class != policy.class),
+            "policy case `{}` in the `{}` position declares everything exactly as the \
+             canonical run does, so its row repeats the one beside it",
+            policy.shape,
+            policy.position.as_str()
+        );
     }
 }
 
