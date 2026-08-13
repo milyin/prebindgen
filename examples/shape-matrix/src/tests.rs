@@ -127,13 +127,63 @@ fn a_cell_always_answers() {
         .find(|s| s.id == "scalar")
         .expect("scalar shape");
     for target in Target::ALL {
-        let state = crate::run::run(shape, Position::Param, *target);
+        let outcome = crate::run::run(shape, Position::Param, *target);
         assert!(
-            matches!(state, crate::run::State::PlanSupported),
-            "a scalar parameter should cross for {}, got {state:?}",
-            target.as_str()
+            matches!(outcome.state, crate::run::State::PlanSupported),
+            "a scalar parameter should cross for {}, got {:?}",
+            target.as_str(),
+            outcome.state
+        );
+        assert!(
+            outcome.emitted.is_some(),
+            "a cell that generated produced no Rust to check"
         );
     }
+}
+
+/// The compile check must attribute per cell, and must actually discriminate.
+///
+/// It would be easy to write a check that marks everything as compiling: no
+/// diagnostic ever matches, every cell passes, and the column becomes
+/// decoration. So this feeds it one unit that compiles and one that cannot, in
+/// the same crate, and requires it to separate them — which also pins the
+/// attribution path, since the only thing linking a diagnostic to a cell is the
+/// file rustc names.
+#[test]
+fn the_compile_check_separates_good_from_bad() {
+    let checked = check::check(
+        "selftest",
+        &[
+            check::Unit {
+                id: "selftest_good__param__jni".to_string(),
+                fixture: "pub fn probe(v: u64) -> u64 { v }".to_string(),
+                emitted: "pub fn wrapper(v: u64) -> u64 { flat::probe(v) }".to_string(),
+            },
+            check::Unit {
+                id: "selftest_bad__param__jni".to_string(),
+                fixture: "pub fn probe(v: u64) -> u64 { v }".to_string(),
+                // A type error in emitted code, of the kind a generator makes: the
+                // wrapper hands a string to a function taking an integer.
+                emitted: "pub fn wrapper() -> u64 { flat::probe(\"not a u64\") }".to_string(),
+            },
+        ],
+    )
+    .expect("the check runs");
+
+    assert!(
+        checked.compiled.contains("selftest_good__param__jni"),
+        "a unit that compiles was not recorded as compiling"
+    );
+    assert!(
+        !checked.compiled.contains("selftest_bad__param__jni"),
+        "a unit that does not compile was recorded as compiling — the check is \
+         reporting a state it did not establish"
+    );
+    assert!(
+        checked.failed.contains_key("selftest_bad__param__jni"),
+        "the failing unit produced no attributed diagnostic, so nothing links a \
+         compiler error to the cell it belongs to"
+    );
 }
 
 /// The committed report is the regression gate; a stale one gates nothing.

@@ -24,18 +24,37 @@ pub enum Need {
 
 impl Need {
     /// The Rust the fixture declares for it.
+    ///
+    /// Everything derives `Clone`, as the types in a real source crate do. That
+    /// is not incidental: several generator paths clone — a borrowed handle
+    /// crossing out becomes an owned one — so a fixture whose types were not
+    /// `Clone` would spend its cells measuring that constraint instead of
+    /// whether the shape crosses.
     pub fn source(self) -> &'static str {
         match self {
-            Need::Record => "pub struct Rec { pub id: u64, pub tag: u32 }",
-            Need::Handle => "pub struct Handle { pub id: u64 }",
-            Need::Sum => "pub enum Sum { Num(u64), Nothing }",
-            Need::UnitEnum => "pub enum Mode { On = 0, Off = 1 }",
+            Need::Record => "#[derive(Clone)] pub struct Rec { pub id: u64, pub tag: u32 }",
+            Need::Handle => "#[derive(Clone)] pub struct Handle { pub id: u64 }",
+            // `Display` too: `result_sum_err` puts this in an error position,
+            // where both targets render the error as text.
+            Need::Sum => {
+                "#[derive(Clone)] pub enum Sum { Num(u64), Nothing }\n\
+                          impl std::fmt::Display for Sum {\n\
+                          fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n\
+                          write!(f, \"sum\") } }"
+            }
+            Need::UnitEnum => "#[derive(Clone, Copy)] pub enum Mode { On = 0, Off = 1 }",
             // Both targets need a way to render an error, so the accessor is
             // part of the declaration rather than something a cell goes
             // without.
+            // An error type is `Clone` and `Display` because that is what an
+            // error type is; a fixture without them spends its fallible cells
+            // measuring that requirement instead of whether the shape crosses.
             Need::Error => {
-                "pub struct ZError { pub code: u64 }\n\
-                            pub fn zerror_message(e: &ZError) -> String { unimplemented!() }"
+                "#[derive(Clone)] pub struct ZError { pub code: u64 }\n\
+                 impl std::fmt::Display for ZError {\n\
+                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n\
+                 write!(f, \"error {}\", self.code) } }\n\
+                 pub fn zerror_message(e: &ZError) -> String { unimplemented!() }"
             }
         }
     }
@@ -88,6 +107,17 @@ impl Position {
             Position::Return => "return",
             Position::Field => "struct field",
             Position::Payload => "enum payload",
+        }
+    }
+
+    /// The part of a cell id this position contributes — file-safe, since a
+    /// cell id names the file rustc reports diagnostics against.
+    pub fn slug(self) -> &'static str {
+        match self {
+            Position::Param => "param",
+            Position::Return => "ret",
+            Position::Field => "field",
+            Position::Payload => "payload",
         }
     }
 }

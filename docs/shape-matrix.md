@@ -44,7 +44,8 @@ not a rewrite.
 | # | Step | State |
 |---|---|---|
 | 1 | The enumerator, both targets, committed report + regen gate | **landed** ([#400](https://github.com/milyin/prebindgen/pull/400)) |
-| 2 | Receipts: `ToolchainCompiled` and `RuntimeExercised` | not started |
+| 2 | Receipts: rustc accepts the emitted Rust | **landed** ([#403](https://github.com/milyin/prebindgen/pull/403)) |
+| 2b | The rest of `ToolchainCompiled`, and `RuntimeExercised` | not started |
 | 3 | The minimum-guarantees table | not started |
 | 4 | Multi-parameter aliasing fixtures | not started |
 | 5 | The adapter-policy axis | JNI half ready; C half blocked |
@@ -75,20 +76,29 @@ until new cells are classified" would be vacuous on its own — a regression tha
 flips a working cell to `rejected` would be recorded as a successful
 classification.
 
-### 2. Receipts — the two states that need a toolchain
+### 2. Receipts — rustc — landed
 
-`plan` means generation succeeded. Nothing compiles, links or runs the result
-yet, so the two strongest states are uncollected.
+Every cell that produced Rust is compiled, and the state is a **receipt**: the
+cell is written to its own file, the crate is checked in one pass, and each
+diagnostic is attributed back by the file rustc names. Nothing maps a cell to a
+fixture by hand — that mapping is what let #175's test pass without creating its
+own precondition.
 
-The rule from #198 stands: these states are **derived from mechanical receipts,
-never declared**. A hand-written *cell → fixture-name* mapping can claim coverage
-for a fixture that never touches the cell — the #175 failure exactly. A fixture
-emits its cell id only *after* the relevant assertion has executed, and a cell
-with no receipt stays `PlanSupported` whatever any table claims.
+Compiler messages stay out of the committed report: they vary by toolchain, and
+the report has to be identical on every one that builds it.
 
-`examples/emitcheck` is the precedent for the compile half: it exists so rustc
-judges emitted Rust. The runtime half rides the JVM covertest and the C smoke
-tests.
+Turning the compiler on immediately found ten cells whose generated Rust does not
+compile, and three defects in this harness — each of which had been reporting a
+confident wrong answer. That is the argument for this step in one sentence:
+`plan` was worth less than it looked.
+
+### 2b. The rest of the toolchain
+
+`cbindgen` does not run, so a C cell that compiles has not been shown to produce
+a valid header; the Kotlin compiler does not run either. `RuntimeExercised` needs
+the JVM covertest and the C smoke tests, and the same receipt rule applies — a
+fixture emits its cell id only *after* the relevant assertion has executed, and a
+cell with no receipt keeps the weaker state whatever any table claims.
 
 ### 3. The minimum-guarantees table
 

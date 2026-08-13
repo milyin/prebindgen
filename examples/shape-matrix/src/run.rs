@@ -16,8 +16,14 @@ use prebindgen_registry::{ExpandReturnDecl, FunctionDecl};
 
 use crate::corpus::{Need, Position, Shape};
 
-/// The crate name every fixture item is stamped with.
-const SOURCE_CRATE: &str = "probe";
+/// The crate name every fixture item is stamped with, and so the module the
+/// generated code qualifies its calls through.
+///
+/// Not `probe`: the fixture's function is called that, and a consumer mounting
+/// the source crate as `mod probe` next to a generated `pub fn probe` wrapper
+/// does not compile. The two names are different things and this crate found
+/// out by conflating them.
+pub const SOURCE_CRATE: &str = "flat";
 
 /// The function every fixture declares to the target.
 const PROBE_FN: &str = "probe";
@@ -102,6 +108,15 @@ impl Target {
             Target::Jni => "Kotlin/JNI",
         }
     }
+
+    /// The part of a cell id this target contributes. See
+    /// [`Position::slug`](crate::corpus::Position::slug).
+    pub fn slug(self) -> &'static str {
+        match self {
+            Target::C => "c",
+            Target::Jni => "jni",
+        }
+    }
 }
 
 /// Why a placement is not legal Rust to begin with.
@@ -118,10 +133,36 @@ pub fn not_applicable(shape: &Shape, position: Position) -> Option<&'static str>
     if shape.spelling.contains("impl Fn") {
         return Some("`impl Trait` is not a field type");
     }
-    if shape.spelling.starts_with('&') {
+    if shape.spelling.contains('&') {
         return Some("a borrowed field needs a lifetime parameter on its declaration");
     }
     None
+}
+
+/// The same spelling, with every borrow given an explicit `'static`.
+///
+/// A returned borrow needs a lifetime and the probe function has no parameter
+/// to elide one from, so `-> &Handle` is not Rust at all. Writing `'static`
+/// keeps the shape and makes the fixture legal; the alternative — adding an
+/// anchor parameter — would change what the cell measures.
+///
+/// This was found the hard way: before it, every borrow-returning cell reported
+/// `plan` for a fixture that could not have compiled.
+fn anchored(spelling: &str) -> String {
+    let mut out = String::new();
+    let mut chars = spelling.chars().peekable();
+    while let Some(c) = chars.next() {
+        out.push(c);
+        if c != '&' {
+            continue;
+        }
+        // Already written with a lifetime — `Cow<'static, str>` and friends.
+        if chars.peek() == Some(&'\'') {
+            continue;
+        }
+        out.push_str("'static ");
+    }
+    out
 }
 
 /// The fixture's Rust source: the shape's supporting declarations, the wrapper
@@ -135,18 +176,23 @@ pub fn fixture_source(shape: &Shape, position: Position) -> String {
             items.push(format!("pub fn {PROBE_FN}(v: {ty}) {{ let _ = v; }}"));
         }
         Position::Return => {
+            let ty = anchored(ty);
             items.push(format!(
                 "pub fn {PROBE_FN}() -> {ty} {{ unimplemented!() }}"
             ));
         }
         Position::Field => {
-            items.push(format!("pub struct {PROBE_TY} {{ pub v: {ty} }}"));
+            items.push(format!(
+                "#[derive(Clone)] pub struct {PROBE_TY} {{ pub v: {ty} }}"
+            ));
             items.push(format!(
                 "pub fn {PROBE_FN}() -> {PROBE_TY} {{ unimplemented!() }}"
             ));
         }
         Position::Payload => {
-            items.push(format!("pub enum {PROBE_TY} {{ Carried({ty}), Empty }}"));
+            items.push(format!(
+                "#[derive(Clone)] pub enum {PROBE_TY} {{ Carried({ty}), Empty }}"
+            ));
             items.push(format!(
                 "pub fn {PROBE_FN}() -> {PROBE_TY} {{ unimplemented!() }}"
             ));
@@ -273,6 +319,18 @@ pub fn declarations(shape: &Shape, position: Position) -> Vec<Decl> {
     decls
 }
 
+/// The fixture's items, as the **model** sees them.
+///
+/// Filtered to the four item kinds a `#[prebindgen]` surface declares, the same
+/// filter `examples/emitcheck` applies to its own source file. A fixture is a
+/// real Rust file and so carries things a flat API does not declare — an
+/// `impl Display for ZError` is part of what makes the crate compile and is not
+/// part of its boundary.
+///
+/// Found by feeding them: an `impl` block reaches the frontend as *"is an item
+/// kind the prebindgen source language does not model"*, which failed the whole
+/// binding and turned 32 cells into rejections that had nothing to do with
+/// their shape.
 fn items(source: &str) -> Vec<(syn::Item, SourceLocation)> {
     let loc = SourceLocation {
         crate_name: Some(SOURCE_CRATE.to_string()),
@@ -282,6 +340,12 @@ fn items(source: &str) -> Vec<(syn::Item, SourceLocation)> {
         .expect("fixture parses")
         .items
         .into_iter()
+        .filter(|item| {
+            matches!(
+                item,
+                syn::Item::Fn(_) | syn::Item::Struct(_) | syn::Item::Enum(_) | syn::Item::Const(_)
+            )
+        })
         .map(|item| (item, loc.clone()))
         .collect()
 }
@@ -294,12 +358,23 @@ fn ident(name: &str) -> syn::Ident {
     syn::parse_str(name).expect("ident parses")
 }
 
+/// What one cell produced: the generator's answer, and — when it answered at
+/// all — the Rust it emitted, which is what the next stage type-checks.
+pub struct Outcome {
+    pub state: State,
+    /// The generated Rust. `Some` exactly when `state` is `PlanSupported`.
+    pub emitted: Option<String>,
+}
+
 /// Run one cell, catching a panic as an outcome rather than letting it end the
 /// run. A generator that panics on an unsupported shape is reporting something
 /// — badly — and the table says so.
-pub fn run(shape: &Shape, position: Position, target: Target) -> State {
+pub fn run(shape: &Shape, position: Position, target: Target) -> Outcome {
     if let Some(reason) = not_applicable(shape, position) {
-        return State::NotApplicable(reason);
+        return Outcome {
+            state: State::NotApplicable(reason),
+            emitted: None,
+        };
     }
     let source = fixture_source(shape, position);
     let decls = declarations(shape, position);
@@ -310,9 +385,18 @@ pub fn run(shape: &Shape, position: Position, target: Target) -> State {
     }));
 
     match outcome {
-        Ok(Ok(())) => State::PlanSupported,
-        Ok(Err(msg)) => State::Rejected(msg),
-        Err(payload) => State::Panicked(panic_message(payload)),
+        Ok(Ok(emitted)) => Outcome {
+            state: State::PlanSupported,
+            emitted: Some(emitted),
+        },
+        Ok(Err(msg)) => Outcome {
+            state: State::Rejected(msg),
+            emitted: None,
+        },
+        Err(payload) => Outcome {
+            state: State::Panicked(panic_message(payload)),
+            emitted: None,
+        },
     }
 }
 
@@ -326,7 +410,20 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-fn run_jni(source: &str, decls: &[Decl]) -> Result<(), String> {
+/// The generated Rust, as the target wrote it.
+///
+/// Through a file rather than a string because that is the only surface either
+/// generator offers — a build script writes `generated_bindings.rs` and the
+/// consumer `include!`s it, so this is also exactly what a consumer compiles.
+fn read_back(
+    write: impl FnOnce(&std::path::Path) -> Result<std::path::PathBuf, String>,
+) -> Result<String, String> {
+    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let written = write(&dir.path().join("generated.rs"))?;
+    std::fs::read_to_string(written).map_err(|e| e.to_string())
+}
+
+fn run_jni(source: &str, decls: &[Decl]) -> Result<String, String> {
     let mut pkg = prebindgen_jni::package!().fun(FunctionDecl::new(ident(PROBE_FN)));
     let mut error_decls: Vec<ExpandReturnDecl> = Vec::new();
     for decl in decls {
@@ -352,11 +449,7 @@ fn run_jni(source: &str, decls: &[Decl]) -> Result<(), String> {
     }
     let generation = builder.build().map_err(|e| e.to_string())?;
 
-    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
-    generation
-        .write_rust(dir.path().join("generated.rs"))
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    read_back(|path| generation.write_rust(path).map_err(|e| e.to_string()))
 }
 
 /// The declaration axis, spoken to the C builder.
@@ -381,7 +474,7 @@ pub fn to_c(cbindgen: prebindgen_c::CbindgenBuilder, decl: &Decl) -> prebindgen_
     }
 }
 
-fn run_c(source: &str, decls: &[Decl]) -> Result<(), String> {
+fn run_c(source: &str, decls: &[Decl]) -> Result<String, String> {
     let mut cbindgen = Cbindgen::builder()
         .items(items(source))
         .source_module(syn::parse_str(SOURCE_CRATE).expect("crate name is a path"))
@@ -397,9 +490,5 @@ fn run_c(source: &str, decls: &[Decl]) -> Result<(), String> {
     }
     let generation = cbindgen.build().map_err(|e| e.to_string())?;
 
-    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
-    generation
-        .write_rust(dir.path().join("generated.rs"))
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    read_back(|path| generation.write_rust(path).map_err(|e| e.to_string()))
 }
