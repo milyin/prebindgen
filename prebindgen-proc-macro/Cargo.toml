@@ -26,7 +26,6 @@ syn = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 prebindgen = { workspace = true }
-rand = { workspace = true }
 
 [features]
 debug = ["prebindgen/debug"]

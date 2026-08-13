@@ -14,16 +14,16 @@ pub fn write_to_jsonl_file<P: AsRef<Path>, R: Borrow<Record>>(
     file_path: P,
     records: &[R],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) else {
-        return Err("Failed to open file".into());
-    };
-    // One write for the whole batch: several rustc threads can append to the
-    // same file, and a line split across writes would interleave into garbage.
+    // Serialize the complete batch before touching the output, then minimize
+    // the number of append operations used for it.
     let mut buf = String::new();
     for record in records {
         buf.push_str(&record.borrow().to_jsonl_string()?);
         buf.push('\n');
     }
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) else {
+        return Err("Failed to open file".into());
+    };
     file.write_all(buf.as_bytes())?;
     Ok(())
 }

@@ -37,9 +37,11 @@
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
 use std::{
-    collections::HashSet,
+    collections::HashMap,
+    ffi::OsString,
     hash::{Hash, Hasher},
-    sync::{Mutex, OnceLock},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
@@ -139,8 +141,16 @@ impl Parse for PrebindgenArgs {
     }
 }
 
-/// Groups whose JSONL file this process has already reset.
-static STARTED_GROUPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+#[derive(Default)]
+struct CaptureState {
+    initialized: bool,
+}
+
+type SharedCaptureState = Arc<Mutex<CaptureState>>;
+
+/// One lock per capture file. Macro expansions can run on several rustc
+/// threads, but unrelated groups do not need to block one another.
+static CAPTURE_STATES: OnceLock<Mutex<HashMap<PathBuf, SharedCaptureState>>> = OnceLock::new();
 
 /// Identify the compilation unit this expansion belongs to.
 ///
@@ -155,43 +165,80 @@ static STARTED_GROUPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 /// instead — equally stable per unit.
 fn unit_id() -> &'static str {
     static UNIT_ID: OnceLock<String> = OnceLock::new();
-    UNIT_ID.get_or_init(|| {
-        let args: Vec<String> = std::env::args().collect();
-        if let Some(metadata) =
-            args.iter()
-                .enumerate()
-                .find_map(|(i, arg)| match arg.strip_prefix("-C") {
-                    Some("") => args.get(i + 1)?.strip_prefix("metadata="),
-                    Some(rest) => rest.strip_prefix("metadata="),
-                    None => None,
-                })
-        {
-            return metadata.to_string();
-        }
-        if args.is_empty() {
-            // No command line to key off at all — stay unique per process.
-            return format!("{}_{}", std::process::id(), rand::random::<u64>());
-        }
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        args.hash(&mut hasher);
-        format!("{:016x}", hasher.finish())
-    })
+    UNIT_ID.get_or_init(|| unit_id_from_args(&std::env::args_os().collect::<Vec<_>>()))
 }
 
-/// Get the full path to `{group}_{unit_id}.jsonl` in OUT_DIR, truncating it on
-/// the first write of this process so re-running the same unit replaces its
-/// records instead of appending them again.
+fn unit_id_from_args(args: &[OsString]) -> String {
+    // rustc accepts both short/long and joined/separate codegen options. Use
+    // the last occurrence, matching how repeated compiler options are applied.
+    if let Some(metadata) = args
+        .iter()
+        .enumerate()
+        .filter_map(|(index, arg)| {
+            let arg = arg.to_str()?;
+            match arg {
+                "-C" | "--codegen" => args.get(index + 1)?.to_str()?.strip_prefix("metadata="),
+                _ => arg
+                    .strip_prefix("-C")
+                    .and_then(|arg| arg.strip_prefix("metadata="))
+                    .or_else(|| arg.strip_prefix("--codegen=metadata=")),
+            }
+        })
+        .rfind(|metadata| !metadata.is_empty())
+    {
+        return metadata.to_string();
+    }
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    args.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+/// Get the full path to `{group}_{unit_id}.jsonl` in OUT_DIR.
 fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
-    let path = get_prebindgen_out_dir().join(format!("{group}_{}.jsonl", unit_id()));
-    let first_write = STARTED_GROUPS
+    get_prebindgen_out_dir().join(format!("{group}_{}.jsonl", unit_id()))
+}
+
+fn capture_state(file_path: &Path) -> std::result::Result<SharedCaptureState, String> {
+    let mut states = CAPTURE_STATES
         .get_or_init(Mutex::default)
         .lock()
-        .map(|mut started| started.insert(group.to_string()))
-        .unwrap_or(false);
-    if first_write {
-        let _ = std::fs::remove_file(&path);
+        .map_err(|_| "prebindgen capture-state registry lock was poisoned".to_string())?;
+    Ok(Arc::clone(
+        states.entry(file_path.to_path_buf()).or_default(),
+    ))
+}
+
+/// Reset a compilation unit's capture on its first record, then serialize all
+/// initialization and appends to that file. Keeping both operations under the
+/// same per-file lock prevents a first writer from unlinking a record that a
+/// second rustc thread has already appended.
+fn write_capture_record(file_path: &Path, record: &Record) -> std::result::Result<(), String> {
+    let state = capture_state(file_path)?;
+    let mut state = state.lock().map_err(|_| {
+        format!(
+            "prebindgen capture lock for {} was poisoned",
+            file_path.display()
+        )
+    })?;
+
+    if !state.initialized {
+        match std::fs::remove_file(file_path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "failed to reset prebindgen capture {}: {error}",
+                    file_path.display()
+                ));
+            }
+        }
     }
-    path
+
+    prebindgen::utils::write_to_jsonl_file(file_path, &[record])
+        .map_err(|error| format!("failed to append {}: {error}", file_path.display()))?;
+    state.initialized = true;
+    Ok(())
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
@@ -319,12 +366,9 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         parsed_args.cfg.clone(),
     );
 
-    // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
-    if prebindgen::utils::write_to_jsonl_file(&file_path, &[&new_record]).is_err() {
-        return TokenStream::from(quote! {
-            compile_error!("Failed to write prebindgen record");
-        });
+    if let Err(error) = write_capture_record(&file_path, &new_record) {
+        return syn::Error::new(span, error).to_compile_error().into();
     }
 
     // Re-emit the original item, optionally prepending `#[cfg(...)]` (from the
@@ -454,33 +498,117 @@ pub fn manifest_dir(_input: TokenStream) -> TokenStream {
 
 #[cfg(test)]
 mod tests {
-    use super::get_prebindgen_jsonl_path;
+    use std::{
+        collections::BTreeSet,
+        sync::{Arc, Barrier},
+    };
 
-    /// The same unit must reuse one file: dropped what a previous run of this
-    /// unit left there, then appended to within the run.
+    use super::{unit_id_from_args, write_capture_record, Record, RecordKind};
+
+    fn record(name: impl Into<String>) -> Record {
+        let name = name.into();
+        Record::new(
+            RecordKind::Struct,
+            name.clone(),
+            format!("pub struct {name};"),
+            Default::default(),
+            None,
+        )
+    }
+
+    fn test_dir(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "prebindgen-proc-macro-{}-{name}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
     #[test]
-    fn jsonl_file_is_reset_once_per_run() {
-        let out_dir = std::env::temp_dir().join(format!("prebindgen-test-{}", std::process::id()));
-        std::fs::create_dir_all(out_dir.join("prebindgen")).unwrap();
-        std::env::set_var("OUT_DIR", &out_dir);
+    fn unit_id_accepts_rustc_codegen_spellings_and_uses_the_last() {
+        let args = [
+            "rustc",
+            "-Cmetadata=first",
+            "--codegen=metadata=second",
+            "-C",
+            "metadata=third",
+        ]
+        .map(Into::into);
+        assert_eq!(unit_id_from_args(&args), "third");
 
-        let stale = out_dir
-            .join("prebindgen")
-            .join(format!("test_group_{}.jsonl", super::unit_id()));
-        std::fs::write(&stale, "from a previous run\n").unwrap();
+        let args = ["rustdoc", "--codegen", "metadata=long-form"].map(Into::into);
+        assert_eq!(unit_id_from_args(&args), "long-form");
+    }
 
-        let path = get_prebindgen_jsonl_path("test_group");
-        assert_eq!(path, stale);
-        assert!(!path.exists(), "records of the previous run were kept");
-
-        std::fs::write(&path, "first record\n").unwrap();
-        assert_eq!(get_prebindgen_jsonl_path("test_group"), path);
-        assert_eq!(
-            std::fs::read_to_string(&path).unwrap(),
-            "first record\n",
-            "records of this run were dropped"
+    #[test]
+    fn unit_id_fallback_is_stable_without_metadata() {
+        let args = ["rustdoc", "--test", "src/lib.rs"].map(Into::into);
+        assert_eq!(unit_id_from_args(&args), unit_id_from_args(&args));
+        assert_ne!(
+            unit_id_from_args(&args),
+            unit_id_from_args(&["rustdoc", "src/lib.rs"].map(Into::into))
         );
+    }
 
-        std::fs::remove_dir_all(&out_dir).unwrap();
+    #[test]
+    fn concurrent_first_writes_reset_once_without_losing_records() {
+        const WRITERS: usize = 32;
+
+        let dir = test_dir("concurrent-first-writes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("group_unit.jsonl");
+        prebindgen::utils::write_to_jsonl_file(&path, &[record("Stale")]).unwrap();
+
+        let barrier = Arc::new(Barrier::new(WRITERS));
+        let handles = (0..WRITERS)
+            .map(|index| {
+                let barrier = Arc::clone(&barrier);
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    let record = record(format!("Record{index}"));
+                    barrier.wait();
+                    write_capture_record(&path, &record).unwrap();
+                })
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // A later expansion in the same process must append, not reset again.
+        write_capture_record(&path, &record("LastRecord")).unwrap();
+
+        let records = prebindgen::utils::read_jsonl_file(&path).unwrap();
+        assert_eq!(records.len(), WRITERS + 1);
+        let names = records
+            .into_iter()
+            .map(|record| record.name)
+            .collect::<BTreeSet<_>>();
+        let expected = (0..WRITERS)
+            .map(|index| format!("Record{index}"))
+            .chain(["LastRecord".to_string()])
+            .collect::<BTreeSet<_>>();
+        assert_eq!(names, expected);
+
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn unexpected_reset_error_is_reported() {
+        let dir = test_dir("reset-error");
+        let path = dir.join("capture-is-a-directory");
+        std::fs::create_dir_all(&path).unwrap();
+
+        let error = write_capture_record(&path, &record("Record")).unwrap_err();
+        assert!(
+            error.contains("failed to reset prebindgen capture"),
+            "{error}"
+        );
+        assert!(error.contains(&path.display().to_string()), "{error}");
+
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
