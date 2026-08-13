@@ -200,6 +200,24 @@ Blocked on the plans existing at all
 ([#192](https://github.com/milyin/prebindgen/issues/192),
 [#193](https://github.com/milyin/prebindgen/issues/193)).
 
+## What it has found
+
+The table is not the deliverable; the tickets are. As of `4971a796`:
+
+| Issue | Finding |
+|---|---|
+| [#410](https://github.com/milyin/prebindgen/issues/410) | JNI emits an unqualified `Cow` into the consumer's scope |
+| [#411](https://github.com/milyin/prebindgen/issues/411) | JNI decodes an exclusive-borrow parameter as a shared or plain value |
+| [#412](https://github.com/milyin/prebindgen/issues/412) | C moves out of a raw pointer for an `Option<T>` by-value parameter |
+| [#413](https://github.com/milyin/prebindgen/issues/413) | C returns of borrowed elements: `&[T]` drops the value, `Vec<&T>` maps over an `unsafe fn` |
+| [#414](https://github.com/milyin/prebindgen/issues/414) | C qualifies std `Option` into the source module, and leaves the declared type bare |
+| [#191](https://github.com/milyin/prebindgen/issues/191) | a third of C's refusals and a fifth of JNI's arrive as panics — now a measured number |
+
+Two of these carry a diagnosis rather than a symptom, and both came from a
+comparison no single cell could make: #412 is narrowed to the by-value decode
+path because the same cell with the type declared as a handle compiles, and #414
+gets both halves of one expression's qualification wrong in opposite directions.
+
 ## Exits
 
 Each step states which of the two it is, up front:
