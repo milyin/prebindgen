@@ -236,7 +236,8 @@ pub(crate) fn build_data_class(
     for fqn in factory_imports {
         factory_body = factory_body.import(fqn);
     }
-    let mut factory = KtFun::new("fromParts")
+    let mut factory = ext
+        .mark_unsafe(KtFun::new("fromParts"))
         .vis(KtVis::Public)
         .annotation("JvmStatic")
         .returns(KtType::cls(class_name))
@@ -351,6 +352,11 @@ pub(crate) fn build_typed_handle(
     // `write_typed_handles` after the class body is built.
     let mut class = KtClass::class_(class_name)
         .vis(KtVis::Public)
+        // The class is public; minting one from a raw `Long` is not. Every
+        // generated call site (wrappers, folders, callback proxies, `take()`)
+        // is in this module, and the Rust side builds handles Kotlin-side, so
+        // `internal` costs nothing and closes the forged-pointer hole for good.
+        .ctor_vis(KtVis::Internal)
         .kdoc(class_kdoc)
         .ctor_param(KtCtorParam::new("initialPtr", KtType::long()));
     class = if gc_managed {

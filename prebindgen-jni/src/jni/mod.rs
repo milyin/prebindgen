@@ -51,6 +51,19 @@ pub(crate) use crate::{
     util::snake_to_camel,
 };
 
+/// Short name of the generated `@RequiresOptIn` marker annotation class.
+///
+/// It guards the two generated entry points that hand a raw native pointer to,
+/// or take one from, safe Kotlin and yet cannot be hidden: `NativeHandle.peek()`
+/// and the `fromParts` factories. Both are reached from Rust by JNI reflection
+/// (`call_method` / `call_static_method`), so `internal` would rename them out
+/// from under the lookup — a source-level opt-in marker is the only guard that
+/// leaves the bytecode signature untouched. Handle constructors need no marker:
+/// they are `internal`, which no consumer can opt in to.
+///
+/// See [`Declarations::unsafe_marker_fqn`] for the qualified form.
+pub(crate) const UNSAFE_MARKER: &str = "UnsafeNativeApi";
+
 // ──────────────────────────────────────────────────────────────────────
 // Structured type-conversion configuration
 // ──────────────────────────────────────────────────────────────────────

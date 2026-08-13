@@ -171,7 +171,7 @@ fn snapshot_kotlin_side() {
     assert!(cc.contains("funfromInt"), "{color}");
 
     // Typed handle subclass of NativeHandle.
-    let thing = find("class ZThing(");
+    let thing = find("class ZThing internal constructor(");
     let thingc: String = thing.split_whitespace().collect();
     assert!(thingc.contains(":NativeHandle"), "{thing}");
     // close()/take() mark the handle closed by setting the tag bit — the
@@ -206,6 +206,81 @@ fn snapshot_kotlin_side() {
         !pkg.contains("throw") && !pkg.contains("ZException"),
         "package wrappers: {pkg}"
     );
+}
+
+/// #37: no raw native pointer crosses into a consumer's hands unguarded.
+///
+/// Three entry points used to take or hand out a `Long` that generated native
+/// code then dereferences. Each is closed by the strongest guard it can carry
+/// without breaking the Rust side, which reaches two of them by JNI reflection:
+///
+/// * handle constructors — `internal`, so no opt-in can reach them at all;
+/// * `NativeHandle.peek()` and the `fromParts` factories — `public` in
+///   bytecode (`call_method` / `call_static_method` would not find a mangled
+///   `internal` name) but marked `@RequiresOptIn`, which is source-level only;
+/// * `JNINative` — already `internal`, asserted here so it stays that way.
+///
+/// Generated code opts itself in per file; that blanket is what a consumer
+/// does not get.
+#[test]
+fn raw_pointer_entry_points_are_guarded() {
+    let (_, kotlin) = snapshot_pipeline();
+    let all: String = kotlin.values().cloned().collect::<Vec<_>>().join("\n");
+    let c: String = all.split_whitespace().collect();
+
+    // The marker is declared once, in the base package.
+    let marker_files: Vec<&String> = kotlin
+        .values()
+        .filter(|v| v.contains("annotation class UnsafeNativeApi"))
+        .collect();
+    assert_eq!(
+        marker_files.len(),
+        1,
+        "exactly one marker declaration:\n{all}"
+    );
+    assert!(
+        marker_files[0].contains("@RequiresOptIn")
+            && marker_files[0].contains("RequiresOptIn.Level.ERROR"),
+        "the marker must be an ERROR-level opt-in requirement:\n{}",
+        marker_files[0]
+    );
+
+    // Every generated file opts in — including the one declaring the marker.
+    for (name, src) in &kotlin {
+        assert!(
+            src.contains("@file:OptIn(io.test.jni.UnsafeNativeApi::class)"),
+            "{name} does not opt in:\n{src}"
+        );
+    }
+
+    // Constructors: `internal`, base classes included, so a consumer can
+    // neither mint a handle nor subclass one around a forged pointer.
+    assert!(
+        c.contains("abstractclassNativeHandleinternalconstructor(initialPtr:Long)"),
+        "{all}"
+    );
+    assert!(
+        c.contains("classZThinginternalconstructor(initialPtr:Long)"),
+        "{all}"
+    );
+    assert!(!c.contains("classZThing(initialPtr:Long)"), "{all}");
+
+    // peek() and fromParts: public, marked.
+    assert!(
+        c.contains("@io.test.jni.UnsafeNativeApipublicfunpeek():Long"),
+        "{all}"
+    );
+    for occurrence in all.match_indices("fun fromParts") {
+        let head = &all[..occurrence.0];
+        assert!(
+            head.rfind("@io.test.jni.UnsafeNativeApi")
+                .is_some_and(|m| !head[m..].contains("fun ")),
+            "an unmarked `fromParts` factory:\n{all}"
+        );
+    }
+
+    // The raw extern surface stays module-private.
+    assert!(c.contains("internalobjectJNINative"), "{all}");
 }
 
 /// Generated onError handler interfaces carry the split-channel contract KDoc:

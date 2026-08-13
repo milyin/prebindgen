@@ -186,6 +186,9 @@ fun main() {
     }
 
     // ── data_class: fields cross as leaves, reassembled via fromParts ─────────
+    // `fromParts` takes the raw wire slots, so it is `@UnsafeNativeApi` (#37);
+    // exercising it from hand-written Kotlin means opting in explicitly.
+    @OptIn(UnsafeNativeApi::class)
     section("data_class Payload") {
         val p = Payload(1L, 2, 3.5, true, "hello")
         check(p.id == 1L && p.seq == 2 && p.value == 3.5 && p.flag && p.label == "hello")
@@ -370,6 +373,7 @@ fun main() {
     // The Kotlin surface only (the wire lowering is a separate stage): every
     // variant shape, the nested placement, the per-variant rename, and
     // `fromParts` picking the live group by tag.
+    @OptIn(UnsafeNativeApi::class)
     section("sealed_class Reading (sum surface + fromParts)") {
         // A payload-less alternative is a `data object`; the rest are `data
         // class`es, all nested inside the interface.
@@ -1086,7 +1090,10 @@ fun main() {
         check(r.len(boom) == 1L)
         s.close()
         check(!r.live)
-        check(r.isClosed() && r.peek() == 0L)
+        // `peek()` is opt-in (#37); a closed handle reads back as 0.
+        @OptIn(UnsafeNativeApi::class)
+        val closedPtr = r.peek()
+        check(r.isClosed() && closedPtr == 0L)
 
         // data class: Payload implements PayloadApi; Timestamped : PayloadApi.
         val fresh: Timestamped = payload(1L, 5, 0.0, false, null)

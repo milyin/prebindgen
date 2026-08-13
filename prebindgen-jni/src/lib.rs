@@ -15,6 +15,32 @@
 //!      secondary Kotlin artifacts (typed-handle classes, data/enum classes,
 //!      exception classes, the centralized `JNINative` holder).
 //!
+//! # The raw-pointer surface is not part of the consumer API
+//!
+//! Generated Kotlin passes native pointers around as `Long`s, and generated
+//! native code dereferences them. A `Long` a consumer made up therefore has to
+//! be unable to reach that code (prebindgen#37):
+//!
+//! * **Handle constructors are `internal`.** `KeyExpr(0xdeadbeef)` does not
+//!   compile outside the generated module — including through a subclass of
+//!   `NativeHandle`, whose constructor is `internal` too. Construction is
+//!   entirely Kotlin-side, so nothing on the Rust side depends on this.
+//! * **`object JNINative`, holding every `external fun`, is `internal`.**
+//! * **`NativeHandle.peek()` and the `fromParts` factories are marked
+//!   `@UnsafeNativeApi`** — a generated `@RequiresOptIn` annotation class in
+//!   the base package. Both are looked up from Rust by JNI reflection
+//!   (`call_method` / `call_static_method`), so `internal` would rename them
+//!   out from under the lookup; an opt-in marker constrains the Kotlin source
+//!   without touching the bytecode signature.
+//!
+//! Every generated file carries `@file:OptIn(<pkg>.UnsafeNativeApi::class)`:
+//! generated code is the trusted producer of these pointers. Consumer code
+//! gets no such blanket and must opt in per declaration, which is the point.
+//!
+//! A base package is required for this: with none configured the marker would
+//! land in the root package, which Kotlin cannot import from a subpackage, so
+//! it is not emitted at all (the `internal` constructors still are).
+//!
 //! # Fixed-width unsigned integers
 //!
 //! JniGenBuilder exposes Rust's fixed-width unsigned scalars without narrowing their

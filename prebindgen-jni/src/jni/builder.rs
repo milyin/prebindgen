@@ -250,6 +250,18 @@ impl Declarations {
         self.mangle_harness("JNINative")
     }
 
+    /// The `@RequiresOptIn` marker guarding every generated entry point that
+    /// takes or hands out a raw native pointer — the handle constructors are
+    /// `internal` instead, but `peek()` and the `fromParts` factories are
+    /// reached by JNI reflection and so must stay `public` in bytecode. Lives
+    /// in the base package next to [`Self::jni_native_class_name`].
+    ///
+    /// `None` when no base package is configured: the marker would land in the
+    /// root package, which Kotlin cannot import from a subpackage.
+    pub(crate) fn unsafe_marker_fqn(&self) -> Option<String> {
+        (!self.package.is_empty()).then(|| format!("{}.{UNSAFE_MARKER}", self.package))
+    }
+
     /// Mangle a method emitted on the centralized JNI extern harness.
     pub(crate) fn mangle_jni_method(&self, name: &str) -> String {
         self.mangle_method(&self.package, &self.jni_native_class_name(), name)

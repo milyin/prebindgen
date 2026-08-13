@@ -120,11 +120,70 @@ impl Declarations {
         // Banner after the merge, not per fragment: `merge_files` keeps the
         // first fragment of a package that sets one, so setting it here is
         // independent of fragment order.
+        //
+        // The blanket `@file:OptIn` goes here for the same reason, and because
+        // generated code is *by definition* the trusted producer of these
+        // pointers — opting in file by file would mean tracking which emitter
+        // happened to call a `fromParts` or inherit a marked `peek`, for no
+        // gain. Consumers get no such blanket: that is the whole point.
+        let opt_in = self
+            .unsafe_marker_fqn()
+            .map(|fqn| format!("OptIn({fqn}::class)"));
         let merged: Vec<KtFile> = kt::merge_files(fragments)?
             .into_iter()
-            .map(|f| f.banner(KOTLIN_BANNER))
+            .map(|f| {
+                let f = f.banner(KOTLIN_BANNER);
+                match &opt_in {
+                    Some(a) => f.file_annotation(a),
+                    None => f,
+                }
+            })
             .collect();
         kt::write_files(&merged, kotlin_root)
+    }
+
+    /// The [`UNSAFE_MARKER`] annotation class, declared once in the base
+    /// package. `None` when there is no base package to put it in — see
+    /// [`Declarations::unsafe_marker_fqn`].
+    ///
+    /// A `KtDecl::Raw` because `annotation class` is not a kind the model
+    /// carries, and this one declaration never varies.
+    fn unsafe_marker_decl(&self) -> Option<KtDecl> {
+        self.unsafe_marker_fqn()?;
+        // Line comments, single-line annotations: `raw_reindent` trims each
+        // line and re-derives indentation from braces alone, so anything
+        // wrapped across lines would come out flush left.
+        let code = format!(
+            "// Marks a generated entry point that mints or accepts a raw native pointer.\n\
+             // Such a pointer is valid only if a generated native call produced it;\n\
+             // anything else — a literal, a stale value, a pointer belonging to another\n\
+             // handle — is undefined behaviour reached from safe Kotlin.\n\
+             //\n\
+             // Handle constructors carry no marker: they are `internal`, so no opt-in\n\
+             // reaches them at all. What is left marked here is what the Rust side looks\n\
+             // up by JNI reflection and therefore cannot be hidden.\n\
+             @RequiresOptIn(message = \"Raw native pointer: valid only if a generated \
+             native call produced it. Opting in means you guarantee that.\", \
+             level = RequiresOptIn.Level.ERROR)\n\
+             @Retention(AnnotationRetention.BINARY)\n\
+             @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)\n\
+             public annotation class {UNSAFE_MARKER}"
+        );
+        Some(KtDecl::Raw {
+            name: UNSAFE_MARKER.to_string(),
+            code: KtCode::raw_reindent(&code),
+        })
+    }
+
+    /// Annotate a function with [`UNSAFE_MARKER`] — a no-op when the marker is
+    /// not emitted. Written fully qualified: annotations are raw strings the
+    /// model cannot see into, so a short name would need an import registered
+    /// at every one of these sites.
+    pub(crate) fn mark_unsafe(&self, f: KtFun) -> KtFun {
+        match self.unsafe_marker_fqn() {
+            Some(fqn) => f.annotation(fqn),
+            None => f,
+        }
     }
 
     /// Emit the shared-base fragment — the `NativeHandle` class every typed
@@ -138,7 +197,11 @@ impl Declarations {
 
         let mut file = KtFile::new(&self.package)
             .import("java.lang.ref.Cleaner")
-            .import("java.util.concurrent.atomic.AtomicLong")
+            .import("java.util.concurrent.atomic.AtomicLong");
+        if let Some(marker) = self.unsafe_marker_decl() {
+            file = file.decl(marker);
+        }
+        file = file
             .decl(
                 KtClass::class_with(KtClassModifier::Abstract, "NativeHandle")
                     .vis(KtVis::Public)
@@ -159,6 +222,11 @@ impl Declarations {
                          `ptr` into a separate atomic cell so a GC [Cleaner] action can settle\n\
                          the release after the handle object itself is unreachable.",
                     )
+                    // `internal`: a pointer that did not come out of a generated
+                    // native call is undefined behaviour, and nothing outside
+                    // this module has one. Blocks both `NativeHandle(0xdead)`
+                    // and a consumer subclass smuggling one in through `super`.
+                    .ctor_vis(KtVis::Internal)
                     .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
                     .implements(KtType::cls("AutoCloseable"))
                     .member(
@@ -181,9 +249,17 @@ impl Declarations {
                             .body(KtCode::new().line("ptr = ptr or 1L")),
                     )
                     .member(
-                        KtFun::new("peek")
+                        self.mark_unsafe(KtFun::new("peek"))
                             .vis(KtVis::Public)
-                            .kdoc("The live pointer, or `0` if this handle is closed.")
+                            .kdoc(
+                                "The live pointer, or `0` if this handle is closed.\n\
+                                 \n\
+                                 Meaningful only to the generated native calls it was minted\n\
+                                 for: it is not a handle, it does not keep one alive, and\n\
+                                 passing one back in that a native call did not produce is\n\
+                                 undefined behaviour. Public because the Rust side reads it\n\
+                                 by JNI reflection.",
+                            )
                             .returns(KtType::long())
                             .body(
                                 KtCode::new()
@@ -218,6 +294,7 @@ impl Declarations {
                          unreachable, and an in-flight native call holds the handle on its\n\
                          stack.",
                     )
+                    .ctor_vis(KtVis::Internal)
                     .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
                     .extends(KtType::cls("NativeHandle"), Some("initialPtr"))
                     .member(
@@ -697,7 +774,8 @@ impl Declarations {
 
         // `fromParts(tag, …)` — the tag slot plus every variant's slots side
         // by side, in the same order both sides enumerate them.
-        let mut factory = KtFun::new("fromParts")
+        let mut factory = self
+            .mark_unsafe(KtFun::new("fromParts"))
             .vis(KtVis::Public)
             .annotation("JvmStatic")
             .param(KtParam::new("tag", KtType::int()))
@@ -1874,7 +1952,10 @@ impl Declarations {
             // close() is covered by AutoCloseable. The interface extends
             // AutoCloseable so consumers get `close()` too.
             let base = vec![
-                KtFun::new("peek")
+                // Marked to match the `NativeHandle.peek()` that satisfies it:
+                // an unmarked interface member implemented by a marked one is
+                // an opt-in-propagation error.
+                self.mark_unsafe(KtFun::new("peek"))
                     .vis(KtVis::Default)
                     .returns(KtType::long()),
                 KtFun::new("isClosed")
