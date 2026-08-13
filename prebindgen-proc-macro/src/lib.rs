@@ -186,11 +186,18 @@ fn unit_id_from_args(args: &[OsString]) -> String {
         })
         .rfind(|metadata| !metadata.is_empty())
     {
-        return metadata.to_string();
+        // rustc accepts arbitrary strings here, including slashes and backslashes.
+        // Hash the value before using it as a path component so a caller's
+        // metadata cannot introduce directories or platform-specific names.
+        return hash_unit_id(metadata);
     }
 
+    hash_unit_id(args)
+}
+
+fn hash_unit_id(value: &(impl Hash + ?Sized)) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    args.hash(&mut hasher);
+    value.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
 }
 
@@ -503,7 +510,7 @@ mod tests {
         sync::{Arc, Barrier},
     };
 
-    use super::{unit_id_from_args, write_capture_record, Record, RecordKind};
+    use super::{hash_unit_id, unit_id_from_args, write_capture_record, Record, RecordKind};
 
     fn record(name: impl Into<String>) -> Record {
         let name = name.into();
@@ -528,19 +535,23 @@ mod tests {
     }
 
     #[test]
-    fn unit_id_accepts_rustc_codegen_spellings_and_uses_the_last() {
+    fn unit_id_accepts_rustc_codegen_spellings_hashes_and_uses_the_last() {
         let args = [
             "rustc",
             "-Cmetadata=first",
             "--codegen=metadata=second",
             "-C",
-            "metadata=third",
+            "metadata=third/path\\unit",
         ]
         .map(Into::into);
-        assert_eq!(unit_id_from_args(&args), "third");
+        let unit_id = unit_id_from_args(&args);
+        assert_eq!(unit_id, hash_unit_id("third/path\\unit"));
+        assert_eq!(unit_id.len(), 16);
+        assert!(unit_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert!(!unit_id.contains(['/', '\\']));
 
         let args = ["rustdoc", "--codegen", "metadata=long-form"].map(Into::into);
-        assert_eq!(unit_id_from_args(&args), "long-form");
+        assert_eq!(unit_id_from_args(&args), hash_unit_id("long-form"));
     }
 
     #[test]
