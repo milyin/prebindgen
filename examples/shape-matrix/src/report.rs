@@ -14,16 +14,27 @@ use crate::{
     tag::TypeTag,
 };
 
+/// Every cell's outcome, computed once per process.
+///
+/// Memoized because two consumers want it — the report and the guarantee
+/// ratchet — and a survey costs a full pass over both generators plus a cargo
+/// check. Running it twice in one test binary would double the suite's time to
+/// produce the same answer.
+pub fn survey() -> &'static [Cell] {
+    static SURVEY: std::sync::OnceLock<Vec<Cell>> = std::sync::OnceLock::new();
+    SURVEY.get_or_init(run_all)
+}
+
 /// The whole report.
 pub fn render() -> String {
     let mut out = String::new();
     out.push_str(HEADER);
 
-    let results = run_all();
+    let results = survey();
 
-    render_summary(&mut out, &results);
+    render_summary(&mut out, results);
     for position in Position::ALL {
-        render_position(&mut out, &results, *position);
+        render_position(&mut out, results, *position);
     }
     render_coverage(&mut out);
     render_class_coverage(&mut out);
@@ -32,7 +43,7 @@ pub fn render() -> String {
 }
 
 /// One row of the run: every cell, in corpus order.
-struct Cell {
+pub struct Cell {
     shape: &'static Shape,
     position: Position,
     target: Target,
@@ -51,7 +62,7 @@ struct Cell {
 impl Cell {
     /// `<shape>__<position>__<target>` — the receipt key, and the name of the
     /// file rustc reports against.
-    fn id(&self) -> String {
+    pub fn id(&self) -> String {
         format!(
             "{}__{}__{}",
             self.shape.id,
@@ -76,6 +87,25 @@ impl Cell {
             },
             (State::PlanSupported, Some(false)) => "**bad rust**".to_string(),
             (state, _) => state.cell(),
+        }
+    }
+
+    /// How far this cell got, on the ladder the guarantee ratchet compares.
+    ///
+    /// Derived from the same fields the table prints, so a cell cannot be
+    /// guaranteed at a level the report does not show.
+    pub fn level(&self) -> crate::guarantees::Level {
+        use crate::guarantees::Level;
+        match (&self.state, self.compiled) {
+            (State::PlanSupported, Some(true)) => match &self.header {
+                None => Level::Compiles,
+                Some(h) if h.is_ok() => Level::Header,
+                // A header stage that ran and failed is *worse* than not having
+                // run: the Rust compiles and the C caller still gets nothing.
+                Some(_) => Level::Compiles,
+            },
+            (State::PlanSupported, _) => Level::Generates,
+            _ => Level::Nothing,
         }
     }
 

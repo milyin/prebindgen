@@ -11,8 +11,20 @@
 use std::path::PathBuf;
 
 fn main() {
-    let dest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(shape_matrix::REPORT_PATH);
+    let here = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    let dest = here.join(shape_matrix::REPORT_PATH);
     let report = shape_matrix::report::render();
     std::fs::write(&dest, &report).expect("write REPORT.md");
     eprintln!("shape-matrix: wrote {}", dest.display());
+
+    // Raising a floor is a deliberate act, so it takes a flag. Doing it on every
+    // run would let a cell's floor follow it downwards — the ratchet would hold
+    // nothing.
+    if std::env::args().any(|arg| arg == "--update-guarantees") {
+        let dest = here.join(shape_matrix::guarantees::PATH);
+        let updated = shape_matrix::guarantees::updated(shape_matrix::report::survey());
+        std::fs::write(&dest, &updated).expect("write GUARANTEES.md");
+        eprintln!("shape-matrix: raised floors in {}", dest.display());
+    }
 }
