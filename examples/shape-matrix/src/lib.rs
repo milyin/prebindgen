@@ -37,10 +37,9 @@ pub mod report;
 pub mod run;
 pub mod tag;
 
+use corpus::{Need, Shape, SHAPES};
 use prebindgen::SourceLocation;
 use prebindgen_flat::flat::Flat;
-
-use corpus::{Need, Shape, SHAPES};
 use tag::{tags_in, TypeTag};
 
 /// Where the committed report lives, relative to this crate.

@@ -6,9 +6,11 @@
 
 use std::fmt::Write as _;
 
-use crate::corpus::{Position, Shape, SHAPES};
-use crate::run::{run, State, Target};
-use crate::tag::TypeTag;
+use crate::{
+    corpus::{Position, Shape, SHAPES},
+    run::{run, State, Target},
+    tag::TypeTag,
+};
 
 /// The whole report.
 pub fn render() -> String {

@@ -1,6 +1,8 @@
 use super::*;
-use crate::corpus::{Position, SHAPES};
-use crate::run::{not_applicable, Target};
+use crate::{
+    corpus::{Position, SHAPES},
+    run::{not_applicable, Target},
+};
 
 /// The gate this crate exists to hold.
 ///
