@@ -14,7 +14,7 @@ use prebindgen_jni::{
 };
 use prebindgen_registry::{ExpandReturnDecl, FunctionDecl};
 
-use crate::corpus::{Need, Position, Shape};
+use crate::corpus::{Call, Need, Position, Shape};
 
 /// The crate name every fixture item is stamped with, and so the module the
 /// generated code qualifies its calls through.
@@ -202,6 +202,31 @@ pub fn fixture_source(shape: &Shape, position: Position) -> String {
     items.join("\n")
 }
 
+/// The fixture for a call: one function taking every parameter of the call
+/// shape, and the declarations they need.
+pub fn call_fixture_source(call: &Call) -> String {
+    let mut items: Vec<String> = call.needs.iter().map(|n| n.source().to_string()).collect();
+    let params = call
+        .params
+        .iter()
+        .enumerate()
+        .map(|(n, ty)| format!("p{n}: {ty}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let uses = (0..call.params.len())
+        .map(|n| format!("let _ = p{n};"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    items.push(format!("pub fn {PROBE_FN}({params}) {{ {uses} }}"));
+    items.join("\n")
+}
+
+/// What a call fixture declares. A call places nothing in a struct or an enum,
+/// so there is no wrapper type — only the supporting declarations.
+pub fn call_declarations(call: &Call) -> Vec<Decl> {
+    call.needs.iter().map(|n| Decl::of(*n)).collect()
+}
+
 /// The declaration axis: what a declared type is declared **as**.
 ///
 /// Named in the JNI adapter's vocabulary on purpose. Its class kinds are a
@@ -377,12 +402,23 @@ pub fn run(shape: &Shape, position: Position, target: Target) -> Outcome {
             emitted: None,
         };
     }
-    let source = fixture_source(shape, position);
-    let decls = declarations(shape, position);
+    generate(
+        &fixture_source(shape, position),
+        &declarations(shape, position),
+        target,
+    )
+}
 
+/// Run one call shape. Same driver, different fixture: a call is a second axis
+/// over the same generators, not a second harness.
+pub fn run_call(call: &Call, target: Target) -> Outcome {
+    generate(&call_fixture_source(call), &call_declarations(call), target)
+}
+
+fn generate(source: &str, decls: &[Decl], target: Target) -> Outcome {
     let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| match target {
-        Target::C => run_c(&source, &decls),
-        Target::Jni => run_jni(&source, &decls),
+        Target::C => run_c(source, decls),
+        Target::Jni => run_jni(source, decls),
     }));
 
     match outcome {

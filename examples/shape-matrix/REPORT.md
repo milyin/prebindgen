@@ -33,8 +33,8 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Target | header | rustc | bad header | bad rust | rejected | panic | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| C | 45 | 0 | 0 | 5 | 41 | 31 | 22 |
-| Kotlin/JNI | 0 | 75 | 0 | 5 | 34 | 8 | 22 |
+| C | 53 | 0 | 0 | 5 | 41 | 31 | 22 |
+| Kotlin/JNI | 0 | 83 | 0 | 5 | 34 | 8 | 22 |
 
 The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin/JNI cell stops at rustc because this crate does not run the Kotlin compiler. `rustc` is therefore the top state for JNI and an intermediate one for C.
 
@@ -335,6 +335,23 @@ The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin
 - `result_sum_err` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `Probe` — error: unresolved prebindgen input type `Result < u64 , Sum >`
 
 </details>
+
+## Calls
+
+Several values crossing together. Aliasing is a property of a **call** — two parameters can name the same resource — so it cannot be stated about either value on its own, and both generators emit a preflight under a rule about the whole parameter set.
+
+What this table says is whether such a call can be expressed. Whether the guard *fires* — rejecting the aliased call, sparing the unaliased one, running before ownership moves — is a claim about running code, and no cell here claims it.
+
+| Call | Parameters | C | Kotlin/JNI |
+|---|---|---|---|
+| `consume_consume` | `(Handle, Handle)` | header | rustc |
+| `consume_borrow` | `(Handle, &Handle)` | header | rustc |
+| `borrow_borrow` | `(&Handle, &Handle)` | header | rustc |
+| `consume_optional` | `(Handle, Option<Handle>)` | header | rustc |
+| `handle_and_record` | `(Handle, Rec)` | header | rustc |
+| `handle_and_sum` | `(Handle, Sum)` | header | rustc |
+| `two_records` | `(Rec, Rec)` | header | rustc |
+| `borrow_borrow_consume` | `(&Handle, &Handle, Handle)` | header | rustc |
 
 ## Type-form coverage
 

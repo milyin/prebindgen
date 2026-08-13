@@ -48,7 +48,7 @@ not a rewrite.
 | 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#405](https://github.com/milyin/prebindgen/pull/405)) |
 | 2c | The Kotlin compiler, and `RuntimeExercised` | not started |
 | 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
-| 4 | Multi-parameter aliasing fixtures | not started |
+| 4 | The call axis | **landed** ([#407](https://github.com/milyin/prebindgen/pull/407)) |
 | 5 | The adapter-policy axis | JNI half ready; C half blocked |
 | 6 | Plan-level invariants | blocked |
 
@@ -133,14 +133,24 @@ silently regenerated artifact.
 The `must execute` level the issue also asks for waits on step 2c — there is no
 runtime state for a floor to stand on yet.
 
-### 4. Aliasing fixtures
+### 4. The call axis — landed
 
 Aliasing is a property of a **call**, not of a value: two parameters can name the
-same resource. Three cases that must discriminate at runtime, not merely plan —
-the same resource passed twice where one side consumes it (rejected); the same
-pointers in an **inactive** enum alternative (**not** flagged, or working surface
-silently disappears); and an invalid tag in a *later* argument after an earlier
-one would already have been consumed, proving the check precedes decoding.
+same resource, and both generators emit a preflight under a rule about the whole
+parameter set. Eight call shapes now run through the same driver, compile check,
+header stage and ratchet — pairs that must be guarded, a pair that must not be
+(two shared borrows of one resource are legal), and pairs in different domains.
+
+All eight are expressible in both targets, so the axis found nothing today. What
+it buys is that a call shape becoming inexpressible now falls below a floor.
+
+**Three claims it does not make**, all of which need running code and belong to
+the runtime stage: that the guard rejects the aliased call, that it spares the
+same pointers appearing in an **inactive** enum alternative, and that it runs
+*before* ownership moves — provable by an invalid tag in a later argument, after
+an earlier one would already have been consumed. None of these is asserted
+against emitted text: a grep establishes that the text contains a guard, which is
+not the property anyone cares about.
 
 ### 5. The adapter-policy axis
 

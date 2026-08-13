@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::{
-    corpus::{Position, SHAPES},
+    corpus::{Position, CALLS, SHAPES},
     guarantees, header,
     run::{declarations, kind_of, not_applicable, ClassKind, Target},
 };
@@ -91,6 +91,37 @@ fn every_class_kind_is_exercised() {
         "no cell declares a type as: {missing:?}\n\
          Add a `Need` to `corpus` that declares one."
     );
+}
+
+/// Every parameter of every call must be a type the model accepts, or the call
+/// tests nothing and its `header` cell is measuring a fixture that never
+/// contained the shape it names.
+#[test]
+fn every_call_parameter_classifies() {
+    for call in CALLS {
+        for param in call.params {
+            let reading = syn::parse_str::<syn::Type>(param)
+                .ok()
+                .and_then(|ty| crate::corpus_model_classify(&ty));
+            assert!(
+                reading.is_some(),
+                "the model does not accept `{param}` in call `{}`",
+                call.id
+            );
+        }
+    }
+}
+
+/// A cell id is a file name, a receipt key and a guarantee key at once, so a
+/// collision would silently merge two cells — one of them reporting the other's
+/// compiler diagnostics and inheriting the other's floor.
+#[test]
+fn every_cell_id_is_unique() {
+    let mut ids: Vec<String> = report::survey().iter().map(|c| c.id()).collect();
+    let before = ids.len();
+    ids.sort();
+    ids.dedup();
+    assert_eq!(before, ids.len(), "two cells share an id");
 }
 
 /// Shape ids are the receipt key a cell is reported under, so they have to be
