@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
+
 use super::*;
 use crate::{
     corpus::{Position, SHAPES},
-    header,
+    guarantees, header,
     run::{declarations, kind_of, not_applicable, ClassKind, Target},
 };
 
@@ -206,6 +208,87 @@ fn the_header_stage_requires_a_declaration() {
         !header::generate(not_exported, "probe").is_ok(),
         "a function C cannot call was reported as declared — the stage is \
          reporting a state it did not establish"
+    );
+}
+
+/// The ratchet, against the floors this repository actually commits.
+#[test]
+fn no_cell_falls_below_its_guarantee() {
+    let regressions = guarantees::regressions(report::survey());
+    assert!(
+        regressions.is_empty(),
+        "cells got worse:\n{}\n\nIf this is deliberate — a shape given up on, \
+         or a declaration that changed meaning — lower the floor in {} by hand \
+         in the same commit, so the decision appears in the diff.",
+        regressions
+            .iter()
+            .map(|r| format!("  {r}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        guarantees::PATH
+    );
+}
+
+/// The ratchet must catch a fall, and must not catch a rise.
+///
+/// Otherwise it is a file nobody can tell is working: the committed floors are
+/// all satisfied, so the passing gate above proves only that nothing regressed
+/// *today*, not that a regression would be noticed.
+#[test]
+fn the_ratchet_catches_a_fall_and_ignores_a_rise() {
+    use guarantees::Level;
+    let floors = BTreeMap::from([
+        ("fell__param__c".to_string(), Level::Header),
+        ("rose__param__jni".to_string(), Level::Generates),
+        ("held__param__jni".to_string(), Level::Compiles),
+    ]);
+    let observed = BTreeMap::from([
+        ("fell__param__c".to_string(), Level::Compiles),
+        ("rose__param__jni".to_string(), Level::Compiles),
+        ("held__param__jni".to_string(), Level::Compiles),
+    ]);
+
+    let found = guarantees::regressions_of(&floors, &observed);
+    let ids: Vec<&str> = found.iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec!["fell__param__c"],
+        "the ratchet must report exactly the cell that fell"
+    );
+}
+
+/// Raising is automatic; lowering is not. A run that does worse than the
+/// committed floor must leave that floor standing, or the ratchet would follow
+/// the regression down and hold nothing.
+#[test]
+fn updating_never_lowers_a_floor() {
+    use guarantees::Level;
+    let floors = BTreeMap::from([("cell__param__c".to_string(), Level::Header)]);
+    let observed = BTreeMap::from([("cell__param__c".to_string(), Level::Generates)]);
+
+    let after = guarantees::raised(floors, &observed);
+    assert_eq!(
+        after.get("cell__param__c"),
+        Some(&Level::Header),
+        "a floor followed a cell downwards"
+    );
+}
+
+/// Every floor must name a cell the matrix actually enumerates. A stale entry —
+/// a renamed shape, a dropped position — would sit in the file being satisfied
+/// by nothing at all.
+#[test]
+fn every_guarantee_names_a_live_cell() {
+    let observed = guarantees::observed(report::survey());
+    let committed = guarantees::committed();
+    let stale: Vec<&String> = committed
+        .keys()
+        .filter(|id| !observed.contains_key(*id))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "these floors name cells that no longer exist: {stale:?}\n\
+         Remove them, or restore the cell they were about."
     );
 }
 

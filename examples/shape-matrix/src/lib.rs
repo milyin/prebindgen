@@ -42,10 +42,17 @@
 //! [`header`] asks cbindgen whether that file becomes a header actually
 //! declaring the wrapper, since a header is what a C caller is given.
 //!
-//! Run it with `cargo run -p shape-matrix`, which rewrites `REPORT.md`.
+//! What a cell reached is then held as a floor ([`guarantees`]): rising is free,
+//! falling fails a test that names the cell. The committed report says *"an
+//! answer moved"*; the floor says *"an answer moved **down**"*, which is the
+//! half that does not need a reviewer to catch it.
+//!
+//! Run it with `cargo run -p shape-matrix`, which rewrites `REPORT.md`; add
+//! `-- --update-guarantees` to raise the floors to what the run achieved.
 
 pub mod check;
 pub mod corpus;
+pub mod guarantees;
 pub mod header;
 pub mod report;
 pub mod run;

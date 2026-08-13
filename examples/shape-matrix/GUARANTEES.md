@@ -1,0 +1,148 @@
+<!-- Floors are raised by `cargo run -p shape-matrix -- --update-guarantees`.
+     Lowering one is a hand edit, on purpose. -->
+# Guaranteed levels
+
+The level each cell has been seen to reach. A cell may rise above its floor
+freely; falling below it fails `no_cell_falls_below_its_guarantee`, which names
+the cell and both levels.
+
+This is the gate the committed `REPORT.md` cannot be: a byte-identity diff shows
+a cell getting worse in exactly the same shade as one getting better, so it
+catches a regression only if a reviewer reads the diff and knows which direction
+is which. A floor does not need a reviewer.
+
+`header` is the top of C's ladder and `compiles` the top of Kotlin/JNI's, since
+this crate does not run the Kotlin compiler yet.
+
+| Cell | Floor |
+|---|---|
+| `array_scalar__field__jni` | `compiles` |
+| `array_scalar__param__jni` | `compiles` |
+| `array_scalar__payload__jni` | `compiles` |
+| `array_scalar__ret__jni` | `compiles` |
+| `bool__field__c` | `header` |
+| `bool__field__jni` | `compiles` |
+| `bool__param__c` | `header` |
+| `bool__param__jni` | `compiles` |
+| `bool__payload__c` | `header` |
+| `bool__payload__jni` | `compiles` |
+| `bool__ret__c` | `header` |
+| `bool__ret__jni` | `compiles` |
+| `callback__param__jni` | `compiles` |
+| `callback_handle__param__jni` | `compiles` |
+| `cow_str__field__jni` | `generates` |
+| `cow_str__param__jni` | `generates` |
+| `cow_str__payload__jni` | `generates` |
+| `cow_str__ret__jni` | `compiles` |
+| `exclusive_ref__param__jni` | `generates` |
+| `handle__field__jni` | `compiles` |
+| `handle__param__c` | `header` |
+| `handle__param__jni` | `compiles` |
+| `handle__payload__c` | `header` |
+| `handle__payload__jni` | `compiles` |
+| `handle__ret__c` | `header` |
+| `handle__ret__jni` | `compiles` |
+| `handle_ref__param__c` | `header` |
+| `handle_ref__param__jni` | `compiles` |
+| `handle_ref__ret__c` | `header` |
+| `handle_ref__ret__jni` | `compiles` |
+| `opt_handle__field__jni` | `compiles` |
+| `opt_handle__param__c` | `header` |
+| `opt_handle__param__jni` | `compiles` |
+| `opt_handle__payload__c` | `generates` |
+| `opt_handle__payload__jni` | `compiles` |
+| `opt_handle__ret__c` | `header` |
+| `opt_handle__ret__jni` | `compiles` |
+| `opt_record__field__jni` | `compiles` |
+| `opt_record__param__c` | `generates` |
+| `opt_record__param__jni` | `compiles` |
+| `opt_record__payload__jni` | `compiles` |
+| `opt_record__ret__c` | `header` |
+| `opt_record__ret__jni` | `compiles` |
+| `opt_ref__param__c` | `header` |
+| `opt_ref__param__jni` | `compiles` |
+| `opt_ref__ret__c` | `header` |
+| `opt_ref__ret__jni` | `compiles` |
+| `opt_scalar__field__jni` | `compiles` |
+| `opt_scalar__param__c` | `header` |
+| `opt_scalar__param__jni` | `compiles` |
+| `opt_scalar__payload__jni` | `compiles` |
+| `opt_scalar__ret__c` | `header` |
+| `opt_scalar__ret__jni` | `compiles` |
+| `opt_sum__field__jni` | `compiles` |
+| `opt_sum__param__c` | `generates` |
+| `opt_sum__param__jni` | `compiles` |
+| `opt_sum__ret__c` | `header` |
+| `opt_sum__ret__jni` | `compiles` |
+| `opt_vec__ret__c` | `header` |
+| `opt_vec__ret__jni` | `compiles` |
+| `out_param__param__jni` | `generates` |
+| `record__field__jni` | `compiles` |
+| `record__param__c` | `header` |
+| `record__param__jni` | `compiles` |
+| `record__payload__c` | `header` |
+| `record__payload__jni` | `compiles` |
+| `record__ret__c` | `header` |
+| `record__ret__jni` | `compiles` |
+| `result_handle__payload__jni` | `compiles` |
+| `result_handle__ret__c` | `header` |
+| `result_handle__ret__jni` | `compiles` |
+| `result_scalar__payload__jni` | `compiles` |
+| `result_scalar__ret__c` | `header` |
+| `result_scalar__ret__jni` | `compiles` |
+| `result_sum_err__payload__jni` | `compiles` |
+| `scalar__field__c` | `header` |
+| `scalar__field__jni` | `compiles` |
+| `scalar__param__c` | `header` |
+| `scalar__param__jni` | `compiles` |
+| `scalar__payload__c` | `header` |
+| `scalar__payload__jni` | `compiles` |
+| `scalar__ret__c` | `header` |
+| `scalar__ret__jni` | `compiles` |
+| `shared_ref__param__jni` | `compiles` |
+| `slice_scalar__param__c` | `header` |
+| `slice_scalar__ret__c` | `generates` |
+| `str_ref__param__c` | `header` |
+| `str_ref__param__jni` | `compiles` |
+| `str_ref__ret__jni` | `compiles` |
+| `string__field__c` | `header` |
+| `string__field__jni` | `compiles` |
+| `string__param__c` | `header` |
+| `string__param__jni` | `compiles` |
+| `string__payload__c` | `header` |
+| `string__payload__jni` | `compiles` |
+| `string__ret__c` | `header` |
+| `string__ret__jni` | `compiles` |
+| `sum__field__c` | `header` |
+| `sum__field__jni` | `compiles` |
+| `sum__param__c` | `header` |
+| `sum__param__jni` | `compiles` |
+| `sum__payload__c` | `header` |
+| `sum__ret__c` | `header` |
+| `sum__ret__jni` | `compiles` |
+| `unit__ret__c` | `header` |
+| `unit__ret__jni` | `compiles` |
+| `unit_enum__field__jni` | `compiles` |
+| `unit_enum__param__c` | `header` |
+| `unit_enum__param__jni` | `compiles` |
+| `unit_enum__payload__c` | `header` |
+| `unit_enum__payload__jni` | `compiles` |
+| `unit_enum__ret__c` | `header` |
+| `unit_enum__ret__jni` | `compiles` |
+| `vec_handle__ret__c` | `header` |
+| `vec_handle__ret__jni` | `compiles` |
+| `vec_opt__param__jni` | `compiles` |
+| `vec_opt__payload__jni` | `compiles` |
+| `vec_opt__ret__jni` | `compiles` |
+| `vec_record__field__jni` | `compiles` |
+| `vec_record__param__jni` | `compiles` |
+| `vec_record__payload__jni` | `compiles` |
+| `vec_record__ret__c` | `header` |
+| `vec_record__ret__jni` | `compiles` |
+| `vec_ref__ret__c` | `generates` |
+| `vec_ref__ret__jni` | `compiles` |
+| `vec_scalar__ret__c` | `header` |
+| `vec_scalar__ret__jni` | `compiles` |
+| `vec_sum__param__jni` | `compiles` |
+| `vec_sum__ret__c` | `header` |
+| `vec_sum__ret__jni` | `compiles` |
