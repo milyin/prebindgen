@@ -47,7 +47,7 @@ not a rewrite.
 | 2 | Receipts: rustc accepts the emitted Rust | **landed** ([#403](https://github.com/milyin/prebindgen/pull/403)) |
 | 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#405](https://github.com/milyin/prebindgen/pull/405)) |
 | 2c | The Kotlin compiler, and `RuntimeExercised` | not started |
-| 3 | The minimum-guarantees table | not started |
+| 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
 | 4 | Multi-parameter aliasing fixtures | not started |
 | 5 | The adapter-policy axis | JNI half ready; C half blocked |
 | 6 | Plan-level invariants | blocked |
@@ -116,15 +116,22 @@ receipt rule — a fixture emits its cell id only *after* the relevant assertion
 has executed, and a cell with no receipt keeps the weaker state whatever any
 table claims.
 
-### 3. The minimum-guarantees table
+### 3. The guarantee ratchet — landed
 
-A committed table of `must plan` / `must compile` / `must execute` for shapes
-already shipped. A cell listed `must execute` that reports only `PlanSupported`
-fails the build. Seeded from what downstream depends on and from every cell the
-covertest already touches.
+A floor per cell, in a committed `GUARANTEES.md`: the level it has been seen to
+reach. Rising is free; falling fails a test naming the cell and both levels.
 
-This is the second gate on top of the committed report: the report catches a
-*changed* answer, this catches an answer that was never strong enough.
+This is the gate the report cannot be. A byte-identity diff shows a cell getting
+worse in the same shade as one getting better, so it catches a regression only if
+a reviewer reads the diff and knows which direction is which. A floor does not
+need a reviewer.
+
+**Raising is automatic (`--update-guarantees`); lowering is a hand edit.** Giving
+up on a shape that used to work should cost a visible line in a diff, not a
+silently regenerated artifact.
+
+The `must execute` level the issue also asks for waits on step 2c — there is no
+runtime state for a floor to stand on yet.
 
 ### 4. Aliasing fixtures
 
