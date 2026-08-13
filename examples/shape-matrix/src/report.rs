@@ -8,9 +8,9 @@ use std::fmt::Write as _;
 
 use crate::{
     check::{self, Unit},
-    corpus::{Position, Shape, SHAPES},
+    corpus::{Call, Position, Shape, CALLS, SHAPES},
     header::{self, Header},
-    run::{declarations, run, ClassKind, State, Target},
+    run::{declarations, run, run_call, ClassKind, State, Target},
     tag::TypeTag,
 };
 
@@ -36,16 +36,38 @@ pub fn render() -> String {
     for position in Position::ALL {
         render_position(&mut out, results, *position);
     }
+    render_calls(&mut out, results);
     render_coverage(&mut out);
     render_class_coverage(&mut out);
 
     out
 }
 
+/// What a cell is about: one value in one position, or a whole call.
+#[derive(Clone, Copy)]
+pub enum Subject {
+    Value {
+        shape: &'static Shape,
+        position: Position,
+    },
+    /// Several values crossing together — the axis a per-value cell cannot
+    /// express, because aliasing is a property of the call.
+    Call(&'static Call),
+}
+
+impl Subject {
+    /// The two parts of a cell id that come from the subject.
+    fn id_parts(&self) -> (&'static str, &'static str) {
+        match self {
+            Subject::Value { shape, position } => (shape.id, position.slug()),
+            Subject::Call(call) => (call.id, "call"),
+        }
+    }
+}
+
 /// One row of the run: every cell, in corpus order.
 pub struct Cell {
-    shape: &'static Shape,
-    position: Position,
+    subject: Subject,
     target: Target,
     state: State,
     /// Whether rustc accepted the emitted Rust. `None` when there was nothing
@@ -63,12 +85,8 @@ impl Cell {
     /// `<shape>__<position>__<target>` — the receipt key, and the name of the
     /// file rustc reports against.
     pub fn id(&self) -> String {
-        format!(
-            "{}__{}__{}",
-            self.shape.id,
-            self.position.slug(),
-            self.target.slug()
-        )
+        let (subject, kind) = self.subject.id_parts();
+        format!("{subject}__{kind}__{}", self.target.slug())
     }
 
     /// What the table prints: the furthest stage this cell reached.
@@ -125,27 +143,51 @@ fn run_all() -> Vec<Cell> {
 
     let mut cells = Vec::new();
     let mut units = Vec::new();
+    let mut record =
+        |subject: Subject, target: Target, outcome: crate::run::Outcome, fixture: String| {
+            let cell = Cell {
+                subject,
+                target,
+                state: outcome.state,
+                compiled: None,
+                header: None,
+            };
+            if let Some(emitted) = outcome.emitted {
+                units.push(Unit {
+                    id: cell.id(),
+                    fixture,
+                    emitted,
+                });
+            }
+            cells.push(cell);
+        };
+
     for shape in SHAPES {
         for position in Position::ALL {
             for target in Target::ALL {
-                let outcome = run(shape, *position, *target);
-                let cell = Cell {
+                let subject = Subject::Value {
                     shape,
                     position: *position,
-                    target: *target,
-                    state: outcome.state,
-                    compiled: None,
-                    header: None,
                 };
-                if let Some(emitted) = outcome.emitted {
-                    units.push(Unit {
-                        id: cell.id(),
-                        fixture: crate::run::fixture_source(shape, *position),
-                        emitted,
-                    });
-                }
-                cells.push(cell);
+                let outcome = run(shape, *position, *target);
+                record(
+                    subject,
+                    *target,
+                    outcome,
+                    crate::run::fixture_source(shape, *position),
+                );
             }
+        }
+    }
+    for call in CALLS {
+        for target in Target::ALL {
+            let outcome = run_call(call, *target);
+            record(
+                Subject::Call(call),
+                *target,
+                outcome,
+                crate::run::call_fixture_source(call),
+            );
         }
     }
 
@@ -227,8 +269,12 @@ fn render_position(out: &mut String, results: &[Cell], position: Position) {
         let state_of = |target: Target| {
             results
                 .iter()
-                .find(|c| {
-                    std::ptr::eq(c.shape, shape) && c.position == position && c.target == target
+                .find(|c| match c.subject {
+                    Subject::Value {
+                        shape: s,
+                        position: p,
+                    } => std::ptr::eq(s, shape) && p == position && c.target == target,
+                    Subject::Call(_) => false,
                 })
                 .map(|c| c.text())
                 .unwrap_or_default()
@@ -245,11 +291,71 @@ fn render_position(out: &mut String, results: &[Cell], position: Position) {
     out.push('\n');
 
     let mut notes: Vec<String> = Vec::new();
-    for cell in results.iter().filter(|c| c.position == position) {
+    for cell in results
+        .iter()
+        .filter(|c| matches!(c.subject, Subject::Value { position: p, .. } if p == position))
+    {
         if let Some(detail) = cell.detail() {
             notes.push(format!(
                 "- `{}` / {}: {}",
-                cell.shape.id,
+                cell.subject.id_parts().0,
+                cell.target.as_str(),
+                detail
+            ));
+        }
+    }
+    if !notes.is_empty() {
+        out.push_str("<details><summary>What the generators said</summary>\n\n");
+        for note in notes {
+            let _ = writeln!(out, "{note}");
+        }
+        out.push_str("\n</details>\n\n");
+    }
+}
+
+fn render_calls(out: &mut String, results: &[Cell]) {
+    out.push_str("## Calls\n\n");
+    out.push_str(
+        "Several values crossing together. Aliasing is a property of a **call** — two \
+         parameters can name the same resource — so it cannot be stated about either \
+         value on its own, and both generators emit a preflight under a rule about the \
+         whole parameter set.\n\nWhat this table says is whether such a call can be \
+         expressed. Whether the guard *fires* — rejecting the aliased call, sparing the \
+         unaliased one, running before ownership moves — is a claim about running code, \
+         and no cell here claims it.\n\n",
+    );
+    out.push_str("| Call | Parameters | C | Kotlin/JNI |\n|---|---|---|---|\n");
+    for call in CALLS {
+        let state_of = |target: Target| {
+            results
+                .iter()
+                .find(|c| match c.subject {
+                    Subject::Call(k) => std::ptr::eq(k, call) && c.target == target,
+                    Subject::Value { .. } => false,
+                })
+                .map(|c| c.text())
+                .unwrap_or_default()
+        };
+        let _ = writeln!(
+            out,
+            "| `{}` | `({})` | {} | {} |",
+            call.id,
+            call.params.join(", "),
+            state_of(Target::C),
+            state_of(Target::Jni),
+        );
+    }
+    out.push('\n');
+
+    let mut notes: Vec<String> = Vec::new();
+    for cell in results
+        .iter()
+        .filter(|c| matches!(c.subject, Subject::Call(_)))
+    {
+        if let Some(detail) = cell.detail() {
+            notes.push(format!(
+                "- `{}` / {}: {}",
+                cell.subject.id_parts().0,
                 cell.target.as_str(),
                 detail
             ));

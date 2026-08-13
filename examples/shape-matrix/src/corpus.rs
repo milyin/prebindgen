@@ -80,6 +80,91 @@ pub struct Shape {
     pub needs: &'static [Need],
 }
 
+/// A **call**: several values crossing together.
+///
+/// A separate axis because aliasing is a property of a call and not of a value.
+/// Two parameters can name the same underlying resource, and what the binding
+/// must do about it — reject the call before any conversion runs, or leave it
+/// alone — cannot be stated about either parameter on its own. Both generators
+/// emit an alias preflight for exactly this, under a rule about the *set* of
+/// parameters: at least one consumed handle, and any other handle.
+///
+/// What is measured here is whether such a call can be expressed at all. Whether
+/// the emitted guard *fires* — rejecting the aliased call, sparing the
+/// unaliased one, and running before ownership moves — is a claim about running
+/// code, and waits for the runtime stage rather than being asserted against
+/// emitted text.
+pub struct Call {
+    /// Stable id, used in the report and as the cell's receipt key.
+    pub id: &'static str,
+    /// The parameter types, in order.
+    pub params: &'static [&'static str],
+    pub needs: &'static [Need],
+}
+
+/// The call shapes.
+///
+/// Chosen around the preflight rule rather than at random: pairs that must be
+/// guarded, pairs that must **not** be, and pairs in different resource domains
+/// where the question does not arise.
+pub const CALLS: &[Call] = &[
+    // Two consumed handles — `z_combine(x, x)` hands one allocation to two
+    // consuming converters. The case both generators name in their own docs.
+    Call {
+        id: "consume_consume",
+        params: &["Handle", "Handle"],
+        needs: &[Need::Handle],
+    },
+    // A consume beside a borrow: the borrow dangles the moment the consume
+    // takes ownership. Narrower rules ("two consumed parameters") miss it.
+    Call {
+        id: "consume_borrow",
+        params: &["Handle", "&Handle"],
+        needs: &[Need::Handle],
+    },
+    // Two shared borrows of one resource are legal Rust and legal C, so this
+    // pair must stay expressible — a guard here would remove working surface.
+    Call {
+        id: "borrow_borrow",
+        params: &["&Handle", "&Handle"],
+        needs: &[Need::Handle],
+    },
+    // A consume beside an optional handle: the same domain through a different
+    // spelling, which is why the comparison is on the resource and not on the
+    // declared type.
+    Call {
+        id: "consume_optional",
+        params: &["Handle", "Option<Handle>"],
+        needs: &[Need::Handle],
+    },
+    // A handle beside a value struct — different domains, nothing to alias.
+    Call {
+        id: "handle_and_record",
+        params: &["Handle", "Rec"],
+        needs: &[Need::Handle, Need::Record],
+    },
+    // A handle beside a sum, whose payload is not a handle: the pair a
+    // domain-blind rule would flag.
+    Call {
+        id: "handle_and_sum",
+        params: &["Handle", "Sum"],
+        needs: &[Need::Handle, Need::Sum],
+    },
+    // No handles at all — the control: whatever the preflight does, it has
+    // nothing to say here.
+    Call {
+        id: "two_records",
+        params: &["Rec", "Rec"],
+        needs: &[Need::Record],
+    },
+    // Three, with the consume last: position within the call must not matter.
+    Call {
+        id: "borrow_borrow_consume",
+        params: &["&Handle", "&Handle", "Handle"],
+        needs: &[Need::Handle],
+    },
+];
+
 /// Where the shape is placed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Position {

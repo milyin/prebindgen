@@ -104,6 +104,11 @@ pub fn classify_one(shape: &Shape) -> Option<prebindgen_flat::flat::TypeRef> {
     corpus_model().classify(&ty).ok()
 }
 
+/// The model's reading of one spelling, whatever wrote it.
+pub fn corpus_model_classify(ty: &syn::Type) -> Option<prebindgen_flat::flat::TypeRef> {
+    corpus_model().classify(ty).ok()
+}
+
 /// Every shape paired with the type forms it writes.
 pub fn classify_corpus() -> Vec<(&'static Shape, Vec<TypeTag>)> {
     let model = corpus_model();
