@@ -777,8 +777,13 @@ impl Declarations {
 
         // `fromParts(tag, …)` — the tag slot plus every variant's slots side
         // by side, in the same order both sides enumerate them.
-        let mut factory = self
-            .mark_unsafe(KtFun::new("fromParts"))
+        // No raw-pointer guard here, unlike the data class's `fromParts`. This
+        // one's parameters are the variants' **property** types
+        // (`sum_payload_kt_type`), so a handle payload arrives as its typed
+        // handle class, never as a `Long` — there is no pointer to forge. The
+        // wire-shaped reassembly a sum actually needs is the inlined `when`
+        // over the tag that `sum_builder_singleton` emits, not this factory.
+        let mut factory = KtFun::new("fromParts")
             .vis(KtVis::Public)
             .annotation("JvmStatic")
             .param(KtParam::new("tag", KtType::int()))
@@ -1408,8 +1413,18 @@ impl Declarations {
         // top-level `val`) so it has a stable JVM class + static field that the
         // callback trampoline can fetch via `FindClass` + `GetStaticField`; the
         // output `Vec` wrapper references it as `{holder}.{field}`.
+        //
+        // That stability is also a Java-visible route into the raw twin: an
+        // `internal object` is a public JVM class and `@JvmField` a public
+        // static, so `__XFolderRawHolder.instance.run(list, 0xdeadbeefL)` would
+        // mint a handle from an invented pointer. `@JvmSynthetic` hides the
+        // field from javac while leaving the name and ACC_STATIC alone, which
+        // is all `GetStaticFieldID` looks at. A top-level `internal val`
+        // (the builder singletons) needs no such treatment: its getter is
+        // mangled and its backing field is private.
         let code = format!(
             "internal object {holder} {{\n    \
+             @JvmSynthetic\n    \
              @JvmField\n    \
              val {field}: {folder}<{acc_ty}> =\n        \
              {folder} {{ {lambda_params} -> \
@@ -1496,6 +1511,7 @@ impl Declarations {
         let acc_ty = format!("ArrayList<{iface_short}>");
         let code = format!(
             "internal object {holder} {{\n    \
+             @JvmSynthetic\n    \
              @JvmField\n    \
              val {field}: {folder}<{acc_ty}> =\n        \
              {folder} {{ {} -> {acc}.add({when}); {acc} }}\n\
@@ -1665,6 +1681,7 @@ impl Declarations {
         let acc_ty = format!("ArrayList<{elem_short}>");
         let code = format!(
             "internal object {holder} {{\n    \
+             @JvmSynthetic\n    \
              @JvmField\n    \
              val {field}: {folder}<{acc_ty}> =\n        \
              {folder} {{ {acc}, {elem} -> {acc}.add({wrap}); {acc} }}\n\

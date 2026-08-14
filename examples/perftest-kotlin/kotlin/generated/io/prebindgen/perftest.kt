@@ -181,8 +181,6 @@ internal inline fun <R> withSortedHandleLocks(
 
 public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectBoundary8) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_value: Long,
@@ -207,8 +205,6 @@ public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectB
 
 public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: ObjectBoundaryLeaf) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(left_value: Long, right_value: Long): ObjectBoundary2 = ObjectBoundary2(ObjectBoundaryLeaf.fromParts(left_value), ObjectBoundaryLeaf.fromParts(right_value))
     }
@@ -216,8 +212,6 @@ public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: Objec
 
 public data class ObjectBoundary32(val left: ObjectBoundary16, val right: ObjectBoundary16) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_left_value: Long,
@@ -258,8 +252,6 @@ public data class ObjectBoundary32(val left: ObjectBoundary16, val right: Object
 
 public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBoundary2) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_value: Long,
@@ -272,8 +264,6 @@ public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBo
 
 public data class ObjectBoundary64(val left: ObjectBoundary32, val right: ObjectBoundary32) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_left_left_value: Long,
@@ -350,8 +340,6 @@ public data class ObjectBoundary64(val left: ObjectBoundary32, val right: Object
  */
 public data class ObjectBoundary64Object(val left: ObjectBoundary32, val right: ObjectBoundary32) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_left_left_value: Long,
@@ -424,8 +412,6 @@ public data class ObjectBoundary64Object(val left: ObjectBoundary32, val right: 
 
 public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBoundary4) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_value: Long,
@@ -443,8 +429,6 @@ public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBo
 /** One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree. */
 public data class ObjectBoundaryLeaf(val value: Long) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
     }
@@ -458,8 +442,6 @@ public data class ObjectBoundaryLeaf(val value: Long) {
  */
 public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             id: Long,
@@ -660,11 +642,12 @@ public fun interface PayloadCallback {
     public fun run(payload: Payload)
 }
 
-public fun interface PayloadCallbackRaw {
+internal fun interface PayloadCallbackRaw {
     public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?)
 }
 
-public fun PayloadCallback.asRaw(): PayloadCallbackRaw =
+@JvmSynthetic
+internal fun PayloadCallback.asRaw(): PayloadCallbackRaw =
     PayloadCallbackRaw {
         id,
         seq,
@@ -687,11 +670,12 @@ public fun interface PayloadBuilder<out R> {
 internal val __PayloadBuilder: PayloadBuilder<Payload> =
 PayloadBuilder { id, seq, value, flag, label -> Payload.fromParts(id, seq, value, flag, label) }
 
-public fun interface PayloadFolderRaw<A> {
+internal fun interface PayloadFolderRaw<A> {
     public fun run(acc: A, id: Long, seq: Int, value: Double, flag: Boolean, label: String?): A
 }
 
 internal object __PayloadFolderRawHolder {
+    @JvmSynthetic
     @JvmField
     val instance: PayloadFolderRaw<ArrayList<Payload>> =
     PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }

@@ -29,7 +29,7 @@ fn as_raw_adapter_is_multiline_even_when_short() {
     let src = render_as_raw(spec);
     assert!(
         src.contains(
-            "public fun ThingCallback.asRaw(): ThingCallbackRaw =\n    \
+            "@JvmSynthetic\ninternal fun ThingCallback.asRaw(): ThingCallbackRaw =\n    \
                  ThingCallbackRaw {\n        \
                  handle ->\n        \
                  run(\n            \
@@ -77,7 +77,7 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
 
     let src = render_as_raw(spec);
     assert!(
-        src.contains("public fun ReplyCallback.asRaw(): ReplyCallbackRaw =\n"),
+        src.contains("@JvmSynthetic\ninternal fun ReplyCallback.asRaw(): ReplyCallbackRaw =\n"),
         "{src}"
     );
     assert!(src.contains("    ReplyCallbackRaw {\n"), "{src}");

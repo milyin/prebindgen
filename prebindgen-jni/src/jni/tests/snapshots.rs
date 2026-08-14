@@ -283,21 +283,21 @@ fn raw_pointer_entry_points_are_guarded() {
         "{all}"
     );
 
-    // peek() and fromParts keep their names for JNI, and carry both guards.
+    // peek() keeps its name for JNI, and carries both guards.
     assert!(
         c.contains("@JvmSynthetic@io.test.jni.UnsafeNativeApipublicfunpeek():Long"),
         "{all}"
     );
-    for occurrence in all.match_indices("fun fromParts") {
-        let head = &all[..occurrence.0];
-        let marked = head
-            .rfind("@io.test.jni.UnsafeNativeApi")
-            .is_some_and(|m| !head[m..].contains("fun "));
-        let synthetic = head
-            .rfind("@JvmSynthetic")
-            .is_some_and(|m| !head[m..].contains("fun "));
-        assert!(marked && synthetic, "an unguarded `fromParts`:\n{all}");
-    }
+    // A `fromParts` is guarded only when it actually takes a pointer. This
+    // fixture's one factory is `Error.fromParts(message: String)`, which mints
+    // nothing — guarding it would delete a safe factory from Java and force
+    // consumers to opt into a raw-pointer contract it does not have. The
+    // positive half of the rule lives in
+    // `values::data_class_properties_match_their_from_parts_params`.
+    assert!(
+        c.contains("@JvmStaticpublicfunfromParts(message:String):Error"),
+        "a pointer-free `fromParts` carries neither guard:\n{all}"
+    );
 
     // The extern surface: `internal object` is public on the JVM, so every
     // member needs the flag, not just the object.

@@ -1069,7 +1069,7 @@ fn a_fixed_builder_emits_no_dead_typed_twin() {
 
     // The twin the singleton implements and JNI calls.
     assert!(
-        kotlin.contains("public fun interface LookupBuilderRaw<out R>"),
+        kotlin.contains("internal fun interface LookupBuilderRaw<out R>"),
         "the raw twin is what exists:\n{kotlin}"
     );
     assert!(

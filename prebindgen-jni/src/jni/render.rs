@@ -169,7 +169,7 @@ pub(crate) fn build_data_class(
     // `Enum.fromInt`, projection wraps) use short names; the FQNs they need are
     // collected here and attached to the factory body `Code` below.
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
-    let (factory_params, factory_reconstruct) = flatten_struct_factory(
+    let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,
         registry,
         item_struct,
@@ -236,12 +236,20 @@ pub(crate) fn build_data_class(
     for fqn in factory_imports {
         factory_body = factory_body.import(fqn);
     }
-    let mut factory = ext
-        .mark_unsafe(KtFun::new("fromParts"))
-        .vis(KtVis::Public)
-        .annotation("JvmStatic")
-        .returns(KtType::cls(class_name))
-        .expr_body(factory_body);
+    // Guarded only when a leaf actually is a raw pointer: a `fromParts` over
+    // plain scalars and byte arrays cannot forge anything, and marking it
+    // would delete a safe factory from Java and make unrelated Kotlin
+    // consumers opt into a raw-pointer contract it does not have.
+    let factory = KtFun::new("fromParts");
+    let mut factory = if factory_mints_handle {
+        ext.mark_unsafe(factory)
+    } else {
+        factory
+    }
+    .vis(KtVis::Public)
+    .annotation("JvmStatic")
+    .returns(KtType::cls(class_name))
+    .expr_body(factory_body);
     for (name, ty) in &factory_params {
         factory = factory.param(KtParam::new(name, ty.clone()));
     }

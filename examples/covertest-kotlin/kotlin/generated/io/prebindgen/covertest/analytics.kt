@@ -143,11 +143,12 @@ public fun interface SummaryStorageSummaryFullBuilder<out R> {
     public fun run(count: Long, total: Double, handle: Summary): R
 }
 
-public fun interface SummaryStorageSummaryFullBuilderRaw<out R> {
+internal fun interface SummaryStorageSummaryFullBuilderRaw<out R> {
     public fun run(count: Long, total: Double, handle: Long): R
 }
 
-public fun <R> SummaryStorageSummaryFullBuilder<R>.asRaw(): SummaryStorageSummaryFullBuilderRaw<R> =
+@JvmSynthetic
+internal fun <R> SummaryStorageSummaryFullBuilder<R>.asRaw(): SummaryStorageSummaryFullBuilderRaw<R> =
     SummaryStorageSummaryFullBuilderRaw<R> {
         count,
         total,
@@ -163,11 +164,12 @@ public fun interface SummaryStorageSummaryProbeBuilder<out R> {
     public fun run(count: Long, total: Double, handle: Summary?): R
 }
 
-public fun interface SummaryStorageSummaryProbeBuilderRaw<out R> {
+internal fun interface SummaryStorageSummaryProbeBuilderRaw<out R> {
     public fun run(count: Long, total: Double, handle: Long?): R
 }
 
-public fun <R> SummaryStorageSummaryProbeBuilder<R>.asRaw(): SummaryStorageSummaryProbeBuilderRaw<R> =
+@JvmSynthetic
+internal fun <R> SummaryStorageSummaryProbeBuilder<R>.asRaw(): SummaryStorageSummaryProbeBuilderRaw<R> =
     SummaryStorageSummaryProbeBuilderRaw<R> {
         count,
         total,

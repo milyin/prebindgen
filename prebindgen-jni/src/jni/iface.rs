@@ -463,13 +463,25 @@ impl IfaceSpec {
     }
 
     /// The raw-twin declaration (call only when [`Self::needs_raw`]).
+    ///
+    /// `internal`: its `run` takes handle leaves as raw `Long`s, so anything
+    /// that can name this interface can hand a wrapper a pointer it invented.
+    /// Only generated code — the `asRaw` proxy, the hoisted singletons, the
+    /// error captures, all in this module — ever implements or calls it.
+    ///
+    /// `run` itself stays **public**, because native code resolves it by name
+    /// (`GetMethodID("run", …)`) and an internal member would be mangled to
+    /// `run$<module>`. That is safe: an internal interface is a public JVM
+    /// class Java can implement, but implementing it only lets a caller invoke
+    /// their own `run` — the forging route is the generated proxy, which
+    /// [`Self::to_as_raw_fun`] hides.
     pub fn to_raw_decl(&self) -> KtFunInterface {
         let mut m = KtFunSig::new(IFACE_METHOD).vis(KtVis::Public);
         for p in &self.params {
             m = m.param(KtParam::new(&p.name, p.raw.clone()));
         }
         m = m.returns(self.ret.clone());
-        let mut i = KtFunInterface::new(self.raw_name(), m).vis(KtVis::Public);
+        let mut i = KtFunInterface::new(self.raw_name(), m).vis(KtVis::Internal);
         for tp in &self.type_params {
             i = i.type_param(tp);
         }
@@ -649,7 +661,22 @@ impl IfaceSpec {
                 nest_binds(c, &binds, &call_args.join(", "))
             })
         };
-        let mut f = KtFun::new("asRaw").vis(KtVis::Public).receiver(recv);
+        // `internal` + `@JvmSynthetic`, the same pair the handle entry points
+        // carry. This proxy is the one place a raw `Long` becomes a typed
+        // handle inside a file that already holds the blanket opt-in, so a
+        // public `asRaw()` handed any caller a forged-pointer route with no
+        // opt-in of their own:
+        //
+        //     val raw = QueryCallback { … }.asRaw()
+        //     raw.run(…, 0xdeadbeefL)   // → Query.fromRawPtr(0xdeadbeef)
+        //
+        // Every call site is a generated wrapper in this module, so `internal`
+        // costs nothing; `@JvmSynthetic` closes the same route from Java,
+        // where `internal` is merely a mangled public static.
+        let mut f = KtFun::new("asRaw")
+            .vis(KtVis::Internal)
+            .annotation(JVM_SYNTHETIC)
+            .receiver(recv);
         for g in &bare_generics {
             f = f.generic(g);
         }

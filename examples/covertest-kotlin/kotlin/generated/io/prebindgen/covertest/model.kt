@@ -64,8 +64,6 @@ public sealed interface Hold {
     public data class For(public val v0: ULong) : Hold
 
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(tag: Int, for_v0: ULong): Hold =
             when (tag) {
@@ -111,8 +109,6 @@ public sealed interface Lookup : AutoCloseable {
     }
 
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(tag: Int, found_v0: Summary, failed_v0: String): Lookup =
             when (tag) {
@@ -139,8 +135,6 @@ public sealed interface Marker {
     public data class Ranked(public val v0: Priority?) : Marker
 
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(tag: Int, ranked_v0: Priority?): Marker =
             when (tag) {
@@ -187,8 +181,6 @@ public sealed interface Reading {
     public data class Companion(public val v0: Long) : Reading
 
     public companion object Companion_ {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             tag: Int,
@@ -219,8 +211,6 @@ public sealed interface Reading {
  */
 public data class Annotated(val payload: Payload, val alternate: Payload?, val ttl: Long?, val priority: Priority?) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             payload_id: Long,
@@ -273,8 +263,6 @@ public data class Arrays(val bytes: ByteArray, val shorts: ShortArray, val ints:
     override fun toString(): String = "Arrays(bytes=${bytes.contentToString()}, shorts=${shorts.contentToString()}, ints=${ints.contentToString()}, longs=${longs.contentToString()}, doubles=${doubles.contentToString()}, flags=${flags.contentToString()}, raw=${raw.contentToString()})"
 
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             bytes: ByteArray,
@@ -323,8 +311,6 @@ public data class BlobValue(val stamp: Stamp, val id: ByteArray, val chunks: Lis
     override fun toString(): String = "BlobValue(stamp=${stamp}, id=${id.contentToString()}, chunks=${chunks.joinToString(", ", "[", "]") { __e -> "${__e.contentToString()}" }})"
 
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             stamp_secs: Long,
@@ -342,8 +328,6 @@ public data class BlobValue(val stamp: Stamp, val id: ByteArray, val chunks: Lis
  */
 public data class CacheConfig(val replies: RepliesConfig, val ttl: Long) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             replies_priority: Int,
@@ -367,8 +351,6 @@ public data class CacheConfig(val replies: RepliesConfig, val ttl: Long) {
  */
 public data class DurationBoundary(val required: ULong, val delay: ULong?) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(required: Long, delay: Long): DurationBoundary = DurationBoundary(required.toULong(), if (delay == -1L) null else delay.toULong())
     }
@@ -383,8 +365,6 @@ public data class DurationBoundary(val required: ULong, val delay: ULong?) {
  */
 public data class HoldPolicy(val hold: Hold, val grace: Hold?) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             hold__tag: Int,
@@ -408,8 +388,6 @@ public data class HoldPolicy(val hold: Hold, val grace: Hold?) {
  */
 public data class ObjectBoundary(val left: ObjectBoundary64, val right: ObjectBoundary63) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_left_left_left_value: Long,
@@ -545,8 +523,6 @@ public data class ObjectBoundary(val left: ObjectBoundary64, val right: ObjectBo
 
 public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectBoundary8) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_value: Long,
@@ -571,8 +547,6 @@ public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectB
 
 public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: ObjectBoundaryLeaf) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(left_value: Long, right_value: Long): ObjectBoundary2 = ObjectBoundary2(ObjectBoundaryLeaf.fromParts(left_value), ObjectBoundaryLeaf.fromParts(right_value))
     }
@@ -580,8 +554,6 @@ public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: Objec
 
 public data class ObjectBoundary32(val left: ObjectBoundary16, val right: ObjectBoundary16) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_left_value: Long,
@@ -622,8 +594,6 @@ public data class ObjectBoundary32(val left: ObjectBoundary16, val right: Object
 
 public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBoundary2) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_value: Long,
@@ -637,8 +607,6 @@ public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBo
 /** The right half of [`ObjectBoundary`]: 32 + 16 + 8 + 4 + 2 + 1 leaves. */
 public data class ObjectBoundary63(val leaves32: ObjectBoundary32, val leaves16: ObjectBoundary16, val leaves8: ObjectBoundary8, val leaves4: ObjectBoundary4, val leaves2: ObjectBoundary2, val leaf: ObjectBoundaryLeaf) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             leaves32_left_left_left_left_left_value: Long,
@@ -710,8 +678,6 @@ public data class ObjectBoundary63(val leaves32: ObjectBoundary32, val leaves16:
 
 public data class ObjectBoundary64(val left: ObjectBoundary32, val right: ObjectBoundary32) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_left_left_left_value: Long,
@@ -784,8 +750,6 @@ public data class ObjectBoundary64(val left: ObjectBoundary32, val right: Object
 
 public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBoundary4) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             left_left_left_value: Long,
@@ -803,8 +767,6 @@ public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBo
 /** One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree. */
 public data class ObjectBoundaryLeaf(val value: Long) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
     }
@@ -824,8 +786,6 @@ public data class ObjectBoundaryLeaf(val value: Long) {
  */
 public data class Observation(val id: Long, val reading: Reading, val fallback: Reading?, val note: String) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             id: Long,
@@ -859,8 +819,6 @@ public data class Observation(val id: Long, val reading: Reading, val fallback: 
  */
 public data class RepliesConfig(val priority: Priority, val maxSamples: Long) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(priority: Int, maxSamples: Long): RepliesConfig = RepliesConfig(Priority.fromInt(priority), maxSamples)
     }
@@ -889,8 +847,6 @@ public data class Stamp(val secs: Long, val nanos: Long) {
     }
 
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(secs: Long, nanos: Long): Stamp = Stamp(secs, nanos)
     }
@@ -899,8 +855,6 @@ public data class Stamp(val secs: Long, val nanos: Long) {
 /** A data class carrying the object-shaped sum. */
 public data class Tagged(val id: Long, val marker: Marker) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(id: Long, marker__tag: Int, marker_ranked_v0: Int?): Tagged = Tagged(id, when (marker__tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(marker_ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $marker__tag") })
     }
@@ -913,8 +867,6 @@ public data class Tagged(val id: Long, val marker: Marker) {
  */
 public data class Unsigned(val byte: Int, val short: Int, val int: Long, val long: ULong, val maybeLong: ULong?) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             byte: Int,
@@ -1072,11 +1024,12 @@ public fun interface LookupCallback {
     public fun run(lookup: Lookup)
 }
 
-public fun interface LookupCallbackRaw {
+internal fun interface LookupCallbackRaw {
     public fun run(tag: Int, found_v0: Long, failed_v0: String?)
 }
 
-public fun LookupCallback.asRaw(): LookupCallbackRaw =
+@JvmSynthetic
+internal fun LookupCallback.asRaw(): LookupCallbackRaw =
     LookupCallbackRaw {
         tag,
         found_v0,
@@ -1093,7 +1046,7 @@ public fun interface ProbeCallback {
     public fun run(seq: Long, outcome: Lookup?)
 }
 
-public fun interface ProbeCallbackRaw {
+internal fun interface ProbeCallbackRaw {
     public fun run(
         seq: Long,
         outcome__tag: Int?,
@@ -1102,7 +1055,8 @@ public fun interface ProbeCallbackRaw {
     )
 }
 
-public fun ProbeCallback.asRaw(): ProbeCallbackRaw =
+@JvmSynthetic
+internal fun ProbeCallback.asRaw(): ProbeCallbackRaw =
     ProbeCallbackRaw {
         seq,
         outcome__tag,
@@ -1120,7 +1074,7 @@ public fun interface ReadingCallback {
     public fun run(reading: Reading)
 }
 
-public fun interface ReadingCallbackRaw {
+internal fun interface ReadingCallbackRaw {
     public fun run(
         tag: Int,
         exact_v0: Long,
@@ -1132,7 +1086,8 @@ public fun interface ReadingCallbackRaw {
     )
 }
 
-public fun ReadingCallback.asRaw(): ReadingCallbackRaw =
+@JvmSynthetic
+internal fun ReadingCallback.asRaw(): ReadingCallbackRaw =
     ReadingCallbackRaw {
         tag,
         exact_v0,
@@ -1158,7 +1113,7 @@ public fun interface ReportCallback {
     )
 }
 
-public fun interface ReportCallbackRaw {
+internal fun interface ReportCallbackRaw {
     public fun run(
         summary__count: Long,
         summary__total: Double,
@@ -1172,7 +1127,8 @@ public fun interface ReportCallbackRaw {
     )
 }
 
-public fun ReportCallback.asRaw(): ReportCallbackRaw =
+@JvmSynthetic
+internal fun ReportCallback.asRaw(): ReportCallbackRaw =
     ReportCallbackRaw {
         summary__count,
         summary__total,
@@ -1213,14 +1169,14 @@ public fun interface BlobValueBuilder<out R> {
 internal val __BlobValueBuilder: BlobValueBuilder<BlobValue> =
 BlobValueBuilder { stamp__secs, stamp__nanos, id, chunks -> BlobValue.fromParts(stamp__secs, stamp__nanos, id, chunks) }
 
-public fun interface DurationBoundaryBuilderRaw<out R> {
+internal fun interface DurationBoundaryBuilderRaw<out R> {
     public fun run(required: Long, delay: Long): R
 }
 
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
 DurationBoundaryBuilderRaw { required, delay -> DurationBoundary.fromParts(required, delay) }
 
-public fun interface HoldBuilderRaw<out R> {
+internal fun interface HoldBuilderRaw<out R> {
     public fun run(tag: Int, for_v0: Long): R
 }
 
@@ -1229,7 +1185,7 @@ HoldBuilderRaw { tag, for_v0 ->
     when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
 }
 
-public fun interface LookupBuilderRaw<out R> {
+internal fun interface LookupBuilderRaw<out R> {
     public fun run(tag: Int, found_v0: Long, failed_v0: String?): R
 }
 
@@ -1256,7 +1212,7 @@ public fun interface ProbeBuilder<out R> {
     ): R
 }
 
-public fun interface ProbeBuilderRaw<out R> {
+internal fun interface ProbeBuilderRaw<out R> {
     public fun run(
         seq: Long,
         outcome__tag: Int?,
@@ -1265,7 +1221,8 @@ public fun interface ProbeBuilderRaw<out R> {
     ): R
 }
 
-public fun <R> ProbeBuilder<R>.asRaw(): ProbeBuilderRaw<R> =
+@JvmSynthetic
+internal fun <R> ProbeBuilder<R>.asRaw(): ProbeBuilderRaw<R> =
     ProbeBuilderRaw<R> {
         seq,
         outcome__tag,
@@ -1300,11 +1257,12 @@ public fun interface SpanHolderBuilder<out R> {
     public fun run(spanHolderSpan__required: ULong?, spanHolderSpan__delay: ULong?): R
 }
 
-public fun interface SpanHolderBuilderRaw<out R> {
+internal fun interface SpanHolderBuilderRaw<out R> {
     public fun run(spanHolderSpan__required: Long?, spanHolderSpan__delay: Long?): R
 }
 
-public fun <R> SpanHolderBuilder<R>.asRaw(): SpanHolderBuilderRaw<R> =
+@JvmSynthetic
+internal fun <R> SpanHolderBuilder<R>.asRaw(): SpanHolderBuilderRaw<R> =
     SpanHolderBuilderRaw<R> {
         spanHolderSpan__required,
         spanHolderSpan__delay ->
@@ -1321,14 +1279,14 @@ public fun interface StampBuilder<out R> {
 internal val __StampBuilder: StampBuilder<Stamp> =
 StampBuilder { secs, nanos -> Stamp.fromParts(secs, nanos) }
 
-public fun interface UnsignedBuilderRaw<out R> {
+internal fun interface UnsignedBuilderRaw<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: Long, maybeLong: Long?): R
 }
 
 internal val __UnsignedBuilderRaw: UnsignedBuilderRaw<Unsigned> =
 UnsignedBuilderRaw { byte, short, int, long, maybeLong -> Unsigned.fromParts(byte, short, int, long, maybeLong) }
 
-public fun interface ReadingFolderRaw<A> {
+internal fun interface ReadingFolderRaw<A> {
     public fun run(
         acc: A,
         tag: Int,
@@ -1342,16 +1300,18 @@ public fun interface ReadingFolderRaw<A> {
 }
 
 internal object __ReadingFolderRawHolder {
+    @JvmSynthetic
     @JvmField
     val instance: ReadingFolderRaw<ArrayList<Reading>> =
     ReadingFolderRaw { acc, tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0 -> acc.add(when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }); acc }
 }
 
-public fun interface StampFolderRaw<A> {
+internal fun interface StampFolderRaw<A> {
     public fun run(acc: A, secs: Long, nanos: Long): A
 }
 
 internal object __StampFolderRawHolder {
+    @JvmSynthetic
     @JvmField
     val instance: StampFolderRaw<ArrayList<Stamp>> =
     StampFolderRaw { acc, secs, nanos -> acc.add(Stamp.fromParts(secs, nanos)); acc }

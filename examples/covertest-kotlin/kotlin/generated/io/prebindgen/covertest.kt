@@ -286,8 +286,6 @@ public data class Payload(override val id: Long, override val seq: Int, override
     }
 
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             id: Long,
@@ -315,8 +313,6 @@ public data class Payload(override val id: Long, override val seq: Int, override
  */
 public data class WrappedFields(val id: Long, val boxed: Long?, val plain: Long?, val boxedEnum: Priority, val plainEnum: Priority) {
     public companion object {
-        @JvmSynthetic
-        @io.prebindgen.covertest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
             id: Long,
@@ -504,11 +500,12 @@ public fun interface PayloadCallback {
     public fun run(payload: Payload)
 }
 
-public fun interface PayloadCallbackRaw {
+internal fun interface PayloadCallbackRaw {
     public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?)
 }
 
-public fun PayloadCallback.asRaw(): PayloadCallbackRaw =
+@JvmSynthetic
+internal fun PayloadCallback.asRaw(): PayloadCallbackRaw =
     PayloadCallbackRaw {
         id,
         seq,
@@ -528,11 +525,12 @@ public fun interface DurationCallback {
     public fun run(duration: ULong)
 }
 
-public fun interface DurationCallbackRaw {
+internal fun interface DurationCallbackRaw {
     public fun run(duration: Long)
 }
 
-public fun DurationCallback.asRaw(): DurationCallbackRaw =
+@JvmSynthetic
+internal fun DurationCallback.asRaw(): DurationCallbackRaw =
     DurationCallbackRaw {
         duration ->
         run(
@@ -559,7 +557,7 @@ public fun interface LedgerCallback {
     )
 }
 
-public fun interface LedgerCallbackRaw {
+internal fun interface LedgerCallbackRaw {
     public fun run(
         ledgerFiled__summary__count: Long?,
         ledgerFiled__summary__total: Double?,
@@ -582,7 +580,8 @@ public fun interface LedgerCallbackRaw {
     )
 }
 
-public fun LedgerCallback.asRaw(): LedgerCallbackRaw =
+@JvmSynthetic
+internal fun LedgerCallback.asRaw(): LedgerCallbackRaw =
     LedgerCallbackRaw {
         ledgerFiled__summary__count,
         ledgerFiled__summary__total,
@@ -634,11 +633,12 @@ public fun interface StorageCallback {
     public fun run(storage: Storage)
 }
 
-public fun interface StorageCallbackRaw {
+internal fun interface StorageCallbackRaw {
     public fun run(storage: Long)
 }
 
-public fun StorageCallback.asRaw(): StorageCallbackRaw =
+@JvmSynthetic
+internal fun StorageCallback.asRaw(): StorageCallbackRaw =
     StorageCallbackRaw {
         storage ->
         val __own0 = Storage.fromRawPtr(storage)
@@ -653,11 +653,12 @@ public fun interface u64Callback {
     public fun run(u64: ULong)
 }
 
-public fun interface u64CallbackRaw {
+internal fun interface u64CallbackRaw {
     public fun run(u64: Long)
 }
 
-public fun u64Callback.asRaw(): u64CallbackRaw =
+@JvmSynthetic
+internal fun u64Callback.asRaw(): u64CallbackRaw =
     u64CallbackRaw {
         u64 ->
         run(
@@ -688,7 +689,7 @@ public fun interface LedgerBuilder<out R> {
     ): R
 }
 
-public fun interface LedgerBuilderRaw<out R> {
+internal fun interface LedgerBuilderRaw<out R> {
     public fun run(
         ledgerFiled__summary__count: Long?,
         ledgerFiled__summary__total: Double?,
@@ -711,7 +712,8 @@ public fun interface LedgerBuilderRaw<out R> {
     ): R
 }
 
-public fun <R> LedgerBuilder<R>.asRaw(): LedgerBuilderRaw<R> =
+@JvmSynthetic
+internal fun <R> LedgerBuilder<R>.asRaw(): LedgerBuilderRaw<R> =
     LedgerBuilderRaw<R> {
         ledgerFiled__summary__count,
         ledgerFiled__summary__total,
@@ -760,21 +762,23 @@ public fun interface PayloadBuilder<out R> {
 internal val __PayloadBuilder: PayloadBuilder<Payload> =
 PayloadBuilder { id, seq, value, flag, label -> Payload.fromParts(id, seq, value, flag, label) }
 
-public fun interface PayloadFolderRaw<A> {
+internal fun interface PayloadFolderRaw<A> {
     public fun run(acc: A, id: Long, seq: Int, value: Double, flag: Boolean, label: String?): A
 }
 
 internal object __PayloadFolderRawHolder {
+    @JvmSynthetic
     @JvmField
     val instance: PayloadFolderRaw<ArrayList<Payload>> =
     PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
 }
 
-public fun interface StorageFolderRaw<A> {
+internal fun interface StorageFolderRaw<A> {
     public fun run(acc: A, element: Long): A
 }
 
 internal object __StorageFolderRawHolder {
+    @JvmSynthetic
     @JvmField
     val instance: StorageFolderRaw<ArrayList<Storage>> =
     StorageFolderRaw { acc, element -> acc.add(Storage.fromRawPtr(element)); acc }
@@ -785,16 +789,18 @@ public fun interface StringFolder<A> {
 }
 
 internal object __StringFolderHolder {
+    @JvmSynthetic
     @JvmField
     val instance: StringFolder<ArrayList<String>> =
     StringFolder { acc, element -> acc.add(element); acc }
 }
 
-public fun interface u64FolderRaw<A> {
+internal fun interface u64FolderRaw<A> {
     public fun run(acc: A, element: Long): A
 }
 
 internal object __u64FolderRawHolder {
+    @JvmSynthetic
     @JvmField
     val instance: u64FolderRaw<ArrayList<ULong>> =
     u64FolderRaw { acc, element -> acc.add(element.toULong()); acc }

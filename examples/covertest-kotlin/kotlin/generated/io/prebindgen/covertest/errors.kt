@@ -63,11 +63,12 @@ public fun interface StorageErrorHandler<out R> {
     public fun run(message: String, handle: StorageError): R
 }
 
-public fun interface StorageErrorHandlerRaw<out R> {
+internal fun interface StorageErrorHandlerRaw<out R> {
     public fun run(message: String, handle: Long): R
 }
 
-public fun <R> StorageErrorHandler<R>.asRaw(): StorageErrorHandlerRaw<R> =
+@JvmSynthetic
+internal fun <R> StorageErrorHandler<R>.asRaw(): StorageErrorHandlerRaw<R> =
     StorageErrorHandlerRaw<R> {
         message,
         handle ->

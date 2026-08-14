@@ -1933,6 +1933,31 @@ fun main() {
         }
         check(ptrAccessors.isNotEmpty())
         check(ptrAccessors.all { it.isSynthetic })
+
+        // The callback adapters. `X.asRaw()` returns the generated proxy whose
+        // `run` takes handle leaves as bare `Long`s and calls `fromRawPtr` on
+        // them inside a file that holds the blanket opt-in — so a public
+        // `asRaw` handed any caller a forged-pointer route with no opt-in of
+        // its own. They are extension functions, hence statics on the file
+        // facade class.
+        val facades = listOf("io.prebindgen.covertest.CovertestKt", "io.prebindgen.covertest.model.ModelKt")
+            .mapNotNull { runCatching { Class.forName(it) }.getOrNull() }
+        // `$lambda$N` bodies share the prefix and are `private`, so javac
+        // cannot resolve them either way; the adapters themselves are what
+        // must carry the flag.
+        val asRaws = facades.flatMap { it.declaredMethods.toList() }
+            .filter { it.name.startsWith("asRaw") && !java.lang.reflect.Modifier.isPrivate(it.modifiers) }
+        check(asRaws.isNotEmpty()) { "no asRaw adapters found to check" }
+        check(asRaws.all { it.isSynthetic }) {
+            "Java-callable asRaw in " + asRaws.filterNot { it.isSynthetic }.map { it.declaringClass.name }
+        }
+        // The hoisted folder singletons are the same route without the
+        // extension: `internal object` is a public JVM class and `@JvmField` a
+        // public static, so `__StorageFolderRawHolder.instance.run(list,
+        // 0xdeadbeefL)` would mint a handle from an invented pointer.
+        val holder = Class.forName("io.prebindgen.covertest.__StorageFolderRawHolder")
+        val instance = holder.getDeclaredField("instance")
+        check(instance.isSynthetic) { "__StorageFolderRawHolder.instance is Java-readable" }
     }
 
     println("PASS - $sectionCount sections, every JniGen feature exercised")
