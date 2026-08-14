@@ -38,7 +38,7 @@
 //!
 use std::{
     collections::HashMap,
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
@@ -152,6 +152,35 @@ type SharedCaptureState = Arc<Mutex<CaptureState>>;
 /// threads, but unrelated groups do not need to block one another.
 static CAPTURE_STATES: OnceLock<Mutex<HashMap<PathBuf, SharedCaptureState>>> = OnceLock::new();
 
+/// Options that describe how the compiled tests are *run*, or how diagnostics
+/// are *rendered*, and take a value (`--opt value` or `--opt=value`).
+///
+/// None of them changes what is compiled, and Cargo varies them from one
+/// invocation to the next: `cargo test --doc <filter>` forwards the filter (and
+/// everything after `--`) to rustdoc as `--test-args`. Feeding them to the
+/// fallback id would mint a fresh capture file per invocation — exactly the
+/// leak this is fixing (#201).
+///
+/// The list is deliberately a deny-list of provably run-time-only options
+/// rather than an allow-list of compile-identifying ones: dropping an
+/// argument that *does* identify a unit would let two distinct units share one
+/// capture file and reset each other's records, which loses items silently.
+/// Everything not listed here is kept, so an unknown option can only ever cost
+/// an extra file, never a lost record.
+const RUNTIME_ONLY_VALUE_OPTIONS: &[&str] = &[
+    "--test-args",
+    "--test-run-directory",
+    "--runtool",
+    "--runtool-arg",
+    "--color",
+    "--error-format",
+    "--json",
+    "--diagnostic-width",
+];
+
+/// Run-time-only options that take no value; see [`RUNTIME_ONLY_VALUE_OPTIONS`].
+const RUNTIME_ONLY_FLAGS: &[&str] = &["--nocapture"];
+
 /// Identify the compilation unit this expansion belongs to.
 ///
 /// `build.rs` clears the prebindgen directory, but only when Cargo re-runs the
@@ -160,39 +189,107 @@ static CAPTURE_STATES: OnceLock<Mutex<HashMap<PathBuf, SharedCaptureState>>> = O
 /// therefore leave one stale JSONL file behind per rustc invocation, forever
 /// (#201). The id has to be stable across rebuilds of the same unit (so the
 /// file is overwritten) yet differ between units built concurrently, e.g. lib
-/// vs. test: rustc's own `-C metadata` hash is exactly that. rustdoc, which
-/// compiles doctests without `-C metadata`, gets a hash of its command line
-/// instead — equally stable per unit.
+/// vs. test: rustc's own `-C metadata` is exactly that. rustdoc, which compiles
+/// doctests without `-C metadata`, gets a hash of the compile-identifying part
+/// of its command line instead — equally stable per unit.
+///
+/// Both halves err towards *more* ids: an id that is finer than the unit only
+/// leaves a stale file behind, while an id shared by two units would let one
+/// unit reset the other's capture and silently drop its items.
 fn unit_id() -> &'static str {
     static UNIT_ID: OnceLock<String> = OnceLock::new();
     UNIT_ID.get_or_init(|| unit_id_from_args(&std::env::args_os().collect::<Vec<_>>()))
 }
 
 fn unit_id_from_args(args: &[OsString]) -> String {
-    // rustc accepts both short/long and joined/separate codegen options. Use
-    // the last occurrence, matching how repeated compiler options are applied.
-    if let Some(metadata) = args
-        .iter()
-        .enumerate()
-        .filter_map(|(index, arg)| {
-            let arg = arg.to_str()?;
-            match arg {
-                "-C" | "--codegen" => args.get(index + 1)?.to_str()?.strip_prefix("metadata="),
-                _ => arg
-                    .strip_prefix("-C")
-                    .and_then(|arg| arg.strip_prefix("metadata="))
-                    .or_else(|| arg.strip_prefix("--codegen=metadata=")),
-            }
-        })
-        .rfind(|metadata| !metadata.is_empty())
-    {
-        // rustc accepts arbitrary strings here, including slashes and backslashes.
-        // Hash the value before using it as a path component so a caller's
-        // metadata cannot introduce directories or platform-specific names.
-        return hash_unit_id(metadata);
+    let mut metadata = metadata_components(args);
+    // rustc sorts the list before folding it into the crate id, so argument
+    // order alone does not make a different unit.
+    metadata.sort_unstable();
+    if !metadata.is_empty() {
+        // rustc accepts arbitrary strings here, including slashes and
+        // backslashes. Hash the components before using them as a path
+        // component so a caller's metadata cannot introduce directories or
+        // platform-specific names.
+        return hash_unit_id(metadata.as_slice());
     }
 
-    hash_unit_id(args)
+    hash_unit_id(compile_identifying_args(args).as_slice())
+}
+
+/// Collect every `-C metadata` component.
+///
+/// rustc declares this option as `metadata: Vec<String>` parsed by `parse_list`,
+/// so repeated occurrences **accumulate** (they are not last-value-wins) and each
+/// occurrence contributes its whitespace-separated words; `StableCrateId::new`
+/// then sorts them. `-Cmetadata=a b`, `-Cmetadata=a -Cmetadata=b` and
+/// `-C metadata=b --codegen=metadata=a` therefore all describe the same unit,
+/// while `-Cmetadata=b` alone describes a different one, and an empty value
+/// contributes nothing. Verified on rustc 1.85.0 and 1.97.1 by comparing the
+/// symbol hash / crate disambiguator of a probe crate.
+///
+/// Hashing only the last occurrence — as this did before — would map
+/// `unit_a shared` and `unit_b shared` onto one capture file, letting one unit
+/// reset the other's records.
+fn metadata_components(args: &[OsString]) -> Vec<&str> {
+    let mut components = Vec::new();
+    let mut index = 0;
+    while index < args.len() {
+        let arg = args[index].to_str();
+        index += 1;
+        let Some(arg) = arg else { continue };
+        // rustc accepts the short and long spelling of the codegen flag, each
+        // with the value joined or in the following argument.
+        let value = match arg {
+            "-C" | "--codegen" => {
+                let value = args.get(index).and_then(|arg| arg.to_str());
+                // The next argument is this option's value whatever it holds.
+                index += 1;
+                value.and_then(|value| value.strip_prefix("metadata="))
+            }
+            _ => arg
+                .strip_prefix("-C")
+                .and_then(|arg| arg.strip_prefix("metadata="))
+                .or_else(|| arg.strip_prefix("--codegen=metadata=")),
+        };
+        if let Some(value) = value {
+            components.extend(value.split_whitespace());
+        }
+    }
+    components
+}
+
+/// The arguments that identify *what* is compiled: everything except the
+/// run-time-only options above.
+fn compile_identifying_args(args: &[OsString]) -> Vec<&OsStr> {
+    let mut kept = Vec::with_capacity(args.len());
+    let mut index = 0;
+    while index < args.len() {
+        let arg = &args[index];
+        index += 1;
+        // A non-UTF-8 argument is none of the options below, so it is kept.
+        let Some(text) = arg.to_str() else {
+            kept.push(arg.as_os_str());
+            continue;
+        };
+        if RUNTIME_ONLY_FLAGS.contains(&text) {
+            continue;
+        }
+        if RUNTIME_ONLY_VALUE_OPTIONS.contains(&text) {
+            // Drop the value carried by the following argument as well.
+            index += 1;
+            continue;
+        }
+        let joined_value = RUNTIME_ONLY_VALUE_OPTIONS.iter().any(|option| {
+            text.strip_prefix(option)
+                .is_some_and(|rest| rest.starts_with('='))
+        });
+        if joined_value {
+            continue;
+        }
+        kept.push(arg.as_os_str());
+    }
+    kept
 }
 
 fn hash_unit_id(value: &(impl Hash + ?Sized)) -> String {
@@ -510,7 +607,10 @@ mod tests {
         sync::{Arc, Barrier},
     };
 
-    use super::{hash_unit_id, unit_id_from_args, write_capture_record, Record, RecordKind};
+    use super::{
+        compile_identifying_args, hash_unit_id, unit_id_from_args, write_capture_record, Record,
+        RecordKind,
+    };
 
     fn record(name: impl Into<String>) -> Record {
         let name = name.into();
@@ -535,7 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn unit_id_accepts_rustc_codegen_spellings_hashes_and_uses_the_last() {
+    fn unit_id_accepts_every_rustc_codegen_spelling_and_hashes_the_value() {
         let args = [
             "rustc",
             "-Cmetadata=first",
@@ -545,13 +645,60 @@ mod tests {
         ]
         .map(Into::into);
         let unit_id = unit_id_from_args(&args);
-        assert_eq!(unit_id, hash_unit_id("third/path\\unit"));
+        assert_eq!(
+            unit_id,
+            hash_unit_id(&["first", "second", "third/path\\unit"][..])
+        );
         assert_eq!(unit_id.len(), 16);
         assert!(unit_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
         assert!(!unit_id.contains(['/', '\\']));
 
         let args = ["rustdoc", "--codegen", "metadata=long-form"].map(Into::into);
-        assert_eq!(unit_id_from_args(&args), hash_unit_id("long-form"));
+        assert_eq!(unit_id_from_args(&args), hash_unit_id(&["long-form"][..]));
+    }
+
+    #[test]
+    fn unit_id_hashes_every_metadata_component_not_only_the_last() {
+        // rustc's `-C metadata` is a list: every occurrence contributes to the
+        // unit, so two units sharing only their trailing component are still
+        // distinct and must not share a capture file.
+        let unit_a = ["rustc", "-Cmetadata=unit_a", "-Cmetadata=shared"].map(Into::into);
+        let unit_b = ["rustc", "-Cmetadata=unit_b", "-Cmetadata=shared"].map(Into::into);
+        assert_ne!(unit_id_from_args(&unit_a), unit_id_from_args(&unit_b));
+        assert_ne!(
+            unit_id_from_args(&unit_a),
+            unit_id_from_args(&["rustc", "-Cmetadata=shared"].map(Into::into))
+        );
+
+        // Argument order alone is not a different unit: rustc sorts the list
+        // before folding it into the crate id (verified against the symbol
+        // hashes of a probe crate on 1.85.0 and 1.97.1).
+        assert_eq!(
+            unit_id_from_args(&["rustc", "-Cmetadata=a", "-Cmetadata=b"].map(Into::into)),
+            unit_id_from_args(&["rustc", "-Cmetadata=b", "-Cmetadata=a"].map(Into::into))
+        );
+    }
+
+    #[test]
+    fn unit_id_follows_rustc_list_parsing_of_metadata() {
+        // `parse_list` splits each value on whitespace and appends it, so these
+        // spellings describe one and the same unit.
+        assert_eq!(
+            unit_id_from_args(&["rustc", "-Cmetadata=a b"].map(Into::into)),
+            unit_id_from_args(&["rustc", "-Cmetadata=a", "-Cmetadata=b"].map(Into::into))
+        );
+        // An empty value contributes no component.
+        assert_eq!(
+            unit_id_from_args(&["rustc", "-Cmetadata=first", "-Cmetadata="].map(Into::into)),
+            unit_id_from_args(&["rustc", "-Cmetadata=first"].map(Into::into))
+        );
+        // ... and on its own it leaves nothing to key the unit on, so the
+        // argument fallback takes over.
+        let only_empty = ["rustc", "-Cmetadata=", "src/lib.rs"].map(Into::into);
+        assert_eq!(
+            unit_id_from_args(&only_empty),
+            hash_unit_id(compile_identifying_args(&only_empty).as_slice())
+        );
     }
 
     #[test]
@@ -562,6 +709,58 @@ mod tests {
             unit_id_from_args(&args),
             unit_id_from_args(&["rustdoc", "src/lib.rs"].map(Into::into))
         );
+    }
+
+    #[test]
+    fn unit_id_fallback_ignores_arguments_that_only_run_the_tests() {
+        // Cargo forwards a doctest filter (and anything after `--`) as
+        // `--test-args`; rustdoc compiles the same unit either way.
+        let doctest = |extra: &[&str]| {
+            let mut args = vec![
+                "rustdoc".to_string(),
+                "--edition=2021".to_string(),
+                "--crate-type".to_string(),
+                "lib".to_string(),
+                "--crate-name".to_string(),
+                "example_flat".to_string(),
+                "--test".to_string(),
+                "examples/example-flat/src/lib.rs".to_string(),
+            ];
+            args.extend(extra.iter().map(|arg| arg.to_string()));
+            unit_id_from_args(&args.into_iter().map(Into::into).collect::<Vec<_>>())
+        };
+
+        let plain = doctest(&[]);
+        assert_eq!(plain, doctest(&["--test-args", "alpha"]));
+        assert_eq!(plain, doctest(&["--test-args", "beta"]));
+        assert_eq!(plain, doctest(&["--test-args=beta"]));
+        assert_eq!(
+            plain,
+            doctest(&["--test-args", "beta", "--test-args", "--nocapture"])
+        );
+        assert_eq!(plain, doctest(&["--nocapture"]));
+        assert_eq!(
+            plain,
+            doctest(&[
+                "--test-run-directory",
+                "examples/example-flat",
+                "--color",
+                "always",
+                "--error-format=json",
+            ])
+        );
+
+        // What is compiled still separates units.
+        assert_ne!(plain, doctest(&["--cfg", "feature=\"unstable\""]));
+        assert_ne!(
+            plain,
+            unit_id_from_args(
+                &["rustdoc", "--crate-name", "other", "--test", "src/lib.rs"].map(Into::into)
+            )
+        );
+        // An unknown option is kept: an extra file is acceptable, a lost
+        // record is not.
+        assert_ne!(plain, doctest(&["--never-heard-of-it", "value"]));
     }
 
     #[test]
