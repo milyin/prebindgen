@@ -91,9 +91,9 @@ impl WrapKind {
             Some(fqn) => {
                 let short = fqn.rsplit('.').next().unwrap_or(fqn);
                 if raw_nullable {
-                    format!("{arg}?.let {{ {short}(it) }}")
+                    format!("{arg}?.let {{ {} }}", handle_from_raw(short, "it"))
                 } else {
-                    format!("{short}({arg})")
+                    handle_from_raw(short, arg)
                 }
             }
         }

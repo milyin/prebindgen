@@ -1233,7 +1233,7 @@ fn sum_return_group_can_own_a_handle() {
         "a handle payload's group slot is the raw pointer:\n{kotlin}"
     );
     assert!(
-        kotlin.contains("1 -> Lookup.Found(Probe(found_v0))"),
+        kotlin.contains("1 -> Lookup.Found(Probe.fromRawPtr(found_v0))"),
         "the live arm wraps the pointer into its typed handle class:\n{kotlin}"
     );
 }
@@ -1333,7 +1333,7 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
         "the selector plus a raw-pointer group slot, both prefixed by the field:\n{kotlin}"
     );
     assert!(
-        kotlin.contains("Lookup.Found(Probe(outcome_found_v0))"),
+        kotlin.contains("Lookup.Found(Probe.fromRawPtr(outcome_found_v0))"),
         "the parent's fromParts inlines the `when` and wraps the pointer:\n{kotlin}"
     );
     assert!(

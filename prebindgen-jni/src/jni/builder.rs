@@ -251,15 +251,19 @@ impl Declarations {
     }
 
     /// The `@RequiresOptIn` marker guarding every generated entry point that
-    /// takes or hands out a raw native pointer — the handle constructors are
-    /// `internal` instead, but `peek()` and the `fromParts` factories are
-    /// reached by JNI reflection and so must stay `public` in bytecode. Lives
-    /// in the base package next to [`Self::jni_native_class_name`].
+    /// takes or hands out a raw native pointer. Lives in the base package next
+    /// to [`Self::jni_native_class_name`], and is referenced fully qualified
+    /// from every generated file.
     ///
-    /// `None` when no base package is configured: the marker would land in the
-    /// root package, which Kotlin cannot import from a subpackage.
-    pub(crate) fn unsafe_marker_fqn(&self) -> Option<String> {
-        (!self.package.is_empty()).then(|| format!("{}.{UNSAFE_MARKER}", self.package))
+    /// With no base package that qualification is just the short name, which
+    /// only resolves from the root package itself — Kotlin cannot import from
+    /// the root package. `write_kotlin` rejects that configuration when any
+    /// generated file would land in a subpackage.
+    pub(crate) fn unsafe_marker_fqn(&self) -> String {
+        match self.package.is_empty() {
+            true => UNSAFE_MARKER.to_string(),
+            false => format!("{}.{UNSAFE_MARKER}", self.package),
+        }
     }
 
     /// Mangle a method emitted on the centralized JNI extern harness.

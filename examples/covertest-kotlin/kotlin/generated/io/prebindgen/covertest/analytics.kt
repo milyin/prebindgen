@@ -13,7 +13,7 @@ import io.prebindgen.covertest.releaseCell
 import io.prebindgen.covertest.withSortedHandleLocks
 
 /** Typed handle for a native Zenoh `Archive`. */
-public class SummaryVault internal constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+public class SummaryVault private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -27,17 +27,22 @@ public class SummaryVault internal constructor(initialPtr: Long) : NativeHandle(
     public fun take(): SummaryVault {
         val p = ptr
         ptr = p or 1L
-        return SummaryVault(p)
+        return SummaryVault.fromRawPtr(p)
     }
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): SummaryVault = SummaryVault(initialPtr)
     }
 }
 
 /** Typed handle for a native Zenoh `Summary`. */
-public class Summary internal constructor(initialPtr: Long) : GcNativeHandle(initialPtr) {
+public class Summary private constructor(initialPtr: Long) : GcNativeHandle(initialPtr) {
     private val __cleanable = registerGcHandle(this) { freePtr(it) }
 
     @Synchronized
@@ -51,7 +56,7 @@ public class Summary internal constructor(initialPtr: Long) : GcNativeHandle(ini
     public fun take(): Summary {
         val p = releaseCell(cell)
         __cleanable?.clean()
-        return Summary(if (p != 0L) p else cell.get())
+        return Summary.fromRawPtr(if (p != 0L) p else cell.get())
     }
 
     /** Number of payloads (flatten-output **field** / **accessor**). */
@@ -103,7 +108,12 @@ public class Summary internal constructor(initialPtr: Long) : GcNativeHandle(ini
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): Summary = Summary(initialPtr)
 
         /**
          * Construct a [`Summary`] from its parts (declared a **constructor** /
@@ -113,14 +123,14 @@ public class Summary internal constructor(initialPtr: Long) : GcNativeHandle(ini
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = CovNative.summaryNew(count, total, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return Summary(__ret)
+            return Summary.fromRawPtr(__ret)
         }
 
         public fun fromMean(count: Long, mean: Double, onError: JniErrorHandler<Summary>): Summary {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = CovNative.summaryFromMean(count, mean, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return Summary(__ret)
+            return Summary.fromRawPtr(__ret)
         }
     }
 }
@@ -145,7 +155,7 @@ public fun <R> SummaryStorageSummaryFullBuilder<R>.asRaw(): SummaryStorageSummar
         run(
             count,
             total,
-            Summary(handle)
+            Summary.fromRawPtr(handle)
         )
     }
 
@@ -165,7 +175,7 @@ public fun <R> SummaryStorageSummaryProbeBuilder<R>.asRaw(): SummaryStorageSumma
         run(
             count,
             total,
-            handle?.let { Summary(it) }
+            handle?.let { Summary.fromRawPtr(it) }
         )
     }
 
@@ -293,7 +303,7 @@ public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary>): 
         CovNative.storageSummaryHandle(s_ptr, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return Summary(__ret)
+    return Summary.fromRawPtr(__ret)
 }
 
 /**
@@ -689,7 +699,7 @@ public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.archiveNew(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return SummaryVault(__ret)
+    return SummaryVault.fromRawPtr(__ret)
 }
 
 public fun archiveStore(a: SummaryVault, count: Long, total: Double, onError: JniErrorHandler<Unit>) = archiveStore(a, 0, count, total, null, onError)
@@ -750,5 +760,5 @@ public fun archiveLatest(a: SummaryVault, onError: JniErrorHandler<Summary?>): S
         CovNative.archiveLatest(a_ptr, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret.let { if (it == 0L) null else Summary(it) }
+    return __ret.let { if (it == 0L) null else Summary.fromRawPtr(it) }
 }

@@ -9,7 +9,7 @@ import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.withSortedHandleLocks
 
 /** Typed handle for a native Zenoh `StorageError`. */
-public class StorageError internal constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+public class StorageError private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -23,7 +23,7 @@ public class StorageError internal constructor(initialPtr: Long) : NativeHandle(
     public fun take(): StorageError {
         val p = ptr
         ptr = p or 1L
-        return StorageError(p)
+        return StorageError.fromRawPtr(p)
     }
 
     /**
@@ -43,7 +43,12 @@ public class StorageError internal constructor(initialPtr: Long) : NativeHandle(
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): StorageError = StorageError(initialPtr)
     }
 }
 
@@ -68,7 +73,7 @@ public fun <R> StorageErrorHandler<R>.asRaw(): StorageErrorHandlerRaw<R> =
         handle ->
         run(
             message,
-            StorageError(handle)
+            StorageError.fromRawPtr(handle)
         )
     }
 

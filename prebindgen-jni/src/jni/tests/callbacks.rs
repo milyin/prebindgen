@@ -154,7 +154,7 @@ fn callback_snapshot_kotlin_side() {
         "{all}"
     );
     assert!(
-        all.contains("funZThingCallback.asRaw():ZThingCallbackRaw=ZThingCallbackRaw{handle,name->run(ZThing(handle),name)}"),
+        all.contains("funZThingCallback.asRaw():ZThingCallbackRaw=ZThingCallbackRaw{handle,name->run(ZThing.fromRawPtr(handle),name)}"),
         "{all}"
     );
     // Plan-less ZOther arg (Phase 3): a raw twin `run(zOther: Long)` + an `asRaw`
@@ -164,7 +164,7 @@ fn callback_snapshot_kotlin_side() {
         all.contains("funinterfaceZOtherCallbackRaw{publicfunrun(zOther:Long)"),
         "{all}"
     );
-    assert!(all.contains("val__own0=ZOther(zOther)"), "{all}");
+    assert!(all.contains("val__own0=ZOther.fromRawPtr(zOther)"), "{all}");
     assert!(all.contains("finally{__own0.close()}"), "{all}");
     assert!(!all.contains("VoidCallbackRaw"), "{all}");
 

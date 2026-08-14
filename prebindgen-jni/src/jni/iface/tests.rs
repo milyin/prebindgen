@@ -33,7 +33,7 @@ fn as_raw_adapter_is_multiline_even_when_short() {
                  ThingCallbackRaw {\n        \
                  handle ->\n        \
                  run(\n            \
-                 Thing(handle)\n        \
+                 Thing.fromRawPtr(handle)\n        \
                  )\n    \
                  }"
         ),
@@ -85,11 +85,11 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
     assert!(src.contains("        sample__payload ->\n"), "{src}");
     assert!(src.contains("        run(\n"), "{src}");
     assert!(
-        src.contains("            replierZid?.let { ZenohId(it) },\n"),
+        src.contains("            replierZid?.let { ZenohId.fromRawPtr(it) },\n"),
         "{src}"
     );
     assert!(
-        src.contains("            sample__payload?.let { ZBytes(it) }\n"),
+        src.contains("            sample__payload?.let { ZBytes.fromRawPtr(it) }\n"),
         "{src}"
     );
 }

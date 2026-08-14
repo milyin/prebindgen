@@ -171,7 +171,7 @@ fn snapshot_kotlin_side() {
     assert!(cc.contains("funfromInt"), "{color}");
 
     // Typed handle subclass of NativeHandle.
-    let thing = find("class ZThing internal constructor(");
+    let thing = find("class ZThing private constructor(");
     let thingc: String = thing.split_whitespace().collect();
     assert!(thingc.contains(":NativeHandle"), "{thing}");
     // close()/take() mark the handle closed by setting the tag bit — the
@@ -208,17 +208,27 @@ fn snapshot_kotlin_side() {
     );
 }
 
-/// #37: no raw native pointer crosses into a consumer's hands unguarded.
+/// #37: no raw native pointer crosses into a consumer's hands unguarded —
+/// from Kotlin **or** from Java.
 ///
-/// Three entry points used to take or hand out a `Long` that generated native
-/// code then dereferences. Each is closed by the strongest guard it can carry
-/// without breaking the Rust side, which reaches two of them by JNI reflection:
+/// `internal` and `@RequiresOptIn` both stop at the Kotlin compiler: an
+/// `internal` member is a public JVM member under a mangled name, and javac
+/// does not know what an opt-in requirement is. So every raw-pointer entry
+/// point carries `@JvmSynthetic` (invisible to javac, invisible to nothing
+/// else — JNI resolves on the name, which it leaves alone) and, where it must
+/// stay callable from generated Kotlin, the opt-in marker as well:
 ///
-/// * handle constructors — `internal`, so no opt-in can reach them at all;
-/// * `NativeHandle.peek()` and the `fromParts` factories — `public` in
-///   bytecode (`call_method` / `call_static_method` would not find a mangled
-///   `internal` name) but marked `@RequiresOptIn`, which is source-level only;
-/// * `JNINative` — already `internal`, asserted here so it stays that way.
+/// * handle constructors — `private`, behind an `internal` + synthetic
+///   `fromRawPtr`. `@JvmSynthetic` is not applicable to a constructor, and
+///   `internal` alone left `new ZThing(0xdeadbeefL)` compiling from Java;
+/// * `NativeHandle.peek()` and the `fromParts` factories — reached from Rust
+///   by `call_method` / `call_static_method`, so the name must survive:
+///   synthetic + marked;
+/// * every `external fun` on `JNINative`, and each class's static `freePtr` —
+///   `internal object` is a *public* JVM class, so these were callable
+///   directly, handles bypassed entirely;
+/// * `ptr`, `markConsumed`, and the other internal members — a Java caller
+///   could otherwise repoint a live handle before letting it close.
 ///
 /// Generated code opts itself in per file; that blanket is what a consumer
 /// does not get.
@@ -253,34 +263,93 @@ fn raw_pointer_entry_points_are_guarded() {
         );
     }
 
-    // Constructors: `internal`, base classes included, so a consumer can
-    // neither mint a handle nor subclass one around a forged pointer.
+    // Constructors: the concrete handle is `private`, reachable only through
+    // the synthetic factory. `internal` here would still be a public JVM
+    // constructor — that was the Java hole.
+    assert!(
+        c.contains("classZThingprivateconstructor(initialPtr:Long)"),
+        "{all}"
+    );
+    assert!(!c.contains("classZThing(initialPtr:Long)"), "{all}");
+    assert!(
+        c.contains("@JvmSyntheticinternalfunfromRawPtr(initialPtr:Long):ZThing"),
+        "{all}"
+    );
+    // The base stays `internal` (subclasses need `super`), which is inert: no
+    // generated signature accepts a foreign subclass, and nothing it could
+    // reach from Java is left visible.
     assert!(
         c.contains("abstractclassNativeHandleinternalconstructor(initialPtr:Long)"),
         "{all}"
     );
-    assert!(
-        c.contains("classZThinginternalconstructor(initialPtr:Long)"),
-        "{all}"
-    );
-    assert!(!c.contains("classZThing(initialPtr:Long)"), "{all}");
 
-    // peek() and fromParts: public, marked.
+    // peek() and fromParts keep their names for JNI, and carry both guards.
     assert!(
-        c.contains("@io.test.jni.UnsafeNativeApipublicfunpeek():Long"),
+        c.contains("@JvmSynthetic@io.test.jni.UnsafeNativeApipublicfunpeek():Long"),
         "{all}"
     );
     for occurrence in all.match_indices("fun fromParts") {
         let head = &all[..occurrence.0];
+        let marked = head
+            .rfind("@io.test.jni.UnsafeNativeApi")
+            .is_some_and(|m| !head[m..].contains("fun "));
+        let synthetic = head
+            .rfind("@JvmSynthetic")
+            .is_some_and(|m| !head[m..].contains("fun "));
+        assert!(marked && synthetic, "an unguarded `fromParts`:\n{all}");
+    }
+
+    // The extern surface: `internal object` is public on the JVM, so every
+    // member needs the flag, not just the object.
+    assert!(c.contains("internalobjectJNINative"), "{all}");
+    for occurrence in all.match_indices("external fun") {
+        let head = &all[..occurrence.0];
         assert!(
-            head.rfind("@io.test.jni.UnsafeNativeApi")
+            head.rfind("@JvmSynthetic")
                 .is_some_and(|m| !head[m..].contains("fun ")),
-            "an unmarked `fromParts` factory:\n{all}"
+            "an `external fun` reachable from Java:\n{all}"
         );
     }
 
-    // The raw extern surface stays module-private.
-    assert!(c.contains("internalobjectJNINative"), "{all}");
+    // Internal state a Java caller could otherwise use to repoint a live
+    // handle: accessors hidden, not just the Kotlin-side visibility.
+    assert!(
+        c.contains("@get:JvmSynthetic@set:JvmSynthetic@Volatileinternalopenvarptr:Long"),
+        "{all}"
+    );
+    assert!(
+        c.contains("@JvmSyntheticinternalopenfunmarkConsumed()"),
+        "{all}"
+    );
+}
+
+/// The opt-in marker lives in the base package and every generated file names
+/// it fully qualified. With no base package it lands in the root package,
+/// which Kotlin cannot import from a subpackage — so a subpackage file could
+/// not opt in, and the raw-pointer entry points would be unguarded by default.
+/// That configuration is refused rather than silently degraded.
+#[test]
+#[should_panic(expected = "no base package is configured")]
+fn a_subpackage_without_a_base_package_is_refused() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![(
+        syn::Item::Fn(
+            syn::parse_str("pub fn z_thing_new() -> ZThing { unimplemented!() }").unwrap(),
+        ),
+        loc,
+    )];
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).expect("index");
+    // No `set_package_prefix`, but the declarations name a subpackage.
+    let jni = JniGenBuilder::new().package(
+        crate::package!("thing")
+            .class(crate::ptr_class!(ZThing))
+            .fun(prebindgen_registry::fun!(z_thing_new)),
+    );
+    let dir = unique_test_dir("jnigen_no_base_package");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let _ = gen.write_kotlin(&dir.join("kotlin"));
 }
 
 /// Generated onError handler interfaces carry the split-channel contract KDoc:

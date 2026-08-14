@@ -1901,5 +1901,39 @@ fun main() {
         p.close()
     }
 
+    // ── The raw-pointer surface is closed to Java (#37) ──────────────────────
+    section("raw-pointer surface is invisible to javac (bytecode check)") {
+        // `internal` and `@RequiresOptIn` are Kotlin-source constructs: the
+        // JVM sees a public member under a mangled name, and javac enforces
+        // no opt-in. What actually stops a Java caller is `private` (for the
+        // constructors, which `@JvmSynthetic` cannot target) and
+        // ACC_SYNTHETIC, which javac skips during resolution. Assert the
+        // flags on the emitted bytecode rather than trusting the source.
+        fun ctorsHidden(c: Class<*>) = c.declaredConstructors.all {
+            java.lang.reflect.Modifier.isPrivate(it.modifiers) || it.isSynthetic
+        }
+        for (c in listOf(Storage::class.java, Summary::class.java, Esc_Probe::class.java)) {
+            check(ctorsHidden(c)) { "${'$'}{c.name} has a Java-callable constructor" }
+        }
+        // peek() keeps its name — Rust calls it through JNI — but not its
+        // visibility to javac.
+        check(NativeHandle::class.java.getDeclaredMethod("peek").isSynthetic)
+        // Every extern, and the per-class static free. `internal object` is a
+        // public JVM class, so the object's own visibility guards nothing.
+        val externs = CovNative::class.java.declaredMethods.filter { java.lang.reflect.Modifier.isNative(it.modifiers) }
+        check(externs.isNotEmpty())
+        check(externs.all { it.isSynthetic }) {
+            "Java-callable externs: ${'$'}{externs.filterNot { it.isSynthetic }.map { it.name }}"
+        }
+        check(Storage::class.java.declaredMethods.filter { java.lang.reflect.Modifier.isNative(it.modifiers) }.all { it.isSynthetic })
+        // Mutable pointer state: a visible setter would let a caller repoint a
+        // live handle and have the next generated call free that address.
+        val ptrAccessors = NativeHandle::class.java.declaredMethods.filter {
+            it.name.startsWith("getPtr") || it.name.startsWith("setPtr")
+        }
+        check(ptrAccessors.isNotEmpty())
+        check(ptrAccessors.all { it.isSynthetic })
+    }
+
     println("PASS - $sectionCount sections, every JniGen feature exercised")
 }

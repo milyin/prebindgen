@@ -11,9 +11,11 @@ import java.util.concurrent.atomic.AtomicLong
 // anything else — a literal, a stale value, a pointer belonging to another
 // handle — is undefined behaviour reached from safe Kotlin.
 //
-// Handle constructors carry no marker: they are `internal`, so no opt-in
-// reaches them at all. What is left marked here is what the Rust side looks
-// up by JNI reflection and therefore cannot be hidden.
+// This is the Kotlin half of the guard. The other half is `@JvmSynthetic`,
+// which hides the same members from Java — `internal` does not: it is a
+// Kotlin-only boundary that the JVM sees as public under a mangled name.
+// Handle constructors carry no marker at all: they are `private`, reachable
+// only through a synthetic factory.
 @RequiresOptIn(message = "Raw native pointer: valid only if a generated native call produced it. Opting in means you guarantee that.", level = RequiresOptIn.Level.ERROR)
 @Retention(AnnotationRetention.BINARY)
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)
@@ -37,13 +39,14 @@ public annotation class UnsafeNativeApi
  * the release after the handle object itself is unreachable.
  */
 public abstract class NativeHandle internal constructor(initialPtr: Long) : AutoCloseable {
-    @Volatile internal open var ptr: Long = initialPtr
+    @get:JvmSynthetic @set:JvmSynthetic @Volatile internal open var ptr: Long = initialPtr
 
     /**
      * Mark this handle consumed by value — the native side now owns
      * (and frees) the box; only the closed tag is recorded here. A
      * GC-managed handle also settles its release ticket.
      */
+    @JvmSynthetic
     internal open fun markConsumed() {
         ptr = ptr or 1L
     }
@@ -57,6 +60,7 @@ public abstract class NativeHandle internal constructor(initialPtr: Long) : Auto
      * undefined behaviour. Public because the Rust side reads it
      * by JNI reflection.
      */
+    @JvmSynthetic
     @io.prebindgen.perftest.UnsafeNativeApi
     public fun peek(): Long {
         val p = ptr
@@ -84,12 +88,13 @@ public abstract class NativeHandle internal constructor(initialPtr: Long) : Auto
  * stack.
  */
 public abstract class GcNativeHandle internal constructor(initialPtr: Long) : NativeHandle(initialPtr) {
-    internal val cell: AtomicLong = AtomicLong(initialPtr)
+    @get:JvmSynthetic internal val cell: AtomicLong = AtomicLong(initialPtr)
 
-    internal final override var ptr: Long
+    @get:JvmSynthetic @set:JvmSynthetic internal final override var ptr: Long
         get() = cell.get()
         set(v) { cell.set(v) }
 
+    @JvmSynthetic
     internal final override fun markConsumed() {
         releaseCell(cell)
     }
@@ -101,6 +106,7 @@ public abstract class GcNativeHandle internal constructor(initialPtr: Long) : Na
  * release, else `0` (empty or already tagged — someone else settled
  * it).
  */
+@JvmSynthetic
 internal fun releaseCell(cell: AtomicLong): Long {
     while (true) {
         val v = cell.get()
@@ -119,6 +125,7 @@ internal object NativeCleaner {
  * the class's `freePtr` (never the handle — that would keep it
  * reachable forever). Returns `null` for a handle born closed.
  */
+@JvmSynthetic
 internal fun registerGcHandle(handle: GcNativeHandle, free: (raw: Long) -> Unit): Cleanable? {
     if (handle.isClosed()) return null
     val c = handle.cell
@@ -135,6 +142,7 @@ internal fun registerGcHandle(handle: GcNativeHandle, free: (raw: Long) -> Unit)
  * their tagged pointers are rejected by the Rust-side converter guard
  * inside the native call. Scales to any arity.
  */
+@JvmSynthetic
 internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> R): R {
     val sorted = handles.sortedBy { it.ptr and -2L }
     fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }
@@ -142,9 +150,11 @@ internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> 
 }
 
 /** Allocation-free single-handle lock (one monitor, nothing to order). */
+@JvmSynthetic
 internal inline fun <R> withSortedHandleLocks(a: NativeHandle, body: () -> R): R = synchronized(a) { body() }
 
 /** Allocation-free two-handle lock: order by masked address then nest monitors. */
+@JvmSynthetic
 internal inline fun <R> withSortedHandleLocks(a: NativeHandle, b: NativeHandle, body: () -> R): R {
     val first: NativeHandle
     val second: NativeHandle
@@ -153,6 +163,7 @@ internal inline fun <R> withSortedHandleLocks(a: NativeHandle, b: NativeHandle, 
 }
 
 /** Allocation-free three-handle lock: 3-compare sorting network, then nest. */
+@JvmSynthetic
 internal inline fun <R> withSortedHandleLocks(
     a: NativeHandle,
     b: NativeHandle,
@@ -170,6 +181,7 @@ internal inline fun <R> withSortedHandleLocks(
 
 public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectBoundary8) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
@@ -195,6 +207,7 @@ public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectB
 
 public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: ObjectBoundaryLeaf) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(left_value: Long, right_value: Long): ObjectBoundary2 = ObjectBoundary2(ObjectBoundaryLeaf.fromParts(left_value), ObjectBoundaryLeaf.fromParts(right_value))
@@ -203,6 +216,7 @@ public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: Objec
 
 public data class ObjectBoundary32(val left: ObjectBoundary16, val right: ObjectBoundary16) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
@@ -244,6 +258,7 @@ public data class ObjectBoundary32(val left: ObjectBoundary16, val right: Object
 
 public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBoundary2) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
@@ -257,6 +272,7 @@ public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBo
 
 public data class ObjectBoundary64(val left: ObjectBoundary32, val right: ObjectBoundary32) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
@@ -334,6 +350,7 @@ public data class ObjectBoundary64(val left: ObjectBoundary32, val right: Object
  */
 public data class ObjectBoundary64Object(val left: ObjectBoundary32, val right: ObjectBoundary32) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
@@ -407,6 +424,7 @@ public data class ObjectBoundary64Object(val left: ObjectBoundary32, val right: 
 
 public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBoundary4) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
@@ -425,6 +443,7 @@ public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBo
 /** One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree. */
 public data class ObjectBoundaryLeaf(val value: Long) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
@@ -439,6 +458,7 @@ public data class ObjectBoundaryLeaf(val value: Long) {
  */
 public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
     public companion object {
+        @JvmSynthetic
         @io.prebindgen.perftest.UnsafeNativeApi
         @JvmStatic
         public fun fromParts(
@@ -452,7 +472,7 @@ public data class Payload(val id: Long, val seq: Int, val value: Double, val fla
 }
 
 /** Typed handle for a native Zenoh `PayloadHandler`. */
-public class PayloadHandler internal constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+public class PayloadHandler private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -466,17 +486,22 @@ public class PayloadHandler internal constructor(initialPtr: Long) : NativeHandl
     public fun take(): PayloadHandler {
         val p = ptr
         ptr = p or 1L
-        return PayloadHandler(p)
+        return PayloadHandler.fromRawPtr(p)
     }
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): PayloadHandler = PayloadHandler(initialPtr)
     }
 }
 
 /** Typed handle for a native Zenoh `PayloadVecHandler`. */
-public class PayloadVecHandler internal constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+public class PayloadVecHandler private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -490,17 +515,22 @@ public class PayloadVecHandler internal constructor(initialPtr: Long) : NativeHa
     public fun take(): PayloadVecHandler {
         val p = ptr
         ptr = p or 1L
-        return PayloadVecHandler(p)
+        return PayloadVecHandler.fromRawPtr(p)
     }
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): PayloadVecHandler = PayloadVecHandler(initialPtr)
     }
 }
 
 /** Typed handle for a native Zenoh `Storage`. */
-public class Storage internal constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+public class Storage private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -514,17 +544,22 @@ public class Storage internal constructor(initialPtr: Long) : NativeHandle(initi
     public fun take(): Storage {
         val p = ptr
         ptr = p or 1L
-        return Storage(p)
+        return Storage.fromRawPtr(p)
     }
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): Storage = Storage(initialPtr)
     }
 }
 
 /** Typed handle for a native Zenoh `Token`. */
-public class Token internal constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+public class Token private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -538,7 +573,7 @@ public class Token internal constructor(initialPtr: Long) : NativeHandle(initial
     public fun take(): Token {
         val p = ptr
         ptr = p or 1L
-        return Token(p)
+        return Token.fromRawPtr(p)
     }
 
     /** Read a plain benchmark token. */
@@ -555,20 +590,25 @@ public class Token internal constructor(initialPtr: Long) : NativeHandle(initial
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): Token = Token(initialPtr)
 
         /** Create a plain benchmark token. */
         public fun tokenNew(value: Long, onError: JniErrorHandler<Token>): Token {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = JNINative.tokenNew(value, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return Token(__ret)
+            return Token.fromRawPtr(__ret)
         }
     }
 }
 
 /** Typed handle for a native Zenoh `TokenGc`. */
-public class TokenGc internal constructor(initialPtr: Long) : GcNativeHandle(initialPtr) {
+public class TokenGc private constructor(initialPtr: Long) : GcNativeHandle(initialPtr) {
     private val __cleanable = registerGcHandle(this) { freePtr(it) }
 
     @Synchronized
@@ -582,7 +622,7 @@ public class TokenGc internal constructor(initialPtr: Long) : GcNativeHandle(ini
     public fun take(): TokenGc {
         val p = releaseCell(cell)
         __cleanable?.clean()
-        return TokenGc(if (p != 0L) p else cell.get())
+        return TokenGc.fromRawPtr(if (p != 0L) p else cell.get())
     }
 
     /** Read a gc-managed benchmark token. */
@@ -599,14 +639,19 @@ public class TokenGc internal constructor(initialPtr: Long) : GcNativeHandle(ini
 
     public companion object {
         @JvmStatic
+        @JvmSynthetic
         external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): TokenGc = TokenGc(initialPtr)
 
         /** Create a gc-managed benchmark token. */
         public fun tokenGcNew(value: Long, onError: JniErrorHandler<TokenGc>): TokenGc {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = JNINative.tokenGcNew(value, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return TokenGc(__ret)
+            return TokenGc.fromRawPtr(__ret)
         }
     }
 }
@@ -765,6 +810,7 @@ internal object JNINative {
         io.prebindgen.perftest.NativeLibrary.ensureLoaded()
     }
 
+    @JvmSynthetic
     external fun largeFlatInputSum(
         valueLeftLeftLeftLeftLeftLeftValue: Long,
         valueLeftLeftLeftLeftLeftRightValue: Long,
@@ -833,22 +879,31 @@ internal object JNINative {
         errorSink: Any,
     ): Long
 
+    @JvmSynthetic
     external fun largeObjectInputSum(value: ObjectBoundary64Object, errorSink: Any): Long
 
+    @JvmSynthetic
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
 
+    @JvmSynthetic
     external fun payloadVecHandlerNew(f: Any, errorSink: Any): Long
 
+    @JvmSynthetic
     external fun storageCallback(s: Long, handler: Long, errorSink: Any)
 
+    @JvmSynthetic
     external fun storageCallbackVec(s: Long, handler: Long, errorSink: Any)
 
+    @JvmSynthetic
     external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
 
+    @JvmSynthetic
     external fun storageGetVec(s: Long, acc: Any?, fold: Any, errorSink: Any): Any?
 
+    @JvmSynthetic
     external fun storageNew(errorSink: Any): Long
 
+    @JvmSynthetic
     external fun storagePutByRead(
         s: Long,
         payloadId: Long,
@@ -859,6 +914,7 @@ internal object JNINative {
         errorSink: Any,
     )
 
+    @JvmSynthetic
     external fun storagePutByTake(
         s: Long,
         payloadId: Long,
@@ -869,18 +925,25 @@ internal object JNINative {
         errorSink: Any,
     )
 
+    @JvmSynthetic
     external fun storagePutSlice(s: Long, payloads: Long, errorSink: Any)
 
+    @JvmSynthetic
     external fun tokenGcNew(value: Long, errorSink: Any): Long
 
+    @JvmSynthetic
     external fun tokenGcValue(t: Long, errorSink: Any): Long
 
+    @JvmSynthetic
     external fun tokenNew(value: Long, errorSink: Any): Long
 
+    @JvmSynthetic
     external fun tokenValue(t: Long, errorSink: Any): Long
 
+    @JvmSynthetic
     external fun payloadVecNew(cap: Int): Long
 
+    @JvmSynthetic
     external fun payloadVecPush(
         handle: Long,
         eId: Long,
@@ -890,5 +953,6 @@ internal object JNINative {
         eLabel: String?,
     )
 
+    @JvmSynthetic
     external fun payloadVecFree(handle: Long)
 }

@@ -19,27 +19,46 @@
 //!
 //! Generated Kotlin passes native pointers around as `Long`s, and generated
 //! native code dereferences them. A `Long` a consumer made up therefore has to
-//! be unable to reach that code (prebindgen#37):
+//! be unable to reach that code (prebindgen#37) — from Kotlin **and** from
+//! Java, which is a separate problem: `internal` and `@RequiresOptIn` are
+//! Kotlin-source constructs, and an `internal` member compiles to a *public*
+//! JVM member under a mangled name that javac will happily call.
 //!
-//! * **Handle constructors are `internal`.** `KeyExpr(0xdeadbeef)` does not
-//!   compile outside the generated module — including through a subclass of
-//!   `NativeHandle`, whose constructor is `internal` too. Construction is
-//!   entirely Kotlin-side, so nothing on the Rust side depends on this.
-//! * **`object JNINative`, holding every `external fun`, is `internal`.**
-//! * **`NativeHandle.peek()` and the `fromParts` factories are marked
-//!   `@UnsafeNativeApi`** — a generated `@RequiresOptIn` annotation class in
-//!   the base package. Both are looked up from Rust by JNI reflection
-//!   (`call_method` / `call_static_method`), so `internal` would rename them
-//!   out from under the lookup; an opt-in marker constrains the Kotlin source
-//!   without touching the bytecode signature.
+//! So each entry point carries `@JvmSynthetic`, which sets `ACC_SYNTHETIC` —
+//! javac refuses to resolve it, while JNI (which looks up by name) and the
+//! JVM's native-method binding do not care:
+//!
+//! * **Handle constructors are `private`**, behind an `internal`
+//!   `@JvmSynthetic fromRawPtr` factory. `@JvmSynthetic` cannot target a
+//!   constructor at all, and `internal` alone still left
+//!   `new KeyExpr(0xdeadbeefL)` compiling from Java. Nothing on the Rust side
+//!   constructs a handle, so this costs no generated call site.
+//! * **Every `external fun` is `@JvmSynthetic`**, as is each class's static
+//!   `freePtr`. `internal object JNINative` is a public JVM class with a
+//!   public `INSTANCE`, so its externs were callable directly — the handle
+//!   layer bypassed entirely.
+//! * **`NativeHandle.peek()` and the `fromParts` factories** are looked up
+//!   from Rust by JNI reflection (`call_method` / `call_static_method`), so
+//!   their names must survive. They get `@JvmSynthetic` plus
+//!   **`@UnsafeNativeApi`**, a generated `@RequiresOptIn` annotation class in
+//!   the base package, which is what constrains a *Kotlin* consumer.
+//! * **Internal state — `ptr`, `markConsumed`, the locking helpers — is
+//!   `@JvmSynthetic` too.** A visible `setPtr$module` would let a Java caller
+//!   repoint a live handle and have the next generated call free that address.
+//!
+//! The base `NativeHandle` constructor stays `internal`, because the generated
+//! subclasses reach it through `super`. A Java subclass is inert: every
+//! generated signature takes a `final` concrete handle type, and there is
+//! nothing left for it to call.
 //!
 //! Every generated file carries `@file:OptIn(<pkg>.UnsafeNativeApi::class)`:
 //! generated code is the trusted producer of these pointers. Consumer code
 //! gets no such blanket and must opt in per declaration, which is the point.
 //!
-//! A base package is required for this: with none configured the marker would
-//! land in the root package, which Kotlin cannot import from a subpackage, so
-//! it is not emitted at all (the `internal` constructors still are).
+//! The marker lives in the base package and is named fully qualified. With no
+//! base package configured it would land in the root package, which Kotlin
+//! cannot import from a subpackage — `write_kotlin` refuses that combination
+//! rather than emit an unguarded surface.
 //!
 //! # Fixed-width unsigned integers
 //!

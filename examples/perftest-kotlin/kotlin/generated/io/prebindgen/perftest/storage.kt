@@ -21,7 +21,7 @@ public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = JNINative.storageNew(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return Storage(__ret)
+    return Storage.fromRawPtr(__ret)
 }
 
 /**
@@ -105,7 +105,7 @@ public fun payloadHandlerNew(
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = JNINative.payloadHandlerNew(f.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return PayloadHandler(__ret)
+    return PayloadHandler.fromRawPtr(__ret)
 }
 
 /**
@@ -198,7 +198,7 @@ public fun payloadVecHandlerNew(
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = JNINative.payloadVecHandlerNew(f, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return PayloadVecHandler(__ret)
+    return PayloadVecHandler.fromRawPtr(__ret)
 }
 
 /**

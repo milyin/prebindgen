@@ -73,7 +73,7 @@ pub(crate) fn projection_leaf_kt(ext: &Declarations, proj: &Projection) -> Optio
 /// Wrap one raw projection leaf into its typed Kotlin form.
 pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str) -> String {
     match kind {
-        ProjectionKind::Handle => format!("{short}({raw})"),
+        ProjectionKind::Handle => handle_from_raw(short, raw),
         ProjectionKind::Unsigned64 => format!("{raw}.toULong()"),
     }
 }
@@ -99,7 +99,7 @@ pub(crate) fn factory_projection_wire_wrap(
 
     use crate::jni::{NullableKind, ProjectionKind::*};
     let direct = |kind: &crate::jni::ProjectionKind| match kind {
-        Handle => (KtType::long(), format!("{short}({name})")),
+        Handle => (KtType::long(), handle_from_raw(short, name)),
         Unsigned64 => (KtType::long(), format!("{name}.toULong()")),
     };
     match &proj.strategy {

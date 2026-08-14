@@ -560,7 +560,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
     // The folder singleton wraps each raw `jlong` element into the typed handle
     // class and appends it — no Rust object construction.
     assert!(
-        kc.contains("ZThing(element)") || kc.contains("acc.add(ZThing("),
+        kc.contains("ZThing.fromRawPtr(element)") || kc.contains("acc.add(ZThing.fromRawPtr("),
         "{kotlin}"
     );
     // `Option<Vec<…>>` surfaces as a nullable list.
@@ -1727,7 +1727,7 @@ fn data_class_properties_match_their_from_parts_params() {
     // …and the factory reassembles into exactly those properties: the nested
     // child is inlined as its own leaves, the handle arrives as a raw pointer
     // and the enum as its discriminant, then each is rebuilt.
-    assert!(kc.contains("Bag(Handle(handle)"), "{kotlin}");
+    assert!(kc.contains("Bag(Handle.fromRawPtr(handle)"), "{kotlin}");
     assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
 }
