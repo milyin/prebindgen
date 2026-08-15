@@ -200,9 +200,16 @@ pub use crate::api::{
 // `prebindgen-registry`, and re-exports its own decl macros' support types at
 // its own root — see `prebindgen-jni`'s docs for the JNI / Kotlin workflow.
 
+#[doc(hidden)]
+pub mod layout {
+    //! Capture-directory layout, shared by the proc-macro (writing) and
+    //! [`Source`](crate::Source) (reading).
+    pub use crate::api::layout::{capture_file_name, group_dir_name, GROUP_NAME_FILE};
+}
+
 pub mod utils {
     #[doc(hidden)]
-    pub use crate::api::utils::jsonl::{read_jsonl_file, write_record_file, write_to_jsonl_file};
+    pub use crate::api::utils::jsonl::{publish_file, read_jsonl_file, write_to_jsonl_file};
     pub use crate::api::utils::target_triple::TargetTriple;
 }
 

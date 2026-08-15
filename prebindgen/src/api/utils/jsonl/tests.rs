@@ -111,11 +111,11 @@ fn a_record(name: &str, content: &str) -> Record {
 }
 
 fn line_of(record: &Record) -> String {
-    record.to_jsonl_string().unwrap()
+    format!("{}\n", record.to_jsonl_string().unwrap())
 }
 
 #[test]
-fn write_record_file_creates_the_group_directory_and_one_line() {
+fn publish_file_creates_the_group_directory_and_one_line() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir
         .path()
@@ -123,7 +123,7 @@ fn write_record_file_creates_the_group_directory_and_one_line() {
         .join("Test_0123456789abcdef.jsonl");
     let record = a_record("Test", "pub struct Test;");
 
-    write_record_file(&path, &line_of(&record)).unwrap();
+    publish_file(&path, &line_of(&record)).unwrap();
 
     let read = read_jsonl_file(&path).unwrap();
     assert_eq!(read, vec![record]);
@@ -131,11 +131,11 @@ fn write_record_file_creates_the_group_directory_and_one_line() {
 }
 
 #[test]
-fn write_record_file_leaves_no_temporaries_behind() {
+fn publish_file_leaves_no_temporaries_behind() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("group").join("Test_0123456789abcdef.jsonl");
 
-    write_record_file(&path, &line_of(&a_record("Test", "pub struct Test;"))).unwrap();
+    publish_file(&path, &line_of(&a_record("Test", "pub struct Test;"))).unwrap();
 
     let leftovers = fs::read_dir(path.parent().unwrap())
         .unwrap()
@@ -169,7 +169,7 @@ fn concurrent_identical_writes_leave_one_complete_file() {
             let line = line.clone();
             std::thread::spawn(move || {
                 barrier.wait();
-                write_record_file(&path, &line).unwrap();
+                publish_file(&path, &line).unwrap();
             })
         })
         .collect::<Vec<_>>();
@@ -191,7 +191,7 @@ fn concurrent_identical_writes_leave_one_complete_file() {
 }
 
 #[test]
-fn write_record_file_rewrites_an_empty_file() {
+fn publish_file_rewrites_an_empty_file() {
     // A zero-length file is not a record this layout could have published, so
     // it must not suppress the real one.
     let dir = tempfile::tempdir().unwrap();
@@ -203,7 +203,7 @@ fn write_record_file_rewrites_an_empty_file() {
     fs::write(&path, "").unwrap();
 
     let record = a_record("Test", "pub struct Test;");
-    write_record_file(&path, &line_of(&record)).unwrap();
+    publish_file(&path, &line_of(&record)).unwrap();
 
     assert_eq!(read_jsonl_file(&path).unwrap(), vec![record]);
 }

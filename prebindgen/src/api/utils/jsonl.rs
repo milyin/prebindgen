@@ -10,26 +10,26 @@ use std::{
 
 use crate::api::record::Record;
 
-/// Serialize one record and publish it at `file_path` atomically.
+/// Publish `contents` at `file_path` atomically, once.
 ///
-/// The capture file name is derived from the record itself (see
-/// `prebindgen_proc_macro`), so any writer producing this path produces these
+/// Every path in the capture directory is named after what it holds (see
+/// [`layout`](crate::layout)), so any writer producing this path produces these
 /// exact bytes. Two compilations of the same source therefore write the same
 /// file rather than two copies of it — but they may do so concurrently, so the
 /// content is written to a private temporary file in the same directory and
 /// `rename`d over the destination. A reader consequently sees either the
 /// previous complete file or the new complete file, never a partial one, and a
 /// lost race costs nothing because the loser wrote identical bytes.
-pub fn write_record_file<P: AsRef<Path>>(
+pub fn publish_file<P: AsRef<Path>>(
     file_path: P,
-    jsonl_line: &str,
+    contents: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file_path = file_path.as_ref();
 
-    // The name determines the content, so an existing file is already this
-    // record: skip the write rather than re-publishing identical bytes. Only a
-    // complete file can exist at this path (they arrive by rename), but a
-    // zero-length one from an older layout or a truncated copy is rewritten.
+    // The name determines the content, so an existing file already holds it:
+    // skip the write rather than re-publishing identical bytes. Only a complete
+    // file can exist at this path (they arrive by rename), but a zero-length
+    // one from an older layout or a truncated copy is rewritten.
     if fs::metadata(file_path).is_ok_and(|metadata| metadata.len() > 0) {
         return Ok(());
     }
@@ -38,10 +38,6 @@ pub fn write_record_file<P: AsRef<Path>>(
         .parent()
         .ok_or_else(|| format!("capture path {} has no parent", file_path.display()))?;
     fs::create_dir_all(directory)?;
-
-    let mut contents = String::with_capacity(jsonl_line.len() + 1);
-    contents.push_str(jsonl_line);
-    contents.push('\n');
 
     // Unique per process and per call: two writers must never share a temporary.
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);

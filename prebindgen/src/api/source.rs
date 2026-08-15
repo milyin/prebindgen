@@ -9,7 +9,12 @@ use itertools::Itertools;
 use roxygen::roxygen;
 
 use crate::{
-    api::{batching::cfg_filter, record::Record, utils::jsonl::read_jsonl_file},
+    api::{
+        batching::cfg_filter,
+        layout::{group_dir_name, GROUP_NAME_FILE},
+        record::Record,
+        utils::jsonl::read_jsonl_file,
+    },
     SourceLocation, TargetTriple, CRATE_NAME_FILE, FEATURES_FILE,
 };
 
@@ -364,7 +369,7 @@ impl Source {
     fn group_files(input_dir: &Path, group: &str) -> Vec<PathBuf> {
         let mut files = Vec::new();
 
-        if let Ok(entries) = fs::read_dir(input_dir.join(group)) {
+        if let Ok(entries) = fs::read_dir(input_dir.join(group_dir_name(group))) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path
@@ -398,11 +403,16 @@ impl Source {
 
     /// Internal method to discover all available groups from the directory
     ///
-    /// A group is a subdirectory. The flat layout of prebindgen ≤ 0.5.0 spelled
-    /// it as the file-name prefix up to the first `_`, which is still honoured
-    /// for a capture directory written by an older macro — and is why group
-    /// names may no longer contain `_`.
+    /// A group is a subdirectory whose name digests the group (so that two
+    /// groups differing only in case, or named after a Windows device, still
+    /// get one directory each). The digest is not reversible, so the exact name
+    /// comes from the [`GROUP_NAME_FILE`] the macro writes beside the records.
+    ///
+    /// The flat layout of prebindgen ≤ 0.5.0 spelled the group as the file-name
+    /// prefix up to the first `_`, and is still honoured for a capture
+    /// directory written by an older macro.
     fn discover_groups<P: AsRef<Path>>(input_dir: P) -> HashSet<String> {
+        let input_dir = input_dir.as_ref();
         let mut groups = HashSet::new();
 
         if let Ok(entries) = fs::read_dir(input_dir) {
@@ -412,7 +422,9 @@ impl Source {
                     continue;
                 };
                 if path.is_dir() {
-                    groups.insert(file_name.to_string());
+                    if let Some(group) = read_group_name(&path) {
+                        groups.insert(group);
+                    }
                 } else if file_name.ends_with(JSONL_EXTENSION) {
                     // Legacy flat layout: everything before the first underscore.
                     if let Some(underscore_pos) = file_name.find('_') {
@@ -423,6 +435,35 @@ impl Source {
         }
 
         groups
+    }
+}
+
+/// The exact name of the group whose captures live in `group_dir`.
+///
+/// A directory holding captures always names itself: the macro publishes the
+/// name file before the group's first record. One that does not is not a group
+/// directory — unless it holds records anyway, which would mean dropping them
+/// silently.
+fn read_group_name(group_dir: &Path) -> Option<String> {
+    match fs::read_to_string(group_dir.join(GROUP_NAME_FILE)) {
+        Ok(group) => Some(group.trim_end_matches(['\n', '\r']).to_string()),
+        Err(_) => {
+            let holds_captures = fs::read_dir(group_dir).is_ok_and(|entries| {
+                entries.flatten().any(|entry| {
+                    entry
+                        .file_name()
+                        .to_str()
+                        .is_some_and(|name| name.ends_with(JSONL_EXTENSION))
+                })
+            });
+            assert!(
+                !holds_captures,
+                "{} holds prebindgen captures but no {GROUP_NAME_FILE}; \
+                 the capture directory is damaged — rebuild the source crate",
+                group_dir.display()
+            );
+            None
+        }
     }
 }
 
@@ -599,9 +640,11 @@ mod tests {
     use super::*;
     use crate::api::record::RecordKind;
 
-    fn write(dir: &Path, relative: &str, name: &str) {
-        let path = dir.join(relative);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
+    /// Publish a record into `group`'s directory the way the macro does.
+    fn write(dir: &Path, group: &str, name: &str) {
+        let group_dir = dir.join(group_dir_name(group));
+        fs::create_dir_all(&group_dir).unwrap();
+        fs::write(group_dir.join(GROUP_NAME_FILE), group).unwrap();
         let record = Record::new(
             RecordKind::Struct,
             name.to_string(),
@@ -609,79 +652,125 @@ mod tests {
             Default::default(),
             None,
         );
-        fs::write(&path, format!("{}\n", record.to_jsonl_string().unwrap())).unwrap();
+        let serialized = record.to_jsonl_string().unwrap();
+        fs::write(
+            group_dir.join(crate::api::layout::capture_file_name(name, &serialized)),
+            format!("{serialized}\n"),
+        )
+        .unwrap();
+    }
+
+    fn names_of(dir: &Path, group: &str) -> Vec<String> {
+        let mut names = Source::read_group(dir, group)
+            .into_iter()
+            .map(|record| record.name)
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    fn groups(dir: &Path) -> Vec<String> {
+        let mut groups = Source::discover_groups(dir).into_iter().collect::<Vec<_>>();
+        groups.sort();
+        groups
     }
 
     #[test]
     fn groups_are_directories() {
         let dir = tempfile::tempdir().unwrap();
-        write(dir.path(), "default/Alpha_0000000000000001.jsonl", "Alpha");
-        write(dir.path(), "default/Beta_0000000000000002.jsonl", "Beta");
-        write(dir.path(), "structs/Gamma_0000000000000003.jsonl", "Gamma");
+        write(dir.path(), "default", "Alpha");
+        write(dir.path(), "default", "Beta");
+        write(dir.path(), "structs", "Gamma");
 
-        assert_eq!(
-            Source::discover_groups(dir.path()),
-            ["default", "structs"]
-                .map(str::to_string)
-                .into_iter()
-                .collect::<HashSet<_>>()
-        );
-
-        let mut names = Source::read_group(dir.path(), "default")
-            .into_iter()
-            .map(|record| record.name)
-            .collect::<Vec<_>>();
-        names.sort();
-        assert_eq!(names, ["Alpha", "Beta"]);
+        assert_eq!(groups(dir.path()), ["default", "structs"]);
+        assert_eq!(names_of(dir.path(), "default"), ["Alpha", "Beta"]);
+        assert_eq!(names_of(dir.path(), "structs"), ["Gamma"]);
     }
 
     #[test]
-    fn a_group_name_may_contain_an_underscore() {
-        // The flat layout spelled the group as the file-name prefix up to the
-        // first `_`, so `my_group` was discovered as `my`. A directory has no
-        // such ambiguity.
+    fn groups_differing_only_in_case_stay_apart() {
+        // `.join(group)` would merge these on macOS and Windows, so the
+        // directory name leads with a digest of the group.
         let dir = tempfile::tempdir().unwrap();
-        write(dir.path(), "my_group/Alpha_0000000000000001.jsonl", "Alpha");
+        write(dir.path(), "Foo", "Upper");
+        write(dir.path(), "foo", "Lower");
 
-        assert_eq!(
-            Source::discover_groups(dir.path()),
-            ["my_group".to_string()].into_iter().collect::<HashSet<_>>()
-        );
-        assert_eq!(Source::read_group(dir.path(), "my_group").len(), 1);
+        assert_eq!(groups(dir.path()), ["Foo", "foo"]);
+        assert_eq!(names_of(dir.path(), "Foo"), ["Upper"]);
+        assert_eq!(names_of(dir.path(), "foo"), ["Lower"]);
+    }
+
+    #[test]
+    fn a_group_may_be_named_anything_a_string_literal_can_hold() {
+        // Including names a filesystem would otherwise refuse or mangle:
+        // Windows devices, path separators, `..`, and non-ASCII.
+        let dir = tempfile::tempdir().unwrap();
+        let hostile = [
+            "CON", "NUL", "COM1", "LPT1", "my_group", "a/b", "..", "grüppe", "",
+        ];
+        for (index, group) in hostile.iter().enumerate() {
+            write(dir.path(), group, &format!("Item{index}"));
+        }
+
+        let mut expected = hostile.map(str::to_string).to_vec();
+        expected.sort();
+        assert_eq!(groups(dir.path()), expected);
+        for (index, group) in hostile.iter().enumerate() {
+            assert_eq!(names_of(dir.path(), group), [format!("Item{index}")]);
+        }
     }
 
     #[test]
     fn the_flat_layout_of_older_captures_is_still_read() {
-        // A capture directory written by prebindgen <= 0.5.0, or one holding
-        // both layouts while a build is in flight.
+        // A capture directory written by prebindgen <= 0.5.0.
         let dir = tempfile::tempdir().unwrap();
-        write(dir.path(), "default_1234_5678.jsonl", "Legacy");
-        write(dir.path(), "default/Alpha_0000000000000001.jsonl", "Alpha");
-
-        assert_eq!(
-            Source::discover_groups(dir.path()),
-            ["default".to_string()].into_iter().collect::<HashSet<_>>()
+        let record = Record::new(
+            RecordKind::Struct,
+            "Legacy".to_string(),
+            "pub struct Legacy;".to_string(),
+            Default::default(),
+            None,
         );
-        let mut names = Source::read_group(dir.path(), "default")
-            .into_iter()
-            .map(|record| record.name)
-            .collect::<Vec<_>>();
-        names.sort();
-        assert_eq!(names, ["Alpha", "Legacy"]);
+        fs::write(
+            dir.path().join("default_1234_5678.jsonl"),
+            format!("{}\n", record.to_jsonl_string().unwrap()),
+        )
+        .unwrap();
+        write(dir.path(), "default", "Alpha");
+
+        assert_eq!(groups(dir.path()), ["default"]);
+        assert_eq!(names_of(dir.path(), "default"), ["Alpha", "Legacy"]);
     }
 
     #[test]
     fn non_capture_entries_are_ignored() {
         let dir = tempfile::tempdir().unwrap();
-        write(dir.path(), "default/Alpha_0000000000000001.jsonl", "Alpha");
-        fs::write(dir.path().join("crate_name.txt"), "example-flat").unwrap();
-        fs::write(dir.path().join("features.txt"), "unstable\n").unwrap();
-        fs::write(dir.path().join("default/notes.txt"), "scratch").unwrap();
+        write(dir.path(), "default", "Alpha");
+        fs::write(dir.path().join(CRATE_NAME_FILE), "example-flat").unwrap();
+        fs::write(dir.path().join(FEATURES_FILE), "unstable\n").unwrap();
+        fs::write(
+            dir.path().join(group_dir_name("default")).join("notes.txt"),
+            "scratch",
+        )
+        .unwrap();
+        fs::create_dir_all(dir.path().join("not-a-group")).unwrap();
 
-        assert_eq!(
-            Source::discover_groups(dir.path()),
-            ["default".to_string()].into_iter().collect::<HashSet<_>>()
-        );
-        assert_eq!(Source::read_group(dir.path(), "default").len(), 1);
+        assert_eq!(groups(dir.path()), ["default"]);
+        assert_eq!(names_of(dir.path(), "default"), ["Alpha"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "holds prebindgen captures but no group.txt")]
+    fn captures_without_a_group_name_are_not_silently_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default", "Alpha");
+        fs::remove_file(
+            dir.path()
+                .join(group_dir_name("default"))
+                .join(GROUP_NAME_FILE),
+        )
+        .unwrap();
+
+        Source::discover_groups(dir.path());
     }
 }
