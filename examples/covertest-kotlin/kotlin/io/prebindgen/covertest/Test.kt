@@ -1958,6 +1958,16 @@ fun main() {
         val holder = Class.forName("io.prebindgen.covertest.__StorageFolderRawHolder")
         val instance = holder.getDeclaredField("instance")
         check(instance.isSynthetic) { "__StorageFolderRawHolder.instance is Java-readable" }
+        // And the hoisted builder singletons: a top-level `internal val` has a
+        // private backing field but a facade getter javac resolves like any
+        // other static, so `ModelKt.get__LookupBuilderRaw().run(0, 0xdeadbeefL,
+        // null)` would mint a handle from an invented pointer.
+        val getters = facades.flatMap { it.declaredMethods.toList() }
+            .filter { it.name.startsWith("get__") }
+        check(getters.isNotEmpty()) { "no builder singletons found to check" }
+        check(getters.all { it.isSynthetic }) {
+            "Java-callable builder singleton: " + getters.filterNot { it.isSynthetic }.map { it.name }
+        }
     }
 
     println("PASS - $sectionCount sections, every JniGen feature exercised")

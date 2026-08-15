@@ -759,6 +759,7 @@ public fun interface PayloadBuilder<out R> {
     public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): R
 }
 
+@get:JvmSynthetic
 internal val __PayloadBuilder: PayloadBuilder<Payload> =
 PayloadBuilder { id, seq, value, flag, label -> Payload.fromParts(id, seq, value, flag, label) }
 

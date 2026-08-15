@@ -137,15 +137,18 @@ impl Declarations {
         // could not opt in and would not compile. Rather than silently drop
         // the guard for that configuration (which is how prebindgen#37 stayed
         // reproducible by default), refuse it.
+        // A configuration error, not a bug: it is reported as the error this
+        // function already returns, not as a panic.
         if self.package.is_empty() {
             if let Some(f) = merged.iter().find(|f| !f.package.is_empty()) {
-                panic!(
-                    "no base package is configured, but `{}` is generated into subpackage `{}`. \
-                     The {UNSAFE_MARKER} opt-in marker would land in the root package, which \
-                     Kotlin cannot import from a subpackage, leaving the raw-pointer entry \
-                     points unguarded. Set a base package with `set_package_prefix`.",
-                    f.package, f.package,
-                );
+                return Err(WriteKotlinError::Other(format!(
+                    "no base package is configured, but a declaration is generated into \
+                     subpackage `{}`. The {UNSAFE_MARKER} opt-in marker would land in the \
+                     root package, which Kotlin cannot import from a subpackage, leaving \
+                     the raw-pointer entry points unguarded. Set a base package with \
+                     `set_package_prefix`.",
+                    f.package,
+                )));
             }
         }
         kt::write_files(&merged, kotlin_root)
@@ -1369,8 +1372,17 @@ impl Declarations {
         let val_name = format!("__{builder}");
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let joined = names.join(", ");
+        // `@get:JvmSynthetic` for the same reason the folder appenders carry it
+        // on their field: `internal` is a Kotlin-only boundary. The getter of a
+        // top-level `internal val` is `ACC_PUBLIC` on the file facade class, so
+        // `ModelKt.get__LookupBuilderRaw().run(0xdeadbeefL, …)` would mint a
+        // handle from an invented pointer under the file's blanket opt-in.
+        // Nothing legitimate loses a route: these singletons are referenced
+        // only from generated Kotlin in this module, and native never resolves
+        // them by name.
         let code = format!(
-            "internal val {val_name}: {builder}<{class_short}> =\n    \
+            "@get:JvmSynthetic\n\
+             internal val {val_name}: {builder}<{class_short}> =\n    \
              {builder} {{ {joined} -> {class_short}.fromParts({joined}) }}"
         );
         KtDecl::Raw {
@@ -1419,9 +1431,9 @@ impl Declarations {
         // static, so `__XFolderRawHolder.instance.run(list, 0xdeadbeefL)` would
         // mint a handle from an invented pointer. `@JvmSynthetic` hides the
         // field from javac while leaving the name and ACC_STATIC alone, which
-        // is all `GetStaticFieldID` looks at. A top-level `internal val`
-        // (the builder singletons) needs no such treatment: its getter is
-        // mangled and its backing field is private.
+        // is all `GetStaticFieldID` looks at. The builder singletons carry
+        // `@get:JvmSynthetic` for the same reason — a top-level `internal val`
+        // has a private backing field but an `ACC_PUBLIC` facade getter.
         let code = format!(
             "internal object {holder} {{\n    \
              @JvmSynthetic\n    \
@@ -1467,8 +1479,12 @@ impl Declarations {
         );
         let builder = spec.raw_name();
         let val_name = format!("__{builder}");
+        // `@get:JvmSynthetic`: see `value_struct_builder_singleton` — the
+        // facade getter of a top-level `internal val` is Java-callable, and
+        // this `when` wraps handle leaves with `fromRawPtr`.
         let code = format!(
-            "internal val {val_name}: {builder}<{iface_short}> =\n    \
+            "@get:JvmSynthetic\n\
+             internal val {val_name}: {builder}<{iface_short}> =\n    \
              {builder} {{ {} ->\n    {when}\n}}",
             names.join(", "),
         );

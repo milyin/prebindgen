@@ -1072,9 +1072,14 @@ fn a_fixed_builder_emits_no_dead_typed_twin() {
         kotlin.contains("internal fun interface LookupBuilderRaw<out R>"),
         "the raw twin is what exists:\n{kotlin}"
     );
+    // `@get:JvmSynthetic`: the facade getter of a top-level `internal val` is
+    // `ACC_PUBLIC`, so without it `ModelKt.get__LookupBuilderRaw().run(0xdead…)`
+    // would reconstruct a handle from a forged pointer out of Java.
     assert!(
-        kotlin.contains("internal val __LookupBuilderRaw: LookupBuilderRaw<Lookup>"),
-        "the singleton implements it:\n{kotlin}"
+        kotlin.contains(
+            "@get:JvmSynthetic\ninternal val __LookupBuilderRaw: LookupBuilderRaw<Lookup>"
+        ),
+        "the singleton implements it, hidden from javac:\n{kotlin}"
     );
     // The dead surface: the typed declaration and the proxy adapting to it.
     assert!(

@@ -1159,6 +1159,7 @@ public fun interface ArraysBuilder<out R> {
     ): R
 }
 
+@get:JvmSynthetic
 internal val __ArraysBuilder: ArraysBuilder<Arrays> =
 ArraysBuilder { bytes, shorts, ints, longs, doubles, flags, raw -> Arrays.fromParts(bytes, shorts, ints, longs, doubles, flags, raw) }
 
@@ -1166,6 +1167,7 @@ public fun interface BlobValueBuilder<out R> {
     public fun run(stamp__secs: Long, stamp__nanos: Long, id: ByteArray, chunks: List<ByteArray>): R
 }
 
+@get:JvmSynthetic
 internal val __BlobValueBuilder: BlobValueBuilder<BlobValue> =
 BlobValueBuilder { stamp__secs, stamp__nanos, id, chunks -> BlobValue.fromParts(stamp__secs, stamp__nanos, id, chunks) }
 
@@ -1173,6 +1175,7 @@ internal fun interface DurationBoundaryBuilderRaw<out R> {
     public fun run(required: Long, delay: Long): R
 }
 
+@get:JvmSynthetic
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
 DurationBoundaryBuilderRaw { required, delay -> DurationBoundary.fromParts(required, delay) }
 
@@ -1180,6 +1183,7 @@ internal fun interface HoldBuilderRaw<out R> {
     public fun run(tag: Int, for_v0: Long): R
 }
 
+@get:JvmSynthetic
 internal val __HoldBuilderRaw: HoldBuilderRaw<Hold> =
 HoldBuilderRaw { tag, for_v0 ->
     when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
@@ -1189,6 +1193,7 @@ internal fun interface LookupBuilderRaw<out R> {
     public fun run(tag: Int, found_v0: Long, failed_v0: String?): R
 }
 
+@get:JvmSynthetic
 internal val __LookupBuilderRaw: LookupBuilderRaw<Lookup> =
 LookupBuilderRaw { tag, found_v0, failed_v0 ->
     when (tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary.fromRawPtr(found_v0)); 2 -> Lookup.Failed(failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $tag") }
@@ -1198,6 +1203,7 @@ public fun interface MarkerBuilder<out R> {
     public fun run(tag: Int, ranked_v0: Int?): R
 }
 
+@get:JvmSynthetic
 internal val __MarkerBuilder: MarkerBuilder<Marker> =
 MarkerBuilder { tag, ranked_v0 ->
     when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
@@ -1248,6 +1254,7 @@ public fun interface ReadingBuilder<out R> {
     ): R
 }
 
+@get:JvmSynthetic
 internal val __ReadingBuilder: ReadingBuilder<Reading> =
 ReadingBuilder { tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0 ->
     when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
@@ -1276,6 +1283,7 @@ public fun interface StampBuilder<out R> {
     public fun run(secs: Long, nanos: Long): R
 }
 
+@get:JvmSynthetic
 internal val __StampBuilder: StampBuilder<Stamp> =
 StampBuilder { secs, nanos -> Stamp.fromParts(secs, nanos) }
 
@@ -1283,6 +1291,7 @@ internal fun interface UnsignedBuilderRaw<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: Long, maybeLong: Long?): R
 }
 
+@get:JvmSynthetic
 internal val __UnsignedBuilderRaw: UnsignedBuilderRaw<Unsigned> =
 UnsignedBuilderRaw { byte, short, int, long, maybeLong -> Unsigned.fromParts(byte, short, int, long, maybeLong) }
 

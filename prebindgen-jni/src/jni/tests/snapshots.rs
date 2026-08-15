@@ -327,9 +327,9 @@ fn raw_pointer_entry_points_are_guarded() {
 /// it fully qualified. With no base package it lands in the root package,
 /// which Kotlin cannot import from a subpackage — so a subpackage file could
 /// not opt in, and the raw-pointer entry points would be unguarded by default.
-/// That configuration is refused rather than silently degraded.
+/// That configuration is refused rather than silently degraded — as an error
+/// from `write_kotlin`, since it is the caller's configuration, not a bug.
 #[test]
-#[should_panic(expected = "no base package is configured")]
 fn a_subpackage_without_a_base_package_is_refused() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![(
@@ -349,7 +349,11 @@ fn a_subpackage_without_a_base_package_is_refused() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni.build_with(registry).expect("resolve");
-    let _ = gen.write_kotlin(&dir.join("kotlin"));
+    let err = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect_err("a subpackage without a base package must be refused");
+    let msg = err.to_string();
+    assert!(msg.contains("no base package is configured"), "{msg}");
 }
 
 /// Generated onError handler interfaces carry the split-channel contract KDoc:
