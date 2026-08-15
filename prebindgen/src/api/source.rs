@@ -418,24 +418,28 @@ impl Source {
         if let Ok(entries) = fs::read_dir(input_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
-                    continue;
-                };
+                // A group directory is ASCII, so a name that is not UTF-8 is
+                // not one — but it still has to face the damage check below
+                // rather than being skipped with its captures inside.
+                let file_name = path.file_name().and_then(|name| name.to_str());
                 if path.is_dir() {
-                    if let Some(group) = decode_group_dir_name(file_name) {
-                        groups.insert(group);
-                    } else {
-                        assert!(
+                    match file_name.and_then(decode_group_dir_name) {
+                        Some(group) => {
+                            groups.insert(group);
+                        }
+                        None => assert!(
                             !holds_captures(&path),
                             "{} holds prebindgen captures but is not a group directory; \
                              the capture directory is damaged — rebuild the source crate",
                             path.display()
-                        );
+                        ),
                     }
-                } else if file_name.ends_with(JSONL_EXTENSION) {
-                    // Legacy flat layout: everything before the first underscore.
-                    if let Some(underscore_pos) = file_name.find('_') {
-                        groups.insert(file_name[..underscore_pos].to_string());
+                } else if let Some(file_name) = file_name {
+                    if file_name.ends_with(JSONL_EXTENSION) {
+                        // Legacy flat layout: everything before the first underscore.
+                        if let Some(underscore_pos) = file_name.find('_') {
+                            groups.insert(file_name[..underscore_pos].to_string());
+                        }
                     }
                 }
             }
@@ -750,6 +754,42 @@ mod tests {
 
         assert_eq!(groups(dir.path()), ["default"]);
         assert_eq!(names_of(dir.path(), "default"), ["Alpha"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a group directory")]
+    fn captures_under_a_non_canonical_spelling_are_not_silently_dropped() {
+        // `g_-61` decodes to `a`, but `a` canonicalizes to `g_a`, so reporting
+        // the group would send `read_group` to an empty directory and lose
+        // these records.
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "a", "Alpha");
+        fs::rename(
+            dir.path().join(group_dir_name("a")),
+            dir.path().join("g_-61"),
+        )
+        .unwrap();
+
+        Source::discover_groups(dir.path());
+    }
+
+    // Linux only: APFS refuses to create a name that is not valid UTF-8, which
+    // is why macOS cannot reach this case in the first place. CI runs Linux.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[should_panic(expected = "is not a group directory")]
+    fn captures_under_a_non_utf8_directory_are_not_silently_dropped() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default", "Alpha");
+        fs::rename(
+            dir.path().join(group_dir_name("default")),
+            dir.path().join(std::ffi::OsStr::from_bytes(b"g_\xff\xfe")),
+        )
+        .unwrap();
+
+        Source::discover_groups(dir.path());
     }
 
     #[test]

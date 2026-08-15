@@ -96,6 +96,14 @@ pub fn group_dir_name(group: &str) -> String {
 
 /// The group name a directory produced by [`group_dir_name`] stands for, or
 /// `None` if it was not produced by it.
+///
+/// Only the **canonical** spelling of a name is accepted: the encoding admits
+/// redundant forms (`g_-61` decodes to `a`, as does `g_a`; `-4a` and `-4A` name
+/// one byte), and accepting a redundant one would be worse than rejecting it.
+/// Discovery would report group `a` while [`group_dir_name`] sends
+/// `Source::read_group` to `g_a`, so the records in `g_-61` would be dropped
+/// with nothing to show for it — the failure the caller's damage check exists
+/// to catch.
 pub fn decode_group_dir_name(dir_name: &str) -> Option<String> {
     let encoded = dir_name.strip_prefix(GROUP_DIR_PREFIX)?;
 
@@ -116,7 +124,9 @@ pub fn decode_group_dir_name(dir_name: &str) -> Option<String> {
             _ => return None,
         }
     }
-    String::from_utf8(bytes).ok()
+
+    let decoded = String::from_utf8(bytes).ok()?;
+    (group_dir_name(&decoded) == dir_name).then_some(decoded)
 }
 
 /// The file holding one record: `{name}_{digest}.jsonl`.
