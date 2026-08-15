@@ -36,11 +36,9 @@
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
-use std::{cell::RefCell, collections::HashSet};
-
 use prebindgen::{
     get_prebindgen_out_dir,
-    layout::{capture_file_name, group_dir_name, GROUP_NAME_FILE},
+    layout::{capture_file_name, group_dir_name, MAX_COMPONENT_LEN},
     utils::publish_file,
     Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME,
 };
@@ -140,11 +138,10 @@ impl Parse for PrebindgenArgs {
     }
 }
 
-/// Publish `record` under the path its own contents determine, and make sure
-/// the group directory records the group's exact name.
+/// Publish `record` under the path its own contents determine.
 ///
 /// The path is derived from the **record**, never from the process or the
-/// compilation that produced it: `{OUT_DIR}/prebindgen/{digest(group)}_{group}/
+/// compilation that produced it: `{OUT_DIR}/prebindgen/g_{group}/
 /// {name}_{digest(record)}.jsonl` (see `prebindgen::layout`). Every compiler
 /// that captures this item computes this same path and writes these same
 /// bytes, so repeated compilations — `cargo check`, `build`, `test`, `clippy`,
@@ -160,29 +157,22 @@ fn publish_record(
     record: &Record,
     serialized: &str,
 ) -> std::result::Result<(), String> {
-    let group_dir = get_prebindgen_out_dir().join(group_dir_name(group));
-
-    // The directory digests the group name, which is not reversible; the name
-    // itself goes beside the records so `Source` can report the group a
-    // consumer selects by. Written before the first record of the group, so a
-    // directory holding captures always names itself.
-    let group_name_file = group_dir.join(GROUP_NAME_FILE);
-    let is_first_record_of_group =
-        GROUPS.with(|groups| groups.borrow_mut().insert(group.to_string()));
-    if is_first_record_of_group {
-        publish_file(&group_name_file, group).map_err(|error| format!("prebindgen: {error}"))?;
+    let group_dir = group_dir_name(group);
+    if group_dir.len() > MAX_COMPONENT_LEN {
+        return Err(format!(
+            "#[prebindgen] group name {group:?} is too long: it encodes to {} bytes, \
+             and a directory name may hold {MAX_COMPONENT_LEN}",
+            group_dir.len()
+        ));
     }
 
     publish_file(
-        group_dir.join(capture_file_name(&record.name, serialized)),
+        get_prebindgen_out_dir()
+            .join(group_dir)
+            .join(capture_file_name(&record.name, serialized)),
         &format!("{serialized}\n"),
     )
     .map_err(|error| format!("prebindgen: {error}"))
-}
-
-thread_local! {
-    /// Groups whose name file this thread has already published.
-    static GROUPS: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.

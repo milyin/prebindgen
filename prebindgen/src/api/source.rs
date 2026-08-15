@@ -11,7 +11,7 @@ use roxygen::roxygen;
 use crate::{
     api::{
         batching::cfg_filter,
-        layout::{group_dir_name, GROUP_NAME_FILE},
+        layout::{decode_group_dir_name, group_dir_name},
         record::Record,
         utils::jsonl::read_jsonl_file,
     },
@@ -403,10 +403,10 @@ impl Source {
 
     /// Internal method to discover all available groups from the directory
     ///
-    /// A group is a subdirectory whose name digests the group (so that two
-    /// groups differing only in case, or named after a Windows device, still
-    /// get one directory each). The digest is not reversible, so the exact name
-    /// comes from the [`GROUP_NAME_FILE`] the macro writes beside the records.
+    /// A group is a subdirectory whose name encodes the group reversibly (so
+    /// that two groups differing only in case, or named after a Windows device,
+    /// still get one directory each), and the exact name is decoded back out of
+    /// it — see [`layout`](crate::layout).
     ///
     /// The flat layout of prebindgen ≤ 0.5.0 spelled the group as the file-name
     /// prefix up to the first `_`, and is still honoured for a capture
@@ -422,8 +422,15 @@ impl Source {
                     continue;
                 };
                 if path.is_dir() {
-                    if let Some(group) = read_group_name(&path) {
+                    if let Some(group) = decode_group_dir_name(file_name) {
                         groups.insert(group);
+                    } else {
+                        assert!(
+                            !holds_captures(&path),
+                            "{} holds prebindgen captures but is not a group directory; \
+                             the capture directory is damaged — rebuild the source crate",
+                            path.display()
+                        );
                     }
                 } else if file_name.ends_with(JSONL_EXTENSION) {
                     // Legacy flat layout: everything before the first underscore.
@@ -438,33 +445,20 @@ impl Source {
     }
 }
 
-/// The exact name of the group whose captures live in `group_dir`.
+/// Whether a directory holds capture files.
 ///
-/// A directory holding captures always names itself: the macro publishes the
-/// name file before the group's first record. One that does not is not a group
-/// directory — unless it holds records anyway, which would mean dropping them
-/// silently.
-fn read_group_name(group_dir: &Path) -> Option<String> {
-    match fs::read_to_string(group_dir.join(GROUP_NAME_FILE)) {
-        Ok(group) => Some(group.trim_end_matches(['\n', '\r']).to_string()),
-        Err(_) => {
-            let holds_captures = fs::read_dir(group_dir).is_ok_and(|entries| {
-                entries.flatten().any(|entry| {
-                    entry
-                        .file_name()
-                        .to_str()
-                        .is_some_and(|name| name.ends_with(JSONL_EXTENSION))
-                })
-            });
-            assert!(
-                !holds_captures,
-                "{} holds prebindgen captures but no {GROUP_NAME_FILE}; \
-                 the capture directory is damaged — rebuild the source crate",
-                group_dir.display()
-            );
-            None
-        }
-    }
+/// Used to tell a directory that is not a group's — Cargo puts other things in
+/// `OUT_DIR` — from one whose name this build cannot decode, which would mean
+/// dropping records silently.
+fn holds_captures(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.ends_with(JSONL_EXTENSION))
+        })
+    })
 }
 
 /// Read the crate name from the stored file
@@ -644,7 +638,6 @@ mod tests {
     fn write(dir: &Path, group: &str, name: &str) {
         let group_dir = dir.join(group_dir_name(group));
         fs::create_dir_all(&group_dir).unwrap();
-        fs::write(group_dir.join(GROUP_NAME_FILE), group).unwrap();
         let record = Record::new(
             RecordKind::Struct,
             name.to_string(),
@@ -760,14 +753,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "holds prebindgen captures but no group.txt")]
-    fn captures_without_a_group_name_are_not_silently_dropped() {
+    #[should_panic(expected = "is not a group directory")]
+    fn captures_in_an_undecodable_directory_are_not_silently_dropped() {
         let dir = tempfile::tempdir().unwrap();
         write(dir.path(), "default", "Alpha");
-        fs::remove_file(
-            dir.path()
-                .join(group_dir_name("default"))
-                .join(GROUP_NAME_FILE),
+        fs::rename(
+            dir.path().join(group_dir_name("default")),
+            dir.path().join("default"),
         )
         .unwrap();
 

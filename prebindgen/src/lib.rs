@@ -204,7 +204,9 @@ pub use crate::api::{
 pub mod layout {
     //! Capture-directory layout, shared by the proc-macro (writing) and
     //! [`Source`](crate::Source) (reading).
-    pub use crate::api::layout::{capture_file_name, group_dir_name, GROUP_NAME_FILE};
+    pub use crate::api::layout::{
+        capture_file_name, decode_group_dir_name, group_dir_name, MAX_COMPONENT_LEN,
+    };
 }
 
 pub mod utils {
