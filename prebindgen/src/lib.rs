@@ -202,7 +202,7 @@ pub use crate::api::{
 
 pub mod utils {
     #[doc(hidden)]
-    pub use crate::api::utils::jsonl::{read_jsonl_file, write_to_jsonl_file};
+    pub use crate::api::utils::jsonl::{read_jsonl_file, write_record_file, write_to_jsonl_file};
     pub use crate::api::utils::target_triple::TargetTriple;
 }
 

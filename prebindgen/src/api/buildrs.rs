@@ -33,17 +33,24 @@ pub fn init_prebindgen_out_dir() {
     // For doctests, use "source_ffi" even if CARGO_PKG_NAME is set to "prebindgen"
     let crate_name = env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME environment variable not set. This function should be called from build.rs.");
 
-    // delete all files in the prebindgen directory
+    // Delete everything in the prebindgen directory. This is the generation
+    // boundary: the captures below it describe the crate as it was, and the
+    // compilations that follow rewrite them. Group *directories* have to go
+    // with the files — leaving them would keep records for items this revision
+    // renamed or removed.
     let prebindgen_dir = get_prebindgen_out_dir();
     if prebindgen_dir.exists() {
         for entry in fs::read_dir(&prebindgen_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.is_file() {
-                fs::remove_file(&path).unwrap_or_else(|e| {
-                    panic!("Failed to delete {}: {}", path.display(), e);
-                });
-            }
+            let removed = if path.is_dir() {
+                fs::remove_dir_all(&path)
+            } else {
+                fs::remove_file(&path)
+            };
+            removed.unwrap_or_else(|e| {
+                panic!("Failed to delete {}: {}", path.display(), e);
+            });
         }
     } else {
         fs::create_dir_all(&prebindgen_dir).unwrap_or_else(|e| {

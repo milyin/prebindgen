@@ -99,3 +99,111 @@ fn test_jsonl_file_format() {
     let parsed: Record = serde_json::from_str(lines[1]).unwrap();
     assert_eq!(parsed.cfg, Some("feature = \"unstable\"".to_string()));
 }
+
+fn a_record(name: &str, content: &str) -> Record {
+    Record::new(
+        RecordKind::Struct,
+        name.to_string(),
+        content.to_string(),
+        Default::default(),
+        None,
+    )
+}
+
+fn line_of(record: &Record) -> String {
+    record.to_jsonl_string().unwrap()
+}
+
+#[test]
+fn write_record_file_creates_the_group_directory_and_one_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir
+        .path()
+        .join("structs")
+        .join("Test_0123456789abcdef.jsonl");
+    let record = a_record("Test", "pub struct Test;");
+
+    write_record_file(&path, &line_of(&record)).unwrap();
+
+    let read = read_jsonl_file(&path).unwrap();
+    assert_eq!(read, vec![record]);
+    assert_eq!(fs::read_to_string(&path).unwrap().lines().count(), 1);
+}
+
+#[test]
+fn write_record_file_leaves_no_temporaries_behind() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("group").join("Test_0123456789abcdef.jsonl");
+
+    write_record_file(&path, &line_of(&a_record("Test", "pub struct Test;"))).unwrap();
+
+    let leftovers = fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "Test_0123456789abcdef.jsonl")
+        .collect::<Vec<_>>();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+}
+
+#[test]
+fn concurrent_identical_writes_leave_one_complete_file() {
+    // The file name is derived from the contents, so every writer of a given
+    // path writes these same bytes: the losers of the rename race cost nothing,
+    // and no reader can observe a partial file.
+    const WRITERS: usize = 32;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir
+        .path()
+        .join("default")
+        .join("Test_0123456789abcdef.jsonl");
+    let record = a_record("Test", "pub struct Test;");
+    let line = line_of(&record);
+
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(WRITERS));
+    let handles = (0..WRITERS)
+        .map(|_| {
+            let barrier = std::sync::Arc::clone(&barrier);
+            let path = path.clone();
+            let line = line.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                write_record_file(&path, &line).unwrap();
+            })
+        })
+        .collect::<Vec<_>>();
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let files = fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        files,
+        vec![path.clone()],
+        "exactly one file, no temporaries"
+    );
+    assert_eq!(read_jsonl_file(&path).unwrap(), vec![record]);
+}
+
+#[test]
+fn write_record_file_rewrites_an_empty_file() {
+    // A zero-length file is not a record this layout could have published, so
+    // it must not suppress the real one.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir
+        .path()
+        .join("default")
+        .join("Test_0123456789abcdef.jsonl");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, "").unwrap();
+
+    let record = a_record("Test", "pub struct Test;");
+    write_record_file(&path, &line_of(&record)).unwrap();
+
+    assert_eq!(read_jsonl_file(&path).unwrap(), vec![record]);
+}

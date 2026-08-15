@@ -323,38 +323,34 @@ impl Source {
         builder.build()
     }
 
-    /// Internal method to read all exported files matching the group name pattern `<group>_*`
+    /// Read every capture file of one group: `<input_dir>/<group>/*.jsonl`.
+    ///
+    /// The proc-macro names each file after the record it holds, so a file that
+    /// two compilations both produced exists once. Records that only *some*
+    /// compilations see — a `#[cfg(test)]` item, say — arrive as extra files and
+    /// are merged here, which is why this deduplicates by name (plus `cfg`)
+    /// rather than trusting the file set.
     fn read_group<P: AsRef<Path>>(input_dir: P, group: &str) -> Vec<Record> {
-        let pattern = format!("{group}_");
         let mut record_map = HashMap::new();
 
-        // Read the directory and find all matching files
-        if let Ok(entries) = fs::read_dir(&input_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
-                        #[cfg(feature = "debug")]
-                        println!("Reading exported file: {}", path.display());
-                        let path_clone = path.clone();
+        for path in Self::group_files(input_dir.as_ref(), group) {
+            #[cfg(feature = "debug")]
+            println!("Reading exported file: {}", path.display());
 
-                        match read_jsonl_file(&path) {
-                            Ok(records) => {
-                                for record in records {
-                                    // Use a HashMap to deduplicate records by name and cfg
-                                    let key = if let Some(cfg) = &record.cfg {
-                                        format!("{}#{}", record.name, cfg)
-                                    } else {
-                                        record.name.clone()
-                                    };
-                                    record_map.insert(key, record);
-                                }
-                            }
-                            Err(e) => {
-                                panic!("Failed to read {}: {}", path_clone.display(), e);
-                            }
-                        }
+            match read_jsonl_file(&path) {
+                Ok(records) => {
+                    for record in records {
+                        // Use a HashMap to deduplicate records by name and cfg
+                        let key = if let Some(cfg) = &record.cfg {
+                            format!("{}#{}", record.name, cfg)
+                        } else {
+                            record.name.clone()
+                        };
+                        record_map.insert(key, record);
                     }
+                }
+                Err(e) => {
+                    panic!("Failed to read {}: {}", path.display(), e);
                 }
             }
         }
@@ -363,21 +359,64 @@ impl Source {
         record_map.into_values().collect::<Vec<_>>()
     }
 
-    /// Internal method to discover all available groups from the directory
-    fn discover_groups<P: AsRef<Path>>(input_dir: P) -> HashSet<String> {
-        let mut groups = HashSet::new();
+    /// The capture files belonging to `group`, from the group's directory and
+    /// from the flat `<group>_*.jsonl` layout written by prebindgen ≤ 0.5.0.
+    fn group_files(input_dir: &Path, group: &str) -> Vec<PathBuf> {
+        let mut files = Vec::new();
 
-        // Discover all available groups
+        if let Ok(entries) = fs::read_dir(input_dir.join(group)) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with(JSONL_EXTENSION))
+                {
+                    files.push(path);
+                }
+            }
+        }
+
+        let legacy_prefix = format!("{group}_");
         if let Ok(entries) = fs::read_dir(input_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.ends_with(JSONL_EXTENSION) {
-                        // Extract group name from filename (everything before the first underscore)
-                        if let Some(underscore_pos) = file_name.find('_') {
-                            let group_name = &file_name[..underscore_pos];
-                            groups.insert(group_name.to_string());
-                        }
+                if path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| {
+                        name.starts_with(&legacy_prefix) && name.ends_with(JSONL_EXTENSION)
+                    })
+                {
+                    files.push(path);
+                }
+            }
+        }
+
+        files
+    }
+
+    /// Internal method to discover all available groups from the directory
+    ///
+    /// A group is a subdirectory. The flat layout of prebindgen ≤ 0.5.0 spelled
+    /// it as the file-name prefix up to the first `_`, which is still honoured
+    /// for a capture directory written by an older macro — and is why group
+    /// names may no longer contain `_`.
+    fn discover_groups<P: AsRef<Path>>(input_dir: P) -> HashSet<String> {
+        let mut groups = HashSet::new();
+
+        if let Ok(entries) = fs::read_dir(input_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                if path.is_dir() {
+                    groups.insert(file_name.to_string());
+                } else if file_name.ends_with(JSONL_EXTENSION) {
+                    // Legacy flat layout: everything before the first underscore.
+                    if let Some(underscore_pos) = file_name.find('_') {
+                        groups.insert(file_name[..underscore_pos].to_string());
                     }
                 }
             }
@@ -550,5 +589,99 @@ impl Builder {
             self.target_triple,
             self.crate_name,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::api::record::RecordKind;
+
+    fn write(dir: &Path, relative: &str, name: &str) {
+        let path = dir.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let record = Record::new(
+            RecordKind::Struct,
+            name.to_string(),
+            format!("pub struct {name};"),
+            Default::default(),
+            None,
+        );
+        fs::write(&path, format!("{}\n", record.to_jsonl_string().unwrap())).unwrap();
+    }
+
+    #[test]
+    fn groups_are_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default/Alpha_0000000000000001.jsonl", "Alpha");
+        write(dir.path(), "default/Beta_0000000000000002.jsonl", "Beta");
+        write(dir.path(), "structs/Gamma_0000000000000003.jsonl", "Gamma");
+
+        assert_eq!(
+            Source::discover_groups(dir.path()),
+            ["default", "structs"]
+                .map(str::to_string)
+                .into_iter()
+                .collect::<HashSet<_>>()
+        );
+
+        let mut names = Source::read_group(dir.path(), "default")
+            .into_iter()
+            .map(|record| record.name)
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, ["Alpha", "Beta"]);
+    }
+
+    #[test]
+    fn a_group_name_may_contain_an_underscore() {
+        // The flat layout spelled the group as the file-name prefix up to the
+        // first `_`, so `my_group` was discovered as `my`. A directory has no
+        // such ambiguity.
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "my_group/Alpha_0000000000000001.jsonl", "Alpha");
+
+        assert_eq!(
+            Source::discover_groups(dir.path()),
+            ["my_group".to_string()].into_iter().collect::<HashSet<_>>()
+        );
+        assert_eq!(Source::read_group(dir.path(), "my_group").len(), 1);
+    }
+
+    #[test]
+    fn the_flat_layout_of_older_captures_is_still_read() {
+        // A capture directory written by prebindgen <= 0.5.0, or one holding
+        // both layouts while a build is in flight.
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default_1234_5678.jsonl", "Legacy");
+        write(dir.path(), "default/Alpha_0000000000000001.jsonl", "Alpha");
+
+        assert_eq!(
+            Source::discover_groups(dir.path()),
+            ["default".to_string()].into_iter().collect::<HashSet<_>>()
+        );
+        let mut names = Source::read_group(dir.path(), "default")
+            .into_iter()
+            .map(|record| record.name)
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, ["Alpha", "Legacy"]);
+    }
+
+    #[test]
+    fn non_capture_entries_are_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default/Alpha_0000000000000001.jsonl", "Alpha");
+        fs::write(dir.path().join("crate_name.txt"), "example-flat").unwrap();
+        fs::write(dir.path().join("features.txt"), "unstable\n").unwrap();
+        fs::write(dir.path().join("default/notes.txt"), "scratch").unwrap();
+
+        assert_eq!(
+            Source::discover_groups(dir.path()),
+            ["default".to_string()].into_iter().collect::<HashSet<_>>()
+        );
+        assert_eq!(Source::read_group(dir.path(), "default").len(), 1);
     }
 }
