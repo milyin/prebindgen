@@ -51,7 +51,7 @@ public class Esc_Probe private constructor(initialPtr: Long) : NativeHandle(init
         internal fun fromRawPtr(initialPtr: Long): Esc_Probe = Esc_Probe(initialPtr)
 
         /** Construct an [`EscapeProbe`] (its covertest constructor). */
-        public fun escapeProbeNew(value: Long, onError: JniErrorHandler<Esc_Probe>): Esc_Probe {
+        public fun escapeProbeNew(value: Long, onError: JniErrorHandler<Esc_Probe?>): Esc_Probe? {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = CovNative.escapeProbeNew(value, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)

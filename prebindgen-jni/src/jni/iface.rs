@@ -1661,6 +1661,8 @@ pub(crate) fn error_handler_iface_spec(
          parameters carry the decomposed `{source_short}`. Binding/system failures go to the\n\
          separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`\n\
          discriminator here. The wrapper returns whatever `run` returns;\n\
+         the handler firing is the error discriminator: null can also be a successful optional\n\
+         result, while a non-null value can be a handler-supplied fallback.\n\
          throwing from `run` is safe (it executes after the native call has returned)."
     ));
     Some(iface)
@@ -1687,6 +1689,8 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &Declarations) -> IfaceSpec {
          failure message. For an infallible wrapper this is the sole `onError`; a\n\
          fallible wrapper takes it as `onBindingError` alongside the typed domain\n\
          handler. The wrapper returns whatever `run` returns;\n\
+         the handler firing is the error discriminator: null can also be a successful optional\n\
+         result, while a non-null value can be a handler-supplied fallback.\n\
          throwing from `run` is safe (it executes after the native call has returned)."
             .to_string(),
     );

@@ -30,7 +30,7 @@ public class StorageError private constructor(initialPtr: Long) : NativeHandle(i
      * Render a [`StorageError`] as its message (the error's flatten-output
      * **accessor**, fed to `onError`).
      */
-    public fun message(onError: JniErrorHandler<String>): String {
+    public fun message(onError: JniErrorHandler<String?>): String? {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __bcap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
@@ -57,6 +57,8 @@ public class StorageError private constructor(initialPtr: Long) : NativeHandle(i
  * parameters carry the decomposed `StorageError`. Binding/system failures go to the
  * separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`
  * discriminator here. The wrapper returns whatever `run` returns;
+ * the handler firing is the error discriminator: null can also be a successful optional
+ * result, while a non-null value can be a handler-supplied fallback.
  * throwing from `run` is safe (it executes after the native call has returned).
  */
 public fun interface StorageErrorHandler<out R> {

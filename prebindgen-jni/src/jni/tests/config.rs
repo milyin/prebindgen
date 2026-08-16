@@ -358,7 +358,7 @@ fn per_class_name_and_base_package_fun() {
     assert!(!kc.contains("JNIZThing"), "{kotlin}");
     // Wrappers reference the renamed class.
     assert!(
-        kc.contains("funthingNew(onError:JniErrorHandler<Gadget>):Gadget"),
+        kc.contains("funthingNew(onError:JniErrorHandler<Gadget?>):Gadget?"),
         "{kotlin}"
     );
     // Base-package functions land in the base package file (which also hosts
@@ -433,7 +433,7 @@ fn setters_after_declarations_apply() {
     assert!(tc.contains("classThingprivateconstructor("), "{things}");
     assert!(!tc.contains("classZThingprivateconstructor("), "{things}");
     assert!(
-        tc.contains("funthingNew(onError:JniErrorHandler<Thing>):Thing"),
+        tc.contains("funthingNew(onError:JniErrorHandler<Thing?>):Thing?"),
         "{things}"
     );
 }

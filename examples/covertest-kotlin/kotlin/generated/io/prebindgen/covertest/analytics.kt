@@ -119,14 +119,14 @@ public class Summary private constructor(initialPtr: Long) : GcNativeHandle(init
          * Construct a [`Summary`] from its parts (declared a **constructor** /
          * companion factory, and the build-from **variant** of the flatten-input).
          */
-        public fun of(count: Long, total: Double, onError: JniErrorHandler<Summary>): Summary {
+        public fun of(count: Long, total: Double, onError: JniErrorHandler<Summary?>): Summary? {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = CovNative.summaryNew(count, total, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
             return Summary.fromRawPtr(__ret)
         }
 
-        public fun fromMean(count: Long, mean: Double, onError: JniErrorHandler<Summary>): Summary {
+        public fun fromMean(count: Long, mean: Double, onError: JniErrorHandler<Summary?>): Summary? {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = CovNative.summaryFromMean(count, mean, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -192,7 +192,11 @@ public fun interface SummaryFolder<A> {
  * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun <R> storageSummary(s: Storage, onError: JniErrorHandler<R>, build: SummaryBuilder<R>): R {
+public fun <R> storageSummary(
+    s: Storage,
+    onError: JniErrorHandler<R?>,
+    build: SummaryBuilder<R>,
+): R? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
@@ -210,8 +214,8 @@ public fun describeSummary(
     s01: Double?,
     s1: Summary?,
     verbose: Boolean,
-    onError: JniErrorHandler<String>,
-): String {
+    onError: JniErrorHandler<String?>,
+): String? {
     if (s1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = run {
@@ -297,7 +301,7 @@ public fun storageMatchesSummary(
  * Like [`storage_summary`] but the binding keeps the result as a raw opaque
  * handle (per-fn **flatten-output-suppress**).
  */
-public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary>): Summary {
+public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary?>): Summary? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
@@ -336,9 +340,9 @@ public fun summaryTotalRaw(s: Summary, onError: JniErrorHandler<Double>): Double
 @Suppress("UNCHECKED_CAST")
 public fun <R> storageSummaryFull(
     s: Storage,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SummaryStorageSummaryFullBuilder<R>,
-): R {
+): R? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
@@ -360,9 +364,9 @@ public fun <R> storageSummaryFull(
 @Suppress("UNCHECKED_CAST")
 public fun <R> storageSummaryProbe(
     s: Storage,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SummaryStorageSummaryProbeBuilder<R>,
-): R {
+): R? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
@@ -522,35 +526,35 @@ public fun <R> summaryMerge(
     primaryTotal: Double,
     fallbackCount: Long,
     fallbackTotal: Double,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SummaryBuilder<R>,
-): R = summaryMerge(0, primaryCount, primaryTotal, null, 0, fallbackCount, fallbackTotal, null, onError, build)
+): R? = summaryMerge(0, primaryCount, primaryTotal, null, 0, fallbackCount, fallbackTotal, null, onError, build)
 
 @Suppress("UNCHECKED_CAST")
 public fun <R> summaryMerge(
     primaryCount: Long,
     primaryTotal: Double,
     fallback: Summary,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SummaryBuilder<R>,
-): R = summaryMerge(0, primaryCount, primaryTotal, null, 1, null, null, fallback, onError, build)
+): R? = summaryMerge(0, primaryCount, primaryTotal, null, 1, null, null, fallback, onError, build)
 
 @Suppress("UNCHECKED_CAST")
 public fun <R> summaryMerge(
     primary: Summary,
     fallbackCount: Long,
     fallbackTotal: Double,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SummaryBuilder<R>,
-): R = summaryMerge(1, null, null, primary, 0, fallbackCount, fallbackTotal, null, onError, build)
+): R? = summaryMerge(1, null, null, primary, 0, fallbackCount, fallbackTotal, null, onError, build)
 
 @Suppress("UNCHECKED_CAST")
 public fun <R> summaryMerge(
     primary: Summary,
     fallback: Summary,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SummaryBuilder<R>,
-): R = summaryMerge(1, null, null, primary, 1, null, null, fallback, onError, build)
+): R? = summaryMerge(1, null, null, primary, 1, null, null, fallback, onError, build)
 
 /**
  * Combine two summaries (#87 regression: BOTH parameters are splittable under
@@ -572,9 +576,9 @@ public fun <R> summaryMerge(
     fallback00: Long?,
     fallback01: Double?,
     fallback1: Summary?,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SummaryBuilder<R>,
-): R {
+): R? {
     if ((primary1?.ptr ?: 0L) != 0L && (primary1?.ptr ?: 0L) == (fallback1?.ptr ?: 0L)) return onError.run(
         "Aliasing arguments: 'primary1' and 'fallback1' are the same native resource; a consumed handle may not be passed twice in one call.",
     )
@@ -666,9 +670,9 @@ public fun <A> summarySeries(
     count: Long,
     start: Long,
     acc: A,
-    onError: JniErrorHandler<A>,
+    onError: JniErrorHandler<A?>,
     fold: SummaryFolder<A>,
-): A {
+): A? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.summarySeries(count, start, acc, fold, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -697,7 +701,7 @@ public fun <A> summarySeriesOpt(
 }
 
 /** Create an empty archive. */
-public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
+public fun archiveNew(onError: JniErrorHandler<SummaryVault?>): SummaryVault? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.archiveNew(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)

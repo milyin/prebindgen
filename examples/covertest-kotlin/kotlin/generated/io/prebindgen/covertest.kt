@@ -451,7 +451,7 @@ public class Storage private constructor(initialPtr: Long) : NativeHandle(initia
          * Build a storage holding a single payload (a **constructor** / companion
          * factory on `Storage`).
          */
-        public fun withPayload(payload: Payload, onError: JniErrorHandler<Storage>): Storage {
+        public fun withPayload(payload: Payload, onError: JniErrorHandler<Storage?>): Storage? {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = CovNative.storageWithPayload(
                 payload.id,
@@ -813,6 +813,8 @@ internal object __u64FolderRawHolder {
  * failure message. For an infallible wrapper this is the sole `onError`; a
  * fallible wrapper takes it as `onBindingError` alongside the typed domain
  * handler. The wrapper returns whatever `run` returns;
+ * the handler firing is the error discriminator: null can also be a successful optional
+ * result, while a non-null value can be a handler-supplied fallback.
  * throwing from `run` is safe (it executes after the native call has returned).
  */
 public fun interface JniErrorHandler<out R> {
@@ -837,7 +839,7 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
  * Build the opaque string the C side stores in [`Payload::label`]. To C this
  * returns a `string_t *` (since `String` is declared `opaque_ptr`).
  */
-public fun stringNew(s: String, onError: JniErrorHandler<String>): String {
+public fun stringNew(s: String, onError: JniErrorHandler<String?>): String? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.stringNew(s, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)

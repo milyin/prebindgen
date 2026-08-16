@@ -160,6 +160,10 @@ private val boomStorage = StorageErrorHandler<Nothing> { message, handle ->
 /** Thrown by the [StorageErrorHandler] used to probe the domain error channel. */
 private class LabelError(val detail: String) : RuntimeException(detail)
 
+/** Assert that a reference-returning call with a throwing handler succeeded. */
+private fun <T : Any> T?.orThrow(): T =
+    this ?: throw AssertionError("a throwing error handler returned instead of throwing")
+
 private var sectionCount = 0
 
 private inline fun section(name: String, body: () -> Unit) {
@@ -205,7 +209,7 @@ fun main() {
             ULong.MAX_VALUE,
             ULong.MAX_VALUE,
             boom,
-        )
+        ).orThrow()
         check(
             max == Unsigned(
                 UByte.MAX_VALUE.toInt(),
@@ -466,31 +470,31 @@ fun main() {
     section("sum as a data-class field (tag-gated groups on one fromParts)") {
         // Every alternative survives the crossing, including the payload-less
         // one and the two whose groups sit beside object-shaped slots.
-        check(observationNew(0, false, boom).reading == Reading.Missing)
-        check(observationNew(1, false, boom).reading == Reading.Exact(42L))
-        check(observationNew(2, false, boom).reading == Reading.Range(1L, 9L))
-        check(observationNew(3, false, boom).reading == Reading.Tagged("warm", Priority.HIGH))
-        check(observationNew(4, false, boom).reading == Reading.Companion(5L))
+        check(observationNew(0, false, boom).orThrow().reading == Reading.Missing)
+        check(observationNew(1, false, boom).orThrow().reading == Reading.Exact(42L))
+        check(observationNew(2, false, boom).orThrow().reading == Reading.Range(1L, 9L))
+        check(observationNew(3, false, boom).orThrow().reading == Reading.Tagged("warm", Priority.HIGH))
+        check(observationNew(4, false, boom).orThrow().reading == Reading.Companion(5L))
 
         // The sum sits beside ordinary flattened leaves — they must not be
         // disturbed by the tag-gated groups interleaved with them.
-        val obs = observationNew(3, false, boom)
+        val obs = observationNew(3, false, boom).orThrow()
         check(obs.id == 7L && obs.note == "obs")
 
         // `Option<sum>`: the present flag and the tag are independent facts,
         // so an absent optional is null regardless of what its tag slot holds.
-        check(observationNew(1, false, boom).fallback == null)
-        check(observationNew(1, true, boom).fallback == Reading.Range(1L, 9L))
+        check(observationNew(1, false, boom).orThrow().fallback == null)
+        check(observationNew(1, true, boom).orThrow().fallback == Reading.Range(1L, 9L))
         // …and an object-payload variant round-trips through the optional too.
-        check(observationNew(2, true, boom).fallback == Reading.Tagged("warm", Priority.HIGH))
+        check(observationNew(2, true, boom).orThrow().fallback == Reading.Tagged("warm", Priority.HIGH))
         // Both sums live at once, each with its own tag.
-        val both = observationNew(4, true, boom)
+        val both = observationNew(4, true, boom).orThrow()
         check(both.reading == Reading.Companion(5L) && both.fallback == Reading.Missing)
 
         // …and back IN as part of a data-class parameter: every alternative
         // reconstructs the same Rust variant it came from.
         for (which in 0..4) {
-            check(observationWhich(observationNew(which, false, boom), boom) == which)
+            check(observationWhich(observationNew(which, false, boom).orThrow(), boom) == which)
         }
         // A Kotlin-constructed value (not one that came from Rust) crosses in
         // just the same.
@@ -550,9 +554,9 @@ fun main() {
 
         // `Vec<E>` return: each element's tag + groups cross raw and the
         // folder singleton appends the rebuilt alternative.
-        check(readingSeries(0, boom).isEmpty())
+        check(readingSeries(0, boom).orThrow().isEmpty())
         check(
-            readingSeries(5, boom) == listOf(
+            readingSeries(5, boom).orThrow() == listOf(
                 Reading.Missing,
                 Reading.Exact(42L),
                 Reading.Range(1L, 9L),
@@ -565,7 +569,7 @@ fun main() {
         // sum while the wire still carries decoupled slots.
         val seen = ArrayList<Reading>()
         readingEach(5, { r -> seen.add(r) }, boom)
-        check(seen == readingSeries(5, boom))
+        check(seen == readingSeries(5, boom).orThrow())
     }
 
     // ── a tag-gated group that owns a native resource ─────────────────────────
@@ -641,7 +645,7 @@ fun main() {
     // is `AutoCloseable` either way and its `close()` cascades either way; the
     // walk into the alternatives lives in `Lookup`, not in `Verdict`.
     section("a data-class field reaching a handle through a sum cascades") {
-        val v = verdictNew(7L, 3L, 1.5, boom)
+        val v = verdictNew(7L, 3L, 1.5, boom).orThrow()
         check(v.id == 7L)
         val found = v.outcome
         check(found is Lookup.Found)
@@ -657,7 +661,7 @@ fun main() {
         // …and an alternative owning nothing native closes to a no-op, so the
         // cascade is safe for every value of the field, not just the live-handle
         // one.
-        val absent = verdictNew(8L, 0L, 0.0, boom)
+        val absent = verdictNew(8L, 0L, 0.0, boom).orThrow()
         check(absent.outcome === Lookup.Absent)
         absent.close()
     }
@@ -670,7 +674,7 @@ fun main() {
     // together. This section IS that tie: it would not compile if `Holder` had
     // no `close()`, and the last check fails if `Dossier` had none.
     section("a data-class field reaching a handle through a nested data class cascades") {
-        val d = dossierNew(5L, 3L, 4L, 2.0, boom)
+        val d = dossierNew(5L, 3L, 4L, 2.0, boom).orThrow()
         check(d.note == 5L)
         check(d.holder.tag == 3L)
         val summary = d.holder.summary
@@ -813,7 +817,7 @@ fun main() {
                 val filed = if (fLabel == null) "-|$fTag" else "$fLabel/$fCount/$fTag"
                 val archived = if (aLabel == null) "-|$aTag" else "$aLabel/$aCount/$aTag"
                 "$filed $archived"
-            }
+            }.orThrow()
             rows.add(row)
         }
         // `-|null`: an absent report nulls the selector too, so a receiver can
@@ -851,7 +855,7 @@ fun main() {
     // what each live group needs, so Kotlin gets an ordinary value with no
     // borrow to track and the owner can be read again afterwards (#161).
     section("borrowed sum returns") {
-        val vault = archiveNew(boom)
+        val vault = archiveNew(boom).orThrow()
 
         // Every alternative, read back through `&Reading`.
         archiveSetReading(vault, 0, boom)
@@ -886,9 +890,9 @@ fun main() {
     // reads an enum property back (bare and optional read differently: the slot
     // holds the enum OBJECT, not a boxed Int).
     section("sum with a non-leaf payload (whole-object crossing, Option<enum>)") {
-        check(taggedRank(taggedNew(0, boom), boom) == -1)
-        check(taggedRank(taggedNew(1, boom), boom) == 0)
-        check(taggedRank(taggedNew(2, boom), boom) == 10)
+        check(taggedRank(taggedNew(0, boom).orThrow(), boom) == -1)
+        check(taggedRank(taggedNew(1, boom).orThrow(), boom) == 0)
+        check(taggedRank(taggedNew(2, boom).orThrow(), boom) == 10)
 
         // Kotlin-constructed values cross identically — including the two
         // `Ranked` shapes that differ only by the optional being present.
@@ -906,31 +910,31 @@ fun main() {
     // Both arrive as a JVM null, so only the tag tells `Ranked(null)` from
     // `None_`.
     section("Option<enum> payload in a returned sum") {
-        check(markerOf(0, boom) === Marker.None_)
+        check(markerOf(0, boom).orThrow() === Marker.None_)
 
-        val absent = markerOf(1, boom)
+        val absent = markerOf(1, boom).orThrow()
         check(absent is Marker.Ranked && absent.v0 == null)
 
-        val present = markerOf(2, boom)
+        val present = markerOf(2, boom).orThrow()
         check(present is Marker.Ranked && present.v0 == Priority.HIGH)
 
         // The two nulls are distinguishable in both directions: each value the
         // return path built crosses back in and reads as itself.
-        check(taggedRank(Tagged(1L, markerOf(0, boom)), boom) == -1)
-        check(taggedRank(Tagged(1L, markerOf(1, boom)), boom) == 0)
-        check(taggedRank(Tagged(1L, markerOf(2, boom)), boom) == 10)
+        check(taggedRank(Tagged(1L, markerOf(0, boom).orThrow()), boom) == -1)
+        check(taggedRank(Tagged(1L, markerOf(1, boom).orThrow()), boom) == 0)
+        check(taggedRank(Tagged(1L, markerOf(2, boom).orThrow()), boom) == 10)
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────
     section("value_class Stamp") {
-        val st: Stamp = stampNew(7L, 42L, boom)
+        val st: Stamp = stampNew(7L, 42L, boom).orThrow()
         check(st.secs(boom) == 7L)
         check(st.nanos(boom) == 42L)
-        val series: List<Stamp> = stampSeries(3L, boom)
+        val series: List<Stamp> = stampSeries(3L, boom).orThrow()
         check(series.size == 3)
         check(series[0].secs(boom) == 0L)
         check(series[2].secs(boom) == 2L && series[2].nanos(boom) == 0L)
-        check(stampSeries(0L, boom).isEmpty())
+        check(stampSeries(0L, boom).orThrow().isEmpty())
     }
 
     // ── array-backed VALUE EQUALITY ─────────────────────────────────────────
@@ -945,11 +949,11 @@ fun main() {
         // The NEGATIVE case first: a data class with no array property must keep
         // the compiler's own equality. The generator emits nothing for it, so
         // this pins that the content operators do not churn ordinary classes.
-        val s1 = stampNew(7L, 42L, boom)
-        val s2 = stampNew(7L, 42L, boom)
+        val s1 = stampNew(7L, 42L, boom).orThrow()
+        val s2 = stampNew(7L, 42L, boom).orThrow()
         check(s1 == s2) { "scalar data class must compare by value: $s1 vs $s2" }
         check(s1.hashCode() == s2.hashCode())
-        check(stampNew(8L, 42L, boom) != s1) { "different content must not compare equal" }
+        check(stampNew(8L, 42L, boom).orThrow() != s1) { "different content must not compare equal" }
         check(hashSetOf(s1, s2).size == 1)
         check(s1.toString() == "Stamp(secs=7, nanos=42)") { "got $s1" }
 
@@ -958,7 +962,7 @@ fun main() {
         // this also covers the `31 * result + …contentHashCode()` fold form
         // that a real value (`Timestamp(ntp64, id)`) produces.
         fun blob(secs: Long, id: ByteArray, chunks: List<ByteArray>) =
-            blobValueNew(secs, id, chunks, boom)
+            blobValueNew(secs, id, chunks, boom).orThrow()
 
         val chunks = listOf(byteArrayOf(9), byteArrayOf(8, 7))
         val b1 = blob(7L, byteArrayOf(1, 2, 3), chunks)
@@ -1031,7 +1035,7 @@ fun main() {
         // slot is the wrapper class, not `[B` — reading the old descriptor threw
         // `NoSuchFieldError` on the first decode.
         check(blobValueEcho(b1, boom) == b1) { "jobject-input round trip must preserve the value" }
-        check(blobValueEcho(blob(0L, ByteArray(0), emptyList()), boom).chunks.isEmpty())
+        check(blobValueEcho(blob(0L, ByteArray(0), emptyList()), boom).orThrow().chunks.isEmpty())
     }
 
     // ── Option<scalar> nullable primitive return + data_class instance
@@ -1043,7 +1047,7 @@ fun main() {
 
     // ── ptr_class members + Option<Payload>/Option<Vec>/Vec round-trips ──────
     section("Storage members + Option/Vec round-trips") {
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
         check(s.len(boom) == 0L)
 
         storagePutByTake(s, payload(42L, 1, 1.0, false, "a"), boom)
@@ -1068,7 +1072,7 @@ fun main() {
 
     // ── constructor (companion factory) ──────────────────────────────────────
     section("constructor Storage.withPayload") {
-        val s = Storage.withPayload(payload(99L, 0, 0.0, false, "z"), boom)
+        val s = Storage.withPayload(payload(99L, 0, 0.0, false, "z"), boom).orThrow()
         check(s.len(boom) == 1L)
         check(s.contains(99L, boom))
         s.close()
@@ -1080,7 +1084,7 @@ fun main() {
     // generated members — used here polymorphically, no generated-code edits ──
     section(".interface() hatch (Api interfaces extended by SDK interfaces)") {
         // ptr class: Storage implements StorageApi; CovResource : StorageApi.
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
         val r: CovResource = s
         check(r.live)                     // default over inherited peek()/isClosed()
         check(r.isEmpty())                // default over class-specific len()
@@ -1109,7 +1113,7 @@ fun main() {
 
     // ── impl Fn callbacks: single-payload + whole-batch ──────────────────────
     section("callbacks (impl Fn single + slice)") {
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
         storagePutSlice(
             s,
             listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null), payload(3L, 0, 0.0, false, null)),
@@ -1118,7 +1122,7 @@ fun main() {
 
         // payload_handler_new: closure decoded once, fires once per payload.
         var perElem = 0L
-        val h = payloadHandlerNew(PayloadCallback { p -> perElem += p.id }, boom)
+        val h = payloadHandlerNew(PayloadCallback { p -> perElem += p.id }, boom).orThrow()
         storageCallback(s, h, boom)
         check(perElem == 6L)
         h.close()
@@ -1129,7 +1133,7 @@ fun main() {
         val vh: PayloadVecHandler = payloadVecHandlerNew(
             PayloadListCallback { list -> batchSize = list.size; batchSum = list.sumOf { it.id } },
             boom,
-        )
+        ).orThrow()
         storageCallbackVec(s, vh, boom)
         check(batchSize == 3)
         check(batchSum == 6L)
@@ -1139,15 +1143,15 @@ fun main() {
 
     // ── flatten matrix on Summary: output (default/suppress/with) ────────────
     section("flatten_output (default / suppress / with)") {
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
         storagePutSlice(s, listOf(payload(1L, 0, 10.0, false, null), payload(2L, 0, 30.0, false, null)), boom)
 
         // flatten_output DEFAULT: decompose into (count, total) leaves via builder.
-        val pair = storageSummary(s, boom) { count, total -> count to total }
+        val pair = storageSummary(s, boom) { count, total -> count to total }.orThrow()
         check(pair.first == 2L && pair.second == 40.0)
 
         // flatten_output_suppress: keep the raw opaque handle.
-        val raw: Summary = storageSummaryHandle(s, boom)
+        val raw: Summary = storageSummaryHandle(s, boom).orThrow()
         check(raw.count(boom) == 2L)          // accessor on handle (non-consuming)
         check(raw.total(boom) == 40.0)
         check(raw.scaled(2.0, boom) == 80.0)  // method on handle
@@ -1159,7 +1163,7 @@ fun main() {
         val full = storageSummaryFull(s, boom) { count, total, handle ->
             fullHandle = handle
             count to total
-        }
+        }.orThrow()
         check(full.first == 2L && full.second == 40.0)
         check(fullHandle!!.total(boom) == 40.0)
         fullHandle!!.close()
@@ -1176,12 +1180,12 @@ fun main() {
     // fails ⇒ the leaf is null (no native clone, no wrapper); holds ⇒ a live
     // owned handle arrives with the values.
     section("binding-local field (fun! + sig!)") {
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
 
         // Empty storage: count == 0 ⇒ the predicate fails ⇒ null handle.
         val emptyProbe = storageSummaryProbe(s, boom) { count, total, handle ->
             Triple(count, total, handle)
-        }
+        }.orThrow()
         check(emptyProbe.first == 0L && emptyProbe.second == 0.0)
         check(emptyProbe.third == null) { "empty summary must arrive value-only" }
 
@@ -1189,7 +1193,7 @@ fun main() {
         storagePutSlice(s, listOf(payload(1L, 0, 10.0, false, null), payload(2L, 0, 30.0, false, null)), boom)
         val probe = storageSummaryProbe(s, boom) { count, total, handle ->
             Triple(count, total, handle)
-        }
+        }.orThrow()
         check(probe.first == 2L && probe.second == 40.0)
         val h = probe.third ?: error("non-empty summary must deliver its handle")
         check(h.count(boom) == 2L && h.total(boom) == 40.0)
@@ -1210,7 +1214,7 @@ fun main() {
         // mangling covers binding-local fns exactly like registry fns.
         // FALLIBLE companion constructor: the sig's `Result<Summary, String>`
         // return is the error channel — happy path first…
-        val m = Summary.fromMean(4L, 2.5, boom)
+        val m = Summary.fromMean(4L, 2.5, boom).orThrow()
         check(m.count(boom) == 4L && m.total(boom) == 10.0)
         // Instance method.
         check(m.mean(boom) == 2.5)
@@ -1231,11 +1235,11 @@ fun main() {
 
     // ── flatten input on Summary: default + with, both selectors ─────────────
     section("flatten_input (default / with), leaves + handle") {
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
         storagePutSlice(s, listOf(payload(1L, 0, 10.0, false, null), payload(2L, 0, 30.0, false, null)), boom)
 
         // constructor + accessors + method on the analytics handle.
-        val sum = Summary.of(2L, 40.0, boom)
+        val sum = Summary.of(2L, 40.0, boom).orThrow()
         check(sum.count(boom) == 2L && sum.total(boom) == 40.0 && sum.scaled(0.5, boom) == 20.0)
         sum.close()
 
@@ -1243,14 +1247,14 @@ fun main() {
         // `Summary` variants: idiomatic typed forms delegating to the selector.
         check(storageMatchesSummary(s, 2L, 40.0, boom))       // build-from-leaves arm
         check(!storageMatchesSummary(s, 1L, 40.0, boom))
-        val h0 = Summary.of(2L, 40.0, boom)
+        val h0 = Summary.of(2L, 40.0, boom).orThrow()
         check(storageMatchesSummary(s, h0, boom))             // pass-handle arm
         // The selector form stays public underneath (raw arm dispatch).
         check(storageMatchesSummary(s, 0, 2L, 40.0, null, boom))
 
         // #52 single-param split via a per-fn `.expand_param` override.
         check(storageExpectSummary(s, 2L, 40.0, boom))        // build-from-leaves arm
-        val h1 = Summary.of(2L, 40.0, boom)
+        val h1 = Summary.of(2L, 40.0, boom).orThrow()
         check(storageExpectSummary(s, h1, boom))              // pass-handle arm
 
         // #52 CARTESIAN PRODUCT: two split params → the 2×2 grid of typed
@@ -1258,10 +1262,10 @@ fun main() {
         // with the origin parameter name (`primaryCount`, `fallbackTotal`); the
         // handle arm consumes its `Summary`, so each is a fresh handle.
         check(summaryPrefer(2L, 40.0, 1L, 1.0, boom) == 1L)                       // build / build
-        check(summaryPrefer(1L, 1.0, Summary.of(3L, 99.0, boom), boom) == 0L)     // build / handle
-        check(summaryPrefer(Summary.of(3L, 99.0, boom), 1L, 1.0, boom) == 1L)     // handle / build
+        check(summaryPrefer(1L, 1.0, Summary.of(3L, 99.0, boom).orThrow(), boom) == 0L)     // build / handle
+        check(summaryPrefer(Summary.of(3L, 99.0, boom).orThrow(), 1L, 1.0, boom) == 1L)     // handle / build
         check(
-            summaryPrefer(Summary.of(1L, 1.0, boom), Summary.of(3L, 99.0, boom), boom) == 0L,
+            summaryPrefer(Summary.of(1L, 1.0, boom).orThrow(), Summary.of(3L, 99.0, boom).orThrow(), boom) == 0L,
         )                                                                          // handle / handle
 
         // #87: split × builder-delivered return. `summaryMerge` returns a
@@ -1274,13 +1278,13 @@ fun main() {
                 (3L to 42.0),
         )                                                                          // build / build
         check(
-            summaryMerge(2L, 40.0, Summary.of(1L, 2.0, boom), boom) { count, _ -> count } == 3L,
+            summaryMerge(2L, 40.0, Summary.of(1L, 2.0, boom).orThrow(), boom) { count, _ -> count } == 3L,
         )                                                                          // build / handle
         check(
-            summaryMerge(Summary.of(2L, 40.0, boom), 1L, 2.0, boom) { _, total -> total } == 42.0,
+            summaryMerge(Summary.of(2L, 40.0, boom).orThrow(), 1L, 2.0, boom) { _, total -> total } == 42.0,
         )                                                                          // handle / build
         check(
-            summaryMerge(Summary.of(2L, 40.0, boom), Summary.of(1L, 2.0, boom), boom) {
+            summaryMerge(Summary.of(2L, 40.0, boom).orThrow(), Summary.of(1L, 2.0, boom).orThrow(), boom) {
                 count, total ->
                 count to total
             } == (3L to 42.0),
@@ -1293,7 +1297,7 @@ fun main() {
         // still open, still usable, and still ours to close. A check inside the
         // converter could not offer that: by then the first argument is gone.
         run {
-            val shared = Summary.of(5L, 55.0, boom)
+            val shared = Summary.of(5L, 55.0, boom).orThrow()
             var aliasMessage: String? = null
             val rejected = summaryPrefer(shared, shared) { je ->
                 aliasMessage = je
@@ -1309,7 +1313,7 @@ fun main() {
 
             // No false positives — two DISTINCT handles of the same class go
             // through untouched.
-            check(summaryPrefer(shared, Summary.of(3L, 99.0, boom), boom) == 0L)
+            check(summaryPrefer(shared, Summary.of(3L, 99.0, boom).orThrow(), boom) == 0L)
         }
 
         // Optional combined-selector expansion: `Option<&Summary>` under the
@@ -1317,7 +1321,7 @@ fun main() {
         // the borrow-identity arm CLONES, so the handle survives the call.
         check(summaryTotalOpt(-1, null, null, null, boom) == -1.0)     // absent
         check(summaryTotalOpt(0, 2L, 40.0, null, boom) == 40.0)        // build arm
-        val hOpt = Summary.of(3L, 99.0, boom)
+        val hOpt = Summary.of(3L, 99.0, boom).orThrow()
         check(summaryTotalOpt(1, null, null, hOpt, boom) == 99.0)      // borrow-identity arm
         check(hOpt.total(boom) == 99.0)                                // handle still live
         hOpt.close()
@@ -1334,7 +1338,7 @@ fun main() {
     // A fallible-typed wrapper takes TWO handlers: `onBindingError` (the binding
     // channel) and `onError` (the typed domain channel, no `je`). See #45.
     section("Result error channel storageTryWithLabel") {
-        val ok = storageTryWithLabel("hi", boom, boomStorage)
+        val ok = storageTryWithLabel("hi", boom, boomStorage).orThrow()
         check(ok.len(boom) == 1L)
         ok.close()
 
@@ -1357,28 +1361,28 @@ fun main() {
     // ── #45: both channels of ONE fallible wrapper, each fires independently ──
     section("two-caller split storageTryFromStamp") {
         // Happy path: neither channel fires.
-        val ok = storageTryFromStamp(stampNew(5L, 0L, boom), byteArrayOf(1, 2), boom, boomStorage)
+        val ok = storageTryFromStamp(stampNew(5L, 0L, boom).orThrow(), byteArrayOf(1, 2), boom, boomStorage).orThrow()
         check(ok.len(boom) == 1L)
         ok.close()
 
         // DOMAIN error (well-formed Stamp, rejected value): `onError` fires,
-        // `onBindingError` must NOT. The handler returns a throwaway Storage.
+        // `onBindingError` must NOT. The handler declines to fabricate a Storage.
         var domainMsg: String? = null
         val domainRet = storageTryFromStamp(
-            stampNew(-1L, 0L, boom),
+            stampNew(-1L, 0L, boom).orThrow(),
             byteArrayOf(1, 2),
-            JniErrorHandler<Storage> { je ->
+            JniErrorHandler<Storage?> { je ->
                 throw AssertionError("binding channel must not fire on a domain error: $je")
             },
-            StorageErrorHandler<Storage> { message, handle ->
+            StorageErrorHandler<Storage?> { message, handle ->
                 domainMsg = message
                 check(handle.message(boom) == "stamp secs must be positive")
                 handle.close()
-                storageNew(boom)
+                null
             },
         )
         check(domainMsg == "stamp secs must be positive") { "domain onError did not fire: $domainMsg" }
-        domainRet.close()
+        check(domainRet == null)
 
         // BINDING error (wrong-length `tag` array): `onBindingError` fires,
         // the domain `onError` must NOT.
@@ -1386,11 +1390,11 @@ fun main() {
         val bindingRet = storageTryFromStamp(
             Stamp(1L, 0L),
             byteArrayOf(1, 2, 3),   // `tag` is [u8; 2]; 3 must be rejected on decode
-            JniErrorHandler<Storage> { je ->
+            JniErrorHandler<Storage?> { je ->
                 bindingJe = je
-                storageNew(boom)
+                null
             },
-            StorageErrorHandler<Storage> { _, handle ->
+            StorageErrorHandler<Storage?> { _, handle ->
                 handle.close()
                 throw AssertionError("domain channel must not fire on a binding error")
             },
@@ -1398,7 +1402,7 @@ fun main() {
         check(bindingJe != null && bindingJe!!.contains("fixed-size array decode")) {
             "binding onBindingError did not fire: $bindingJe"
         }
-        bindingRet.close()
+        check(bindingRet == null)
     }
 
     // ── input_wrapper / output_wrapper: Millis ⇄ Long ────────────────────────
@@ -1483,13 +1487,13 @@ fun main() {
     }
 
     section("Vec<Storage> handle fold (storageShards / storageShardsOpt)") {
-        val shards = storageShards(3L, 2L, boom)
+        val shards = storageShards(3L, 2L, boom).orThrow()
         check(shards.size == 3)
         check(shards.all { it.len(boom) == 2L })
         check(shards[2].contains(2001L, boom))   // distinct, correctly-typed handles
         check(!shards[0].contains(2001L, boom))
         shards.forEach { it.close() }
-        check(storageShards(0L, 2L, boom).isEmpty())
+        check(storageShards(0L, 2L, boom).orThrow().isEmpty())
         // Option<Vec<handle>>: the same fold under the null niche.
         check(storageShardsOpt(0L, 2L, boom) == null)
         val some = storageShardsOpt(2L, 1L, boom)!!
@@ -1509,7 +1513,7 @@ fun main() {
                 escaped = st
             },
             boom,
-        )
+        ).orThrow()
         storageEmit(5L, h, boom)
         check(openInRun && seenLen == 5L)
         // close-unless-taken: the proxy closed the handle after run.
@@ -1520,13 +1524,13 @@ fun main() {
     // ── nested data_class + Option<prim>/Option<enum> FIELDS ─────────────────
     section("nested data_class Annotated + Option fields") {
         val p = payload(7L, 1, 2.5, true, "x")
-        val a = annotatedNew(p, 30L, Priority.HIGH, boom)   // output: nested fromParts
+        val a = annotatedNew(p, 30L, Priority.HIGH, boom).orThrow() // output: nested fromParts
         check(a.payload == p && a.ttl == 30L && a.priority == Priority.HIGH)
         check(annotatedTtl(a, boom) == 30L)                 // input: (present, value) pair
         check(annotatedPriority(a, boom) == Priority.HIGH)  // Option<enum> return
         check(annotatedPayloadValue(a, boom) == 2.5)        // nested field survived decode
         check(annotatedAlternateValue(a, boom) == null)     // Option<nested> absent gate
-        val none = annotatedNew(payload(1L, 0, 0.0, false, null), null, null, boom)
+        val none = annotatedNew(payload(1L, 0, 0.0, false, null), null, null, boom).orThrow()
         check(annotatedTtl(none, boom) == null && annotatedPriority(none, boom) == null)
         // Kotlin-constructed instance crosses direct + optional recursive paths.
         val c = Annotated(
@@ -1572,9 +1576,9 @@ fun main() {
     // `Archive` is renamed to `SummaryVault` via the per-class `.name()`
     // override — the explicit type annotation asserts the rename.
     section("borrowed-opaque output archiveLatest") {
-        val a: SummaryVault = archiveNew(boom)
+        val a: SummaryVault = archiveNew(boom).orThrow()
         check(archiveLatest(a, boom) == null)               // None → null
-        val s = Summary.of(2L, 40.0, boom)
+        val s = Summary.of(2L, 40.0, boom).orThrow()
         archiveStore(a, 1, null, null, s, boom)             // flatten-input, handle arm
         val first = archiveLatest(a, boom)!!
         val second = archiveLatest(a, boom)!!
@@ -1608,7 +1612,7 @@ fun main() {
         // DECOMPOSED return: no converter names the spelling — the extern binds
         // the value and matches it, so the `Box` has to come off first (#292).
         // Same delivery as `archiveLatest`, one wrapper apart.
-        val a: SummaryVault = archiveNew(boom)
+        val a: SummaryVault = archiveNew(boom).orThrow()
         check(boxedLatest(a, boom) { count, total -> count to total } == null)
         archiveStore(a, 0, 5L, 100.0, null, boom)
         check(boxedLatest(a, boom) { count, total -> count to total } == 5L to 100.0)
@@ -1669,24 +1673,24 @@ fun main() {
         // field decodes stay inside the presence gate; a fixture whose fields
         // all decode successfully cannot tell the two orders apart.
         check(holderTagOr(null, -9L, boom) == -9L)
-        val held = Summary.of(4L, 8.0, boom)
+        val held = Summary.of(4L, 8.0, boom).orThrow()
         check(holderTagOr(Holder(3L, held), -9L, boom) == 7L)  // 3 + count(4)
     }
 
     // ── Vec<String> fold + Option<data-class> input + plain String return ────
     section("Vec<String> storageLabels + Option<Payload> input + String return") {
-        val s = storageNew(boom)
-        check(storageLabels(s, boom).isEmpty())
+        val s = storageNew(boom).orThrow()
+        check(storageLabels(s, boom).orThrow().isEmpty())
         storagePutSlice(
             s,
             listOf(payload(1L, 0, 0.0, false, "a"), payload(2L, 0, 0.0, false, null), payload(3L, 0, 0.0, false, "c")),
             boom,
         )
-        check(storageLabels(s, boom) == listOf("a", "c"))
+        check(storageLabels(s, boom).orThrow() == listOf("a", "c"))
         check(storagePutOpt(s, payload(4L, 0, 0.0, false, "d"), boom))   // Some → pushed
         check(!storagePutOpt(s, null, boom))                              // None → not
         check(s.len(boom) == 4L)
-        check(storageLabels(s, boom) == listOf("a", "c", "d"))
+        check(storageLabels(s, boom).orThrow() == listOf("a", "c", "d"))
         check(stringNew("hello", boom) == "hello")
         check(stringNew("", boom) == "")
         s.close()
@@ -1696,16 +1700,16 @@ fun main() {
     section("binding error je != null (wrong-length fixed-size array)") {
         var je: String? = null
         val fallback = storageTryFromStamp(
-            stampNew(1L, 0L, boom),
+            stampNew(1L, 0L, boom).orThrow(),
             byteArrayOf(1, 2, 3),   // `tag` is [u8; 2]; 3 is rejected on decode
             JniErrorHandler { e ->
                 je = e
-                storageNew(boom)
+                storageNew(boom).orThrow()
             },
             StorageErrorHandler { _, handle ->
                 throw AssertionError("domain channel must not fire on a decode failure")
             },
-        )
+        ).orThrow()
         fallback.close()
         check(je != null && je!!.contains("fixed-size array decode")) { "unexpected je: $je" }
     }
@@ -1715,13 +1719,13 @@ fun main() {
     // trampoline describes + clears the pending exception per upcall (the stack
     // trace printed below is EXPECTED output) and delivery continues.
     section("callback exceptions are swallowed (no-throw contract)") {
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
         storagePutSlice(s, listOf(payload(1L, 0, 0.0, false, null), payload(2L, 0, 0.0, false, null)), boom)
         var fired = 0
         val h = payloadHandlerNew(
             PayloadCallback { fired++; throw RuntimeException("deliberate covertest exception") },
             boom,
-        )
+        ).orThrow()
         storageCallback(s, h, boom)   // must not throw at the call site
         check(fired == 2) { "every payload must still be delivered, got $fired" }
         storageCallback(s, h, boom)   // the handler stays usable
@@ -1732,16 +1736,16 @@ fun main() {
 
     // ── 3-handle sorted locking + concurrent smoke ───────────────────────────
     section("3-handle locking + 2-thread smoke") {
-        val s1 = Storage.withPayload(payload(1L, 0, 0.0, false, null), boom)
-        val s2 = Storage.withPayload(payload(2L, 0, 0.0, false, null), boom)
-        val s3 = storageNew(boom)
+        val s1 = Storage.withPayload(payload(1L, 0, 0.0, false, null), boom).orThrow()
+        val s2 = Storage.withPayload(payload(2L, 0, 0.0, false, null), boom).orThrow()
+        val s3 = storageNew(boom).orThrow()
         check(storageTotalLen(s1, s2, s3, boom) == 2L)
         check(storageTotalLen(s3, s2, s1, boom) == 2L)   // argument order irrelevant
         // Opposite lock-acquisition orders + a writer on a shared handle: the
         // sorted N-ary locking must neither deadlock nor tear.
         val iterations = 2_000
         val errs = AtomicInteger()
-        val s4 = storageNew(boom)
+        val s4 = storageNew(boom).orThrow()
         val workers = listOf(
             thread { repeat(iterations) { if (storageTotalLen(s1, s2, s3, boom) != 2L) errs.incrementAndGet() } },
             thread { repeat(iterations) { if (storageTotalLen(s3, s2, s1, boom) != 2L) errs.incrementAndGet() } },
@@ -1769,7 +1773,7 @@ fun main() {
     section("close/take storm (lock-order stability + closed-handle race)") {
         val slots = 4
         val pool = java.util.concurrent.atomic.AtomicReferenceArray<Storage>(slots)
-        for (i in 0 until slots) pool.set(i, storageNew(boom))
+        for (i in 0 until slots) pool.set(i, storageNew(boom).orThrow())
         val stop = java.util.concurrent.atomic.AtomicBoolean(false)
         val closedRaces = AtomicInteger()
         val unexpected = java.util.concurrent.atomic.AtomicReference<String?>(null)
@@ -1794,7 +1798,7 @@ fun main() {
                 val rnd = java.util.concurrent.ThreadLocalRandom.current()
                 repeat(3_000) { n ->
                     val i = rnd.nextInt(slots)
-                    val old = pool.getAndSet(i, storageNew(boom))
+                    val old = pool.getAndSet(i, storageNew(boom).orThrow())
                     when (n % 3) {
                         0 -> old.close()
                         // take(): the twin shares the old handle's masked
@@ -1819,7 +1823,7 @@ fun main() {
     // 20k upcalls, half carrying a fresh String local each — leaked JNI local
     // refs (the historical daemon-thread OOM) would accumulate here.
     section("high-volume callback (localref pressure)") {
-        val s = storageNew(boom)
+        val s = storageNew(boom).orThrow()
         val n = 5_000
         storagePutSlice(
             s,
@@ -1828,7 +1832,7 @@ fun main() {
         )
         var count = 0L
         var sum = 0L
-        val h = payloadHandlerNew(PayloadCallback { p -> count++; sum += p.id }, boom)
+        val h = payloadHandlerNew(PayloadCallback { p -> count++; sum += p.id }, boom).orThrow()
         repeat(4) { storageCallback(s, h, boom) }
         check(count == 4L * n)
         check(sum == 4L * (n.toLong() - 1L) * n.toLong() / 2L)
@@ -1844,7 +1848,7 @@ fun main() {
     // double-settled ticket would crash the JVM in the churn loop below.
     section(".gc_managed() lifecycle (ticket + Cleaner backstop)") {
         // Explicit close stays primary and is idempotent.
-        val a = Summary.of(2L, 40.0, boom)
+        val a = Summary.of(2L, 40.0, boom).orThrow()
         check(a.total(boom) == 40.0)
         a.close()
         check(a.isClosed())
@@ -1854,7 +1858,7 @@ fun main() {
         check(closedErr != null && closedErr!!.contains("closed native handle"))
 
         // take(): ticket moves into the fresh wrapper; the source is closed.
-        val b = Summary.of(3L, 60.0, boom)
+        val b = Summary.of(3L, 60.0, boom).orThrow()
         val c = b.take()
         check(b.isClosed() && !c.isClosed())
         check(c.total(boom) == 60.0)
@@ -1863,7 +1867,7 @@ fun main() {
 
         // By-value consumption settles the ticket (markConsumed): the summary
         // is freed by Rust, and neither close nor the Cleaner may free again.
-        val d = Summary.of(2L, 40.0, boom)
+        val d = Summary.of(2L, 40.0, boom).orThrow()
         check(summaryTotalRaw(d, boom) == 40.0)
         check(d.isClosed())
         d.close()
@@ -1873,7 +1877,7 @@ fun main() {
         // then force GC so the cleaner thread settles the survivors. Any
         // double free or free-under-use aborts the JVM here.
         repeat(2_000) { i ->
-            val s = Summary.of(i.toLong(), i.toDouble(), boom)
+            val s = Summary.of(i.toLong(), i.toDouble(), boom).orThrow()
             when (i % 3) {
                 0 -> {} // dropped live: the Cleaner frees it
                 1 -> s.close()
@@ -1885,7 +1889,7 @@ fun main() {
             Thread.sleep(50)
         }
         // The world is still sane after the cleaner ran.
-        val e = Summary.of(5L, 50.0, boom)
+        val e = Summary.of(5L, 50.0, boom).orThrow()
         check(e.count(boom) == 5L)
         e.close()
     }
@@ -1896,7 +1900,7 @@ fun main() {
         // spec's `_1` escaping — `esc_1pkg` + `Esc_1Probe` in the freePtr
         // destructor, `escape_1probe_1value` on the harness extern. A raw
         // dot-to-underscore symbol would throw UnsatisfiedLinkError.
-        val p = Esc_Probe.escapeProbeNew(7L, boom)
+        val p = Esc_Probe.escapeProbeNew(7L, boom).orThrow()
         check(p.escapeProbeValue(boom) == 7L)
         p.close()
     }

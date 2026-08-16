@@ -1327,7 +1327,7 @@ internal object __StampFolderRawHolder {
 }
 
 /** Classify a payload by magnitude of its `value` (enum **return**). */
-public fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority {
+public fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority?>): Priority? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.payloadPriority(p.id, p.seq, p.value, p.flag, p.label, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1346,8 +1346,8 @@ public fun priorityWeight(p: Priority, onError: JniErrorHandler<Int>): Int {
 public fun priorityOr(
     p: Priority?,
     fallback: Priority,
-    onError: JniErrorHandler<Priority>,
-): Priority {
+    onError: JniErrorHandler<Priority?>,
+): Priority? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1360,7 +1360,7 @@ public fun priorityOr(
  * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp {
+public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp?>): Stamp? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.stampNew(secs, nanos, __StampBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1374,7 +1374,7 @@ public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): S
  * The Rust `Stamp` result is delivered decomposed: the builder callback receives (`secs`, `nanos`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp> {
+public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>?>): List<Stamp>? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.stampSeries(
         count,
@@ -1435,7 +1435,7 @@ public fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int? {
  * Reverse a label's characters (exercises the binding-local conversion on
  * a parameter and the return).
  */
-public fun labelReverse(l: String, onError: JniErrorHandler<String>): String {
+public fun labelReverse(l: String, onError: JniErrorHandler<String?>): String? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.labelReverse(l, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1455,8 +1455,8 @@ public fun labelReverse(l: String, onError: JniErrorHandler<String>): String {
  */
 public fun labelSeriesEcho(
     labels: List<String>,
-    onError: JniErrorHandler<List<String>>,
-): List<String> {
+    onError: JniErrorHandler<List<String>?>,
+): List<String>? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.labelSeriesEcho(labels, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1471,8 +1471,8 @@ public fun annotatedNew(
     payload: Payload,
     ttl: Long?,
     priority: Priority?,
-    onError: JniErrorHandler<Annotated>,
-): Annotated {
+    onError: JniErrorHandler<Annotated?>,
+): Annotated? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.annotatedNew(
         payload.id,
@@ -1608,8 +1608,8 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
 public fun observationNew(
     which: Int,
     withFallback: Boolean,
-    onError: JniErrorHandler<Observation>,
-): Observation {
+    onError: JniErrorHandler<Observation?>,
+): Observation? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.observationNew(which, withFallback, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1655,7 +1655,7 @@ public fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int 
 }
 
 /** Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`. */
-public fun taggedNew(which: Int, onError: JniErrorHandler<Tagged>): Tagged {
+public fun taggedNew(which: Int, onError: JniErrorHandler<Tagged?>): Tagged? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.taggedNew(which, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1688,7 +1688,7 @@ public fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int {
  * The Rust `Marker` result is delivered decomposed: the builder callback receives (`tag`, `ranked_v0`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun markerOf(which: Int, onError: JniErrorHandler<Marker>): Marker {
+public fun markerOf(which: Int, onError: JniErrorHandler<Marker?>): Marker? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.markerOf(which, __MarkerBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1705,7 +1705,7 @@ public fun markerOf(which: Int, onError: JniErrorHandler<Marker>): Marker {
  * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun readingOf(which: Int, onError: JniErrorHandler<Reading>): Reading {
+public fun readingOf(which: Int, onError: JniErrorHandler<Reading?>): Reading? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.readingOf(which, __ReadingBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1734,7 +1734,7 @@ public fun readingMaybe(which: Int, onError: JniErrorHandler<Reading?>): Reading
  * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun readingSeries(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading> {
+public fun readingSeries(n: Int, onError: JniErrorHandler<List<Reading>?>): List<Reading>? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.readingSeries(
         n,
@@ -1760,7 +1760,7 @@ public fun readingEach(n: Int, sink: ReadingCallback, onError: JniErrorHandler<U
  * The Rust `Lookup` result is delivered decomposed: the builder callback receives (`tag`, `found_v0`, `failed_v0`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>): Lookup {
+public fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup?>): Lookup? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.lookupOf(count, total, __LookupBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1789,8 +1789,8 @@ public fun verdictNew(
     id: Long,
     count: Long,
     total: Double,
-    onError: JniErrorHandler<Verdict>,
-): Verdict {
+    onError: JniErrorHandler<Verdict?>,
+): Verdict? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.verdictNew(id, count, total, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1803,8 +1803,8 @@ public fun dossierNew(
     tag: Long,
     count: Long,
     total: Double,
-    onError: JniErrorHandler<Dossier>,
-): Dossier {
+    onError: JniErrorHandler<Dossier?>,
+): Dossier? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.dossierNew(note, tag, count, total, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1834,9 +1834,9 @@ public fun <R> probeNew(
     seq: Long,
     count: Long,
     total: Double,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: ProbeBuilder<R>,
-): R {
+): R? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.probeNew(seq, count, total, build.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -1875,9 +1875,9 @@ public fun <R> spanHolderNew(
     seq: Long,
     requiredMs: ULong,
     delayMs: Long,
-    onError: JniErrorHandler<R>,
+    onError: JniErrorHandler<R?>,
     build: SpanHolderBuilder<R>,
-): R {
+): R? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.spanHolderNew(seq, requiredMs.toLong(), delayMs, build.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2176,7 +2176,7 @@ public fun <R> boxedLatest(
  * The Rust `Ledger` result is delivered decomposed: the builder callback receives (`ledgerFiled__summary__count`, `ledgerFiled__summary__total`, `ledgerFiled__taken`, `ledgerFiled__origin__secs`, `ledgerFiled__origin__nanos`, `ledgerFiled__outcome__tag`, `ledgerFiled__outcome__found_v0`, `ledgerFiled__outcome__failed_v0`, `ledgerFiled__label`, `ledgerArchived__summary__count`, `ledgerArchived__summary__total`, `ledgerArchived__taken`, `ledgerArchived__origin__secs`, `ledgerArchived__origin__nanos`, `ledgerArchived__outcome__tag`, `ledgerArchived__outcome__found_v0`, `ledgerArchived__outcome__failed_v0`, `ledgerArchived__label`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun <R> ledgerNew(n: Long, onError: JniErrorHandler<R>, build: LedgerBuilder<R>): R {
+public fun <R> ledgerNew(n: Long, onError: JniErrorHandler<R?>, build: LedgerBuilder<R>): R? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.ledgerNew(n, build.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2209,7 +2209,7 @@ public fun archiveSetReading(a: SummaryVault, which: Int, onError: JniErrorHandl
  * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun archiveReading(a: SummaryVault, onError: JniErrorHandler<Reading>): Reading {
+public fun archiveReading(a: SummaryVault, onError: JniErrorHandler<Reading?>): Reading? {
     if (a.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(a) {
@@ -2244,7 +2244,7 @@ public fun archiveReadingMaybe(a: SummaryVault, onError: JniErrorHandler<Reading
  * The Rust `Hold` result is delivered decomposed: the builder callback receives (`tag`, `for_v0`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold>): Hold {
+public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold?>): Hold? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.holdEcho(h, __HoldBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2252,7 +2252,7 @@ public fun holdEcho(h: Hold, onError: JniErrorHandler<Hold>): Hold {
 }
 
 /** Round-trip a data class carrying converted-payload sums. */
-public fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy>): HoldPolicy {
+public fun holdPolicyEcho(p: HoldPolicy, onError: JniErrorHandler<HoldPolicy?>): HoldPolicy? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.holdPolicyEcho(p.hold, p.grace, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2297,8 +2297,8 @@ public fun unsignedRoundTrip(
     int: Long,
     long: ULong,
     maybeLong: ULong?,
-    onError: JniErrorHandler<Unsigned>,
-): Unsigned {
+    onError: JniErrorHandler<Unsigned?>,
+): Unsigned? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.unsignedRoundTrip(
         byte,
@@ -2353,7 +2353,7 @@ public fun unsignedEmit(value: ULong, f: u64Callback, onError: JniErrorHandler<U
  * the Kotlin side.
  */
 @Suppress("UNCHECKED_CAST")
-public fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong> {
+public fun unsignedSeries(onError: JniErrorHandler<List<ULong>?>): List<ULong>? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.unsignedSeries(ArrayList<ULong>(), __u64FolderRawHolder.instance, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2370,8 +2370,8 @@ public fun blobValueNew(
     secs: Long,
     id: ByteArray,
     chunks: List<ByteArray>,
-    onError: JniErrorHandler<BlobValue>,
-): BlobValue {
+    onError: JniErrorHandler<BlobValue?>,
+): BlobValue? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.blobValueNew(secs, id, chunks, __BlobValueBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2390,7 +2390,7 @@ public fun blobValueNew(
  * The Rust `BlobValue` result is delivered decomposed: the builder callback receives (`stamp__secs`, `stamp__nanos`, `id`, `chunks`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun blobValueEcho(value: BlobValue, onError: JniErrorHandler<BlobValue>): BlobValue {
+public fun blobValueEcho(value: BlobValue, onError: JniErrorHandler<BlobValue?>): BlobValue? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.blobValueEcho(value, __BlobValueBuilder, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -2403,7 +2403,7 @@ public fun blobValueEcho(value: BlobValue, onError: JniErrorHandler<BlobValue>):
  * The Rust `Arrays` result is delivered decomposed: the builder callback receives (`bytes`, `shorts`, `ints`, `longs`, `doubles`, `flags`, `raw`).
  */
 @Suppress("UNCHECKED_CAST")
-public fun arraysEcho(a: Arrays, onError: JniErrorHandler<Arrays>): Arrays {
+public fun arraysEcho(a: Arrays, onError: JniErrorHandler<Arrays?>): Arrays? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.arraysEcho(
         a.bytes,
@@ -2456,8 +2456,8 @@ public fun boxedDurationEcho(value: ULong, onError: JniErrorHandler<ULong>): ULo
 @Suppress("UNCHECKED_CAST")
 public fun durationBoundaryEcho(
     value: DurationBoundary,
-    onError: JniErrorHandler<DurationBoundary>,
-): DurationBoundary {
+    onError: JniErrorHandler<DurationBoundary?>,
+): DurationBoundary? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.durationBoundaryEcho(value, __DurationBoundaryBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
