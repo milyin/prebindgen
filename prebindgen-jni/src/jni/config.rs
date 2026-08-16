@@ -42,12 +42,12 @@
 use super::*;
 
 /// Which per-kind mangle hook applies when deriving a declared class's
-/// Kotlin name. Value classes reuse the data-class hook.
+/// Kotlin name.
 #[derive(Clone, Copy)]
 pub(crate) enum NameKind {
     Ptr,
     Enum,
-    DataOrValue,
+    Data,
 }
 
 /// Raw naming spec of one declared class type, stored in [`TypeConfig`] as
@@ -228,7 +228,7 @@ impl Declarations {
         let mangled = match kind {
             NameKind::Ptr => self.mangle_ptr_class(&package, short),
             NameKind::Enum => self.mangle_enum(&package, short),
-            NameKind::DataOrValue => self.mangle_data_class(&package, short),
+            NameKind::Data => self.mangle_data_class(&package, short),
         };
         self.resolve_class_fqn(subpackage, &mangled)
     }
