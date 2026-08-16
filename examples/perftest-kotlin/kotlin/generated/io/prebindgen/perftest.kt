@@ -580,7 +580,7 @@ public class Token private constructor(initialPtr: Long) : NativeHandle(initialP
         internal fun fromRawPtr(initialPtr: Long): Token = Token(initialPtr)
 
         /** Create a plain benchmark token. */
-        public fun tokenNew(value: Long, onError: JniErrorHandler<Token>): Token {
+        public fun tokenNew(value: Long, onError: JniErrorHandler<Token?>): Token? {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = JNINative.tokenNew(value, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -629,7 +629,7 @@ public class TokenGc private constructor(initialPtr: Long) : GcNativeHandle(init
         internal fun fromRawPtr(initialPtr: Long): TokenGc = TokenGc(initialPtr)
 
         /** Create a gc-managed benchmark token. */
-        public fun tokenGcNew(value: Long, onError: JniErrorHandler<TokenGc>): TokenGc {
+        public fun tokenGcNew(value: Long, onError: JniErrorHandler<TokenGc?>): TokenGc? {
             val __bcap = JniErrorHandlerCapture.acquire()
             val __ret = JNINative.tokenGcNew(value, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -688,6 +688,8 @@ internal object __PayloadFolderRawHolder {
  * failure message. For an infallible wrapper this is the sole `onError`; a
  * fallible wrapper takes it as `onBindingError` alongside the typed domain
  * handler. The wrapper returns whatever `run` returns;
+ * the handler firing is the error discriminator: null can also be a successful optional
+ * result, while a non-null value can be a handler-supplied fallback.
  * throwing from `run` is safe (it executes after the native call has returned).
  */
 public fun interface JniErrorHandler<out R> {

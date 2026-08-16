@@ -818,41 +818,6 @@ fn nullable_recovery_type(declared: KtType, generics: &[String]) -> KtType {
     }
 }
 
-#[cfg(test)]
-mod recovery_return_tests {
-    use super::nullable_recovery_type;
-    use kotlin_codegen::KtType;
-
-    fn recover(ty: KtType, generics: &[&str]) -> KtType {
-        nullable_recovery_type(
-            ty,
-            &generics.iter().map(|g| g.to_string()).collect::<Vec<_>>(),
-        )
-    }
-
-    #[test]
-    fn only_reference_shaped_recovery_returns_become_nullable() {
-        for primitive in [
-            KtType::unit(),
-            KtType::int(),
-            KtType::long(),
-            KtType::boolean(),
-            KtType::cls("ULong"),
-        ] {
-            assert!(!recover(primitive, &[]).is_nullable());
-        }
-        for reference in [
-            KtType::string(),
-            KtType::byte_array(),
-            KtType::generic("List", [KtType::string()]),
-            KtType::cls("io.test.Handle"),
-            KtType::var_r(),
-        ] {
-            assert!(recover(reference, &["R"]).is_nullable());
-        }
-        assert!(recover(KtType::string().nullable(), &[]).is_nullable());
-    }
-}
 /// Build the [`WrapperSurface`]: everything [`render_wrapper_fn`] does up to
 /// (but not including) the body render — the single surface-signature
 /// derivation. **Pure** over `(ext, f, registry, name, receiver)`: signature
@@ -2515,5 +2480,41 @@ pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Optio
         prebindgen_registry::flat::Type::Enum(e) => e.docs(),
         prebindgen_registry::flat::Type::Variant(v) => v.docs(),
         prebindgen_registry::flat::Type::Extern(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod recovery_return_tests {
+    use super::nullable_recovery_type;
+    use kotlin_codegen::KtType;
+
+    fn recover(ty: KtType, generics: &[&str]) -> KtType {
+        nullable_recovery_type(
+            ty,
+            &generics.iter().map(|g| g.to_string()).collect::<Vec<_>>(),
+        )
+    }
+
+    #[test]
+    fn only_reference_shaped_recovery_returns_become_nullable() {
+        for primitive in [
+            KtType::unit(),
+            KtType::int(),
+            KtType::long(),
+            KtType::boolean(),
+            KtType::cls("ULong"),
+        ] {
+            assert!(!recover(primitive, &[]).is_nullable());
+        }
+        for reference in [
+            KtType::string(),
+            KtType::byte_array(),
+            KtType::generic("List", [KtType::string()]),
+            KtType::cls("io.test.Handle"),
+            KtType::var_r(),
+        ] {
+            assert!(recover(reference, &["R"]).is_nullable());
+        }
+        assert!(recover(KtType::string().nullable(), &[]).is_nullable());
     }
 }

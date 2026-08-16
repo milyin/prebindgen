@@ -57,6 +57,9 @@ private val onError = JniErrorHandler<Nothing> { je ->
     throw RuntimeException("native error: $je")
 }
 
+private fun <T : Any> T?.orThrow(): T =
+    this ?: throw AssertionError("a throwing error handler returned instead of throwing")
+
 // One normalized result row: `<op> <variant> <ns_per_op> <mops>`.
 private fun bench(op: String, variant: String, n: Long, body: () -> Unit) {
     val start = System.nanoTime()
@@ -100,7 +103,7 @@ private fun correctness(s: Storage) {
 
     // Whole-batch callback: ONE upcall delivering the entire List<Payload>.
     var cbSum = 0L
-    val vh = payloadVecHandlerNew(PayloadListCallback { list -> cbSum += list.sumOf { it.id } }, onError)
+    val vh = payloadVecHandlerNew(PayloadListCallback { list -> cbSum += list.sumOf { it.id } }, onError).orThrow()
     storageCallbackVec(s, vh, onError)
     check(cbSum == batch.sumOf { it.id }) { "callback_vec should observe the whole batch" }
     vh.close()
@@ -114,7 +117,7 @@ private fun correctness(s: Storage) {
 }
 
 fun main() {
-    val s = storageNew(onError)
+    val s = storageNew(onError).orThrow()
 
     correctness(s)
 
@@ -134,9 +137,9 @@ fun main() {
     var sink = 0L
 
     // Single-payload callback handler, prepared ONCE (trampoline built a single time).
-    val cb = payloadHandlerNew(PayloadCallback { p -> sink += p.id }, onError)
+    val cb = payloadHandlerNew(PayloadCallback { p -> sink += p.id }, onError).orThrow()
     // Whole-batch callback handler, prepared once: one upcall delivers the whole List.
-    val vcb = payloadVecHandlerNew(PayloadListCallback { list -> sink += list.size.toLong() }, onError)
+    val vcb = payloadVecHandlerNew(PayloadListCallback { list -> sink += list.size.toLong() }, onError).orThrow()
 
     // Single-payload ops for one string category (`str` = heap `label`, `null` = none).
     fun runCategory(label: String?, cat: String) {
@@ -181,10 +184,10 @@ fun main() {
         // create + explicit close: plain = tag write + freePtr; gc adds the
         // cell alloc, Cleaner registration, CAS ticket, clean() deregistration.
         bench("handle_close", "plain", HN) {
-            Token.tokenNew(1L, onError).close()
+            Token.tokenNew(1L, onError).orThrow().close()
         }
         bench("handle_close", "gc", HN) {
-            TokenGc.tokenGcNew(1L, onError).close()
+            TokenGc.tokenGcNew(1L, onError).orThrow().close()
         }
         // create + drop (no close): plain leaks natively; gc is freed by the
         // Cleaner as the JVM collects the wrappers.
@@ -199,8 +202,8 @@ fun main() {
         Thread.sleep(200)
         // method call on a live handle: prices the open `ptr` property
         // (field-backed vs atomic-cell getter) on the call path.
-        val tp = Token.tokenNew(7L, onError)
-        val tg = TokenGc.tokenGcNew(7L, onError)
+        val tp = Token.tokenNew(7L, onError).orThrow()
+        val tg = TokenGc.tokenGcNew(7L, onError).orThrow()
         bench("handle_call", "plain", HN) {
             sink += tp.tokenValue(onError)
         }
@@ -217,8 +220,8 @@ fun main() {
     val warm = makeBatch("hello, payload")
     storagePutSlice(s, warm, onError)
     val warmN = minOf(VEC_ITERS, 50_000L)
-    val warmTp = Token.tokenNew(3L, onError)
-    val warmTg = TokenGc.tokenGcNew(3L, onError)
+    val warmTp = Token.tokenNew(3L, onError).orThrow()
+    val warmTg = TokenGc.tokenGcNew(3L, onError).orThrow()
     repeat(warmN.toInt()) {
         storagePutByTake(s, warm[0], onError)
         storageGet(s, onError)
@@ -228,8 +231,8 @@ fun main() {
         storageCallbackVec(s, vcb, onError)
         sink += largeFlatInputSum(largeFlat, onError)
         sink += largeObjectInputSum(largeObject, onError)
-        Token.tokenNew(1L, onError).close()
-        TokenGc.tokenGcNew(1L, onError).close()
+        Token.tokenNew(1L, onError).orThrow().close()
+        TokenGc.tokenGcNew(1L, onError).orThrow().close()
         sink += warmTp.tokenValue(onError)
         sink += warmTg.tokenGcValue(onError)
     }
