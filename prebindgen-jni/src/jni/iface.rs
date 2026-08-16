@@ -1508,8 +1508,8 @@ pub(crate) fn whole_folder_iface_spec(
     // `raw_handle = true`: an opaque-handle element crosses the JNI border as
     // its raw `jlong` (the folder wraps it into the typed handle class in Kotlin
     // bytecode — a native `new_object` per element would cost descriptor parse +
-    // FindClass + GetMethodID + NewObjectA). Value blobs / String are unaffected
-    // (they ignore the flag; see [`leaf_iface_param`]).
+    // FindClass + GetMethodID + NewObjectA). Primitive arrays and String are
+    // unaffected (they ignore the flag; see [`leaf_iface_param`]).
     params.push(leaf_iface_param(
         ext,
         registry,

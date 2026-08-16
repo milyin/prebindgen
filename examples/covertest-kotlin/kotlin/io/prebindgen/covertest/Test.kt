@@ -932,8 +932,8 @@ fun main() {
     // ── array-backed VALUE EQUALITY ─────────────────────────────────────────
     // The Rust types derive `Eq`, so the Kotlin mirrors must compare by
     // content. Kotlin arrays compare by IDENTITY, which silently breaks that
-    // for every `ByteArray`-backed property — a value blob's `bytes`, a
-    // `Vec<u8>` field, and any value carrying one of those. Kotlin's own
+    // for every `ByteArray`-backed property — a `Vec<u8>` field, a fixed-size
+    // `[u8; N]` field, and any value carrying one of those. Kotlin's own
     // `data class` codegen is inconsistent here (its `hashCode`/`toString` DO
     // special-case arrays, its `equals` does not), so `==` is the assertion
     // that matters and `hashCode` alone would not have caught the defect.
@@ -949,8 +949,8 @@ fun main() {
         check(hashSetOf(s1, s2).size == 1)
         check(s1.toString() == "Stamp(secs=7, nanos=42)") { "got $s1" }
 
-        // A data class with a DIRECT `ByteArray` field plus a NESTED value
-        // blob — the two shapes that broke downstream. The bytes sit LAST, so
+        // A data class with a DIRECT `ByteArray` field plus a NESTED data
+        // class — the two shapes that broke downstream. The bytes sit LAST, so
         // this also covers the `31 * result + …contentHashCode()` fold form
         // that a real value (`Timestamp(ntp64, id)`) produces.
         fun blob(secs: Long, id: ByteArray, chunks: List<ByteArray>) =
@@ -965,7 +965,7 @@ fun main() {
         // Every component must actually participate — a comparison that ignored
         // any of them would still pass the equality checks above.
         check(blob(7L, byteArrayOf(1, 2, 4), chunks) != b1) { "id must matter" }
-        check(blob(8L, byteArrayOf(1, 2, 3), chunks) != b1) { "nested blob must matter" }
+        check(blob(8L, byteArrayOf(1, 2, 3), chunks) != b1) { "nested stamp must matter" }
         // A CONTAINER of arrays: `List<ByteArray>` inherits `ByteArray`'s
         // identity equality, so the operators must dig through the container.
         check(blob(7L, byteArrayOf(1, 2, 3), listOf(byteArrayOf(9), byteArrayOf(8, 6))) != b1) {
@@ -1014,18 +1014,16 @@ fun main() {
         check(a1.toString().contains("flags=[true, false, true]")) { "got $a1" }
 
         // Wrong length is a BINDING ERROR, not a panic — the decode's `try_into`
-        // is the length check (the fixed-size-array successor to the value
-        // blob's byte-length guard).
+        // is the fixed-size-array length check.
         var lenErr: String? = null
         arraysEcho(a1.copy(ints = intArrayOf(1, 2))) { je -> lenErr = je; a1 }
         check(lenErr?.contains("fixed-size array decode") == true) {
             "wrong-length array must report a binding error, got: $lenErr"
         }
 
-        // WHOLE-OBJECT input decode (`.jobject_input()`): the decoder reads each
-        // field off the Kotlin object by JVM descriptor. A value-blob field's
-        // slot is the wrapper class, not `[B` — reading the old descriptor threw
-        // `NoSuchFieldError` on the first decode.
+        // WHOLE-OBJECT input decode (`.jobject_input()`): the decoder reads the
+        // nested data class, direct byte array, and list of byte arrays from the
+        // Kotlin object by their JVM descriptors.
         check(blobValueEcho(b1, boom) == b1) { "jobject-input round trip must preserve the value" }
         check(blobValueEcho(blob(0L, ByteArray(0), emptyList()), boom).chunks.isEmpty())
     }

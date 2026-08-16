@@ -1506,8 +1506,8 @@ pub(crate) fn leaf_ty_is_prim(
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose
     // converter's wire is the raw `jlong` the typed `run` declares as `Long`
     // (`J`): the receiver constructs the typed class in bytecode. A nullable
-    // handle boxes to `java.lang.Long` instead (object chunk). Value blobs
-    // stay objects (`[B`).
+    // handle boxes to `java.lang.Long` instead (object chunk). Fixed-size
+    // arrays and other object wires stay objects (for example, `[B`).
     let proj_ok = match &entry.metadata.projection {
         None => true,
         Some(p) => matches!(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
