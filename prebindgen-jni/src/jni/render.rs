@@ -2485,8 +2485,9 @@ pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Optio
 
 #[cfg(test)]
 mod recovery_return_tests {
-    use super::nullable_recovery_type;
     use kotlin_codegen::KtType;
+
+    use super::nullable_recovery_type;
 
     fn recover(ty: KtType, generics: &[&str]) -> KtType {
         nullable_recovery_type(
