@@ -186,6 +186,9 @@ fun main() {
     }
 
     // ── data_class: fields cross as leaves, reassembled via fromParts ─────────
+    // `fromParts` takes the raw wire slots, so it is `@UnsafeNativeApi` (#37);
+    // exercising it from hand-written Kotlin means opting in explicitly.
+    @OptIn(UnsafeNativeApi::class)
     section("data_class Payload") {
         val p = Payload(1L, 2, 3.5, true, "hello")
         check(p.id == 1L && p.seq == 2 && p.value == 3.5 && p.flag && p.label == "hello")
@@ -370,6 +373,7 @@ fun main() {
     // The Kotlin surface only (the wire lowering is a separate stage): every
     // variant shape, the nested placement, the per-variant rename, and
     // `fromParts` picking the live group by tag.
+    @OptIn(UnsafeNativeApi::class)
     section("sealed_class Reading (sum surface + fromParts)") {
         // A payload-less alternative is a `data object`; the rest are `data
         // class`es, all nested inside the interface.
@@ -1084,7 +1088,10 @@ fun main() {
         check(r.len(boom) == 1L)
         s.close()
         check(!r.live)
-        check(r.isClosed() && r.peek() == 0L)
+        // `peek()` is opt-in (#37); a closed handle reads back as 0.
+        @OptIn(UnsafeNativeApi::class)
+        val closedPtr = r.peek()
+        check(r.isClosed() && closedPtr == 0L)
 
         // data class: Payload implements PayloadApi; Timestamped : PayloadApi.
         val fresh: Timestamped = payload(1L, 5, 0.0, false, null)
@@ -1890,6 +1897,75 @@ fun main() {
         val p = Esc_Probe.escapeProbeNew(7L, boom)
         check(p.escapeProbeValue(boom) == 7L)
         p.close()
+    }
+
+    // ── The raw-pointer surface is closed to Java (#37) ──────────────────────
+    section("raw-pointer surface is invisible to javac (bytecode check)") {
+        // `internal` and `@RequiresOptIn` are Kotlin-source constructs: the
+        // JVM sees a public member under a mangled name, and javac enforces
+        // no opt-in. What actually stops a Java caller is `private` (for the
+        // constructors, which `@JvmSynthetic` cannot target) and
+        // ACC_SYNTHETIC, which javac skips during resolution. Assert the
+        // flags on the emitted bytecode rather than trusting the source.
+        fun ctorsHidden(c: Class<*>) = c.declaredConstructors.all {
+            java.lang.reflect.Modifier.isPrivate(it.modifiers) || it.isSynthetic
+        }
+        for (c in listOf(Storage::class.java, Summary::class.java, Esc_Probe::class.java)) {
+            check(ctorsHidden(c)) { "${'$'}{c.name} has a Java-callable constructor" }
+        }
+        // peek() keeps its name — Rust calls it through JNI — but not its
+        // visibility to javac.
+        check(NativeHandle::class.java.getDeclaredMethod("peek").isSynthetic)
+        // Every extern, and the per-class static free. `internal object` is a
+        // public JVM class, so the object's own visibility guards nothing.
+        val externs = CovNative::class.java.declaredMethods.filter { java.lang.reflect.Modifier.isNative(it.modifiers) }
+        check(externs.isNotEmpty())
+        check(externs.all { it.isSynthetic }) {
+            "Java-callable externs: ${'$'}{externs.filterNot { it.isSynthetic }.map { it.name }}"
+        }
+        check(Storage::class.java.declaredMethods.filter { java.lang.reflect.Modifier.isNative(it.modifiers) }.all { it.isSynthetic })
+        // Mutable pointer state: a visible setter would let a caller repoint a
+        // live handle and have the next generated call free that address.
+        val ptrAccessors = NativeHandle::class.java.declaredMethods.filter {
+            it.name.startsWith("getPtr") || it.name.startsWith("setPtr")
+        }
+        check(ptrAccessors.isNotEmpty())
+        check(ptrAccessors.all { it.isSynthetic })
+
+        // The callback adapters. `X.asRaw()` returns the generated proxy whose
+        // `run` takes handle leaves as bare `Long`s and calls `fromRawPtr` on
+        // them inside a file that holds the blanket opt-in — so a public
+        // `asRaw` handed any caller a forged-pointer route with no opt-in of
+        // its own. They are extension functions, hence statics on the file
+        // facade class.
+        val facades = listOf("io.prebindgen.covertest.CovertestKt", "io.prebindgen.covertest.model.ModelKt")
+            .mapNotNull { runCatching { Class.forName(it) }.getOrNull() }
+        // `$lambda$N` bodies share the prefix and are `private`, so javac
+        // cannot resolve them either way; the adapters themselves are what
+        // must carry the flag.
+        val asRaws = facades.flatMap { it.declaredMethods.toList() }
+            .filter { it.name.startsWith("asRaw") && !java.lang.reflect.Modifier.isPrivate(it.modifiers) }
+        check(asRaws.isNotEmpty()) { "no asRaw adapters found to check" }
+        check(asRaws.all { it.isSynthetic }) {
+            "Java-callable asRaw in " + asRaws.filterNot { it.isSynthetic }.map { it.declaringClass.name }
+        }
+        // The hoisted folder singletons are the same route without the
+        // extension: `internal object` is a public JVM class and `@JvmField` a
+        // public static, so `__StorageFolderRawHolder.instance.run(list,
+        // 0xdeadbeefL)` would mint a handle from an invented pointer.
+        val holder = Class.forName("io.prebindgen.covertest.__StorageFolderRawHolder")
+        val instance = holder.getDeclaredField("instance")
+        check(instance.isSynthetic) { "__StorageFolderRawHolder.instance is Java-readable" }
+        // And the hoisted builder singletons: a top-level `internal val` has a
+        // private backing field but a facade getter javac resolves like any
+        // other static, so `ModelKt.get__LookupBuilderRaw().run(0, 0xdeadbeefL,
+        // null)` would mint a handle from an invented pointer.
+        val getters = facades.flatMap { it.declaredMethods.toList() }
+            .filter { it.name.startsWith("get__") }
+        check(getters.isNotEmpty()) { "no builder singletons found to check" }
+        check(getters.all { it.isSynthetic }) {
+            "Java-callable builder singleton: " + getters.filterNot { it.isSynthetic }.map { it.name }
+        }
     }
 
     println("PASS - $sectionCount sections, every JniGen feature exercised")

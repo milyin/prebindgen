@@ -169,7 +169,7 @@ pub(crate) fn build_data_class(
     // `Enum.fromInt`, projection wraps) use short names; the FQNs they need are
     // collected here and attached to the factory body `Code` below.
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
-    let (factory_params, factory_reconstruct) = flatten_struct_factory(
+    let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,
         registry,
         item_struct,
@@ -236,11 +236,20 @@ pub(crate) fn build_data_class(
     for fqn in factory_imports {
         factory_body = factory_body.import(fqn);
     }
-    let mut factory = KtFun::new("fromParts")
-        .vis(KtVis::Public)
-        .annotation("JvmStatic")
-        .returns(KtType::cls(class_name))
-        .expr_body(factory_body);
+    // Guarded only when a leaf actually is a raw pointer: a `fromParts` over
+    // plain scalars and byte arrays cannot forge anything, and marking it
+    // would delete a safe factory from Java and make unrelated Kotlin
+    // consumers opt into a raw-pointer contract it does not have.
+    let factory = KtFun::new("fromParts");
+    let mut factory = if factory_mints_handle {
+        ext.mark_unsafe(factory)
+    } else {
+        factory
+    }
+    .vis(KtVis::Public)
+    .annotation("JvmStatic")
+    .returns(KtType::cls(class_name))
+    .expr_body(factory_body);
     for (name, ty) in &factory_params {
         factory = factory.param(KtParam::new(name, ty.clone()));
     }
@@ -318,12 +327,36 @@ pub(crate) fn build_typed_handle(
     // Companion object: the `@JvmStatic external fun freePtr(ptr: Long)` called
     // by `close()`, plus one **factory** member per `.constructor(f, name)`
     // (a free wrapper — no receiver — returning the class).
-    let mut companion = KtCompanion::new().vis(KtVis::Public).member(
-        KtFun::new(free_extern.clone())
-            .annotation("JvmStatic")
-            .external()
-            .param(KtParam::new("ptr", KtType::long())),
-    );
+    let mut companion = KtCompanion::new()
+        .vis(KtVis::Public)
+        .member(
+            // `@JvmSynthetic`: a `@JvmStatic external fun` is a public static
+            // native method, so `Storage.freePtr(0xdeadbeefL)` from Java would
+            // free an address of the caller's choosing.
+            KtFun::new(free_extern.clone())
+                .annotation("JvmStatic")
+                .annotation(JVM_SYNTHETIC)
+                .external()
+                .param(KtParam::new("ptr", KtType::long())),
+        )
+        // The replacement for the raw-pointer constructor. `internal` +
+        // `@JvmSynthetic` is reachable from generated Kotlin and from neither
+        // another Kotlin module nor Java; the constructor itself is `private`,
+        // because a constructor can be neither hidden by `@JvmSynthetic`
+        // (Kotlin rejects the target) nor by `internal` (still public on the
+        // JVM). Nothing on the Rust side constructs a handle.
+        .member(
+            internal_fun(HANDLE_FACTORY)
+                .kdoc(
+                    "Wrap a pointer a generated native call returned. Passing anything \
+                     else — a literal, a stale pointer, one belonging to another \
+                     handle — is undefined behaviour, which is why this is not part \
+                     of the public API.",
+                )
+                .param(KtParam::new("initialPtr", KtType::long()))
+                .returns(KtType::cls(class_name))
+                .expr_body(KtCode::new().line(format!("{class_name}(initialPtr)"))),
+        );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
         if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
@@ -351,6 +384,12 @@ pub(crate) fn build_typed_handle(
     // `write_typed_handles` after the class body is built.
     let mut class = KtClass::class_(class_name)
         .vis(KtVis::Public)
+        // The class is public; minting one from a raw `Long` is not. `private`
+        // rather than `internal`, because an internal constructor is still a
+        // public JVM constructor — `new Storage(0xdeadbeefL).close()` compiled
+        // from Java. Every generated call site goes through the companion's
+        // `fromRawPtr` instead (see `handle_from_raw`).
+        .ctor_vis(KtVis::Private)
         .kdoc(class_kdoc)
         .ctor_param(KtCtorParam::new("initialPtr", KtType::long()));
     class = if gc_managed {
@@ -392,7 +431,8 @@ pub(crate) fn build_typed_handle(
                             .line("val p = releaseCell(cell)")
                             .line("__cleanable?.clean()")
                             .line(format!(
-                                "return {class_name}(if (p != 0L) p else cell.get())"
+                                "return {}",
+                                handle_from_raw(class_name, "if (p != 0L) p else cell.get()")
                             )),
                     ),
             )
@@ -424,7 +464,7 @@ pub(crate) fn build_typed_handle(
                         KtCode::new()
                             .line("val p = ptr")
                             .line("ptr = p or 1L")
-                            .line(format!("return {class_name}(p)")),
+                            .line(format!("return {}", handle_from_raw(class_name, "p"))),
                     ),
             )
     };

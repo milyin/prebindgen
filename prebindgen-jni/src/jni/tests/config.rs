@@ -50,7 +50,8 @@ fn ptr_class_implements_adds_interface_supertypes() {
         .expect("thing package file");
     assert!(
         thing.contains(
-            "class ZThing(initialPtr: Long) : NativeHandle(initialPtr), Resource, LocalIface {"
+            "class ZThing private constructor(initialPtr: Long) : \
+             NativeHandle(initialPtr), Resource, LocalIface {"
         ),
         "{thing}"
     );
@@ -109,7 +110,9 @@ fn ptr_class_interface_emits_generated_api() {
     assert!(tc.contains("funzThingSize("), "{thing}");
     // Class implements the generated interface + the user one; members override.
     assert!(
-        tc.contains("classZThing(initialPtr:Long):NativeHandle(initialPtr),ZThingApi,Resource{"),
+        tc.contains(
+            "classZThingprivateconstructor(initialPtr:Long):NativeHandle(initialPtr),ZThingApi,Resource{"
+        ),
         "{thing}"
     );
     assert!(tc.contains("publicoverridefuntake():ZThing"), "{thing}");
@@ -350,7 +353,7 @@ fn per_class_name_and_base_package_fun() {
     let kc: String = kotlin.split_whitespace().collect();
 
     // The literal rename wins over both the default short name and the mangle.
-    assert!(kc.contains("classGadget("), "{kotlin}");
+    assert!(kc.contains("classGadgetprivateconstructor("), "{kotlin}");
     assert!(!kc.contains("ZThing("), "{kotlin}");
     assert!(!kc.contains("JNIZThing"), "{kotlin}");
     // Wrappers reference the renamed class.
@@ -427,8 +430,8 @@ fn setters_after_declarations_apply() {
         .expect("subpackage file under the late-set prefix");
     // ...and the late-set mangle drives the class name (`ZThing` → `Thing`).
     let tc: String = things.split_whitespace().collect();
-    assert!(tc.contains("classThing("), "{things}");
-    assert!(!tc.contains("classZThing("), "{things}");
+    assert!(tc.contains("classThingprivateconstructor("), "{things}");
+    assert!(!tc.contains("classZThingprivateconstructor("), "{things}");
     assert!(
         tc.contains("funthingNew(onError:JniErrorHandler<Thing>):Thing"),
         "{things}"

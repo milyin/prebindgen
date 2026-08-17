@@ -51,6 +51,77 @@ pub(crate) use crate::{
     util::snake_to_camel,
 };
 
+/// Short name of the generated `@RequiresOptIn` marker annotation class.
+///
+/// The Kotlin half of the raw-pointer guard: it marks every generated entry
+/// point that hands a raw native pointer to, or takes one from, safe Kotlin
+/// and cannot be hidden outright — `NativeHandle.peek()` and the `fromParts`
+/// factories, both reached from Rust by JNI reflection, so renaming them is
+/// not an option. [`JVM_SYNTHETIC`] is the other half, for Java.
+///
+/// See [`Declarations::unsafe_marker_fqn`] for the qualified form.
+pub(crate) const UNSAFE_MARKER: &str = "UnsafeNativeApi";
+
+/// `kotlin.jvm.JvmSynthetic` — the JVM half of the raw-pointer guard.
+///
+/// `internal` and `@RequiresOptIn` are Kotlin-source constructs and stop at
+/// the Kotlin compiler: `internal` members are emitted as **public** JVM
+/// methods under a mangled name, and javac neither knows nor enforces an
+/// opt-in marker. `@JvmSynthetic` sets `ACC_SYNTHETIC`, which javac skips when
+/// resolving a call, so a Java consumer cannot name the member at all.
+///
+/// It leaves the name and the JVM signature alone, so JNI's own lookup
+/// (`GetMethodID` / `GetStaticMethodID`, which ignore the flag) still finds
+/// `peek`, `fromParts`, and the `external fun` externs. That is exactly what
+/// `internal` could not offer. It is **not** applicable to a constructor
+/// (Kotlin rejects the target), which is why a handle's constructor is instead
+/// `private` behind a synthetic factory — see [`HANDLE_FACTORY`].
+pub(crate) const JVM_SYNTHETIC: &str = "JvmSynthetic";
+
+/// Name of the generated per-handle factory that replaces the raw-pointer
+/// constructor: `Storage.fromRawPtr(p)` rather than `Storage(p)`.
+///
+/// A handle's constructor is `private` — `internal` would still be a public
+/// JVM constructor and `@JvmSynthetic` cannot be applied to one, so `new
+/// Storage(0xdeadbeefL)` compiled fine from Java. The factory is `internal` +
+/// [`JVM_SYNTHETIC`], reachable from generated Kotlin and from nowhere else.
+pub(crate) const HANDLE_FACTORY: &str = "fromRawPtr";
+
+/// Spell the construction of a typed handle from a raw pointer expression.
+///
+/// Every generated site that mints a handle goes through here, so the choice
+/// of [`HANDLE_FACTORY`] over a constructor is made once.
+pub(crate) fn handle_from_raw(short: &str, raw: &str) -> String {
+    format!("{short}.{HANDLE_FACTORY}({raw})")
+}
+
+/// An `internal` member of the generated surface, hidden from Java too.
+///
+/// Always pair the two: `internal` alone leaves a public JVM method behind a
+/// mangled name, and `handle.setPtr$mymodule(0xdeadbeefL)` from Java would
+/// then repoint a live handle at an address of the caller's choosing, which
+/// the next generated call happily frees. See [`JVM_SYNTHETIC`].
+pub(crate) fn internal_fun(name: &str) -> kotlin_codegen::KtFun {
+    kotlin_codegen::KtFun::new(name)
+        .vis(kotlin_codegen::KtVis::Internal)
+        .annotation(JVM_SYNTHETIC)
+}
+
+/// Use-site targets for [`JVM_SYNTHETIC`] on an `internal` property: a bare
+/// annotation would land on the backing field and leave the accessors — the
+/// part javac actually resolves — visible.
+pub(crate) fn internal_prop(p: kotlin_codegen::KtProperty) -> kotlin_codegen::KtProperty {
+    p.vis(kotlin_codegen::KtVis::Internal)
+        .annotation(format!("get:{JVM_SYNTHETIC}"))
+        .annotation(format!("set:{JVM_SYNTHETIC}"))
+}
+
+/// [`internal_prop`] for a `val`, which has no setter to hide.
+pub(crate) fn internal_val(p: kotlin_codegen::KtProperty) -> kotlin_codegen::KtProperty {
+    p.vis(kotlin_codegen::KtVis::Internal)
+        .annotation(format!("get:{JVM_SYNTHETIC}"))
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Structured type-conversion configuration
 // ──────────────────────────────────────────────────────────────────────
