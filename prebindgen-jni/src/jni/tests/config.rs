@@ -358,7 +358,7 @@ fn per_class_name_and_base_package_fun() {
     assert!(!kc.contains("JNIZThing"), "{kotlin}");
     // Wrappers reference the renamed class.
     assert!(
-        kc.contains("funthingNew(onError:JniErrorHandler<Gadget>):Gadget"),
+        kc.contains("funthingNew(onError:JniErrorHandler<Gadget?>):Gadget?"),
         "{kotlin}"
     );
     // Base-package functions land in the base package file (which also hosts
@@ -370,6 +370,59 @@ fn per_class_name_and_base_package_fun() {
         .expect("base package file");
     assert!(base.contains("fun ping("), "{base}");
     assert!(base.contains("fun thingNew("), "{base}");
+}
+
+/// A generated reference class may legitimately have the same short name as a
+/// Kotlin builtin. Its full identity keeps it reference-shaped, so nullable
+/// recovery must not mistake `io.test.jni.thing.Int` for primitive `Int`.
+#[test]
+fn builtin_looking_class_name_keeps_nullable_recovery() {
+    use prebindgen::SourceLocation;
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThing {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn thing_new() -> ZThing {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing).name("Int"))
+                .fun(prebindgen_registry::fun!(thing_new)),
+        );
+
+    let dir = unique_test_dir("jnigen_builtin_looking_class");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect();
+    let compact: String = kotlin.split_whitespace().collect();
+
+    assert!(compact.contains("classIntprivateconstructor("), "{kotlin}");
+    assert!(
+        compact.contains("funthingNew(onError:JniErrorHandler<Int?>):Int?"),
+        "{kotlin}"
+    );
 }
 
 /// Setters are order-insensitive: declaring the package FIRST and applying
@@ -433,7 +486,7 @@ fn setters_after_declarations_apply() {
     assert!(tc.contains("classThingprivateconstructor("), "{things}");
     assert!(!tc.contains("classZThingprivateconstructor("), "{things}");
     assert!(
-        tc.contains("funthingNew(onError:JniErrorHandler<Thing>):Thing"),
+        tc.contains("funthingNew(onError:JniErrorHandler<Thing?>):Thing?"),
         "{things}"
     );
 }

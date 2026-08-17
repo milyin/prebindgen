@@ -1660,8 +1660,11 @@ pub(crate) fn error_handler_iface_spec(
         "Domain-error callback: called only when the native function returns `Err` — the\n\
          parameters carry the decomposed `{source_short}`. Binding/system failures go to the\n\
          separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`\n\
-         discriminator here. The wrapper returns whatever `run` returns;\n\
-         throwing from `run` is safe (it executes after the native call has returned)."
+         discriminator here. The wrapper returns whatever `run` returns. Where that type is\n\
+         nullable you may return `null` to decline — you are not required to fabricate a result.\n\
+         Consequently the handler firing, not the returned value, is the error discriminator:\n\
+         `null` can also be a successful optional result, and a non-null value can be a fallback\n\
+         you supplied. Throwing from `run` is safe (it executes after the native call has returned)."
     ));
     Some(iface)
 }
@@ -1686,8 +1689,11 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &Declarations) -> IfaceSpec {
          converter in the chain may fail, or a handle may be closed). `je` is the\n\
          failure message. For an infallible wrapper this is the sole `onError`; a\n\
          fallible wrapper takes it as `onBindingError` alongside the typed domain\n\
-         handler. The wrapper returns whatever `run` returns;\n\
-         throwing from `run` is safe (it executes after the native call has returned)."
+         handler. The wrapper returns whatever `run` returns. Where that type is nullable you may\n\
+         return `null` to decline — you are not required to fabricate a result. Consequently the\n\
+         handler firing, not the returned value, is the error discriminator: `null` can also be a\n\
+         successful optional result, and a non-null value can be a fallback you supplied. Throwing\n\
+         from `run` is safe (it executes after the native call has returned)."
             .to_string(),
     );
     iface

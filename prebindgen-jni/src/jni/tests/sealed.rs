@@ -1187,7 +1187,7 @@ fn borrowed_sum_return_matches_through_the_reference() {
     // handle, so there is nothing to close and no lifetime to track.
     assert!(
         kotlin.contains(
-            "public fun readBorrowed(p: Probe, onError: JniErrorHandler<Reading>): Reading"
+            "public fun readBorrowed(p: Probe, onError: JniErrorHandler<Reading?>): Reading?"
         ),
         "a borrowed sum arrives as an ordinary value:\n{kotlin}"
     );
@@ -1213,7 +1213,7 @@ fn sum_return_composes_with_option_and_vec() {
     );
     assert!(
         kotlin.contains(
-            "public fun readAll(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading>"
+            "public fun readAll(n: Int, onError: JniErrorHandler<List<Reading>?>): List<Reading>?"
         ) && kotlin.contains("__ReadingFolderRawHolder.instance"),
         "Vec<sum> folds through a hoisted appender singleton:\n{kotlin}"
     );

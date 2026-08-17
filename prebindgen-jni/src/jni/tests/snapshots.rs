@@ -374,7 +374,13 @@ fn handler_interfaces_carry_split_contract_kdoc() {
         shared.contains("binding/system failure channel"),
         "{shared}"
     );
-    assert!(shared.contains("throwing from `run` is safe"), "{shared}");
+    assert!(shared.contains("from `run` is safe"), "{shared}");
+    assert!(shared.contains("nullable you may"), "{shared}");
+    assert!(shared.contains("return `null` to decline"), "{shared}");
+    assert!(
+        shared.contains("handler firing, not the returned value, is the error discriminator"),
+        "{shared}"
+    );
 
     // A `Result<_, ZErr>` fn with a declared error decomposition emits the
     // TYPED domain handler; its KDoc states it fires only on a domain error,
@@ -415,7 +421,13 @@ fn handler_interfaces_carry_split_contract_kdoc() {
     assert!(typed.contains("Domain-error callback"), "{typed}");
     assert!(typed.contains("decomposed `ZErr`"), "{typed}");
     assert!(typed.contains("onBindingError"), "{typed}");
-    assert!(typed.contains("throwing from `run` is safe"), "{typed}");
+    assert!(typed.contains("from `run` is safe"), "{typed}");
+    assert!(typed.contains("nullable you may"), "{typed}");
+    assert!(typed.contains("return `null` to decline"), "{typed}");
+    assert!(
+        typed.contains("handler firing, not the returned value, is the error discriminator"),
+        "{typed}"
+    );
 }
 
 /// A `data_class` struct with an opaque-pointer string field

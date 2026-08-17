@@ -2099,7 +2099,7 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
     );
     assert!(ac.contains("funname(onError:"), "{all}");
     assert!(
-        ac.contains("funzThingGet(onError:JniErrorHandler<ZThing>):ZThing"),
+        ac.contains("funzThingGet(onError:JniErrorHandler<ZThing?>):ZThing?"),
         "{all}"
     );
 }

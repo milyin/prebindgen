@@ -17,7 +17,7 @@ import io.prebindgen.perftest.asRaw
 import io.prebindgen.perftest.withSortedHandleLocks
 
 /** Create a new, empty storage handle. */
-public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
+public fun storageNew(onError: JniErrorHandler<Storage?>): Storage? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = JNINative.storageNew(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -100,8 +100,8 @@ public fun storagePutByRead(s: Storage, payload: Payload, onError: JniErrorHandl
  */
 public fun payloadHandlerNew(
     f: PayloadCallback,
-    onError: JniErrorHandler<PayloadHandler>,
-): PayloadHandler {
+    onError: JniErrorHandler<PayloadHandler?>,
+): PayloadHandler? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = JNINative.payloadHandlerNew(f.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -193,8 +193,8 @@ public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): 
  */
 public fun payloadVecHandlerNew(
     f: PayloadListCallback,
-    onError: JniErrorHandler<PayloadVecHandler>,
-): PayloadVecHandler {
+    onError: JniErrorHandler<PayloadVecHandler?>,
+): PayloadVecHandler? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = JNINative.payloadVecHandlerNew(f, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
