@@ -56,10 +56,11 @@ public class StorageError private constructor(initialPtr: Long) : NativeHandle(i
  * Domain-error callback: called only when the native function returns `Err` — the
  * parameters carry the decomposed `StorageError`. Binding/system failures go to the
  * separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`
- * discriminator here. The wrapper returns whatever `run` returns;
- * the handler firing is the error discriminator: null can also be a successful optional
- * result, while a non-null value can be a handler-supplied fallback.
- * throwing from `run` is safe (it executes after the native call has returned).
+ * discriminator here. The wrapper returns whatever `run` returns. Where that type is
+ * nullable you may return `null` to decline — you are not required to fabricate a result.
+ * Consequently the handler firing, not the returned value, is the error discriminator:
+ * `null` can also be a successful optional result, and a non-null value can be a fallback
+ * you supplied. Throwing from `run` is safe (it executes after the native call has returned).
  */
 public fun interface StorageErrorHandler<out R> {
     public fun run(message: String, handle: StorageError): R

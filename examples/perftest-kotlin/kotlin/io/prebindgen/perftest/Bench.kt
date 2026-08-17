@@ -181,6 +181,8 @@ fun main() {
     // leak-on-drop behavior) and the Cleaner backlog.
     val HN = minOf(N, 2_000_000L)
     fun runHandleLifecycle() {
+        // The nullable recovery contract puts orThrow() in these measured paths,
+        // so both post-change rows include its null check.
         // create + explicit close: plain = tag write + freePtr; gc adds the
         // cell alloc, Cleaner registration, CAS ticket, clean() deregistration.
         bench("handle_close", "plain", HN) {

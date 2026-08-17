@@ -1168,6 +1168,21 @@ fun main() {
         check(fullHandle!!.total(boom) == 40.0)
         fullHandle!!.close()
         s.close()
+
+        // Generic R? recovery: a binding failure may deliberately decline to
+        // fabricate an R by returning null from the handler.
+        var genericRecoveryError: String? = null
+        val recovered: String? = storageSummary(
+            s,
+            JniErrorHandler<String?> { je ->
+                genericRecoveryError = je
+                null
+            },
+        ) { count, total -> "$count:$total" }
+        check(recovered == null)
+        check(genericRecoveryError?.contains("closed native handle") == true) {
+            "unexpected generic recovery error: $genericRecoveryError"
+        }
     }
 
     // ── binding-local field: fun!(crate::…).sig(sig!).name("handle") ────────

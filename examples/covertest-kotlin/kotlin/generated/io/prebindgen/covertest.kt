@@ -812,10 +812,11 @@ internal object __u64FolderRawHolder {
  * converter in the chain may fail, or a handle may be closed). `je` is the
  * failure message. For an infallible wrapper this is the sole `onError`; a
  * fallible wrapper takes it as `onBindingError` alongside the typed domain
- * handler. The wrapper returns whatever `run` returns;
- * the handler firing is the error discriminator: null can also be a successful optional
- * result, while a non-null value can be a handler-supplied fallback.
- * throwing from `run` is safe (it executes after the native call has returned).
+ * handler. The wrapper returns whatever `run` returns. Where that type is nullable you may
+ * return `null` to decline — you are not required to fabricate a result. Consequently the
+ * handler firing, not the returned value, is the error discriminator: `null` can also be a
+ * successful optional result, and a non-null value can be a fallback you supplied. Throwing
+ * from `run` is safe (it executes after the native call has returned).
  */
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
