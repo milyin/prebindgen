@@ -385,6 +385,15 @@ impl Source {
     /// that two groups differing only in case, or named after a Windows device,
     /// still get one directory each), and the exact name is decoded back out of
     /// it — see [`layout`](crate::layout).
+    ///
+    /// A capture that is *not* under such a directory is refused rather than
+    /// skipped. The description file says which format this directory is in,
+    /// but the macro that wrote the captures is a different package from the
+    /// build script that wrote the description
+    /// ([`output`](crate::api::output)), so a capture outside the layout is how
+    /// a macro that never learned the format announces itself — prebindgen ≤
+    /// 0.5.0 leaves `{group}_{pid}_{thread}.jsonl` here. Skipping those is the
+    /// silent empty binding this whole file exists to prevent.
     fn discover_groups<P: AsRef<Path>>(input_dir: P) -> HashSet<String> {
         let input_dir = input_dir.as_ref();
         let mut groups = HashSet::new();
@@ -404,10 +413,22 @@ impl Source {
                         None => assert!(
                             !holds_captures(&path),
                             "{} holds prebindgen captures but is not a group directory; \
-                             the capture directory is damaged — rebuild the source crate",
+                             the capture directory is damaged, or was written by a \
+                             prebindgen that lays captures out differently — rebuild the \
+                             source crate",
                             path.display()
                         ),
                     }
+                } else {
+                    assert!(
+                        !file_name.is_some_and(|name| name.ends_with(JSONL_EXTENSION)),
+                        "{} is a prebindgen capture outside any group directory. The \
+                         `#[prebindgen]` macro that wrote it does not write the layout \
+                         this prebindgen reads: `prebindgen-proc-macro` and `prebindgen` \
+                         are separate dependencies of the source crate, and Cargo does \
+                         not check that they agree. Name one prebindgen in both.",
+                        path.display()
+                    );
                 }
             }
         }
@@ -660,10 +681,13 @@ mod tests {
     }
 
     #[test]
-    fn the_flat_layout_of_older_captures_is_not_a_group() {
-        // A capture directory written by prebindgen <= 0.5.0. Reading one is
-        // refused outright — `Output::read` stops on the description file it
-        // does not carry — so the file left here names no group.
+    #[should_panic(expected = "capture outside any group directory")]
+    fn a_capture_written_by_an_older_macro_is_not_skipped() {
+        // What a source crate produces when its `prebindgen` build-dependency
+        // writes the description but its `prebindgen-proc-macro` is <= 0.5.0:
+        // a directory that describes itself correctly, holding captures in the
+        // flat layout of an older macro. Skipping them is the silent empty
+        // binding this refuses.
         let dir = tempfile::tempdir().unwrap();
         let record = Record::new(
             RecordKind::Struct,
@@ -679,8 +703,7 @@ mod tests {
         .unwrap();
         write(dir.path(), "default", "Alpha");
 
-        assert_eq!(groups(dir.path()), ["default"]);
-        assert_eq!(names_of(dir.path(), "default"), ["Alpha"]);
+        Source::discover_groups(dir.path());
     }
 
     #[test]

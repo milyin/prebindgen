@@ -195,6 +195,23 @@ pub use crate::api::{
 // its own root — see `prebindgen-jni`'s docs for the JNI / Kotlin workflow.
 
 #[doc(hidden)]
+pub mod output {
+    //! The capture directory's description file, and the format number the
+    //! `#[prebindgen]` macro and [`Source`](crate::Source) both check against.
+    use std::path::Path;
+
+    /// Check that `dir` is described in the format this prebindgen writes.
+    ///
+    /// Called by the `#[prebindgen]` macro before it captures, because the
+    /// macro and the build script that prepared `dir` come from two packages
+    /// that a manifest can pair freely. `Err` carries the reason, for the macro
+    /// to report on the item it was expanding.
+    pub fn check_writer(dir: &Path) -> Result<(), String> {
+        crate::api::output::Output::check_writer(dir)
+    }
+}
+
+#[doc(hidden)]
 pub mod layout {
     //! Capture-directory layout, shared by the proc-macro (writing) and
     //! [`Source`](crate::Source) (reading).
