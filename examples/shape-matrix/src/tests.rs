@@ -211,7 +211,7 @@ fn a_cell_always_answers() {
         .find(|s| s.id == "scalar")
         .expect("scalar shape");
     for target in Target::ALL {
-        let outcome = crate::run::run(shape, Position::Param, *target);
+        let outcome = crate::run::run(shape, Position::Param, *target, "smoke__param__x");
         assert!(
             matches!(outcome.state, crate::run::State::PlanSupported),
             "a scalar parameter should cross for {}, got {:?}",
@@ -267,6 +267,56 @@ fn the_compile_check_separates_good_from_bad() {
         checked.failed.contains_key("selftest_bad__param__jni"),
         "the failing unit produced no attributed diagnostic, so nothing links a \
          compiler error to the cell it belongs to"
+    );
+}
+
+/// The Kotlin stage must separate, and must attribute.
+///
+/// Same argument as the compile check's: a stage whose diagnostics never match
+/// records every cell as passing, and the column becomes decoration. So this
+/// feeds it one cell whose Kotlin is a program and one whose Kotlin is not, in
+/// the same compiler pass, and requires both the verdicts and the attribution —
+/// the only thing tying a diagnostic to a cell is the directory the sources were
+/// written under, which is the cell id.
+#[test]
+fn the_kotlin_stage_separates_good_from_bad() {
+    let unit = |id: &str, source: &str| crate::kotlin::Unit {
+        id: id.to_string(),
+        files: vec![crate::run::KotlinFile {
+            path: "probe.kt".to_string(),
+            source: source.to_string(),
+        }],
+    };
+    let compiled = crate::kotlin::compile(
+        "selftest",
+        &[
+            unit(
+                "selftest_good__param__jni",
+                "package selftest.good\npublic fun probe(v: Long): Long = v\n",
+            ),
+            unit(
+                // A type error of the kind a generator makes: a nullable value
+                // handed to something that requires a non-null one.
+                "selftest_bad__param__jni",
+                "package selftest.bad\npublic fun probe(v: Long?): Long = v\n",
+            ),
+        ],
+    )
+    .expect("the Kotlin check runs — is kotlinc on PATH?");
+
+    assert!(
+        compiled.ok.contains("selftest_good__param__jni"),
+        "a cell whose Kotlin compiles was not recorded as compiling"
+    );
+    assert!(
+        !compiled.ok.contains("selftest_bad__param__jni"),
+        "a cell whose Kotlin does not compile was recorded as compiling — the \
+         stage is reporting a state it did not establish"
+    );
+    assert!(
+        compiled.failed.contains_key("selftest_bad__param__jni"),
+        "the failing cell produced no attributed diagnostic, so nothing links a \
+         Kotlin error to the cell it belongs to"
     );
 }
 

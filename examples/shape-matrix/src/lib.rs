@@ -38,9 +38,11 @@
 //!
 //! Every cell that produces Rust is then handed to rustc ([`check`]), because
 //! "the generator produced a file" and "the file compiles" are different claims
-//! and only the second is worth much. For the C target there is a third:
-//! [`header`] asks cbindgen whether that file becomes a header actually
-//! declaring the wrapper, since a header is what a C caller is given.
+//! and only the second is worth much. Each target then has a last stage of its
+//! own, and it is the one that produces what a caller is actually given:
+//! [`header`] asks cbindgen whether the C file becomes a header declaring the
+//! wrapper, and [`kotlin`] asks the Kotlin compiler whether the classes beside
+//! the JNI file are a program.
 //!
 //! What a cell reached is then held as a floor ([`guarantees`]): rising is free,
 //! falling fails a test that names the cell. The committed report says *"an
@@ -54,11 +56,17 @@
 //!
 //! Run it with `cargo run -p shape-matrix`, which rewrites `REPORT.md`; add
 //! `-- --update-guarantees` to raise the floors to what the run achieved.
+//!
+//! It needs `kotlinc` on `PATH`. Without it the Kotlin stage reports that it
+//! could not run and every JNI cell stops a rung short, which is a *different
+//! report* — loudly, so that a regeneration missing the compiler shows up as a
+//! large diff rather than as a quiet downgrade.
 
 pub mod check;
 pub mod corpus;
 pub mod guarantees;
 pub mod header;
+pub mod kotlin;
 pub mod report;
 pub mod run;
 pub mod runtime;

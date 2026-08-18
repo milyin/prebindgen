@@ -173,7 +173,8 @@ pub fn exercise() -> Result<BTreeMap<String, Outcome>, String> {
             .unwrap_or_else(|| panic!("runtime case names unknown call `{}`", case.call));
         // Only the C target: a JNI wrapper is entered from a JVM, and this
         // stage's whole premise is that C's is not.
-        let Some(emitted) = run_call(call, Target::C).emitted else {
+        let id = crate::report::id_of(&crate::report::Subject::Call(call), Target::C);
+        let Some(emitted) = run_call(call, Target::C, &id).emitted else {
             continue;
         };
 

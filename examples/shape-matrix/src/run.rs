@@ -32,6 +32,13 @@ pub const PROBE_FN: &str = "probe";
 /// The struct or enum a `Field` / `Payload` fixture wraps the shape in.
 const PROBE_TY: &str = "Probe";
 
+/// The Kotlin package every cell's own package hangs under.
+///
+/// A cell's package is this plus its id — see [`run_jni`], and
+/// [`crate::kotlin`] for why one package per cell is what lets a single
+/// compiler pass cover the corpus.
+const PACKAGE_ROOT: &str = "io.prebindgen.matrix";
+
 /// The accessor every target needs in order to turn an error value into
 /// something a foreign caller can read.
 const ERROR_MESSAGE_FN: &str = "zerror_message";
@@ -410,22 +417,38 @@ pub struct Outcome {
     pub state: State,
     /// The generated Rust. `Some` exactly when `state` is `PlanSupported`.
     pub emitted: Option<String>,
+    /// The generated Kotlin, for a JNI cell that produced any. Empty for every
+    /// C cell and for anything that did not get that far.
+    pub kotlin: Vec<KotlinFile>,
+}
+
+/// One emitted Kotlin file: where the generator put it, relative to the output
+/// root it was given, and what it wrote.
+///
+/// Carried rather than left on disk because the directory it was written into is
+/// a temporary one — [`crate::kotlin`] lays the corpus out again, one directory
+/// per cell, which is what attributes a diagnostic back to a cell.
+pub struct KotlinFile {
+    pub path: String,
+    pub source: String,
 }
 
 /// Run one cell, catching a panic as an outcome rather than letting it end the
 /// run. A generator that panics on an unsupported shape is reporting something
 /// — badly — and the table says so.
-pub fn run(shape: &Shape, position: Position, target: Target) -> Outcome {
+pub fn run(shape: &Shape, position: Position, target: Target, cell: &str) -> Outcome {
     if let Some(reason) = not_applicable(shape, position) {
         return Outcome {
             state: State::NotApplicable(reason),
             emitted: None,
+            kotlin: Vec::new(),
         };
     }
     generate(
         &fixture_source(shape, position),
         &declarations(shape, position),
         target,
+        cell,
     )
 }
 
@@ -439,11 +462,18 @@ pub fn run(shape: &Shape, position: Position, target: Target) -> Outcome {
 /// The override applies to the shape's supporting types and not to the wrapper
 /// a field or payload fixture declares: the question is how the *subject*
 /// crosses, and re-declaring its container would ask a different one.
-pub fn run_policy(shape: &Shape, position: Position, class: ClassKind, target: Target) -> Outcome {
+pub fn run_policy(
+    shape: &Shape,
+    position: Position,
+    class: ClassKind,
+    target: Target,
+    cell: &str,
+) -> Outcome {
     if let Some(reason) = not_applicable(shape, position) {
         return Outcome {
             state: State::NotApplicable(reason),
             emitted: None,
+            kotlin: Vec::new(),
         };
     }
     let mut decls = declarations(shape, position);
@@ -455,33 +485,41 @@ pub fn run_policy(shape: &Shape, position: Position, class: ClassKind, target: T
             decl.class = class;
         }
     }
-    generate(&fixture_source(shape, position), &decls, target)
+    generate(&fixture_source(shape, position), &decls, target, cell)
 }
 
 /// Run one call shape. Same driver, different fixture: a call is a second axis
 /// over the same generators, not a second harness.
-pub fn run_call(call: &Call, target: Target) -> Outcome {
-    generate(&call_fixture_source(call), &call_declarations(call), target)
+pub fn run_call(call: &Call, target: Target, cell: &str) -> Outcome {
+    generate(
+        &call_fixture_source(call),
+        &call_declarations(call),
+        target,
+        cell,
+    )
 }
 
-fn generate(source: &str, decls: &[Decl], target: Target) -> Outcome {
+fn generate(source: &str, decls: &[Decl], target: Target, cell: &str) -> Outcome {
     let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| match target {
-        Target::C => run_c(source, decls),
-        Target::Jni => run_jni(source, decls),
+        Target::C => run_c(source, decls).map(|rust| (rust, Vec::new())),
+        Target::Jni => run_jni(source, decls, cell),
     }));
 
     match outcome {
-        Ok(Ok(emitted)) => Outcome {
+        Ok(Ok((emitted, kotlin))) => Outcome {
             state: State::PlanSupported,
             emitted: Some(emitted),
+            kotlin,
         },
         Ok(Err(msg)) => Outcome {
             state: State::Rejected(msg),
             emitted: None,
+            kotlin: Vec::new(),
         },
         Err(payload) => Outcome {
             state: State::Panicked(panic_message(payload)),
             emitted: None,
+            kotlin: Vec::new(),
         },
     }
 }
@@ -509,7 +547,7 @@ fn read_back(
     std::fs::read_to_string(written).map_err(|e| e.to_string())
 }
 
-fn run_jni(source: &str, decls: &[Decl]) -> Result<String, String> {
+fn run_jni(source: &str, decls: &[Decl], cell: &str) -> Result<(String, Vec<KotlinFile>), String> {
     let mut pkg = prebindgen_jni::package!().fun(FunctionDecl::new(ident(PROBE_FN)));
     let mut error_decls: Vec<ExpandReturnDecl> = Vec::new();
     for decl in decls {
@@ -526,9 +564,15 @@ fn run_jni(source: &str, decls: &[Decl]) -> Result<String, String> {
             pkg.class(decl.class.decl(ty(&decl.name)))
         };
     }
+    // One package per cell. Every cell declares the same classes — `JNINative`,
+    // `NativeHandle`, its own declared surface — so a shared package is a
+    // redeclaration per cell, and the Kotlin compiler could only be run one cell
+    // at a time. See [`crate::kotlin`]: the package is also the directory a
+    // diagnostic is attributed by, so both facts come from the cell id rather
+    // than from a second naming scheme.
     let mut builder = JniGen::builder()
         .items(items(source))
-        .set_package_prefix("io.prebindgen.matrix")
+        .set_package_prefix(format!("{PACKAGE_ROOT}.{cell}"))
         .package(pkg);
     for decl in error_decls {
         builder = builder.expand(decl);
@@ -545,8 +589,19 @@ fn run_jni(source: &str, decls: &[Decl]) -> Result<String, String> {
     if written.is_empty() {
         return Err("the binding produced no Kotlin at all".to_string());
     }
+    let mut kotlin = Vec::new();
+    for path in &written {
+        let relative = path
+            .strip_prefix(kotlin_dir.path())
+            .map_err(|e| format!("a written Kotlin file escaped its directory: {e}"))?;
+        kotlin.push(KotlinFile {
+            path: relative.to_string_lossy().into_owned(),
+            source: std::fs::read_to_string(path).map_err(|e| e.to_string())?,
+        });
+    }
 
-    read_back(|path| generation.write_rust(path).map_err(|e| e.to_string()))
+    let rust = read_back(|path| generation.write_rust(path).map_err(|e| e.to_string()))?;
+    Ok((rust, kotlin))
 }
 
 /// The declaration axis, spoken to the C builder.

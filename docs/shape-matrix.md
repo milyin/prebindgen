@@ -47,7 +47,8 @@ not a rewrite.
 | 2 | Receipts: rustc accepts the emitted Rust | **landed** ([#403](https://github.com/milyin/prebindgen/pull/403)) |
 | 2b | Kotlin emitted, and cbindgen asked for the header | **landed** ([#405](https://github.com/milyin/prebindgen/pull/405)) |
 | 2c | The runtime — C side, in pure Rust | **landed** ([#409](https://github.com/milyin/prebindgen/pull/409)) |
-| 2d | The Kotlin compiler and the JVM runtime | not started — needs kotlinc and a JVM in CI |
+| 2d | The Kotlin compiler | **landed** |
+| 2e | The JVM runtime | not started — needs a cdylib per cell and a harness to enter it |
 | 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
 | 4 | The call axis | **landed** ([#407](https://github.com/milyin/prebindgen/pull/407)) |
 | 5 | The declaration-policy axis | **landed** for the JNI vocabulary ([#408](https://github.com/milyin/prebindgen/pull/408)); C's own declarators blocked |
@@ -121,11 +122,49 @@ load-bearing: a `()`-returning one **aborts** on rejection (a panic cannot cross
 `extern "C"`), while a fallible one reports through the error out-param. Only the
 second is observable in-process, and only the second is what a real C API does.
 
-### 2d. The Kotlin compiler and the JVM runtime
+### 2d. The Kotlin compiler — landed
 
-Still open, and the first step in this sequence that is not self-contained: the
-Kotlin emitted in 2b is written but never compiled, and its wrappers are entered
-from a JVM. Both need toolchains in CI.
+2b made every JNI cell **write** its Kotlin and checked only that it was not
+empty. This compiles it, which is the same step 2 took on the Rust side and
+carries the same argument: a generator that produced a file and a generator that
+produced a program are different claims.
+
+JNI's ladder now ends at `kotlin`, the counterpart of C's `header` — what a
+Kotlin caller is handed is classes, not a header — and `rustc` becomes what it
+already was for C: where a cell stopped without reaching its target's last
+stage.
+
+**Each cell's Kotlin is its own package**, `io.prebindgen.matrix.<cell id>`, set
+on the generator rather than patched into the emitted text. Every cell declares
+the same classes — `JNINative`, `NativeHandle`, its own surface — so one package
+would be a hundred redeclarations, and compiling cells one at a time would cost
+a JVM start each. One `kotlinc` over the whole corpus takes about as long as two
+separate ones. The package is also the directory a diagnostic is attributed by,
+so the receipt rule holds: nothing maps a message to a cell by hand.
+
+**This is the infrastructure commitment**, and it is smaller than it looked: the
+two CI jobs that run the matrix — `build` through `cargo test`, `covertest`
+through the regen check — install a pinned `kotlinc`. Pinned because a cell's
+state is a compiler's answer, so the committed report is reproducible only
+against a named one.
+
+Not having the compiler is **not** a verdict: the stage reports that it could not
+run, every cell stays a rung short, and the resulting large diff is what a
+regeneration without it looks like. That is deliberately loud rather than quiet.
+
+It found four cells whose Kotlin does not compile beside Rust that does — [#429](https://github.com/milyin/prebindgen/issues/429)
+and [#430](https://github.com/milyin/prebindgen/issues/430).
+
+### 2e. The JVM runtime
+
+Still open, and the one part of this sequence with no shortcut. A JNI wrapper is
+entered from a JVM: reaching it needs each cell built as a cdylib, loaded, and
+called through its `JNINative` — where the C side's wrappers were ordinary Rust
+functions a `cargo test` could call.
+
+What it would settle is the claim neither compiler makes: that the two halves
+agree about a signature. A Kotlin `external fun` and a Rust `#[no_mangle]`
+symbol are checked against each other by nothing until a JVM looks one up.
 
 ### 3. The guarantee ratchet — landed
 
@@ -212,6 +251,8 @@ The table is not the deliverable; the tickets are. As of `146eb348`:
 | [#413](https://github.com/milyin/prebindgen/issues/413) | C returns of borrowed elements: `&[T]` drops the value, `Vec<&T>` maps over an `unsafe fn` | fixed ([#427](https://github.com/milyin/prebindgen/pull/427)) |
 | [#414](https://github.com/milyin/prebindgen/issues/414) | C qualifies std `Option` into the source module, and leaves the declared type bare | fixed ([#424](https://github.com/milyin/prebindgen/pull/424)) |
 | [#428](https://github.com/milyin/prebindgen/issues/428) | C calls the composite marker for an `Option<&T>` **callback argument**, and the marker takes no arguments | open |
+| [#429](https://github.com/milyin/prebindgen/issues/429) | JNI's sum-payload builder converts the wire value as if it were the leaf — the `Option` and the collection layers are skipped | open |
+| [#430](https://github.com/milyin/prebindgen/issues/430) | JNI's `data_class` factory builds an opaque handle through the constructor #404 made private | open |
 | [#191](https://github.com/milyin/prebindgen/issues/191) | a third of C's refusals and a fifth of JNI's arrive as panics — now a measured number | open |
 
 Two of the five carried a diagnosis rather than a symptom, and both came from a
@@ -225,6 +266,14 @@ the way the fixes predicted: C's `bad rust` column is 5 → 0 and Kotlin/JNI's
 anything but a handle now says so instead of emitting a wrapper that discards
 the callee's writes. That fall tripped the ratchet, which is the ratchet working:
 lowering those two floors is a hand edit in `146eb348`, visible in the diff.
+
+#429 and #430 are step 2d's, and they are the pattern this work keeps repeating:
+four cells that had been reporting `rustc` — the top of JNI's ladder as it then
+was — emit Kotlin the compiler refuses. Their Rust compiles, so nothing before
+the Kotlin compiler could have caught them. Between them the two defects hold the
+complementary halves of one correct answer: the field path does the null check
+the payload builder omits, and the payload builder calls the factory the field
+path does not.
 
 **#428 is a finding about the corpus as much as about the generator.** It is
 #413 with the directions swapped — a composite lowered structurally in one

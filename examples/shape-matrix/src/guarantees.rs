@@ -37,8 +37,15 @@ pub enum Level {
     Generates,
     /// The emitted Rust compiles.
     Compiles,
-    /// C only: cbindgen declares the wrapper. The top of C's ladder; JNI's ends
-    /// at [`Level::Compiles`] until the Kotlin compiler runs.
+    /// JNI only: the Kotlin compiler accepts the emitted Kotlin. The top of
+    /// JNI's ladder.
+    Kotlin,
+    /// C only: cbindgen declares the wrapper. The top of C's ladder.
+    ///
+    /// Above [`Level::Kotlin`] only because the two have to be ordered
+    /// somehow: no cell can reach both — they are the last rung of one
+    /// target's ladder each — and a floor is compared against the same cell's
+    /// own level, never across targets.
     Header,
 }
 
@@ -48,6 +55,7 @@ impl Level {
             Level::Nothing => "nothing",
             Level::Generates => "generates",
             Level::Compiles => "compiles",
+            Level::Kotlin => "kotlin",
             Level::Header => "header",
         }
     }
@@ -57,6 +65,7 @@ impl Level {
             Level::Nothing,
             Level::Generates,
             Level::Compiles,
+            Level::Kotlin,
             Level::Header,
         ]
         .into_iter()
@@ -185,7 +194,6 @@ a cell getting worse in exactly the same shade as one getting better, so it
 catches a regression only if a reviewer reads the diff and knows which direction
 is which. A floor does not need a reviewer.
 
-`header` is the top of C's ladder and `compiles` the top of Kotlin/JNI's, since
-this crate does not run the Kotlin compiler yet.
+`header` is the top of C's ladder and `kotlin` the top of Kotlin/JNI's.
 
 ";

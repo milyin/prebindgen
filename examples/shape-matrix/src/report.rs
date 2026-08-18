@@ -83,18 +83,31 @@ pub struct Cell {
     /// all, which is not a verdict about the cell either.
     compiled: Option<bool>,
     /// What cbindgen made of it. `None` for every JNI cell — that target's next
-    /// stage is the Kotlin compiler, which this crate does not run — and for
-    /// any cell whose Rust did not compile, since there would be nothing sound
-    /// to hand on.
+    /// stage is the Kotlin compiler, not a header — and for any cell whose Rust
+    /// did not compile, since there would be nothing sound to hand on.
     header: Option<Header>,
+    /// Whether the Kotlin compiler accepted this cell's emitted Kotlin. `None`
+    /// for every C cell, for a cell that emitted none, and for a run where the
+    /// stage could not start at all.
+    kotlin: Option<bool>,
+}
+
+/// `<shape>__<position>__<target>` — the receipt key, the name of the file
+/// rustc reports against, the directory the Kotlin compiler reports against,
+/// and the Kotlin package a cell's own binding surface is emitted into.
+///
+/// A free function because the id is needed **before** a cell exists: the JNI
+/// run is given it so the emitted Kotlin says which cell it belongs to, and one
+/// formula in one place is what keeps that package and this key the same string.
+pub fn id_of(subject: &Subject, target: Target) -> String {
+    let (shape, kind) = subject.id_parts();
+    format!("{shape}__{kind}__{}", target.slug())
 }
 
 impl Cell {
-    /// `<shape>__<position>__<target>` — the receipt key, and the name of the
-    /// file rustc reports against.
+    /// This cell's [`id_of`].
     pub fn id(&self) -> String {
-        let (subject, kind) = self.subject.id_parts();
-        format!("{subject}__{kind}__{}", self.target.slug())
+        id_of(&self.subject, self.target)
     }
 
     /// What the table prints: the furthest stage this cell reached.
@@ -106,7 +119,11 @@ impl Cell {
     fn text(&self) -> String {
         match (&self.state, self.compiled) {
             (State::PlanSupported, Some(true)) => match &self.header {
-                None => "rustc".to_string(),
+                None => match self.kotlin {
+                    Some(true) => "kotlin".to_string(),
+                    Some(false) => "**bad kotlin**".to_string(),
+                    None => "rustc".to_string(),
+                },
                 Some(Header::Declared) => "header".to_string(),
                 Some(Header::Missing) => "**no decl**".to_string(),
                 Some(Header::Failed(_)) => "**bad header**".to_string(),
@@ -124,7 +141,13 @@ impl Cell {
         use crate::guarantees::Level;
         match (&self.state, self.compiled) {
             (State::PlanSupported, Some(true)) => match &self.header {
-                None => Level::Compiles,
+                None => match self.kotlin {
+                    Some(true) => Level::Kotlin,
+                    // A Kotlin stage that ran and failed is *worse* than not
+                    // having run, for the same reason a failed header stage is:
+                    // the Rust compiles and the Kotlin caller still has nothing.
+                    _ => Level::Compiles,
+                },
                 Some(h) if h.is_ok() => Level::Header,
                 // A header stage that ran and failed is *worse* than not having
                 // run: the Rust compiles and the C caller still gets nothing.
@@ -151,6 +174,7 @@ fn run_all() -> Vec<Cell> {
 
     let mut cells = Vec::new();
     let mut units = Vec::new();
+    let mut kotlin_units = Vec::new();
     let mut record =
         |subject: Subject, target: Target, outcome: crate::run::Outcome, fixture: String| {
             let cell = Cell {
@@ -159,7 +183,14 @@ fn run_all() -> Vec<Cell> {
                 state: outcome.state,
                 compiled: None,
                 header: None,
+                kotlin: None,
             };
+            if !outcome.kotlin.is_empty() {
+                kotlin_units.push(crate::kotlin::Unit {
+                    id: cell.id(),
+                    files: outcome.kotlin,
+                });
+            }
             if let Some(emitted) = outcome.emitted {
                 units.push(Unit {
                     id: cell.id(),
@@ -177,7 +208,7 @@ fn run_all() -> Vec<Cell> {
                     shape,
                     position: *position,
                 };
-                let outcome = run(shape, *position, *target);
+                let outcome = run(shape, *position, *target, &id_of(&subject, *target));
                 record(
                     subject,
                     *target,
@@ -189,9 +220,10 @@ fn run_all() -> Vec<Cell> {
     }
     for call in CALLS {
         for target in Target::ALL {
-            let outcome = run_call(call, *target);
+            let subject = Subject::Call(call);
+            let outcome = run_call(call, *target, &id_of(&subject, *target));
             record(
-                Subject::Call(call),
+                subject,
                 *target,
                 outcome,
                 crate::run::call_fixture_source(call),
@@ -201,9 +233,16 @@ fn run_all() -> Vec<Cell> {
     for policy in POLICIES {
         let shape = policy.shape();
         for target in Target::ALL {
-            let outcome = run_policy(shape, policy.position, policy.class, *target);
+            let subject = Subject::Policy(policy);
+            let outcome = run_policy(
+                shape,
+                policy.position,
+                policy.class,
+                *target,
+                &id_of(&subject, *target),
+            );
             record(
-                Subject::Policy(policy),
+                subject,
                 *target,
                 outcome,
                 crate::run::fixture_source(shape, policy.position),
@@ -245,13 +284,42 @@ fn run_all() -> Vec<Cell> {
         Err(err) => eprintln!("shape-matrix: the compile check did not run: {err}"),
     }
 
+    // The JNI target's own next stage. Only cells whose Rust compiles are asked:
+    // the two halves are one binding, and Kotlin that compiles beside Rust that
+    // does not is not a working cell.
+    kotlin_units.retain(|unit| {
+        cells
+            .iter()
+            .any(|cell| cell.compiled == Some(true) && cell.id() == unit.id)
+    });
+    match crate::kotlin::compile("cells", &kotlin_units) {
+        Ok(compiled) => {
+            for cell in &mut cells {
+                let id = cell.id();
+                if kotlin_units.iter().any(|unit| unit.id == id) {
+                    cell.kotlin = Some(compiled.ok.contains(&id));
+                }
+            }
+            for (id, messages) in &compiled.failed {
+                eprintln!("shape-matrix: {id} emitted Kotlin that does not compile:");
+                for message in messages {
+                    eprintln!("    {message}");
+                }
+            }
+        }
+        Err(err) => eprintln!("shape-matrix: the Kotlin check did not run: {err}"),
+    }
+
     cells
 }
 
 fn render_summary(out: &mut String, results: &[Cell]) {
     out.push_str("## Summary\n\n");
-    out.push_str("| Target | header | rustc | bad header | bad rust | rejected | panic | n/a |\n");
-    out.push_str("|---|---:|---:|---:|---:|---:|---:|---:|\n");
+    out.push_str(
+        "| Target | header | kotlin | rustc | bad header | bad kotlin | bad rust | rejected | \
+         panic | n/a |\n",
+    );
+    out.push_str("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n");
     for target in Target::ALL {
         let of = |f: fn(&Cell) -> bool| {
             results
@@ -261,11 +329,13 @@ fn render_summary(out: &mut String, results: &[Cell]) {
         };
         let _ = writeln!(
             out,
-            "| {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
             target.as_str(),
             of(|c| c.header.as_ref().is_some_and(Header::is_ok)),
-            of(|c| c.compiled == Some(true) && c.header.is_none()),
+            of(|c| c.kotlin == Some(true)),
+            of(|c| c.compiled == Some(true) && c.header.is_none() && c.kotlin.is_none()),
             of(|c| c.header.as_ref().is_some_and(|h| !h.is_ok())),
+            of(|c| c.kotlin == Some(false)),
             of(|c| c.compiled == Some(false)),
             of(|c| matches!(c.state, State::Rejected(_))),
             of(|c| matches!(c.state, State::Panicked(_))),
@@ -273,10 +343,11 @@ fn render_summary(out: &mut String, results: &[Cell]) {
         );
     }
     out.push_str(
-        "\nThe two targets stop at different stages: a C cell goes on to cbindgen, \
-         a Kotlin/JNI cell stops at rustc because this crate does not run the Kotlin \
-         compiler. `rustc` is therefore the top state for JNI and an intermediate \
-         one for C.\n",
+        "\nThe two targets end at different stages, and each column belongs to one of \
+         them: a C cell goes on to cbindgen and tops out at `header`, a Kotlin/JNI cell \
+         goes on to the Kotlin compiler and tops out at `kotlin`. `rustc` is where a cell \
+         stopped without reaching either — for JNI that means it emitted no Kotlin to \
+         compile, and for C that its Rust did not reach the header stage.\n",
     );
     out.push('\n');
 }
@@ -586,7 +657,9 @@ never by a hand-written list of what is supposed to work. See
 | Cell | Meaning |
 |---|---|
 | `header` | C only: rustc accepted the Rust **and cbindgen declared the wrapper in a header**. The furthest any cell gets today. |
-| `rustc` | the generator produced Rust and rustc accepted it. For JNI this is the top of the ladder — the Kotlin compiler does not run here, though the Kotlin **is** generated, and a cell whose Kotlin cannot be written is `rejected`. |
+| `kotlin` | JNI only: rustc accepted the Rust **and the Kotlin compiler accepted the Kotlin**. The top of that target's ladder, and the counterpart of `header` — what a Kotlin caller is given is classes, not a header. |
+| `rustc` | the generator produced Rust and rustc accepted it, and the cell stopped there: it reached neither its target's last stage nor a failure in it. |
+| **`bad kotlin`** | the generator produced Kotlin the Kotlin compiler refused, beside Rust that compiles. Worse than not having run the stage, exactly as **`bad header`** is on the C side. |
 | **`no decl`** | cbindgen produced a header that does not declare the wrapper — nothing a C program can call. |
 | **`bad header`** | cbindgen refused the emitted Rust, or panicked on it. |
 | **`bad rust`** | the generator produced Rust that does not compile. Green unit tests can coexist with this — that is why the check exists. It also covers a refusal the generator *chose* to make at compile time, through a generated assertion with its own message: same user-visible outcome, and a refusal arriving as a compile error rather than as a named rejection at declaration time is [#191](https://github.com/milyin/prebindgen/issues/191)'s subject. The run's stderr distinguishes them. |
@@ -595,10 +668,11 @@ never by a hand-written list of what is supposed to work. See
 | **`panic`** | the generator refused it without a diagnosis — the user gets a stack trace instead of a sentence ([#191](https://github.com/milyin/prebindgen/issues/191)). |
 | `—` | the placement is not legal Rust, so there is nothing to ask. |
 
-`rustc` is evidence, not a guarantee. It is the Rust half of
-`ToolchainCompiled`: the emitted Rust type-checks against the fixture the way a
-binding crate compiles it. The C header, the Kotlin classes and every
-`RuntimeExercised` cell still require toolchains this stage does not run.
+A compiler is evidence, not a guarantee. `rustc` says the emitted Rust
+type-checks against the fixture the way a binding crate compiles it, and
+`kotlin` says the emitted classes are a program; neither says the two halves
+agree at runtime about a signature, which is what a JVM would answer and what no
+cell here asks yet.
 
 Compiler messages are deliberately **not** in this file — they vary by
 toolchain, and the report has to be identical on every one that builds it. A
