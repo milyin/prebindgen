@@ -594,3 +594,36 @@ fn an_element_answers_for_its_docs() {
     ));
     assert_eq!(as_fn(&bare).docs(), None);
 }
+
+/// A spelling names `Cow` and `MaybeUninit` in full, because the model's
+/// prelude has them and Rust's does not — normalization reduces both to a bare
+/// name, and generated Rust is `include!`d into a consumer crate that need not
+/// have imported either (#410). Everything else stays the source's own tokens,
+/// which is the whole point of spelling off the origin.
+#[test]
+fn a_spelling_qualifies_what_rusts_prelude_does_not_declare() {
+    let f: syn::ItemFn = syn::parse_quote!(
+        pub fn probe(
+            a: Cow<'static, str>,
+            b: std::borrow::Cow<'a, [u8]>,
+            c: &mut MaybeUninit<u64>,
+            d: Option<Vec<String>>,
+        ) {
+        }
+    );
+    let element = parse_one(syn::Item::Fn(f));
+    let func = as_fn(&element);
+
+    assert_eq!(
+        func.params
+            .iter()
+            .map(|p| tokens(&p.ty.spell()))
+            .collect::<Vec<_>>(),
+        vec![
+            ":: std :: borrow :: Cow < 'static , str >",
+            ":: std :: borrow :: Cow < 'a , [u8] >",
+            "& mut :: std :: mem :: MaybeUninit < u64 >",
+            "Option < Vec < String > >",
+        ]
+    );
+}

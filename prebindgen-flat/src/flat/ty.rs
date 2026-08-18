@@ -141,7 +141,8 @@ impl TypeRef {
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside
     /// it; the node itself never leaves the model.
     pub(crate) fn spell(&self) -> proc_macro2::TokenStream {
-        self.origin.spell()
+        use quote::ToTokens;
+        super::spelling::qualify_for_emission(self.origin.as_syn()).to_token_stream()
     }
 
     /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
@@ -517,7 +518,7 @@ impl TypeRef {
     /// a wrapper under a borrow or inside an `Option` belongs to that inner
     /// node's own spelling.
     pub(crate) fn stripped_syntax(&self) -> syn::Type {
-        self.unwrapped().origin.as_syn().clone()
+        super::spelling::qualify_for_emission(self.unwrapped().origin.as_syn())
     }
 
     /// True when this is `&mut T` over a **value** — not `&mut MaybeUninit<T>`.
