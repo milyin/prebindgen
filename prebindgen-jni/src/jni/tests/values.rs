@@ -2553,4 +2553,33 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
         out.contains("could not be resolved") && out.contains("MaybeUninit"),
         "the refusal names the spelling: {out}"
     );
+
+    // Three spellings that reach a handle without borrowing one. Each is
+    // refused even though the entry the borrow resolves through answers
+    // `is_direct_handle` — a slot, a decoded box and a decoded reference are
+    // locals the wrapper drops, so the write never reaches the JVM's object.
+    for (spelling, name, names) in [
+        (
+            syn::parse_quote!(&mut MaybeUninit<Handle>),
+            "jnigen_excl_uninit_handle",
+            "MaybeUninit",
+        ),
+        (
+            syn::parse_quote!(&mut Box<Handle>),
+            "jnigen_excl_boxed_handle",
+            "Box",
+        ),
+        (
+            syn::parse_quote!(&mut &Handle),
+            "jnigen_excl_ref_handle",
+            "Handle",
+        ),
+    ] {
+        let refusal = build(spelling, name)
+            .expect_err("only the handle itself carries a write back to the JVM");
+        assert!(
+            refusal.contains("could not be resolved") && refusal.contains(names),
+            "the refusal names the spelling: {refusal}"
+        );
+    }
 }

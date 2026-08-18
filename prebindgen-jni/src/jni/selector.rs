@@ -107,7 +107,12 @@ impl Declarations {
             }
             return None;
         }
-        if let prebindgen_registry::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
+        if let prebindgen_registry::flat::TypeKind::Ref {
+            mutable,
+            inner: borrowed,
+            ..
+        } = ty.unwrapped().kind()
+        {
             // The target through the accessor: an out-parameter's `MaybeUninit`
             // is the slot a `T` goes in, and it is the `T` that converts.
             let inner = ty.borrow_target().expect("a borrow");
@@ -172,17 +177,32 @@ impl Declarations {
             // dropped with the wrapper's frame. Declining is what the `&mut [T]`
             // branch above already does, for the same reason (#411).
             //
+            // The question is asked of `borrowed`, the node written directly
+            // under the `&`, and not of `inner`, which is the same node with an
+            // out-parameter's `MaybeUninit` already peeled off. Three spellings
+            // separate the two, and the borrowed node is the handle in none of
+            // them: `&mut MaybeUninit<Handle>` borrows a slot rather than the
+            // object, and `&mut Box<Handle>` and `&mut &Handle` borrow a decoded
+            // wrapper and a decoded reference, both locals the wrapper drops.
+            // All three still answer `is_direct_handle`, because a transparent
+            // bridge and a borrow each inherit the inner type's projection — so
+            // the shape is read off the model, where only a `Named` node is the
+            // handle itself.
+            //
             // `mutable` off the `Ref` kind rather than through
             // `is_exclusive_borrow`, which answers `false` for a
             // `&mut MaybeUninit<T>` out-parameter — a slot whose writes are lost
             // exactly as an exclusive borrow's are.
             //
-            // An inner with no entry yet is not a refusal: the resolver runs to
-            // a fixed point and asks again once that rank resolves.
+            // A borrowed node with no entry yet is not a refusal: the resolver
+            // runs to a fixed point and asks again once that rank resolves.
             let writes_reach_the_caller = !*mutable
-                || registry
-                    .input_entry(inner)
-                    .is_some_and(|e| e.metadata.is_direct_handle());
+                || (matches!(
+                    borrowed.kind(),
+                    prebindgen_registry::flat::TypeKind::Named { .. }
+                ) && registry
+                    .input_entry(borrowed)
+                    .is_some_and(|e| e.metadata.is_direct_handle()));
             if writes_reach_the_caller {
                 let mutable = ty.is_exclusive_borrow();
                 if let Some(mut c) = self.input_wrapper_shape(
