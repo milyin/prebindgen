@@ -2183,7 +2183,15 @@ impl CbindgenBuilder {
             } else {
                 syn::parse_quote!(*const #inner_wire)
             };
-            let read = if is_ptr { quote!(v) } else { quote!(*v) };
+            // A by-value inner is reached through a `*const` the C caller
+            // supplied, and reaches the inner converter by COPY: `*v` is a move
+            // out of a raw pointer, which is only accepted for a `Copy` wire —
+            // a scalar mirror compiled and a struct mirror did not (#412).
+            let read = if is_ptr {
+                quote!(v)
+            } else {
+                quote!(::core::ptr::read(v))
+            };
             let name = format_ident!("__cbg_in_option_{}", sanitize(&inner.key()));
             let lt: TokenStream = if inner.borrow_target().is_some() {
                 quote!(<'a>)
