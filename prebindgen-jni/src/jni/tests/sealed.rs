@@ -1235,6 +1235,11 @@ fn sum_return_composes_with_option_and_vec() {
 /// not compile in all three shapes below (#429) — nulls dropped, and an element
 /// conversion applied to the list. Nothing caught it because the Rust half
 /// compiles and no test asked for these payloads.
+///
+/// The last three alternatives are the controls, and they are the reason this
+/// fixture has more variants than the defect had shapes: distributing over a
+/// collection is only right when its elements convert, and a payload with no
+/// layer at all must come out exactly as it did.
 #[test]
 fn a_payload_carries_its_option_and_collection_layers() {
     let loc = myflat_loc();
@@ -1254,6 +1259,8 @@ fn a_payload_carries_its_option_and_collection_layers() {
                     Held(Option<Handle>),
                     Many(Vec<Option<u64>>),
                     Owned(Handle),
+                    Blob(Vec<u8>),
+                    Names(Vec<String>),
                     Empty,
                 }
             )),
@@ -1313,6 +1320,19 @@ fn a_payload_carries_its_option_and_collection_layers() {
     assert!(
         kotlin.contains("Probe.Owned(Handle.fromRawPtr(owned_v0))"),
         "a plain handle payload is unchanged:\n{kotlin}"
+    );
+    // …and so is a run of values whose elements need no conversion. There is
+    // nothing to distribute there, and mapping the identity over one would
+    // replace the property's type rather than preserve it: `Vec<u8>` surfaces
+    // as a `ByteArray`, and `ByteArray.map { it }` is a `List<Byte>` (#432
+    // review).
+    assert!(
+        kotlin.contains("Probe.Blob(blob_v0!!)"),
+        "a byte-array payload is passed straight through:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("Probe.Names(names_v0!!)"),
+        "a list payload whose elements convert to themselves is too:\n{kotlin}"
     );
 }
 

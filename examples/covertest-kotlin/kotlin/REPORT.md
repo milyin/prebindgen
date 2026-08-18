@@ -86,6 +86,8 @@ Base package: `io.prebindgen.covertest`
 - `holder_tag_or` — `fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String?>): String?`
 - `label_series_echo` — `fun labelSeriesEcho(labels: List<String>, onError: JniErrorHandler<List<String>?>): List<String>?`
+- `layered_of` — `fun layeredOf(which: Int, onError: JniErrorHandler<Layered?>): Layered?`
+  - shaped by: return `Layered` decomposed → [tag, count_v0, held_v0, many_v0, blob_v0, plain_v0] (Callback delivery)
 - `ledger_each` — `fun ledgerEach(n: Long, sink: LedgerCallback, onError: JniErrorHandler<Unit>)`
 - `ledger_new` — `fun <R> ledgerNew(n: Long, onError: JniErrorHandler<R?>, build: LedgerBuilder<R>): R?`
   - shaped by: return `Ledger` decomposed → [ledgerFiled__summary__count, ledgerFiled__summary__total, ledgerFiled__taken, ledgerFiled__origin__secs, ledgerFiled__origin__nanos, ledgerFiled__outcome__tag, ledgerFiled__outcome__found_v0, ledgerFiled__outcome__failed_v0, ledgerFiled__label, ledgerArchived__summary__count, ledgerArchived__summary__total, ledgerArchived__taken, ledgerArchived__origin__secs, ledgerArchived__origin__nanos, ledgerArchived__outcome__tag, ledgerArchived__outcome__found_v0, ledgerArchived__outcome__failed_v0, ledgerArchived__label] (Callback delivery)
@@ -211,6 +213,7 @@ Base package: `io.prebindgen.covertest`
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
 - `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
 - `Holder`: data_class → `io.prebindgen.covertest.Holder` (wire `jni :: objects :: JObject`)
+- `Layered`: sealed_class → `io.prebindgen.covertest.model.Layered` (wire `?`)
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)

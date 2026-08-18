@@ -1631,8 +1631,11 @@ impl Declarations {
     ///    `!!` would turn a legitimately absent value into an exception. A
     ///    *collection* of optionals is not itself optional — its absences are
     ///    inside it — so that slot is re-asserted like any other.
-    /// 2. **Distribute** — a `Vec<T>` payload arrives as a `List` of element
-    ///    slots, so the wrap runs per element rather than on the list.
+    /// 2. **Distribute** — a `Vec<T>` payload arrives as a run of element slots,
+    ///    so the wrap runs per element rather than on the run. Only when the
+    ///    elements actually convert: a run that needs no conversion is already
+    ///    the property's own type, and `map` would replace it — `Vec<u8>`
+    ///    surfaces as a `ByteArray`, whose `map` is a `List<Byte>`.
     /// 3. **Wrap** — the raw wire becomes the property: an enum discriminant
     ///    through `fromInt`, a handle/blob/`ULong` through the interface's own
     ///    [`WrapKind`](crate::jni::WrapKind), everything else verbatim. Each
@@ -1689,9 +1692,19 @@ impl Declarations {
             Some(short) => format!("{short}.fromInt({x})"),
             None => param.wrap.wrap_expr(x, nullable),
         };
-        match sequence {
-            Some(_) => format!("{arg}.map {{ {} }}", wrap("it")),
-            None => wrap(&arg),
+        if sequence.is_none() {
+            return wrap(&arg);
+        }
+        // Distribute only when there is something to distribute. A run of
+        // values whose elements need no conversion already arrives as the
+        // property's own type, and mapping the identity over it would replace
+        // that type rather than preserve it: a `Vec<u8>` payload surfaces as a
+        // Kotlin `ByteArray`, and `ByteArray.map { it }` is a `List<Byte>`.
+        let element = wrap("it");
+        if element == "it" {
+            arg
+        } else {
+            format!("{arg}.map {{ {element} }}")
         }
     }
 

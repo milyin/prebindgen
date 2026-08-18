@@ -250,6 +250,12 @@ fn main() {
                 // `close()` — that is what lets a container cascade into it
                 // with the same one-liner a handle field gets (#218).
                 .class(sealed_class!(Lookup))
+                // #429: the sum whose payloads have LAYERS — an optional
+                // scalar, an optional handle, a list of optionals — beside two
+                // controls that must not gain one. The builder that reassembles
+                // them is Kotlin, so only a compiled run says whether each
+                // layer was carried.
+                .class(sealed_class!(Layered))
                 // …and `Verdict` is that container: the sum in DATA-CLASS FIELD
                 // position, the third place a handle is reached through.
                 // `Holder` above is the plain-handle field it must match.
@@ -551,6 +557,8 @@ fn main() {
                 // handle-carrying sum arriving through a CALLBACK, and a sum
                 // returned BORROWED (`&E` / `Option<&E>`).
                 .fun(fun!(lookup_each))
+                // …and #429's layered payloads, one call per case.
+                .fun(fun!(layered_of))
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
                 .fun(fun!(verdict_new))
