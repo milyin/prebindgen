@@ -803,3 +803,19 @@ fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {
         },
     }
 }
+
+/// The element converter as something `Iterator::map` accepts.
+///
+/// A safe `fn` item is itself a `FnMut`, and is passed by name — which is what
+/// every sequence return emitted before, and what the borrowed-element
+/// converters broke: `unsafe fn(&T) -> *const t` implements no `Fn` trait at
+/// all, so `Vec<&T>` built a `map` that did not type-check (#413). Calling it
+/// inside a closure is the call site the `unsafe fn` needs, and the wrapper's
+/// body is already an unsafe context.
+fn map_arg(conv: &syn::Ident, is_unsafe: bool) -> TokenStream {
+    if is_unsafe {
+        quote!(|__value| #conv(__value))
+    } else {
+        quote!(#conv)
+    }
+}
