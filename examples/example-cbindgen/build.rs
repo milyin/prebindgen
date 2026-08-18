@@ -145,6 +145,14 @@ fn generate_ffi_bindings() -> PathBuf {
         .callback(pq!(impl Fn(Option<f64>) + Send + Sync + 'static))
         .base_name("maybe_value");
 
+    // …and the same over an enum whose discriminants skip zero, which is what
+    // says the absent slot is left UNWRITTEN rather than filled: the wire is the
+    // Rust enum itself, so a fabricated zero would be an invalid value of it.
+    cbindgen = cbindgen.enum_type(pq!(Grade));
+    cbindgen = cbindgen
+        .callback(pq!(impl Fn(Option<Grade>) + Send + Sync + 'static))
+        .base_name("maybe_grade");
+
     // Constructors / `Result`-returning ops (fallible inputs route through the
     // error out-param), plus the infallible by-value `Foo` accessors and the
     // `InsideFoo` producer — none need `.panic()`. `calculator_apply` takes an
@@ -215,6 +223,7 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_get_history),
         pq!(calculator_for_each),
         pq!(calculator_last_or_none),
+        pq!(calculator_grade_or_none),
         // `&str` label input is fallible (null-checked) with no `Result`.
         pq!(shape_new_labeled),
     ] {

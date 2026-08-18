@@ -1541,12 +1541,16 @@ impl CbindgenBuilder {
                     arg_wires.push(syn::parse_quote!(*mut #wire));
                     continue;
                 }
-                // A composite has no wire of its own — a `()` destination is the
-                // marker saying so — so its C params are the fields its shape
-                // lowers to, exactly as `dispatch_fn_input` fills them (#428).
-                if matches!(&wire, syn::Type::Tuple(t) if t.elems.is_empty()) {
+                // A composite has no wire of its own, so its C params are the
+                // fields its shape lowers to — exactly as `dispatch_fn_input`
+                // fills them (#428). Each is `MaybeUninit`: an absent value
+                // leaves its slot unwritten, and the wrapper must not build a
+                // Rust value to fill it with. `#[repr(transparent)]` keeps both
+                // the C ABI and the header spelling.
+                if marker_destination(&wire) && r_is_lowered_composite(&reading) {
                     for field in self.lower_shape(&reading, registry).fields {
-                        arg_wires.push(field.wire);
+                        let w = field.wire;
+                        arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
                     }
                     continue;
                 }
@@ -1738,13 +1742,25 @@ impl CbindgenBuilder {
             // A takeable argument is a whole-value policy over an opaque handle
             // and never a composite, so it keeps the by-reference path below.
             //
-            // A marker is recognised by its `()` destination, which is what
-            // `out_wrappers` gives one and what says "this type has no converter
-            // of its own". Field COUNT cannot say it: `Option<&T>` carves the
-            // pointer's niche and lowers to a single `*const` — one field, and
-            // still nothing a converter call can produce.
-            let composite = !is_takeable
-                && matches!(&entry.destination, syn::Type::Tuple(t) if t.elems.is_empty());
+            // Which shapes those are is the MODEL's answer, not the marker's: a
+            // `()` destination says the type has no wire of its own, and a
+            // `Result` has one of those too while no arm lowers it. Field COUNT
+            // cannot say it either — `Option<&T>` carves the pointer's niche and
+            // lowers to a single `*const`, one field and still nothing a
+            // converter call can produce.
+            if !is_takeable
+                && marker_destination(&entry.destination)
+                && !r_is_lowered_composite(arg)
+            {
+                panic!(
+                    "Cbindgen: callback argument `{}` has no C ABI — it resolves to a marker \
+                     converter and is not one of the shapes lowered structurally (`Option<T>`, \
+                     `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback \
+                     arguments instead.",
+                    arg,
+                );
+            }
+            let composite = !is_takeable && r_is_lowered_composite(arg);
             if composite {
                 let shape = self.lower_shape(arg, registry);
                 closure_params.push(quote!(#ai: #src));
@@ -1756,16 +1772,22 @@ impl CbindgenBuilder {
                         format_ident!("__w{}_{}", i, f)
                     };
                     let wire = &field.wire;
-                    // Zeroed, not merely declared: a shape with a `present` flag
-                    // writes only the flag when the value is absent, which is
-                    // right for a RETURN — those fields are the caller's
-                    // out-params and it must not read them. A callback has to
-                    // pass something, and every wire here is a `#[repr(C)]`
-                    // POD whose all-zero pattern is valid: a null pointer, a
-                    // `false`, a `0`. The C side must not read it, which is the
-                    // same contract the out-param carries.
-                    encode_stmts.push(quote!(let mut #fi: #wire = ::core::mem::zeroed();));
-                    targets.push(quote!(#fi));
+                    // `MaybeUninit`, not a zeroed value: a shape with a `present`
+                    // flag writes only the flag when the value is absent, which
+                    // is right for a RETURN — those fields are the caller's
+                    // out-params and it must not read them — but a callback has
+                    // to pass the slot along. Materialising a value to fill it
+                    // is what must not happen: not every wire's all-zero pattern
+                    // is a legal value of its type, and a declared `enum_type`'s
+                    // discriminants are the source's own, so zero need not name
+                    // a variant at all (#428 review).
+                    //
+                    // This makes no assumption about WHICH fields the encode
+                    // writes, which is the encoder's business and not this
+                    // caller's.
+                    encode_stmts
+                        .push(quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::uninit();));
+                    targets.push(quote!(*#fi.as_mut_ptr()));
                     call_args.push(quote!(#fi));
                 }
                 // A firing callback has no error channel, so a fallible

@@ -19,6 +19,11 @@ typedef enum operation_t {
   Div = 3,
 } operation_t;
 
+typedef enum grade_t {
+  Low = 1,
+  High = 2,
+} grade_t;
+
 typedef enum inside_foo_t {
   DouddleDee = 42,
   DouddleDum = 24,
@@ -99,6 +104,12 @@ typedef struct closure_value_t {
   void (*drop)(void*);
 } closure_value_t;
 
+typedef struct closure_maybe_grade_t {
+  void *context;
+  void (*call)(bool, enum grade_t, void*);
+  void (*drop)(void*);
+} closure_maybe_grade_t;
+
 typedef struct closure_maybe_value_t {
   void *context;
   void (*call)(bool, double, void*);
@@ -138,6 +149,8 @@ uint64_t calculator_get_count(const struct calculator_t *c);
 double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
 
 double calculator_get_value(const struct calculator_t *c);
+
+void calculator_grade_or_none(const struct calculator_t *c, struct closure_maybe_grade_t f);
 
 bool calculator_is(const struct calculator_t *c, double value);
 

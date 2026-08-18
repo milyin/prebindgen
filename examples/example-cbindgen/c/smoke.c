@@ -374,6 +374,49 @@ static void on_maybe_value(bool present, double value, void *ctx) {
     calls->fired++;
 }
 
+/* The same shape over an enum whose discriminants skip zero — the case
+ * `Option<double>` cannot detect.
+ *
+ * A declared `enum_type`'s wire is the Rust enum itself, so filling the absent
+ * slot with any fabricated value builds an invalid one. The slot is left
+ * unwritten instead, and C reads it only when the flag says to. */
+struct maybe_grades {
+    int fired;
+    bool present[2];
+    enum grade_t value;
+};
+
+static void on_maybe_grade(bool present, enum grade_t value, void *ctx) {
+    struct maybe_grades *calls = (struct maybe_grades *)ctx;
+    if (calls->fired < 2) {
+        calls->present[calls->fired] = present;
+        if (present) {
+            calls->value = value;
+        }
+    }
+    calls->fired++;
+}
+
+static void test_optional_enum_callback_arg(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+    double applied = -1.0;
+    CHECK(calculator_apply(c, Add, 20.0, &applied, &e));
+    CHECK(e == NULL);
+
+    struct maybe_grades calls = {0, {false, false}, Low};
+    struct closure_maybe_grade_t closure = {
+        .context = &calls, .call = on_maybe_grade, .drop = NULL};
+    calculator_grade_or_none(c, closure);
+
+    CHECK(calls.fired == 2);
+    CHECK(calls.present[0]);
+    CHECK(calls.value == High);
+    CHECK(!calls.present[1]);
+
+    calculator_drop(c);
+}
+
 static void test_optional_callback_arg(void) {
     char *e = NULL;
     calculator_t *c = calculator_new();
@@ -407,6 +450,7 @@ int main(void) {
     test_nested_union_payload();
     test_alias_preflight();
     test_optional_callback_arg();
+    test_optional_enum_callback_arg();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
@@ -415,6 +459,6 @@ int main(void) {
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
            "converter-derived payloads, out-of-domain bool payload and "
            "data-struct field, nested union payload, alias preflight, "
-           "optional callback argument\n");
+           "optional callback argument (scalar and zero-less enum)\n");
     return 0;
 }

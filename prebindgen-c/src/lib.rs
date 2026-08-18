@@ -607,6 +607,23 @@ fn r_is_vec(t: &TypeRef) -> bool {
     matches!(t.kind(), TypeKind::Vec(_))
 }
 
+/// A converter destination that is the unit — the mark `out_wrappers` puts on a
+/// type with no wire of its own.
+fn marker_destination(ty: &syn::Type) -> bool {
+    matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
+}
+
+/// The composite shapes [`Cbindgen::lower_shape`] decomposes: a value with no
+/// wire of its own, whose ABI is the fields it lowers to.
+///
+/// Read off the model rather than off the marker converter's `()` destination.
+/// `out_wrappers` gives that destination to a `Result` too, and no arm lowers
+/// one — so a destination test answers `yes` for a shape nothing can emit, and
+/// the caller ends up calling the marker it was trying to avoid (#428 review).
+fn r_is_lowered_composite(t: &TypeRef) -> bool {
+    t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some()
+}
+
 /// The opaque-pointer payload shape — `Box<T>` or `Option<Box<T>>` — off the
 /// classification, returning the reading of `T`.
 ///

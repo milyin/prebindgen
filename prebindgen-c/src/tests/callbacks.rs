@@ -345,9 +345,66 @@ fn callback_arg_lowers_an_optional_structurally() {
         "the composite marker is called as if it were a converter:\n{src}"
     );
     // `Option<&T>` over an opaque handle carries its absence in the pointer, so
-    // the C `call` takes one `*const handle` and NULL is `None`.
+    // the C `call` takes one `*const handle` and NULL is `None`. The slot is
+    // `MaybeUninit`, which is `#[repr(transparent)]` and so is neither an ABI
+    // nor a header change — it is what lets an absent value leave its slot
+    // unwritten instead of being filled with a fabricated one.
     assert!(
-        compact.contains("call:::core::option::Option<unsafeextern\"C\"fn(*consthandle,"),
+        compact.contains(
+            "call:::core::option::Option<unsafeextern\"C\"fn(::core::mem::MaybeUninit<*consthandle>,"
+        ),
         "the closure `call` takes the borrowed pointer:\n{src}"
+    );
+}
+
+/// A `Result` callback argument is refused where it is declared, not emitted as
+/// a call to the marker that stands in for it.
+///
+/// `out_wrappers` gives `Result<T, E>` the same `()` destination it gives
+/// `Option`/`Vec`/`Cow`, and no arm of `lower_shape` lowers one. So a rule that
+/// asked the *destination* whether a shape can be lowered structurally answered
+/// yes for this one and produced the very `E0061` #428 is about (#428 review).
+/// The question is the model's: which shapes does `lower_shape` decompose.
+#[test]
+fn a_result_callback_arg_is_refused_at_its_declaration() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            pub _0: u64,
+        }
+    );
+    let err: syn::ItemStruct = syn::parse_quote!(
+        pub struct Error {
+            pub _0: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Result<Handle, Error>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Struct(err), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_error(syn::parse_quote!(Error), syn::parse_quote!(error_message))
+        .callback(syn::parse_quote!(
+            impl Fn(Result<Handle, Error>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_result_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_result_arg");
+    });
+    assert!(
+        message.contains("has no C ABI") && message.contains("Result"),
+        "the refusal names the shape and why: {message}"
     );
 }
