@@ -1854,11 +1854,19 @@ impl CbindgenBuilder {
                 let __call = c.call;
                 let __ctx = ::std::sync::Arc::new(__Ctx { context: c.context, drop: c.drop });
                 move |#(#closure_params),*| {
-                    #(#encode_stmts)*
+                    // Encode INSIDE the guard: a closure struct whose `call` is
+                    // NULL receives nothing, and a converter that allocates —
+                    // `Vec`/`Cow` into a malloc'd array, a `String` into a
+                    // malloc'd `char *` — would hand that allocation to nobody
+                    // on every invocation (#428 review). Not converting at all
+                    // is also what the argument's own `Drop` expects: the value
+                    // is simply dropped, which is neither a leak nor a double
+                    // free.
                     if let ::core::option::Option::Some(__f) = __call {
+                        #(#encode_stmts)*
                         unsafe { __f(#(#call_args,)* __ctx.context) }
+                        #(#post_drops)*
                     }
-                    #(#post_drops)*
                 }
             }
         );

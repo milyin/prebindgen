@@ -417,6 +417,50 @@ static void test_optional_enum_callback_arg(void) {
     calculator_drop(c);
 }
 
+/* A composite whose lowering ALLOCATES, delivered to a closure that cannot
+ * receive it.
+ *
+ * `Vec<f64>` crosses as a malloc'd `(double *, size_t)` the C side owns. A
+ * closure struct whose `call` is NULL receives nothing, so converting the
+ * argument at all would hand that block to nobody — a leak on every
+ * invocation, and one only a leak detector can see (#428 review). This section
+ * is why `smoke-asan.sh` runs under LSan: with the encode outside the call
+ * guard, the block below is reported and the run fails.
+ *
+ * The live case is beside it, so the same fixture shows the array still
+ * arrives when there IS a callback — a guard that skipped the call as well
+ * would pass a leak check and be useless. */
+static void on_history_batch(double *values, uintptr_t len, void *ctx) {
+    double *sum = (double *)ctx;
+    for (uintptr_t i = 0; i < len; i++) {
+        *sum += values[i];
+    }
+    example_free(values); /* the array is C's to free */
+}
+
+static void test_allocating_callback_arg(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+    double applied = -1.0;
+    CHECK(calculator_apply(c, Add, 4.0, &applied, &e));
+    CHECK(calculator_apply(c, Add, 6.0, &applied, &e));
+    CHECK(e == NULL);
+
+    /* Live: the batch arrives and is freed by the receiver. */
+    double sum = 0.0;
+    struct closure_history_batch_t live = {
+        .context = &sum, .call = on_history_batch, .drop = NULL};
+    calculator_history_batch(c, live);
+    CHECK(sum == 14.0); /* 4 + 10 */
+
+    /* No `call`: nothing may be allocated, because nothing could free it. */
+    struct closure_history_batch_t silent = {
+        .context = NULL, .call = NULL, .drop = NULL};
+    calculator_history_batch(c, silent);
+
+    calculator_drop(c);
+}
+
 static void test_optional_callback_arg(void) {
     char *e = NULL;
     calculator_t *c = calculator_new();
@@ -451,6 +495,7 @@ int main(void) {
     test_alias_preflight();
     test_optional_callback_arg();
     test_optional_enum_callback_arg();
+    test_allocating_callback_arg();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
@@ -459,6 +504,7 @@ int main(void) {
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
            "converter-derived payloads, out-of-domain bool payload and "
            "data-struct field, nested union payload, alias preflight, "
-           "optional callback argument (scalar and zero-less enum)\n");
+           "optional callback argument (scalar and zero-less enum), "
+           "allocating callback argument with and without a call\n");
     return 0;
 }

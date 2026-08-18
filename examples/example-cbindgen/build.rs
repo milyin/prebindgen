@@ -148,6 +148,13 @@ fn generate_ffi_bindings() -> PathBuf {
     // …and the same over an enum whose discriminants skip zero, which is what
     // says the absent slot is left UNWRITTEN rather than filled: the wire is the
     // Rust enum itself, so a fabricated zero would be an invalid value of it.
+    // The composite whose lowering ALLOCATES: `Vec<f64>` crosses as a malloc'd
+    // `(double *, size_t)` the C side owns and frees. A closure with a NULL
+    // `call` must therefore convert nothing at all.
+    cbindgen = cbindgen
+        .callback(pq!(impl Fn(Vec<f64>) + Send + Sync + 'static))
+        .base_name("history_batch");
+
     cbindgen = cbindgen.enum_type(pq!(Grade));
     cbindgen = cbindgen
         .callback(pq!(impl Fn(Option<Grade>) + Send + Sync + 'static))
@@ -224,6 +231,7 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_for_each),
         pq!(calculator_last_or_none),
         pq!(calculator_grade_or_none),
+        pq!(calculator_history_batch),
         // `&str` label input is fallible (null-checked) with no `Result`.
         pq!(shape_new_labeled),
     ] {

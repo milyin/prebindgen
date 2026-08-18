@@ -458,6 +458,19 @@ pub fn calculator_last_or_none(c: &Calculator, f: impl Fn(Option<f64>) + Send + 
     f(None);
 }
 
+/// Deliver the whole history as an owned array — the composite whose lowering
+/// **allocates**.
+///
+/// A `Vec<T>` argument crosses as a malloc'd `(ptr, len)` pair the C side owns,
+/// so a closure whose `call` is NULL must not convert at all: nobody would
+/// receive that block, and nobody could free it (#428 review). Its sibling
+/// callbacks allocate nothing, so only this one can say whether the encode is
+/// inside the guard.
+#[prebindgen]
+pub fn calculator_history_batch(c: &Calculator, f: impl Fn(Vec<f64>) + Send + Sync + 'static) {
+    f(c.history.clone());
+}
+
 /// The same shape over a [`Grade`], whose discriminants skip zero.
 ///
 /// The absent arm must leave the value slot alone rather than fill it: the wire

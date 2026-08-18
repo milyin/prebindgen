@@ -19,6 +19,11 @@ typedef enum operation_t {
   Div = 3,
 } operation_t;
 
+typedef enum grade_t {
+  Low = 1,
+  High = 2,
+} grade_t;
+
 typedef enum inside_foo_t {
   DouddleDee = 14,
   DouddleDum = 88,
@@ -99,6 +104,24 @@ typedef struct closure_value_t {
   void (*drop)(void*);
 } closure_value_t;
 
+typedef struct closure_maybe_grade_t {
+  void *context;
+  void (*call)(bool, enum grade_t, void*);
+  void (*drop)(void*);
+} closure_maybe_grade_t;
+
+typedef struct closure_history_batch_t {
+  void *context;
+  void (*call)(double*, uintptr_t, void*);
+  void (*drop)(void*);
+} closure_history_batch_t;
+
+typedef struct closure_maybe_value_t {
+  void *context;
+  void (*call)(bool, double, void*);
+  void (*drop)(void*);
+} closure_maybe_value_t;
+
 typedef struct foo_t {
   uint64_t id;
   uint64_t aarch64_field;
@@ -133,7 +156,13 @@ double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
 
 double calculator_get_value(const struct calculator_t *c);
 
+void calculator_grade_or_none(const struct calculator_t *c, struct closure_maybe_grade_t f);
+
+void calculator_history_batch(const struct calculator_t *c, struct closure_history_batch_t f);
+
 bool calculator_is(const struct calculator_t *c, double value);
+
+void calculator_last_or_none(const struct calculator_t *c, struct closure_maybe_value_t f);
 
 struct calculator_t *calculator_merge(struct calculator_t *a, struct calculator_t *b, char **e);
 

@@ -166,6 +166,19 @@ pub unsafe extern "C" fn shape_drop(this_: *mut ::core::mem::MaybeUninit<shape_t
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
+pub struct closure_history_batch_t {
+    pub context: *mut ::core::ffi::c_void,
+    pub call: ::core::option::Option<
+        unsafe extern "C" fn(
+            ::core::mem::MaybeUninit<*mut f64>,
+            ::core::mem::MaybeUninit<usize>,
+            *mut ::core::ffi::c_void,
+        ),
+    >,
+    pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct closure_maybe_grade_t {
     pub context: *mut ::core::ffi::c_void,
     pub call: ::core::option::Option<
@@ -480,6 +493,43 @@ pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
     ::core::ptr::read(v.as_ptr() as *const u8) != 0
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_history_batch_t(
+    c: closure_history_batch_t,
+) -> impl Fn(::std::vec::Vec<f64>) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: ::std::vec::Vec<f64>| {
+        if let ::core::option::Option::Some(__f) = __call {
+            let mut __w0_0 = ::core::mem::MaybeUninit::<*mut f64>::uninit();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<usize>::uninit();
+            let __arr: ::std::vec::Vec<f64> = __a0
+                .into_iter()
+                .map(__cbg_out_f64)
+                .collect();
+            let (__p, __n) = __cbg_alloc_array(__arr);
+            *__w0_0.as_mut_ptr() = __p;
+            *__w0_1.as_mut_ptr() = __n;
+            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
+        }
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_closure_maybe_grade_t(
     c: closure_maybe_grade_t,
 ) -> impl Fn(::core::option::Option<example_flat::Grade>) + Send + Sync + 'static {
@@ -502,18 +552,18 @@ pub(crate) unsafe fn __cbg_in_closure_maybe_grade_t(
         drop: c.drop,
     });
     move |__a0: ::core::option::Option<example_flat::Grade>| {
-        let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::uninit();
-        let mut __w0_1 = ::core::mem::MaybeUninit::<grade_t>::uninit();
-        match __a0 {
-            ::core::option::Option::Some(__x) => {
-                *__w0_0.as_mut_ptr() = true;
-                *__w0_1.as_mut_ptr() = __cbg_out_Grade(__x);
-            }
-            ::core::option::Option::None => {
-                *__w0_0.as_mut_ptr() = false;
-            }
-        }
         if let ::core::option::Option::Some(__f) = __call {
+            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::uninit();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<grade_t>::uninit();
+            match __a0 {
+                ::core::option::Option::Some(__x) => {
+                    *__w0_0.as_mut_ptr() = true;
+                    *__w0_1.as_mut_ptr() = __cbg_out_Grade(__x);
+                }
+                ::core::option::Option::None => {
+                    *__w0_0.as_mut_ptr() = false;
+                }
+            }
             unsafe { __f(__w0_0, __w0_1, __ctx.context) }
         }
     }
@@ -541,18 +591,18 @@ pub(crate) unsafe fn __cbg_in_closure_maybe_value_t(
         drop: c.drop,
     });
     move |__a0: ::core::option::Option<f64>| {
-        let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::uninit();
-        let mut __w0_1 = ::core::mem::MaybeUninit::<f64>::uninit();
-        match __a0 {
-            ::core::option::Option::Some(__x) => {
-                *__w0_0.as_mut_ptr() = true;
-                *__w0_1.as_mut_ptr() = __cbg_out_f64(__x);
-            }
-            ::core::option::Option::None => {
-                *__w0_0.as_mut_ptr() = false;
-            }
-        }
         if let ::core::option::Option::Some(__f) = __call {
+            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::uninit();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<f64>::uninit();
+            match __a0 {
+                ::core::option::Option::Some(__x) => {
+                    *__w0_0.as_mut_ptr() = true;
+                    *__w0_1.as_mut_ptr() = __cbg_out_f64(__x);
+                }
+                ::core::option::Option::None => {
+                    *__w0_0.as_mut_ptr() = false;
+                }
+            }
             unsafe { __f(__w0_0, __w0_1, __ctx.context) }
         }
     }
@@ -580,8 +630,8 @@ pub(crate) unsafe fn __cbg_in_closure_value_t(
         drop: c.drop,
     });
     move |__a0: f64| {
-        let __w0 = __cbg_out_f64(__a0);
         if let ::core::option::Option::Some(__f) = __call {
+            let __w0 = __cbg_out_f64(__a0);
             unsafe { __f(__w0, __ctx.context) }
         }
     }
@@ -911,6 +961,21 @@ pub unsafe extern "C" fn calculator_grade_or_none(
     };
     let f = __cbg_in_closure_maybe_grade_t(f);
     example_flat::calculator_grade_or_none(c, f);
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn calculator_history_batch(
+    c: *const calculator_t,
+    f: closure_history_batch_t,
+) {
+    let c = match __cbg_in___Calculator(c) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let f = __cbg_in_closure_history_batch_t(f);
+    example_flat::calculator_history_batch(c, f);
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]

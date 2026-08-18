@@ -110,6 +110,12 @@ typedef struct closure_maybe_grade_t {
   void (*drop)(void*);
 } closure_maybe_grade_t;
 
+typedef struct closure_history_batch_t {
+  void *context;
+  void (*call)(double*, uintptr_t, void*);
+  void (*drop)(void*);
+} closure_history_batch_t;
+
 typedef struct closure_maybe_value_t {
   void *context;
   void (*call)(bool, double, void*);
@@ -151,6 +157,8 @@ double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
 double calculator_get_value(const struct calculator_t *c);
 
 void calculator_grade_or_none(const struct calculator_t *c, struct closure_maybe_grade_t f);
+
+void calculator_history_batch(const struct calculator_t *c, struct closure_history_batch_t f);
 
 bool calculator_is(const struct calculator_t *c, double value);
 

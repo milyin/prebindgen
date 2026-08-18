@@ -357,6 +357,57 @@ fn callback_arg_lowers_an_optional_structurally() {
     );
 }
 
+/// …and so is a `Result` **under** an `Option`, which is the same defect one
+/// layer in.
+///
+/// `Option<Result<T, E>>` is an optional, so a test that looks only at the
+/// outermost layer admits it — and then the lowering reaches the `Result` as a
+/// base field and calls *its* marker (#428 review). Lowerability is a property
+/// of the whole shape, so the check recurses.
+#[test]
+fn a_result_under_an_option_is_refused_too() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            pub _0: u64,
+        }
+    );
+    let err: syn::ItemStruct = syn::parse_quote!(
+        pub struct Error {
+            pub _0: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Option<Result<Handle, Error>>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Struct(err), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_error(syn::parse_quote!(Error), syn::parse_quote!(error_message))
+        .callback(syn::parse_quote!(
+            impl Fn(Option<Result<Handle, Error>>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_opt_result_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_opt_result_arg");
+    });
+    assert!(
+        message.contains("has no C ABI"),
+        "a shape whose inner layer cannot be lowered is refused whole: {message}"
+    );
+}
+
 /// A `Result` callback argument is refused where it is declared, not emitted as
 /// a call to the marker that stands in for it.
 ///

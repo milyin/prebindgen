@@ -621,7 +621,42 @@ fn marker_destination(ty: &syn::Type) -> bool {
 /// one — so a destination test answers `yes` for a shape nothing can emit, and
 /// the caller ends up calling the marker it was trying to avoid (#428 review).
 fn r_is_lowered_composite(t: &TypeRef) -> bool {
-    t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some()
+    let composite = t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
+    composite && r_shape_is_lowerable(t)
+}
+
+/// Whether [`Cbindgen::lower_shape`] decomposes `t` **all the way down**.
+///
+/// Asking only about the outermost layer is not enough: `Option<Result<T, E>>`
+/// is an optional, so a shallow test admits it, and then the lowering reaches
+/// the `Result` as a base field and emits a call to *its* marker — the same
+/// failure one layer in (#428 review).
+fn r_shape_is_lowerable(t: &TypeRef) -> bool {
+    // No arm lowers a `Result`, in any position.
+    if t.fallible_parts().is_some() {
+        return false;
+    }
+    if let Some(inner) = t.optional_inner() {
+        return r_shape_is_lowerable(inner);
+    }
+    // A run's element must be a single value — the same rule `lower_shape`
+    // asserts when it builds the `(ptr, len)` pair.
+    if let Some(elem) = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)) {
+        return elem.optional_inner().is_none()
+            && r_vec_elem(elem).is_none()
+            && r_cow_slice_elem(elem).is_none()
+            && elem.fallible_parts().is_none();
+    }
+    // A base value: its own converter is the wire.
+    true
+}
+
+/// The element of a `Vec<E>`.
+fn r_vec_elem(t: &TypeRef) -> Option<&TypeRef> {
+    match t.kind() {
+        TypeKind::Vec(elem) => Some(elem),
+        _ => None,
+    }
 }
 
 /// The opaque-pointer payload shape — `Box<T>` or `Option<Box<T>>` — off the
