@@ -76,8 +76,8 @@ runtime crate (~350 lines), not the generator.
 |---|---|---|
 | `prebindgen` | Base: reads what `#[prebindgen]` captured and hands out `(syn::Item, SourceLocation)` pairs via `Source` | — |
 | `prebindgen-proc-macro` | The `#[prebindgen]` macro itself | `prebindgen` |
-| `prebindgen-flat` | The flat model: parses the captured stream into one flat namespace | `prebindgen` |
-| `prebindgen-registry` | The language-agnostic pipeline: type resolution, boundary expansion, Rust emission | `prebindgen-flat`, `prebindgen` |
+| `prebindgen-flat` | Independent flat parser/model and Rust-rendering protocol | `prebindgen` |
+| `prebindgen-registry` | Collector/resolver; owns the callback-only `Emit` key | `prebindgen-flat`, `prebindgen` |
 | `prebindgen-c` | C / cbindgen adapter (`CbindgenBuilder`) — experimental proof of concept | `prebindgen-registry` |
 | `prebindgen-jni` | JNI / Kotlin adapter (`JniGenBuilder`) | `prebindgen-registry`, [`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) |
 | `prebindgen-c-runtime` | Leaf, ~65 lines, no deps — traits the generated C converters call at run time | — |
