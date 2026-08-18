@@ -1,6 +1,7 @@
 use quote::ToTokens;
 
 use super::*;
+use crate::test_util::SpellForTest;
 
 /// A fixture declaration's identity. A declaration is a key, not a spelling —
 /// see `ConstructorDecl::target`.

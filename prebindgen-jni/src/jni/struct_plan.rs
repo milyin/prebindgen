@@ -633,7 +633,7 @@ pub(crate) fn type_close_strategy(
     assert!(
         depth <= 16,
         "close-strategy walk: recursion too deep at type `{}` (cyclic data_class?)",
-        ty.spell()
+        ty
     );
     // An owned `Handle` projection is the one thing that actually owns
     // something: a `ULong` owns nothing, and a borrowed handle is not ours to
