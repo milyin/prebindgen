@@ -66,6 +66,7 @@ import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.spanHolderNew
+import io.prebindgen.covertest.model.vaultHolderNew
 import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.holdEcho
@@ -951,6 +952,46 @@ fun main() {
         check(taggedRank(Tagged(1L, markerOf(0, boom).orThrow()), boom) == -1)
         check(taggedRank(Tagged(1L, markerOf(1, boom).orThrow()), boom) == 0)
         check(taggedRank(Tagged(1L, markerOf(2, boom).orThrow()), boom) == 10)
+    }
+
+    // The same two axes as the bounded-leaf matrix above, on an opaque HANDLE
+    // leaf — whose `None` rides `0L`, because a `Box` pointer is never zero,
+    // rather than a declared sentinel.
+    //
+    // The fourth row is why this runs rather than being asserted as text: an
+    // `Option<handle>` under an absent ancestor collapses two absences into one
+    // nullable typed view, and the two halves that carry them — the JNI
+    // descriptor and the encoder's `jvalue` — can disagree while both still
+    // compile. That is #433, and the first fix for it broke this row while
+    // fixing the second one.
+    section("an optional handle leaf reads its own niche and its ancestor's null") {
+        // Ancestor absent: both leaves are null through the `?.` alone, and the
+        // one WITH a niche must not report its sentinel as anything else.
+        check(vaultHolderNew(-1L, 5L, 7L, boom) { always, maybe ->
+            "${always == null}/${maybe == null}"
+        } == "true/true")
+
+        // Ancestor present, leaf absent: only the leaf with a niche of its own
+        // can be null here, and it is — through `0L`, not through a JVM null.
+        check(vaultHolderNew(0L, 5L, -1L, boom) { always, maybe ->
+            check(always != null && maybe == null)
+            always!!.grams(boom)
+        } == 5L)
+
+        // Both present: each handle points at its own object, and each is the
+        // JVM's to close.
+        check(vaultHolderNew(0L, 5L, 7L, boom) { always, maybe ->
+            val a = always ?: error("the ancestor-nullable leaf was dropped")
+            val m = maybe ?: error("the niche-carrying leaf was dropped")
+            val total = a.grams(boom) + m.grams(boom)
+            // Each is the JVM's to close, and closing one leaves the other
+            // alone: they are distinct objects, not one pointer delivered twice.
+            a.close()
+            check(a.isClosed() && !m.isClosed())
+            m.close()
+            check(m.isClosed())
+            total
+        } == 12L)
     }
 
     // The sum whose payloads have LAYERS. The class that reassembles a variant
