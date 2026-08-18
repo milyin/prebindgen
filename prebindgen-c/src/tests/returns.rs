@@ -286,6 +286,83 @@ fn cow_u8_returns_scalar_array() {
     assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
 }
 
+/// `&[u64]` returns the same owned scalar array as `Cow<'_, [u8]>` above.
+///
+/// A shared slice already had an output entry, for the callback-argument
+/// lowering, whose destination is a marker with no wire. As a RETURN that made
+/// the wrapper give C nothing at all and call the marker with an argument it
+/// does not take (#413), so the exported signature is what this pins.
+#[test]
+fn slice_returns_scalar_array() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_ids(z: &ZZBytes) -> &'static [u64] {
+            unimplemented!()
+        }
+    );
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .opaque_ptr(syn::parse_quote!(ZZBytes))
+        .function(syn::parse_quote!(z_ids))
+        .panic();
+
+    let src = write(cbindgen, registry, "slice_ret");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(compact.contains("->*mutu64"), "{src}");
+    assert!(compact.contains("len:*mutusize"), "{src}");
+    assert!(
+        compact.contains(".iter().copied().map(__cbg_out_u64).collect()"),
+        "{src}"
+    );
+    assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
+}
+
+/// `Vec<&T>` maps its elements through the borrow converter, which is an
+/// `unsafe fn` — and an `unsafe fn` item implements no `Fn` trait, so passing
+/// it to `map` by name did not type-check (#413). It is called in a closure
+/// instead. A safe element converter is still passed by name.
+#[test]
+fn vec_of_borrows_calls_the_unsafe_element_converter() {
+    let loc = SourceLocation::default();
+    let handle: syn::ItemStruct = syn::parse_quote!(
+        pub struct ZHandle {
+            id: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_handles() -> Vec<&'static ZHandle> {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(handle), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .opaque_ptr(syn::parse_quote!(ZHandle))
+        .function(syn::parse_quote!(z_handles))
+        .panic();
+
+    let src = write(cbindgen, registry, "vec_of_borrows");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(compact.contains("->*mut*constz_handle"), "{src}");
+    assert!(
+        compact.contains(".map(|__value|__cbg_out_ref_ZHandle(__value))"),
+        "{src}"
+    );
+}
+
 /// `Result<Vec<T>, E>` has no free niche (the array NULL means *empty*), so
 /// it takes `bool f(T** out, size_t* out_len, <inputs>, E* e)`.
 #[test]

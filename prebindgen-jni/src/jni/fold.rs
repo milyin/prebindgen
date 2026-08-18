@@ -73,7 +73,7 @@ pub(crate) fn projection_leaf_kt(ext: &Declarations, proj: &Projection) -> Optio
 /// Wrap one raw projection leaf into its typed Kotlin form.
 pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str) -> String {
     match kind {
-        ProjectionKind::Handle => format!("{short}({raw})"),
+        ProjectionKind::Handle => handle_from_raw(short, raw),
         ProjectionKind::Unsigned64 => format!("{raw}.toULong()"),
     }
 }
@@ -99,7 +99,7 @@ pub(crate) fn factory_projection_wire_wrap(
 
     use crate::jni::{NullableKind, ProjectionKind::*};
     let direct = |kind: &crate::jni::ProjectionKind| match kind {
-        Handle => (KtType::long(), format!("{short}({name})")),
+        Handle => (KtType::long(), handle_from_raw(short, name)),
         Unsigned64 => (KtType::long(), format!("{name}.toULong()")),
     };
     match &proj.strategy {
@@ -161,11 +161,15 @@ pub(crate) fn is_kotlin_primitive_ty(t: &KtType) -> bool {
         })
 }
 
+/// The Kotlin side of one struct's `fromParts` bridge — see
+/// [`flatten_struct_factory`], whose returned tuple this names.
+pub(crate) type StructFactory = (Vec<(String, KtType)>, String, bool);
+
 /// Recursively build the Kotlin `fromParts` factory for a data class — the
 /// mirror of the native `flatten_struct_encode` (in the [`jni`](super)
 /// module). Both walk the same [`build_struct_plan`], so the leaf order and
 /// slot types agree by construction.
-/// Returns `(params, reconstruct)`:
+/// Returns `(params, reconstruct, mints_handle)`:
 /// * `params` — the flattened `(name, kotlin_type)` list (one per transitive
 ///   leaf wire; nested data-class fields are inlined, `Option<nested>` prepends
 ///   a `…__present: Boolean` flag). Order/types match the native call's JVM
@@ -174,6 +178,9 @@ pub(crate) fn is_kotlin_primitive_ty(t: &KtType) -> bool {
 ///   `Class(<part per constructor field>)`, where a nested field reconstructs
 ///   via `Child.fromParts(<child param names>)` (`if (present) … else null` when
 ///   optional) and a leaf reconstructs with its wrap.
+/// * `mints_handle` — whether any transitive leaf is an opaque handle, i.e.
+///   whether this factory takes a raw native pointer and so needs the
+///   raw-pointer guard (see [`plan_mints_handle`]).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_factory(
     ext: &Declarations,
@@ -183,9 +190,10 @@ pub(crate) fn flatten_struct_factory(
     class_name: &str,
     imports: &mut BTreeSet<String>,
     depth: usize,
-) -> Option<(Vec<(String, KtType)>, String)> {
+) -> Option<StructFactory> {
     let plan = build_struct_plan(ext, registry, s, depth)?;
-    factory_from_plan(&plan, prefix, class_name, imports)
+    let (params, reconstruct) = factory_from_plan(&plan, prefix, class_name, imports)?;
+    Some((params, reconstruct, plan_mints_handle(&plan)))
 }
 
 /// Walk a [`StructPlan`] emitting the Kotlin `fromParts` side: the flattened

@@ -908,7 +908,7 @@ impl CbindgenBuilder {
                     .zip(&wires)
                     .map(|(f, w)| f.bind(w))
                     .collect();
-                variant_defs.push(emit.shape(a, quote!(#vident), &defs));
+                variant_defs.push(emit.shape_alternative(a, quote!(#vident), &defs));
 
                 // Drop arm: bind every field, free the owning ones.
                 let owning: Vec<(usize, &Field, &syn::Type)> = a
@@ -931,7 +931,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let pattern = emit.shape(a, quote!(#cname::#vident), &parts);
+                let pattern = emit.shape_alternative(a, quote!(#cname::#vident), &parts);
                 let frees = owning.iter().map(|(i, f, _)| {
                     let b = &binds[*i];
                     self.payload_free_stmt(&f.ty, b, registry)
@@ -1134,7 +1134,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let from = emit.shape(a, quote!(#cname::#vident), &parts);
+                let from = emit.shape_alternative(a, quote!(#cname::#vident), &parts);
                 let exprs: Vec<TokenStream> = a
                     .fields
                     .iter()
@@ -1158,7 +1158,7 @@ impl CbindgenBuilder {
                     .zip(&exprs)
                     .map(|(f, e)| f.bind(e))
                     .collect();
-                let to = emit.shape(a, quote!(#src::#vident), &inits);
+                let to = emit.shape_alternative(a, quote!(#src::#vident), &inits);
                 quote!(#from => #to,)
             })
             .collect();
@@ -1271,7 +1271,7 @@ impl CbindgenBuilder {
                     .zip(&binds)
                     .map(|(f, b)| f.bind(b))
                     .collect();
-                let from = emit.shape(a, quote!(#src::#vident), &parts);
+                let from = emit.shape_alternative(a, quote!(#src::#vident), &parts);
                 let exprs: Vec<TokenStream> = a
                     .fields
                     .iter()
@@ -1289,7 +1289,7 @@ impl CbindgenBuilder {
                     .zip(&exprs)
                     .map(|(f, e)| f.bind(e))
                     .collect();
-                let to = emit.shape(a, quote!(#cname::#vident), &inits);
+                let to = emit.shape_alternative(a, quote!(#cname::#vident), &inits);
                 quote!(#from => #to,)
             })
             .collect();
@@ -2183,7 +2183,15 @@ impl CbindgenBuilder {
             } else {
                 syn::parse_quote!(*const #inner_wire)
             };
-            let read = if is_ptr { quote!(v) } else { quote!(*v) };
+            // A by-value inner is reached through a `*const` the C caller
+            // supplied, and reaches the inner converter by COPY: `*v` is a move
+            // out of a raw pointer, which is only accepted for a `Copy` wire —
+            // a scalar mirror compiled and a struct mirror did not (#412).
+            let read = if is_ptr {
+                quote!(v)
+            } else {
+                quote!(::core::ptr::read(v))
+            };
             let name = format_ident!("__cbg_in_option_{}", sanitize(&inner.key()));
             let lt: TokenStream = if inner.borrow_target().is_some() {
                 quote!(<'a>)

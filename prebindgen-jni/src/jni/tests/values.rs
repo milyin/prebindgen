@@ -560,7 +560,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
     // The folder singleton wraps each raw `jlong` element into the typed handle
     // class and appends it — no Rust object construction.
     assert!(
-        kc.contains("ZThing(element)") || kc.contains("acc.add(ZThing("),
+        kc.contains("ZThing.fromRawPtr(element)") || kc.contains("acc.add(ZThing.fromRawPtr("),
         "{kotlin}"
     );
     // `Option<Vec<…>>` surfaces as a nullable list.
@@ -1727,9 +1727,26 @@ fn data_class_properties_match_their_from_parts_params() {
     // …and the factory reassembles into exactly those properties: the nested
     // child is inlined as its own leaves, the handle arrives as a raw pointer
     // and the enum as its discriminant, then each is rebuilt.
-    assert!(kc.contains("Bag(Handle(handle)"), "{kotlin}");
+    assert!(kc.contains("Bag(Handle.fromRawPtr(handle)"), "{kotlin}");
     assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
+
+    // …and the raw-pointer guard follows that same plan, factory by factory
+    // (#37). `Bag` takes a handle leaf as a bare `Long`, so its factory can
+    // forge one and carries both guards; `Child` takes an `i64` and carries
+    // neither — marking it would remove a safe factory from Java and make
+    // consumers opt into a contract it does not have. The negative half of
+    // this rule is pinned again in `snapshots::raw_pointer_entry_points_are_guarded`.
+    assert!(
+        kc.contains(
+            "@JvmSynthetic@io.test.jni.UnsafeNativeApi@JvmStaticpublicfunfromParts(handle:Long"
+        ),
+        "the handle-bearing factory is guarded:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("@JvmStaticpublicfunfromParts(n:Long):Child"),
+        "the pointer-free factory is not:\n{kotlin}"
+    );
 }
 
 /// Every shape an array length can take — a FREE const, an ASSOCIATED const,
@@ -2444,4 +2461,161 @@ fn a_wrapped_vec_element_keeps_the_push_path_and_shares_one_trio() {
         "`&[Box<Foo>]` must keep the general converter path — serving it would \
          mean consuming the Vec the arm exists to borrow:\n{kotlin}"
     );
+}
+
+/// An exclusive-borrow parameter resolves only over an opaque handle, whose
+/// object the JVM keeps alive on the Rust side. Over anything decoded onto the
+/// Rust stack the callee's writes are dropped with the wrapper's frame, so the
+/// crossing is refused instead of emitting a binding that discards them (#411).
+///
+/// Both refused spellings used to RESOLVE and emit Rust that did not compile —
+/// `&mut Rec` passed a shared borrow of the rebuilt value, and
+/// `&mut MaybeUninit<u64>` passed the decoded payload where the slot was
+/// expected. The C adapter refuses `&mut T` outright, so this also brings the
+/// two targets to the same answer for the shape.
+#[test]
+fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
+    /// One fixture per case: the declared surface plus one function taking the
+    /// spelling under test. Returns the generated Rust, or the resolve error.
+    fn build(param: syn::Type, name: &str) -> Result<String, String> {
+        let loc = myflat_loc();
+        let items: Vec<(syn::Item, SourceLocation)> = vec![
+            (
+                syn::parse_quote!(
+                    pub struct Rec {
+                        pub id: u64,
+                    }
+                ),
+                loc.clone(),
+            ),
+            (
+                syn::parse_quote!(
+                    pub struct Handle {
+                        inner: u64,
+                    }
+                ),
+                loc.clone(),
+            ),
+            (
+                syn::parse_quote!(
+                    pub struct Converted {
+                        inner: u64,
+                    }
+                ),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn converted_from_handle(h: Handle) -> Converted {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn converted_to_handle(c: Converted) -> Handle {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn probe(v: #param) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .convert(
+                prebindgen_registry::convert!(Converted)
+                    .input(prebindgen_registry::fun!(converted_from_handle))
+                    .output(prebindgen_registry::fun!(converted_to_handle)),
+            )
+            .package(
+                crate::package!()
+                    .class(crate::data_class!(Rec))
+                    .class(crate::ptr_class!(Handle))
+                    .fun(prebindgen_registry::fun!(probe)),
+            );
+        let dir = unique_test_dir(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    }
+
+    // A handle: the converter hands back an `OwnedObject<Handle>` over the
+    // object the JVM points at, so the call site's `&mut` reaches it.
+    let handle = build(syn::parse_quote!(&mut Handle), "jnigen_excl_handle")
+        .expect("an exclusive borrow of a handle is a write the caller keeps");
+    let hc: String = handle.split_whitespace().collect();
+    assert!(hc.contains("flat::probe(&mutv)"), "{handle}");
+
+    // A data class: the fields are rebuilt into a local, and nothing carries a
+    // write back to Kotlin.
+    let rec = build(syn::parse_quote!(&mut Rec), "jnigen_excl_rec")
+        .expect_err("an exclusive borrow of a decoded value has no write-back");
+    assert!(
+        rec.contains("could not be resolved") && rec.contains("mut Rec"),
+        "the refusal names the spelling: {rec}"
+    );
+
+    // An out-parameter's slot: the same loss, one layer down.
+    let out = build(
+        syn::parse_quote!(&mut MaybeUninit<u64>),
+        "jnigen_excl_uninit",
+    )
+    .expect_err("an out-parameter's writes are lost the same way");
+    assert!(
+        out.contains("could not be resolved") && out.contains("MaybeUninit"),
+        "the refusal names the spelling: {out}"
+    );
+
+    // Four spellings that reach a handle without borrowing one. Each is refused
+    // even though the entry the borrow resolves through answers
+    // `is_direct_handle`: a slot, a decoded box, a decoded reference and a
+    // `convert!` composed over the handle are all locals the wrapper drops, so
+    // the write never reaches the JVM's object. The last also loses the
+    // conversion stage, which is how it produced a type mismatch as well.
+    for (spelling, name, names) in [
+        (
+            syn::parse_quote!(&mut MaybeUninit<Handle>),
+            "jnigen_excl_uninit_handle",
+            "MaybeUninit",
+        ),
+        (
+            syn::parse_quote!(&mut Box<Handle>),
+            "jnigen_excl_boxed_handle",
+            "Box",
+        ),
+        (
+            syn::parse_quote!(&mut &Handle),
+            "jnigen_excl_ref_handle",
+            "Handle",
+        ),
+        (
+            syn::parse_quote!(&mut Converted),
+            "jnigen_excl_converted_handle",
+            "Converted",
+        ),
+    ] {
+        let refusal = build(spelling, name)
+            .expect_err("only the handle itself carries a write back to the JVM");
+        assert!(
+            refusal.contains("could not be resolved") && refusal.contains(names),
+            "the refusal names the spelling: {refusal}"
+        );
+    }
 }

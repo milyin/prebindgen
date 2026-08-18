@@ -750,9 +750,17 @@ impl CbindgenBuilder {
                 niches: Niches::empty(),
             };
         }
-        // `Cow<'_, [T]>` → `T_wire* + size_t`. The C side receives an owned
-        // malloc'd copy, just like `Vec<T>` outputs.
-        if let Some(elem) = r_cow_slice_elem(ty) {
+        // `Cow<'_, [T]>` and `&[T]` → `T_wire* + size_t`. The C side receives an
+        // owned malloc'd copy, just like `Vec<T>` outputs.
+        //
+        // A shared slice reaches this only as a RETURN: a slice parameter is a
+        // pointer pair the caller supplies, and a slice callback argument is
+        // lowered by `prereq_callback_structs`. Without the second predicate a
+        // slice return fell through to the base-value path and took the `()`
+        // destination of the marker converter that exists for that callback
+        // lowering, so the wrapper returned nothing and called the marker with
+        // an argument it does not take (#413).
+        if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
             let entry = registry.output_entry(elem).unwrap_or_else(|| {
                 panic!(
                     "Cbindgen: `Cow` slice element `{}` has no output converter",
@@ -833,6 +841,7 @@ impl CbindgenBuilder {
         if let TypeKind::Vec(elem) = ty.kind() {
             let entry = registry.output_entry(elem).expect("Vec element converter");
             let elem_conv = entry.function.sig.ident.clone();
+            let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
             let elem_wire = entry.destination.clone();
             let t_ptr = &targets[0];
             let t_len = &targets[1];
@@ -850,18 +859,19 @@ impl CbindgenBuilder {
             } else {
                 return quote!(
                     let __arr: ::std::vec::Vec<#elem_wire> =
-                        #val.into_iter().map(#elem_conv).collect();
+                        #val.into_iter().map(#elem_map).collect();
                     let (__p, __n) = __cbg_alloc_array(__arr);
                     #t_ptr = __p;
                     #t_len = __n;
                 );
             }
         }
-        if let Some(elem) = r_cow_slice_elem(ty) {
+        if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
             let entry = registry
                 .output_entry(elem)
-                .expect("Cow slice element converter");
+                .expect("slice element converter");
             let elem_conv = entry.function.sig.ident.clone();
+            let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
             let elem_wire = entry.destination.clone();
             let t_ptr = &targets[0];
             let t_len = &targets[1];
@@ -879,7 +889,7 @@ impl CbindgenBuilder {
             } else {
                 return quote!(
                     let __arr: ::std::vec::Vec<#elem_wire> =
-                        #val.iter().copied().map(#elem_conv).collect();
+                        #val.iter().copied().map(#elem_map).collect();
                     let (__p, __n) = __cbg_alloc_array(__arr);
                     #t_ptr = __p;
                     #t_len = __n;
@@ -932,6 +942,7 @@ impl CbindgenBuilder {
             .optional_inner()
             .or(vec_elem)
             .or_else(|| r_cow_slice_elem(ty))
+            .or_else(|| r_scalar_slice_elem(ty))
         {
             return Self::output_is_fallible(inner, registry);
         }

@@ -25,8 +25,7 @@ proc-macro2 = { workspace = true }
 # The fixtures for niches, callback identity, sealed cells and value-form
 # deriving build a registry directly and mint an `Emit`. Those constructors are
 # sealed against ordinary callers and opened only for a test suite.
-# `Emit::for_test` lives in `prebindgen-flat` (with the flat model); `Registry`'s
-# `*_for_test` accessors live in `prebindgen-registry` (with the pipeline).
+# `Emit::for_test` and the `Registry` test constructors live in
+# `prebindgen-registry`, which owns both callback capabilities.
 prebindgen = { workspace = true, features = ["testing"] }
-prebindgen-flat = { workspace = true, features = ["testing"] }
 prebindgen-registry = { workspace = true, features = ["testing"] }

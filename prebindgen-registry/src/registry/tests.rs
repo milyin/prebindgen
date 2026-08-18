@@ -104,7 +104,7 @@ impl Prebindgen for StubExt {
         &self,
         _f: &prebindgen_flat::flat::Function,
         _registry: &Registry<()>,
-        _emit: &prebindgen_flat::Emit,
+        _emit: &crate::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -112,7 +112,7 @@ impl Prebindgen for StubExt {
         &self,
         _s: &prebindgen_flat::flat::Struct,
         _registry: &Registry<()>,
-        _emit: &prebindgen_flat::Emit,
+        _emit: &crate::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -120,7 +120,7 @@ impl Prebindgen for StubExt {
         &self,
         _v: &prebindgen_flat::flat::Variant,
         _registry: &Registry<()>,
-        _emit: &prebindgen_flat::Emit,
+        _emit: &crate::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -128,7 +128,7 @@ impl Prebindgen for StubExt {
         &self,
         _e: &prebindgen_flat::flat::Enum,
         _registry: &Registry<()>,
-        _emit: &prebindgen_flat::Emit,
+        _emit: &crate::Emit,
     ) -> TokenStream {
         TokenStream::new()
     }
@@ -332,10 +332,6 @@ fn duplicate_name_across_sources_names_both_crates() {
     use prebindgen::{Record, RecordKind, SourceLocation};
 
     let make_source = |crate_name: &str| -> prebindgen::Source {
-        let dir = crate::test_util::unique_test_dir(&format!("dup_src_{crate_name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("crate_name.txt"), crate_name).unwrap();
         let record = Record::new(
             RecordKind::Function,
             "same_name".to_string(),
@@ -348,7 +344,11 @@ fn duplicate_name_across_sources_names_both_crates() {
             },
             None,
         );
-        prebindgen::utils::write_to_jsonl_file(dir.join("default_1.jsonl"), &[&record]).unwrap();
+        let dir = crate::test_util::write_capture_dir(
+            &format!("dup_src_{crate_name}"),
+            crate_name,
+            &[&record],
+        );
         prebindgen::Source::new(&dir)
     };
 
@@ -426,7 +426,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             f: &prebindgen_flat::flat::Function,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_function(f, r, _emit)
         }
@@ -434,7 +434,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             s: &prebindgen_flat::flat::Struct,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_struct(s, r, _emit)
         }
@@ -442,7 +442,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             v: &prebindgen_flat::flat::Variant,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_variant(v, r, _emit)
         }
@@ -450,7 +450,7 @@ fn resolve_surfaces_adapter_invariant_errors() {
             &self,
             e: &prebindgen_flat::flat::Enum,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_enum(e, r, _emit)
         }
@@ -628,10 +628,6 @@ fn foreign_qualified_declared_type_stays_supported() {
 fn write_source_dir(tag: &str, crate_name: &str, fn_name: &str) -> std::path::PathBuf {
     use prebindgen::{Record, RecordKind, SourceLocation};
 
-    let dir = crate::test_util::unique_test_dir(&format!("builder_{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("crate_name.txt"), crate_name).unwrap();
     let record = Record::new(
         RecordKind::Function,
         fn_name.to_string(),
@@ -644,8 +640,7 @@ fn write_source_dir(tag: &str, crate_name: &str, fn_name: &str) -> std::path::Pa
         },
         None,
     );
-    prebindgen::utils::write_to_jsonl_file(dir.join("default_1.jsonl"), &[&record]).unwrap();
-    dir
+    crate::test_util::write_capture_dir(&format!("builder_{tag}"), crate_name, &[&record])
 }
 
 /// Render a module path the way the other origin tests in this file do.
@@ -1086,13 +1081,16 @@ fn from_flat_projects_each_element_kind() {
     let reg: RegistryBuilder<()> = Registry::builder(flat).expect("project");
 
     let id = |n: &str| syn::parse_str::<syn::Ident>(n).unwrap();
+    let is_enum = |name: &str| {
+        matches!(
+            reg.flat().declared_type(name),
+            Some(prebindgen_flat::flat::Type::Variant(_) | prebindgen_flat::flat::Type::Enum(_))
+        )
+    };
     assert!(reg.flat().function(&id("f").to_string()).is_some());
     assert!(reg.flat().struct_type(&id("S").to_string()).is_some());
-    assert!(
-        reg.flat().enum_item(&id("Sum").to_string()).is_some(),
-        "a sum is an enum here"
-    );
-    assert!(reg.flat().enum_item(&id("Flags").to_string()).is_some());
+    assert!(is_enum("Sum"), "a sum is an enum here");
+    assert!(is_enum("Flags"));
     assert!(reg.flat().constant(&id("K").to_string()).is_some());
     assert_eq!(
         reg.flat().guards().count(),
@@ -1100,8 +1098,7 @@ fn from_flat_projects_each_element_kind() {
         "both anonymous consts, in stream order"
     );
     assert!(
-        reg.flat().struct_type(&id("Handle").to_string()).is_none()
-            && reg.flat().enum_item(&id("Handle").to_string()).is_none(),
+        reg.flat().struct_type(&id("Handle").to_string()).is_none() && !is_enum("Handle"),
         "an Extern names a type; it declares no body to index"
     );
 
@@ -1356,18 +1353,26 @@ fn a_binding_local_fn_joins_the_index_but_not_the_source_modules() {
         .contains(&"my_helpers".to_string()));
 }
 
-/// Both enum shapes answer to `enum_item` — the merge the old `enums` map made,
-/// which 30 adapter reads depend on.
+/// Both enum shapes remain distinct and directly usable through the flat model.
 #[test]
-fn enum_item_answers_for_both_shapes() {
+fn both_enum_shapes_are_available_from_the_model() {
     let reg: RegistryBuilder<()> = crate::test_util::reg_with(&[
         "pub enum Sum { A(u64), B }",
         "pub enum Flags { X = 1, Y = 2 }",
         "pub struct S { pub a: u64 }",
     ]);
-    assert!(reg.flat().enum_item("Sum").is_some(), "a sum");
-    assert!(reg.flat().enum_item("Flags").is_some(), "a C-style enum");
-    assert!(reg.flat().enum_item("S").is_none(), "not a struct");
+    assert!(matches!(
+        reg.flat().declared_type("Sum"),
+        Some(prebindgen_flat::flat::Type::Variant(_))
+    ));
+    assert!(matches!(
+        reg.flat().declared_type("Flags"),
+        Some(prebindgen_flat::flat::Type::Enum(_))
+    ));
+    assert!(matches!(
+        reg.flat().declared_type("S"),
+        Some(prebindgen_flat::flat::Type::Struct(_))
+    ));
     assert!(reg.flat().struct_type("S").is_some());
     assert!(reg.flat().struct_type("Sum").is_none());
 }
@@ -1476,7 +1481,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             f: &prebindgen_flat::flat::Function,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_function(f, r, _emit)
         }
@@ -1484,7 +1489,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             st: &prebindgen_flat::flat::Struct,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_struct(st, r, _emit)
         }
@@ -1492,7 +1497,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             v: &prebindgen_flat::flat::Variant,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_variant(v, r, _emit)
         }
@@ -1500,7 +1505,7 @@ fn a_type_only_a_local_fn_writes_still_has_a_reading() {
             &self,
             e: &prebindgen_flat::flat::Enum,
             r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
             self.0.on_enum(e, r, _emit)
         }

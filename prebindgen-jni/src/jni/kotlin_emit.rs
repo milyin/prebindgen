@@ -120,11 +120,83 @@ impl Declarations {
         // Banner after the merge, not per fragment: `merge_files` keeps the
         // first fragment of a package that sets one, so setting it here is
         // independent of fragment order.
+        //
+        // The blanket `@file:OptIn` goes here for the same reason, and because
+        // generated code is *by definition* the trusted producer of these
+        // pointers — opting in file by file would mean tracking which emitter
+        // happened to call a `fromParts` or inherit a marked `peek`, for no
+        // gain. Consumers get no such blanket: that is the whole point.
+        let opt_in = format!("OptIn({}::class)", self.unsafe_marker_fqn());
         let merged: Vec<KtFile> = kt::merge_files(fragments)?
             .into_iter()
-            .map(|f| f.banner(KOTLIN_BANNER))
+            .map(|f| f.banner(KOTLIN_BANNER).file_annotation(&opt_in))
             .collect();
+        // The marker sits in the base package and every file names it fully
+        // qualified. With no base package that name lives in the root package,
+        // which Kotlin cannot import from anywhere else — so a subpackage file
+        // could not opt in and would not compile. Rather than silently drop
+        // the guard for that configuration (which is how prebindgen#37 stayed
+        // reproducible by default), refuse it.
+        // A configuration error, not a bug: it is reported as the error this
+        // function already returns, not as a panic.
+        if self.package.is_empty() {
+            if let Some(f) = merged.iter().find(|f| !f.package.is_empty()) {
+                return Err(WriteKotlinError::Other(format!(
+                    "no base package is configured, but a declaration is generated into \
+                     subpackage `{}`. The {UNSAFE_MARKER} opt-in marker would land in the \
+                     root package, which Kotlin cannot import from a subpackage, leaving \
+                     the raw-pointer entry points unguarded. Set a base package with \
+                     `set_package_prefix`.",
+                    f.package,
+                )));
+            }
+        }
         kt::write_files(&merged, kotlin_root)
+    }
+
+    /// The [`UNSAFE_MARKER`] annotation class, declared once in the base
+    /// package — see [`Declarations::unsafe_marker_fqn`].
+    ///
+    /// A `KtDecl::Raw` because `annotation class` is not a kind the model
+    /// carries, and this one declaration never varies.
+    fn unsafe_marker_decl(&self) -> KtDecl {
+        // Line comments, single-line annotations: `raw_reindent` trims each
+        // line and re-derives indentation from braces alone, so anything
+        // wrapped across lines would come out flush left.
+        let code = format!(
+            "// Marks a generated entry point that mints or accepts a raw native pointer.\n\
+             // Such a pointer is valid only if a generated native call produced it;\n\
+             // anything else — a literal, a stale value, a pointer belonging to another\n\
+             // handle — is undefined behaviour reached from safe Kotlin.\n\
+             //\n\
+             // This is the Kotlin half of the guard. The other half is `@JvmSynthetic`,\n\
+             // which hides the same members from Java — `internal` does not: it is a\n\
+             // Kotlin-only boundary that the JVM sees as public under a mangled name.\n\
+             // Handle constructors carry no marker at all: they are `private`, reachable\n\
+             // only through a synthetic factory.\n\
+             @RequiresOptIn(message = \"Raw native pointer: valid only if a generated \
+             native call produced it. Opting in means you guarantee that.\", \
+             level = RequiresOptIn.Level.ERROR)\n\
+             @Retention(AnnotationRetention.BINARY)\n\
+             @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)\n\
+             public annotation class {UNSAFE_MARKER}"
+        );
+        KtDecl::Raw {
+            name: UNSAFE_MARKER.to_string(),
+            code: KtCode::raw_reindent(&code),
+        }
+    }
+
+    /// Guard a public entry point that must keep its exact JVM signature
+    /// because Rust looks it up by JNI reflection: [`JVM_SYNTHETIC`] hides it
+    /// from Java, [`UNSAFE_MARKER`] makes Kotlin demand an opt-in.
+    ///
+    /// The marker is written fully qualified — annotations are raw strings the
+    /// model cannot see into, so a short name would need an import registered
+    /// at every one of these sites.
+    pub(crate) fn mark_unsafe(&self, f: KtFun) -> KtFun {
+        f.annotation(JVM_SYNTHETIC)
+            .annotation(self.unsafe_marker_fqn())
     }
 
     /// Emit the shared-base fragment — the `NativeHandle` class every typed
@@ -138,7 +210,9 @@ impl Declarations {
 
         let mut file = KtFile::new(&self.package)
             .import("java.lang.ref.Cleaner")
-            .import("java.util.concurrent.atomic.AtomicLong")
+            .import("java.util.concurrent.atomic.AtomicLong");
+        file = file
+            .decl(self.unsafe_marker_decl())
             .decl(
                 KtClass::class_with(KtClassModifier::Abstract, "NativeHandle")
                     .vis(KtVis::Public)
@@ -159,19 +233,27 @@ impl Declarations {
                          `ptr` into a separate atomic cell so a GC [Cleaner] action can settle\n\
                          the release after the handle object itself is unreachable.",
                     )
+                    // `internal`, not `private`: the generated subclasses have
+                    // to reach it through `super`. That leaves a public JVM
+                    // constructor a Java class could extend, which is inert —
+                    // every generated function takes a `final` concrete handle
+                    // type, and the externs are `@JvmSynthetic`, so a foreign
+                    // subclass has nowhere to go. The concrete classes, which
+                    // do go somewhere, are `private` behind a factory.
+                    .ctor_vis(KtVis::Internal)
                     .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
                     .implements(KtType::cls("AutoCloseable"))
                     .member(
-                        KtProperty::var("ptr")
-                            .ty(KtType::long())
-                            .initializer("initialPtr")
-                            .vis(KtVis::Internal)
-                            .modifier("open")
-                            .annotation("Volatile"),
+                        internal_prop(
+                            KtProperty::var("ptr")
+                                .ty(KtType::long())
+                                .initializer("initialPtr"),
+                        )
+                        .modifier("open")
+                        .annotation("Volatile"),
                     )
                     .member(
-                        KtFun::new("markConsumed")
-                            .vis(KtVis::Internal)
+                        internal_fun("markConsumed")
                             .modifier("open")
                             .kdoc(
                                 "Mark this handle consumed by value — the native side now owns\n\
@@ -181,9 +263,17 @@ impl Declarations {
                             .body(KtCode::new().line("ptr = ptr or 1L")),
                     )
                     .member(
-                        KtFun::new("peek")
+                        self.mark_unsafe(KtFun::new("peek"))
                             .vis(KtVis::Public)
-                            .kdoc("The live pointer, or `0` if this handle is closed.")
+                            .kdoc(
+                                "The live pointer, or `0` if this handle is closed.\n\
+                                 \n\
+                                 Meaningful only to the generated native calls it was minted\n\
+                                 for: it is not a handle, it does not keep one alive, and\n\
+                                 passing one back in that a native call did not produce is\n\
+                                 undefined behaviour. Public because the Rust side reads it\n\
+                                 by JNI reflection.",
+                            )
                             .returns(KtType::long())
                             .body(
                                 KtCode::new()
@@ -218,18 +308,18 @@ impl Declarations {
                          unreachable, and an in-flight native call holds the handle on its\n\
                          stack.",
                     )
+                    .ctor_vis(KtVis::Internal)
                     .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
                     .extends(KtType::cls("NativeHandle"), Some("initialPtr"))
                     .member(
-                        KtProperty::val("cell")
-                            .ty(KtType::cls("AtomicLong"))
-                            .initializer("AtomicLong(initialPtr)")
-                            .vis(KtVis::Internal),
+                        internal_val(
+                            KtProperty::val("cell")
+                                .ty(KtType::cls("AtomicLong"))
+                                .initializer("AtomicLong(initialPtr)"),
+                        ),
                     )
                     .member(
-                        KtProperty::var("ptr")
-                            .ty(KtType::long())
-                            .vis(KtVis::Internal)
+                        internal_prop(KtProperty::var("ptr").ty(KtType::long()))
                             .modifier("final override")
                             .accessors(
                                 KtCode::new()
@@ -238,15 +328,13 @@ impl Declarations {
                             ),
                     )
                     .member(
-                        KtFun::new("markConsumed")
-                            .vis(KtVis::Internal)
+                        internal_fun("markConsumed")
                             .modifier("final override")
                             .body(KtCode::new().line("releaseCell(cell)")),
                     ),
             )
             .decl(
-                KtFun::new("releaseCell")
-                    .vis(KtVis::Internal)
+                internal_fun("releaseCell")
                     .kdoc(
                         "Win the untagged→tagged release transition of a gc_managed handle's\n\
                          cell: returns the untagged address if the caller now owns the\n\
@@ -276,8 +364,7 @@ impl Declarations {
                     ),
             )
             .decl(
-                KtFun::new("registerGcHandle")
-                    .vis(KtVis::Internal)
+                internal_fun("registerGcHandle")
                     .kdoc(
                         "Register [handle]'s GC release action, capturing only its cell and\n\
                          the class's `freePtr` (never the handle — that would keep it\n\
@@ -304,8 +391,7 @@ impl Declarations {
         // so it doesn't surface as an unused-`internal fun` warning.
         if self.emit_handle_locks {
             file = file.decl(
-                KtFun::new("withSortedHandleLocks")
-                    .vis(KtVis::Internal)
+                internal_fun("withSortedHandleLocks")
                     .kdoc(
                         "Acquire every handle's monitor in one global order — sorted by the\n\
                          immutable address bits (`ptr and -2`; bit 0 is the closed tag and\n\
@@ -340,8 +426,7 @@ impl Declarations {
             // is preserved even across paths.
             file = file
                 .decl(
-                    KtFun::new("withSortedHandleLocks")
-                        .vis(KtVis::Internal)
+                    internal_fun("withSortedHandleLocks")
                         .modifier("inline")
                         .kdoc("Allocation-free single-handle lock (one monitor, nothing to order).")
                         .generic("R")
@@ -351,8 +436,7 @@ impl Declarations {
                         .expr_body(KtCode::new().line("synchronized(a) { body() }")),
                 )
                 .decl(
-                    KtFun::new("withSortedHandleLocks")
-                        .vis(KtVis::Internal)
+                    internal_fun("withSortedHandleLocks")
                         .modifier("inline")
                         .kdoc("Allocation-free two-handle lock: order by masked address then nest monitors.")
                         .generic("R")
@@ -369,8 +453,7 @@ impl Declarations {
                         ),
                 )
                 .decl(
-                    KtFun::new("withSortedHandleLocks")
-                        .vis(KtVis::Internal)
+                    internal_fun("withSortedHandleLocks")
                         .modifier("inline")
                         .kdoc("Allocation-free three-handle lock: 3-compare sorting network, then nest.")
                         .generic("R")
@@ -697,6 +780,12 @@ impl Declarations {
 
         // `fromParts(tag, …)` — the tag slot plus every variant's slots side
         // by side, in the same order both sides enumerate them.
+        // No raw-pointer guard here, unlike the data class's `fromParts`. This
+        // one's parameters are the variants' **property** types
+        // (`sum_payload_kt_type`), so a handle payload arrives as its typed
+        // handle class, never as a `Long` — there is no pointer to forge. The
+        // wire-shaped reassembly a sum actually needs is the inlined `when`
+        // over the tag that `sum_builder_singleton` emits, not this factory.
         let mut factory = KtFun::new("fromParts")
             .vis(KtVis::Public)
             .annotation("JvmStatic")
@@ -1283,8 +1372,17 @@ impl Declarations {
         let val_name = format!("__{builder}");
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let joined = names.join(", ");
+        // `@get:JvmSynthetic` for the same reason the folder appenders carry it
+        // on their field: `internal` is a Kotlin-only boundary. The getter of a
+        // top-level `internal val` is `ACC_PUBLIC` on the file facade class, so
+        // `ModelKt.get__LookupBuilderRaw().run(0xdeadbeefL, …)` would mint a
+        // handle from an invented pointer under the file's blanket opt-in.
+        // Nothing legitimate loses a route: these singletons are referenced
+        // only from generated Kotlin in this module, and native never resolves
+        // them by name.
         let code = format!(
-            "internal val {val_name}: {builder}<{class_short}> =\n    \
+            "@get:JvmSynthetic\n\
+             internal val {val_name}: {builder}<{class_short}> =\n    \
              {builder} {{ {joined} -> {class_short}.fromParts({joined}) }}"
         );
         KtDecl::Raw {
@@ -1327,8 +1425,18 @@ impl Declarations {
         // top-level `val`) so it has a stable JVM class + static field that the
         // callback trampoline can fetch via `FindClass` + `GetStaticField`; the
         // output `Vec` wrapper references it as `{holder}.{field}`.
+        //
+        // That stability is also a Java-visible route into the raw twin: an
+        // `internal object` is a public JVM class and `@JvmField` a public
+        // static, so `__XFolderRawHolder.instance.run(list, 0xdeadbeefL)` would
+        // mint a handle from an invented pointer. `@JvmSynthetic` hides the
+        // field from javac while leaving the name and ACC_STATIC alone, which
+        // is all `GetStaticFieldID` looks at. The builder singletons carry
+        // `@get:JvmSynthetic` for the same reason — a top-level `internal val`
+        // has a private backing field but an `ACC_PUBLIC` facade getter.
         let code = format!(
             "internal object {holder} {{\n    \
+             @JvmSynthetic\n    \
              @JvmField\n    \
              val {field}: {folder}<{acc_ty}> =\n        \
              {folder} {{ {lambda_params} -> \
@@ -1371,8 +1479,12 @@ impl Declarations {
         );
         let builder = spec.raw_name();
         let val_name = format!("__{builder}");
+        // `@get:JvmSynthetic`: see `value_struct_builder_singleton` — the
+        // facade getter of a top-level `internal val` is Java-callable, and
+        // this `when` wraps handle leaves with `fromRawPtr`.
         let code = format!(
-            "internal val {val_name}: {builder}<{iface_short}> =\n    \
+            "@get:JvmSynthetic\n\
+             internal val {val_name}: {builder}<{iface_short}> =\n    \
              {builder} {{ {} ->\n    {when}\n}}",
             names.join(", "),
         );
@@ -1415,6 +1527,7 @@ impl Declarations {
         let acc_ty = format!("ArrayList<{iface_short}>");
         let code = format!(
             "internal object {holder} {{\n    \
+             @JvmSynthetic\n    \
              @JvmField\n    \
              val {field}: {folder}<{acc_ty}> =\n        \
              {folder} {{ {} -> {acc}.add({when}); {acc} }}\n\
@@ -1584,6 +1697,7 @@ impl Declarations {
         let acc_ty = format!("ArrayList<{elem_short}>");
         let code = format!(
             "internal object {holder} {{\n    \
+             @JvmSynthetic\n    \
              @JvmField\n    \
              val {field}: {folder}<{acc_ty}> =\n        \
              {folder} {{ {acc}, {elem} -> {acc}.add({wrap}); {acc} }}\n\
@@ -1819,8 +1933,16 @@ impl Declarations {
         }
         // Each `external fun` is an object member; the AST renderer collects
         // their imports from the (full-FQN) parameter/return types.
+        //
+        // `@JvmSynthetic` on every one of them. The object is `internal`, but
+        // that is a Kotlin-only boundary: it compiles to a public JVM class
+        // with public native methods and a public `INSTANCE`, so
+        // `CovNative.INSTANCE.storage_close(0xdeadbeefL)` was callable from
+        // plain Java — the whole handle surface bypassed. The flag is
+        // invisible to javac and irrelevant to native-method binding, which
+        // resolves on the name alone.
         for fun in externs {
-            obj = obj.member(fun);
+            obj = obj.member(fun.annotation(JVM_SYNTHETIC));
         }
         KtFile::new(&self.package).decl(obj)
     }
@@ -1874,7 +1996,10 @@ impl Declarations {
             // close() is covered by AutoCloseable. The interface extends
             // AutoCloseable so consumers get `close()` too.
             let base = vec![
-                KtFun::new("peek")
+                // Marked to match the `NativeHandle.peek()` that satisfies it:
+                // an unmarked interface member implemented by a marked one is
+                // an opt-in-propagation error.
+                self.mark_unsafe(KtFun::new("peek"))
                     .vis(KtVis::Default)
                     .returns(KtType::long()),
                 KtFun::new("isClosed")

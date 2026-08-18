@@ -199,7 +199,7 @@ pub trait Prebindgen {
     fn prerequisites(
         &self,
         _registry: &Registry<Self::Metadata>,
-        _emit: &prebindgen_flat::Emit,
+        _emit: &crate::Emit,
     ) -> Vec<syn::Item> {
         Vec::new()
     }
@@ -219,7 +219,7 @@ pub trait Prebindgen {
         &self,
         _item: &mut syn::Item,
         _registry: &Registry<Self::Metadata>,
-        _emit: &prebindgen_flat::Emit,
+        _emit: &crate::Emit,
     ) {
     }
 
@@ -281,7 +281,7 @@ pub trait Prebindgen {
         &self,
         f: &prebindgen_flat::flat::Function,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream;
 
     /// Per-struct emission. Typically empty for languages that get
@@ -290,7 +290,7 @@ pub trait Prebindgen {
         &self,
         s: &prebindgen_flat::flat::Struct,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream;
 
     /// Per-sum emission — an `enum` whose alternatives carry payloads.
@@ -303,7 +303,7 @@ pub trait Prebindgen {
         &self,
         v: &prebindgen_flat::flat::Variant,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream;
 
     /// Per-enum emission — the fieldless shape, a named set of integers.
@@ -311,7 +311,7 @@ pub trait Prebindgen {
         &self,
         e: &prebindgen_flat::flat::Enum,
         registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream;
 
     /// Per-const emission. Default: a named const re-emits as a path-alias
@@ -327,7 +327,7 @@ pub trait Prebindgen {
         &self,
         c: &prebindgen_flat::flat::Constant,
         _registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream {
         match self.source_module() {
             Some(m) => emit.const_alias(c, m),

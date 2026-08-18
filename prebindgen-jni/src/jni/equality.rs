@@ -3,8 +3,8 @@
 //!
 //! A generated class mirrors a Rust type that derives `PartialEq`/`Eq`, so two
 //! values with equal contents must compare equal. Kotlin arrays compare by
-//! IDENTITY, which breaks that for every `Vec<u8>` field (`ByteArray`) and for
-//! the `ByteArray` a value blob carries:
+//! IDENTITY, which breaks that for every `Vec<u8>` or fixed-size primitive-array
+//! field that surfaces as a Kotlin array:
 //!
 //! ```text
 //! Timestamp(1uL, byteArrayOf(1,2,3)) == Timestamp(1uL, byteArrayOf(1,2,3))  // false
@@ -17,19 +17,6 @@
 //! right `HashMap` bucket and is then rejected. Both members are emitted here
 //! anyway, so the behavior is stated by the generated source rather than
 //! inherited from a compiler special case that only covers two of the three.
-//!
-//! ## Why value blobs are not `@JvmInline`
-//!
-//! Kotlin 1.9 (the version this generator targets downstream) rejects
-//! `equals`/`hashCode` members on a value class outright — *"Member with the
-//! name 'equals' is reserved for future releases"* — and its typed-equals
-//! replacement (`operator fun equals(other: T)`) is experimental, needing an
-//! opt-in flag every consumer would have to set. A `@JvmInline value class`
-//! therefore CANNOT be given value equality at this language level, so
-//! [`super::kotlin_emit`] emits value blobs as a plain `data class`. That costs
-//! one small allocation per crossing at the wrapper tier (the JNI ABI is
-//! unaffected — externs declare `ByteArray` directly and the wrapper passes
-//! `.bytes`), which is the price of the type behaving like the value it is.
 
 use kotlin_codegen::{KtCode, KtFun, KtParam, KtType};
 

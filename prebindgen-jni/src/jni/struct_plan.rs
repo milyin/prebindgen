@@ -207,6 +207,39 @@ pub(crate) fn build_struct_plan(
     Some(StructPlan { fields })
 }
 
+/// True when this plan's flattened `fromParts` takes at least one **raw
+/// native pointer** leaf — an opaque-handle projection, whose wire slot is a
+/// bare `jlong` the factory mints a handle from.
+///
+/// This is what decides whether that factory needs the raw-pointer guard.
+/// Marking every `fromParts` was over-broad: a pointer-free factory such as
+/// `Timestamp.fromParts(Long, ByteArray)` cannot forge anything, and guarding
+/// it only removed a safe factory from Java and forced unrelated consumers to
+/// opt into a contract it does not have.
+///
+/// Recursive for the same reason the factory is: a nested data class inlines
+/// its leaves into the parent's signature, so a handle two levels down still
+/// arrives as a raw `Long` parameter of the *parent's* `fromParts`.
+pub(crate) fn plan_mints_handle(plan: &StructPlan) -> bool {
+    plan.fields.iter().any(|f| kind_mints_handle(&f.kind))
+}
+
+fn kind_mints_handle(kind: &PlanFieldKind) -> bool {
+    match kind {
+        PlanFieldKind::Projection { proj, .. } => proj.kind == ProjectionKind::Handle,
+        PlanFieldKind::Nested { plan, .. } => plan_mints_handle(plan),
+        PlanFieldKind::Sum { variants, .. } => variants
+            .iter()
+            .flat_map(|v| &v.fields)
+            .any(|f| kind_mints_handle(&f.kind)),
+        // `ULong` is a value, not a pointer; the rest are enums and plain
+        // leaves that carry no address.
+        PlanFieldKind::Enum { .. }
+        | PlanFieldKind::OptionEnum { .. }
+        | PlanFieldKind::Leaf { .. } => false,
+    }
+}
+
 /// Classify ONE value position — a struct field or a sum's variant payload —
 /// into its bridge slot. Both callers go through here so a payload and a
 /// struct field of the same Rust type get the same slot, wire, descriptor and
@@ -600,7 +633,7 @@ pub(crate) fn type_close_strategy(
     assert!(
         depth <= 16,
         "close-strategy walk: recursion too deep at type `{}` (cyclic data_class?)",
-        ty.spell()
+        ty
     );
     // An owned `Handle` projection is the one thing that actually owns
     // something: a `ULong` owns nothing, and a borrowed handle is not ours to

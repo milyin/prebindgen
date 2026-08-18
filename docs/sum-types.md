@@ -55,7 +55,7 @@ hand-rolling a different simulation.
 > every other group is inert.
 
 Nothing else is new. A group's leaves are ordinary leaves: scalars, `String`, `enum_class`
-discriminants, opaque handles, value blobs, nested data classes. The two adapters differ only in
+discriminants, opaque handles, fixed-size primitive arrays, nested data classes. The two adapters differ only in
 *where* the groups are overlaid:
 
 | Adapter | Groups overlaid in | Inert groups |
@@ -133,8 +133,8 @@ from it**, so the surface stays self-consistent; the running example below keeps
 each snippet reads as one contract. `examples/covertest-kotlin` exercises the rename
 (`variant!(Labeled).name("Tagged")` ⇒ the class `Tagged` and the slots `tagged_v0` / `tagged_v1`).
 
-`sealed_class!(E)` is a fifth class kind beside `ptr_class!` / `data_class!` / `enum_class!` /
-`value_class!`: one simple argument, sub-builder, `.name()`, per-variant `.variant(variant!(V))`, and
+`sealed_class!(E)` is a fourth class kind beside `ptr_class!` / `data_class!` /
+`enum_class!`: one simple argument, sub-builder, `.name()`, per-variant `.variant(variant!(V))`, and
 the shared `class_interface_methods!` (`.interface()`, `.interface_name()`, `.implements()`). Like
 `enum_class!` it has no `.method` / `.constructor`: a sum value has no object identity Rust-side, so
 a "method" on it is a free function taking it.

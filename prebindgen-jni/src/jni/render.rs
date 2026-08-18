@@ -169,7 +169,7 @@ pub(crate) fn build_data_class(
     // `Enum.fromInt`, projection wraps) use short names; the FQNs they need are
     // collected here and attached to the factory body `Code` below.
     let mut factory_imports: BTreeSet<String> = BTreeSet::new();
-    let (factory_params, factory_reconstruct) = flatten_struct_factory(
+    let (factory_params, factory_reconstruct, factory_mints_handle) = flatten_struct_factory(
         ext,
         registry,
         item_struct,
@@ -236,11 +236,20 @@ pub(crate) fn build_data_class(
     for fqn in factory_imports {
         factory_body = factory_body.import(fqn);
     }
-    let mut factory = KtFun::new("fromParts")
-        .vis(KtVis::Public)
-        .annotation("JvmStatic")
-        .returns(KtType::cls(class_name))
-        .expr_body(factory_body);
+    // Guarded only when a leaf actually is a raw pointer: a `fromParts` over
+    // plain scalars and byte arrays cannot forge anything, and marking it
+    // would delete a safe factory from Java and make unrelated Kotlin
+    // consumers opt into a raw-pointer contract it does not have.
+    let factory = KtFun::new("fromParts");
+    let mut factory = if factory_mints_handle {
+        ext.mark_unsafe(factory)
+    } else {
+        factory
+    }
+    .vis(KtVis::Public)
+    .annotation("JvmStatic")
+    .returns(KtType::cls(class_name))
+    .expr_body(factory_body);
     for (name, ty) in &factory_params {
         factory = factory.param(KtParam::new(name, ty.clone()));
     }
@@ -318,12 +327,36 @@ pub(crate) fn build_typed_handle(
     // Companion object: the `@JvmStatic external fun freePtr(ptr: Long)` called
     // by `close()`, plus one **factory** member per `.constructor(f, name)`
     // (a free wrapper — no receiver — returning the class).
-    let mut companion = KtCompanion::new().vis(KtVis::Public).member(
-        KtFun::new(free_extern.clone())
-            .annotation("JvmStatic")
-            .external()
-            .param(KtParam::new("ptr", KtType::long())),
-    );
+    let mut companion = KtCompanion::new()
+        .vis(KtVis::Public)
+        .member(
+            // `@JvmSynthetic`: a `@JvmStatic external fun` is a public static
+            // native method, so `Storage.freePtr(0xdeadbeefL)` from Java would
+            // free an address of the caller's choosing.
+            KtFun::new(free_extern.clone())
+                .annotation("JvmStatic")
+                .annotation(JVM_SYNTHETIC)
+                .external()
+                .param(KtParam::new("ptr", KtType::long())),
+        )
+        // The replacement for the raw-pointer constructor. `internal` +
+        // `@JvmSynthetic` is reachable from generated Kotlin and from neither
+        // another Kotlin module nor Java; the constructor itself is `private`,
+        // because a constructor can be neither hidden by `@JvmSynthetic`
+        // (Kotlin rejects the target) nor by `internal` (still public on the
+        // JVM). Nothing on the Rust side constructs a handle.
+        .member(
+            internal_fun(HANDLE_FACTORY)
+                .kdoc(
+                    "Wrap a pointer a generated native call returned. Passing anything \
+                     else — a literal, a stale pointer, one belonging to another \
+                     handle — is undefined behaviour, which is why this is not part \
+                     of the public API.",
+                )
+                .param(KtParam::new("initialPtr", KtType::long()))
+                .returns(KtType::cls(class_name))
+                .expr_body(KtCode::new().line(format!("{class_name}(initialPtr)"))),
+        );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
         if let Some(item_fn) = registry.flat().function(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
@@ -351,6 +384,12 @@ pub(crate) fn build_typed_handle(
     // `write_typed_handles` after the class body is built.
     let mut class = KtClass::class_(class_name)
         .vis(KtVis::Public)
+        // The class is public; minting one from a raw `Long` is not. `private`
+        // rather than `internal`, because an internal constructor is still a
+        // public JVM constructor — `new Storage(0xdeadbeefL).close()` compiled
+        // from Java. Every generated call site goes through the companion's
+        // `fromRawPtr` instead (see `handle_from_raw`).
+        .ctor_vis(KtVis::Private)
         .kdoc(class_kdoc)
         .ctor_param(KtCtorParam::new("initialPtr", KtType::long()));
     class = if gc_managed {
@@ -392,7 +431,8 @@ pub(crate) fn build_typed_handle(
                             .line("val p = releaseCell(cell)")
                             .line("__cleanable?.clean()")
                             .line(format!(
-                                "return {class_name}(if (p != 0L) p else cell.get())"
+                                "return {}",
+                                handle_from_raw(class_name, "if (p != 0L) p else cell.get()")
                             )),
                     ),
             )
@@ -424,7 +464,7 @@ pub(crate) fn build_typed_handle(
                         KtCode::new()
                             .line("val p = ptr")
                             .line("ptr = p or 1L")
-                            .line(format!("return {class_name}(p)")),
+                            .line(format!("return {}", handle_from_raw(class_name, "p"))),
                     ),
             )
     };
@@ -738,6 +778,46 @@ pub(crate) struct WrapperSurface {
     body_imports: BTreeSet<String>,
 }
 
+/// Whether an error handler may return null when it cannot manufacture the
+/// value a failed call was meant to produce.
+#[derive(Clone, Copy)]
+enum RecoveryReturn {
+    /// Public wrappers: reference-shaped returns become nullable. Types whose
+    /// nullable form has a different JVM representation (primitives and
+    /// ULong) keep their declared type.
+    NullableReferences,
+    /// Constant helpers always install a throwing handler themselves, so they
+    /// retain the constant's declared type instead of leaking nullability into
+    /// the public property.
+    Declared,
+}
+
+/// The type returned by both error handlers and, consequently, by the wrapper
+/// itself. A handler may decline to fabricate a reference result by returning
+/// null; primitive-shaped results keep their existing unboxed contract.
+fn recovery_return_type(out: &OutputPlan, policy: RecoveryReturn) -> KtType {
+    let declared = out.kt_return.clone().unwrap_or_else(KtType::unit);
+    if matches!(policy, RecoveryReturn::Declared) {
+        return declared;
+    }
+    let generics: Vec<String> = out.generic.iter().cloned().collect();
+    nullable_recovery_type(declared, &generics)
+}
+
+fn nullable_recovery_type(declared: KtType, generics: &[String]) -> KtType {
+    if declared.is_nullable() || declared == KtType::unit() {
+        return declared;
+    }
+    let nullable = declared.clone().nullable();
+    if crate::jni::symbols::erase_kt_type(generics, &declared)
+        == crate::jni::symbols::erase_kt_type(generics, &nullable)
+    {
+        nullable
+    } else {
+        declared
+    }
+}
+
 /// Build the [`WrapperSurface`]: everything [`render_wrapper_fn`] does up to
 /// (but not including) the body render — the single surface-signature
 /// derivation. **Pure** over `(ext, f, registry, name, receiver)`: signature
@@ -751,6 +831,24 @@ pub(crate) fn build_wrapper_surface(
     registry: &Registry<KotlinMeta>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
+) -> Option<WrapperSurface> {
+    build_wrapper_surface_with_recovery(
+        ext,
+        f,
+        registry,
+        kotlin_name_override,
+        receiver_key,
+        RecoveryReturn::NullableReferences,
+    )
+}
+
+fn build_wrapper_surface_with_recovery(
+    ext: &Declarations,
+    f: &prebindgen_registry::flat::Function,
+    registry: &Registry<KotlinMeta>,
+    kotlin_name_override: Option<&str>,
+    receiver_key: Option<&TypeKey>,
+    recovery: RecoveryReturn,
 ) -> Option<WrapperSurface> {
     let mut body_imports = BTreeSet::new();
     let fplan = ext.fn_plan(registry, f).ok()?;
@@ -766,7 +864,7 @@ pub(crate) fn build_wrapper_surface(
     let (params, receiver_idx) =
         classify_params(ext, &fplan, registry, &mut body_imports, receiver_key)?;
     let out = classify_output(ext, f, &fplan, registry, &mut body_imports)?;
-    let r_ty = out.kt_return.clone().unwrap_or_else(KtType::unit);
+    let r_ty = recovery_return_type(&out, recovery);
     let sink = error_sink_parts(f, &fplan, registry, &mut body_imports, &r_ty)?;
 
     let mut fun = KtFun::new(&kt_name).vis(KtVis::Public);
@@ -808,8 +906,8 @@ pub(crate) fn build_wrapper_surface(
     if out.cast_return {
         fun = fun.annotation("Suppress(\"UNCHECKED_CAST\")");
     }
-    if let Some(rt) = &out.kt_return {
-        fun = fun.returns(rt.clone());
+    if out.kt_return.is_some() {
+        fun = fun.returns(r_ty);
     }
     Some(WrapperSurface {
         fun,
@@ -828,7 +926,32 @@ pub(crate) fn render_wrapper_fn(
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<KtFun> {
-    let surface = build_wrapper_surface(ext, f, registry, kotlin_name_override, receiver_key)?;
+    render_wrapper_fn_with_recovery(
+        ext,
+        f,
+        registry,
+        kotlin_name_override,
+        receiver_key,
+        RecoveryReturn::NullableReferences,
+    )
+}
+
+fn render_wrapper_fn_with_recovery(
+    ext: &Declarations,
+    f: &prebindgen_registry::flat::Function,
+    registry: &Registry<KotlinMeta>,
+    kotlin_name_override: Option<&str>,
+    receiver_key: Option<&TypeKey>,
+    recovery: RecoveryReturn,
+) -> Option<KtFun> {
+    let surface = build_wrapper_surface_with_recovery(
+        ext,
+        f,
+        registry,
+        kotlin_name_override,
+        receiver_key,
+        recovery,
+    )?;
     let WrapperSurface {
         mut fun,
         params,
@@ -889,7 +1012,14 @@ pub(crate) fn render_const_val(
     let getter = const_getter_fn(c);
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
-    let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
+    let helper = render_wrapper_fn_with_recovery(
+        ext,
+        &getter,
+        registry,
+        Some(&helper_name),
+        None,
+        RecoveryReturn::Declared,
+    )?;
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| c.name.to_string());
@@ -920,7 +1050,14 @@ pub(crate) fn render_constant_fn_val(
 ) -> Option<(KtFun, KtProperty)> {
     let default = kt_snake_to_camel(&f.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
-    let helper = render_wrapper_fn(ext, f, registry, Some(&helper_name), None)?;
+    let helper = render_wrapper_fn_with_recovery(
+        ext,
+        f,
+        registry,
+        Some(&helper_name),
+        None,
+        RecoveryReturn::Declared,
+    )?;
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| f.name.to_string());
@@ -951,7 +1088,14 @@ pub(crate) fn render_const_expr_val(
     let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty, registry);
     let default = kt_snake_to_camel(&getter.name.to_string());
     let helper_name = ext.mangle_fun(package, &default);
-    let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
+    let helper = render_wrapper_fn_with_recovery(
+        ext,
+        &getter,
+        registry,
+        Some(&helper_name),
+        None,
+        RecoveryReturn::Declared,
+    )?;
     let expr = decl.expr.to_token_stream();
     let kdoc = format!(
         "Binding-defined constant: `{expr}` (evaluated lazily, once, through \
@@ -2336,5 +2480,42 @@ pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Optio
         prebindgen_registry::flat::Type::Enum(e) => e.docs(),
         prebindgen_registry::flat::Type::Variant(v) => v.docs(),
         prebindgen_registry::flat::Type::Extern(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod recovery_return_tests {
+    use kotlin_codegen::KtType;
+
+    use super::nullable_recovery_type;
+
+    fn recover(ty: KtType, generics: &[&str]) -> KtType {
+        nullable_recovery_type(
+            ty,
+            &generics.iter().map(|g| g.to_string()).collect::<Vec<_>>(),
+        )
+    }
+
+    #[test]
+    fn only_reference_shaped_recovery_returns_become_nullable() {
+        for primitive in [
+            KtType::unit(),
+            KtType::int(),
+            KtType::long(),
+            KtType::boolean(),
+            KtType::cls("ULong"),
+        ] {
+            assert!(!recover(primitive, &[]).is_nullable());
+        }
+        for reference in [
+            KtType::string(),
+            KtType::byte_array(),
+            KtType::generic("List", [KtType::string()]),
+            KtType::cls("io.test.Handle"),
+            KtType::var_r(),
+        ] {
+            assert!(recover(reference, &["R"]).is_nullable());
+        }
+        assert!(recover(KtType::string().nullable(), &[]).is_nullable());
     }
 }

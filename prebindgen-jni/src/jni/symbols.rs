@@ -375,8 +375,8 @@ impl std::fmt::Display for JvmSignature {
 /// The JVM boxed class of a Kotlin primitive — a nullable primitive crosses
 /// as its box (`Int?` → `java.lang.Integer`), a distinct JVM descriptor from
 /// the unboxed primitive, so `f(x: Int)` and `f(x: Int?)` do NOT clash.
-fn boxed_primitive(simple: &str) -> Option<&'static str> {
-    Some(match simple {
+fn boxed_primitive(builtin: &str) -> Option<&'static str> {
+    Some(match builtin {
         "Int" => "java.lang.Integer",
         "Long" => "java.lang.Long",
         "Short" => "java.lang.Short",
@@ -385,6 +385,29 @@ fn boxed_primitive(simple: &str) -> Option<&'static str> {
         "Boolean" => "java.lang.Boolean",
         "Float" => "java.lang.Float",
         "Double" => "java.lang.Double",
+        _ => return None,
+    })
+}
+
+/// The canonical short name of a Kotlin builtin represented either the way
+/// JniGen constructs it (`Int`) or by its full Kotlin identity (`kotlin.Int`).
+/// A qualified generated class such as `io.test.Int` is deliberately not a
+/// builtin merely because its last path segment has the same spelling.
+fn kotlin_builtin(fqn: &str) -> Option<&'static str> {
+    Some(match fqn {
+        "Int" | "kotlin.Int" => "Int",
+        "Long" | "kotlin.Long" => "Long",
+        "Short" | "kotlin.Short" => "Short",
+        "Byte" | "kotlin.Byte" => "Byte",
+        "Char" | "kotlin.Char" => "Char",
+        "Boolean" | "kotlin.Boolean" => "Boolean",
+        "Float" | "kotlin.Float" => "Float",
+        "Double" | "kotlin.Double" => "Double",
+        "ULong" | "kotlin.ULong" => "ULong",
+        "String" | "kotlin.String" => "String",
+        "ByteArray" | "kotlin.ByteArray" => "ByteArray",
+        "Any" | "kotlin.Any" => "Any",
+        "Unit" | "kotlin.Unit" => "Unit",
         _ => return None,
     })
 }
@@ -407,30 +430,30 @@ pub(crate) fn erase_kt_type(generics: &[String], ty: &KtType) -> ErasedJvmType {
     let token = match ty {
         KtType::Function { params, .. } => format!("kotlin.Function{}", params.len()),
         KtType::Named { fqn, nullable, .. } => {
-            let simple = ty.simple_name().unwrap_or(fqn);
+            let builtin = kotlin_builtin(fqn);
             if generics.iter().any(|g| g == fqn) {
                 "java.lang.Object".to_string()
-            } else if simple == "ULong" {
+            } else if builtin == Some("ULong") {
                 if *nullable {
                     "kotlin.ULong".to_string()
                 } else {
                     "Long".to_string()
                 }
-            } else if let Some(boxed) = boxed_primitive(simple) {
+            } else if let Some(boxed) = builtin.and_then(boxed_primitive) {
                 if *nullable {
                     boxed.to_string()
                 } else {
-                    simple.to_string()
+                    builtin.expect("boxed primitive is a builtin").to_string()
                 }
             } else {
-                match simple {
-                    "String" => "java.lang.String".to_string(),
-                    "ByteArray" => "byte[]".to_string(),
-                    "Any" => "java.lang.Object".to_string(),
-                    "Unit" => "void".to_string(),
-                    // Generic container (args erased) or a plain class: the
-                    // declared `fqn` (a generic's `fqn` is its raw name, e.g.
-                    // `List`), so `List<X>` and `List<Y>` share one token.
+                match builtin {
+                    Some("String") => "java.lang.String".to_string(),
+                    Some("ByteArray") => "byte[]".to_string(),
+                    Some("Any") => "java.lang.Object".to_string(),
+                    Some("Unit") => "void".to_string(),
+                    // Generic container (args erased) or a plain class: retain
+                    // the declared FQN. Nullability never changes an ordinary
+                    // class's JVM descriptor.
                     _ => fqn.clone(),
                 }
             }
@@ -526,5 +549,20 @@ mod tests {
             erase(&[], kt::KtType::cls("io.other.Foo")),
             "distinct FQNs stay distinct"
         );
+        for fqn in [
+            "io.test.Int",
+            "io.test.ULong",
+            "io.test.String",
+            "io.test.ByteArray",
+            "io.test.Any",
+            "io.test.Unit",
+        ] {
+            assert_eq!(erase(&[], kt::KtType::cls(fqn)), fqn);
+            assert_eq!(
+                erase(&[], kt::KtType::cls(fqn).nullable()),
+                fqn,
+                "qualified builtin-looking class `{fqn}` must stay a reference"
+            );
+        }
     }
 }

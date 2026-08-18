@@ -1069,12 +1069,17 @@ fn a_fixed_builder_emits_no_dead_typed_twin() {
 
     // The twin the singleton implements and JNI calls.
     assert!(
-        kotlin.contains("public fun interface LookupBuilderRaw<out R>"),
+        kotlin.contains("internal fun interface LookupBuilderRaw<out R>"),
         "the raw twin is what exists:\n{kotlin}"
     );
+    // `@get:JvmSynthetic`: the facade getter of a top-level `internal val` is
+    // `ACC_PUBLIC`, so without it `ModelKt.get__LookupBuilderRaw().run(0xdead…)`
+    // would reconstruct a handle from a forged pointer out of Java.
     assert!(
-        kotlin.contains("internal val __LookupBuilderRaw: LookupBuilderRaw<Lookup>"),
-        "the singleton implements it:\n{kotlin}"
+        kotlin.contains(
+            "@get:JvmSynthetic\ninternal val __LookupBuilderRaw: LookupBuilderRaw<Lookup>"
+        ),
+        "the singleton implements it, hidden from javac:\n{kotlin}"
     );
     // The dead surface: the typed declaration and the proxy adapting to it.
     assert!(
@@ -1182,7 +1187,7 @@ fn borrowed_sum_return_matches_through_the_reference() {
     // handle, so there is nothing to close and no lifetime to track.
     assert!(
         kotlin.contains(
-            "public fun readBorrowed(p: Probe, onError: JniErrorHandler<Reading>): Reading"
+            "public fun readBorrowed(p: Probe, onError: JniErrorHandler<Reading?>): Reading?"
         ),
         "a borrowed sum arrives as an ordinary value:\n{kotlin}"
     );
@@ -1208,7 +1213,7 @@ fn sum_return_composes_with_option_and_vec() {
     );
     assert!(
         kotlin.contains(
-            "public fun readAll(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading>"
+            "public fun readAll(n: Int, onError: JniErrorHandler<List<Reading>?>): List<Reading>?"
         ) && kotlin.contains("__ReadingFolderRawHolder.instance"),
         "Vec<sum> folds through a hoisted appender singleton:\n{kotlin}"
     );
@@ -1233,7 +1238,7 @@ fn sum_return_group_can_own_a_handle() {
         "a handle payload's group slot is the raw pointer:\n{kotlin}"
     );
     assert!(
-        kotlin.contains("1 -> Lookup.Found(Probe(found_v0))"),
+        kotlin.contains("1 -> Lookup.Found(Probe.fromRawPtr(found_v0))"),
         "the live arm wraps the pointer into its typed handle class:\n{kotlin}"
     );
 }
@@ -1333,7 +1338,7 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
         "the selector plus a raw-pointer group slot, both prefixed by the field:\n{kotlin}"
     );
     assert!(
-        kotlin.contains("Lookup.Found(Probe(outcome_found_v0))"),
+        kotlin.contains("Lookup.Found(Probe.fromRawPtr(outcome_found_v0))"),
         "the parent's fromParts inlines the `when` and wraps the pointer:\n{kotlin}"
     );
     assert!(

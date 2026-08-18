@@ -161,12 +161,6 @@
 //! `prebindgen-jni` crate, which hands the result to its `JniGenBuilder`.
 //!
 
-/// File name for storing the crate name
-const CRATE_NAME_FILE: &str = "crate_name.txt";
-
-/// File name for storing enabled Cargo features collected in build.rs
-const FEATURES_FILE: &str = "features.txt";
-
 /// Default group name for items without explicit group name
 pub const DEFAULT_GROUP_NAME: &str = "default";
 
@@ -200,9 +194,35 @@ pub use crate::api::{
 // `prebindgen-registry`, and re-exports its own decl macros' support types at
 // its own root — see `prebindgen-jni`'s docs for the JNI / Kotlin workflow.
 
+#[doc(hidden)]
+pub mod output {
+    //! The capture directory's description file, and the format number the
+    //! `#[prebindgen]` macro and [`Source`](crate::Source) both check against.
+    use std::path::Path;
+
+    /// Check that `dir` is described in the format this prebindgen writes.
+    ///
+    /// Called by the `#[prebindgen]` macro before it captures, because the
+    /// macro and the build script that prepared `dir` come from two packages
+    /// that a manifest can pair freely. `Err` carries the reason, for the macro
+    /// to report on the item it was expanding.
+    pub fn check_writer(dir: &Path) -> Result<(), String> {
+        crate::api::output::Output::check_writer(dir)
+    }
+}
+
+#[doc(hidden)]
+pub mod layout {
+    //! Capture-directory layout, shared by the proc-macro (writing) and
+    //! [`Source`](crate::Source) (reading).
+    pub use crate::api::layout::{
+        capture_file_name, decode_group_dir_name, group_dir_name, MAX_COMPONENT_LEN,
+    };
+}
+
 pub mod utils {
     #[doc(hidden)]
-    pub use crate::api::utils::jsonl::{read_jsonl_file, write_to_jsonl_file};
+    pub use crate::api::utils::jsonl::{publish_file, read_jsonl_file, write_to_jsonl_file};
     pub use crate::api::utils::target_triple::TargetTriple;
 }
 

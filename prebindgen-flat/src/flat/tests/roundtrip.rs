@@ -13,6 +13,10 @@
 //! complete.
 
 use super::*;
+use crate::RustEmitter;
+
+struct TestEmit;
+impl crate::RustEmitter for TestEmit {}
 
 /// Each parameter and the return type re-emit exactly what was written —
 /// including a lifetime, which the classification does not model.
@@ -192,8 +196,8 @@ fn empty_delimiters_survive_and_spell() {
 
     let spell = |a: &Alternative| {
         let name = &a.name;
-        crate::flat::emit::Emit::for_test()
-            .shape(a, quote::quote!(E::#name), &[])
+        TestEmit
+            .shape_alternative(a, quote::quote!(E::#name), &[])
             .to_string()
     };
     assert_eq!(spell(&v.alternatives[0]), "E :: A");
@@ -212,8 +216,8 @@ fn empty_delimiters_survive_and_spell() {
     let e = as_enum(&element);
     let spell = |v: &EnumValue| {
         let name = &v.name;
-        crate::flat::emit::Emit::for_test()
-            .shape(v, quote::quote!(F::#name), &[])
+        TestEmit
+            .shape_enum_value(v, quote::quote!(F::#name), &[])
             .to_string()
     };
     assert_eq!(spell(&e.values[0]), "F :: A");
@@ -235,8 +239,8 @@ fn empty_delimiters_survive_and_spell() {
             .map(|f| f.bind(&quote::format_ident!("__f{}", f.index)))
             .collect();
         let name = &a.name;
-        crate::flat::emit::Emit::for_test()
-            .shape(a, quote::quote!(Reading::#name), &parts)
+        TestEmit
+            .shape_alternative(a, quote::quote!(Reading::#name), &parts)
             .to_string()
     };
     assert_eq!(bind(&v.alternatives[0]), "Reading :: Exact (__f0)");
@@ -258,8 +262,8 @@ fn struct_delimiters_survive_and_spell() {
         let name = &s.name;
         (
             s.fields.len(),
-            crate::flat::emit::Emit::for_test()
-                .shape(s, quote::quote!(#name), parts)
+            TestEmit
+                .shape_struct(s, quote::quote!(#name), parts)
                 .to_string(),
         )
     };
@@ -589,4 +593,37 @@ fn an_element_answers_for_its_docs() {
         pub fn g() {}
     ));
     assert_eq!(as_fn(&bare).docs(), None);
+}
+
+/// A spelling names `Cow` and `MaybeUninit` in full, because the model's
+/// prelude has them and Rust's does not — normalization reduces both to a bare
+/// name, and generated Rust is `include!`d into a consumer crate that need not
+/// have imported either (#410). Everything else stays the source's own tokens,
+/// which is the whole point of spelling off the origin.
+#[test]
+fn a_spelling_qualifies_what_rusts_prelude_does_not_declare() {
+    let f: syn::ItemFn = syn::parse_quote!(
+        pub fn probe(
+            a: Cow<'static, str>,
+            b: std::borrow::Cow<'a, [u8]>,
+            c: &mut MaybeUninit<u64>,
+            d: Option<Vec<String>>,
+        ) {
+        }
+    );
+    let element = parse_one(syn::Item::Fn(f));
+    let func = as_fn(&element);
+
+    assert_eq!(
+        func.params
+            .iter()
+            .map(|p| tokens(&p.ty.spell()))
+            .collect::<Vec<_>>(),
+        vec![
+            ":: std :: borrow :: Cow < 'static , str >",
+            ":: std :: borrow :: Cow < 'a , [u8] >",
+            "& mut :: std :: mem :: MaybeUninit < u64 >",
+            "Option < Vec < String > >",
+        ]
+    );
 }

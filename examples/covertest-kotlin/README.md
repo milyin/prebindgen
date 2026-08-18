@@ -90,13 +90,13 @@ for the full table; in brief:
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
   return), `Option<T>` (param / return / **field**, incl. `Option<enum>` in
   all three positions and `Option<Payload>` in both directions),
-  `Vec<T>`/`&[T]`, `Vec<String>`, `Vec<value_class>` → `List<ByteArray>`,
+  `Vec<T>`/`&[T]`, `Vec<String>`, `Vec<Stamp>` → `List<Stamp>`,
   `Vec<handle>` / `Option<Vec<handle>>` (Kotlin-side handle fold),
   borrowed-opaque returns (`Option<&T>` → cloned owned handle),
-  `Result<_, E>` → `onError`, enums, value classes, `impl Fn` callbacks
+  `Result<_, E>` → `onError`, enums, data/sealed classes, fixed-size primitive arrays, `impl Fn` callbacks
   (single + slice + **owned-handle**), N-ary sorted handle locking (3 handles,
   hammered from 4 threads), the `je != null` binding-error channel (malformed
-  value-class bytes), the callback no-throw contract (exceptions described +
+  wrong-length fixed-size arrays), the callback no-throw contract (exceptions described +
   cleared per upcall), and per-upcall local-frame hygiene (20k-upcall
   pressure run).
 
