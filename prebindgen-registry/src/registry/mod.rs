@@ -209,7 +209,7 @@ pub struct Registry<M = ()> {
     /// emission gate is "did the binding declare this item" — so it outlives
     /// the scan that consumes it.
     declared: Declared,
-    /// Type tables, one per direction. Each scanned type gets a [`TypeCell`]
+    /// Type tables, one per direction. Each scanned type gets a `TypeCell`
     /// holding what the key names, whether the binding asks for it directly, and
     /// the conversion once the generator supplies one.
     ///
@@ -272,7 +272,7 @@ impl<M> Registry<M> {
     /// this way projects nothing — [`Self::flat`] would hand a later stage an
     /// empty model that claims to be this registry's source. Outside this crate
     /// the entry point is [`Self::builder`], which has a model behind it.
-    /// [`Self::empty`] for the test suite of an out-of-crate adapter.
+    /// `Self::empty` for the test suite of an out-of-crate adapter.
     ///
     /// Gated on the non-default `testing` feature, so the "not public" rule
     /// above is unchanged for every ordinary build; a fixture that wants a
@@ -286,7 +286,7 @@ impl<M> Registry<M> {
     /// asked for it directly (the cell's root flag).
     ///
     /// Test support, `testing`-gated: it answers the one question a fixture
-    /// asks of a cell without handing out [`TypeCell`], which is the
+    /// asks of a cell without handing out `TypeCell`, which is the
     /// registry's storage and no part of the public surface.
     #[cfg(any(test, feature = "testing"))]
     pub fn is_root_for_test(&self, dir: Direction, key: &TypeKey) -> Option<bool> {

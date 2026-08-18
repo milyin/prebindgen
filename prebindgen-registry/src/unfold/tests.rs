@@ -9,7 +9,10 @@ fn key(s: &str) -> crate::registry::TypeKey {
 }
 use prebindgen_flat::types_util::ident;
 
-use crate::{registry::Registry, test_util::scanned_with as reg_with};
+use crate::{
+    registry::Registry,
+    test_util::{scanned_with as reg_with, SpellForTest},
+};
 
 /// A reading for a fixture type, lowered by the model.
 ///
