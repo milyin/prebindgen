@@ -101,6 +101,7 @@ import io.prebindgen.covertest.model.readingSeries
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.Tagged
 import io.prebindgen.covertest.model.markerOf
+import io.prebindgen.covertest.model.maybeHolderNew
 import io.prebindgen.covertest.model.taggedNew
 import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
@@ -684,6 +685,31 @@ fun main() {
         // Two levels down, closed by one `close()` at the top.
         d.close()
         check(summary.isClosed())
+    }
+
+    // The same handle field with an `Option` in front of it. The factory that
+    // rebuilds the class takes a different arm per case, and the present arm has
+    // to MINT a handle — through the generated factory, since #404 made the
+    // constructor private. The optional arm went on naming the constructor, so
+    // this class did not compile at all (#430), which no emission test could
+    // say: the Rust half is identical either way. This section is the tie —
+    // it does not compile if the arm names something private, and the checks
+    // fail if either case rebuilds the wrong thing.
+    section("an optional handle field is minted through the factory, present and absent") {
+        val present = maybeHolderNew(3L, 4L, 8.0, true, boom).orThrow()
+        check(present.tag == 3L)
+        val held = present.summary ?: error("the present arm dropped the handle")
+        check(!held.isClosed())
+        check(held.count(boom) == 4L)
+        present.close()
+        check(held.isClosed())
+
+        // …and the absent arm produces `null` rather than a handle over pointer
+        // 0, so closing the container is a no-op with nothing to free.
+        val absentHolder = maybeHolderNew(7L, 4L, 8.0, false, boom).orThrow()
+        check(absentHolder.tag == 7L)
+        check(absentHolder.summary == null)
+        absentHolder.close()
     }
 
     // An output boundary DERIVED from the type's value form

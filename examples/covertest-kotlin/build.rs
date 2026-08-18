@@ -218,6 +218,12 @@ fn main() {
         // harness is what ties the two decisions together, since an emission
         // test never compiles the inner class.
         .package(package!().class(data_class!(Dossier)))
+        // #430: the same handle field with an `Option` in front of it. The
+        // present arm mints the handle, and it has to do so through the
+        // generated factory — the constructor is private (#404). Only a
+        // compiled run says which one the factory names, so the shape lives
+        // here rather than only in an emission test.
+        .package(package!().class(data_class!(MaybeHolder)))
         // A data class whose FIELDS carry transparent wrappers (#289 + #292):
         // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
         // does — the decoupled `(present, value)` pair — with the `Box` put back
@@ -557,6 +563,10 @@ fn main() {
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))
+                // #430: the handle field with an `Option` in front of it. The
+                // return is what runs the factory, so both arms — minted and
+                // absent — are compiled and exercised.
+                .fun(fun!(maybe_holder_new))
                 // #213: the output boundary DERIVED from the type's value form
                 // rather than restated. `report_each` delivers the decomposed
                 // `Report` in one crossing; the leaf list comes from

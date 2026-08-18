@@ -1857,6 +1857,34 @@ pub fn holder_tag_or(h: Option<Holder>, fallback: i64) -> i64 {
     }
 }
 
+/// [`Holder`]'s optional twin: the handle field may be **absent**.
+///
+/// The two are the same shape with one `Option` between the field and the
+/// handle, and the factory that rebuilds them on the Kotlin side takes a
+/// different arm for each. The present arm has to mint the handle through the
+/// generated factory, because #404 made the constructor `private` — and the
+/// optional arm went on naming the constructor, so this shape emitted Kotlin
+/// that does not compile at all (#430).
+///
+/// Nothing in this crate had the shape, which is why an emission test was the
+/// only thing that could have caught it, and why it is here: a `MaybeHolder`
+/// returned to the JVM is built by that factory, so both arms are compiled and
+/// both are run.
+#[prebindgen]
+pub struct MaybeHolder {
+    pub tag: i64,
+    pub summary: Option<Summary>,
+}
+
+/// Build a [`MaybeHolder`] with the handle present or absent.
+#[prebindgen]
+pub fn maybe_holder_new(tag: i64, count: i64, total: f64, present: bool) -> MaybeHolder {
+    MaybeHolder {
+        tag,
+        summary: present.then_some(Summary { count, total }),
+    }
+}
+
 /// A data class whose **fields** carry transparent wrappers.
 ///
 /// This is what #289 changes and why it could not land alone. The field walk
