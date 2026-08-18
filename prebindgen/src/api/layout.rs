@@ -2,8 +2,7 @@
 //!
 //! ```text
 //! {OUT_DIR}/prebindgen/
-//!     crate_name.txt
-//!     features.txt
+//!     prebindgen_output.toml            <- what wrote this, and in what format
 //!     g_{group}/                        <- one directory per group, encoded
 //!         {name}_{digest(record)}.jsonl <- one file per captured record
 //! ```

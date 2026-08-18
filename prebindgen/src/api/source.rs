@@ -12,10 +12,11 @@ use crate::{
     api::{
         batching::cfg_filter,
         layout::{decode_group_dir_name, group_dir_name},
+        output::Output,
         record::Record,
         utils::jsonl::read_jsonl_file,
     },
-    SourceLocation, TargetTriple, CRATE_NAME_FILE, FEATURES_FILE,
+    SourceLocation, TargetTriple,
 };
 
 /// File extension for data files
@@ -76,7 +77,7 @@ pub struct Source {
     // Configuration needed to build a CfgFilter at iteration time
     features_constant: Option<String>,
     target_triple: Option<String>,
-    features_list: Vec<String>, // normalized list from features.txt
+    features_list: Vec<String>, // enabled features, from the description file
 }
 
 impl Source {
@@ -112,18 +113,13 @@ impl Source {
                 input_dir.display()
             );
         }
-        // The stored name (CARGO_PKG_NAME at capture time) doubles as the
-        // "directory was initialized" check, so it is read even when
-        // overridden. The override wins: it is the name THIS crate
-        // references the source crate by (a Cargo.toml dependency rename).
-        let stored_crate_name = read_stored_crate_name(input_dir).unwrap_or_else(|| {
-            panic!(
-                "The directory {} was not initialized with init_prebindgen_out_dir(). \
-                Please ensure that init_prebindgen_out_dir() is called in the build.rs of the source crate.",
-                input_dir.display()
-            )
-        });
-        let crate_name = crate_name_override.unwrap_or(stored_crate_name);
+        // The description also carries the format these captures are in, and
+        // reading it is what verifies that this prebindgen wrote them — so it
+        // is read even when the name it holds is overridden. The override
+        // wins: it is the name THIS crate references the source crate by (a
+        // Cargo.toml dependency rename).
+        let output = Output::read(input_dir);
+        let crate_name = crate_name_override.unwrap_or(output.package.name);
 
         let groups = Self::discover_groups(input_dir);
         let mut items = HashMap::new();
@@ -146,8 +142,7 @@ impl Source {
             items.insert(group, group_items);
         }
 
-        // Read features list once and store normalized list
-        let features_list = read_features_from_out_dir(input_dir);
+        let features_list = output.package.features;
 
         Self {
             crate_name,
@@ -364,8 +359,7 @@ impl Source {
         record_map.into_values().collect::<Vec<_>>()
     }
 
-    /// The capture files belonging to `group`, from the group's directory and
-    /// from the flat `<group>_*.jsonl` layout written by prebindgen ≤ 0.5.0.
+    /// The capture files belonging to `group`.
     fn group_files(input_dir: &Path, group: &str) -> Vec<PathBuf> {
         let mut files = Vec::new();
 
@@ -382,22 +376,6 @@ impl Source {
             }
         }
 
-        let legacy_prefix = format!("{group}_");
-        if let Ok(entries) = fs::read_dir(input_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| {
-                        name.starts_with(&legacy_prefix) && name.ends_with(JSONL_EXTENSION)
-                    })
-                {
-                    files.push(path);
-                }
-            }
-        }
-
         files
     }
 
@@ -407,10 +385,6 @@ impl Source {
     /// that two groups differing only in case, or named after a Windows device,
     /// still get one directory each), and the exact name is decoded back out of
     /// it — see [`layout`](crate::layout).
-    ///
-    /// The flat layout of prebindgen ≤ 0.5.0 spelled the group as the file-name
-    /// prefix up to the first `_`, and is still honoured for a capture
-    /// directory written by an older macro.
     fn discover_groups<P: AsRef<Path>>(input_dir: P) -> HashSet<String> {
         let input_dir = input_dir.as_ref();
         let mut groups = HashSet::new();
@@ -434,13 +408,6 @@ impl Source {
                             path.display()
                         ),
                     }
-                } else if let Some(file_name) = file_name {
-                    if file_name.ends_with(JSONL_EXTENSION) {
-                        // Legacy flat layout: everything before the first underscore.
-                        if let Some(underscore_pos) = file_name.find('_') {
-                            groups.insert(file_name[..underscore_pos].to_string());
-                        }
-                    }
                 }
             }
         }
@@ -463,31 +430,6 @@ fn holds_captures(dir: &Path) -> bool {
                 .is_some_and(|name| name.ends_with(JSONL_EXTENSION))
         })
     })
-}
-
-/// Read the crate name from the stored file
-fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
-    let crate_name_path = input_dir.join(CRATE_NAME_FILE);
-    fs::read_to_string(crate_name_path)
-        .ok()
-        .map(|s| s.trim().to_string())
-}
-
-/// Read enabled features list from FEATURES_FILE and normalize into a sorted, deduplicated Vec<String>
-fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
-    let features_path = input_dir.join(FEATURES_FILE);
-    let Some(contents) = fs::read_to_string(features_path).ok() else {
-        return Vec::new();
-    };
-    let mut features: Vec<String> = contents
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(|s| s.to_string())
-        .collect();
-    features.sort();
-    features.dedup();
-    features
 }
 
 /// Builder for constructing a `Source` with custom options
@@ -547,8 +489,8 @@ impl Builder {
     /// from the source crate.
     ///
     /// It's important to note that the set of features to filter is determined
-    /// not by this constant, but by file "features.txt" in
-    /// prebindgen output directory. These are features which the source crate was
+    /// not by this constant, but by the `package.features` list in
+    /// `prebindgen_output.toml` in the prebindgen output directory. These are features which the source crate was
     /// built with *as build.rs dependency*. The constant contains the features which
     /// the source crate was built *as library dependency*.
     /// The purpose of the constant is to use it in the assert in the
@@ -718,8 +660,10 @@ mod tests {
     }
 
     #[test]
-    fn the_flat_layout_of_older_captures_is_still_read() {
-        // A capture directory written by prebindgen <= 0.5.0.
+    fn the_flat_layout_of_older_captures_is_not_a_group() {
+        // A capture directory written by prebindgen <= 0.5.0. Reading one is
+        // refused outright — `Output::read` stops on the description file it
+        // does not carry — so the file left here names no group.
         let dir = tempfile::tempdir().unwrap();
         let record = Record::new(
             RecordKind::Struct,
@@ -736,15 +680,15 @@ mod tests {
         write(dir.path(), "default", "Alpha");
 
         assert_eq!(groups(dir.path()), ["default"]);
-        assert_eq!(names_of(dir.path(), "default"), ["Alpha", "Legacy"]);
+        assert_eq!(names_of(dir.path(), "default"), ["Alpha"]);
     }
 
     #[test]
     fn non_capture_entries_are_ignored() {
         let dir = tempfile::tempdir().unwrap();
         write(dir.path(), "default", "Alpha");
-        fs::write(dir.path().join(CRATE_NAME_FILE), "example-flat").unwrap();
-        fs::write(dir.path().join(FEATURES_FILE), "unstable\n").unwrap();
+        crate::api::output::Output::new("example-flat".to_string(), ["unstable".to_string()])
+            .write(dir.path());
         fs::write(
             dir.path().join(group_dir_name("default")).join("notes.txt"),
             "scratch",

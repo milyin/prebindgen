@@ -332,10 +332,6 @@ fn duplicate_name_across_sources_names_both_crates() {
     use prebindgen::{Record, RecordKind, SourceLocation};
 
     let make_source = |crate_name: &str| -> prebindgen::Source {
-        let dir = crate::test_util::unique_test_dir(&format!("dup_src_{crate_name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("crate_name.txt"), crate_name).unwrap();
         let record = Record::new(
             RecordKind::Function,
             "same_name".to_string(),
@@ -348,7 +344,11 @@ fn duplicate_name_across_sources_names_both_crates() {
             },
             None,
         );
-        prebindgen::utils::write_to_jsonl_file(dir.join("default_1.jsonl"), &[&record]).unwrap();
+        let dir = crate::test_util::write_capture_dir(
+            &format!("dup_src_{crate_name}"),
+            crate_name,
+            &[&record],
+        );
         prebindgen::Source::new(&dir)
     };
 
@@ -628,10 +628,6 @@ fn foreign_qualified_declared_type_stays_supported() {
 fn write_source_dir(tag: &str, crate_name: &str, fn_name: &str) -> std::path::PathBuf {
     use prebindgen::{Record, RecordKind, SourceLocation};
 
-    let dir = crate::test_util::unique_test_dir(&format!("builder_{tag}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("crate_name.txt"), crate_name).unwrap();
     let record = Record::new(
         RecordKind::Function,
         fn_name.to_string(),
@@ -644,8 +640,7 @@ fn write_source_dir(tag: &str, crate_name: &str, fn_name: &str) -> std::path::Pa
         },
         None,
     );
-    prebindgen::utils::write_to_jsonl_file(dir.join("default_1.jsonl"), &[&record]).unwrap();
-    dir
+    crate::test_util::write_capture_dir(&format!("builder_{tag}"), crate_name, &[&record])
 }
 
 /// Render a module path the way the other origin tests in this file do.

@@ -5,7 +5,7 @@
 // examples had to be ```ignore — never compiled, free to rot.
 //
 // This is *not* `init_prebindgen_out_dir` in miniature. That function also
-// cleans the output directory, writes `crate_name.txt` and `features.txt`, and
+// cleans the output directory, writes `prebindgen_output.toml`, and
 // exports the crate's real feature list — all of which exist so a *downstream*
 // crate can later read this one's captured surface through `Source`. Nothing
 // reads prebindgen's own output, so this supplies only the two things macro
