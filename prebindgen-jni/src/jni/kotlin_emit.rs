@@ -1619,17 +1619,27 @@ impl Declarations {
     /// The variant-constructor argument for one group leaf: its `run`
     /// parameter, un-inerted and wrapped back into the property type.
     ///
-    /// Two independent transforms, in this order:
+    /// Three transforms, in this order, one per layer between the wire slot and
+    /// the property. Applying the innermost one to the slot — which is what this
+    /// did — skips the two above it and emits Kotlin that does not compile
+    /// (#429):
     ///
     /// 1. **Un-inert** — an object-shaped group slot is declared nullable
     ///    (an inert group arrives as JVM null), so inside its own live arm it is
     ///    re-asserted with `!!`. A payload that is *itself* optional
     ///    (`Option<T>`) keeps its null: there the JVM null means `None`, and
-    ///    `!!` would turn a legitimately absent value into an exception.
-    /// 2. **Wrap** — the raw wire becomes the property: an enum discriminant
+    ///    `!!` would turn a legitimately absent value into an exception. A
+    ///    *collection* of optionals is not itself optional — its absences are
+    ///    inside it — so that slot is re-asserted like any other.
+    /// 2. **Distribute** — a `Vec<T>` payload arrives as a `List` of element
+    ///    slots, so the wrap runs per element rather than on the list.
+    /// 3. **Wrap** — the raw wire becomes the property: an enum discriminant
     ///    through `fromInt`, a handle/blob/`ULong` through the interface's own
-    ///    [`WrapKind`](crate::jni::WrapKind), everything else
-    ///    verbatim.
+    ///    [`WrapKind`](crate::jni::WrapKind), everything else verbatim. Each
+    ///    knows the nullable spelling of itself, which is what carries an
+    ///    `Option` through — except a **niche** representation, where absence is
+    ///    a value in a slot that is not nullable at all and `?.` would not
+    ///    compile.
     fn sum_ctor_arg(
         &self,
         registry: &impl Conversions<KotlinMeta>,
@@ -1640,20 +1650,27 @@ impl Declarations {
     ) -> String {
         // Off the leaf's own reading — no lookup, and a wrapped spelling
         // answers as the bare one does.
-        let optional = leaf.out_ty.optional_inner().is_some();
-        let arg = if param.raw.is_nullable() && !optional {
+        let sequence = leaf.out_ty.sequence_elem();
+        let value = sequence.unwrap_or(&leaf.out_ty);
+        let optional = value.optional_inner().is_some();
+        let arg = if param.raw.is_nullable() && !(optional && sequence.is_none()) {
             format!("{name}!!")
         } else {
             name.to_string()
         };
+        // What the wrap has to spell nullably: the element's own optionality
+        // inside a list, and for a bare payload only when the slot is nullable
+        // too.
+        let nullable = optional && (sequence.is_some() || param.raw.is_nullable());
+
         // An enum payload rides its `jint` discriminant, so the interface types
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        if self.is_kotlin_enum_reading(&leaf.out_ty) {
+        let enum_class = self.is_kotlin_enum_reading(value).then(|| {
             // The `Option` layer peeled off the model, so the entry lookup takes
             // the layer's own reading instead of a spelling to look back up.
-            let inner = leaf.out_ty.optional_inner().unwrap_or(&leaf.out_ty);
+            let inner = value.optional_inner().unwrap_or(value);
             let name = registry
                 .output_entry(inner)
                 .and_then(|e| e.metadata.kotlin_name.clone())
@@ -1664,14 +1681,18 @@ impl Declarations {
                         leaf.name
                     )
                 });
-            let short = register_fqn(&name, imports);
-            return if optional {
-                format!("{arg}?.let {{ {short}.fromInt(it) }}")
-            } else {
-                format!("{short}.fromInt({arg})")
-            };
+            register_fqn(&name, imports)
+        });
+
+        let wrap = |x: &str| match &enum_class {
+            Some(short) if nullable => format!("{x}?.let {{ {short}.fromInt(it) }}"),
+            Some(short) => format!("{short}.fromInt({x})"),
+            None => param.wrap.wrap_expr(x, nullable),
+        };
+        match sequence {
+            Some(_) => format!("{arg}.map {{ {} }}", wrap("it")),
+            None => wrap(&arg),
         }
-        param.wrap.wrap_expr(&arg, false)
     }
 
     /// The hoisted **folder-appender** singleton for a **whole single-leaf
