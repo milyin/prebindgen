@@ -1227,6 +1227,141 @@ fn sum_return_composes_with_option_and_vec() {
     );
 }
 
+/// A payload's layers are each carried across, not skipped.
+///
+/// The raw builder reassembles a variant from wire slots, and between a slot and
+/// the property there can be a collection, an `Option`, and the leaf the wrap
+/// knows about. Applying the wrap straight to the slot emitted Kotlin that does
+/// not compile in all three shapes below (#429) — nulls dropped, and an element
+/// conversion applied to the list. Nothing caught it because the Rust half
+/// compiles and no test asked for these payloads.
+///
+/// The fixture has more variants than the defect had shapes, because each
+/// answer needs its control: distributing over a collection is right only when
+/// its elements convert, a payload with no layer must come out exactly as it
+/// did, and the layers occur in **both orders** and at **any depth** —
+/// `Vec<Option<T>>`, `Option<Vec<T>>` and `Vec<Vec<Option<T>>>` are all
+/// accepted, so the walk over them recurses instead of unrolling.
+#[test]
+fn a_payload_carries_its_option_and_collection_layers() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Handle {
+                    v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Probe {
+                    Count(Option<u64>),
+                    Held(Option<Handle>),
+                    Many(Vec<Option<u64>>),
+                    Owned(Handle),
+                    Blob(Vec<u8>),
+                    Names(Vec<String>),
+                    Values(Option<Vec<Option<u64>>>),
+                    Nested(Vec<Vec<Option<u64>>>),
+                    Labels(Option<Vec<String>>),
+                    Empty,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn probe() -> Probe {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Handle))
+                .class(crate::sealed_class!(Probe))
+                .fun(prebindgen_registry::fun!(probe)),
+        );
+
+    let dir = unique_test_dir("jnigen_sum_payload_layers");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // `Option<u64>`: JVM null is the absent case, so the conversion is
+    // null-safe rather than applied through it.
+    assert!(
+        kotlin.contains("Probe.Count(count_v0?.toULong())"),
+        "an optional scalar payload keeps its null:\n{kotlin}"
+    );
+    // `Option<Handle>`: same, and the handle still comes from the factory.
+    assert!(
+        kotlin.contains("Probe.Held(held_v0?.let { Handle.fromRawPtr(it) })"),
+        "an optional handle payload keeps its null:\n{kotlin}"
+    );
+    // `Vec<Option<u64>>`: the list slot is un-inerted, and the element
+    // conversion runs per element — the nulls are inside the list, not on it.
+    assert!(
+        kotlin.contains("Probe.Many(many_v0!!.map { it?.toULong() })"),
+        "a collection payload converts element by element:\n{kotlin}"
+    );
+    // The control: a payload that is neither optional nor a collection is
+    // un-inerted and wrapped exactly as before.
+    assert!(
+        kotlin.contains("Probe.Owned(Handle.fromRawPtr(owned_v0))"),
+        "a plain handle payload is unchanged:\n{kotlin}"
+    );
+    // …and so is a run of values whose elements need no conversion. There is
+    // nothing to distribute there, and mapping the identity over one would
+    // replace the property's type rather than preserve it: `Vec<u8>` surfaces
+    // as a `ByteArray`, and `ByteArray.map { it }` is a `List<Byte>` (#432
+    // review).
+    assert!(
+        kotlin.contains("Probe.Blob(blob_v0!!)"),
+        "a byte-array payload is passed straight through:\n{kotlin}"
+    );
+    // Layers nest, so the walk over them recurses rather than unrolling a fixed
+    // two: with `Vec<Vec<Option<u64>>>` the element of the outer run is another
+    // run, and the leaf's conversion belongs at the bottom. The inner lambda
+    // names its parameter because a nested `it` would shadow the outer one.
+    assert!(
+        kotlin.contains("Probe.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } })"),
+        "nested runs distribute at every level:\n{kotlin}"
+    );
+    // A run under an `Option` is still a run: the layers occur in both orders,
+    // and looking for the collection without peeling the `Option` first found
+    // none — so the element conversion landed on the list (#432 review).
+    assert!(
+        kotlin.contains("Probe.Values(values_v0?.map { it?.toULong() })"),
+        "an optional run distributes, and keeps its own null:\n{kotlin}"
+    );
+    // …and the identity guard holds under an `Option` too: nothing to
+    // distribute means no `?.map` either.
+    assert!(
+        kotlin.contains("Probe.Labels(labels_v0)"),
+        "an optional run of unconverted elements is passed through:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("Probe.Names(names_v0!!)"),
+        "a list payload whose elements convert to themselves is too:\n{kotlin}"
+    );
+}
+
 /// A variant payload may be an opaque **handle**: it rides its raw `jlong`
 /// like any other handle leaf, so its slot stays a primitive (an inert group
 /// leaves the `0L` sentinel, never a fabricated handle object).

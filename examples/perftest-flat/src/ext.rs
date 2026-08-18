@@ -348,6 +348,68 @@ pub fn lookup_of(count: i64, total: f64) -> Lookup {
     }
 }
 
+/// The payload shapes whose **layers** a sum's raw builder has to carry.
+///
+/// Between a wire slot and the property there can be a collection, an `Option`,
+/// and the leaf the wrap knows about, and the builder applied the leaf's
+/// conversion straight to the slot — so a null was dropped, a handle was minted
+/// from a nullable slot, and an element conversion ran on the list itself
+/// (#429). Every one of those is a Kotlin compile error; the Rust half is
+/// identical either way, which is why only a compiled harness can hold the
+/// line.
+///
+/// The last two alternatives are the controls, and they matter as much as the
+/// first three: distributing over a collection is right only when its elements
+/// convert. `Vec<u8>` surfaces as a Kotlin `ByteArray`, and mapping the
+/// identity over one produces a `List<Byte>` — the property's type replaced
+/// rather than preserved.
+#[prebindgen]
+#[derive(Clone)]
+pub enum Layered {
+    /// `Option<u64>` — JVM null is the absent case, so the unsigned conversion
+    /// has to be null-safe rather than applied through it.
+    Count(Option<u64>),
+    /// `Option<Summary>` — the same, over a handle that must be **minted** in
+    /// the present case and left alone in the absent one.
+    Held(Option<Summary>),
+    /// `Vec<Option<u64>>` — the absences are *inside* the list, so the slot is
+    /// un-inerted and the conversion runs per element.
+    Many(Vec<Option<u64>>),
+    /// A run under an `Option` — the two layers in the other order. Looking for
+    /// the run without peeling the `Option` first finds none, and the element
+    /// conversion lands on the list.
+    Values(Option<Vec<Option<u64>>>),
+    /// Layers nest: the element of this run is another run, so the leaf's
+    /// conversion belongs two levels down and a walk that unrolls a fixed two
+    /// applies it one level too high.
+    Nested(Vec<Vec<Option<u64>>>),
+    /// A control: a run of values that needs no element conversion, and whose
+    /// Kotlin type is not a `List` at all.
+    Blob(Vec<u8>),
+    /// A control: no layer between the slot and the property.
+    Plain(i64),
+}
+
+/// Build a [`Layered`], one `which` per alternative and per case within it:
+/// `0` absent count, `1` present count, `2` absent handle, `3` present handle,
+/// `4` a list mixing present and absent, `5` an absent run, `6` a present run,
+/// `7` a run of runs, `8` a byte run, anything else `Plain`.
+#[prebindgen]
+pub fn layered_of(which: i32) -> Layered {
+    match which {
+        0 => Layered::Count(None),
+        1 => Layered::Count(Some(4)),
+        2 => Layered::Held(None),
+        3 => Layered::Held(Some(summary_new(4, 8.0))),
+        4 => Layered::Many(vec![Some(1), None, Some(3)]),
+        5 => Layered::Values(None),
+        6 => Layered::Values(Some(vec![Some(5), None])),
+        7 => Layered::Nested(vec![vec![Some(6), None], vec![]]),
+        8 => Layered::Blob(vec![1, 2, 3]),
+        _ => Layered::Plain(7),
+    }
+}
+
 /// A handle-carrying sum as a **callback argument** — the same `Lookup` that
 /// [`lookup_of`] returns, arriving through `impl Fn` instead. Alternatives are
 /// delivered in `count` order starting at `-1`, so `n >= 3` covers all three:

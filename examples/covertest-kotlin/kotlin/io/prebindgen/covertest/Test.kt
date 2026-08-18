@@ -37,6 +37,7 @@ import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Hold
 import io.prebindgen.covertest.model.HoldPolicy
+import io.prebindgen.covertest.model.Layered
 import io.prebindgen.covertest.model.Lookup
 import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
@@ -89,6 +90,7 @@ import io.prebindgen.covertest.model.reportEach
 import io.prebindgen.covertest.model.probeEach
 import io.prebindgen.covertest.model.probeNew
 import io.prebindgen.covertest.model.lookupOf
+import io.prebindgen.covertest.model.layeredOf
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
 import io.prebindgen.covertest.model.archiveReading
@@ -949,6 +951,49 @@ fun main() {
         check(taggedRank(Tagged(1L, markerOf(0, boom).orThrow()), boom) == -1)
         check(taggedRank(Tagged(1L, markerOf(1, boom).orThrow()), boom) == 0)
         check(taggedRank(Tagged(1L, markerOf(2, boom).orThrow()), boom) == 10)
+    }
+
+    // The sum whose payloads have LAYERS. The class that reassembles a variant
+    // from wire slots is Kotlin, and between a slot and the property there can
+    // be a collection, an `Option`, and the leaf conversion. Applying the leaf's
+    // conversion straight to the slot compiled nothing at all (#429), and the
+    // Rust half is identical either way — so a compiled run is the only thing
+    // that holds this line. The two controls at the end are half of it: a run
+    // that needs no element conversion must NOT be distributed over, or a
+    // `ByteArray` property comes back a `List<Byte>`.
+    section("a sum payload carries its Option and collection layers") {
+        // `Option<u64>`: JVM null is the absent case, not an error.
+        check((layeredOf(0, boom).orThrow() as Layered.Count).v0 == null)
+        check((layeredOf(1, boom).orThrow() as Layered.Count).v0 == 4uL)
+
+        // `Option<handle>` — `Layered.Held` — is COMPILED here and not called:
+        // its slot is declared a boxed `Long?` while the Rust side writes a
+        // primitive into it, so invoking either case throws (#433). That is a
+        // defect in the wire under this one, not in the layer carrying that
+        // #429 fixed, and the builder line above is compiled either way, which
+        // is the guard this section is for. Add the two calls here when #433
+        // lands.
+
+        // `Vec<Option<u64>>`: the absences are inside the list, so a mixed one
+        // arrives element by element rather than as one null.
+        check((layeredOf(4, boom).orThrow() as Layered.Many).v0 == listOf(1uL, null, 3uL))
+
+        // …and the same two layers in the other order. An absent run is null
+        // rather than an empty list, and a present one still converts element by
+        // element.
+        check((layeredOf(5, boom).orThrow() as Layered.Values).v0 == null)
+        check((layeredOf(6, boom).orThrow() as Layered.Values).v0 == listOf(5uL, null))
+
+        // Layers nest, and the conversion belongs at the bottom of the stack.
+        check(
+            (layeredOf(7, boom).orThrow() as Layered.Nested).v0 ==
+                listOf(listOf(6uL, null), emptyList())
+        )
+
+        // The controls. A `Vec<u8>` payload is a `ByteArray`, and a payload with
+        // no layer is passed straight through.
+        check((layeredOf(8, boom).orThrow() as Layered.Blob).v0.toList() == listOf<Byte>(1, 2, 3))
+        check((layeredOf(9, boom).orThrow() as Layered.Plain).v0 == 7L)
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

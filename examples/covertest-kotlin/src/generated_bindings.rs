@@ -3700,6 +3700,47 @@ pub(crate) unsafe fn JObject_to_Vec_Label_3fdf860d<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JObject_to_Vec_Option_u64_a34190e7<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<Vec<Option<u64>>, __JniErr> {
+    Ok({
+        let __list = jni::objects::JList::from_env(env, v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        let mut __it = __list
+            .iter(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
+        let mut __out: Vec<Option<u64>> = Vec::new();
+        while let Some(__obj) = __it
+            .next(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-next: {}", e)))?
+        {
+            let __elem_wire: jni::objects::JObject = __obj.into();
+            let __elem: Option<u64> = JObject_to_Option_u64_32be16a2(env, &__elem_wire)?;
+            __out.push(__elem);
+        }
+        __out
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -3723,6 +3764,50 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
         {
             let __elem_wire: jni::objects::JObject = __obj.into();
             let __elem: perftest_flat::Payload = JObject_to_Payload_98f64326(
+                env,
+                &__elem_wire,
+            )?;
+            __out.push(__elem);
+        }
+        __out
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_Vec_Vec_Option_u64_342a76c6<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<Vec<Vec<Option<u64>>>, __JniErr> {
+    Ok({
+        let __list = jni::objects::JList::from_env(env, v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        let mut __it = __list
+            .iter(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
+        let mut __out: Vec<Vec<Option<u64>>> = Vec::new();
+        while let Some(__obj) = __it
+            .next(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-next: {}", e)))?
+        {
+            let __elem_wire: jni::objects::JObject = __obj.into();
+            let __elem: Vec<Option<u64>> = JObject_to_Vec_Option_u64_a34190e7(
                 env,
                 &__elem_wire,
             )?;
@@ -9167,6 +9252,33 @@ pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Option_Vec_Option_u64_to_JObject_006312b6<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<Vec<Option<u64>>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let v: Option<Vec<Option<u64>>> = v;
+        {
+            match v {
+                Some(value) => Vec_Option_u64_to_JObject_a34190e7(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Vec<perftest_flat::Payload>>,
@@ -9940,6 +10052,46 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Vec_Option_u64_to_JObject_a34190e7<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Vec<Option<u64>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let v: Vec<Option<u64>> = v;
+        let __list_obj = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
+        let __list = jni::objects::JList::from_env(env, &__list_obj)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        for __elem in v.into_iter() {
+            let __elem_wire = Option_u64_to_JObject_32be16a2(env, __elem)?;
+            let __elem_obj: jni::objects::JObject = __elem_wire.into();
+            __list
+                .add(env, &__elem_obj)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Vec<_>: list-add: {}", e)))?;
+        }
+        __list_obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<perftest_flat::Payload>,
@@ -10037,6 +10189,46 @@ pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
             >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
         for __elem in v.into_iter() {
             let __elem_wire = String_to_JString_c7f3ca43(env, __elem)?;
+            let __elem_obj: jni::objects::JObject = __elem_wire.into();
+            __list
+                .add(env, &__elem_obj)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Vec<_>: list-add: {}", e)))?;
+        }
+        __list_obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Vec_Vec_Option_u64_to_JObject_342a76c6<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Vec<Vec<Option<u64>>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let v: Vec<Vec<Option<u64>>> = v;
+        let __list_obj = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
+        let __list = jni::objects::JList::from_env(env, &__list_obj)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        for __elem in v.into_iter() {
+            let __elem_wire = Vec_Option_u64_to_JObject_a34190e7(env, __elem)?;
             let __elem_obj: jni::objects::JObject = __elem_wire.into();
             __list
                 .add(env, &__elem_obj)
@@ -15567,6 +15759,285 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelSeriesEcho<
                 __SINK_FQN,
                 __SINK_DESCR,
                 &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    which: jni::sys::jint,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let which = match jint_to_i32_a3e3b6ef(&mut env, &which) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/LayeredBuilderRaw";
+    const __CB_DESCR: &str = "(ILjava/lang/Long;Ljava/lang/Long;Ljava/util/List;Ljava/util/List;Ljava/util/List;[BJ)Ljava/lang/Object;";
+    let __out = perftest_flat::layered_of(which);
+    let __obj0: jni::sys::jvalue;
+    let __obj1: jni::objects::JObject;
+    let __obj2: jni::sys::jvalue;
+    let __obj3: jni::objects::JObject;
+    let __obj4: jni::objects::JObject;
+    let __obj5: jni::objects::JObject;
+    let __obj6: jni::objects::JObject;
+    let __obj7: jni::sys::jvalue;
+    match &__out {
+        perftest_flat::Layered::Count(__sv0) => {
+            let __enc___obj1 = match Option_u64_to_JObject_32be16a2(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj1 = __enc___obj1;
+            __obj0 = jni::sys::jvalue { i: 0 };
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::objects::JObject::null();
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::objects::JObject::null();
+            __obj7 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Layered::Held(__sv0) => {
+            let __enc___obj2 = match Option_Summary_to_jlong_252ef2ba(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj2 = jni::sys::jvalue {
+                j: __enc___obj2,
+            };
+            __obj0 = jni::sys::jvalue { i: 1 };
+            __obj1 = jni::objects::JObject::null();
+            __obj3 = jni::objects::JObject::null();
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::objects::JObject::null();
+            __obj7 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Layered::Many(__sv0) => {
+            let __enc___obj3 = match Vec_Option_u64_to_JObject_a34190e7(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj3 = __enc___obj3;
+            __obj0 = jni::sys::jvalue { i: 2 };
+            __obj1 = jni::objects::JObject::null();
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::objects::JObject::null();
+            __obj7 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Layered::Values(__sv0) => {
+            let __enc___obj4 = match Option_Vec_Option_u64_to_JObject_006312b6(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj4 = __enc___obj4;
+            __obj0 = jni::sys::jvalue { i: 3 };
+            __obj1 = jni::objects::JObject::null();
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::objects::JObject::null();
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::objects::JObject::null();
+            __obj7 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Layered::Nested(__sv0) => {
+            let __enc___obj5 = match Vec_Vec_Option_u64_to_JObject_342a76c6(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj5 = __enc___obj5;
+            __obj0 = jni::sys::jvalue { i: 4 };
+            __obj1 = jni::objects::JObject::null();
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::objects::JObject::null();
+            __obj4 = jni::objects::JObject::null();
+            __obj6 = jni::objects::JObject::null();
+            __obj7 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Layered::Blob(__sv0) => {
+            let __enc___obj6 = match Vec_u8_to_JByteArray_7936d5de(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj6 = __enc___obj6.into();
+            __obj0 = jni::sys::jvalue { i: 5 };
+            __obj1 = jni::objects::JObject::null();
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::objects::JObject::null();
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::objects::JObject::null();
+            __obj7 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Layered::Plain(__sv0) => {
+            let __enc___obj7 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj7 = jni::sys::jvalue {
+                j: __enc___obj7,
+            };
+            __obj0 = jni::sys::jvalue { i: 6 };
+            __obj1 = jni::objects::JObject::null();
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::objects::JObject::null();
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::objects::JObject::null();
+        }
+    }
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[
+                __obj0,
+                jni::sys::jvalue {
+                    l: __obj1.as_raw(),
+                },
+                __obj2,
+                jni::sys::jvalue {
+                    l: __obj3.as_raw(),
+                },
+                jni::sys::jvalue {
+                    l: __obj4.as_raw(),
+                },
+                jni::sys::jvalue {
+                    l: __obj5.as_raw(),
+                },
+                jni::sys::jvalue {
+                    l: __obj6.as_raw(),
+                },
+                __obj7,
+            ],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }

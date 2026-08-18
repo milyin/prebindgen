@@ -76,6 +76,128 @@ public sealed interface Hold {
 }
 
 /**
+ * The payload shapes whose **layers** a sum's raw builder has to carry.
+ *
+ * Between a wire slot and the property there can be a collection, an `Option`,
+ * and the leaf the wrap knows about, and the builder applied the leaf's
+ * conversion straight to the slot — so a null was dropped, a handle was minted
+ * from a nullable slot, and an element conversion ran on the list itself
+ * (#429). Every one of those is a Kotlin compile error; the Rust half is
+ * identical either way, which is why only a compiled harness can hold the
+ * line.
+ *
+ * The last two alternatives are the controls, and they matter as much as the
+ * first three: distributing over a collection is right only when its elements
+ * convert. `Vec<u8>` surfaces as a Kotlin `ByteArray`, and mapping the
+ * identity over one produces a `List<Byte>` — the property's type replaced
+ * rather than preserved.
+ *
+ * JVM-side surface for the native Rust `Layered` sum: exactly one alternative is live.
+ *
+ * The live alternative may carry a native handle, so this value is `AutoCloseable`: closing it closes whatever the live alternative holds, and is a no-op for the alternatives that hold nothing native.
+ */
+public sealed interface Layered : AutoCloseable {
+    /**
+     * `Option<u64>` — JVM null is the absent case, so the unsigned conversion
+     * has to be null-safe rather than applied through it.
+     */
+    public data class Count(public val v0: ULong?) : Layered {
+        override fun close() {
+        }
+    }
+
+    /**
+     * `Option<Summary>` — the same, over a handle that must be **minted** in
+     * the present case and left alone in the absent one.
+     */
+    public data class Held(public val v0: Summary?) : Layered {
+        override fun close() {
+            v0?.close()
+        }
+    }
+
+    /**
+     * `Vec<Option<u64>>` — the absences are *inside* the list, so the slot is
+     * un-inerted and the conversion runs per element.
+     */
+    public data class Many(public val v0: List<ULong?>) : Layered {
+        override fun close() {
+        }
+    }
+
+    /**
+     * A run under an `Option` — the two layers in the other order. Looking for
+     * the run without peeling the `Option` first finds none, and the element
+     * conversion lands on the list.
+     */
+    public data class Values(public val v0: List<ULong?>?) : Layered {
+        override fun close() {
+        }
+    }
+
+    /**
+     * Layers nest: the element of this run is another run, so the leaf's
+     * conversion belongs two levels down and a walk that unrolls a fixed two
+     * applies it one level too high.
+     */
+    public data class Nested(public val v0: List<List<ULong?>>) : Layered {
+        override fun close() {
+        }
+    }
+
+    /**
+     * A control: a run of values that needs no element conversion, and whose
+     * Kotlin type is not a `List` at all.
+     */
+    public data class Blob(public val v0: ByteArray) : Layered {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is Blob) return false
+            return v0.contentEquals(other.v0)
+        }
+
+        override fun hashCode(): Int {
+            return v0.contentHashCode()
+        }
+
+        override fun toString(): String = "Blob(v0=${v0.contentToString()})"
+
+        override fun close() {
+        }
+    }
+
+    /** A control: no layer between the slot and the property. */
+    public data class Plain(public val v0: Long) : Layered {
+        override fun close() {
+        }
+    }
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            tag: Int,
+            count_v0: ULong?,
+            held_v0: Summary?,
+            many_v0: List<ULong?>,
+            values_v0: List<ULong?>?,
+            nested_v0: List<List<ULong?>>,
+            blob_v0: ByteArray,
+            plain_v0: Long,
+        ): Layered =
+            when (tag) {
+                0 -> Count(count_v0)
+                1 -> Held(held_v0)
+                2 -> Many(many_v0)
+                3 -> Values(values_v0)
+                4 -> Nested(nested_v0)
+                5 -> Blob(blob_v0)
+                6 -> Plain(plain_v0)
+                else -> throw IllegalArgumentException("Layered: invalid tag $tag")
+            }
+    }
+}
+
+/**
  * A sum whose alternatives are a **payload-less** variant and one carrying an
  * opaque **handle** — the shape a real lookup/reply result takes, and the one
  * that proves a tag-gated group can own a native resource: the live group
@@ -1190,6 +1312,25 @@ HoldBuilderRaw { tag, for_v0 ->
     when (tag) { 0 -> Hold.Indefinite; 1 -> Hold.For(for_v0.toULong()); else -> throw IllegalArgumentException("Hold: invalid tag $tag") }
 }
 
+internal fun interface LayeredBuilderRaw<out R> {
+    public fun run(
+        tag: Int,
+        count_v0: Long?,
+        held_v0: Long?,
+        many_v0: List<Long?>?,
+        values_v0: List<Long?>?,
+        nested_v0: List<List<Long?>>?,
+        blob_v0: ByteArray?,
+        plain_v0: Long,
+    ): R
+}
+
+@get:JvmSynthetic
+internal val __LayeredBuilderRaw: LayeredBuilderRaw<Layered> =
+LayeredBuilderRaw { tag, count_v0, held_v0, many_v0, values_v0, nested_v0, blob_v0, plain_v0 ->
+    when (tag) { 0 -> Layered.Count(count_v0?.toULong()); 1 -> Layered.Held(held_v0?.let { Summary.fromRawPtr(it) }); 2 -> Layered.Many(many_v0!!.map { it?.toULong() }); 3 -> Layered.Values(values_v0?.map { it?.toULong() }); 4 -> Layered.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } }); 5 -> Layered.Blob(blob_v0!!); 6 -> Layered.Plain(plain_v0); else -> throw IllegalArgumentException("Layered: invalid tag $tag") }
+}
+
 internal fun interface LookupBuilderRaw<out R> {
     public fun run(tag: Int, found_v0: Long, failed_v0: String?): R
 }
@@ -1783,6 +1924,22 @@ public fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: Jni
     val __bcap = JniErrorHandlerCapture.acquire()
     CovNative.lookupEach(n, total, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Layered`], one `which` per alternative and per case within it:
+ * `0` absent count, `1` present count, `2` absent handle, `3` present handle,
+ * `4` a list mixing present and absent, `5` an absent run, `6` a present run,
+ * `7` a run of runs, `8` a byte run, anything else `Plain`.
+ *
+ * The Rust `Layered` result is delivered decomposed: the builder callback receives (`tag`, `count_v0`, `held_v0`, `many_v0`, `values_v0`, `nested_v0`, `blob_v0`, `plain_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun layeredOf(which: Int, onError: JniErrorHandler<Layered?>): Layered? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.layeredOf(which, __LayeredBuilderRaw, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Layered
 }
 
 /** Build a [`Verdict`] whose outcome comes from [`lookup_of`]. */

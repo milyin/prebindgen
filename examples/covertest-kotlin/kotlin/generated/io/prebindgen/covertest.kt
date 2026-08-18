@@ -1204,6 +1204,9 @@ internal object CovNative {
     external fun labelSeriesEcho(labels: List<String>, errorSink: Any): List<String>
 
     @JvmSynthetic
+    external fun layeredOf(which: Int, build: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
     external fun ledgerEach(n: Long, sink: Any, errorSink: Any)
 
     @JvmSynthetic
