@@ -1032,7 +1032,7 @@ pub fn vault_holder_new(seq: i64, count: i64, maybe_count: i64) -> VaultHolder {
     VaultHolder {
         vault: (seq >= 0).then(|| handles::Vault {
             always: handles::Ingot { grams: count },
-            maybe: (maybe_count >= 0).then(|| handles::Ingot { grams: maybe_count }),
+            maybe: (maybe_count >= 0).then_some(handles::Ingot { grams: maybe_count }),
         }),
     }
 }
