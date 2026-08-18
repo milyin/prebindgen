@@ -35,10 +35,10 @@ prebindgen                BASE. Source stream only. No adapters, no registry.
   └─ Source, Record, SourceLocation, init_prebindgen_out_dir / get_* ,
      RustEdition, TargetTriple, utils::jsonl, DEFAULT_GROUP_NAME
 
-prebindgen-flat           the flat model + TypeKey + the Emit capability
+prebindgen-flat           the flat model + TypeKey + the RustEmitter protocol
   deps: prebindgen
 
-prebindgen-registry       language-agnostic pipeline + shared decl vocabulary
+prebindgen-registry       language-agnostic pipeline + Emit key + shared decl vocabulary
   deps: prebindgen-flat
 
 prebindgen-jni            JNI/Kotlin generator
@@ -75,33 +75,64 @@ already writes `convert!(Millis).input(fun!(millis_from_raw))`, so
 all four name only `TypeKey`, `Origin<syn::Type>`, `syn` types and each other,
 never a Kotlin or JNI type.
 
-## What the split costs — and the follow-up it owes
+## What the split costs — and how the emission boundary works
 
-`Emit::new()` was `pub(in crate::api::core)` — *only core may mint the
-capability*. Once the pipeline moved to `prebindgen-registry` that became
-**inexpressible**: the registry must mint, and Rust has no cross-crate friend.
+`prebindgen-flat` owns the captured syntax, but
+`prebindgen-registry` owns the policy deciding where adapters may render it.
+Rust has no cross-crate friend visibility, so one concrete capability type
+cannot honestly be private to both crates.
 
-This document previously claimed the important half survived — that `as_syn` /
-`spell` / `stripped_syntax` would all stay private inside `flat`. **That was
-wrong, and the B3 carve proved it.** The registry's emission path calls
-`TypeRef::spell`, `Origin::spell` and `Flat::enum_item`, so those three had to
-open along with `Emit::new`, `TypeRef::{borrowed, optional, scalar}`,
-`Flat::{classify, add_local_function}` and `types_util::ident`.
+The boundary is therefore split into protocol and key:
 
-What actually survives is narrower but still the load-bearing part: `as_syn`,
-`stripped_syntax`, `TypeKind::to_syn` and the three `spell(head, parts)` shape
-methods — **every route to the `syn` node itself** — remain
-`pub(in crate::api::core)`. What opened is `spell()`, which yields a
-`TokenStream`; re-parsing one to recover a node was already documented here as
-the accepted residual, so the regression is that the residual is now reachable
-without holding an `Emit`, not that a new door appeared.
+- `prebindgen-flat::RustEmitter` is the object-safe rendering protocol. Its
+  default methods are the single implementation of spelling, verbatim-item,
+  discriminant, and captured-shape rendering.
+- `prebindgen-registry::Emit` is the concrete registry key. Its constructor
+  is registry-private; `write_rust` and `RegistryBuilder::convert_with`
+  hand references to it only to emission callbacks.
+- `Emit` implements and dereferences to `RustEmitter`, so adapters retain
+  the concise `emit.spell(ty)` API without a duplicate forwarding surface in
+  the registry crate.
 
-Four `compile_fail` doctests asserted the closed form of `spell` / `enum_item`
-and no longer prove anything; they are now plain doctests.
+This preserves the dependency and mental model:
 
-Restoring the seal is **[#375](https://github.com/milyin/prebindgen/issues/375)**
-— a separate effort, deliberately not part of this split. It is redesign rather
-than a move, nothing is unsound, and no generated output depends on it.
+```text
+prebindgen -> prebindgen-flat -> prebindgen-registry -> prebindgen-{c,jni}
+  extract          parse              collect              convert
+```
+
+It also preserves independent use. A different collector can depend directly
+on `prebindgen-flat` and deliberately implement `RustEmitter` for a key that
+it owns. The trait is intentionally not sealed: establishing a separate
+emission boundary is collector API.
+
+The registry's default path is compiler-checked. `prebindgen-registry` does
+not re-export `RustEmitter` through its `flat` model path, so an adapter that
+depends only on the registry cannot name the protocol or construct
+`prebindgen-registry::Emit`; it can render only after receiving `&Emit` in
+an emission callback. A compile-fail doctest pins both restrictions.
+
+Rust cannot prevent an adapter from deliberately adding a direct
+`prebindgen-flat` dependency and implementing the public protocol for a new
+key. That is the unavoidable residual of keeping the flat layer independently
+usable, but it is explicit in both the manifest and an `impl RustEmitter`.
+Workspace CI rejects such implementations in `prebindgen-c` and
+`prebindgen-jni`.
+
+The accidental direct doors introduced by the split are closed:
+`TypeRef::spell` and `Origin::spell` are crate-private, the test-only
+`Flat::enum_item` syntax accessor is gone, and raw `syn` access remains
+private. Compile-fail doctests cover direct spelling, raw-node access,
+registry-key construction, and the hidden registry-to-flat protocol path.
+
+The other widened methods are intentional flat-model API rather than emission
+doors. `Flat::classify`, `Flat::add_local_function`,
+`TypeRef::{borrowed, optional, scalar}`, and `types_util::ident` let an
+independent parser or collector build and compose the representation without
+depending on the registry.
+
+This addresses [#375](https://github.com/milyin/prebindgen/issues/375) without
+reversing the crate dependency.
 
 ## Phases
 
@@ -112,16 +143,12 @@ than a move, nothing is unsound, and no generated output depends on it.
 | **A2** | `prebindgen-{jni,c}-runtime` carved out; emitted paths repointed | done |
 | **A3** | shared decl vocabulary → `core::decl`; breaks `cbindgen → jnigen` | done |
 | **A5** | drop the `unstable-cbindgen` feature | done |
-| **A4** | `Emit` → `flat`; `flat/` reaches zero core-sibling refs | done |
+| **A4** | rendering protocol → `flat`; registry-owned `Emit` key → `registry` | done |
 | **B1** | carve `prebindgen-c` | done |
 | **B2** | carve `prebindgen-jni` | done |
 | **B3** | carve `prebindgen-registry` | done |
 | **B4** | carve `prebindgen-flat`; `prebindgen` is what remains | done |
 | **C** | workspace manifest, examples, docs, downstream repos | done |
-
-Restoring the `Emit` seal is tracked separately as
-[#375](https://github.com/milyin/prebindgen/issues/375) and is **not** a phase of
-this split.
 
 Phase A is all in-place, so the tree stays green at every commit and the Phase B
 moves are close to pure renames.

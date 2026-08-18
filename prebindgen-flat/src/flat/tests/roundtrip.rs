@@ -13,6 +13,10 @@
 //! complete.
 
 use super::*;
+use crate::RustEmitter;
+
+struct TestEmit;
+impl crate::RustEmitter for TestEmit {}
 
 /// Each parameter and the return type re-emit exactly what was written —
 /// including a lifetime, which the classification does not model.
@@ -192,8 +196,8 @@ fn empty_delimiters_survive_and_spell() {
 
     let spell = |a: &Alternative| {
         let name = &a.name;
-        crate::flat::emit::Emit::for_test()
-            .shape(a, quote::quote!(E::#name), &[])
+        TestEmit
+            .shape_alternative(a, quote::quote!(E::#name), &[])
             .to_string()
     };
     assert_eq!(spell(&v.alternatives[0]), "E :: A");
@@ -212,8 +216,8 @@ fn empty_delimiters_survive_and_spell() {
     let e = as_enum(&element);
     let spell = |v: &EnumValue| {
         let name = &v.name;
-        crate::flat::emit::Emit::for_test()
-            .shape(v, quote::quote!(F::#name), &[])
+        TestEmit
+            .shape_enum_value(v, quote::quote!(F::#name), &[])
             .to_string()
     };
     assert_eq!(spell(&e.values[0]), "F :: A");
@@ -235,8 +239,8 @@ fn empty_delimiters_survive_and_spell() {
             .map(|f| f.bind(&quote::format_ident!("__f{}", f.index)))
             .collect();
         let name = &a.name;
-        crate::flat::emit::Emit::for_test()
-            .shape(a, quote::quote!(Reading::#name), &parts)
+        TestEmit
+            .shape_alternative(a, quote::quote!(Reading::#name), &parts)
             .to_string()
     };
     assert_eq!(bind(&v.alternatives[0]), "Reading :: Exact (__f0)");
@@ -258,8 +262,8 @@ fn struct_delimiters_survive_and_spell() {
         let name = &s.name;
         (
             s.fields.len(),
-            crate::flat::emit::Emit::for_test()
-                .shape(s, quote::quote!(#name), parts)
+            TestEmit
+                .shape_struct(s, quote::quote!(#name), parts)
                 .to_string(),
         )
     };

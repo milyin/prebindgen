@@ -35,7 +35,7 @@ use super::{
 /// A type as the language accepted it, plus the exact syntax it came from.
 ///
 /// The retained slice is what generated Rust spells, through
-/// [`spell`](Self::spell). It is **not**
+/// [`RustEmitter::spell`](crate::RustEmitter::spell). It is **not**
 /// where facts go to survive a lossy classification any more — `kind` keeps the
 /// lifetime, the wrapper and the argument it used to drop, and rebuilding the
 /// syntax from it proves so. Keeping the slice anyway is cheap, exact
@@ -45,32 +45,20 @@ use super::{
 /// # The invariant
 ///
 /// > **Every `TypeRef` was classified by the model.** [`Flat`](super::Flat)
-/// > classified it from source syntax, or the registry pipeline composed it by
+/// > classified it from source syntax, or a collector composed it by
 /// > layering over something already classified.
 ///
-/// **Historically enforced by visibility, now by convention.** Before the
-/// registry pipeline moved to the separate `prebindgen-registry` crate, the
-/// boundary was `api::core` and was drawn by visibility at four places, each
-/// checked by the compiler on every build:
+/// **Enforced at the representation boundary.** The `kind` and `origin`
+/// fields remain private, so no consumer can assemble a disagreeing pair.
+/// `Flat::classify` and the `borrowed` / `optional` / `scalar`
+/// composers are intentionally public: they are the independent flat layer's
+/// constructors, and each builds the model and its matching origin together.
+/// A collector does not need to depend on `prebindgen-registry` to create or
+/// compose a valid reading.
 ///
-/// | | |
-/// |---|---|
-/// | the `kind` and `origin` fields | `pub(super)` — a public field **is** a constructor, so restricting only the composers would block nothing |
-/// | `borrowed` / `optional` / `scalar` | `pub(crate)` |
-/// | `named` | `pub(super)` — `flat` alone |
-/// | `Flat::classify` | `pub(crate)` |
-///
-/// A module-path seal can no longer express "the registry pipeline, and
-/// nothing else" once that pipeline is a different crate — there is no path
-/// inside this crate to name it — so `borrowed` / `optional` / `scalar` and
-/// `Flat::classify` are now plain `pub`, and the fields stay `pub(super)`
-/// (nothing outside `flat` ever needed them). The intent is unchanged and
-/// documented here, but no longer compiler-enforced against a destination
-/// adapter (`prebindgen-c`, `prebindgen-jni`): restoring that would need a real
-/// API, e.g. a sealed capability token minted only by `prebindgen-registry`.
-/// Where one needs a type the model already declares, the **declaration**
-/// answers: see [`Variant::type_ref`](super::Variant::type_ref), which is what
-/// the `SumTag` selector uses instead of composing a reading from an ident.
+/// This is separate from emission authority. Constructing a `TypeRef` exposes
+/// its model facts; rendering its captured spelling requires a pipeline-owned
+/// `RustEmitter` key.
 ///
 /// The invariant is unconditional — no phase, no lifetime, no direction — so it
 /// holds for a **stored** value. That is the point: a `TypeRef` lives in
@@ -110,8 +98,8 @@ impl fmt::Display for TypeRef {
     ///
     /// Diagnostics are not emission: a panic naming an unsupported type is
     /// decision code reporting why it decided, and it must not need the
-    /// [`Emit`](crate::flat::emit::Emit) capability to say so. So this is
-    /// ungated where [`spell`](Self::spell) is not.
+    /// [`RustEmitter`](crate::RustEmitter) capability to say so. So this is
+    /// ungated where [`RustEmitter::spell`](crate::RustEmitter::spell) is not.
     ///
     /// **The identity, not the spelling** — `TypeKey`, which is
     /// `canonical_type` rendered. Delegating to `spell()` would have handed the
@@ -137,22 +125,10 @@ impl TypeRef {
     /// let forged = TypeRef { kind: TypeKind::Unit, origin: todo!() };
     /// ```
     ///
-    /// …nor, historically, through a composer (`E0624`) — **no longer true**:
-    /// `borrowed` / `optional` / `scalar` are `pub` now that the registry
-    /// pipeline that composes with them is the separate `prebindgen-registry`
-    /// crate rather than code inside this one:
-    ///
-    /// ```
-    /// # use prebindgen_flat::flat::{ScalarKind, TypeRef};
-    /// let composed = TypeRef::scalar(ScalarKind::Bool);
-    /// ```
-    ///
-    /// The struct-literal case above still proves the **crate** boundary. The
-    /// stronger claim this crate used to enforce by visibility — that nothing
-    /// above `api::core` can mint one either — no longer has a module path to
-    /// be checked against once the registry pipeline is the separate
-    /// `prebindgen-registry` crate; see the type-level doc's "The invariant"
-    /// section for what replaced it.
+    /// The public composition constructors (`borrowed`, `optional`, `scalar`) are
+    /// intentional flat-model API: collectors can derive readings without reparsing
+    /// Rust. They construct a matching kind and origin together, but the resulting
+    /// captured spelling still leaves this crate only through `RustEmitter`.
     pub fn kind(&self) -> &TypeKind {
         &self.kind
     }
@@ -164,7 +140,7 @@ impl TypeRef {
     /// Tokens, not a `syn::Type`: a spelling is for spelling. What the type
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside
     /// it; the node itself never leaves the model.
-    pub fn spell(&self) -> proc_macro2::TokenStream {
+    pub(crate) fn spell(&self) -> proc_macro2::TokenStream {
         use quote::ToTokens;
         super::spelling::qualify_for_emission(self.origin.as_syn()).to_token_stream()
     }
@@ -424,7 +400,7 @@ impl TypeRef {
     /// adds over its classification, if any — `Box<Option<T>>` → `Some("Box")`,
     /// `Option<T>` → `None`.
     ///
-    /// This exists because [`kind`](Self::kind) and [`spell`](Self::spell)
+    /// This exists because [`kind`](Self::kind) and [`RustEmitter::spell`](crate::RustEmitter::spell)
     /// answer different questions, and only one of them is about the
     /// destination:
     ///
@@ -650,7 +626,7 @@ impl TypeRef {
     ///
     /// A [`Named`](TypeKind::Named)'s generic arguments are **not** among them:
     /// [`TypeId`] keeps a name and nothing else, so `MyBox<Foo>` reaches no `Foo`
-    /// here. The full spelling is [`Self::spell`]'s answer for whoever needs it.
+    /// here. The full spelling is [`RustEmitter::spell`](crate::RustEmitter::spell)'s answer for whoever needs it.
     pub fn walk(&self) -> Vec<&TypeRef> {
         let mut out = Vec::new();
         self.collect_refs(&mut out);
@@ -721,7 +697,7 @@ impl TypeRef {
 /// One variant per accepted Rust **form**, not per destination concept. `str`
 /// and `String` are two forms and get two variants; `Box<T>` is a form of its
 /// own and does not disappear into `T`. Nothing here folds two spellings
-/// together, which is what makes [`TypeRef::spell`] recoverable from this —
+/// together, which is what makes [`RustEmitter::spell`](crate::RustEmitter::spell) recoverable from this —
 /// rebuilding the syntax from a kind is the round-trip that checks it.
 ///
 /// # Why it is only syntax

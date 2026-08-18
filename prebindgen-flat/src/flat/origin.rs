@@ -20,7 +20,7 @@ use super::key::TypeKey;
 /// `syn` tokens normally carry spans, so in principle the syntax alone could
 /// answer "where was this written". Not here: the proc-macro serializes each
 /// marked item as a **string** into JSONL, and `build.rs` re-parses it, so every
-/// span in [`spell()`](Self::spell) points into an anonymous buffer.
+/// span in the captured spelling points into an anonymous buffer.
 /// [`SourceLocation::from_span`] captures file, line and column at
 /// macro-expansion time — while real rustc spans still exist — precisely because
 /// they cannot survive that trip.
@@ -48,19 +48,17 @@ use super::key::TypeKey;
 /// in one flat namespace. [`ConstId`](super::ConstId) is not an exception — the
 /// crate it records is the const's *declaring* crate, obtained by lookup, and
 /// that is exactly what lets an array extent refuse a const from another source.
-/// # The syntax is sealed
+/// # Structured syntax access is sealed
 ///
-/// > **You may output the source. You may not read it.**
-///
-/// [`spell`](Self::spell) hands out tokens and nothing else, which is all
-/// generated Rust ever needed. The node is reachable only through one
-/// crate-internal accessor, and the field itself is `pub(super)` — so the
-/// model still reads it freely, while everything outside is limited to the
-/// spelling.
+/// The crate-private `spell` operation produces tokens and nothing else, which is all
+/// generated Rust ever needed. The typed node is reachable only inside this crate,
+/// and the field itself is `pub(super)`. Derived `Debug` remains available for
+/// diagnostics; it is not a stable or structured syntax API.
 ///
 /// It was a public field returning a `syn` node to anyone who asked.
-/// Outside this crate, captured syntax is reachable only through
-/// [`Emit`](crate::flat::emit::Emit), and the compiler enforces it.
+/// Outside this crate, rendering requires an explicit
+/// [`RustEmitter`](crate::RustEmitter) implementation; no raw syntax accessor is
+/// public.
 #[derive(Clone, Debug)]
 pub struct Origin<S> {
     /// The exact tokens this node was built from.
@@ -80,9 +78,9 @@ impl<S> Origin<S> {
 
     /// The node as `syn` — **the escape**.
     ///
-    /// Every place that takes the source apart instead of asking the model
-    /// comes through here, and `pub(crate)` is what keeps that
-    /// list short: only [`Emit`](crate::flat::emit::Emit) can reach it.
+    /// Every place that takes the source apart instead of asking the model comes
+    /// through here, and `pub(crate)` keeps it inside the flat model and its
+    /// rendering protocol.
     ///
     /// Naming it is not an accusation. An emitter assembling a `syn::Item`, or a
     /// signature the generated crate must restate node for node, legitimately
@@ -137,11 +135,9 @@ impl<S: ToTokens> Origin<S> {
     /// **visible**: `.to_token_stream().to_string()` was indistinguishable from
     /// the same call on a type an adapter built itself.
     ///
-    /// `pub`, not `pub(crate)`: the registry pipeline's own
-    /// tests (now in the separate `prebindgen-registry` crate) call this on a
-    /// captured element's `origin` — see `TypeRef`'s doc for why this seal is
-    /// now a convention rather than a compiler check.
-    pub fn spell(&self) -> proc_macro2::TokenStream {
+    /// Crate-private: rendering leaves this crate only through a `RustEmitter`
+    /// implementation supplied by a collecting pipeline.
+    pub(crate) fn spell(&self) -> proc_macro2::TokenStream {
         self.syntax.to_token_stream()
     }
 }
@@ -149,16 +145,16 @@ impl<S: ToTokens> Origin<S> {
 impl Origin<syn::Type> {
     /// A **declared** type's tokens.
     ///
-    /// Public where [`Origin::spell`] is sealed, and the difference is what `S`
+    /// Public where `Origin::spell` is sealed, and the difference is what `S`
     /// is. An `Origin<syn::ItemFn>`'s tokens re-parse to the captured item, so
     /// handing them out is the item door under another name — that one is
-    /// [`Emit`](crate::flat::emit::Emit)'s to open. An
+    /// [`RustEmitter`](crate::RustEmitter)'s to open. An
     /// `Origin<syn::Type>` in an adapter's declaration holds a type the
     /// **build script wrote**, which was never captured syntax and which #280
     /// leaves the model no way to have a reading for.
     ///
     /// Still a token route, and still one C3 has to account for when
-    /// [`TypeRef::spell`](super::TypeRef::spell) moves onto `Emit`: a
+    /// the callback renderer spells a `TypeRef`: a
     /// declaration is an identity (`key()`), and the two sites that spell one
     /// do it to splice `#target` into generated Rust.
     pub fn declared_spelling(&self) -> proc_macro2::TokenStream {
