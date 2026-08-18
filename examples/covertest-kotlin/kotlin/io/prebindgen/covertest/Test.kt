@@ -973,9 +973,13 @@ fun main() {
 
         // Ancestor present, leaf absent: only the leaf with a niche of its own
         // can be null here, and it is — through `0L`, not through a JVM null.
+        // The live one is a freshly minted OWNING handle, so it is closed after
+        // reading; `Ingot` is a plain `NativeHandle` with no Cleaner backstop,
+        // and dropping the only reference would leak the allocation.
         check(vaultHolderNew(0L, 5L, -1L, boom) { always, maybe ->
-            check(always != null && maybe == null)
-            always!!.grams(boom)
+            check(maybe == null)
+            val a = always ?: error("the ancestor-nullable leaf was dropped")
+            a.use { it.grams(boom) }
         } == 5L)
 
         // Both present: each handle points at its own object, and each is the
