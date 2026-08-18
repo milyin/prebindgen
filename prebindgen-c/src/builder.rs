@@ -598,32 +598,75 @@ impl CbindgenBuilder {
 
     // ── Internal helpers ───────────────────────────────────────────────
 
-    /// Fully-qualify a bare single-segment source type against
+    /// Fully-qualify every bare single-segment source type inside `ty` against
     /// [`Self::source_module`] (e.g. `ZKeyExpr` → `zenoh_flat::ZKeyExpr`).
     /// Anything already qualified, or with no `source_module` set, is returned
     /// unchanged.
+    ///
+    /// **Every** path node in the type, not the outermost one: a source type
+    /// can sit under any accepted shape — `Option<&Handle>` in a callback
+    /// argument, `&[Payload]`, `(Rec, Rec)` — and a name left bare there does
+    /// not resolve in the consumer crate the generated file is included into
+    /// (#414). The walk is what makes one rule apply everywhere; the rule per
+    /// node is below.
     pub(super) fn src_ty(&self, ty: &syn::Type) -> syn::Type {
+        use syn::visit_mut::VisitMut;
+        struct Qualifier<'a>(&'a CbindgenBuilder);
+        impl VisitMut for Qualifier<'_> {
+            fn visit_type_path_mut(&mut self, tp: &mut syn::TypePath) {
+                self.0.qualify_path(tp);
+                // The node's own arguments, after it: `Option<Handle>` is the
+                // language's `Option` over the source crate's `Handle`, and the
+                // two halves resolve against different roots.
+                syn::visit_mut::visit_type_path_mut(self, tp);
+            }
+        }
+        // A trait bound is a `syn::Path` and not a `Type::Path`, so overriding
+        // only the type-path visit leaves `impl Fn(..) + Send` alone and still
+        // reaches the argument types written inside it.
+        let mut out = ty.clone();
+        Qualifier(self).visit_type_mut(&mut out);
+        out
+    }
+
+    /// One path node of [`Self::src_ty`]: what root it resolves against.
+    fn qualify_path(&self, tp: &mut syn::TypePath) {
+        if tp.qself.is_some() {
+            return;
+        }
+        let as_ty = syn::Type::Path(tp.clone());
         // Built-in scalar primitives (`f64`, `i32`, …) live in no source module;
         // qualifying them would produce invalid paths like `zenoh_flat::f64` (hit by
         // callback args, e.g. `impl Fn(f64)`). Leave them bare.
-        if is_scalar(ty) {
-            return ty.clone();
+        if is_scalar(&as_ty) {
+            return;
         }
         // Std `String` likewise lives in no source module — qualifying it would
         // produce `zenoh_flat::String`. It can be declared `opaque_ptr` (a boxed
         // pointer the C side holds as `string_t *`), so resolve it to the std path.
-        if is_string(ty) {
-            return syn::parse_quote!(::std::string::String);
+        if is_string(&as_ty) {
+            tp.path = syn::parse_quote!(::std::string::String);
+            return;
         }
-        if let (Some(m), syn::Type::Path(tp)) = (&self.source_module, ty) {
-            if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1
-            {
-                let mut path = m.clone();
-                path.segments.push(tp.path.segments[0].clone());
-                return syn::Type::Path(syn::TypePath { qself: None, path });
-            }
+        if tp.path.leading_colon.is_some() || tp.path.segments.len() != 1 {
+            return;
         }
-        ty.clone()
+        let seg = tp.path.segments[0].clone();
+        // A name the language pre-declares is no source crate's, whatever the
+        // source module is — spelled in full, since the generated file is
+        // included into a crate that need not have imported it.
+        if let Some(full) = prelude_path(&seg.ident) {
+            let mut path: syn::Path =
+                syn::parse_str(full).expect("a path literal in `prelude_path`");
+            path.segments.last_mut().expect("non-empty").arguments = seg.arguments;
+            tp.path = path;
+            return;
+        }
+        if let Some(m) = &self.source_module {
+            let mut path = m.clone();
+            path.segments.push(seg);
+            tp.path = path;
+        }
     }
 
     /// [`Self::src_ty`] off the **identity** — the type peer of

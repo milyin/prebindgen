@@ -838,3 +838,53 @@ fn one_kind_presents_one_c_type_however_it_is_spelled() {
         "a bare optional handle is boxed by the converter:\n{src}"
     );
 }
+
+/// A payload's typed drop names both halves of `Option<Handle>` against the
+/// right root: `Option` is the language's and never the source module's, and
+/// `Handle` is the source module's and never bare (#414). Both come out of one
+/// expression, so a fix that only qualifies the outer path swaps one error for
+/// the other.
+#[test]
+fn a_payload_drop_qualifies_the_language_and_the_source_crate_apart() {
+    let loc = SourceLocation::default();
+    let probe: syn::ItemEnum = syn::parse_quote!(
+        pub enum Probe {
+            Carried(Option<Handle>),
+            Empty,
+        }
+    );
+    let handle: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            inner: u64,
+        }
+    );
+    let make: syn::ItemFn = syn::parse_quote!(
+        pub fn probe_new() -> Probe {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Enum(probe), loc.clone()),
+        (syn::Item::Struct(handle), loc.clone()),
+        (syn::Item::Fn(make), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .free_memory_function("myflat_free")
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .tagged_union(syn::parse_quote!(Probe))
+        .function(syn::parse_quote!(probe_new))
+        .panic();
+
+    let src = write(cbindgen, registry, "payload_drop_qualification");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("*__f0as*mut::core::option::Option<myflat::Handle>"),
+        "{src}"
+    );
+}

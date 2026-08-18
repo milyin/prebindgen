@@ -249,3 +249,52 @@ fn callback_struct_name_defaults_generically() {
     assert!(compact.contains("structclosure_z_sample_t"), "{src}");
     assert!(compact.contains("callback:closure_z_sample_t"), "{src}");
 }
+
+/// A source type under any accepted shape is qualified, not just an outermost
+/// one: a callback argument spelled `Option<&Handle>` names the language's
+/// `Option` and the source crate's `Handle`, each against its own root (#414).
+///
+/// The closure the trampoline builds is where a bare name shows: both the
+/// returned `impl Fn(..)` and the closure's own parameter ascription are
+/// written into the generated file, and neither resolves in a consumer crate
+/// that has not imported `Handle`.
+#[test]
+fn callback_arg_qualifies_a_source_type_under_a_wrapper() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            pub _0: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Option<&Handle>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .callback(syn::parse_quote!(
+            impl Fn(Option<&Handle>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_handle_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let src = write(cbindgen, registry, "cb_optref_qualified");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("implFn(::core::option::Option<&zenoh_flat::Handle>)"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("move|__a0:::core::option::Option<&zenoh_flat::Handle>|"),
+        "{src}"
+    );
+}
