@@ -107,7 +107,12 @@ impl Declarations {
             }
             return None;
         }
-        if let prebindgen_registry::flat::TypeKind::Ref { mutable, .. } = ty.unwrapped().kind() {
+        if let prebindgen_registry::flat::TypeKind::Ref {
+            mutable,
+            inner: borrowed,
+            ..
+        } = ty.unwrapped().kind()
+        {
             // The target through the accessor: an out-parameter's `MaybeUninit`
             // is the slot a `T` goes in, and it is the `T` that converts.
             let inner = ty.borrow_target().expect("a borrow");
@@ -162,16 +167,57 @@ impl Declarations {
                     return None;
                 }
             }
-            let mutable = ty.is_exclusive_borrow();
-            if let Some(mut c) = self.input_wrapper_shape(
-                WrapperShape::Borrow { mutable },
-                &produced,
-                inner,
-                registry,
-                emit,
-            ) {
-                c.subs = vec![inner.key()];
-                return Some(c);
+            // An exclusive borrow crosses only when the borrowed value LIVES on
+            // the Rust side. A handle's input converter hands back an
+            // `OwnedObject<T>` that derefs to the object the JVM holds a
+            // pointer to, so a write through the `&mut` is still there once the
+            // wrapper returns. Every other input converter decodes a fresh
+            // value onto the Rust stack — a `data_class`'s fields, a scalar, an
+            // out-parameter's slot — and the callee's writes to that value are
+            // dropped with the wrapper's frame. Declining is what the `&mut [T]`
+            // branch above already does, for the same reason (#411).
+            //
+            // The question is asked of `borrowed` — the node written directly
+            // under the `&` — and it is asked of the DECLARATION. Two things
+            // make that the only answer that holds.
+            //
+            // `inner` is the same node with an out-parameter's `MaybeUninit`
+            // already peeled off, so asking it admits `&mut MaybeUninit<T>`,
+            // which borrows a slot rather than the object.
+            //
+            // And a converter's own metadata cannot say whether the borrowed
+            // thing is the object: `is_direct_handle` reads the projection, and
+            // a transparent bridge, a borrow, and a `convert!` composed over a
+            // handle all inherit that projection from the type underneath. Each
+            // of `&mut Box<Handle>`, `&mut &Handle` and `&mut ConvertedHandle`
+            // therefore answered yes while decoding a local the wrapper drops —
+            // the last one also loses the conversion stage `input_borrow` does
+            // not carry, so the call gets an `OwnedObject<Handle>` where the
+            // declared type was expected. `ptr_class!` is the declaration that
+            // means "the JVM holds a pointer to this object", and nothing else
+            // does.
+            //
+            // `mutable` off the `Ref` kind rather than through
+            // `is_exclusive_borrow`, which answers `false` for a
+            // `&mut MaybeUninit<T>` out-parameter — a slot whose writes are lost
+            // exactly as an exclusive borrow's are.
+            let writes_reach_the_caller = !*mutable
+                || self
+                    .types
+                    .get(&borrowed.key())
+                    .is_some_and(|cfg| cfg.is_opaque());
+            if writes_reach_the_caller {
+                let mutable = ty.is_exclusive_borrow();
+                if let Some(mut c) = self.input_wrapper_shape(
+                    WrapperShape::Borrow { mutable },
+                    &produced,
+                    inner,
+                    registry,
+                    emit,
+                ) {
+                    c.subs = vec![inner.key()];
+                    return Some(c);
+                }
             }
         }
         // 4. Last resort: the spelling differs from something convertible only
