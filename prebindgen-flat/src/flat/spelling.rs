@@ -273,3 +273,47 @@ fn reduce_flat_path(path: &mut syn::Path, against: &Normalization) {
         path.segments = std::iter::once(last).collect();
     }
 }
+
+/// The [`Normalization::PRELUDE`] entries the **language** does not
+/// pre-declare, and the paths that always resolve.
+///
+/// Normalization reduces every prelude constructor to its bare name, which is
+/// what keys agree on. For `Vec`/`Option`/`Result`/`String`/`Box` that name is
+/// in scope in any crate, so a generated signature may spell it. `Cow` and
+/// `MaybeUninit` are in this model's prelude and not in Rust's — see
+/// [`Normalization::PRELUDE`]'s doc, which says so — and generated Rust is
+/// `include!`d into a consumer that need not have imported either.
+const EMISSION_PATHS: &[(&str, &str)] = &[
+    ("Cow", "::std::borrow::Cow"),
+    ("MaybeUninit", "::std::mem::MaybeUninit"),
+];
+
+/// Undo the reduction for [`EMISSION_PATHS`], so a spelling compiles wherever
+/// the generated file is included.
+///
+/// The emission-side inverse of [`normalize_type`], and deliberately only for
+/// the names whose reduced form a consumer crate may not have in scope: every
+/// other spelling stays the source's own, which is what makes a generated
+/// signature name the type the way the source crate does.
+pub(crate) fn qualify_for_emission(ty: &syn::Type) -> syn::Type {
+    use syn::visit_mut::VisitMut;
+    struct Qualifier;
+    impl VisitMut for Qualifier {
+        fn visit_type_path_mut(&mut self, tp: &mut syn::TypePath) {
+            if tp.qself.is_none() && tp.path.segments.len() == 1 {
+                let seg = tp.path.segments.first().expect("len checked");
+                if let Some((_, full)) = EMISSION_PATHS.iter().find(|(name, _)| seg.ident == name) {
+                    let args = seg.arguments.clone();
+                    let mut path: syn::Path =
+                        syn::parse_str(full).expect("a path literal in EMISSION_PATHS");
+                    path.segments.last_mut().expect("non-empty").arguments = args;
+                    tp.path = path;
+                }
+            }
+            syn::visit_mut::visit_type_path_mut(self, tp);
+        }
+    }
+    let mut out = ty.clone();
+    Qualifier.visit_type_mut(&mut out);
+    out
+}
