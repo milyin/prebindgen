@@ -102,7 +102,7 @@ fn option_scalar_input_boxed_pointer() {
     let src = write(cbindgen, registry, "option_in_scalar");
     let compact: String = src.split_whitespace().collect();
 
-    // Boxed behind a const pointer; NULL ⇒ None, else `Some(*v)`.
+    // Boxed behind a const pointer; NULL ⇒ None, else `Some` of the pointee, read.
     assert!(compact.contains("timestamp_ntp64:*consti64"), "{src}");
     assert!(
         compact.contains("ifv.is_null(){::core::option::Option::None}"),
