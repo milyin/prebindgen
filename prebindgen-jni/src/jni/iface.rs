@@ -101,23 +101,27 @@ impl WrapKind {
             None => arg.to_string(),
             Some(fqn) => {
                 let short = fqn.rsplit('.').next().unwrap_or(fqn);
-                // A niche says absence in the value itself, so it is tested
-                // whatever the slot's nullability says — the slot is a primitive
-                // exactly because the niche is what carries the absence.
-                if let WrapKind::Handle {
-                    niche_sentinel: Some(sentinel),
-                    ..
-                } = self
-                {
-                    return format!(
+                // Two absences, and they compose: the leaf's own `None` rides
+                // the niche, and an ANCESTOR's rides the JVM null of a slot
+                // widened to carry it. Same four combinations the `Unsigned64`
+                // arm above spells, for the same reason.
+                let sentinel = match self {
+                    WrapKind::Handle { niche_sentinel, .. } => niche_sentinel.as_deref(),
+                    _ => None,
+                };
+                match (raw_nullable, sentinel) {
+                    (true, Some(sentinel)) => format!(
+                        "{arg}?.let {{ if (it == {sentinel}) null else {} }}",
+                        handle_from_raw(short, "it")
+                    ),
+                    (true, None) => {
+                        format!("{arg}?.let {{ {} }}", handle_from_raw(short, "it"))
+                    }
+                    (false, Some(sentinel)) => format!(
                         "if ({arg} == {sentinel}) null else {}",
                         handle_from_raw(short, arg)
-                    );
-                }
-                if raw_nullable {
-                    format!("{arg}?.let {{ {} }}", handle_from_raw(short, "it"))
-                } else {
-                    handle_from_raw(short, arg)
+                    ),
+                    (false, None) => handle_from_raw(short, arg),
                 }
             }
         }
@@ -964,20 +968,25 @@ fn leaf_iface_param(
     if let Some(p) = proj.filter(|p| p.kind == ProjectionKind::Handle) {
         let fqn = ext.kotlin_fqn(&p.leaf_key)?.to_string();
         if raw_handle {
-            // The same rule the `Unsigned64` arm above follows: when the leaf's
-            // own `Option` rides a niche, that niche IS the absent value, so the
-            // slot stays the primitive the encoder writes and the wrap tests the
-            // sentinel. Declaring the slot nullable instead put a
+            // The same rule the `Unsigned64` arm above follows, and the same two
+            // axes. The slot is the projection's own wire — a primitive `Long`,
+            // which is what the encoder writes — widened only for an absence
+            // that comes from an ANCESTOR, since that one has nothing but the
+            // JVM null to ride. Keying the width on the typed view instead
+            // widened it for the leaf's own `Option` too, putting a
             // `Ljava/lang/Long;` in the descriptor over a `jvalue { j }` (#433).
+            //
+            // The sentinel is the other axis: the leaf's own `None`, which rides
+            // the niche whatever the ancestor does — a `Box` pointer is never 0.
             let niche_sentinel = if builder_kt.is_nullable() {
                 wrap_sentinel(p, nullable)
             } else {
                 None
             };
-            let raw = if niche_sentinel.is_some() {
-                KtType::long()
+            let raw = if nullable {
+                KtType::long().nullable()
             } else {
-                nullable_kt(KtType::long())
+                KtType::long()
             };
             return Some(IfaceParam {
                 name,
