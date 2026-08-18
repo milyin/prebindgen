@@ -958,9 +958,15 @@ fun main() {
         check((layeredOf(5, boom).orThrow() as Layered.Values).v0 == null)
         check((layeredOf(6, boom).orThrow() as Layered.Values).v0 == listOf(5uL, null))
 
+        // Layers nest, and the conversion belongs at the bottom of the stack.
+        check(
+            (layeredOf(7, boom).orThrow() as Layered.Nested).v0 ==
+                listOf(listOf(6uL, null), emptyList())
+        )
+
         // The controls. A `Vec<u8>` payload is a `ByteArray`, and a payload with
         // no layer is passed straight through.
-        check((layeredOf(7, boom).orThrow() as Layered.Blob).v0.toList() == listOf<Byte>(1, 2, 3))
+        check((layeredOf(8, boom).orThrow() as Layered.Blob).v0.toList() == listOf<Byte>(1, 2, 3))
         check((layeredOf(9, boom).orThrow() as Layered.Plain).v0 == 7L)
     }
 

@@ -1619,34 +1619,18 @@ impl Declarations {
     /// The variant-constructor argument for one group leaf: its `run`
     /// parameter, un-inerted and wrapped back into the property type.
     ///
-    /// Three transforms, in this order, one per layer between the wire slot and
-    /// the property. Applying the innermost one to the slot — which is what this
-    /// did — skips the two above it and emits Kotlin that does not compile
-    /// (#429):
+    /// A payload is a stack of layers over one leaf — any number of `Vec`s and
+    /// `Option`s, in any order — and each has its own spelling in Kotlin. The
+    /// wrap belongs to the **leaf**, so it is applied there and nowhere else;
+    /// applying it to the slot instead skipped every layer above it (#429), and
+    /// unrolling a fixed two levels skipped whatever a third one was (#432
+    /// review). [`Self::carry_layers`] walks them.
     ///
-    /// 1. **Un-inert** — an object-shaped group slot is declared nullable
-    ///    (an inert group arrives as JVM null), so inside its own live arm it is
-    ///    re-asserted with `!!`. A payload that is *itself* optional
-    ///    (`Option<T>`) keeps its null: there the JVM null means `None`, and
-    ///    `!!` would turn a legitimately absent value into an exception. A
-    ///    *collection* of optionals is not itself optional — its absences are
-    ///    inside it — so that slot is re-asserted like any other.
-    ///
-    ///    The two layers occur in both orders, and the peel is outermost first:
-    ///    `Option<Vec<T>>` is an optional run, and looking for the run without
-    ///    peeling the `Option` finds none.
-    /// 2. **Distribute** — a `Vec<T>` payload arrives as a run of element slots,
-    ///    so the wrap runs per element rather than on the run. Only when the
-    ///    elements actually convert: a run that needs no conversion is already
-    ///    the property's own type, and `map` would replace it — `Vec<u8>`
-    ///    surfaces as a `ByteArray`, whose `map` is a `List<Byte>`.
-    /// 3. **Wrap** — the raw wire becomes the property: an enum discriminant
-    ///    through `fromInt`, a handle/blob/`ULong` through the interface's own
-    ///    [`WrapKind`](crate::jni::WrapKind), everything else verbatim. Each
-    ///    knows the nullable spelling of itself, which is what carries an
-    ///    `Option` through — except a **niche** representation, where absence is
-    ///    a value in a slot that is not nullable at all and `?.` would not
-    ///    compile.
+    /// This function owns only the step that is not a layer: an object-shaped
+    /// group slot is declared nullable (an inert group arrives as JVM null), so
+    /// inside its own live arm it is re-asserted with `!!`. A payload that is
+    /// *itself* optional keeps its null — there the JVM null means `None`, and
+    /// `!!` would turn a legitimately absent value into an exception.
     fn sum_ctor_arg(
         &self,
         registry: &impl Conversions<KotlinMeta>,
@@ -1656,70 +1640,97 @@ impl Declarations {
         imports: &mut BTreeSet<String>,
     ) -> String {
         // Off the leaf's own reading — no lookup, and a wrapped spelling
-        // answers as the bare one does. Peeled outermost first, because the two
-        // layers occur in both orders: `Vec<Option<T>>` and `Option<Vec<T>>` are
-        // each accepted, and detecting the collection without peeling the
-        // `Option` first sees none on the second.
-        let optional = leaf.out_ty.optional_inner();
-        let under = optional.unwrap_or(&leaf.out_ty);
-        let sequence = under.sequence_elem();
-        let element = sequence.unwrap_or(under);
-        let arg = if param.raw.is_nullable() && optional.is_none() {
+        // answers as the bare one does.
+        let arg = if param.raw.is_nullable() && leaf.out_ty.optional_inner().is_none() {
             format!("{name}!!")
         } else {
             name.to_string()
         };
-        // What the wrap has to spell nullably: inside a run, the element's own
-        // optionality; on a bare payload, the payload's — and then only when
-        // its slot is nullable at all, since a niche representation spells
-        // absence as a value and `?.` on a primitive does not compile.
-        let nullable = if sequence.is_some() {
-            element.optional_inner().is_some()
-        } else {
-            optional.is_some() && param.raw.is_nullable()
-        };
+        self.carry_layers(registry, param, &leaf.out_ty, arg, false, 0, imports)
+    }
 
+    /// One payload layer, and then the rest of them.
+    ///
+    /// `recv` is an expression for the value at this layer and `nullable` says
+    /// whether an `Option` above it left that expression nullable, so each layer
+    /// spells itself over whatever the layer above produced:
+    ///
+    /// * an **`Option`** is not a step of its own — it makes the layer under it
+    ///   nullable, and that layer knows how to say so (`?.map`, `?.let`, a
+    ///   niche's sentinel test);
+    /// * a **run** distributes the rest over its elements, and only when there
+    ///   is something to distribute: a run whose elements convert to themselves
+    ///   already has the property's type, and `map` would replace it — `Vec<u8>`
+    ///   surfaces as a `ByteArray`, whose `map` is a `List<Byte>`;
+    /// * the **leaf** is where the wrap finally applies.
+    ///
+    /// The lambda parameter is implicit at the outermost run and named below it,
+    /// because a nested `it` would shadow the one above.
+    #[allow(clippy::too_many_arguments)]
+    fn carry_layers(
+        &self,
+        registry: &impl Conversions<KotlinMeta>,
+        param: &crate::jni::IfaceParam,
+        ty: &prebindgen_registry::flat::TypeRef,
+        recv: String,
+        nullable: bool,
+        depth: usize,
+        imports: &mut BTreeSet<String>,
+    ) -> String {
+        if let Some(inner) = ty.optional_inner() {
+            return self.carry_layers(registry, param, inner, recv, true, depth, imports);
+        }
+        if let Some(elem) = ty.sequence_elem() {
+            let bound = if depth == 0 {
+                "it".to_string()
+            } else {
+                format!("__e{depth}")
+            };
+            let body = self.carry_layers(
+                registry,
+                param,
+                elem,
+                bound.clone(),
+                false,
+                depth + 1,
+                imports,
+            );
+            if body == bound {
+                return recv;
+            }
+            let lambda = if depth == 0 {
+                body
+            } else {
+                format!("{bound} -> {body}")
+            };
+            let call = if nullable { "?.map" } else { ".map" };
+            return format!("{recv}{call} {{ {lambda} }}");
+        }
+        // The leaf. A niche representation is the one place an optional value is
+        // NOT spelled nullably: absence is a value there, in a slot that is not
+        // nullable at all, and `?.` on a primitive does not compile. Only the
+        // outermost slot can be one — an element of a run is always boxed.
+        let nullable = nullable && (depth > 0 || param.raw.is_nullable());
         // An enum payload rides its `jint` discriminant, so the interface types
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        let enum_class = self.is_kotlin_enum_reading(element).then(|| {
-            // The `Option` layer peeled off the model, so the entry lookup takes
-            // the layer's own reading instead of a spelling to look back up.
-            let inner = element.optional_inner().unwrap_or(element);
+        if self.is_kotlin_enum_reading(ty) {
             let name = registry
-                .output_entry(inner)
+                .output_entry(ty)
                 .and_then(|e| e.metadata.kotlin_name.clone())
                 .and_then(|t| t.leaf_name().map(str::to_string))
                 .unwrap_or_else(|| {
-                    panic!(
-                        "sum builder: enum payload `{}` has no Kotlin type on its output converter",
-                        leaf.name
-                    )
+                    panic!("sum builder: enum payload `{ty}` has no Kotlin type on its output converter")
                 });
-            register_fqn(&name, imports)
-        });
-
-        let wrap = |x: &str| match &enum_class {
-            Some(short) if nullable => format!("{x}?.let {{ {short}.fromInt(it) }}"),
-            Some(short) => format!("{short}.fromInt({x})"),
-            None => param.wrap.wrap_expr(x, nullable),
-        };
-        if sequence.is_none() {
-            return wrap(&arg);
+            let short = register_fqn(&name, imports);
+            return if nullable {
+                format!("{recv}?.let {{ {short}.fromInt(it) }}")
+            } else {
+                format!("{short}.fromInt({recv})")
+            };
         }
-        // Distribute only when there is something to distribute. A run of
-        // values whose elements need no conversion already arrives as the
-        // property's own type, and mapping the identity over it would replace
-        // that type rather than preserve it: a `Vec<u8>` payload surfaces as a
-        // Kotlin `ByteArray`, and `ByteArray.map { it }` is a `List<Byte>`.
-        let mapped = wrap("it");
-        if mapped == "it" {
-            return arg;
-        }
-        // A run under an `Option` keeps its null through the distribution too.
-        let map = if optional.is_some() { "?.map" } else { ".map" };
-        format!("{arg}{map} {{ {mapped} }}")
+        param.wrap.wrap_expr(&recv, nullable)
     }
 
     /// The hoisted **folder-appender** singleton for a **whole single-leaf

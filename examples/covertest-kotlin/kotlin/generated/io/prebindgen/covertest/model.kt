@@ -135,6 +135,16 @@ public sealed interface Layered : AutoCloseable {
     }
 
     /**
+     * Layers nest: the element of this run is another run, so the leaf's
+     * conversion belongs two levels down and a walk that unrolls a fixed two
+     * applies it one level too high.
+     */
+    public data class Nested(public val v0: List<List<ULong?>>) : Layered {
+        override fun close() {
+        }
+    }
+
+    /**
      * A control: a run of values that needs no element conversion, and whose
      * Kotlin type is not a `List` at all.
      */
@@ -169,6 +179,7 @@ public sealed interface Layered : AutoCloseable {
             held_v0: Summary?,
             many_v0: List<ULong?>,
             values_v0: List<ULong?>?,
+            nested_v0: List<List<ULong?>>,
             blob_v0: ByteArray,
             plain_v0: Long,
         ): Layered =
@@ -177,8 +188,9 @@ public sealed interface Layered : AutoCloseable {
                 1 -> Held(held_v0)
                 2 -> Many(many_v0)
                 3 -> Values(values_v0)
-                4 -> Blob(blob_v0)
-                5 -> Plain(plain_v0)
+                4 -> Nested(nested_v0)
+                5 -> Blob(blob_v0)
+                6 -> Plain(plain_v0)
                 else -> throw IllegalArgumentException("Layered: invalid tag $tag")
             }
     }
@@ -1306,6 +1318,7 @@ internal fun interface LayeredBuilderRaw<out R> {
         held_v0: Long?,
         many_v0: List<Long?>?,
         values_v0: List<Long?>?,
+        nested_v0: List<List<Long?>>?,
         blob_v0: ByteArray?,
         plain_v0: Long,
     ): R
@@ -1313,8 +1326,8 @@ internal fun interface LayeredBuilderRaw<out R> {
 
 @get:JvmSynthetic
 internal val __LayeredBuilderRaw: LayeredBuilderRaw<Layered> =
-LayeredBuilderRaw { tag, count_v0, held_v0, many_v0, values_v0, blob_v0, plain_v0 ->
-    when (tag) { 0 -> Layered.Count(count_v0?.toULong()); 1 -> Layered.Held(held_v0?.let { Summary.fromRawPtr(it) }); 2 -> Layered.Many(many_v0!!.map { it?.toULong() }); 3 -> Layered.Values(values_v0?.map { it?.toULong() }); 4 -> Layered.Blob(blob_v0!!); 5 -> Layered.Plain(plain_v0); else -> throw IllegalArgumentException("Layered: invalid tag $tag") }
+LayeredBuilderRaw { tag, count_v0, held_v0, many_v0, values_v0, nested_v0, blob_v0, plain_v0 ->
+    when (tag) { 0 -> Layered.Count(count_v0?.toULong()); 1 -> Layered.Held(held_v0?.let { Summary.fromRawPtr(it) }); 2 -> Layered.Many(many_v0!!.map { it?.toULong() }); 3 -> Layered.Values(values_v0?.map { it?.toULong() }); 4 -> Layered.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } }); 5 -> Layered.Blob(blob_v0!!); 6 -> Layered.Plain(plain_v0); else -> throw IllegalArgumentException("Layered: invalid tag $tag") }
 }
 
 internal fun interface LookupBuilderRaw<out R> {
@@ -1916,9 +1929,9 @@ public fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: Jni
  * Build a [`Layered`], one `which` per alternative and per case within it:
  * `0` absent count, `1` present count, `2` absent handle, `3` present handle,
  * `4` a list mixing present and absent, `5` an absent run, `6` a present run,
- * `7` a byte run, anything else `Plain`.
+ * `7` a run of runs, `8` a byte run, anything else `Plain`.
  *
- * The Rust `Layered` result is delivered decomposed: the builder callback receives (`tag`, `count_v0`, `held_v0`, `many_v0`, `values_v0`, `blob_v0`, `plain_v0`).
+ * The Rust `Layered` result is delivered decomposed: the builder callback receives (`tag`, `count_v0`, `held_v0`, `many_v0`, `values_v0`, `nested_v0`, `blob_v0`, `plain_v0`).
  */
 @Suppress("UNCHECKED_CAST")
 public fun layeredOf(which: Int, onError: JniErrorHandler<Layered?>): Layered? {

@@ -379,6 +379,10 @@ pub enum Layered {
     /// the run without peeling the `Option` first finds none, and the element
     /// conversion lands on the list.
     Values(Option<Vec<Option<u64>>>),
+    /// Layers nest: the element of this run is another run, so the leaf's
+    /// conversion belongs two levels down and a walk that unrolls a fixed two
+    /// applies it one level too high.
+    Nested(Vec<Vec<Option<u64>>>),
     /// A control: a run of values that needs no element conversion, and whose
     /// Kotlin type is not a `List` at all.
     Blob(Vec<u8>),
@@ -389,7 +393,7 @@ pub enum Layered {
 /// Build a [`Layered`], one `which` per alternative and per case within it:
 /// `0` absent count, `1` present count, `2` absent handle, `3` present handle,
 /// `4` a list mixing present and absent, `5` an absent run, `6` a present run,
-/// `7` a byte run, anything else `Plain`.
+/// `7` a run of runs, `8` a byte run, anything else `Plain`.
 #[prebindgen]
 pub fn layered_of(which: i32) -> Layered {
     match which {
@@ -400,7 +404,8 @@ pub fn layered_of(which: i32) -> Layered {
         4 => Layered::Many(vec![Some(1), None, Some(3)]),
         5 => Layered::Values(None),
         6 => Layered::Values(Some(vec![Some(5), None])),
-        7 => Layered::Blob(vec![1, 2, 3]),
+        7 => Layered::Nested(vec![vec![Some(6), None], vec![]]),
+        8 => Layered::Blob(vec![1, 2, 3]),
         _ => Layered::Plain(7),
     }
 }

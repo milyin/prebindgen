@@ -1239,8 +1239,9 @@ fn sum_return_composes_with_option_and_vec() {
 /// The fixture has more variants than the defect had shapes, because each
 /// answer needs its control: distributing over a collection is right only when
 /// its elements convert, a payload with no layer must come out exactly as it
-/// did, and the two layers occur in **both orders** — `Vec<Option<T>>` and
-/// `Option<Vec<T>>` are each accepted, and each needs the other's peel.
+/// did, and the layers occur in **both orders** and at **any depth** —
+/// `Vec<Option<T>>`, `Option<Vec<T>>` and `Vec<Vec<Option<T>>>` are all
+/// accepted, so the walk over them recurses instead of unrolling.
 #[test]
 fn a_payload_carries_its_option_and_collection_layers() {
     let loc = myflat_loc();
@@ -1263,6 +1264,7 @@ fn a_payload_carries_its_option_and_collection_layers() {
                     Blob(Vec<u8>),
                     Names(Vec<String>),
                     Values(Option<Vec<Option<u64>>>),
+                    Nested(Vec<Vec<Option<u64>>>),
                     Labels(Option<Vec<String>>),
                     Empty,
                 }
@@ -1332,6 +1334,14 @@ fn a_payload_carries_its_option_and_collection_layers() {
     assert!(
         kotlin.contains("Probe.Blob(blob_v0!!)"),
         "a byte-array payload is passed straight through:\n{kotlin}"
+    );
+    // Layers nest, so the walk over them recurses rather than unrolling a fixed
+    // two: with `Vec<Vec<Option<u64>>>` the element of the outer run is another
+    // run, and the leaf's conversion belongs at the bottom. The inner lambda
+    // names its parameter because a nested `it` would shadow the outer one.
+    assert!(
+        kotlin.contains("Probe.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } })"),
+        "nested runs distribute at every level:\n{kotlin}"
     );
     // A run under an `Option` is still a run: the layers occur in both orders,
     // and looking for the collection without peeling the `Option` first found
