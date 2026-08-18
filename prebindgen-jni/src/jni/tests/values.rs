@@ -2497,6 +2497,30 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
                 loc.clone(),
             ),
             (
+                syn::parse_quote!(
+                    pub struct Converted {
+                        inner: u64,
+                    }
+                ),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn converted_from_handle(h: Handle) -> Converted {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn converted_to_handle(c: Converted) -> Handle {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
                 syn::Item::Fn(syn::parse_quote!(
                     pub fn probe(v: #param) {
                         unimplemented!()
@@ -2509,6 +2533,11 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
             crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
         let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
+            .convert(
+                prebindgen_registry::convert!(Converted)
+                    .input(prebindgen_registry::fun!(converted_from_handle))
+                    .output(prebindgen_registry::fun!(converted_to_handle)),
+            )
             .package(
                 crate::package!()
                     .class(crate::data_class!(Rec))
@@ -2554,10 +2583,12 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
         "the refusal names the spelling: {out}"
     );
 
-    // Three spellings that reach a handle without borrowing one. Each is
-    // refused even though the entry the borrow resolves through answers
-    // `is_direct_handle` — a slot, a decoded box and a decoded reference are
-    // locals the wrapper drops, so the write never reaches the JVM's object.
+    // Four spellings that reach a handle without borrowing one. Each is refused
+    // even though the entry the borrow resolves through answers
+    // `is_direct_handle`: a slot, a decoded box, a decoded reference and a
+    // `convert!` composed over the handle are all locals the wrapper drops, so
+    // the write never reaches the JVM's object. The last also loses the
+    // conversion stage, which is how it produced a type mismatch as well.
     for (spelling, name, names) in [
         (
             syn::parse_quote!(&mut MaybeUninit<Handle>),
@@ -2573,6 +2604,11 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
             syn::parse_quote!(&mut &Handle),
             "jnigen_excl_ref_handle",
             "Handle",
+        ),
+        (
+            syn::parse_quote!(&mut Converted),
+            "jnigen_excl_converted_handle",
+            "Converted",
         ),
     ] {
         let refusal = build(spelling, name)
