@@ -1547,7 +1547,7 @@ impl CbindgenBuilder {
                 // leaves its slot unwritten, and the wrapper must not build a
                 // Rust value to fill it with. `#[repr(transparent)]` keeps both
                 // the C ABI and the header spelling.
-                if marker_destination(&wire) && r_is_lowered_composite(&reading) {
+                if marker_destination(&wire) && r_is_lowered_composite(&reading, registry) {
                     for field in self.lower_shape(&reading, registry).fields {
                         let w = field.wire;
                         arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
@@ -1750,7 +1750,7 @@ impl CbindgenBuilder {
             // converter call can produce.
             if !is_takeable
                 && marker_destination(&entry.destination)
-                && !r_is_lowered_composite(arg)
+                && !r_is_lowered_composite(arg, registry)
             {
                 panic!(
                     "Cbindgen: callback argument `{}` has no C ABI — it resolves to a marker \
@@ -1760,7 +1760,7 @@ impl CbindgenBuilder {
                     arg,
                 );
             }
-            let composite = !is_takeable && r_is_lowered_composite(arg);
+            let composite = !is_takeable && r_is_lowered_composite(arg, registry);
             if composite {
                 let shape = self.lower_shape(arg, registry);
                 closure_params.push(quote!(#ai: #src));

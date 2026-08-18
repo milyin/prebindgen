@@ -408,6 +408,45 @@ fn a_result_under_an_option_is_refused_too() {
     );
 }
 
+/// A run whose ELEMENT has no wire of its own is refused too — the case a list
+/// of shapes cannot catch.
+///
+/// `&[u8]` is a plain borrow by every shape test there is, and in the converter
+/// table it is a shared-slice **marker**: the `(ptr, len)` lowering for one is
+/// structural in the callback path, so it has no element wire to be the element
+/// of something else. `Vec<&'static [u8]>` therefore passed a check that
+/// enumerated wrapper kinds, and the lowering mapped a zero-argument marker over
+/// real slices (#428 review). Lowerability asks the table instead, so a marker
+/// disqualifies its shape whatever put it there.
+#[test]
+fn a_run_of_markers_is_refused() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Vec<&'static [u8]>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .callback(syn::parse_quote!(
+            impl Fn(Vec<&'static [u8]>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_slices_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_vec_slice_arg");
+    });
+    assert!(
+        message.contains("has no C ABI"),
+        "a run whose element has no wire of its own is refused whole: {message}"
+    );
+}
+
 /// A `Result` callback argument is refused where it is declared, not emitted as
 /// a call to the marker that stands in for it.
 ///
