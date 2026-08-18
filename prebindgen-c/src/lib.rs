@@ -624,6 +624,32 @@ fn is_string(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
 }
 
+/// The full path for a bare name the **language** pre-declares, or `None` for a
+/// name only the source crate can be declaring.
+///
+/// Ingest reduces a captured type's spelling to the bare name the language
+/// knows the constructor by (`std::option::Option<T>` and `Option<T>` are one
+/// type), so by the time an emitter spells a type, a prelude constructor and a
+/// source-crate item look alike: both are one segment. Qualifying either
+/// against the source module produces a path that does not exist — see
+/// [`Cbindgen::src_ty`], which is the only caller.
+///
+/// The paths are spelled in full rather than left bare because the generated
+/// file is `include!`d into a consumer crate, and `MaybeUninit` is not in
+/// Rust's prelude.
+fn prelude_path(ident: &syn::Ident) -> Option<&'static str> {
+    Some(match ident.to_string().as_str() {
+        "Option" => "::core::option::Option",
+        "Result" => "::core::result::Result",
+        "Vec" => "::std::vec::Vec",
+        "Box" => "::std::boxed::Box",
+        "String" => "::std::string::String",
+        "Cow" => "::std::borrow::Cow",
+        "MaybeUninit" => "::core::mem::MaybeUninit",
+        _ => return None,
+    })
+}
+
 /// The C wire for a `bool` in any position C can write: `MaybeUninit<bool>`.
 ///
 /// `bool` is the one FFI-safe scalar with a restricted domain — only `0` and

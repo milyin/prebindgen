@@ -615,15 +615,41 @@ impl CbindgenBuilder {
         if is_string(ty) {
             return syn::parse_quote!(::std::string::String);
         }
-        if let (Some(m), syn::Type::Path(tp)) = (&self.source_module, ty) {
-            if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1
-            {
-                let mut path = m.clone();
-                path.segments.push(tp.path.segments[0].clone());
-                return syn::Type::Path(syn::TypePath { qself: None, path });
+        let syn::Type::Path(tp) = ty else {
+            return ty.clone();
+        };
+        if tp.qself.is_some() || tp.path.leading_colon.is_some() || tp.path.segments.len() != 1 {
+            return ty.clone();
+        }
+        // The arguments are qualified first, and separately: `Option<Handle>`
+        // is the language's `Option` over the source crate's `Handle`, so the
+        // two halves resolve against different roots and a single prefix over
+        // the whole path gets one of them wrong whichever way it goes (#414).
+        let mut seg = tp.path.segments[0].clone();
+        if let syn::PathArguments::AngleBracketed(args) = &mut seg.arguments {
+            for arg in args.args.iter_mut() {
+                if let syn::GenericArgument::Type(t) = arg {
+                    *t = self.src_ty(t);
+                }
             }
         }
-        ty.clone()
+        // A name the language pre-declares is no source crate's, whatever the
+        // source module is — spelled in full, since the generated file is
+        // included into a crate that need not have imported it.
+        if let Some(full) = prelude_path(&seg.ident) {
+            let mut path: syn::Path =
+                syn::parse_str(full).expect("a path literal in `prelude_path`");
+            path.segments.last_mut().expect("non-empty").arguments = seg.arguments;
+            return syn::Type::Path(syn::TypePath { qself: None, path });
+        }
+        match &self.source_module {
+            Some(m) => {
+                let mut path = m.clone();
+                path.segments.push(seg);
+                syn::Type::Path(syn::TypePath { qself: None, path })
+            }
+            None => ty.clone(),
+        }
     }
 
     /// [`Self::src_ty`] off the **identity** — the type peer of
