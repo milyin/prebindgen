@@ -1027,6 +1027,50 @@ public data class Verdict(val id: Long, val outcome: Lookup) : AutoCloseable {
     }
 }
 
+/** Typed handle for a native Zenoh `Ingot`. */
+public class Ingot private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Ingot {
+        val p = ptr
+        ptr = p or 1L
+        return Ingot.fromRawPtr(p)
+    }
+
+    /**
+     * What an [`Ingot`] weighs — enough to prove the handle delivered to the JVM
+     * points at the right object.
+     */
+    public fun grams(onError: JniErrorHandler<Long>): Long {
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
+        val __bcap = JniErrorHandlerCapture.acquire()
+        val __ret = withSortedHandleLocks(this) {
+            val this_ptr = this.ptr
+            CovNative.ingotGrams(this_ptr, __bcap)
+        }
+        if (__bcap.failed) return onError.run(__bcap.ze0)
+        return __ret
+    }
+
+    public companion object {
+        @JvmStatic
+        @JvmSynthetic
+        external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): Ingot = Ingot(initialPtr)
+    }
+}
+
 /** Typed handle for a native Zenoh `Probe`. */
 public class Probe private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -1140,6 +1184,64 @@ public class SpanHolder private constructor(initialPtr: Long) : NativeHandle(ini
         /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
         @JvmSynthetic
         internal fun fromRawPtr(initialPtr: Long): SpanHolder = SpanHolder(initialPtr)
+    }
+}
+
+/** Typed handle for a native Zenoh `Vault`. */
+public class Vault private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Vault {
+        val p = ptr
+        ptr = p or 1L
+        return Vault.fromRawPtr(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        @JvmSynthetic
+        external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): Vault = Vault(initialPtr)
+    }
+}
+
+/** Typed handle for a native Zenoh `VaultHolder`. */
+public class VaultHolder private constructor(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): VaultHolder {
+        val p = ptr
+        ptr = p or 1L
+        return VaultHolder.fromRawPtr(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        @JvmSynthetic
+        external fun freePtr(ptr: Long)
+
+        /** Wrap a pointer a generated native call returned. Passing anything else — a literal, a stale pointer, one belonging to another handle — is undefined behaviour, which is why this is not part of the public API. */
+        @JvmSynthetic
+        internal fun fromRawPtr(initialPtr: Long): VaultHolder = VaultHolder(initialPtr)
     }
 }
 
@@ -1316,7 +1418,7 @@ internal fun interface LayeredBuilderRaw<out R> {
     public fun run(
         tag: Int,
         count_v0: Long?,
-        held_v0: Long?,
+        held_v0: Long,
         many_v0: List<Long?>?,
         values_v0: List<Long?>?,
         nested_v0: List<List<Long?>>?,
@@ -1328,7 +1430,7 @@ internal fun interface LayeredBuilderRaw<out R> {
 @get:JvmSynthetic
 internal val __LayeredBuilderRaw: LayeredBuilderRaw<Layered> =
 LayeredBuilderRaw { tag, count_v0, held_v0, many_v0, values_v0, nested_v0, blob_v0, plain_v0 ->
-    when (tag) { 0 -> Layered.Count(count_v0?.toULong()); 1 -> Layered.Held(held_v0?.let { Summary.fromRawPtr(it) }); 2 -> Layered.Many(many_v0!!.map { it?.toULong() }); 3 -> Layered.Values(values_v0?.map { it?.toULong() }); 4 -> Layered.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } }); 5 -> Layered.Blob(blob_v0!!); 6 -> Layered.Plain(plain_v0); else -> throw IllegalArgumentException("Layered: invalid tag $tag") }
+    when (tag) { 0 -> Layered.Count(count_v0?.toULong()); 1 -> Layered.Held(if (held_v0 == 0L) null else Summary.fromRawPtr(held_v0)); 2 -> Layered.Many(many_v0!!.map { it?.toULong() }); 3 -> Layered.Values(values_v0?.map { it?.toULong() }); 4 -> Layered.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } }); 5 -> Layered.Blob(blob_v0!!); 6 -> Layered.Plain(plain_v0); else -> throw IllegalArgumentException("Layered: invalid tag $tag") }
 }
 
 internal fun interface LookupBuilderRaw<out R> {
@@ -1436,6 +1538,25 @@ internal fun interface UnsignedBuilderRaw<out R> {
 @get:JvmSynthetic
 internal val __UnsignedBuilderRaw: UnsignedBuilderRaw<Unsigned> =
 UnsignedBuilderRaw { byte, short, int, long, maybeLong -> Unsigned.fromParts(byte, short, int, long, maybeLong) }
+
+public fun interface VaultHolderBuilder<out R> {
+    public fun run(vaultHolderVault__always: Ingot?, vaultHolderVault__maybe: Ingot?): R
+}
+
+internal fun interface VaultHolderBuilderRaw<out R> {
+    public fun run(vaultHolderVault__always: Long?, vaultHolderVault__maybe: Long?): R
+}
+
+@JvmSynthetic
+internal fun <R> VaultHolderBuilder<R>.asRaw(): VaultHolderBuilderRaw<R> =
+    VaultHolderBuilderRaw<R> {
+        vaultHolderVault__always,
+        vaultHolderVault__maybe ->
+        run(
+            vaultHolderVault__always?.let { Ingot.fromRawPtr(it) },
+            vaultHolderVault__maybe?.let { if (it == 0L) null else Ingot.fromRawPtr(it) }
+        )
+    }
 
 internal fun interface ReadingFolderRaw<A> {
     public fun run(
@@ -2052,6 +2173,27 @@ public fun <R> spanHolderNew(
 ): R? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.spanHolderNew(seq, requiredMs.toLong(), delayMs, build.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as R
+}
+
+/**
+ * `None` when `seq` is negative and `maybe` is absent when `maybe_count` is,
+ * so one call reaches every row: ancestor absent, ancestor present with the
+ * leaf absent, and both present.
+ *
+ * The Rust `VaultHolder` result is delivered decomposed: the builder callback receives (`vaultHolderVault__always`, `vaultHolderVault__maybe`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <R> vaultHolderNew(
+    seq: Long,
+    count: Long,
+    maybeCount: Long,
+    onError: JniErrorHandler<R?>,
+    build: VaultHolderBuilder<R>,
+): R? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.vaultHolderNew(seq, count, maybeCount, build.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as R
 }

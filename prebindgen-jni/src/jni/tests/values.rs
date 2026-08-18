@@ -171,6 +171,176 @@ fn flattened_field_composes_bounded_conversion_stages() {
     );
 }
 
+/// The same four ways for an **opaque handle** leaf — the matrix #142 drew for a
+/// bounded `convert!`, on the projection that has a niche without declaring one.
+///
+/// A `Box` pointer is never 0, so a handle's `None` rides `0L` exactly as a
+/// bounded leaf's rides its declared sentinel. The two axes are the same two,
+/// and so is the rule: the slot's **width** follows the ancestor, because only
+/// a JVM null can carry an absence the leaf's own type does not have; the
+/// **sentinel** follows the leaf's own type, because that is whose `None` it is.
+///
+/// | ancestor optional | leaf's own type | wire | wrap |
+/// |---|---|---|---|
+/// | no  | `Thing`         | `Long`  | `Thing.fromRawPtr(x)` |
+/// | no  | `Option<Thing>` | `Long`  | `if (x == 0L) null else Thing.fromRawPtr(x)` |
+/// | yes | `Thing`         | `Long?` | `x?.let { Thing.fromRawPtr(it) }` |
+/// | yes | `Option<Thing>` | `Long?` | `x?.let { if (it == 0L) null else Thing.fromRawPtr(it) }` |
+///
+/// Row 2 is what #433 was: the slot was widened for the leaf's own `Option`, so
+/// the descriptor asked for a `java.lang.Long` over a `jvalue { j }` and calling
+/// the builder threw. Row 4 is what the first fix for it broke — keying the
+/// width on the typed view collapses the two axes in the other direction, and
+/// the encoder boxes any ancestor-nullable leaf.
+#[test]
+fn a_handle_leaf_takes_its_niche_from_its_own_type_not_its_ancestor() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Thing {
+                    v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Span {
+                    v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Holder {
+                    v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct SpanStruct {
+                    pub required: Thing,
+                    pub maybe: Option<Thing>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn span_to_struct(s: &Span) -> SpanStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        // The CONDITIONAL hoist: `Span`'s value form is reached through an
+        // `Option`, so every leaf below it is nullable — rows 3 and 4.
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_span(h: &Holder) -> Option<&Span> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn holder_each(cb: impl Fn(Holder) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        // …and the same two leaves NOT under an optional ancestor — rows 1 and 2.
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn span_each(cb: impl Fn(Span) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Span))
+                .class(crate::ptr_class!(Holder))
+                .class(crate::ptr_class!(Thing))
+                .fun(prebindgen_registry::fun!(span_each))
+                .fun(prebindgen_registry::fun!(holder_each)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Span)
+                .fields(prebindgen_registry::fields!(span_to_struct)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(Holder)
+                .field(prebindgen_registry::fun!(holder_span)),
+        );
+
+    let dir = unique_test_dir("jnigen_handle_niche_matrix");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let rust =
+        std::fs::read_to_string(generation.write_rust(dir.join("g.rs")).expect("write_rust"))
+            .unwrap();
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Rows 1 and 2 — no optional ancestor. Both slots are the primitive the
+    // encoder writes, and only the leaf with its own `Option` reads the niche.
+    assert!(
+        kotlin.contains("public fun run(required: Long, maybe: Long)"),
+        "an optional handle leaf is not boxed by its own Option:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("Thing.fromRawPtr(required)"),
+        "row 1:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("if (maybe == 0L) null else Thing.fromRawPtr(maybe)"),
+        "row 2:\n{kotlin}"
+    );
+
+    // Rows 3 and 4 — under a conditional hoist. Both slots widen, because only
+    // a JVM null can carry the ancestor's absence, and row 4 keeps BOTH.
+    assert!(
+        kotlin.contains("public fun run(holderSpan__required: Long?, holderSpan__maybe: Long?)"),
+        "an ancestor-nullable handle leaf is boxed:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("holderSpan__required?.let { Thing.fromRawPtr(it) }"),
+        "row 3:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("holderSpan__maybe?.let { if (it == 0L) null else Thing.fromRawPtr(it) }"),
+        "row 4:\n{kotlin}"
+    );
+
+    // The descriptors are the half a compiler cannot check: they are built from
+    // the same `raw` view, and the encoder fills an object slot with a `JObject`
+    // and a primitive one with a `jvalue { j }`.
+    assert!(rust.contains(r#""run", "(JJ)V""#), "rows 1-2:\n{rust}");
+    assert!(
+        rust.contains(r#""run", "(Ljava/lang/Long;Ljava/lang/Long;)V""#),
+        "rows 3-4:\n{rust}"
+    );
+}
+
 /// The four ways a **bounded** `convert!` leaf can meet optionality, in one
 /// fixture — the matrix #142 is about.
 ///

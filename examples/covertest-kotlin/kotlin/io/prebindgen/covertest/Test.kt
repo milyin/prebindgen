@@ -66,6 +66,7 @@ import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.spanHolderNew
+import io.prebindgen.covertest.model.vaultHolderNew
 import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.holdEcho
@@ -953,6 +954,50 @@ fun main() {
         check(taggedRank(Tagged(1L, markerOf(2, boom).orThrow()), boom) == 10)
     }
 
+    // The same two axes as the bounded-leaf matrix above, on an opaque HANDLE
+    // leaf — whose `None` rides `0L`, because a `Box` pointer is never zero,
+    // rather than a declared sentinel.
+    //
+    // The fourth row is why this runs rather than being asserted as text: an
+    // `Option<handle>` under an absent ancestor collapses two absences into one
+    // nullable typed view, and the two halves that carry them — the JNI
+    // descriptor and the encoder's `jvalue` — can disagree while both still
+    // compile. That is #433, and the first fix for it broke this row while
+    // fixing the second one.
+    section("an optional handle leaf reads its own niche and its ancestor's null") {
+        // Ancestor absent: both leaves are null through the `?.` alone, and the
+        // one WITH a niche must not report its sentinel as anything else.
+        check(vaultHolderNew(-1L, 5L, 7L, boom) { always, maybe ->
+            "${always == null}/${maybe == null}"
+        } == "true/true")
+
+        // Ancestor present, leaf absent: only the leaf with a niche of its own
+        // can be null here, and it is — through `0L`, not through a JVM null.
+        // The live one is a freshly minted OWNING handle, so it is closed after
+        // reading; `Ingot` is a plain `NativeHandle` with no Cleaner backstop,
+        // and dropping the only reference would leak the allocation.
+        check(vaultHolderNew(0L, 5L, -1L, boom) { always, maybe ->
+            check(maybe == null)
+            val a = always ?: error("the ancestor-nullable leaf was dropped")
+            a.use { it.grams(boom) }
+        } == 5L)
+
+        // Both present: each handle points at its own object, and each is the
+        // JVM's to close.
+        check(vaultHolderNew(0L, 5L, 7L, boom) { always, maybe ->
+            val a = always ?: error("the ancestor-nullable leaf was dropped")
+            val m = maybe ?: error("the niche-carrying leaf was dropped")
+            val total = a.grams(boom) + m.grams(boom)
+            // Each is the JVM's to close, and closing one leaves the other
+            // alone: they are distinct objects, not one pointer delivered twice.
+            a.close()
+            check(a.isClosed() && !m.isClosed())
+            m.close()
+            check(m.isClosed())
+            total
+        } == 12L)
+    }
+
     // The sum whose payloads have LAYERS. The class that reassembles a variant
     // from wire slots is Kotlin, and between a slot and the property there can
     // be a collection, an `Option`, and the leaf conversion. Applying the leaf's
@@ -966,13 +1011,16 @@ fun main() {
         check((layeredOf(0, boom).orThrow() as Layered.Count).v0 == null)
         check((layeredOf(1, boom).orThrow() as Layered.Count).v0 == 4uL)
 
-        // `Option<handle>` — `Layered.Held` — is COMPILED here and not called:
-        // its slot is declared a boxed `Long?` while the Rust side writes a
-        // primitive into it, so invoking either case throws (#433). That is a
-        // defect in the wire under this one, not in the layer carrying that
-        // #429 fixed, and the builder line above is compiled either way, which
-        // is the guard this section is for. Add the two calls here when #433
-        // lands.
+        // `Option<handle>`: the absence rides the handle's own niche, so the
+        // absent case is `0L` in a primitive slot rather than a JVM null in a
+        // boxed one (#433). Both arms run, and closing the present one closes
+        // the handle it minted.
+        check((layeredOf(2, boom).orThrow() as Layered.Held).v0 == null)
+        val held = layeredOf(3, boom).orThrow() as Layered.Held
+        val summary = held.v0 ?: error("the present arm dropped the handle")
+        check(summary.count(boom) == 4L)
+        held.close()
+        check(summary.isClosed())
 
         // `Vec<Option<u64>>`: the absences are inside the list, so a mixed one
         // arrives element by element rather than as one null.

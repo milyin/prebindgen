@@ -135,6 +135,8 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Unsigned` decomposed → [byte, short, int, long, maybeLong] (Callback delivery)
 - `unsigned_series` — `fun unsignedSeries(onError: JniErrorHandler<List<ULong>?>): List<ULong>?`
   - shaped by: return `u64` decomposed → [] (Callback delivery)
+- `vault_holder_new` — `fun <R> vaultHolderNew(seq: Long, count: Long, maybeCount: Long, onError: JniErrorHandler<R?>, build: VaultHolderBuilder<R>): R?`
+  - shaped by: return `VaultHolder` decomposed → [vaultHolderVault__always, vaultHolderVault__maybe] (Callback delivery)
 - `verdict_new` — `fun verdictNew(id: Long, count: Long, total: Double, onError: JniErrorHandler<Verdict?>): Verdict?`
 - `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`
 
@@ -172,6 +174,10 @@ Base package: `io.prebindgen.covertest`
 
 - `escape_probe_new` — `fun escapeProbeNew(value: Long, onError: JniErrorHandler<Esc_Probe?>): Esc_Probe?`
 - `escape_probe_value` — `fun escapeProbeValue(onError: JniErrorHandler<Long>): Long`
+
+## class `io.prebindgen.covertest.model.Ingot` (ptr_class, Rust `Ingot`)
+
+- `ingot_grams` — `fun grams(onError: JniErrorHandler<Long>): Long`
 
 ## class `io.prebindgen.covertest.Payload` (data_class, Rust `Payload`)
 
@@ -214,6 +220,7 @@ Base package: `io.prebindgen.covertest`
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
 - `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
 - `Holder`: data_class → `io.prebindgen.covertest.Holder` (wire `jni :: objects :: JObject`)
+- `Ingot`: ptr_class → `io.prebindgen.covertest.model.Ingot` (wire `jni :: sys :: jlong`)
 - `Layered`: sealed_class → `io.prebindgen.covertest.model.Layered` (wire `?`)
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
@@ -245,6 +252,8 @@ Base package: `io.prebindgen.covertest`
 - `Summary`: ptr_class → `io.prebindgen.covertest.analytics.Summary` (wire `jni :: sys :: jlong`)
 - `Tagged`: data_class → `io.prebindgen.covertest.model.Tagged` (wire `jni :: objects :: JObject`)
 - `Unsigned`: data_class → `io.prebindgen.covertest.model.Unsigned` (wire `jni :: objects :: JObject`)
+- `Vault`: ptr_class → `io.prebindgen.covertest.model.Vault` (wire `jni :: sys :: jlong`)
+- `VaultHolder`: ptr_class → `io.prebindgen.covertest.model.VaultHolder` (wire `jni :: sys :: jlong`)
 - `Verdict`: data_class → `io.prebindgen.covertest.model.Verdict` (wire `jni :: objects :: JObject`)
 - `WrappedFields`: data_class → `io.prebindgen.covertest.WrappedFields` (wire `jni :: objects :: JObject`)
 

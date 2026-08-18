@@ -281,6 +281,14 @@ fn main() {
                 // its wrap; the other's absence is the ancestor's `?.`.
                 .class(ptr_class!(Span))
                 .class(ptr_class!(SpanHolder))
+                // #433: the same matrix on an opaque handle leaf, whose niche
+                // is `0L` rather than a declared sentinel. `VaultHolder` is what
+                // reaches the fourth row — an `Option<handle>` under an absent
+                // ancestor — where the descriptor and the encoder can disagree
+                // while both halves still compile.
+                .class(ptr_class!(Vault))
+                .class(ptr_class!(VaultHolder))
+                .class(ptr_class!(Ingot).method(fun!(ingot_grams)))
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
@@ -434,6 +442,8 @@ fn main() {
         // `None`, never an ancestor's.
         .expand(expand_return!(Span).fields(fields!(span_to_struct)))
         .expand(expand_return!(SpanHolder).field(fun!(span_holder_span)))
+        .expand(expand_return!(Vault).fields(fields!(vault_to_struct)))
+        .expand(expand_return!(VaultHolder).field(fun!(vault_holder_vault)))
         // #220: `ProbeStruct.outcome` is `Option<Lookup>`. Its whole segment
         // gates together — one tuple bind whose absent arm defaults every slot
         // — because a sum's leaves are not independent. The selector boxes, so
@@ -592,6 +602,7 @@ fn main() {
                 .fun(fun!(ledger_each))
                 // #142: the holder whose span is optional.
                 .fun(fun!(span_holder_new))
+                .fun(fun!(vault_holder_new))
                 // A transparent wrapper (`Box<Option<String>>`) in and out. The
                 // model erases the `Box`, so this must cross exactly as a
                 // `String?` — and because this crate compiles its generated

@@ -1198,6 +1198,9 @@ internal object CovNative {
     ): Long
 
     @JvmSynthetic
+    external fun ingotGrams(i: Long, errorSink: Any): Long
+
+    @JvmSynthetic
     external fun labelReverse(l: String, errorSink: Any): String
 
     @JvmSynthetic
@@ -1626,6 +1629,15 @@ internal object CovNative {
 
     @JvmSynthetic
     external fun unsignedSeries(acc: Any?, fold: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
+    external fun vaultHolderNew(
+        seq: Long,
+        count: Long,
+        maybeCount: Long,
+        build: Any,
+        errorSink: Any,
+    ): Any?
 
     @JvmSynthetic
     external fun verdictNew(id: Long, count: Long, total: Double, errorSink: Any): Verdict
