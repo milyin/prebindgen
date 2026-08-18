@@ -1236,10 +1236,11 @@ fn sum_return_composes_with_option_and_vec() {
 /// conversion applied to the list. Nothing caught it because the Rust half
 /// compiles and no test asked for these payloads.
 ///
-/// The last three alternatives are the controls, and they are the reason this
-/// fixture has more variants than the defect had shapes: distributing over a
-/// collection is only right when its elements convert, and a payload with no
-/// layer at all must come out exactly as it did.
+/// The fixture has more variants than the defect had shapes, because each
+/// answer needs its control: distributing over a collection is right only when
+/// its elements convert, a payload with no layer must come out exactly as it
+/// did, and the two layers occur in **both orders** — `Vec<Option<T>>` and
+/// `Option<Vec<T>>` are each accepted, and each needs the other's peel.
 #[test]
 fn a_payload_carries_its_option_and_collection_layers() {
     let loc = myflat_loc();
@@ -1261,6 +1262,8 @@ fn a_payload_carries_its_option_and_collection_layers() {
                     Owned(Handle),
                     Blob(Vec<u8>),
                     Names(Vec<String>),
+                    Values(Option<Vec<Option<u64>>>),
+                    Labels(Option<Vec<String>>),
                     Empty,
                 }
             )),
@@ -1329,6 +1332,19 @@ fn a_payload_carries_its_option_and_collection_layers() {
     assert!(
         kotlin.contains("Probe.Blob(blob_v0!!)"),
         "a byte-array payload is passed straight through:\n{kotlin}"
+    );
+    // A run under an `Option` is still a run: the layers occur in both orders,
+    // and looking for the collection without peeling the `Option` first found
+    // none — so the element conversion landed on the list (#432 review).
+    assert!(
+        kotlin.contains("Probe.Values(values_v0?.map { it?.toULong() })"),
+        "an optional run distributes, and keeps its own null:\n{kotlin}"
+    );
+    // …and the identity guard holds under an `Option` too: nothing to
+    // distribute means no `?.map` either.
+    assert!(
+        kotlin.contains("Probe.Labels(labels_v0)"),
+        "an optional run of unconverted elements is passed through:\n{kotlin}"
     );
     assert!(
         kotlin.contains("Probe.Names(names_v0!!)"),

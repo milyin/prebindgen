@@ -375,6 +375,10 @@ pub enum Layered {
     /// `Vec<Option<u64>>` — the absences are *inside* the list, so the slot is
     /// un-inerted and the conversion runs per element.
     Many(Vec<Option<u64>>),
+    /// A run under an `Option` — the two layers in the other order. Looking for
+    /// the run without peeling the `Option` first finds none, and the element
+    /// conversion lands on the list.
+    Values(Option<Vec<Option<u64>>>),
     /// A control: a run of values that needs no element conversion, and whose
     /// Kotlin type is not a `List` at all.
     Blob(Vec<u8>),
@@ -384,7 +388,8 @@ pub enum Layered {
 
 /// Build a [`Layered`], one `which` per alternative and per case within it:
 /// `0` absent count, `1` present count, `2` absent handle, `3` present handle,
-/// `4` a list mixing present and absent, `5` a byte run, anything else `Plain`.
+/// `4` a list mixing present and absent, `5` an absent run, `6` a present run,
+/// `7` a byte run, anything else `Plain`.
 #[prebindgen]
 pub fn layered_of(which: i32) -> Layered {
     match which {
@@ -393,7 +398,9 @@ pub fn layered_of(which: i32) -> Layered {
         2 => Layered::Held(None),
         3 => Layered::Held(Some(summary_new(4, 8.0))),
         4 => Layered::Many(vec![Some(1), None, Some(3)]),
-        5 => Layered::Blob(vec![1, 2, 3]),
+        5 => Layered::Values(None),
+        6 => Layered::Values(Some(vec![Some(5), None])),
+        7 => Layered::Blob(vec![1, 2, 3]),
         _ => Layered::Plain(7),
     }
 }

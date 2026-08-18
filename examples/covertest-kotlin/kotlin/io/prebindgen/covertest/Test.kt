@@ -952,9 +952,15 @@ fun main() {
         // arrives element by element rather than as one null.
         check((layeredOf(4, boom).orThrow() as Layered.Many).v0 == listOf(1uL, null, 3uL))
 
+        // …and the same two layers in the other order. An absent run is null
+        // rather than an empty list, and a present one still converts element by
+        // element.
+        check((layeredOf(5, boom).orThrow() as Layered.Values).v0 == null)
+        check((layeredOf(6, boom).orThrow() as Layered.Values).v0 == listOf(5uL, null))
+
         // The controls. A `Vec<u8>` payload is a `ByteArray`, and a payload with
         // no layer is passed straight through.
-        check((layeredOf(5, boom).orThrow() as Layered.Blob).v0.toList() == listOf<Byte>(1, 2, 3))
+        check((layeredOf(7, boom).orThrow() as Layered.Blob).v0.toList() == listOf<Byte>(1, 2, 3))
         check((layeredOf(9, boom).orThrow() as Layered.Plain).v0 == 7L)
     }
 

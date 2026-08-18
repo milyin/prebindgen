@@ -1631,6 +1631,10 @@ impl Declarations {
     ///    `!!` would turn a legitimately absent value into an exception. A
     ///    *collection* of optionals is not itself optional — its absences are
     ///    inside it — so that slot is re-asserted like any other.
+    ///
+    ///    The two layers occur in both orders, and the peel is outermost first:
+    ///    `Option<Vec<T>>` is an optional run, and looking for the run without
+    ///    peeling the `Option` finds none.
     /// 2. **Distribute** — a `Vec<T>` payload arrives as a run of element slots,
     ///    so the wrap runs per element rather than on the run. Only when the
     ///    elements actually convert: a run that needs no conversion is already
@@ -1652,28 +1656,37 @@ impl Declarations {
         imports: &mut BTreeSet<String>,
     ) -> String {
         // Off the leaf's own reading — no lookup, and a wrapped spelling
-        // answers as the bare one does.
-        let sequence = leaf.out_ty.sequence_elem();
-        let value = sequence.unwrap_or(&leaf.out_ty);
-        let optional = value.optional_inner().is_some();
-        let arg = if param.raw.is_nullable() && !(optional && sequence.is_none()) {
+        // answers as the bare one does. Peeled outermost first, because the two
+        // layers occur in both orders: `Vec<Option<T>>` and `Option<Vec<T>>` are
+        // each accepted, and detecting the collection without peeling the
+        // `Option` first sees none on the second.
+        let optional = leaf.out_ty.optional_inner();
+        let under = optional.unwrap_or(&leaf.out_ty);
+        let sequence = under.sequence_elem();
+        let element = sequence.unwrap_or(under);
+        let arg = if param.raw.is_nullable() && optional.is_none() {
             format!("{name}!!")
         } else {
             name.to_string()
         };
-        // What the wrap has to spell nullably: the element's own optionality
-        // inside a list, and for a bare payload only when the slot is nullable
-        // too.
-        let nullable = optional && (sequence.is_some() || param.raw.is_nullable());
+        // What the wrap has to spell nullably: inside a run, the element's own
+        // optionality; on a bare payload, the payload's — and then only when
+        // its slot is nullable at all, since a niche representation spells
+        // absence as a value and `?.` on a primitive does not compile.
+        let nullable = if sequence.is_some() {
+            element.optional_inner().is_some()
+        } else {
+            optional.is_some() && param.raw.is_nullable()
+        };
 
         // An enum payload rides its `jint` discriminant, so the interface types
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
         // struct field.
-        let enum_class = self.is_kotlin_enum_reading(value).then(|| {
+        let enum_class = self.is_kotlin_enum_reading(element).then(|| {
             // The `Option` layer peeled off the model, so the entry lookup takes
             // the layer's own reading instead of a spelling to look back up.
-            let inner = value.optional_inner().unwrap_or(value);
+            let inner = element.optional_inner().unwrap_or(element);
             let name = registry
                 .output_entry(inner)
                 .and_then(|e| e.metadata.kotlin_name.clone())
@@ -1700,12 +1713,13 @@ impl Declarations {
         // property's own type, and mapping the identity over it would replace
         // that type rather than preserve it: a `Vec<u8>` payload surfaces as a
         // Kotlin `ByteArray`, and `ByteArray.map { it }` is a `List<Byte>`.
-        let element = wrap("it");
-        if element == "it" {
-            arg
-        } else {
-            format!("{arg}.map {{ {element} }}")
+        let mapped = wrap("it");
+        if mapped == "it" {
+            return arg;
         }
+        // A run under an `Option` keeps its null through the distribution too.
+        let map = if optional.is_some() { "?.map" } else { ".map" };
+        format!("{arg}{map} {{ {mapped} }}")
     }
 
     /// The hoisted **folder-appender** singleton for a **whole single-leaf

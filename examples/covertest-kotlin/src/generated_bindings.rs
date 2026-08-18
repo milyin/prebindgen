@@ -2224,159 +2224,6 @@ pub(crate) unsafe fn JObject_to_Holder_c36a9705<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn JObject_to_Layered_ed4c30e9<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<perftest_flat::Layered, __JniErr> {
-    Ok({
-        let __obj = v;
-        (|| -> ::core::result::Result<perftest_flat::Layered, __JniErr> {
-            if __obj.is_null() {
-                return ::core::result::Result::Err(
-                    <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(
-                        "Layered: null value where a variant was required".to_string(),
-                    ),
-                );
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Layered$Count")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Layered", ": instanceof ",
-                        "io/prebindgen/covertest/model/Layered$Count", ": {}"), e
-                    ),
-                ))?
-            {
-                let __p_v0_raw: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Ljava/lang/Object;")
-                    .and_then(|val| val.l())
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Layered.Count.v0: {}", e)))?;
-                let __p_v0 = JObject_to_Option_u64_32be16a2(env, &__p_v0_raw)?;
-                return ::core::result::Result::Ok(perftest_flat::Layered::Count(__p_v0));
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Layered$Held")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Layered", ": instanceof ",
-                        "io/prebindgen/covertest/model/Layered$Held", ": {}"), e
-                    ),
-                ))?
-            {
-                let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(
-                        __obj,
-                        "v0",
-                        "Lio/prebindgen/covertest/analytics/Summary;",
-                    )
-                    .and_then(|val| val.l())
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Layered.Held.v0: {}", e)))?;
-                let __p_v0_raw: jni::sys::jlong = if __p_v0_obj.is_null() {
-                    0
-                } else {
-                    env.call_method(&__p_v0_obj, "peek", "()J", &[])
-                        .and_then(|val| val.j())
-                        .map_err(|e| <__JniErr as ::core::convert::From<
-                            String,
-                        >>::from(format!("Layered.Held.v0: {}", e)))?
-                };
-                let __p_v0 = jlong_to_Option_Summary_252ef2ba(env, &__p_v0_raw)?;
-                return ::core::result::Result::Ok(perftest_flat::Layered::Held(__p_v0));
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Layered$Many")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Layered", ": instanceof ",
-                        "io/prebindgen/covertest/model/Layered$Many", ": {}"), e
-                    ),
-                ))?
-            {
-                let __p_v0_raw: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "Ljava/util/List;")
-                    .and_then(|val| val.l())
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Layered.Many.v0: {}", e)))?;
-                let __p_v0 = JObject_to_Vec_Option_u64_a34190e7(env, &__p_v0_raw)?;
-                return ::core::result::Result::Ok(perftest_flat::Layered::Many(__p_v0));
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Layered$Blob")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Layered", ": instanceof ",
-                        "io/prebindgen/covertest/model/Layered$Blob", ": {}"), e
-                    ),
-                ))?
-            {
-                let __p_v0_obj: jni::objects::JObject = env
-                    .get_field(__obj, "v0", "[B")
-                    .and_then(|val| val.l())
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Layered.Blob.v0: {}", e)))?;
-                let __p_v0_raw: jni::objects::JByteArray = __p_v0_obj.into();
-                let __p_v0 = JByteArray_to_Vec_u8_7936d5de(env, &__p_v0_raw)?;
-                return ::core::result::Result::Ok(perftest_flat::Layered::Blob(__p_v0));
-            }
-            if env
-                .is_instance_of(__obj, "io/prebindgen/covertest/model/Layered$Plain")
-                .map_err(|e| <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    format!(
-                        concat!("Layered", ": instanceof ",
-                        "io/prebindgen/covertest/model/Layered$Plain", ": {}"), e
-                    ),
-                ))?
-            {
-                let __p_v0_raw: jni::sys::jlong = env
-                    .get_field(__obj, "v0", "J")
-                    .and_then(|val| val.j())
-                    .map_err(|e| <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("Layered.Plain.v0: {}", e)))? as _;
-                let __p_v0 = jlong_to_i64_fbf9a9bc(env, &__p_v0_raw)?;
-                return ::core::result::Result::Ok(perftest_flat::Layered::Plain(__p_v0));
-            }
-            ::core::result::Result::Err(
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(
-                    "Layered: value is not one of its declared variants".to_string(),
-                ),
-            )
-        })()?
-    })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 pub(crate) unsafe fn JObject_to_Lookup_94ada15e<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -9274,6 +9121,33 @@ pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Option_Vec_Option_u64_to_JObject_006312b6<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<Vec<Option<u64>>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let v: Option<Vec<Option<u64>>> = v;
+        {
+            match v {
+                Some(value) => Vec_Option_u64_to_JObject_a34190e7(env, value)?,
+                None => jni::objects::JObject::null().into(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Vec<perftest_flat::Payload>>,
@@ -15749,14 +15623,15 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
     #[allow(non_upper_case_globals)]
     static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __CB_FQN: &str = "io/prebindgen/covertest/model/LayeredBuilderRaw";
-    const __CB_DESCR: &str = "(ILjava/lang/Long;Ljava/lang/Long;Ljava/util/List;[BJ)Ljava/lang/Object;";
+    const __CB_DESCR: &str = "(ILjava/lang/Long;Ljava/lang/Long;Ljava/util/List;Ljava/util/List;[BJ)Ljava/lang/Object;";
     let __out = perftest_flat::layered_of(which);
     let __obj0: jni::sys::jvalue;
     let __obj1: jni::objects::JObject;
     let __obj2: jni::sys::jvalue;
     let __obj3: jni::objects::JObject;
     let __obj4: jni::objects::JObject;
-    let __obj5: jni::sys::jvalue;
+    let __obj5: jni::objects::JObject;
+    let __obj6: jni::sys::jvalue;
     match &__out {
         perftest_flat::Layered::Count(__sv0) => {
             let __enc___obj1 = match Option_u64_to_JObject_32be16a2(
@@ -15781,7 +15656,8 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
             __obj2 = jni::sys::jvalue { j: 0i64 };
             __obj3 = jni::objects::JObject::null();
             __obj4 = jni::objects::JObject::null();
-            __obj5 = jni::sys::jvalue { j: 0i64 };
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::sys::jvalue { j: 0i64 };
         }
         perftest_flat::Layered::Held(__sv0) => {
             let __enc___obj2 = match Option_Summary_to_jlong_252ef2ba(
@@ -15808,7 +15684,8 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
             __obj1 = jni::objects::JObject::null();
             __obj3 = jni::objects::JObject::null();
             __obj4 = jni::objects::JObject::null();
-            __obj5 = jni::sys::jvalue { j: 0i64 };
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::sys::jvalue { j: 0i64 };
         }
         perftest_flat::Layered::Many(__sv0) => {
             let __enc___obj3 = match Vec_Option_u64_to_JObject_a34190e7(
@@ -15833,10 +15710,11 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
             __obj1 = jni::objects::JObject::null();
             __obj2 = jni::sys::jvalue { j: 0i64 };
             __obj4 = jni::objects::JObject::null();
-            __obj5 = jni::sys::jvalue { j: 0i64 };
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::sys::jvalue { j: 0i64 };
         }
-        perftest_flat::Layered::Blob(__sv0) => {
-            let __enc___obj4 = match Vec_u8_to_JByteArray_7936d5de(
+        perftest_flat::Layered::Values(__sv0) => {
+            let __enc___obj4 = match Option_Vec_Option_u64_to_JObject_006312b6(
                 &mut env,
                 __sv0.clone(),
             ) {
@@ -15853,15 +15731,19 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
                     return jni::objects::JObject::null().into();
                 }
             };
-            __obj4 = __enc___obj4.into();
+            __obj4 = __enc___obj4;
             __obj0 = jni::sys::jvalue { i: 3 };
             __obj1 = jni::objects::JObject::null();
             __obj2 = jni::sys::jvalue { j: 0i64 };
             __obj3 = jni::objects::JObject::null();
-            __obj5 = jni::sys::jvalue { j: 0i64 };
+            __obj5 = jni::objects::JObject::null();
+            __obj6 = jni::sys::jvalue { j: 0i64 };
         }
-        perftest_flat::Layered::Plain(__sv0) => {
-            let __enc___obj5 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+        perftest_flat::Layered::Blob(__sv0) => {
+            let __enc___obj5 = match Vec_u8_to_JByteArray_7936d5de(
+                &mut env,
+                __sv0.clone(),
+            ) {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
                     signal_binding_error(
@@ -15875,14 +15757,38 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
                     return jni::objects::JObject::null().into();
                 }
             };
-            __obj5 = jni::sys::jvalue {
-                j: __enc___obj5,
-            };
+            __obj5 = __enc___obj5.into();
             __obj0 = jni::sys::jvalue { i: 4 };
             __obj1 = jni::objects::JObject::null();
             __obj2 = jni::sys::jvalue { j: 0i64 };
             __obj3 = jni::objects::JObject::null();
             __obj4 = jni::objects::JObject::null();
+            __obj6 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Layered::Plain(__sv0) => {
+            let __enc___obj6 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj6 = jni::sys::jvalue {
+                j: __enc___obj6,
+            };
+            __obj0 = jni::sys::jvalue { i: 5 };
+            __obj1 = jni::objects::JObject::null();
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::objects::JObject::null();
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::objects::JObject::null();
         }
     }
     match __CB_MID
@@ -15904,7 +15810,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
                 jni::sys::jvalue {
                     l: __obj4.as_raw(),
                 },
-                __obj5,
+                jni::sys::jvalue {
+                    l: __obj5.as_raw(),
+                },
+                __obj6,
             ],
         )
     {
