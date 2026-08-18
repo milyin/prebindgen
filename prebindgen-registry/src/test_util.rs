@@ -119,6 +119,18 @@ pub(crate) fn unique_test_dir(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), seq))
 }
 
+/// Test-only adapter preserving the concise spelling assertions while routing
+/// them through the same registry-owned key as production callbacks.
+pub(crate) trait SpellForTest {
+    fn spell(&self) -> proc_macro2::TokenStream;
+}
+
+impl SpellForTest for prebindgen_flat::flat::TypeRef {
+    fn spell(&self) -> proc_macro2::TokenStream {
+        crate::Emit::for_test().spell(self)
+    }
+}
+
 /// Write a capture directory holding `records`, the way a source crate's build
 /// script and the `#[prebindgen]` macro write one: a `prebindgen_output.toml`
 /// naming the crate, and the captures under the `default` group's directory.

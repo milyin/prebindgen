@@ -21,8 +21,9 @@
 //!   [`ConverterImpl`] (a generated converter fn plus its wire type) for each
 //!   crossing the registry hands it, and gives them all back through
 //!   `RegistryBuilder::convert_with`.
-//! * **Emits the wrapper code per item** — `on_function` / `on_struct` /
-//!   `on_enum` / `on_const` on the [`Prebindgen`] trait.
+//! * **Owns the Rust-emission key** and emits wrapper code per item —
+//!   `on_function` / `on_struct` / `on_enum` / `on_const` on the
+//!   [`Prebindgen`] trait.
 //!
 //! Everything language-specific that must travel through the pipeline rides in
 //! the back-end's chosen [`Metadata`](Prebindgen::Metadata) type (a JNI
@@ -100,6 +101,7 @@ pub(crate) mod declared_target;
 mod destination;
 pub mod diagnostics;
 pub mod domain;
+mod emit;
 pub mod expand;
 pub mod niches;
 pub mod prebindgen;
@@ -112,9 +114,11 @@ pub mod write;
 
 /// The flat model itself lives in the separate `prebindgen-flat` crate —
 /// re-exported here so an adapter names one crate root for the whole
-/// pipeline.
+/// pipeline. `RustEmitter` is deliberately omitted: registry-only adapters
+/// receive rendering authority as [`Emit`] in callbacks. A different collector
+/// depends on `prebindgen-flat` directly to implement its own key.
 pub use ::prebindgen_flat::{flat, shape, types_util};
-pub use ::prebindgen_flat::{Element, Emit, Flat};
+pub use ::prebindgen_flat::{Element, Flat};
 
 pub use self::{
     decl::{
@@ -123,6 +127,7 @@ pub use self::{
     },
     diagnostics::{warn_unclaimed, Claimed},
     domain::{DomainScalar, RepresentationDomain, ScalarValue},
+    emit::Emit,
     niches::{NicheSlot, Niches},
     prebindgen::{ConverterImpl, NamePredicate, Prebindgen, Stage},
     registry::{

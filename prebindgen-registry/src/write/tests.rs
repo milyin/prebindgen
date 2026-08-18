@@ -29,7 +29,7 @@ impl Prebindgen for IdentityExt {
         &self,
         f: &prebindgen_flat::flat::Function,
         _registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_fn(f)
     }
@@ -38,7 +38,7 @@ impl Prebindgen for IdentityExt {
         &self,
         s: &prebindgen_flat::flat::Struct,
         _registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_struct(s)
     }
@@ -47,7 +47,7 @@ impl Prebindgen for IdentityExt {
         &self,
         v: &prebindgen_flat::flat::Variant,
         _registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_variant(v)
     }
@@ -56,7 +56,7 @@ impl Prebindgen for IdentityExt {
         &self,
         e: &prebindgen_flat::flat::Enum,
         _registry: &Registry<Self::Metadata>,
-        emit: &prebindgen_flat::Emit,
+        emit: &crate::Emit,
     ) -> TokenStream {
         emit.verbatim_enum(e)
     }
@@ -242,33 +242,33 @@ fn guards_emit_ungated_and_in_stream_order() {
             &self,
             f: &prebindgen_flat::flat::Function,
             _r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
-            f.origin.spell()
+            _emit.verbatim_fn(f)
         }
         fn on_struct(
             &self,
             s: &prebindgen_flat::flat::Struct,
             _r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
-            s.origin.spell()
+            _emit.verbatim_struct(s)
         }
         fn on_variant(
             &self,
             v: &prebindgen_flat::flat::Variant,
             _r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
-            v.origin.spell()
+            _emit.verbatim_variant(v)
         }
         fn on_enum(
             &self,
             e: &prebindgen_flat::flat::Enum,
             _r: &Registry<()>,
-            _emit: &prebindgen_flat::Emit,
+            _emit: &crate::Emit,
         ) -> TokenStream {
-            e.origin.spell()
+            _emit.verbatim_enum(e)
         }
     }
 

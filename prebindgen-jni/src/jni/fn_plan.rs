@@ -73,7 +73,7 @@ pub(crate) enum ParamForm {
 pub(crate) struct PlanLeaf {
     /// The leaf's **reading** — classification and spelling in one value, so
     /// the two cannot disagree and no consumer has to look the type up. Spell
-    /// with `reading.spell()`.
+    /// with `emit.spell(reading)` in an emission callback.
     pub reading: TypeRef,
     /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
     /// hard-keyword escaping) — shared by the wrapper signature and the
@@ -118,7 +118,7 @@ pub(crate) enum InputKind {
     /// Vec-handle on the wire, built by pushing element leaves.
     /// The element as a **reading**, and the CANONICAL one: the vec-helper plan
     /// and the element key are both taken from it, and generated Rust spells
-    /// `elem.spell()`. `elem_wrappers` is what the storage therefore does not
+    /// `emit.spell(elem)`. `elem_wrappers` is what the storage therefore does not
     /// carry, put back per element on consumption (#296) — empty for the
     /// ordinary case, and a list rather than a second `TypeRef` because every
     /// variant of this enum pays its size.

@@ -53,7 +53,7 @@ pub struct DeconSpec {
     /// The decomposed type as first encountered. A **reading**, so "compare via
     /// [`TypeKey`](crate::registry::TypeKey), not syntactically" is
     /// the type rather than an instruction: `source.key()` is the identity and
-    /// `source.spell()` is what generated Rust says.
+    /// `emit.spell(&source)` is what an emission callback writes.
     pub source: prebindgen_flat::flat::TypeRef,
     /// Flattened leaves in declared record order — names, types, paths,
     /// nullability all declaration-fixed.
@@ -310,7 +310,7 @@ pub struct UnfoldLeaf {
     /// The **reading** of the type whose resolved output converter encodes this
     /// leaf — a reference type for accessors (`&str`, `&F`), `&Source` for the
     /// identity leaf (so the borrowed-opaque clone converter / projection is
-    /// reused). Spell it with `out_ty.spell()`.
+    /// reused). Spell it with `emit.spell(&out_ty)` in an emission callback.
     ///
     /// A reading rather than a spelling because a consumer asking what this
     /// leaf's type *means* had to hand the spelling back to the registry and
