@@ -33,8 +33,8 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Target | header | rustc | bad header | bad rust | rejected | panic | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| C | 65 | 0 | 0 | 5 | 42 | 32 | 22 |
-| Kotlin/JNI | 0 | 95 | 0 | 6 | 34 | 9 | 22 |
+| C | 70 | 0 | 0 | 0 | 42 | 32 | 22 |
+| Kotlin/JNI | 0 | 98 | 0 | 1 | 36 | 9 | 22 |
 
 The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin/JNI cell stops at rustc because this crate does not run the Kotlin compiler. `rustc` is therefore the top state for JNI and an intermediate one for C.
 
@@ -52,24 +52,24 @@ The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin
 | `sum` | `Sum` | header | rustc |
 | `unit_enum` | `Mode` | header | rustc |
 | `shared_ref` | `&Rec` | rejected | rustc |
-| `exclusive_ref` | `&mut Rec` | rejected | **bad rust** |
+| `exclusive_ref` | `&mut Rec` | rejected | rejected |
 | `handle_ref` | `&Handle` | header | rustc |
-| `out_param` | `&mut MaybeUninit<u64>` | rejected | **bad rust** |
+| `out_param` | `&mut MaybeUninit<u64>` | rejected | rejected |
 | `opt_scalar` | `Option<u64>` | header | rustc |
 | `vec_scalar` | `Vec<u64>` | rejected | rejected |
 | `slice_scalar` | `&[u64]` | header | rejected |
 | `slice_mut_scalar` | `&mut [u64]` | rejected | rejected |
 | `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
-| `cow_str` | `Cow<'static, str>` | rejected | **bad rust** |
-| `opt_record` | `Option<Rec>` | **bad rust** | rustc |
+| `cow_str` | `Cow<'static, str>` | rejected | rustc |
+| `opt_record` | `Option<Rec>` | header | rustc |
 | `opt_handle` | `Option<Handle>` | header | rustc |
 | `opt_ref` | `Option<&Handle>` | header | rustc |
 | `vec_record` | `Vec<Rec>` | rejected | rustc |
 | `vec_handle` | `Vec<Handle>` | rejected | **panic** |
 | `vec_ref` | `Vec<&Handle>` | rejected | **panic** |
 | `vec_sum` | `Vec<Sum>` | rejected | rustc |
-| `opt_sum` | `Option<Sum>` | **bad rust** | rustc |
+| `opt_sum` | `Option<Sum>` | header | rustc |
 | `array_record` | `[Rec; 2]` | rejected | rejected |
 | `opt_vec` | `Option<Vec<u64>>` | rejected | rejected |
 | `vec_opt` | `Vec<Option<u64>>` | rejected | rustc |
@@ -85,7 +85,9 @@ The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin
 - `unit` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `()`
 - `shared_ref` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `& Rec`
 - `exclusive_ref` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `& mut Rec`
+- `exclusive_ref` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `& mut Rec`
 - `out_param` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `& mut MaybeUninit < u64 >`
+- `out_param` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `& mut MaybeUninit < u64 >`
 - `vec_scalar` / C: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `Vec < u64 >`
 - `vec_scalar` / Kotlin/JNI: 1 required type(s) could not be resolved: — error: unresolved prebindgen input type `Vec < u64 >`
 - `slice_scalar` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `& [u64]` — error: unresolved prebindgen input type `[u64]`
@@ -136,7 +138,7 @@ The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin
 | `out_param` | `&mut MaybeUninit<u64>` | rejected | rejected |
 | `opt_scalar` | `Option<u64>` | header | rustc |
 | `vec_scalar` | `Vec<u64>` | header | rustc |
-| `slice_scalar` | `&[u64]` | **bad rust** | rejected |
+| `slice_scalar` | `&[u64]` | header | rejected |
 | `slice_mut_scalar` | `&mut [u64]` | rejected | rejected |
 | `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
@@ -146,7 +148,7 @@ The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin
 | `opt_ref` | `Option<&Handle>` | header | rustc |
 | `vec_record` | `Vec<Rec>` | header | rustc |
 | `vec_handle` | `Vec<Handle>` | header | rustc |
-| `vec_ref` | `Vec<&Handle>` | **bad rust** | rustc |
+| `vec_ref` | `Vec<&Handle>` | header | rustc |
 | `vec_sum` | `Vec<Sum>` | header | rustc |
 | `opt_sum` | `Option<Sum>` | header | rustc |
 | `array_record` | `[Rec; 2]` | rejected | rejected |
@@ -209,7 +211,7 @@ The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin
 | `slice_mut_scalar` | `&mut [u64]` | — | — |
 | `array_scalar` | `[u8; 4]` | **panic** | rustc |
 | `boxed_scalar` | `Box<u64>` | **panic** | rejected |
-| `cow_str` | `Cow<'static, str>` | **panic** | **bad rust** |
+| `cow_str` | `Cow<'static, str>` | **panic** | rustc |
 | `opt_record` | `Option<Rec>` | **panic** | rustc |
 | `opt_handle` | `Option<Handle>` | **panic** | rustc |
 | `opt_ref` | `Option<&Handle>` | — | — |
@@ -287,9 +289,9 @@ The two targets stop at different stages: a C cell goes on to cbindgen, a Kotlin
 | `slice_mut_scalar` | `&mut [u64]` | — | — |
 | `array_scalar` | `[u8; 4]` | rejected | rustc |
 | `boxed_scalar` | `Box<u64>` | rejected | rejected |
-| `cow_str` | `Cow<'static, str>` | rejected | **bad rust** |
+| `cow_str` | `Cow<'static, str>` | rejected | rustc |
 | `opt_record` | `Option<Rec>` | **panic** | rustc |
-| `opt_handle` | `Option<Handle>` | **bad rust** | rustc |
+| `opt_handle` | `Option<Handle>` | header | rustc |
 | `opt_ref` | `Option<&Handle>` | — | — |
 | `vec_record` | `Vec<Rec>` | **panic** | rustc |
 | `vec_handle` | `Vec<Handle>` | **panic** | **panic** |
@@ -388,7 +390,7 @@ Each row shows the canonical answer beside the varied one, because the differenc
 | `unit_enum` | return | opaque handle | header | header | **bad rust** | rustc |
 | `vec_record` | return | opaque handle | header | header | rustc | rustc |
 | `vec_record` | parameter | opaque handle | rejected | rejected | **panic** | rustc |
-| `opt_record` | parameter | opaque handle | header | **bad rust** | rustc | rustc |
+| `opt_record` | parameter | opaque handle | header | header | rustc | rustc |
 
 <details><summary>What the generators said</summary>
 
