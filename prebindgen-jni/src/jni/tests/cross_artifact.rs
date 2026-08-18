@@ -523,14 +523,14 @@ fn cross_artifact_optional_iterable_fold_agrees() {
         );
     }
     // …and the Kotlin wrapper surface is the generic fold on both, returning
-    // `A` for the bare shape and `A?` for the `Optional`-wrapped one.
+    // A? for both: null is the recovery value or the optional result.
     let wrappers = kotlin
         .values()
         .find(|src| src.contains("fun <A> zThingsAll"))
         .expect("a generated file declares the fold wrappers");
     let kc: String = wrappers.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
-        kc.contains("fun<A>zThingsAll(acc:A,onError:JniErrorHandler<A>,fold:ZThingFolder<A>):A{"),
+        kc.contains("fun<A>zThingsAll(acc:A,onError:JniErrorHandler<A?>,fold:ZThingFolder<A>):A?{"),
         "bare fold wrapper surface:\n{wrappers}"
     );
     assert!(

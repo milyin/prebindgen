@@ -560,7 +560,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
     // The folder singleton wraps each raw `jlong` element into the typed handle
     // class and appends it — no Rust object construction.
     assert!(
-        kc.contains("ZThing(element)") || kc.contains("acc.add(ZThing("),
+        kc.contains("ZThing.fromRawPtr(element)") || kc.contains("acc.add(ZThing.fromRawPtr("),
         "{kotlin}"
     );
     // `Option<Vec<…>>` surfaces as a nullable list.
@@ -1727,9 +1727,26 @@ fn data_class_properties_match_their_from_parts_params() {
     // …and the factory reassembles into exactly those properties: the nested
     // child is inlined as its own leaves, the handle arrives as a raw pointer
     // and the enum as its discriminant, then each is rebuilt.
-    assert!(kc.contains("Bag(Handle(handle)"), "{kotlin}");
+    assert!(kc.contains("Bag(Handle.fromRawPtr(handle)"), "{kotlin}");
     assert!(kc.contains("Child.fromParts(child_n)"), "{kotlin}");
     assert!(kc.contains("Level.fromInt(level)"), "{kotlin}");
+
+    // …and the raw-pointer guard follows that same plan, factory by factory
+    // (#37). `Bag` takes a handle leaf as a bare `Long`, so its factory can
+    // forge one and carries both guards; `Child` takes an `i64` and carries
+    // neither — marking it would remove a safe factory from Java and make
+    // consumers opt into a contract it does not have. The negative half of
+    // this rule is pinned again in `snapshots::raw_pointer_entry_points_are_guarded`.
+    assert!(
+        kc.contains(
+            "@JvmSynthetic@io.test.jni.UnsafeNativeApi@JvmStaticpublicfunfromParts(handle:Long"
+        ),
+        "the handle-bearing factory is guarded:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("@JvmStaticpublicfunfromParts(n:Long):Child"),
+        "the pointer-free factory is not:\n{kotlin}"
+    );
 }
 
 /// Every shape an array length can take — a FREE const, an ASSOCIATED const,

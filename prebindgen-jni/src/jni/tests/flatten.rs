@@ -209,7 +209,7 @@ fn error_unwrap_universal_records() {
     // The fallible wrapper takes BOTH channels; the domain redispatch wraps the
     // captured leaves (no `je`), the binding one forwards its single message.
     assert!(
-        all.contains("returnonError.run(ZErr(__dcap.ze0!!),__dcap.ze1!!,__dcap.ze2)"),
+        all.contains("returnonError.run(ZErr.fromRawPtr(__dcap.ze0!!),__dcap.ze1!!,__dcap.ze2)"),
         "{all}"
     );
     assert!(
@@ -1362,7 +1362,7 @@ fn gc_managed_handle_lifecycle() {
 
     // The gc class extends GcNativeHandle and self-registers via the cell.
     assert!(
-        all.contains("classZThing(initialPtr:Long):GcNativeHandle(initialPtr)"),
+        all.contains("classZThingprivateconstructor(initialPtr:Long):GcNativeHandle(initialPtr)"),
         "{raw}"
     );
     assert!(
@@ -1377,19 +1377,19 @@ fn gc_managed_handle_lifecycle() {
     // take(): ticket voided, ownership moves into the fresh wrapper.
     assert!(
         all.contains(
-            "valp=releaseCell(cell)__cleanable?.clean()returnZThing(if(p!=0L)pelsecell.get())"
+            "valp=releaseCell(cell)__cleanable?.clean()returnZThing.fromRawPtr(if(p!=0L)pelsecell.get())"
         ),
         "{raw}"
     );
 
     // The plain class keeps the field-backed lifecycle.
     assert!(
-        all.contains("classZOther(initialPtr:Long):NativeHandle(initialPtr)"),
+        all.contains("classZOtherprivateconstructor(initialPtr:Long):NativeHandle(initialPtr)"),
         "{raw}"
     );
     assert!(all.contains("ptr=por1L"), "{raw}");
     assert!(
-        !all.contains("classZOther(initialPtr:Long):GcNativeHandle"),
+        !all.contains("classZOtherprivateconstructor(initialPtr:Long):GcNativeHandle"),
         "{raw}"
     );
 
@@ -2093,10 +2093,13 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
     let ac: String = all.split_whitespace().collect();
     // The typed handle class with its instance method, and the typed factory
     // wrapper returning the class — the full declaration↔signature chain.
-    assert!(ac.contains("classZThing(initialPtr:Long)"), "{all}");
+    assert!(
+        ac.contains("classZThingprivateconstructor(initialPtr:Long)"),
+        "{all}"
+    );
     assert!(ac.contains("funname(onError:"), "{all}");
     assert!(
-        ac.contains("funzThingGet(onError:JniErrorHandler<ZThing>):ZThing"),
+        ac.contains("funzThingGet(onError:JniErrorHandler<ZThing?>):ZThing?"),
         "{all}"
     );
 }

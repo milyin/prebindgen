@@ -5,14 +5,16 @@
 // examples had to be ```ignore — never compiled, free to rot.
 //
 // This is *not* `init_prebindgen_out_dir` in miniature. That function also
-// cleans the output directory, writes `crate_name.txt` and `features.txt`, and
+// cleans the output directory, writes `prebindgen_output.toml`, and
 // exports the crate's real feature list — all of which exist so a *downstream*
 // crate can later read this one's captured surface through `Source`. Nothing
 // reads prebindgen's own output, so this supplies only the two things macro
 // expansion itself touches:
 //
 //   - the `prebindgen` subdirectory, which `#[prebindgen]` opens with
-//     `create_new` to write its JSONL into;
+//     `create_new` to write its JSONL into, and the description file the macro
+//     checks the format against before it writes (`api::output`) — spelled out
+//     here because a crate cannot call its own build-dependency;
 //   - `PREBINDGEN_FEATURES`, which `features!()` reads. Empty is correct here:
 //     the doctests assert nothing about its contents.
 //
@@ -28,5 +30,13 @@ fn main() {
             prebindgen_dir.display()
         )
     });
+    // Format 1, as `api::output::FORMAT` defines it. Written by hand for the
+    // reason above; if the number moves, the doctests that run `#[prebindgen]`
+    // fail with the mismatch this file is here to avoid faking.
+    std::fs::write(
+        prebindgen_dir.join("prebindgen_output.toml"),
+        "format = 1\n\n[package]\nname = \"prebindgen\"\nfeatures = []\n",
+    )
+    .unwrap_or_else(|e| panic!("failed to describe the prebindgen output directory: {e}"));
     println!("cargo:rustc-env=PREBINDGEN_FEATURES=");
 }

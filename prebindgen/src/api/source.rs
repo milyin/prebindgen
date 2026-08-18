@@ -9,8 +9,14 @@ use itertools::Itertools;
 use roxygen::roxygen;
 
 use crate::{
-    api::{batching::cfg_filter, record::Record, utils::jsonl::read_jsonl_file},
-    SourceLocation, TargetTriple, CRATE_NAME_FILE, FEATURES_FILE,
+    api::{
+        batching::cfg_filter,
+        layout::{decode_group_dir_name, group_dir_name},
+        output::Output,
+        record::Record,
+        utils::jsonl::read_jsonl_file,
+    },
+    SourceLocation, TargetTriple,
 };
 
 /// File extension for data files
@@ -71,7 +77,7 @@ pub struct Source {
     // Configuration needed to build a CfgFilter at iteration time
     features_constant: Option<String>,
     target_triple: Option<String>,
-    features_list: Vec<String>, // normalized list from features.txt
+    features_list: Vec<String>, // enabled features, from the description file
 }
 
 impl Source {
@@ -107,18 +113,13 @@ impl Source {
                 input_dir.display()
             );
         }
-        // The stored name (CARGO_PKG_NAME at capture time) doubles as the
-        // "directory was initialized" check, so it is read even when
-        // overridden. The override wins: it is the name THIS crate
-        // references the source crate by (a Cargo.toml dependency rename).
-        let stored_crate_name = read_stored_crate_name(input_dir).unwrap_or_else(|| {
-            panic!(
-                "The directory {} was not initialized with init_prebindgen_out_dir(). \
-                Please ensure that init_prebindgen_out_dir() is called in the build.rs of the source crate.",
-                input_dir.display()
-            )
-        });
-        let crate_name = crate_name_override.unwrap_or(stored_crate_name);
+        // The description also carries the format these captures are in, and
+        // reading it is what verifies that this prebindgen wrote them — so it
+        // is read even when the name it holds is overridden. The override
+        // wins: it is the name THIS crate references the source crate by (a
+        // Cargo.toml dependency rename).
+        let output = Output::read(input_dir);
+        let crate_name = crate_name_override.unwrap_or(output.package.name);
 
         let groups = Self::discover_groups(input_dir);
         let mut items = HashMap::new();
@@ -141,8 +142,7 @@ impl Source {
             items.insert(group, group_items);
         }
 
-        // Read features list once and store normalized list
-        let features_list = read_features_from_out_dir(input_dir);
+        let features_list = output.package.features;
 
         Self {
             crate_name,
@@ -323,38 +323,34 @@ impl Source {
         builder.build()
     }
 
-    /// Internal method to read all exported files matching the group name pattern `<group>_*`
+    /// Read every capture file of one group: `<input_dir>/<group>/*.jsonl`.
+    ///
+    /// The proc-macro names each file after the record it holds, so a file that
+    /// two compilations both produced exists once. Records that only *some*
+    /// compilations see — a `#[cfg(test)]` item, say — arrive as extra files and
+    /// are merged here, which is why this deduplicates by name (plus `cfg`)
+    /// rather than trusting the file set.
     fn read_group<P: AsRef<Path>>(input_dir: P, group: &str) -> Vec<Record> {
-        let pattern = format!("{group}_");
         let mut record_map = HashMap::new();
 
-        // Read the directory and find all matching files
-        if let Ok(entries) = fs::read_dir(&input_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
-                        #[cfg(feature = "debug")]
-                        println!("Reading exported file: {}", path.display());
-                        let path_clone = path.clone();
+        for path in Self::group_files(input_dir.as_ref(), group) {
+            #[cfg(feature = "debug")]
+            println!("Reading exported file: {}", path.display());
 
-                        match read_jsonl_file(&path) {
-                            Ok(records) => {
-                                for record in records {
-                                    // Use a HashMap to deduplicate records by name and cfg
-                                    let key = if let Some(cfg) = &record.cfg {
-                                        format!("{}#{}", record.name, cfg)
-                                    } else {
-                                        record.name.clone()
-                                    };
-                                    record_map.insert(key, record);
-                                }
-                            }
-                            Err(e) => {
-                                panic!("Failed to read {}: {}", path_clone.display(), e);
-                            }
-                        }
+            match read_jsonl_file(&path) {
+                Ok(records) => {
+                    for record in records {
+                        // Use a HashMap to deduplicate records by name and cfg
+                        let key = if let Some(cfg) = &record.cfg {
+                            format!("{}#{}", record.name, cfg)
+                        } else {
+                            record.name.clone()
+                        };
+                        record_map.insert(key, record);
                     }
+                }
+                Err(e) => {
+                    panic!("Failed to read {}: {}", path.display(), e);
                 }
             }
         }
@@ -363,22 +359,76 @@ impl Source {
         record_map.into_values().collect::<Vec<_>>()
     }
 
+    /// The capture files belonging to `group`.
+    fn group_files(input_dir: &Path, group: &str) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+
+        if let Ok(entries) = fs::read_dir(input_dir.join(group_dir_name(group))) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with(JSONL_EXTENSION))
+                {
+                    files.push(path);
+                }
+            }
+        }
+
+        files
+    }
+
     /// Internal method to discover all available groups from the directory
+    ///
+    /// A group is a subdirectory whose name encodes the group reversibly (so
+    /// that two groups differing only in case, or named after a Windows device,
+    /// still get one directory each), and the exact name is decoded back out of
+    /// it — see [`layout`](crate::layout).
+    ///
+    /// A capture that is *not* under such a directory is refused rather than
+    /// skipped. The description file says which format this directory is in,
+    /// but the macro that wrote the captures is a different package from the
+    /// build script that wrote the description
+    /// ([`output`](crate::api::output)), so a capture outside the layout is how
+    /// a macro that never learned the format announces itself — prebindgen ≤
+    /// 0.5.0 leaves `{group}_{pid}_{thread}.jsonl` here. Skipping those is the
+    /// silent empty binding this whole file exists to prevent.
     fn discover_groups<P: AsRef<Path>>(input_dir: P) -> HashSet<String> {
+        let input_dir = input_dir.as_ref();
         let mut groups = HashSet::new();
 
-        // Discover all available groups
         if let Ok(entries) = fs::read_dir(input_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.ends_with(JSONL_EXTENSION) {
-                        // Extract group name from filename (everything before the first underscore)
-                        if let Some(underscore_pos) = file_name.find('_') {
-                            let group_name = &file_name[..underscore_pos];
-                            groups.insert(group_name.to_string());
+                // A group directory is ASCII, so a name that is not UTF-8 is
+                // not one — but it still has to face the damage check below
+                // rather than being skipped with its captures inside.
+                let file_name = path.file_name().and_then(|name| name.to_str());
+                if path.is_dir() {
+                    match file_name.and_then(decode_group_dir_name) {
+                        Some(group) => {
+                            groups.insert(group);
                         }
+                        None => assert!(
+                            !holds_captures(&path),
+                            "{} holds prebindgen captures but is not a group directory; \
+                             the capture directory is damaged, or was written by a \
+                             prebindgen that lays captures out differently — rebuild the \
+                             source crate",
+                            path.display()
+                        ),
                     }
+                } else {
+                    assert!(
+                        !file_name.is_some_and(|name| name.ends_with(JSONL_EXTENSION)),
+                        "{} is a prebindgen capture outside any group directory. The \
+                         `#[prebindgen]` macro that wrote it does not write the layout \
+                         this prebindgen reads: `prebindgen-proc-macro` and `prebindgen` \
+                         are separate dependencies of the source crate, and Cargo does \
+                         not check that they agree. Name one prebindgen in both.",
+                        path.display()
+                    );
                 }
             }
         }
@@ -387,29 +437,20 @@ impl Source {
     }
 }
 
-/// Read the crate name from the stored file
-fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
-    let crate_name_path = input_dir.join(CRATE_NAME_FILE);
-    fs::read_to_string(crate_name_path)
-        .ok()
-        .map(|s| s.trim().to_string())
-}
-
-/// Read enabled features list from FEATURES_FILE and normalize into a sorted, deduplicated Vec<String>
-fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
-    let features_path = input_dir.join(FEATURES_FILE);
-    let Some(contents) = fs::read_to_string(features_path).ok() else {
-        return Vec::new();
-    };
-    let mut features: Vec<String> = contents
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(|s| s.to_string())
-        .collect();
-    features.sort();
-    features.dedup();
-    features
+/// Whether a directory holds capture files.
+///
+/// Used to tell a directory that is not a group's — Cargo puts other things in
+/// `OUT_DIR` — from one whose name this build cannot decode, which would mean
+/// dropping records silently.
+fn holds_captures(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.ends_with(JSONL_EXTENSION))
+        })
+    })
 }
 
 /// Builder for constructing a `Source` with custom options
@@ -469,8 +510,8 @@ impl Builder {
     /// from the source crate.
     ///
     /// It's important to note that the set of features to filter is determined
-    /// not by this constant, but by file "features.txt" in
-    /// prebindgen output directory. These are features which the source crate was
+    /// not by this constant, but by the `package.features` list in
+    /// `prebindgen_output.toml` in the prebindgen output directory. These are features which the source crate was
     /// built with *as build.rs dependency*. The constant contains the features which
     /// the source crate was built *as library dependency*.
     /// The purpose of the constant is to use it in the assert in the
@@ -550,5 +591,185 @@ impl Builder {
             self.target_triple,
             self.crate_name,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::api::record::RecordKind;
+
+    /// Publish a record into `group`'s directory the way the macro does.
+    fn write(dir: &Path, group: &str, name: &str) {
+        let group_dir = dir.join(group_dir_name(group));
+        fs::create_dir_all(&group_dir).unwrap();
+        let record = Record::new(
+            RecordKind::Struct,
+            name.to_string(),
+            format!("pub struct {name};"),
+            Default::default(),
+            None,
+        );
+        let serialized = record.to_jsonl_string().unwrap();
+        fs::write(
+            group_dir.join(crate::api::layout::capture_file_name(name, &serialized)),
+            format!("{serialized}\n"),
+        )
+        .unwrap();
+    }
+
+    fn names_of(dir: &Path, group: &str) -> Vec<String> {
+        let mut names = Source::read_group(dir, group)
+            .into_iter()
+            .map(|record| record.name)
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    fn groups(dir: &Path) -> Vec<String> {
+        let mut groups = Source::discover_groups(dir).into_iter().collect::<Vec<_>>();
+        groups.sort();
+        groups
+    }
+
+    #[test]
+    fn groups_are_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default", "Alpha");
+        write(dir.path(), "default", "Beta");
+        write(dir.path(), "structs", "Gamma");
+
+        assert_eq!(groups(dir.path()), ["default", "structs"]);
+        assert_eq!(names_of(dir.path(), "default"), ["Alpha", "Beta"]);
+        assert_eq!(names_of(dir.path(), "structs"), ["Gamma"]);
+    }
+
+    #[test]
+    fn groups_differing_only_in_case_stay_apart() {
+        // `.join(group)` would merge these on macOS and Windows, so the
+        // directory name leads with a digest of the group.
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "Foo", "Upper");
+        write(dir.path(), "foo", "Lower");
+
+        assert_eq!(groups(dir.path()), ["Foo", "foo"]);
+        assert_eq!(names_of(dir.path(), "Foo"), ["Upper"]);
+        assert_eq!(names_of(dir.path(), "foo"), ["Lower"]);
+    }
+
+    #[test]
+    fn a_group_may_be_named_anything_a_string_literal_can_hold() {
+        // Including names a filesystem would otherwise refuse or mangle:
+        // Windows devices, path separators, `..`, and non-ASCII.
+        let dir = tempfile::tempdir().unwrap();
+        let hostile = [
+            "CON", "NUL", "COM1", "LPT1", "my_group", "a/b", "..", "grüppe", "",
+        ];
+        for (index, group) in hostile.iter().enumerate() {
+            write(dir.path(), group, &format!("Item{index}"));
+        }
+
+        let mut expected = hostile.map(str::to_string).to_vec();
+        expected.sort();
+        assert_eq!(groups(dir.path()), expected);
+        for (index, group) in hostile.iter().enumerate() {
+            assert_eq!(names_of(dir.path(), group), [format!("Item{index}")]);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "capture outside any group directory")]
+    fn a_capture_written_by_an_older_macro_is_not_skipped() {
+        // What a source crate produces when its `prebindgen` build-dependency
+        // writes the description but its `prebindgen-proc-macro` is <= 0.5.0:
+        // a directory that describes itself correctly, holding captures in the
+        // flat layout of an older macro. Skipping them is the silent empty
+        // binding this refuses.
+        let dir = tempfile::tempdir().unwrap();
+        let record = Record::new(
+            RecordKind::Struct,
+            "Legacy".to_string(),
+            "pub struct Legacy;".to_string(),
+            Default::default(),
+            None,
+        );
+        fs::write(
+            dir.path().join("default_1234_5678.jsonl"),
+            format!("{}\n", record.to_jsonl_string().unwrap()),
+        )
+        .unwrap();
+        write(dir.path(), "default", "Alpha");
+
+        Source::discover_groups(dir.path());
+    }
+
+    #[test]
+    fn non_capture_entries_are_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default", "Alpha");
+        crate::api::output::Output::new("example-flat".to_string(), ["unstable".to_string()])
+            .write(dir.path());
+        fs::write(
+            dir.path().join(group_dir_name("default")).join("notes.txt"),
+            "scratch",
+        )
+        .unwrap();
+        fs::create_dir_all(dir.path().join("not-a-group")).unwrap();
+
+        assert_eq!(groups(dir.path()), ["default"]);
+        assert_eq!(names_of(dir.path(), "default"), ["Alpha"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a group directory")]
+    fn captures_under_a_non_canonical_spelling_are_not_silently_dropped() {
+        // `g_-61` decodes to `a`, but `a` canonicalizes to `g_a`, so reporting
+        // the group would send `read_group` to an empty directory and lose
+        // these records.
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "a", "Alpha");
+        fs::rename(
+            dir.path().join(group_dir_name("a")),
+            dir.path().join("g_-61"),
+        )
+        .unwrap();
+
+        Source::discover_groups(dir.path());
+    }
+
+    // Linux only: APFS refuses to create a name that is not valid UTF-8, which
+    // is why macOS cannot reach this case in the first place. CI runs Linux.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[should_panic(expected = "is not a group directory")]
+    fn captures_under_a_non_utf8_directory_are_not_silently_dropped() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default", "Alpha");
+        fs::rename(
+            dir.path().join(group_dir_name("default")),
+            dir.path().join(std::ffi::OsStr::from_bytes(b"g_\xff\xfe")),
+        )
+        .unwrap();
+
+        Source::discover_groups(dir.path());
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a group directory")]
+    fn captures_in_an_undecodable_directory_are_not_silently_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "default", "Alpha");
+        fs::rename(
+            dir.path().join(group_dir_name("default")),
+            dir.path().join("default"),
+        )
+        .unwrap();
+
+        Source::discover_groups(dir.path());
     }
 }

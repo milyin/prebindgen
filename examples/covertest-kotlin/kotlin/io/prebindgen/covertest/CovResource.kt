@@ -14,7 +14,15 @@ interface CovResource : StorageApi {
     /** Default member over the class-specific generated `len(...)`. */
     fun isEmpty(): Boolean = len(JniErrorHandler { je -> error(je ?: "len failed") }) == 0L
 
-    /** Default member over the inherited `NativeHandle` surface. */
+    /**
+     * Default member over the inherited `NativeHandle` surface.
+     *
+     * `peek()` is `@UnsafeNativeApi` (prebindgen#37) — reading the raw pointer
+     * is opt-in even though this file sits in the same module as the generated
+     * code. `isClosed()` alone would do here; the opt-in is what a consumer
+     * signs when it wants the pointer itself.
+     */
+    @OptIn(UnsafeNativeApi::class)
     val live: Boolean
         get() = !isClosed() && peek() != 0L
 }

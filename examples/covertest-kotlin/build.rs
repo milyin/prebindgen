@@ -224,7 +224,7 @@ fn main() {
         // on the Rust side. Peeling the field by path segment answered "not
         // optional" and boxed it instead.
         .package(package!().class(data_class!(WrappedFields)))
-        // ── Subpackage `model`: enum + value class + nested data class ──────
+        // ── Subpackage `model`: enum + data/sealed classes ─────────────────
         .package(
             package!("model")
                 // `Priority` as a Kotlin `enum class` (jint wire, `fromInt`

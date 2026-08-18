@@ -91,9 +91,9 @@ impl WrapKind {
             Some(fqn) => {
                 let short = fqn.rsplit('.').next().unwrap_or(fqn);
                 if raw_nullable {
-                    format!("{arg}?.let {{ {short}(it) }}")
+                    format!("{arg}?.let {{ {} }}", handle_from_raw(short, "it"))
                 } else {
-                    format!("{short}({arg})")
+                    handle_from_raw(short, arg)
                 }
             }
         }
@@ -463,13 +463,25 @@ impl IfaceSpec {
     }
 
     /// The raw-twin declaration (call only when [`Self::needs_raw`]).
+    ///
+    /// `internal`: its `run` takes handle leaves as raw `Long`s, so anything
+    /// that can name this interface can hand a wrapper a pointer it invented.
+    /// Only generated code — the `asRaw` proxy, the hoisted singletons, the
+    /// error captures, all in this module — ever implements or calls it.
+    ///
+    /// `run` itself stays **public**, because native code resolves it by name
+    /// (`GetMethodID("run", …)`) and an internal member would be mangled to
+    /// `run$<module>`. That is safe: an internal interface is a public JVM
+    /// class Java can implement, but implementing it only lets a caller invoke
+    /// their own `run` — the forging route is the generated proxy, which
+    /// [`Self::to_as_raw_fun`] hides.
     pub fn to_raw_decl(&self) -> KtFunInterface {
         let mut m = KtFunSig::new(IFACE_METHOD).vis(KtVis::Public);
         for p in &self.params {
             m = m.param(KtParam::new(&p.name, p.raw.clone()));
         }
         m = m.returns(self.ret.clone());
-        let mut i = KtFunInterface::new(self.raw_name(), m).vis(KtVis::Public);
+        let mut i = KtFunInterface::new(self.raw_name(), m).vis(KtVis::Internal);
         for tp in &self.type_params {
             i = i.type_param(tp);
         }
@@ -649,7 +661,22 @@ impl IfaceSpec {
                 nest_binds(c, &binds, &call_args.join(", "))
             })
         };
-        let mut f = KtFun::new("asRaw").vis(KtVis::Public).receiver(recv);
+        // `internal` + `@JvmSynthetic`, the same pair the handle entry points
+        // carry. This proxy is the one place a raw `Long` becomes a typed
+        // handle inside a file that already holds the blanket opt-in, so a
+        // public `asRaw()` handed any caller a forged-pointer route with no
+        // opt-in of their own:
+        //
+        //     val raw = QueryCallback { … }.asRaw()
+        //     raw.run(…, 0xdeadbeefL)   // → Query.fromRawPtr(0xdeadbeef)
+        //
+        // Every call site is a generated wrapper in this module, so `internal`
+        // costs nothing; `@JvmSynthetic` closes the same route from Java,
+        // where `internal` is merely a mangled public static.
+        let mut f = KtFun::new("asRaw")
+            .vis(KtVis::Internal)
+            .annotation(JVM_SYNTHETIC)
+            .receiver(recv);
         for g in &bare_generics {
             f = f.generic(g);
         }
@@ -1508,8 +1535,8 @@ pub(crate) fn whole_folder_iface_spec(
     // `raw_handle = true`: an opaque-handle element crosses the JNI border as
     // its raw `jlong` (the folder wraps it into the typed handle class in Kotlin
     // bytecode — a native `new_object` per element would cost descriptor parse +
-    // FindClass + GetMethodID + NewObjectA). Value blobs / String are unaffected
-    // (they ignore the flag; see [`leaf_iface_param`]).
+    // FindClass + GetMethodID + NewObjectA). Primitive arrays and String are
+    // unaffected (they ignore the flag; see [`leaf_iface_param`]).
     params.push(leaf_iface_param(
         ext,
         registry,
@@ -1633,8 +1660,11 @@ pub(crate) fn error_handler_iface_spec(
         "Domain-error callback: called only when the native function returns `Err` — the\n\
          parameters carry the decomposed `{source_short}`. Binding/system failures go to the\n\
          separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`\n\
-         discriminator here. The wrapper returns whatever `run` returns;\n\
-         throwing from `run` is safe (it executes after the native call has returned)."
+         discriminator here. The wrapper returns whatever `run` returns. Where that type is\n\
+         nullable you may return `null` to decline — you are not required to fabricate a result.\n\
+         Consequently the handler firing, not the returned value, is the error discriminator:\n\
+         `null` can also be a successful optional result, and a non-null value can be a fallback\n\
+         you supplied. Throwing from `run` is safe (it executes after the native call has returned)."
     ));
     Some(iface)
 }
@@ -1659,8 +1689,11 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &Declarations) -> IfaceSpec {
          converter in the chain may fail, or a handle may be closed). `je` is the\n\
          failure message. For an infallible wrapper this is the sole `onError`; a\n\
          fallible wrapper takes it as `onBindingError` alongside the typed domain\n\
-         handler. The wrapper returns whatever `run` returns;\n\
-         throwing from `run` is safe (it executes after the native call has returned)."
+         handler. The wrapper returns whatever `run` returns. Where that type is nullable you may\n\
+         return `null` to decline — you are not required to fabricate a result. Consequently the\n\
+         handler firing, not the returned value, is the error discriminator: `null` can also be a\n\
+         successful optional result, and a non-null value can be a fallback you supplied. Throwing\n\
+         from `run` is safe (it executes after the native call has returned)."
             .to_string(),
     );
     iface

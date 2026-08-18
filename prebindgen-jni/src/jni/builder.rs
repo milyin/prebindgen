@@ -250,6 +250,22 @@ impl Declarations {
         self.mangle_harness("JNINative")
     }
 
+    /// The `@RequiresOptIn` marker guarding every generated entry point that
+    /// takes or hands out a raw native pointer. Lives in the base package next
+    /// to [`Self::jni_native_class_name`], and is referenced fully qualified
+    /// from every generated file.
+    ///
+    /// With no base package that qualification is just the short name, which
+    /// only resolves from the root package itself — Kotlin cannot import from
+    /// the root package. `write_kotlin` rejects that configuration when any
+    /// generated file would land in a subpackage.
+    pub(crate) fn unsafe_marker_fqn(&self) -> String {
+        match self.package.is_empty() {
+            true => UNSAFE_MARKER.to_string(),
+            false => format!("{}.{UNSAFE_MARKER}", self.package),
+        }
+    }
+
     /// Mangle a method emitted on the centralized JNI extern harness.
     pub(crate) fn mangle_jni_method(&self, name: &str) -> String {
         self.mangle_method(&self.package, &self.jni_native_class_name(), name)
@@ -552,23 +568,19 @@ impl JniGenBuilder {
         self.store_iface_opts(&key, decl.iface);
     }
 
-    fn data_value_name_spec(
-        subpackage: &str,
-        short: String,
-        name_override: Option<String>,
-    ) -> NameSpec {
+    fn data_name_spec(subpackage: &str, short: String, name_override: Option<String>) -> NameSpec {
         NameSpec {
             subpackage: subpackage.to_string(),
             short,
             name_override,
-            kind: NameKind::DataOrValue,
+            kind: NameKind::Data,
         }
     }
 
     fn accept_data_class(&mut self, subpackage: &str, decl: DataClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
+        let spec = Self::data_name_spec(subpackage, short, decl.name_override);
         self.register_class(&key, decl.rust_type, DeclaredKind::Data, spec)
             .jobject_input |= decl.jobject_input;
         self.store_iface_opts(&key, decl.iface);

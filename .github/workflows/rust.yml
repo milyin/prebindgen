@@ -110,12 +110,16 @@ jobs:
                      prebindgen-proc-macro prebindgen-flat prebindgen-registry \
                      prebindgen-c prebindgen-jni; do
           echo "== $crate"
-          # Unpublished sibling crates make `cargo package` fail on the
-          # version lookup, which says nothing about this crate's own
-          # metadata. Report that case and keep going; anything else fails.
+          # Unpublished dependencies make `cargo package` fail on the version
+          # lookup, which says nothing about this crate's own metadata. That
+          # covers the sibling crates and, while it is taken from a git branch,
+          # kotlin-codegen: `cargo package` drops the git source and resolves
+          # the `version` key against crates.io. Report and keep going;
+          # anything else fails.
+          unpublished='prebindgen(-[a-z-]+)?|kotlin-codegen'
           if ! out=$(cargo package -p "$crate" --no-verify --allow-dirty 2>&1); then
             printf '%s\n' "$out"
-            printf '%s\n' "$out" | grep -qE "no matching package named \`prebindgen(-[a-z-]+)?\`|failed to select a version for the requirement \`prebindgen(-[a-z-]+)?" || exit 1
+            printf '%s\n' "$out" | grep -qE "no matching package named \`($unpublished)\`|failed to select a version for the requirement \`($unpublished)" || exit 1
             echo "   (unpublished dependency — expected until the release order completes)"
           fi
         done

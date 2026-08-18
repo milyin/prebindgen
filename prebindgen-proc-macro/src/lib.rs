@@ -36,9 +36,15 @@
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
-use std::{collections::HashMap, fs::OpenOptions};
+use std::sync::OnceLock;
 
-use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
+use prebindgen::{
+    get_prebindgen_out_dir,
+    layout::{capture_file_name, group_dir_name, MAX_COMPONENT_LEN},
+    output::check_writer,
+    utils::publish_file,
+    Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME,
+};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
@@ -135,51 +141,59 @@ impl Parse for PrebindgenArgs {
     }
 }
 
-thread_local! {
-    static THREAD_ID: std::cell::RefCell<Option<u64>> = const { std::cell::RefCell::new(None) };
-    static JSONL_PATHS: std::cell::RefCell<HashMap<String, std::path::PathBuf>> = std::cell::RefCell::new(HashMap::new());
+/// Publish `record` under the path its own contents determine.
+///
+/// The path is derived from the **record**, never from the process or the
+/// compilation that produced it: `{OUT_DIR}/prebindgen/g_{group}/
+/// {name}_{digest(record)}.jsonl` (see `prebindgen::layout`). Every compiler
+/// that captures this item computes this same path and writes these same
+/// bytes, so repeated compilations — `cargo check`, `build`, `test`, `clippy`,
+/// and the doctest rustdoc run Cargo never caches — rewrite one file instead of
+/// accumulating a copy each (#201).
+///
+/// That also makes the layout loss-proof by construction rather than by careful
+/// key derivation: a name determines its contents, so two writers either write
+/// identical bytes to one path or different bytes to different paths. There is
+/// no third case in which one compilation overwrites another's records.
+fn publish_record(
+    group: &str,
+    record: &Record,
+    serialized: &str,
+) -> std::result::Result<(), String> {
+    writer_format_checked()?;
+
+    let group_dir = group_dir_name(group);
+    if group_dir.len() > MAX_COMPONENT_LEN {
+        return Err(format!(
+            "#[prebindgen] group name {group:?} is too long: it encodes to {} bytes, \
+             and a directory name may hold {MAX_COMPONENT_LEN}",
+            group_dir.len()
+        ));
+    }
+
+    publish_file(
+        get_prebindgen_out_dir()
+            .join(group_dir)
+            .join(capture_file_name(&record.name, serialized)),
+        &format!("{serialized}\n"),
+    )
+    .map_err(|error| format!("prebindgen: {error}"))
 }
 
-/// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
-fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
-    if let Some(p) = JSONL_PATHS.with(|path| path.borrow().get(group).cloned()) {
-        return p;
-    }
-    let process_id = std::process::id();
-    let thread_id = if let Some(in_thread_id) = THREAD_ID.with(|id| *id.borrow()) {
-        in_thread_id
-    } else {
-        let new_id = rand::random::<u64>();
-        THREAD_ID.with(|id| *id.borrow_mut() = Some(new_id));
-        new_id
-    };
-    let mut random_value = None;
-    // Try to really create file and repeat until success
-    // to avoid collisions in extremely rare case when two threads got
-    // the same random value
-    let new_path = loop {
-        let postfix = if let Some(rv) = random_value {
-            format!("_{rv}")
-        } else {
-            "".to_string()
-        };
-        let path = get_prebindgen_out_dir()
-            .join(format!("{group}_{process_id}_{thread_id}{postfix}.jsonl"));
-        if OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&path)
-            .is_ok()
-        {
-            break path;
-        }
-        random_value = Some(rand::random::<u32>());
-    };
-    JSONL_PATHS.with(|path| {
-        path.borrow_mut()
-            .insert(group.to_string(), new_path.clone());
-    });
-    new_path
+/// Whether the capture directory is described in the format this macro writes,
+/// decided once per compilation.
+///
+/// This macro and the `init_prebindgen_out_dir()` that prepared the directory
+/// are two packages — `prebindgen-proc-macro` and `prebindgen` — and a manifest
+/// may name versions of them that lay captures out differently. Nothing else
+/// compares those two, so the check happens here, where the disagreement can
+/// still be reported against the source crate that declared both. One rustc
+/// process compiles one crate, so once is enough.
+fn writer_format_checked() -> std::result::Result<(), String> {
+    static CHECKED: OnceLock<std::result::Result<(), String>> = OnceLock::new();
+    CHECKED
+        .get_or_init(|| check_writer(&get_prebindgen_out_dir()))
+        .clone()
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
@@ -307,12 +321,19 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         parsed_args.cfg.clone(),
     );
 
-    // Get the full path to the JSONL file
-    let file_path = get_prebindgen_jsonl_path(&group);
-    if prebindgen::utils::write_to_jsonl_file(&file_path, &[&new_record]).is_err() {
-        return TokenStream::from(quote! {
-            compile_error!("Failed to write prebindgen record");
-        });
+    // Publish the record under the path its own contents determine. Failures
+    // are reported at the item, not swallowed: a capture that is silently short
+    // makes the consumer generate incomplete bindings.
+    let serialized = match new_record.to_jsonl_string() {
+        Ok(serialized) => serialized,
+        Err(error) => {
+            return syn::Error::new(span, format!("prebindgen: {error}"))
+                .to_compile_error()
+                .into()
+        }
+    };
+    if let Err(error) = publish_record(&group, &new_record, &serialized) {
+        return syn::Error::new(span, error).to_compile_error().into();
     }
 
     // Re-emit the original item, optionally prepending `#[cfg(...)]` (from the

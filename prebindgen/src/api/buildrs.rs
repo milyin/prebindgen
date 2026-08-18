@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, env, fs, path::Path};
 
-use crate::{CRATE_NAME_FILE, FEATURES_FILE};
+use crate::api::output::Output;
 
 /// Initialize the prebindgen output directory for the current crate
 ///
@@ -33,17 +33,24 @@ pub fn init_prebindgen_out_dir() {
     // For doctests, use "source_ffi" even if CARGO_PKG_NAME is set to "prebindgen"
     let crate_name = env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME environment variable not set. This function should be called from build.rs.");
 
-    // delete all files in the prebindgen directory
+    // Delete everything in the prebindgen directory. This is the generation
+    // boundary: the captures below it describe the crate as it was, and the
+    // compilations that follow rewrite them. Group *directories* have to go
+    // with the files — leaving them would keep records for items this revision
+    // renamed or removed.
     let prebindgen_dir = get_prebindgen_out_dir();
     if prebindgen_dir.exists() {
         for entry in fs::read_dir(&prebindgen_dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.is_file() {
-                fs::remove_file(&path).unwrap_or_else(|e| {
-                    panic!("Failed to delete {}: {}", path.display(), e);
-                });
-            }
+            let removed = if path.is_dir() {
+                fs::remove_dir_all(&path)
+            } else {
+                fs::remove_file(&path)
+            };
+            removed.unwrap_or_else(|e| {
+                panic!("Failed to delete {}: {}", path.display(), e);
+            });
         }
     } else {
         fs::create_dir_all(&prebindgen_dir).unwrap_or_else(|e| {
@@ -55,32 +62,12 @@ pub fn init_prebindgen_out_dir() {
         });
     }
 
-    // Store the crate name in a separate file
-    let crate_name_path = prebindgen_dir.join(CRATE_NAME_FILE);
-    fs::write(&crate_name_path, &crate_name).unwrap_or_else(|e| {
-        panic!(
-            "Failed to write crate name to {}: {}",
-            crate_name_path.display(),
-            e
-        );
-    });
-
     let features = get_enabled_features();
 
-    // Save features list to features.txt (one per line)
-    let features_path = prebindgen_dir.join(FEATURES_FILE);
-    let mut feature_contents = String::new();
-    for feature in &features {
-        feature_contents += feature;
-        feature_contents.push('\n');
-    }
-    fs::write(&features_path, feature_contents).unwrap_or_else(|e| {
-        panic!(
-            "Failed to write features to {}: {}",
-            features_path.display(),
-            e
-        );
-    });
+    // Describe what this directory holds, and in what format, so a reader can
+    // tell that it reads the same prebindgen that wrote it — see
+    // `api::output`.
+    Output::new(crate_name.clone(), features.iter().cloned()).write(&prebindgen_dir);
 
     // Export features list to the main crate as an env variable
     // Accessible via env!("PREBINDGEN_FEATURES") or std::env::var at compile time/runtime
