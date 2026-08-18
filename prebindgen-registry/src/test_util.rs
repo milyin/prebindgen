@@ -118,3 +118,31 @@ pub(crate) fn unique_test_dir(prefix: &str) -> PathBuf {
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), seq))
 }
+
+/// Write a capture directory holding `records`, the way a source crate's build
+/// script and the `#[prebindgen]` macro write one: a `prebindgen_output.toml`
+/// naming the crate, and the captures under the `default` group's directory.
+///
+/// The description is spelled out here rather than produced by prebindgen,
+/// which writes it only from a build script. If its format number moves, this
+/// fixture stops matching and the tests below say so — which is the point of
+/// the number.
+pub(crate) fn write_capture_dir(
+    tag: &str,
+    crate_name: &str,
+    records: &[&prebindgen::Record],
+) -> PathBuf {
+    let dir = unique_test_dir(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    let group_dir = dir.join(prebindgen::layout::group_dir_name(
+        prebindgen::DEFAULT_GROUP_NAME,
+    ));
+    std::fs::create_dir_all(&group_dir).unwrap();
+    std::fs::write(
+        dir.join("prebindgen_output.toml"),
+        format!("format = 1\n\n[package]\nname = \"{crate_name}\"\nfeatures = []\n"),
+    )
+    .unwrap();
+    prebindgen::utils::write_to_jsonl_file(group_dir.join("captures.jsonl"), records).unwrap();
+    dir
+}

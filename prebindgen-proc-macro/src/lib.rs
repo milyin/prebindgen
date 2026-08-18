@@ -36,9 +36,12 @@
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
+use std::sync::OnceLock;
+
 use prebindgen::{
     get_prebindgen_out_dir,
     layout::{capture_file_name, group_dir_name, MAX_COMPONENT_LEN},
+    output::check_writer,
     utils::publish_file,
     Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME,
 };
@@ -157,6 +160,8 @@ fn publish_record(
     record: &Record,
     serialized: &str,
 ) -> std::result::Result<(), String> {
+    writer_format_checked()?;
+
     let group_dir = group_dir_name(group);
     if group_dir.len() > MAX_COMPONENT_LEN {
         return Err(format!(
@@ -173,6 +178,22 @@ fn publish_record(
         &format!("{serialized}\n"),
     )
     .map_err(|error| format!("prebindgen: {error}"))
+}
+
+/// Whether the capture directory is described in the format this macro writes,
+/// decided once per compilation.
+///
+/// This macro and the `init_prebindgen_out_dir()` that prepared the directory
+/// are two packages — `prebindgen-proc-macro` and `prebindgen` — and a manifest
+/// may name versions of them that lay captures out differently. Nothing else
+/// compares those two, so the check happens here, where the disagreement can
+/// still be reported against the source crate that declared both. One rustc
+/// process compiles one crate, so once is enough.
+fn writer_format_checked() -> std::result::Result<(), String> {
+    static CHECKED: OnceLock<std::result::Result<(), String>> = OnceLock::new();
+    CHECKED
+        .get_or_init(|| check_writer(&get_prebindgen_out_dir()))
+        .clone()
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
