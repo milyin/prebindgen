@@ -1519,9 +1519,14 @@ impl CbindgenBuilder {
                     arg_wires.push(syn::parse_quote!(usize));
                     continue;
                 }
+                let reading = registry.reading_of(a).unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen: callback arg `{}` was never classified",
+                        a.to_token_stream()
+                    )
+                });
                 let wire = registry
-                    .reading_of(a)
-                    .and_then(|tr| registry.output_entry(&tr))
+                    .output_entry(&reading)
                     .unwrap_or_else(|| {
                         panic!(
                             "Cbindgen: callback arg `{}` has no output converter (declare it \
@@ -1534,9 +1539,18 @@ impl CbindgenBuilder {
                 // Takeable params are delivered as an owned pointer.
                 if takeable.contains(&i) {
                     arg_wires.push(syn::parse_quote!(*mut #wire));
-                } else {
-                    arg_wires.push(wire);
+                    continue;
                 }
+                // A composite has no wire of its own — a `()` destination is the
+                // marker saying so — so its C params are the fields its shape
+                // lowers to, exactly as `dispatch_fn_input` fills them (#428).
+                if matches!(&wire, syn::Type::Tuple(t) if t.elems.is_empty()) {
+                    for field in self.lower_shape(&reading, registry).fields {
+                        arg_wires.push(field.wire);
+                    }
+                    continue;
+                }
+                arg_wires.push(wire);
             }
             let c_struct = self.callback_c_ident(key);
             items.push(syn::parse_quote!(
@@ -1711,8 +1725,62 @@ impl CbindgenBuilder {
             let src = self.src_ty_deep_of(arg);
             let ai = format_ident!("__a{}", i);
             let wi = format_ident!("__w{}", i);
-            closure_params.push(quote!(#ai: #src));
             let is_takeable = takeable.contains(&i);
+            // A COMPOSITE argument — `Option<T>`, `Vec<T>`, `Cow<'_, [T]>` — has
+            // no converter of its own: `out_wrappers` gives it a marker with a
+            // `()` destination, which exists to resolve the entry and make the
+            // inner required while the real ABI is structural. The return path
+            // lowers those in `lower_shape` / `encode_value`; this one used to
+            // call the marker as if it were a converter, which takes no
+            // arguments (#428). Same lowering, so the two directions cannot
+            // disagree about which shapes they know.
+            //
+            // A takeable argument is a whole-value policy over an opaque handle
+            // and never a composite, so it keeps the by-reference path below.
+            //
+            // A marker is recognised by its `()` destination, which is what
+            // `out_wrappers` gives one and what says "this type has no converter
+            // of its own". Field COUNT cannot say it: `Option<&T>` carves the
+            // pointer's niche and lowers to a single `*const` — one field, and
+            // still nothing a converter call can produce.
+            let composite = !is_takeable
+                && matches!(&entry.destination, syn::Type::Tuple(t) if t.elems.is_empty());
+            if composite {
+                let shape = self.lower_shape(arg, registry);
+                closure_params.push(quote!(#ai: #src));
+                let mut targets = Vec::new();
+                for (f, field) in shape.fields.iter().enumerate() {
+                    let fi = if shape.fields.len() == 1 {
+                        wi.clone()
+                    } else {
+                        format_ident!("__w{}_{}", i, f)
+                    };
+                    let wire = &field.wire;
+                    // Zeroed, not merely declared: a shape with a `present` flag
+                    // writes only the flag when the value is absent, which is
+                    // right for a RETURN — those fields are the caller's
+                    // out-params and it must not read them. A callback has to
+                    // pass something, and every wire here is a `#[repr(C)]`
+                    // POD whose all-zero pattern is valid: a null pointer, a
+                    // `false`, a `0`. The C side must not read it, which is the
+                    // same contract the out-param carries.
+                    encode_stmts.push(quote!(let mut #fi: #wire = ::core::mem::zeroed();));
+                    targets.push(quote!(#fi));
+                    call_args.push(quote!(#fi));
+                }
+                // A firing callback has no error channel, so a fallible
+                // converter aborts — the same answer the single-value path
+                // below gives, spelled by the route the emitters share.
+                encode_stmts.push(self.encode_value(
+                    arg,
+                    quote!(#ai),
+                    &targets,
+                    registry,
+                    &ErrRoute::Panic,
+                ));
+                continue;
+            }
+            closure_params.push(quote!(#ai: #src));
             let mut_kw = if is_takeable { quote!(mut) } else { quote!() };
             if fallible {
                 encode_stmts.push(quote!(

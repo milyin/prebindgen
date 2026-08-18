@@ -298,3 +298,56 @@ fn callback_arg_qualifies_a_source_type_under_a_wrapper() {
         "{src}"
     );
 }
+
+/// An `Option<T>` callback argument is lowered like any other composite, not
+/// handed to the marker that stands in for one.
+///
+/// `out_wrappers` gives `Option`/`Vec`/`Cow` a marker converter with a `()`
+/// destination: it exists to resolve the entry and make the inner required,
+/// while the real ABI is structural. The return path lowers those shapes in
+/// `lower_shape`/`encode_value`; the callback-argument path had no case for
+/// them, so it fell back to calling the entry's converter — the marker, which
+/// takes no arguments (#428).
+#[test]
+fn callback_arg_lowers_an_optional_structurally() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            pub _0: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Option<&Handle>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .callback(syn::parse_quote!(
+            impl Fn(Option<&Handle>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_handle_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let src = write(cbindgen, registry, "cb_optional_arg");
+    let compact: String = src.split_whitespace().collect();
+
+    // The marker is never applied to anything: it takes no arguments.
+    assert!(
+        !compact.contains("__cbg_outmark_option___Handle(__a0)"),
+        "the composite marker is called as if it were a converter:\n{src}"
+    );
+    // `Option<&T>` over an opaque handle carries its absence in the pointer, so
+    // the C `call` takes one `*const handle` and NULL is `None`.
+    assert!(
+        compact.contains("call:::core::option::Option<unsafeextern\"C\"fn(*consthandle,"),
+        "the closure `call` takes the borrowed pointer:\n{src}"
+    );
+}

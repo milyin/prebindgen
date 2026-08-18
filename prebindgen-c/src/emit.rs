@@ -708,7 +708,7 @@ impl CbindgenBuilder {
     /// available for enclosing `Option`/`Result` layers. Mirrors the
     /// niche-stacking model in `core::niches`.
     #[allow(clippy::only_used_in_recursion)]
-    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &Registry<()>) -> ValueShape {
+    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> ValueShape {
         if matches!(ty.kind(), TypeKind::Unit) {
             return ValueShape {
                 fields: vec![],
@@ -832,7 +832,7 @@ impl CbindgenBuilder {
         ty: &TypeRef,
         val: TokenStream,
         targets: &[TokenStream],
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         route: &ErrRoute,
     ) -> TokenStream {
         if matches!(ty.kind(), TypeKind::Unit) {
@@ -933,7 +933,7 @@ impl CbindgenBuilder {
         }
     }
 
-    fn output_is_fallible(ty: &TypeRef, registry: &Registry<()>) -> bool {
+    fn output_is_fallible(ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
         let vec_elem = match ty.kind() {
             TypeKind::Vec(e) => Some(&**e),
             _ => None,

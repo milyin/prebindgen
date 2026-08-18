@@ -345,6 +345,57 @@ static void test_alias_preflight(void) {
     calculator_drop(merged);
 }
 
+/* A composite in ARGUMENT position: `impl Fn(Option<f64>)`.
+ *
+ * A composite has no converter of its own — `Option`/`Vec`/`Cow` resolve to a
+ * marker whose destination is `()` — and the real ABI is the shape it lowers
+ * to. The callback-argument path used to call that marker as if it were a
+ * converter, and a marker takes no arguments, so this shape emitted a binding
+ * that did not build (#428).
+ *
+ * `Option<f64>` has no spare bit pattern, so the shape is a `bool` beside the
+ * value and the C `call` takes both. When the flag is false the value is
+ * unspecified — the same contract a `Result`'s out-param carries — so this
+ * reads it only in the present case. */
+struct maybe_calls {
+    int fired;
+    bool present[2];
+    double value;
+};
+
+static void on_maybe_value(bool present, double value, void *ctx) {
+    struct maybe_calls *calls = (struct maybe_calls *)ctx;
+    if (calls->fired < 2) {
+        calls->present[calls->fired] = present;
+        if (present) {
+            calls->value = value;
+        }
+    }
+    calls->fired++;
+}
+
+static void test_optional_callback_arg(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+    double applied = -1.0;
+    CHECK(calculator_apply(c, Add, 7.0, &applied, &e));
+    CHECK(applied == 7.0);
+    CHECK(e == NULL);
+
+    struct maybe_calls calls = {0, {false, false}, -1.0};
+    struct closure_maybe_value_t closure = {
+        .context = &calls, .call = on_maybe_value, .drop = NULL};
+    calculator_last_or_none(c, closure);
+
+    /* Fires twice from one call: the recorded value, then `None`. */
+    CHECK(calls.fired == 2);
+    CHECK(calls.present[0]);
+    CHECK(calls.value == 7.0);
+    CHECK(!calls.present[1]);
+
+    calculator_drop(c);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
@@ -355,6 +406,7 @@ int main(void) {
     test_out_of_domain_bool_data_struct_field();
     test_nested_union_payload();
     test_alias_preflight();
+    test_optional_callback_arg();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
@@ -362,6 +414,7 @@ int main(void) {
     }
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
            "converter-derived payloads, out-of-domain bool payload and "
-           "data-struct field, nested union payload, alias preflight\n");
+           "data-struct field, nested union payload, alias preflight, "
+           "optional callback argument\n");
     return 0;
 }

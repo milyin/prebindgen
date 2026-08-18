@@ -423,6 +423,24 @@ pub fn calculator_for_each(c: &Calculator, f: impl Fn(f64) + Send + Sync + 'stat
     }
 }
 
+/// The same delivery with an **optional** argument — a composite in argument
+/// position.
+///
+/// `Option`/`Vec`/`Cow` have no converter of their own: each resolves to a
+/// marker whose destination is `()`, and the real ABI is the shape it lowers
+/// to. The return path has always lowered them; the callback-argument path
+/// called that marker as if it were a converter, and a marker takes no
+/// arguments — so this shape emitted a binding that did not build (#428).
+///
+/// Fires once with the last recorded value and once with `None`, so both arms
+/// of the lowering reach C from a single call: an `Option<f64>` has no spare
+/// bit pattern, so it crosses as a `bool` beside the value.
+#[prebindgen]
+pub fn calculator_last_or_none(c: &Calculator, f: impl Fn(Option<f64>) + Send + Sync + 'static) {
+    f(c.history.last().copied());
+    f(None);
+}
+
 /// Reset the accumulator to zero (feature-gated, mirroring zenoh-flat's
 /// `unstable` slices of the API).
 #[cfg(feature = "unstable")]

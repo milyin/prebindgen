@@ -99,6 +99,12 @@ typedef struct closure_value_t {
   void (*drop)(void*);
 } closure_value_t;
 
+typedef struct closure_maybe_value_t {
+  void *context;
+  void (*call)(bool, double, void*);
+  void (*drop)(void*);
+} closure_maybe_value_t;
+
 typedef struct foo_t {
   uint64_t id;
   uint64_t x86_64_field;
@@ -134,6 +140,8 @@ double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
 double calculator_get_value(const struct calculator_t *c);
 
 bool calculator_is(const struct calculator_t *c, double value);
+
+void calculator_last_or_none(const struct calculator_t *c, struct closure_maybe_value_t f);
 
 struct calculator_t *calculator_merge(struct calculator_t *a, struct calculator_t *b, char **e);
 

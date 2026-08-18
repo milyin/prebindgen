@@ -137,6 +137,14 @@ fn generate_ffi_bindings() -> PathBuf {
         .callback(pq!(impl Fn(f64) + Send + Sync + 'static))
         .base_name("value");
 
+    // The OPTIONAL argument -> a `closure_maybe_value_t` whose `call` takes the
+    // fields the shape lowers to: an `Option<f64>` has no spare bit pattern, so
+    // that is a `bool` beside the value. A composite has no converter of its
+    // own, and calling the marker that stands in for one is #428.
+    cbindgen = cbindgen
+        .callback(pq!(impl Fn(Option<f64>) + Send + Sync + 'static))
+        .base_name("maybe_value");
+
     // Constructors / `Result`-returning ops (fallible inputs route through the
     // error out-param), plus the infallible by-value `Foo` accessors and the
     // `InsideFoo` producer — none need `.panic()`. `calculator_apply` takes an
@@ -206,6 +214,7 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_to_string),
         pq!(calculator_get_history),
         pq!(calculator_for_each),
+        pq!(calculator_last_or_none),
         // `&str` label input is fallible (null-checked) with no `Result`.
         pq!(shape_new_labeled),
     ] {

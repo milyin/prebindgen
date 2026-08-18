@@ -159,6 +159,15 @@ pub unsafe extern "C" fn shape_drop(this_: *mut ::core::mem::MaybeUninit<shape_t
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
+pub struct closure_maybe_value_t {
+    pub context: *mut ::core::ffi::c_void,
+    pub call: ::core::option::Option<
+        unsafe extern "C" fn(bool, f64, *mut ::core::ffi::c_void),
+    >,
+    pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct closure_value_t {
     pub context: *mut ::core::ffi::c_void,
     pub call: ::core::option::Option<
@@ -418,6 +427,45 @@ pub(crate) unsafe fn __cbg_in_bool(v: ::core::mem::MaybeUninit<bool>) -> bool {
     ::core::ptr::read(v.as_ptr() as *const u8) != 0
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_closure_maybe_value_t(
+    c: closure_maybe_value_t,
+) -> impl Fn(::core::option::Option<f64>) + Send + Sync + 'static {
+    struct __Ctx {
+        context: *mut ::core::ffi::c_void,
+        drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+    }
+    unsafe impl ::core::marker::Send for __Ctx {}
+    unsafe impl ::core::marker::Sync for __Ctx {}
+    impl ::core::ops::Drop for __Ctx {
+        fn drop(&mut self) {
+            if let ::core::option::Option::Some(__d) = self.drop {
+                unsafe { __d(self.context) }
+            }
+        }
+    }
+    let __call = c.call;
+    let __ctx = ::std::sync::Arc::new(__Ctx {
+        context: c.context,
+        drop: c.drop,
+    });
+    move |__a0: ::core::option::Option<f64>| {
+        let mut __w0_0: bool = ::core::mem::zeroed();
+        let mut __w0_1: f64 = ::core::mem::zeroed();
+        match __a0 {
+            ::core::option::Option::Some(__x) => {
+                __w0_0 = true;
+                __w0_1 = __cbg_out_f64(__x);
+            }
+            ::core::option::Option::None => {
+                __w0_0 = false;
+            }
+        }
+        if let ::core::option::Option::Some(__f) = __call {
+            unsafe { __f(__w0_0, __w0_1, __ctx.context) }
+        }
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_closure_value_t(
     c: closure_value_t,
 ) -> impl Fn(f64) + Send + Sync + 'static {
@@ -568,6 +616,8 @@ pub(crate) fn __cbg_out_u64(v: u64) -> u64 {
 }
 #[allow(non_snake_case, dead_code, unused_variables)]
 pub(crate) fn __cbg_out_unit(v: ()) {}
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) fn __cbg_outmark_option_f64() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __cbg_outmark_vec_f64() {}
 #[allow(non_snake_case, dead_code, unused)]
@@ -760,6 +810,21 @@ pub unsafe extern "C" fn calculator_is(c: *const calculator_t, value: f64) -> bo
     let __ret: bool;
     __ret = __cbg_out_bool(__v);
     __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn calculator_last_or_none(
+    c: *const calculator_t,
+    f: closure_maybe_value_t,
+) {
+    let c = match __cbg_in___Calculator(c) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let f = __cbg_in_closure_maybe_value_t(f);
+    example_flat::calculator_last_or_none(c, f);
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
