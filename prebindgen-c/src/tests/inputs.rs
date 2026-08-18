@@ -82,7 +82,7 @@ fn option_opaque_input_reuses_pointer() {
 }
 
 /// `Option<i64>` input (scalar inner, no niche) is boxed behind a `*const`
-/// pointer: NULL ⇒ `None`, else `*v`. Infallible.
+/// pointer: NULL ⇒ `None`, else the pointee, read. Infallible.
 #[test]
 fn option_scalar_input_boxed_pointer() {
     let loc = SourceLocation::default();
@@ -102,7 +102,7 @@ fn option_scalar_input_boxed_pointer() {
     let src = write(cbindgen, registry, "option_in_scalar");
     let compact: String = src.split_whitespace().collect();
 
-    // Boxed behind a const pointer; NULL ⇒ None, else `Some(*v)`.
+    // Boxed behind a const pointer; NULL ⇒ None, else `Some` of the pointee, read.
     assert!(compact.contains("timestamp_ntp64:*consti64"), "{src}");
     assert!(
         compact.contains("ifv.is_null(){::core::option::Option::None}"),
@@ -111,6 +111,45 @@ fn option_scalar_input_boxed_pointer() {
     assert!(compact.contains("::core::option::Option::Some"), "{src}");
     // Infallible ⇒ no error param.
     assert!(!compact.contains("e:*mut"), "{src}");
+}
+
+/// `Option<Rec>` over a `data_struct` inner takes the same `*const` wire as the
+/// scalar above, and reaches the inner converter by `ptr::read`. A mirror
+/// struct is not `Copy`, so dereferencing the pointer instead would be a move
+/// out of it and the binding would not build (#412).
+#[test]
+fn option_data_struct_input_reads_the_pointee() {
+    let loc = SourceLocation::default();
+    let rec: syn::ItemStruct = syn::parse_quote!(
+        pub struct Rec {
+            pub id: u64,
+            pub tag: u32,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_op(v: Option<Rec>) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(rec), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .data_struct(syn::parse_quote!(Rec))
+        .function(syn::parse_quote!(z_op));
+
+    let src = write(cbindgen, registry, "option_in_data_struct");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(compact.contains("v:*constrec"), "{src}");
+    assert!(
+        compact.contains("__cbg_in_Rec(::core::ptr::read(v))"),
+        "{src}"
+    );
 }
 
 /// `&str` inputs decode directly from `const char *` and can be used by
