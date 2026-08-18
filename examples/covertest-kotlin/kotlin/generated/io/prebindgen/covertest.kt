@@ -245,6 +245,34 @@ public data class Holder(val tag: Long, val summary: Summary) : AutoCloseable {
     }
 }
 
+/**
+ * [`Holder`]'s optional twin: the handle field may be **absent**.
+ *
+ * The two are the same shape with one `Option` between the field and the
+ * handle, and the factory that rebuilds them on the Kotlin side takes a
+ * different arm for each. The present arm has to mint the handle through the
+ * generated factory, because #404 made the constructor `private` — and the
+ * optional arm went on naming the constructor, so this shape emitted Kotlin
+ * that does not compile at all (#430).
+ *
+ * Nothing in this crate had the shape, which is why an emission test was the
+ * only thing that could have caught it, and why it is here: a `MaybeHolder`
+ * returned to the JVM is built by that factory, so both arms are compiled and
+ * both are run.
+ */
+public data class MaybeHolder(val tag: Long, val summary: Summary?) : AutoCloseable {
+    override fun close() {
+        summary?.close()
+    }
+
+    public companion object {
+        @JvmSynthetic
+        @io.prebindgen.covertest.UnsafeNativeApi
+        @JvmStatic
+        public fun fromParts(tag: Long, summary: Long): MaybeHolder = MaybeHolder(tag, if (summary == 0L) null else Summary.fromRawPtr(summary))
+    }
+}
+
 public interface PayloadApi {
     val id: Long
 
@@ -1189,6 +1217,15 @@ internal object CovNative {
 
     @JvmSynthetic
     external fun markerOf(which: Int, build: Any, errorSink: Any): Any?
+
+    @JvmSynthetic
+    external fun maybeHolderNew(
+        tag: Long,
+        count: Long,
+        total: Double,
+        present: Boolean,
+        errorSink: Any,
+    ): MaybeHolder
 
     @JvmSynthetic
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long

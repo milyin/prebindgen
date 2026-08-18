@@ -1627,6 +1627,76 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
     assert!(kc.contains("):ULong"), "{kotlin}");
 }
 
+/// An `Option<Handle>` field mints its handle through the factory, like every
+/// other site that mints one.
+///
+/// A handle's constructor is `private` — #404 sealed it so that no Java or
+/// Kotlin caller can forge a pointer — and `handle_from_raw` is the one place
+/// that names the replacement. The nullable arm of the field factory spelled the
+/// constructor instead, so the generated Kotlin did not compile at all (#430),
+/// which nothing noticed because no test here asked for the shape and the Rust
+/// half compiles either way.
+#[test]
+fn an_optional_handle_field_mints_through_the_factory() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Handle {
+                    pub v: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Bag {
+                    pub handle: Option<Handle>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn bag_make() -> Bag {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(Handle))
+                .class(crate::data_class!(Bag))
+                .fun(prebindgen_registry::fun!(bag_make)),
+        );
+
+    let dir = unique_test_dir("jnigen_optional_handle_field");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = jni.build_with(registry).expect("resolve");
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // Absent rides the `0L` jlong sentinel, and present goes through the
+    // factory — not `Handle(handle)`, which is private.
+    assert!(
+        kc.contains("if(handle==0L)nullelseHandle.fromRawPtr(handle)"),
+        "{kotlin}"
+    );
+}
+
 /// A data class's constructor property types come from the SAME
 /// [`build_struct_plan`] its `fromParts` factory walks, so a property and its
 /// own factory parameter cannot disagree (#156). Pinned across the field kinds

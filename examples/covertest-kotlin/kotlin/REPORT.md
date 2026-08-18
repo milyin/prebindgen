@@ -94,6 +94,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Lookup` decomposed → [tag, found_v0, failed_v0] (Callback delivery)
 - `marker_of` — `fun markerOf(which: Int, onError: JniErrorHandler<Marker?>): Marker?`
   - shaped by: return `Marker` decomposed → [tag, ranked_v0] (Callback delivery)
+- `maybe_holder_new` — `fun maybeHolderNew(tag: Long, count: Long, total: Double, present: Boolean, onError: JniErrorHandler<MaybeHolder?>): MaybeHolder?`
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
 - `observation_new` — `fun observationNew(which: Int, withFallback: Boolean, onError: JniErrorHandler<Observation?>): Observation?`
 - `observation_which` — `fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int`
@@ -213,6 +214,7 @@ Base package: `io.prebindgen.covertest`
 - `Holder`: data_class → `io.prebindgen.covertest.Holder` (wire `jni :: objects :: JObject`)
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
+- `MaybeHolder`: data_class → `io.prebindgen.covertest.MaybeHolder` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `ObjectBoundary16`: data_class → `io.prebindgen.covertest.model.ObjectBoundary16` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary2`: data_class → `io.prebindgen.covertest.model.ObjectBoundary2` (wire `jni :: objects :: JObject`)

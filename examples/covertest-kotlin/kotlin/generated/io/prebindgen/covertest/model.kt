@@ -10,6 +10,7 @@ import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.LedgerBuilder
 import io.prebindgen.covertest.LedgerCallback
+import io.prebindgen.covertest.MaybeHolder
 import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
@@ -1807,6 +1808,20 @@ public fun dossierNew(
 ): Dossier? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.dossierNew(note, tag, count, total, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Build a [`MaybeHolder`] with the handle present or absent. */
+public fun maybeHolderNew(
+    tag: Long,
+    count: Long,
+    total: Double,
+    present: Boolean,
+    onError: JniErrorHandler<MaybeHolder?>,
+): MaybeHolder? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.maybeHolderNew(tag, count, total, present, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
