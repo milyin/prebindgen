@@ -202,21 +202,35 @@ Blocked on the plans existing at all
 
 ## What it has found
 
-The table is not the deliverable; the tickets are. As of `4971a796`:
+The table is not the deliverable; the tickets are. As of `146eb348`:
 
-| Issue | Finding |
-|---|---|
-| [#410](https://github.com/milyin/prebindgen/issues/410) | JNI emits an unqualified `Cow` into the consumer's scope |
-| [#411](https://github.com/milyin/prebindgen/issues/411) | JNI decodes an exclusive-borrow parameter as a shared or plain value |
-| [#412](https://github.com/milyin/prebindgen/issues/412) | C moves out of a raw pointer for an `Option<T>` by-value parameter |
-| [#413](https://github.com/milyin/prebindgen/issues/413) | C returns of borrowed elements: `&[T]` drops the value, `Vec<&T>` maps over an `unsafe fn` |
-| [#414](https://github.com/milyin/prebindgen/issues/414) | C qualifies std `Option` into the source module, and leaves the declared type bare |
-| [#191](https://github.com/milyin/prebindgen/issues/191) | a third of C's refusals and a fifth of JNI's arrive as panics — now a measured number |
+| Issue | Finding | State |
+|---|---|---|
+| [#410](https://github.com/milyin/prebindgen/issues/410) | JNI emits an unqualified `Cow` into the consumer's scope | fixed ([#423](https://github.com/milyin/prebindgen/pull/423)) |
+| [#411](https://github.com/milyin/prebindgen/issues/411) | JNI decodes an exclusive-borrow parameter as a shared or plain value | fixed ([#426](https://github.com/milyin/prebindgen/pull/426)) |
+| [#412](https://github.com/milyin/prebindgen/issues/412) | C moves out of a raw pointer for an `Option<T>` by-value parameter | fixed ([#425](https://github.com/milyin/prebindgen/pull/425)) |
+| [#413](https://github.com/milyin/prebindgen/issues/413) | C returns of borrowed elements: `&[T]` drops the value, `Vec<&T>` maps over an `unsafe fn` | fixed ([#427](https://github.com/milyin/prebindgen/pull/427)) |
+| [#414](https://github.com/milyin/prebindgen/issues/414) | C qualifies std `Option` into the source module, and leaves the declared type bare | fixed ([#424](https://github.com/milyin/prebindgen/pull/424)) |
+| [#428](https://github.com/milyin/prebindgen/issues/428) | C calls the composite marker for an `Option<&T>` **callback argument**, and the marker takes no arguments | open |
+| [#191](https://github.com/milyin/prebindgen/issues/191) | a third of C's refusals and a fifth of JNI's arrive as panics — now a measured number | open |
 
-Two of these carry a diagnosis rather than a symptom, and both came from a
-comparison no single cell could make: #412 is narrowed to the by-value decode
+Two of the five carried a diagnosis rather than a symptom, and both came from a
+comparison no single cell could make: #412 was narrowed to the by-value decode
 path because the same cell with the type declared as a handle compiles, and #414
-gets both halves of one expression's qualification wrong in opposite directions.
+got both halves of one expression's qualification wrong in opposite directions.
+
+All five are merged, and this branch has merged `main` back. The report moved
+the way the fixes predicted: C's `bad rust` column is 5 → 0 and Kotlin/JNI's
+6 → 1, with two JNI cells falling from `bad rust` to `rejected` — `&mut T` over
+anything but a handle now says so instead of emitting a wrapper that discards
+the callee's writes. That fall tripped the ratchet, which is the ratchet working:
+lowering those two floors is a hand edit in `146eb348`, visible in the diff.
+
+**#428 is a finding about the corpus as much as about the generator.** It is
+#413 with the directions swapped — a composite lowered structurally in one
+direction and left to a marker in the other — and this crate did not catch it
+because a **callback argument is not one of the four positions** it enumerates.
+The fix for that is a corpus extension, not a generator change.
 
 ## Exits
 
