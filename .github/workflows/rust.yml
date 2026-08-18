@@ -37,6 +37,13 @@ jobs:
     - uses: actions/checkout@v4
       with:
         path: prebindgen
+    - name: Keep Rust emission authority in registry callbacks
+      run: |
+        if git grep -n -E "impl .*RustEmitter for" -- prebindgen-c prebindgen-jni; then
+          echo "::error::Adapters must receive prebindgen_registry::Emit; they must not implement prebindgen_flat::RustEmitter"
+          exit 1
+        fi
+
     - name: Install Rust ${{ matrix.rust }}
       run: |
         rustup toolchain install ${{ matrix.rust }}
