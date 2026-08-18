@@ -1309,10 +1309,18 @@ fn a_payload_carries_its_option_and_collection_layers() {
         kotlin.contains("Probe.Count(count_v0?.toULong())"),
         "an optional scalar payload keeps its null:\n{kotlin}"
     );
-    // `Option<Handle>`: same, and the handle still comes from the factory.
+    // `Option<Handle>`: the absence rides the handle's own niche — a `Box`
+    // pointer is never 0 — so the slot stays the primitive the encoder writes
+    // and the wrap tests the sentinel, exactly as a data-class field does.
     assert!(
-        kotlin.contains("Probe.Held(held_v0?.let { Handle.fromRawPtr(it) })"),
-        "an optional handle payload keeps its null:\n{kotlin}"
+        kotlin.contains("Probe.Held(if (held_v0 == 0L) null else Handle.fromRawPtr(held_v0))"),
+        "an optional handle payload reads its niche:\n{kotlin}"
+    );
+    // …and the slot it reads that from is a primitive, which is the half the
+    // JNI descriptor is built from.
+    assert!(
+        kotlin.contains("held_v0: Long,"),
+        "an optional handle slot is not boxed:\n{kotlin}"
     );
     // `Vec<Option<u64>>`: the list slot is un-inerted, and the element
     // conversion runs per element — the nulls are inside the list, not on it.

@@ -1316,7 +1316,7 @@ internal fun interface LayeredBuilderRaw<out R> {
     public fun run(
         tag: Int,
         count_v0: Long?,
-        held_v0: Long?,
+        held_v0: Long,
         many_v0: List<Long?>?,
         values_v0: List<Long?>?,
         nested_v0: List<List<Long?>>?,
@@ -1328,7 +1328,7 @@ internal fun interface LayeredBuilderRaw<out R> {
 @get:JvmSynthetic
 internal val __LayeredBuilderRaw: LayeredBuilderRaw<Layered> =
 LayeredBuilderRaw { tag, count_v0, held_v0, many_v0, values_v0, nested_v0, blob_v0, plain_v0 ->
-    when (tag) { 0 -> Layered.Count(count_v0?.toULong()); 1 -> Layered.Held(held_v0?.let { Summary.fromRawPtr(it) }); 2 -> Layered.Many(many_v0!!.map { it?.toULong() }); 3 -> Layered.Values(values_v0?.map { it?.toULong() }); 4 -> Layered.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } }); 5 -> Layered.Blob(blob_v0!!); 6 -> Layered.Plain(plain_v0); else -> throw IllegalArgumentException("Layered: invalid tag $tag") }
+    when (tag) { 0 -> Layered.Count(count_v0?.toULong()); 1 -> Layered.Held(if (held_v0 == 0L) null else Summary.fromRawPtr(held_v0)); 2 -> Layered.Many(many_v0!!.map { it?.toULong() }); 3 -> Layered.Values(values_v0?.map { it?.toULong() }); 4 -> Layered.Nested(nested_v0!!.map { it.map { __e1 -> __e1?.toULong() } }); 5 -> Layered.Blob(blob_v0!!); 6 -> Layered.Plain(plain_v0); else -> throw IllegalArgumentException("Layered: invalid tag $tag") }
 }
 
 internal fun interface LookupBuilderRaw<out R> {

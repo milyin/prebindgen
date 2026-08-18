@@ -43,7 +43,17 @@ pub(crate) enum WrapKind {
     /// Typed == raw (primitives, String, arrays, …): passthrough.
     None,
     /// Opaque handle: raw `Long` → typed handle class (dotted FQN).
-    Handle(String),
+    ///
+    /// `niche_sentinel` carries the absent representation when the leaf's own
+    /// `Option` rides a niche rather than a JVM null — a `Box` pointer is never
+    /// `0`, so `0L` is `None` and the slot stays a primitive. The peer of
+    /// [`Self::Unsigned64`]'s field, and for the same reason: the encoder emits
+    /// that niche, so a slot declared nullable instead asks the JVM to read an
+    /// object where a primitive was written (#433).
+    Handle {
+        fqn: String,
+        niche_sentinel: Option<String>,
+    },
     /// Opaque handle delivered to a callback as a **transient owned** value
     /// (raw `Long` → typed handle class, dotted FQN): the `asRaw` proxy wraps it
     /// AND closes it in a `finally` after `run` returns — the close-unless-taken
@@ -61,7 +71,8 @@ impl WrapKind {
     pub fn class_fqn(&self) -> Option<&str> {
         match self {
             WrapKind::None | WrapKind::Unsigned64 { .. } => None,
-            WrapKind::Handle(f) | WrapKind::HandleOwned(f) => Some(f),
+            WrapKind::Handle { fqn, .. } => Some(fqn),
+            WrapKind::HandleOwned(f) => Some(f),
         }
     }
 
@@ -90,6 +101,19 @@ impl WrapKind {
             None => arg.to_string(),
             Some(fqn) => {
                 let short = fqn.rsplit('.').next().unwrap_or(fqn);
+                // A niche says absence in the value itself, so it is tested
+                // whatever the slot's nullability says — the slot is a primitive
+                // exactly because the niche is what carries the absence.
+                if let WrapKind::Handle {
+                    niche_sentinel: Some(sentinel),
+                    ..
+                } = self
+                {
+                    return format!(
+                        "if ({arg} == {sentinel}) null else {}",
+                        handle_from_raw(short, arg)
+                    );
+                }
                 if raw_nullable {
                     format!("{arg}?.let {{ {} }}", handle_from_raw(short, "it"))
                 } else {
@@ -940,11 +964,29 @@ fn leaf_iface_param(
     if let Some(p) = proj.filter(|p| p.kind == ProjectionKind::Handle) {
         let fqn = ext.kotlin_fqn(&p.leaf_key)?.to_string();
         if raw_handle {
+            // The same rule the `Unsigned64` arm above follows: when the leaf's
+            // own `Option` rides a niche, that niche IS the absent value, so the
+            // slot stays the primitive the encoder writes and the wrap tests the
+            // sentinel. Declaring the slot nullable instead put a
+            // `Ljava/lang/Long;` in the descriptor over a `jvalue { j }` (#433).
+            let niche_sentinel = if builder_kt.is_nullable() {
+                wrap_sentinel(p, nullable)
+            } else {
+                None
+            };
+            let raw = if niche_sentinel.is_some() {
+                KtType::long()
+            } else {
+                nullable_kt(KtType::long())
+            };
             return Some(IfaceParam {
                 name,
                 typed: nullable_kt(KtType::cls(fqn.clone())),
-                raw: nullable_kt(KtType::long()),
-                wrap: WrapKind::Handle(fqn),
+                raw,
+                wrap: WrapKind::Handle {
+                    fqn,
+                    niche_sentinel,
+                },
             });
         }
         // Whole arg: typed class in both views (no proxy wrap).

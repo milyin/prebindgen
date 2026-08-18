@@ -15794,7 +15794,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_layeredOf<'a>(
     #[allow(non_upper_case_globals)]
     static __CB_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
     const __CB_FQN: &str = "io/prebindgen/covertest/model/LayeredBuilderRaw";
-    const __CB_DESCR: &str = "(ILjava/lang/Long;Ljava/lang/Long;Ljava/util/List;Ljava/util/List;Ljava/util/List;[BJ)Ljava/lang/Object;";
+    const __CB_DESCR: &str = "(ILjava/lang/Long;JLjava/util/List;Ljava/util/List;Ljava/util/List;[BJ)Ljava/lang/Object;";
     let __out = perftest_flat::layered_of(which);
     let __obj0: jni::sys::jvalue;
     let __obj1: jni::objects::JObject;

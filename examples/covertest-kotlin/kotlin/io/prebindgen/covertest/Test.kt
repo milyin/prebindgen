@@ -966,13 +966,16 @@ fun main() {
         check((layeredOf(0, boom).orThrow() as Layered.Count).v0 == null)
         check((layeredOf(1, boom).orThrow() as Layered.Count).v0 == 4uL)
 
-        // `Option<handle>` — `Layered.Held` — is COMPILED here and not called:
-        // its slot is declared a boxed `Long?` while the Rust side writes a
-        // primitive into it, so invoking either case throws (#433). That is a
-        // defect in the wire under this one, not in the layer carrying that
-        // #429 fixed, and the builder line above is compiled either way, which
-        // is the guard this section is for. Add the two calls here when #433
-        // lands.
+        // `Option<handle>`: the absence rides the handle's own niche, so the
+        // absent case is `0L` in a primitive slot rather than a JVM null in a
+        // boxed one (#433). Both arms run, and closing the present one closes
+        // the handle it minted.
+        check((layeredOf(2, boom).orThrow() as Layered.Held).v0 == null)
+        val held = layeredOf(3, boom).orThrow() as Layered.Held
+        val summary = held.v0 ?: error("the present arm dropped the handle")
+        check(summary.count(boom) == 4L)
+        held.close()
+        check(summary.isClosed())
 
         // `Vec<Option<u64>>`: the absences are inside the list, so a mixed one
         // arrives element by element rather than as one null.
