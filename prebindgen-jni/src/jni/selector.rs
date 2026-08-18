@@ -162,16 +162,39 @@ impl Declarations {
                     return None;
                 }
             }
-            let mutable = ty.is_exclusive_borrow();
-            if let Some(mut c) = self.input_wrapper_shape(
-                WrapperShape::Borrow { mutable },
-                &produced,
-                inner,
-                registry,
-                emit,
-            ) {
-                c.subs = vec![inner.key()];
-                return Some(c);
+            // An exclusive borrow crosses only when the borrowed value LIVES on
+            // the Rust side. A handle's input converter hands back an
+            // `OwnedObject<T>` that derefs to the object the JVM holds a
+            // pointer to, so a write through the `&mut` is still there once the
+            // wrapper returns. Every other input converter decodes a fresh
+            // value onto the Rust stack — a `data_class`'s fields, a scalar, an
+            // out-parameter's slot — and the callee's writes to that value are
+            // dropped with the wrapper's frame. Declining is what the `&mut [T]`
+            // branch above already does, for the same reason (#411).
+            //
+            // `mutable` off the `Ref` kind rather than through
+            // `is_exclusive_borrow`, which answers `false` for a
+            // `&mut MaybeUninit<T>` out-parameter — a slot whose writes are lost
+            // exactly as an exclusive borrow's are.
+            //
+            // An inner with no entry yet is not a refusal: the resolver runs to
+            // a fixed point and asks again once that rank resolves.
+            let writes_reach_the_caller = !*mutable
+                || registry
+                    .input_entry(inner)
+                    .is_some_and(|e| e.metadata.is_direct_handle());
+            if writes_reach_the_caller {
+                let mutable = ty.is_exclusive_borrow();
+                if let Some(mut c) = self.input_wrapper_shape(
+                    WrapperShape::Borrow { mutable },
+                    &produced,
+                    inner,
+                    registry,
+                    emit,
+                ) {
+                    c.subs = vec![inner.key()];
+                    return Some(c);
+                }
             }
         }
         // 4. Last resort: the spelling differs from something convertible only

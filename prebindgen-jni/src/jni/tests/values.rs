@@ -2462,3 +2462,95 @@ fn a_wrapped_vec_element_keeps_the_push_path_and_shares_one_trio() {
          mean consuming the Vec the arm exists to borrow:\n{kotlin}"
     );
 }
+
+/// An exclusive-borrow parameter resolves only over an opaque handle, whose
+/// object the JVM keeps alive on the Rust side. Over anything decoded onto the
+/// Rust stack the callee's writes are dropped with the wrapper's frame, so the
+/// crossing is refused instead of emitting a binding that discards them (#411).
+///
+/// Both refused spellings used to RESOLVE and emit Rust that did not compile —
+/// `&mut Rec` passed a shared borrow of the rebuilt value, and
+/// `&mut MaybeUninit<u64>` passed the decoded payload where the slot was
+/// expected. The C adapter refuses `&mut T` outright, so this also brings the
+/// two targets to the same answer for the shape.
+#[test]
+fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
+    /// One fixture per case: the declared surface plus one function taking the
+    /// spelling under test. Returns the generated Rust, or the resolve error.
+    fn build(param: syn::Type, name: &str) -> Result<String, String> {
+        let loc = myflat_loc();
+        let items: Vec<(syn::Item, SourceLocation)> = vec![
+            (
+                syn::parse_quote!(
+                    pub struct Rec {
+                        pub id: u64,
+                    }
+                ),
+                loc.clone(),
+            ),
+            (
+                syn::parse_quote!(
+                    pub struct Handle {
+                        inner: u64,
+                    }
+                ),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Fn(syn::parse_quote!(
+                    pub fn probe(v: #param) {
+                        unimplemented!()
+                    }
+                )),
+                loc.clone(),
+            ),
+        ];
+        let registry =
+            crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+        let jni = JniGenBuilder::new()
+            .set_package_prefix("io.test.jni")
+            .package(
+                crate::package!()
+                    .class(crate::data_class!(Rec))
+                    .class(crate::ptr_class!(Handle))
+                    .fun(prebindgen_registry::fun!(probe)),
+            );
+        let dir = unique_test_dir(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        match jni.build_with(registry) {
+            Ok(g) => Ok(std::fs::read_to_string(
+                g.write_rust(dir.join("g.rs")).expect("write_rust"),
+            )
+            .expect("read rust")),
+            Err(e) => Err(format!("{e}")),
+        }
+    }
+
+    // A handle: the converter hands back an `OwnedObject<Handle>` over the
+    // object the JVM points at, so the call site's `&mut` reaches it.
+    let handle = build(syn::parse_quote!(&mut Handle), "jnigen_excl_handle")
+        .expect("an exclusive borrow of a handle is a write the caller keeps");
+    let hc: String = handle.split_whitespace().collect();
+    assert!(hc.contains("flat::probe(&mutv)"), "{handle}");
+
+    // A data class: the fields are rebuilt into a local, and nothing carries a
+    // write back to Kotlin.
+    let rec = build(syn::parse_quote!(&mut Rec), "jnigen_excl_rec")
+        .expect_err("an exclusive borrow of a decoded value has no write-back");
+    assert!(
+        rec.contains("could not be resolved") && rec.contains("mut Rec"),
+        "the refusal names the spelling: {rec}"
+    );
+
+    // An out-parameter's slot: the same loss, one layer down.
+    let out = build(
+        syn::parse_quote!(&mut MaybeUninit<u64>),
+        "jnigen_excl_uninit",
+    )
+    .expect_err("an out-parameter's writes are lost the same way");
+    assert!(
+        out.contains("could not be resolved") && out.contains("MaybeUninit"),
+        "the refusal names the spelling: {out}"
+    );
+}
