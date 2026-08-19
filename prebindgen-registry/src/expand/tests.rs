@@ -2335,33 +2335,50 @@ fn slot_numbers_are_derivable_from_the_tree_walk() {
     // Three shapes that allocate differently: a dispatch (selector then arms),
     // a single-constructor optional (the layer's own payload slot), and a
     // multi-argument optional (an explicit flag, then one slot per argument).
-    let cases: Vec<(&str, Vec<&str>, &str, &str, Vec<Variant>)> = vec![
-        (
-            "dispatch",
-            vec![
+    /// One shape to check: what to call it, the source it needs, the expanded
+    /// parameter, and the variants it expands through.
+    struct Case {
+        label: &'static str,
+        items: Vec<&'static str>,
+        func: &'static str,
+        param: &'static str,
+        variants: Vec<Variant>,
+    }
+
+    let cases = vec![
+        Case {
+            label: "dispatch",
+            items: vec![
                 "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
                 "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
             ],
-            "z_keyexpr_intersects",
-            "a",
-            vec![
+            func: "z_keyexpr_intersects",
+            param: "a",
+            variants: vec![
                 Variant::Ctor(ident("z_keyexpr_try_from")),
                 Variant::Identity,
             ],
-        ),
-        (
-            "optional payload",
-            vec![
+        },
+        Case {
+            label: "optional payload",
+            items: vec![
                 "fn z_encoding_from_string(s: String) -> ZEncoding { todo!() }",
                 "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
             ],
-            "z_session_put",
-            "encoding",
-            vec![Variant::Ctor(ident("z_encoding_from_string"))],
-        ),
+            func: "z_session_put",
+            param: "encoding",
+            variants: vec![Variant::Ctor(ident("z_encoding_from_string"))],
+        },
     ];
 
-    for (label, items, func, param, variants) in cases {
+    for Case {
+        label,
+        items,
+        func,
+        param,
+        variants,
+    } in cases
+    {
         let mut reg: Registry<()> = reg_with(&items);
         let mut exp = Expansions::default();
         exp.expands.push(ExpandDecl {
