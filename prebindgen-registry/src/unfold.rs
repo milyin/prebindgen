@@ -43,8 +43,8 @@ pub use self::{
         UnfoldShape,
     },
     tree::{
-        element_of, flat_tree, flat_view, shape_of, shaped, OutChild, OutLeaf, OutLink, OutNode,
-        OutOfRust, OutProduct,
+        dependencies, dependencies_with, element_of, flat_view, shape_of, shaped, Dependencies,
+        OutChild, OutChoice, OutLeaf, OutLink, OutNode, OutOfRust, OutProduct, OutReach,
     },
 };
 use crate::transform::TransformKind;
@@ -131,6 +131,10 @@ pub struct FieldRecord {
 
 /// How one [`FieldRecord`] decomposes.
 #[derive(Clone)]
+// large_enum_variant: a field states one of three things and a binding has a
+// handful of fields — boxing the subtree would only put an indirection between
+// a field and the decomposition it splices.
+#[allow(clippy::large_enum_variant)]
 pub enum FieldDecon {
     /// By the field type's own deconstructor if it has one, else one leaf —
     /// the same default a [`DeconRecord::Acc`] record's return follows.
@@ -138,11 +142,10 @@ pub enum FieldDecon {
     /// Explicit records, replacing the type default wholesale (the declaration
     /// stated this field's complete leaf set).
     Records(Vec<DeconRecord>),
-    /// Leaves the **adapter** built, appended with this field's path and name
-    /// prefixed onto each. For shapes whose leaf structure only the adapter
-    /// knows — a decomposed sum, which is a selector plus one group per
-    /// alternative rather than a product of records.
-    Leaves(Vec<UnfoldLeaf>),
+    /// A decomposition the **adapter** built, spliced under this field's path
+    /// and name. For shapes no record list describes — a sum, which is a choice
+    /// over its alternatives rather than a product of records.
+    Subtree(OutNode),
 }
 
 impl DeconRecord {
@@ -470,9 +473,7 @@ pub(crate) fn apply<M>(
                 if plan.leaves.is_empty() {
                     continue;
                 }
-                for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
-                }
+                register_dependencies(registry, &plan.tree, &mut claims_nothing());
                 registry.callback_arg_plans.insert(key, plan);
             }
         }
@@ -484,17 +485,21 @@ pub(crate) fn apply<M>(
 /// adapter (which knows the per-field encoding — projections, enums, nested
 /// classes) and handed over as
 /// [`Decompositions::value_structs`](crate::Decompositions::value_structs).
-/// Its [`leaves`](Self::leaves)
-/// are [`LeafSource::Field`] leaves: each crosses the boundary as its own field
-/// value and the foreign side reassembles the object (no Java object is built
-/// on the Rust side).
+/// Its derived leaves are [`LeafSource::Field`] leaves: each crosses the
+/// boundary as its own field value and the foreign side reassembles the object
+/// (no Java object is built on the Rust side).
 pub struct ValueDecon {
     /// Canonical key of the value struct (the `DeconId::Default` key).
     pub key: TypeKey,
-    /// The struct type (owned) the leaves decompose.
+    /// The struct type (owned) the tree decomposes.
     pub source: prebindgen_flat::flat::TypeRef,
-    /// Field-access leaves in foreign-signature / `fromParts` order.
-    pub leaves: Vec<UnfoldLeaf>,
+    /// The decomposition: a product over the struct's fields, with a nested
+    /// declared struct spliced as a product of its own.
+    ///
+    /// The leaf names, access paths and nullability the foreign signature /
+    /// `fromParts` order exposes are **derived** from it — each field states
+    /// one step and one name segment, and nesting composes them.
+    pub tree: OutNode,
 }
 
 /// Wire the synthesized by-value `data_class` decompositions into the registry:
@@ -509,13 +514,30 @@ pub struct ValueDecon {
 /// stays non-generic.
 ///
 /// Runs in `write_rust` right after [`apply`] and before `resolve`.
+/// One decomposition whose shape the **adapter** fixed, ready to be wired into
+/// every boundary use of its type: the leaves each use exposes, and the core
+/// tree each wraps in its own arity layers.
+struct FixedDecon<'a> {
+    key: TypeKey,
+    source: prebindgen_flat::flat::TypeRef,
+    leaves: Vec<UnfoldLeaf>,
+    core: &'a OutNode,
+}
+
 pub(crate) fn apply_value_structs<M>(
     registry: &mut Registry<M>,
     decons: Vec<ValueDecon>,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for vd in &decons {
-        let decon = wire_fixed_decon(registry, &vd.key, &vd.source, &vd.leaves)?;
+        let (leaves, _) = flat_view(&vd.tree)?;
+        let decon = wire_fixed_decon(registry, &vd.key, &vd.source, &leaves)?;
+        let vd = &FixedDecon {
+            key: vd.key.clone(),
+            source: vd.source.clone(),
+            leaves,
+            core: &vd.tree,
+        };
 
         // Output position: a declared fn returning the struct
         // (`T` / `&T` / `Option<T|&T>` / `Vec<T|&T>`) decomposes into a
@@ -538,9 +560,9 @@ pub(crate) fn apply_value_structs<M>(
 /// [`Decompositions::sums`](crate::Decompositions::sums) — the
 /// selector-carrying sibling of [`ValueDecon`].
 ///
-/// Its [`leaves`](Self::leaves) are a [`LeafSource::SumTag`] selector followed
-/// by one **group** per alternative ([`LeafSource::VariantField`] leaves
-/// carrying [`UnfoldLeaf::group`]). Exactly one group is live per value; the
+/// Exactly one alternative is live per value. The derived leaf list is a
+/// [`LeafSource::SumTag`] selector followed by one **group** per alternative
+/// ([`LeafSource::VariantField`] leaves carrying [`UnfoldLeaf::group`]); the
 /// emitter reads the whole list as ONE `match` over the value, filling every
 /// inert slot with its wire default. The foreign side picks the live group by
 /// the tag and rebuilds the alternative, so no object is built on the Rust
@@ -550,8 +572,15 @@ pub struct SumDecon {
     pub key: TypeKey,
     /// The enum type (owned) the leaves decompose.
     pub source: prebindgen_flat::flat::TypeRef,
-    /// The tag leaf followed by every variant's group, in tag order.
-    pub leaves: Vec<UnfoldLeaf>,
+    /// The decomposition: a [`Choice`](crate::transform::TransformKind::Choice)
+    /// over one [`Variant`](OutProduct::Variant) arm per alternative, each a
+    /// product of that alternative's payload members.
+    ///
+    /// The tag leaf and every leaf's group membership are **derived** from it —
+    /// a sum is the one decomposition that is not a product, and saying so
+    /// structurally is what lets the registry, rather than each adapter,
+    /// interpret it.
+    pub tree: OutNode,
 }
 
 /// Wire the synthesized **sum** decompositions into the registry — the
@@ -584,14 +613,31 @@ pub struct SumDecon {
 /// true for jnigen via `export_type`, and not true at all for a registry
 /// assembled without declarations. The invariant holds by construction now
 /// rather than by declaration order.
-fn register_leaves<M>(registry: &mut crate::registry::Registry<M>, leaves: &[UnfoldLeaf]) {
-    for leaf in leaves {
-        if leaf.has_converter() {
-            registry.require_output(&leaf.out_ty);
-        } else {
-            registry.reference_output(&leaf.out_ty);
-        }
+fn register_dependencies<M>(
+    registry: &mut crate::registry::Registry<M>,
+    tree: &OutNode,
+    claims: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+) {
+    let deps = dependencies_with(tree, claims);
+    for ty in &deps.required {
+        registry.require_output(ty);
     }
+    for ty in &deps.referenced {
+        registry.reference_output(ty);
+    }
+}
+
+/// The selection every caller passes today: no adapter states one yet, so
+/// nothing is claimed and every crossing under a plan is registered.
+///
+/// Registration takes the policy rather than assuming it because the two must
+/// be the *same* decision the adapter lowers by — a claim honoured in one and
+/// not the other roots converters the binding never calls, and
+/// [`TypeCell::root`](crate::TypeEntry) only ever gains, so a second pass
+/// cannot take a root back. Handing an adapter's selection in here is #444 §5.
+fn claims_nothing(
+) -> impl FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef> {
+    |_, _| None
 }
 
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
@@ -601,14 +647,16 @@ pub(crate) fn apply_sum_returns<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for sd in &decons {
-        let decon = wire_fixed_decon(registry, &sd.key, &sd.source, &sd.leaves)?;
-        let vd = ValueDecon {
+        let (leaves, _) = flat_view(&sd.tree)?;
+        let decon = wire_fixed_decon(registry, &sd.key, &sd.source, &leaves)?;
+        let fixed = FixedDecon {
             key: sd.key.clone(),
             source: sd.source.clone(),
-            leaves: sd.leaves.clone(),
+            leaves,
+            core: &sd.tree,
         };
-        wire_fixed_returns(registry, &vd, &decon, declared_fns, true);
-        wire_fixed_callbacks(registry, &vd, &decon, declared_fns)?;
+        wire_fixed_returns(registry, &fixed, &decon, declared_fns, true);
+        wire_fixed_callbacks(registry, &fixed, &decon, declared_fns)?;
     }
     Ok(())
 }
@@ -640,7 +688,7 @@ fn wire_fixed_decon<M>(
 /// replaces it.
 fn wire_fixed_returns<M>(
     registry: &mut Registry<M>,
-    vd: &ValueDecon,
+    vd: &FixedDecon<'_>,
     decon: &DeconId,
     declared_fns: &std::collections::HashSet<syn::Ident>,
     no_converter: bool,
@@ -680,11 +728,11 @@ fn wire_fixed_returns<M>(
                 registry.unrequire_output(layer);
             }
         }
-        register_leaves(registry, &vd.leaves);
+        register_dependencies(registry, vd.core, &mut claims_nothing());
         // `layer_types` ends at the core the shape stops on, so the layers are
         // everything before it.
         let layer_tys = &layers.layer_types[..layers.layer_types.len() - 1];
-        let tree = shaped(&shape, layer_tys, flat_tree(&vd.source, &vd.leaves));
+        let tree = shaped(&shape, layer_tys, vd.core.clone());
         let plan = UnfoldPlan {
             source: vd.source.clone(),
             decon: Some(decon.clone()),
@@ -710,7 +758,7 @@ fn wire_fixed_returns<M>(
 /// group-reassembly adapter) can be enabled on its own.
 fn wire_fixed_callbacks<M>(
     registry: &mut Registry<M>,
-    vd: &ValueDecon,
+    vd: &FixedDecon<'_>,
     decon: &DeconId,
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
@@ -753,8 +801,8 @@ fn wire_fixed_callbacks<M>(
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
-                register_leaves(registry, &vd.leaves);
-                let tree = shaped(&shape, &layer_tys, flat_tree(&vd.source, &vd.leaves));
+                register_dependencies(registry, vd.core, &mut claims_nothing());
+                let tree = shaped(&shape, &layer_tys, vd.core.clone());
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
                     decon: Some(decon.clone()),
@@ -897,8 +945,7 @@ fn whole_leaf_fold_plan(
             kind: TransformKind::Leaf(OutLeaf {
                 nullable: false,
                 identity: false,
-                source: LeafSource::Accessor,
-                group: None,
+                reach: OutReach::Accessor,
             }),
         },
     );
@@ -1116,9 +1163,7 @@ fn process_decl<M>(
                 let plan = build_plan(
                     acc, registry, ed, by_ref, element, shape, &layer_tys, &records, decon,
                 )?;
-                for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
-                }
+                register_dependencies(registry, &plan.tree, &mut claims_nothing());
                 plan
             } else {
                 // Whole element: keep the type exactly as written so the
@@ -1164,9 +1209,7 @@ fn process_decl<M>(
             let plan = build_plan(
                 acc, registry, ed, by_ref, source, shape, &layer_tys, &records, decon,
             )?;
-            for leaf in &plan.leaves {
-                registry.require_output(&leaf.out_ty);
-            }
+            register_dependencies(registry, &plan.tree, &mut claims_nothing());
             plan
         };
         // Delivery is by **leaf count**, not a per-decl flag:
@@ -1243,7 +1286,7 @@ fn register_decon_spec<M>(
     }
     // A `DeconSpec` describes the leaf list only — signature artifacts are
     // derived from it, never emitted code — so the tree's hoists are dropped.
-    let (leaves, _) = flat_view(&build_tree(acc, registry, records, source, true)?);
+    let (leaves, _) = flat_view(&build_tree(acc, registry, records, source, true)?)?;
     require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
@@ -1305,7 +1348,7 @@ fn build_plan<M>(
 ) -> Result<UnfoldPlan, UnfoldError> {
     let core = build_tree(acc, registry, records, source, by_ref)?;
     let tree = shaped(&shape, layer_tys, core);
-    let (leaves, hoists) = flat_view(&tree);
+    let (leaves, hoists) = flat_view(&tree)?;
     require_unique_leaf_names(source, &leaves)?;
     require_root_identity_last(by_ref, source, &leaves)?;
 
@@ -1428,8 +1471,7 @@ fn flatten<M>(
                     OutLeaf {
                         nullable: false,
                         identity: true,
-                        source: LeafSource::Accessor,
-                        group: None,
+                        reach: OutReach::Accessor,
                     },
                 ));
             }
@@ -1537,7 +1579,7 @@ fn flatten<M>(
                     // for a shape only it can describe.
                     let child_records = match &fr.decon {
                         FieldDecon::Records(recs) => Some(recs.clone()),
-                        FieldDecon::Leaves(_) => None,
+                        FieldDecon::Subtree(_) => None,
                         FieldDecon::Default => match find_deconstructor_by_type(acc, &child_key) {
                             Some(child_decl) if !visited.contains(&child_key) => {
                                 Some(child_decl.records.clone())
@@ -1552,7 +1594,7 @@ fn flatten<M>(
                         },
                     };
                     let decomposed =
-                        child_records.is_some() || matches!(fr.decon, FieldDecon::Leaves(_));
+                        child_records.is_some() || matches!(fr.decon, FieldDecon::Subtree(_));
 
                     // The field's own `Option` is a nullable NESTING step only
                     // when something is decomposed below it. For a plain leaf
@@ -1571,27 +1613,19 @@ fn flatten<M>(
                         .collect();
                     field_steps.push(PathStep::field(last.clone(), opt && decomposed));
 
-                    // Adapter-built leaves: hang each off this field's link and
-                    // name. Their internal structure (a selector plus its
-                    // groups) is opaque here and passes through untouched — the
-                    // field's own `Option` rides each leaf, since the leaves are
-                    // where this level ends.
-                    if let FieldDecon::Leaves(built) = &fr.decon {
-                        for l in built {
-                            let mut steps = field_steps.clone();
-                            steps.extend(l.path.iter().cloned());
-                            form_children.push(leaf_child(
-                                steps,
-                                vec![fr.name.clone(), l.name.clone()],
-                                l.out_ty.clone(),
-                                OutLeaf {
-                                    nullable: l.nullable || opt,
-                                    identity: l.identity,
-                                    source: l.source.clone(),
-                                    group: l.group,
-                                },
-                            ));
-                        }
+                    // An adapter-built decomposition hangs off this field's
+                    // link like any spliced child: its own structure is
+                    // whatever it declared, and the field's `Option` makes it
+                    // nullable through the link, since something IS decomposed
+                    // below.
+                    if let FieldDecon::Subtree(built) = &fr.decon {
+                        form_children.push(OutChild {
+                            link: OutLink {
+                                steps: field_steps,
+                                name: vec![fr.name.clone()],
+                            },
+                            node: built.clone(),
+                        });
                         continue;
                     }
 
@@ -1636,8 +1670,7 @@ fn flatten<M>(
                             OutLeaf {
                                 nullable: false,
                                 identity: false,
-                                source: LeafSource::Field,
-                                group: None,
+                                reach: OutReach::Field,
                             },
                         ));
                     }
@@ -1762,8 +1795,7 @@ fn flatten<M>(
                         OutLeaf {
                             nullable: cond_handle,
                             identity: cond_handle,
-                            source: LeafSource::Accessor,
-                            group: None,
+                            reach: OutReach::Accessor,
                         },
                     ));
                 }

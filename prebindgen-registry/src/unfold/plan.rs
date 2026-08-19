@@ -251,7 +251,8 @@ pub struct UnfoldPlan {
     /// stack back off them.
     pub(crate) shape: UnfoldShape,
     /// The plan itself: the `Option` / `Vec` layers the value crosses in, and
-    /// what is taken out of it under them (#442). [`Self::shape`],
+    /// what is taken out of it under them (#442). Read it through
+    /// [`Self::tree`]. [`Self::shape`],
     /// [`Self::element`], [`Self::leaves`] and [`Self::hoists`] are **derived
     /// views** of this tree, and a language adapter reads either the tree
     /// (through [`TransformLowerer`](crate::transform::TransformLowerer)) or a
@@ -261,7 +262,7 @@ pub struct UnfoldPlan {
     /// (`..plan` with a different [`Self::delivery`]), and the decomposition
     /// underneath is the same one. `Rc` because the model it names is
     /// `syn`-backed and so single-threaded already.
-    pub tree: std::rc::Rc<crate::unfold::OutNode>,
+    pub(crate) tree: std::rc::Rc<crate::unfold::OutNode>,
     /// Flattened output leaves, in builder-argument order. Populated for
     /// `Decompose`/`Optional` (accessor decomposition) and for a **decomposed**
     /// `Iterable` fold (per-element leaves — explicit-accessor or a synthesized
@@ -307,6 +308,16 @@ pub struct UnfoldPlan {
 }
 
 impl UnfoldPlan {
+    /// The decomposition itself — see the field's own note.
+    ///
+    /// Handed out by reference and never by value: the cached projections
+    /// beside it are computed from this tree when the plan is built, so a
+    /// caller able to swap or mutate it could leave them describing a
+    /// decomposition the plan no longer has.
+    pub fn tree(&self) -> &crate::unfold::OutNode {
+        &self.tree
+    }
+
     /// Outer shape over the core decomposition — see the field's own note.
     pub fn shape(&self) -> &UnfoldShape {
         &self.shape
@@ -395,6 +406,13 @@ pub struct UnfoldLeaf {
     /// Grouping is what turns a leaf list into a `match`: leaves sharing a
     /// group are emitted together in one arm instead of as independent
     /// per-leaf expressions.
+    ///
+    /// `None` says two different things, told apart by [`Self::source`]: on a
+    /// [`SumTag`](LeafSource::SumTag) leaf it means *the selector*, which is
+    /// live whichever arm is — it chooses between the groups rather than
+    /// joining one — and on any other leaf it means the leaf is not under a
+    /// choice at all. Deriving the field from the tree does not merge the two,
+    /// because the tag is the only leaf a choice node contributes itself.
     pub group: Option<i32>,
 }
 

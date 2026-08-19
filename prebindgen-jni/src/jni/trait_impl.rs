@@ -1564,16 +1564,14 @@ impl Declarations {
             if !is_data_class {
                 continue;
             }
-            if let Some(leaves) =
-                crate::jni::synth_value_struct_leaves(self, registry, item_struct, &[], "", 0)
+            if let Some(tree) =
+                crate::jni::synth_value_struct_tree(self, registry, item_struct, reading, 0)
             {
-                if !leaves.is_empty() {
-                    out.push(prebindgen_registry::unfold::ValueDecon {
-                        key,
-                        source: reading.clone(),
-                        leaves,
-                    });
-                }
+                out.push(prebindgen_registry::unfold::ValueDecon {
+                    key,
+                    source: reading.clone(),
+                    tree,
+                });
             }
         }
         out
@@ -1610,7 +1608,7 @@ impl Declarations {
                 // `Variant::type_ref` exists for exactly this, and it works in
                 // the declare phase where a `reading()` lookup could not.
                 source: sum.type_ref().clone(),
-                leaves: crate::jni::synth_sum_leaves(self, sum_cfg, sum),
+                tree: crate::jni::synth_sum_tree(self, sum_cfg, sum),
             });
         }
         out

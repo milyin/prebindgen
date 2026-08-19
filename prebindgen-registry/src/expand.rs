@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
     tree::{
-        wire_leaves, InChild, InChoice, InLeaf, InLink, InNode, InPresence, InProduct, InSlot,
-        IntoRust,
+        dependencies, dependencies_with, wire_leaves, Dependencies, InChild, InChoice, InLeaf,
+        InLink, InNode, InPresence, InProduct, InRun, InSlot, IntoRust,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -321,9 +321,7 @@ fn process_expand<M>(
         &mut visited,
     )?;
 
-    for leaf in &plan.leaves {
-        registry.require_input(&leaf.ty);
-    }
+    register_dependencies(registry, &plan.tree, &mut claims_nothing());
     registry
         .expansion_plans
         .insert((ed.func.clone(), ed.param.clone()), plan);
@@ -401,6 +399,36 @@ struct CtorSig {
     fallible: bool,
 }
 
+/// Root every input converter a construction needs, under one converter
+/// selection.
+///
+/// Both halves of [`Dependencies`] are required for now: the current layout's
+/// selector and presence flag cross as an `i32` and a `bool`, so their
+/// converters must resolve. They are named apart because an adapter that picks
+/// its own physical representation should not inherit this one's (#444 §1).
+///
+/// `claims` is taken rather than assumed because registration and lowering must
+/// make the *same* decision: a subtree claimed in one and not the other roots
+/// converters the binding never calls, and a root can only be gained, never
+/// taken back.
+fn register_dependencies<M>(
+    registry: &mut Registry<M>,
+    tree: &InNode,
+    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+) {
+    let deps = dependencies_with(tree, claims);
+    for ty in deps.required.iter().chain(deps.intrinsic.iter()) {
+        registry.require_input(ty);
+    }
+}
+
+/// The selection every caller passes today: no adapter states one yet. Handing
+/// an adapter's in is #444 §5.
+fn claims_nothing() -> impl FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>
+{
+    |_, _| None
+}
+
 /// Build the [`FoldPlan`] for a chosen construction. A single `Ctor` variant
 /// (no identity) is the plain/unconditional form (no selector); anything else is
 /// selector-dispatched — so a "single" constructor and a 1-variant combined emit
@@ -445,7 +473,6 @@ fn build_plan<M>(
                     let payload = InSlot {
                         slot: next_slot(&mut next),
                         name: param.clone(),
-                        ty: pty.optional(),
                     };
                     let arg = InChild {
                         link: InLink { by_ref: false },
@@ -455,7 +482,10 @@ fn build_plan<M>(
                         },
                     };
                     (
-                        InPresence::Payload(payload),
+                        InPresence::Payload {
+                            slot: payload,
+                            ty: pty.optional(),
+                        },
                         ctor_node(target, func, sig.fallible, vec![arg]),
                     )
                 } else {
@@ -464,11 +494,6 @@ fn build_plan<M>(
                     let flag = InSlot {
                         slot: next_slot(&mut next),
                         name: ident(&format!("{}_present", param)),
-                        // A presence flag no source wrote — placeless by
-                        // construction.
-                        ty: prebindgen_flat::flat::TypeRef::scalar(
-                            prebindgen_flat::flat::ScalarKind::Bool,
-                        ),
                     };
                     let prefix = param.to_string();
                     let mut args = Vec::new();
@@ -575,9 +600,9 @@ fn leaf_child(
     InChild {
         link: InLink { by_ref: false },
         node: InNode {
-            ty: ty.clone(),
+            ty,
             kind: TransformKind::Leaf(InLeaf::Slot {
-                slot: InSlot { slot, name, ty },
+                slot: InSlot { slot, name },
                 wrapped,
             }),
         },
@@ -647,8 +672,6 @@ fn build_core<M>(
     let selector = InSlot {
         slot: next_slot(next),
         name: ident(&format!("{}_sel", prefix)),
-        // The selector, likewise composed and placeless.
-        ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
     };
     let mut arms: Vec<InChild> = Vec::new();
     for (vi, v) in variants.iter().enumerate() {
@@ -1059,7 +1082,7 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
             // Presence rides the layer's own `Option` slot: unwrap it, bind the
             // payload, and the single-argument construction below reads that
             // binding.
-            InPresence::Payload(payload) => {
+            InPresence::Payload { slot: payload, .. } => {
                 let slot = &self.leaf_locals[payload.slot];
                 let bound = bound_local();
                 syn::parse_quote!(match #slot {
@@ -1077,11 +1100,11 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InSlot,
+        op: &InRun,
         _inner: &InNode,
         value: syn::Expr,
     ) -> Result<syn::Expr, Self::Error> {
-        let slot = &self.leaf_locals[op.slot];
+        let slot = &self.leaf_locals[op.slot.slot];
         let bound = bound_local();
         Ok(syn::parse_quote!(
             #slot

@@ -2,12 +2,13 @@
 //! (or a callback argument), and the `match` that encodes it.
 //!
 //! A sum is the one decomposition that is not a deterministic product: only
-//! ONE alternative's leaves are live per value. Core models that with a
+//! ONE alternative's leaves are live per value. Core models that as a
+//! `Choice` node whose arms are the alternatives, and derives from it the
 //! synthesized [`LeafSource::SumTag`] selector plus per-leaf
 //! [`UnfoldLeaf::group`] membership
 //! ([`apply_sum_returns`](prebindgen_registry::unfold::apply_sum_returns)); this
-//! module is the JNI adapter's two ends of it — [`synth_sum_leaves`] builds the
-//! leaf list before `resolve`, [`encode_sum_leaves`] emits the single `match`
+//! module is the JNI adapter's two ends of it — [`synth_sum_tree`] declares the
+//! structure before `resolve`, [`encode_sum_leaves`] emits the single `match`
 //! that fills every slot at emit time.
 //!
 //! The wire layout is the same one a sum-typed **struct field** gets
@@ -25,15 +26,20 @@ use super::*;
 /// variant fragment from its property.
 pub(crate) const SUM_TAG_LEAF: &str = "tag";
 
-/// Synthesize the leaves of one `sealed_class`-declared sum: the
-/// [`LeafSource::SumTag`] selector followed by one
-/// [`LeafSource::VariantField`] leaf per payload field, in tag order, each
-/// carrying its variant's tag as its [`group`](UnfoldLeaf::group).
+/// Build the decomposition of one `sealed_class`-declared sum: a
+/// [`Choice`](prebindgen_registry::transform::TransformKind::Choice) over one
+/// [`Variant`](prebindgen_registry::unfold::OutProduct::Variant) arm per
+/// alternative, each a product of that alternative's payload members.
+///
+/// The registry derives the [`LeafSource::SumTag`] selector, every leaf's
+/// [`group`](prebindgen_registry::unfold::UnfoldLeaf::group) and its
+/// [`LeafSource::VariantField`] from that structure — this says what the sum
+/// IS, not how its leaves lay out.
 ///
 /// Runs BEFORE `resolve` (like
 /// [`synth_value_struct_leaves`](super::synth_value_struct_leaves)), so it may
 /// only read the declaration (`sum_cfg`) and the enum's syntax — never the
-/// converter tables. Every payload's own `out_ty` is registered as a required
+/// converter tables. Every payload's own type is registered as a required
 /// output by the core wiring, so a payload that cannot cross fails naming
 /// itself.
 ///
@@ -41,52 +47,76 @@ pub(crate) const SUM_TAG_LEAF: &str = "tag";
 /// pair the sealed-interface emitter and the struct-field bridge use, so a
 /// `variant!(V).name(...)` rename carries through to the builder's parameter
 /// names too.
-pub(crate) fn synth_sum_leaves(
+pub(crate) fn synth_sum_tree(
     ext: &Declarations,
     sum_cfg: &SumConfig,
     sum: &prebindgen_registry::flat::Variant,
-) -> Vec<prebindgen_registry::unfold::UnfoldLeaf> {
-    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
+) -> prebindgen_registry::unfold::OutNode {
+    use prebindgen_registry::{
+        transform::TransformKind,
+        unfold::{OutChild, OutChoice, OutLeaf, OutLink, OutNode, OutProduct, OutReach},
+    };
 
-    // The selector rides ahead of the groups it chooses between, and carries
-    // **which sum** it selects over as its `out_ty` — that is how the emitter
-    // finds the enum to `match` when the sum is a field rather than the whole
-    // returned value. Nothing looks up a converter for it (`has_converter()` is
-    // false for a `SumTag`): there is no value to convert, the emitter assigns
-    // the tag literal per arm. Its wire is a `jint` by definition.
-    let mut leaves = vec![UnfoldLeaf {
-        name: SUM_TAG_LEAF.to_string(),
-        path: Vec::new(),
-        // The tag names WHICH sum it selects over, and no source wrote that as
-        // a standalone type — so the DECLARATION answers, rather than this
-        // emitter minting a reading from the name. Nothing resolves a converter
-        // for it (`has_converter()` is false), but the emitter reads it back to
-        // find the enum to `match`.
-        out_ty: sum.type_ref().clone(),
-        identity: false,
-        nullable: false,
-        source: LeafSource::SumTag,
-        group: None,
-    }];
-    for alt in &sum.alternatives {
-        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
-        for field in &alt.fields {
-            let prop = sum_field_prop_name(&field.member());
-            leaves.push(UnfoldLeaf {
-                name: sum_slot_fragment(&kotlin_name, &prop),
-                path: Vec::new(),
-                out_ty: field.ty.clone(),
-                identity: false,
-                nullable: false,
-                source: LeafSource::VariantField {
-                    variant: alt.name.clone(),
-                    member: field.member(),
+    let variants = sum
+        .alternatives
+        .iter()
+        .map(|alt| {
+            let kotlin_name = ext.sum_variant_class_name(sum_cfg, &alt.name);
+            let fields = alt
+                .fields
+                .iter()
+                .map(|field| {
+                    let prop = sum_field_prop_name(&field.member());
+                    OutChild {
+                        link: OutLink {
+                            // A variant payload is bound by the arm's pattern,
+                            // not reached by a path.
+                            steps: Vec::new(),
+                            name: vec![sum_slot_fragment(&kotlin_name, &prop)],
+                        },
+                        node: OutNode {
+                            ty: field.ty.clone(),
+                            kind: TransformKind::Leaf(OutLeaf {
+                                nullable: false,
+                                identity: false,
+                                reach: OutReach::VariantMember(field.member()),
+                            }),
+                        },
+                    }
+                })
+                .collect();
+            OutChild {
+                link: OutLink {
+                    steps: Vec::new(),
+                    name: Vec::new(),
                 },
-                group: Some(sum_tag(alt)),
-            });
-        }
+                node: OutNode {
+                    ty: sum.type_ref().clone(),
+                    kind: TransformKind::Product {
+                        op: OutProduct::Variant {
+                            name: alt.name.clone(),
+                            tag: sum_tag(alt),
+                        },
+                        children: fields,
+                    },
+                },
+            }
+        })
+        .collect();
+
+    OutNode {
+        // The sum's own reading, which the DECLARATION answers with —
+        // `Variant::type_ref` exists for exactly this, and it works in the
+        // declare phase where a `reading()` lookup could not. The selector
+        // carries it, which is how the emitter finds the enum to `match`.
+        ty: sum.type_ref().clone(),
+        kind: TransformKind::Choice {
+            op: OutChoice {
+                name: SUM_TAG_LEAF.to_string(),
+            },
+            variants,
+        },
     }
-    leaves
 }
 
 /// The wire slot one leaf occupies when its value is only computed in SOME arm

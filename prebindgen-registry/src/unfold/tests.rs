@@ -1076,6 +1076,41 @@ fn option_vec_whole_element_plan() {
     );
 }
 
+/// A by-value `data_class` decomposition: a product over field leaves, as the
+/// JNI adapter declares one. `fields` are `(name, type)` in `fromParts` order.
+fn value_struct_decon(source: syn::Type, fields: &[(&str, syn::Type)]) -> ValueDecon {
+    use crate::transform::TransformKind;
+
+    let source = tref(source);
+    ValueDecon {
+        key: source.key(),
+        source: source.clone(),
+        tree: OutNode {
+            ty: source,
+            kind: TransformKind::Product {
+                op: OutProduct::Records,
+                children: fields
+                    .iter()
+                    .map(|(name, ty)| OutChild {
+                        link: OutLink {
+                            steps: vec![PathStep::field(ident(name), false)],
+                            name: vec![name.to_string()],
+                        },
+                        node: OutNode {
+                            ty: tref(ty.clone()),
+                            kind: TransformKind::Leaf(OutLeaf {
+                                nullable: false,
+                                identity: false,
+                                reach: OutReach::Field,
+                            }),
+                        },
+                    })
+                    .collect(),
+            },
+        },
+    }
+}
+
 #[test]
 fn value_struct_vec_is_fixed_iterable_fold() {
     // A by-value `data_class` returned as `Option<Vec<T>>` (perftest's
@@ -1085,23 +1120,13 @@ fn value_struct_vec_is_fixed_iterable_fold() {
     // Rust side); `None` ⇒ a null list. Closes the data_class→Vec milestone.
     let mut reg: Registry<()> =
         reg_with(&["fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> { todo!() }"]);
-    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![PathStep::field(ident(name), false)],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::Field,
-        group: None,
-    };
-    let vd = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![
-            leaf("id", syn::parse_quote!(i64)),
-            leaf("seq", syn::parse_quote!(i32)),
+    let vd = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[
+            ("id", syn::parse_quote!(i64)),
+            ("seq", syn::parse_quote!(i32)),
         ],
-    };
+    );
     let declared: std::collections::HashSet<syn::Ident> =
         ["storage_get_vec"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
@@ -1117,6 +1142,23 @@ fn value_struct_vec_is_fixed_iterable_fold() {
                     if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))),
         "Option<Vec<T>> ⇒ Optional(Iterable(Base))"
     );
+    // …and the shape is that reading of the tree: an `Optional` node over a
+    // `Sequence` node over the product the elements decompose into. The three
+    // structural kinds nest in one plan, which is what the derived views are
+    // read back off.
+    {
+        use crate::transform::TransformKind;
+        let TransformKind::Optional { inner, .. } = &plan.tree.kind else {
+            panic!("the return's `Option` is a node");
+        };
+        let TransformKind::Sequence { inner, .. } = &inner.kind else {
+            panic!("the run is a node under it");
+        };
+        assert!(
+            matches!(&inner.kind, TransformKind::Product { children, .. } if children.len() == 2),
+            "each element decomposes into its fields"
+        );
+    }
     assert_eq!(plan.delivery, Delivery::Callback);
     assert!(plan.decon.is_some(), "carries the field decon");
     assert!(
@@ -1138,23 +1180,13 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     let mut reg: Registry<()> = reg_with(&[
         "fn storage_callback_vec(f: impl Fn(&[Payload]) + Send + Sync + 'static) { todo!() }",
     ]);
-    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![PathStep::field(ident(name), false)],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::Field,
-        group: None,
-    };
-    let vd = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![
-            leaf("id", syn::parse_quote!(i64)),
-            leaf("seq", syn::parse_quote!(i32)),
+    let vd = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[
+            ("id", syn::parse_quote!(i64)),
+            ("seq", syn::parse_quote!(i32)),
         ],
-    };
+    );
     let declared: std::collections::HashSet<syn::Ident> =
         ["storage_callback_vec"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
@@ -1178,11 +1210,10 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     let mut reg2: Registry<()> = reg_with(&[
         "fn storage_callback(f: impl Fn(&Payload) + Send + Sync + 'static) { todo!() }",
     ]);
-    let vd2 = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![leaf("id", syn::parse_quote!(i64))],
-    };
+    let vd2 = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[("id", syn::parse_quote!(i64))],
+    );
     let declared2: std::collections::HashSet<syn::Ident> =
         ["storage_callback"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg2, vec![vd2], &declared2).expect("apply_value_structs");
@@ -1567,7 +1598,13 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
         decon: None,
         by_ref: false,
         shape: UnfoldShape::Base,
-        tree: std::rc::Rc::new(crate::unfold::flat_tree(&source, &[])),
+        tree: std::rc::Rc::new(OutNode {
+            ty: source.clone(),
+            kind: crate::transform::TransformKind::Product {
+                op: OutProduct::Records,
+                children: Vec::new(),
+            },
+        }),
         leaves: vec![],
         element: None,
         delivery: Delivery::Return,
@@ -1666,45 +1703,68 @@ fn duplicate_declarations_collected() {
     );
 }
 
-/// The tag + group leaves a sum decomposition is made of. Mirrors what the
-/// JNI adapter synthesizes: a selector followed by one group per alternative.
+/// The decomposition a sum is made of, mirroring what the JNI adapter declares:
+/// a choice over one arm per alternative, each a product of its payload
+/// members. `Reading` has a unit `Missing` (tag 0) and an `Exact(i64)` (tag 1).
 ///
-/// The selector's `out_ty` is **the sum**, as `synth_sum_leaves` stores it — it
-/// names *which* sum it chooses between, which is how the emitter finds the enum
-/// to `match`. It said `i32` here, the tag's wire type, which made the
-/// registration test prove only that *some* converter-free leaf gets a cell
-/// rather than that the selector registers the sum it names (#282).
+/// The tag leaf, its `out_ty` — **the sum**, which is how the emitter finds the
+/// enum to `match` — and every leaf's group are DERIVED from this; the
+/// declaration says only what the sum is.
 fn reading_sum_decon() -> SumDecon {
-    let tag = UnfoldLeaf {
-        name: "tag".to_string(),
-        path: vec![],
-        out_ty: tref(syn::parse_quote!(Reading)),
-        identity: false,
-        nullable: false,
-        source: LeafSource::SumTag,
-        group: None,
-    };
-    let field = |name: &str, variant: &str, idx: u32, ty: syn::Type, group: i32| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::VariantField {
-            variant: ident(variant),
-            member: syn::Member::Unnamed(syn::Index::from(idx as usize)),
+    use crate::transform::TransformKind;
+
+    let arm = |name: &str, tag: i32, fields: Vec<OutChild>| OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: Vec::new(),
         },
-        group: Some(group),
+        node: OutNode {
+            ty: tref(syn::parse_quote!(Reading)),
+            kind: TransformKind::Product {
+                op: OutProduct::Variant {
+                    name: ident(name),
+                    tag,
+                },
+                children: fields,
+            },
+        },
+    };
+    let payload = |name: &str, idx: u32, ty: syn::Type| OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: vec![name.to_string()],
+        },
+        node: OutNode {
+            ty: tref(ty),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                reach: OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(
+                    idx as usize,
+                ))),
+            }),
+        },
     };
     SumDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Reading)),
         source: tref(syn::parse_quote!(Reading)),
-        leaves: vec![
-            tag,
-            // group 0 (`Missing`) is empty — a unit variant contributes only
-            // its tag.
-            field("exact_v0", "Exact", 0, syn::parse_quote!(i64), 1),
-        ],
+        tree: OutNode {
+            ty: tref(syn::parse_quote!(Reading)),
+            kind: TransformKind::Choice {
+                op: OutChoice {
+                    name: "tag".to_string(),
+                },
+                variants: vec![
+                    // A unit variant contributes only its tag.
+                    arm("Missing", 0, Vec::new()),
+                    arm(
+                        "Exact",
+                        1,
+                        vec![payload("exact_v0", 0, syn::parse_quote!(i64))],
+                    ),
+                ],
+            },
+        },
     }
 }
 
@@ -1721,6 +1781,15 @@ fn sum_return_is_a_fixed_builder_plan() {
     apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
 
     let plan = reg.unfold_plans.get(&ident("read_one")).expect("plan");
+    // The plan's tree IS the choice the declaration stated — a sum is not a
+    // product, and the leaf list below is derived from that.
+    assert!(
+        matches!(
+            &plan.tree.kind,
+            crate::transform::TransformKind::Choice { variants, .. } if variants.len() == 2
+        ),
+        "a sum decomposes through a choice node, one arm per alternative"
+    );
     assert!(plan.fixed_builder, "sum ⇒ fixed builder");
     assert_eq!(plan.delivery, Delivery::Callback);
     assert!(matches!(plan.shape, UnfoldShape::Base));
@@ -1875,23 +1944,13 @@ fn sum_callback_arg_is_a_fixed_builder_plan() {
 fn a_vec_of_optionals_installs_no_fixed_fold() {
     let mut reg: Registry<()> =
         reg_with(&["fn storage_get_vec(s: &Storage) -> Vec<Option<Payload>> { todo!() }"]);
-    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![PathStep::field(ident(name), false)],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::Field,
-        group: None,
-    };
-    let vd = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![
-            leaf("id", syn::parse_quote!(i64)),
-            leaf("seq", syn::parse_quote!(i32)),
+    let vd = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[
+            ("id", syn::parse_quote!(i64)),
+            ("seq", syn::parse_quote!(i32)),
         ],
-    };
+    );
     let declared: std::collections::HashSet<syn::Ident> =
         ["storage_get_vec"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
@@ -1948,10 +2007,11 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
     fn choice(
         &mut self,
         _node: &OutNode,
-        op: &std::convert::Infallible,
-        _variants: crate::transform::Lowered<'_, OutOfRust, String>,
+        op: &OutChoice,
+        variants: crate::transform::Lowered<'_, OutOfRust, String>,
     ) -> Result<String, Self::Error> {
-        match *op {}
+        let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
+        Ok(format!("{}?{{{}}}", op.name, arms.join(" | ")))
     }
 
     fn optional(
@@ -1975,12 +2035,11 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
     }
 }
 
-#[test]
-fn tree_lowers_through_the_shared_visitor() {
-    // `z_reply_sample -> Option<&ZSample>` whose ZSample splices ZKeyExpr
-    // (identity + string) and a nullable ZTimestamp. The tree is what the
-    // decomposition IS; the leaf list below is a derived view of it, so both
-    // readings of the same plan must agree on names, order and nullability.
+/// `z_reply_sample -> Option<&ZSample>` whose ZSample splices ZKeyExpr
+/// (identity + string) and a nullable ZTimestamp: an `Optional` layer over a
+/// product with a nested product under each of its two children. Shared by the
+/// traversal tests below.
+fn reply_sample_registry() -> Registry<()> {
     let mut reg: Registry<()> = reg_with(&[
         "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
         "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
@@ -2030,6 +2089,15 @@ fn tree_lowers_through_the_shared_visitor() {
         &acc_set_without("z_reply_sample"),
     )
     .expect("apply");
+    reg
+}
+
+#[test]
+fn tree_lowers_through_the_shared_visitor() {
+    // The tree is what the decomposition IS; the leaf list below is a derived
+    // view of it, so both readings of the same plan must agree on names, order
+    // and nullability.
+    let reg = reply_sample_registry();
 
     let plan = reg
         .unfold_plans
@@ -2066,4 +2134,700 @@ fn tree_lowers_through_the_shared_visitor() {
         names,
         vec![("ke", false), ("ke__str", false), ("ts__ntp64", true)]
     );
+}
+
+/// A stand-in adapter that has a **direct converter** for one type: it claims
+/// that subtree whole and never looks inside it. Records every node it was
+/// asked about, so a test can show what a claimed subtree costs — nothing.
+struct Direct {
+    /// Spelling of the type this adapter converts directly.
+    whole: &'static str,
+    /// Every node `descend` was asked about, in visit order.
+    asked: Vec<String>,
+}
+
+impl crate::transform::TransformLowerer<OutOfRust> for Direct {
+    type Value = String;
+    type Error = std::convert::Infallible;
+
+    fn descend(
+        &mut self,
+        node: &OutNode,
+        _link: Option<&OutLink>,
+    ) -> Result<crate::transform::Descend<String>, Self::Error> {
+        let ty = node.ty.spell().to_string();
+        self.asked.push(ty.clone());
+        Ok(if ty == self.whole {
+            crate::transform::Descend::Atomic(format!("<{ty}>"))
+        } else {
+            crate::transform::Descend::Recurse
+        })
+    }
+
+    fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<String, Self::Error> {
+        Ok(node.ty.spell().to_string())
+    }
+
+    fn product(
+        &mut self,
+        _node: &OutNode,
+        _op: &OutProduct,
+        children: crate::transform::Lowered<'_, OutOfRust, String>,
+    ) -> Result<String, Self::Error> {
+        let inner: Vec<String> = children.into_iter().map(|(_, v)| v).collect();
+        Ok(format!("({})", inner.join(", ")))
+    }
+
+    fn choice(
+        &mut self,
+        _node: &OutNode,
+        op: &OutChoice,
+        variants: crate::transform::Lowered<'_, OutOfRust, String>,
+    ) -> Result<String, Self::Error> {
+        let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
+        Ok(format!("{}?{{{}}}", op.name, arms.join(" | ")))
+    }
+
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("{value}?"))
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("[{value}]*"))
+    }
+}
+
+/// #444: an adapter with a direct converter claims a subtree before anything
+/// under it is visited, at a NESTED structural node — the `ZKeyExpr` product.
+/// Its children are neither lowered nor even offered, so they can contribute no
+/// slot, no converter dependency and no cleanup.
+#[test]
+fn a_direct_converter_ends_a_nested_subtree() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let mut direct = Direct {
+        whole: "ZKeyExpr",
+        asked: Vec::new(),
+    };
+    let rendered = plan.tree.lower(&mut direct).expect("lowering cannot fail");
+    assert_eq!(rendered, "(<ZKeyExpr>, (i64))?");
+
+    // What the claimed subtree contained — the cloned handle and the string —
+    // was never offered to the lowerer at all.
+    assert!(
+        !direct
+            .asked
+            .iter()
+            .any(|t| t == "& ZKeyExpr" || t == "& str"),
+        "a claimed subtree is not descended into: {:?}",
+        direct.asked
+    );
+    // Its sibling still is.
+    assert!(direct.asked.iter().any(|t| t == "i64"));
+}
+
+/// #444: the same decision at the OUTERMOST node — the `Option` layer — ends
+/// the whole plan, so nothing below it is visited.
+#[test]
+fn a_direct_converter_ends_the_whole_tree() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let mut direct = Direct {
+        whole: "Option < & ZSample >",
+        asked: Vec::new(),
+    };
+    let rendered = plan.tree.lower(&mut direct).expect("lowering cannot fail");
+    assert_eq!(rendered, "<Option < & ZSample >>");
+    assert_eq!(
+        direct.asked,
+        vec!["Option < & ZSample >".to_string()],
+        "the root was claimed, so nothing under it was offered"
+    );
+}
+
+/// #444: what a decomposition needs converters for is read off the tree, not
+/// off a leaf list — and a sum's selector names its enum without demanding a
+/// whole-value converter that cannot exist.
+#[test]
+fn dependencies_come_from_the_tree() {
+    let deps = crate::unfold::dependencies(&reading_sum_decon().tree);
+    let required: Vec<String> = deps.required.iter().map(|t| t.key().to_string()).collect();
+    let referenced: Vec<String> = deps
+        .referenced
+        .iter()
+        .map(|t| t.key().to_string())
+        .collect();
+    assert_eq!(required, vec!["i64".to_string()], "the one payload crosses");
+    assert_eq!(
+        referenced,
+        vec!["Reading".to_string()],
+        "the selector names the sum it chooses between"
+    );
+}
+
+/// #444: a sum spliced into a value form must be **named** by the plan, not
+/// **required** of it. The selector carries the enum so an emitter can `match`
+/// it, but a sum has no whole-value output converter, so demanding one would
+/// fail resolution for any binding that has not declared one anyway.
+///
+/// The three per-plan registration sites used to require every derived leaf's
+/// type flatly, which reached the synthesized selector too; they go through the
+/// same tree-derived split the fixed-decon paths use.
+#[test]
+fn a_spliced_sum_is_named_not_required() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn get_report() -> Report { todo!() }",
+        "fn report_to_struct(r: &Report) -> ReportStruct { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("Report"),
+        records: vec![DeconRecord::Fields {
+            func: ident("report_to_struct"),
+            consuming: false,
+            fields: vec![FieldRecord {
+                members: vec![ident("reading")],
+                name: "reading".into(),
+                ty: tref(syn::parse_quote!(Reading)),
+                decon: FieldDecon::Subtree(reading_sum_decon().tree),
+            }],
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("get_report")].into_iter().collect(),
+        &[ident("report_to_struct")].into_iter().collect(),
+    )
+    .expect("apply");
+
+    let plan = reg.unfold_plans.get(&ident("get_report")).expect("plan");
+    assert!(
+        plan.leaves().iter().any(|l| l.source == LeafSource::SumTag),
+        "the spliced sum contributes its selector"
+    );
+    let sum = reg
+        .output_types
+        .get(&TypeKey::from_type(&syn::parse_quote!(Reading)))
+        .expect("the selector registers the sum it chooses between");
+    assert!(
+        !sum.root,
+        "a sum is named, not required — it has no whole-value output converter"
+    );
+    // Its payload, which does cross, still is.
+    assert!(
+        reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
+        "the live payload is a required crossing"
+    );
+}
+
+/// #444 (review): a claimed subtree must drop out of **registration** too, not
+/// only out of the lowerer that claimed it. Asking `dependencies_with` the same
+/// question the lowerer answers is what couples them — a `dependencies()` that
+/// recursed anyway would root converters for children the adapter never
+/// converts, and one of those failing to resolve would fail a binding that does
+/// not need it.
+#[test]
+fn a_claimed_subtree_drops_out_of_the_dependency_set() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let all = crate::unfold::dependencies(&plan.tree);
+    let names = |d: &[prebindgen_flat::flat::TypeRef]| -> Vec<String> {
+        d.iter().map(|t| t.spell().to_string()).collect()
+    };
+    assert_eq!(
+        names(&all.required),
+        vec!["& ZKeyExpr", "& str", "i64"],
+        "with nothing claimed, every crossing is required"
+    );
+
+    // The same tree, with an adapter that converts a whole `ZKeyExpr` directly.
+    // The claim states the reading of the converter it selected. The node says
+    // `ZKeyExpr` — the owned core — while the accessor that reached it borrows,
+    // so the converter the plan calls is the one for `&ZKeyExpr`. Taking
+    // `node.ty` here would root a converter the plan never calls and omit the
+    // one it does.
+    let claimed = crate::unfold::dependencies_with(&plan.tree, &mut |node, link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| {
+            let borrowed = link.is_some_and(|l| l.steps.iter().any(|s| !s.yields_owned()));
+            if borrowed {
+                node.ty.borrowed()
+            } else {
+                node.ty.clone()
+            }
+        })
+    });
+    assert_eq!(
+        names(&claimed.required),
+        vec!["& ZKeyExpr", "i64"],
+        "the selected reading replaces the children, and it is the borrowed one \
+         because the accessor that reached the subtree borrows"
+    );
+}
+
+/// #444 (review): the decision is taken for a value **in a position**. The same
+/// `ZKeyExpr` reached by a borrowing accessor and by an owning one converts and
+/// cleans up differently, so the pre-descent hook is handed the edge as well as
+/// the node.
+#[test]
+fn the_cutoff_sees_the_edge_it_was_reached_by() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let mut seen: Vec<(String, Option<String>)> = Vec::new();
+    crate::unfold::dependencies_with(&plan.tree, &mut |node, link| {
+        seen.push((
+            node.ty.spell().to_string(),
+            link.map(|l| {
+                l.steps
+                    .iter()
+                    .map(|s| s.ident().to_string())
+                    .collect::<Vec<_>>()
+                    .join(".")
+            }),
+        ));
+        None
+    });
+    assert!(
+        seen.contains(&(
+            "ZKeyExpr".to_string(),
+            Some("z_sample_key_expr".to_string())
+        )),
+        "the nested product is offered with the accessor that reached it: {seen:?}"
+    );
+    assert!(
+        seen.iter()
+            .any(|(ty, link)| ty == "ZSample" && link.is_none()),
+        "the node under the `Option` layer has no edge of its own: {seen:?}"
+    );
+}
+
+/// #444 (review): a run delivering whole elements depends on the element's own
+/// converter. The derived leaf list drops it — a whole element is not a named
+/// wire slot — but "what is a slot" and "what needs a converter" are different
+/// questions, and answering the second with the first left `Vec<T>`'s required
+/// set empty for anyone reading the API rather than the construction sites.
+#[test]
+fn a_whole_element_run_requires_its_element() {
+    use crate::transform::TransformKind;
+
+    let elem = tref(syn::parse_quote!(&ZSample));
+    let tree = OutNode {
+        ty: tref(syn::parse_quote!(Vec<&ZSample>)),
+        kind: TransformKind::Sequence {
+            op: (),
+            inner: Box::new(OutNode {
+                ty: elem.clone(),
+                kind: TransformKind::Leaf(OutLeaf {
+                    nullable: false,
+                    identity: false,
+                    reach: OutReach::Accessor,
+                }),
+            }),
+        },
+    };
+    let (leaves, _) = crate::unfold::flat_view(&tree).expect("a whole-element run projects");
+    assert!(
+        leaves.is_empty(),
+        "a whole element is delivered to the fold, not as a named slot"
+    );
+    let deps = crate::unfold::dependencies(&tree);
+    assert_eq!(
+        deps.required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["& ZSample"],
+        "…but it still crosses through its own converter"
+    );
+}
+
+/// #444 (review): the cutoff must reach **registration**, not only the pass
+/// that answered it — and it must root the reading the adapter selected, not
+/// the one the node happens to name.
+///
+/// Asserted over registry roots rather than over the projection, because a root
+/// is what a binding actually demands a converter for, and `TypeCell::root`
+/// only ever gains, so a claim honoured in one pass and not another cannot be
+/// taken back.
+#[test]
+fn a_claimed_subtree_is_not_rooted_by_registration() {
+    let reg = reply_sample_registry();
+    let tree = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan")
+        .tree
+        .clone();
+
+    let rooted = |reg: &Registry<()>, ty: syn::Type| -> Option<bool> {
+        reg.output_types
+            .get(&TypeKey::from_type(&ty))
+            .map(|cell| cell.root)
+    };
+
+    // A BORROWING accessor reached this subtree, so the converter the plan
+    // calls is the one for `&ZKeyExpr`. The node names the owned core, which is
+    // why the claim states its reading rather than leaving it to be guessed.
+    let mut borrowed: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut borrowed, &tree, &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.borrowed())
+    });
+    assert_eq!(
+        rooted(&borrowed, syn::parse_quote!(&ZKeyExpr)),
+        Some(true),
+        "the selected reading is what the binding converts"
+    );
+    assert_ne!(
+        rooted(&borrowed, syn::parse_quote!(ZKeyExpr)),
+        Some(true),
+        "the owned core is NOT what crosses at a borrowed position"
+    );
+    assert_ne!(
+        rooted(&borrowed, syn::parse_quote!(&str)),
+        Some(true),
+        "a child of the claimed subtree is never demanded"
+    );
+
+    // The same claim through an OWNING selection roots the owned reading
+    // instead — the difference is the adapter's choice, not the tree's.
+    let mut owned: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut owned, &tree, &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
+    });
+    assert_eq!(rooted(&owned, syn::parse_quote!(ZKeyExpr)), Some(true));
+    assert_ne!(rooted(&owned, syn::parse_quote!(&ZKeyExpr)), Some(true));
+
+    // With nothing claimed the children are rooted instead, so the difference
+    // is the policy and not the tree. `&ZKeyExpr` is rooted here too, but for
+    // an unrelated reason — the subtree's own identity leaf clones through it —
+    // which is why `&str` is what discriminates the two registrations.
+    let mut plain: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut plain, &tree, &mut |_, _| None);
+    assert_eq!(rooted(&plain, syn::parse_quote!(&str)), Some(true));
+    assert_ne!(rooted(&plain, syn::parse_quote!(ZKeyExpr)), Some(true));
+}
+
+/// `flat_view`'s `Ok` side holds types without `Debug`, so a refusal is taken
+/// by matching rather than by `unwrap_err`.
+fn refused(r: Result<(Vec<UnfoldLeaf>, Vec<Hoist>), UnfoldError>) -> UnfoldError {
+    match r {
+        Ok(_) => panic!("expected the projection to refuse this shape"),
+        Err(e) => e,
+    }
+}
+
+/// #444 (review): a variant payload must be a leaf that BINDS A MEMBER.
+///
+/// Being a leaf is not enough — the binding an arm upgrades to
+/// `LeafSource::VariantField` comes from the leaf's own reach, so a leaf
+/// reached by field access or an accessor would be grouped under the arm while
+/// claiming it was walked to. And a subtree of any kind loses the binding
+/// outright, a nested sum losing its own tags on top, because `group` holds one
+/// tag per leaf.
+///
+/// Reported as a typed planning error naming the sum and the arm, not an abort:
+/// the projection is public, and an adapter handing over a shape it cannot have
+/// should be told which one.
+///
+/// Nothing produces either shape today — a sum's payload members are leaves —
+/// so the refusal is what makes that a stated limit instead of an accident.
+#[test]
+fn a_variant_payload_must_be_a_leaf_that_binds_a_member() {
+    use crate::transform::TransformKind;
+
+    let arm_payload = |payload: OutNode| -> OutNode {
+        OutNode {
+            ty: tref(syn::parse_quote!(Outer)),
+            kind: TransformKind::Choice {
+                op: OutChoice {
+                    name: "tag".to_string(),
+                },
+                variants: vec![OutChild {
+                    link: OutLink {
+                        steps: Vec::new(),
+                        name: Vec::new(),
+                    },
+                    node: OutNode {
+                        ty: tref(syn::parse_quote!(Outer)),
+                        kind: TransformKind::Product {
+                            op: OutProduct::Variant {
+                                name: ident("Wrapped"),
+                                tag: 0,
+                            },
+                            children: vec![OutChild {
+                                link: OutLink {
+                                    steps: Vec::new(),
+                                    name: vec!["inner".to_string()],
+                                },
+                                node: payload,
+                            }],
+                        },
+                    },
+                }],
+            },
+        }
+    };
+    let leaf = |reach: OutReach| OutNode {
+        ty: tref(syn::parse_quote!(i64)),
+        kind: TransformKind::Leaf(OutLeaf {
+            nullable: false,
+            identity: false,
+            reach,
+        }),
+    };
+    let member = || OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(0usize)));
+
+    // A nested SUM — the case the previous check caught, now by structure
+    // rather than by noticing its leaves already had a group.
+    let err = refused(crate::unfold::flat_view(&arm_payload(
+        reading_sum_decon().tree,
+    )));
+    assert!(
+        matches!(
+            &err,
+            UnfoldError::UnsupportedVariantPayload { variant, found, .. }
+                if variant == "Wrapped" && *found == "a choice"
+        ),
+        "got {err}"
+    );
+
+    // A nested PRODUCT — which has no group on its leaves, so it passed the
+    // group-based check and was silently misprojected.
+    let product = OutNode {
+        ty: tref(syn::parse_quote!(InnerStruct)),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children: vec![OutChild {
+                link: OutLink {
+                    steps: vec![PathStep::field(ident("id"), false)],
+                    name: vec!["id".to_string()],
+                },
+                node: leaf(OutReach::Field),
+            }],
+        },
+    };
+    let err = refused(crate::unfold::flat_view(&arm_payload(product)));
+    assert!(
+        matches!(&err, UnfoldError::UnsupportedVariantPayload { found, .. } if *found == "a product"),
+        "got {err}"
+    );
+    assert!(
+        err.to_string().contains("Outer") && err.to_string().contains("Wrapped"),
+        "the error names the sum and the arm: {err}"
+    );
+
+    // …and a run, for the same reason.
+    let run = OutNode {
+        ty: tref(syn::parse_quote!(Vec<i64>)),
+        kind: TransformKind::Sequence {
+            op: (),
+            inner: Box::new(leaf(OutReach::Field)),
+        },
+    };
+    let err = refused(crate::unfold::flat_view(&arm_payload(run)));
+    assert!(
+        matches!(&err, UnfoldError::UnsupportedVariantPayload { found, .. } if *found == "a run"),
+        "got {err}"
+    );
+
+    // A leaf is not enough on its own: the binding an arm upgrades comes from
+    // the leaf's own reach, so one reached by field access or by an accessor
+    // would be grouped under the arm while claiming it was walked to.
+    for (reach, what) in [
+        (OutReach::Field, "field access"),
+        (OutReach::Accessor, "an accessor"),
+    ] {
+        let err = refused(crate::unfold::flat_view(&arm_payload(leaf(reach))));
+        assert!(
+            matches!(&err, UnfoldError::UnsupportedVariantPayload { found, .. } if found.contains(what)),
+            "got {err}"
+        );
+    }
+
+    // A payload leaf that BINDS A MEMBER projects, and comes out as the
+    // variant field it is.
+    let (leaves, _) = crate::unfold::flat_view(&arm_payload(leaf(member())))
+        .expect("a payload that binds a member projects");
+    assert!(
+        leaves.iter().any(|l| matches!(
+            &l.source,
+            LeafSource::VariantField { variant, .. } if variant == "Wrapped"
+        )),
+        "the arm upgrades its payload's binding"
+    );
+
+    // The mirror: a member binding with no arm above it says which variant it
+    // is matched out of, so nothing can complete it.
+    let err = refused(crate::unfold::flat_view(&OutNode {
+        ty: tref(syn::parse_quote!(Outer)),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children: vec![OutChild {
+                link: OutLink {
+                    steps: Vec::new(),
+                    name: vec!["stray".to_string()],
+                },
+                node: leaf(member()),
+            }],
+        },
+    }));
+    assert!(
+        matches!(&err, UnfoldError::VariantMemberOutsideArm { .. }),
+        "got {err}"
+    );
+}
+
+/// #444 (review): a `Choice` and a variant arm must be paired, both ways — the
+/// same "bind the relationship in both directions" rule as the member/arm check
+/// above, one level up.
+///
+/// A choice whose alternative is anything else flattens into a selector
+/// followed by a leaf belonging to no alternative; an arm anywhere else groups
+/// its leaves by a tag no selector chooses between. Both flattened cleanly
+/// before this, so a plan could look valid and be uninterpretable.
+#[test]
+fn a_choice_and_a_variant_arm_must_be_paired() {
+    use crate::transform::TransformKind;
+
+    let payload = || OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: vec!["v0".to_string()],
+        },
+        node: OutNode {
+            ty: tref(syn::parse_quote!(i64)),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                reach: OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(0usize))),
+            }),
+        },
+    };
+    let arm = || OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: Vec::new(),
+        },
+        node: OutNode {
+            ty: tref(syn::parse_quote!(Outer)),
+            kind: TransformKind::Product {
+                op: OutProduct::Variant {
+                    name: ident("Wrapped"),
+                    tag: 0,
+                },
+                children: vec![payload()],
+            },
+        },
+    };
+    let choice_over = |variants: Vec<OutChild>| OutNode {
+        ty: tref(syn::parse_quote!(Outer)),
+        kind: TransformKind::Choice {
+            op: OutChoice {
+                name: "tag".to_string(),
+            },
+            variants,
+        },
+    };
+
+    // 1. A choice whose alternative is a plain leaf.
+    let err = refused(crate::unfold::flat_view(&choice_over(vec![OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: vec!["nope".to_string()],
+        },
+        node: OutNode {
+            ty: tref(syn::parse_quote!(i64)),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                reach: OutReach::Field,
+            }),
+        },
+    }])));
+    assert!(
+        matches!(
+            &err,
+            UnfoldError::ChoiceAlternativeNotAnArm { found, .. } if *found == "a leaf"
+        ),
+        "got {err}"
+    );
+
+    // 2. An arm under an ordinary product, and at the root.
+    let err = refused(crate::unfold::flat_view(&OutNode {
+        ty: tref(syn::parse_quote!(Holder)),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children: vec![arm()],
+        },
+    }));
+    assert!(
+        matches!(&err, UnfoldError::VariantArmOutsideChoice { variant } if variant == "Wrapped"),
+        "got {err}"
+    );
+    let err = refused(crate::unfold::flat_view(&arm().node));
+    assert!(
+        matches!(&err, UnfoldError::VariantArmOutsideChoice { .. }),
+        "got {err}"
+    );
+
+    // …and under EACH arity layer. Both, because "the parent positions a node
+    // can have" is the whole argument for the check being exhaustive, and an
+    // unchecked one is a shape that still flattens into grouped leaves with no
+    // selector.
+    for layer in [
+        TransformKind::Optional {
+            op: (),
+            inner: Box::new(arm().node),
+        },
+        TransformKind::Sequence {
+            op: (),
+            inner: Box::new(arm().node),
+        },
+    ] {
+        let err = refused(crate::unfold::flat_view(&OutNode {
+            ty: tref(syn::parse_quote!(Wrapper)),
+            kind: layer,
+        }));
+        assert!(
+            matches!(&err, UnfoldError::VariantArmOutsideChoice { .. }),
+            "got {err}"
+        );
+    }
+
+    // 3. The paired shape still projects, selector first then the arm's leaf.
+    let (leaves, _) =
+        crate::unfold::flat_view(&choice_over(vec![arm()])).expect("a paired sum projects");
+    assert_eq!(leaves.len(), 2);
+    assert_eq!(leaves[0].source, LeafSource::SumTag);
+    assert_eq!(leaves[1].group, Some(0));
 }

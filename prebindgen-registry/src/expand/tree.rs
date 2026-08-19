@@ -30,9 +30,7 @@ impl TransformDirection for IntoRust {
     type Product = InProduct;
     type Choice = InChoice;
     type Optional = InPresence;
-    /// The run's own wire slot: one value carrying the whole collection, which
-    /// the layer iterates.
-    type Sequence = InSlot;
+    type Sequence = InRun;
     type Link = InLink;
 }
 
@@ -41,12 +39,18 @@ pub type InNode = TransformNode<IntoRust>;
 /// One argument of an into-Rust product, or one arm of a choice.
 pub type InChild = TransformChild<IntoRust>;
 
-/// One wire slot: where it sits in the foreign signature, what it is called
-/// there, and what it carries.
+/// One wire slot: where it sits in the foreign signature and what it is called
+/// there.
 ///
 /// The single description of a slot. [`wire_leaves`] turns the slots a tree
 /// names into [`FoldPlan::leaves`](super::FoldPlan::leaves), so a slot exists
 /// exactly where the node that uses it says so.
+///
+/// What a slot **carries** is not stored here: an argument slot carries its own
+/// node's [`ty`](TransformNode::ty), a selector an `i32` and a presence flag a
+/// `bool` by definition, and the two slots that carry something else — an
+/// `Option` layer's payload and a run — say so on the layer. Storing it twice
+/// would let a node and its slot disagree about one type.
 #[derive(Clone)]
 pub struct InSlot {
     /// Position in the foreign signature, and the index of the caller's
@@ -54,9 +58,6 @@ pub struct InSlot {
     pub slot: usize,
     /// The slot's foreign-side parameter name.
     pub name: syn::Ident,
-    /// What the slot carries. A **reading**: spell it with `emit.spell(&ty)`
-    /// in an emission callback.
-    pub ty: prebindgen_flat::flat::TypeRef,
 }
 
 /// Where one decoded value comes from.
@@ -115,6 +116,10 @@ pub struct InChoice {
 /// How an `Option<…>` layer decides whether its value is present. The three
 /// forms differ in what crosses, which is why the layer names its own slot
 /// rather than inheriting one.
+// large_enum_variant: one presence per layer, and boxing the payload's reading
+// to even the arms out would only put an indirection between a layer and the
+// slot it names (same trade-off as `InLeaf`).
+#[allow(clippy::large_enum_variant)]
 pub enum InPresence {
     /// The dispatch under the layer also encodes absence: its selector reads
     /// `-1`. No slot of the layer's own.
@@ -126,7 +131,23 @@ pub enum InPresence {
     /// The layer decodes its own `Option<…>` slot and hands the payload to the
     /// single-argument construction under it — which reads it as
     /// [`InLeaf::Bound`], having no slot of its own.
-    Payload(InSlot),
+    Payload {
+        slot: InSlot,
+        /// The `Option<…>` the slot carries. Not the layer node's
+        /// [`ty`](TransformNode::ty): the node produces `Option<Target>` while
+        /// the slot carries the constructor's own argument, optionally.
+        ty: prebindgen_flat::flat::TypeRef,
+    },
+}
+
+/// A run's own wire slot: one value carrying the whole collection, which the
+/// layer iterates.
+pub struct InRun {
+    pub slot: InSlot,
+    /// The collection the slot carries. Not the layer node's
+    /// [`ty`](TransformNode::ty), for the reason
+    /// [`InPresence::Payload`] gives.
+    pub ty: prebindgen_flat::flat::TypeRef,
 }
 
 /// How one child hangs off its parent.
@@ -256,12 +277,12 @@ pub fn wire_leaves(tree: &InNode) -> Vec<FoldLeaf> {
 struct CollectSlots<'a>(&'a mut Vec<(usize, FoldLeaf)>);
 
 impl CollectSlots<'_> {
-    fn take(&mut self, s: &InSlot) {
+    fn take(&mut self, s: &InSlot, ty: prebindgen_flat::flat::TypeRef) {
         self.0.push((
             s.slot,
             FoldLeaf {
                 name: s.name.clone(),
-                ty: s.ty.clone(),
+                ty,
             },
         ));
     }
@@ -271,11 +292,11 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
     type Value = ();
     type Error = std::convert::Infallible;
 
-    fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<(), Self::Error> {
+    fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<(), Self::Error> {
         // A bound argument reads what its layer unwrapped; that slot is the
         // layer's, contributed there.
         if let InLeaf::Slot { slot, .. } = op {
-            self.take(slot);
+            self.take(slot, node.ty.clone());
         }
         Ok(())
     }
@@ -295,7 +316,11 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
         op: &InChoice,
         _variants: Lowered<'_, IntoRust, ()>,
     ) -> Result<(), Self::Error> {
-        self.take(&op.selector);
+        // The selector: composed, and placeless by construction.
+        self.take(
+            &op.selector,
+            prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
+        );
         Ok(())
     }
 
@@ -308,7 +333,12 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
     ) -> Result<(), Self::Error> {
         match op {
             InPresence::Selector => {}
-            InPresence::Flag(s) | InPresence::Payload(s) => self.take(s),
+            // A presence flag no source wrote — placeless by construction.
+            InPresence::Flag(s) => self.take(
+                s,
+                prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::Bool),
+            ),
+            InPresence::Payload { slot, ty } => self.take(slot, ty.clone()),
         }
         Ok(())
     }
@@ -316,11 +346,163 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InSlot,
+        op: &InRun,
         _inner: &InNode,
         _value: (),
     ) -> Result<(), Self::Error> {
-        self.take(op);
+        self.take(&op.slot, op.ty.clone());
         Ok(())
+    }
+}
+
+/// What a construction needs converters for, split by where the need comes
+/// from.
+///
+/// Derived by [`dependencies`], through the same traversal an adapter lowers
+/// with — so a subtree claimed whole by a direct converter contributes nothing
+/// here either.
+#[derive(Default)]
+pub struct Dependencies {
+    /// Types the binding **demands** an input converter for: the values a
+    /// constructor actually takes, and the payload an arity layer decodes.
+    pub required: Vec<prebindgen_flat::flat::TypeRef>,
+    /// Wire primitives a **layout** contributes rather than a source value: a
+    /// dispatch's `i32` selector and an `Option` layer's `bool` presence flag.
+    ///
+    /// Named apart because which of them exist — and whether they exist at all
+    /// — is the adapter's choice of physical representation, not something the
+    /// transformation says. They are required today so the current layout keeps
+    /// resolving; an adapter that picks its own selector representation should
+    /// not inherit this one's (#444 §1).
+    pub intrinsic: Vec<prebindgen_flat::flat::TypeRef>,
+}
+
+/// What a construction depends on, read off the tree rather than off the flat
+/// signature.
+///
+/// Assumes nothing is claimed by a direct converter — see
+/// [`dependencies_with`].
+pub fn dependencies(tree: &InNode) -> Dependencies {
+    dependencies_with(tree, &mut |_, _| None)
+}
+
+/// [`dependencies`] under one adapter's converter selection: `claims` answers
+/// with the **reading of the converter it selected** for the node reached by
+/// `link`, or `None` to recurse.
+///
+/// A claimed subtree contributes exactly that reading and nothing from below
+/// it. The reading is stated rather than taken from `node.ty` for the reason
+/// [`unfold::dependencies_with`](crate::unfold::dependencies_with) gives: a
+/// structural node names the owned value it produces, which is not necessarily
+/// what crosses at that position.
+pub fn dependencies_with(
+    tree: &InNode,
+    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+) -> Dependencies {
+    tree.lower(&mut CollectDeps { claims })
+        .expect("collecting dependencies of a built tree cannot fail")
+}
+
+/// The lowerer behind [`dependencies_with`]: each node states the crossings it
+/// needs, and nothing states one twice.
+struct CollectDeps<'a> {
+    claims: &'a mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+}
+
+impl CollectDeps<'_> {
+    fn merge(parts: Lowered<'_, IntoRust, Dependencies>) -> Dependencies {
+        let mut out = Dependencies::default();
+        for (_, mut part) in parts {
+            out.required.append(&mut part.required);
+            out.intrinsic.append(&mut part.intrinsic);
+        }
+        out
+    }
+
+    fn scalar(kind: prebindgen_flat::flat::ScalarKind) -> prebindgen_flat::flat::TypeRef {
+        prebindgen_flat::flat::TypeRef::scalar(kind)
+    }
+}
+
+impl TransformLowerer<IntoRust> for CollectDeps<'_> {
+    type Value = Dependencies;
+    type Error = std::convert::Infallible;
+
+    fn descend(
+        &mut self,
+        node: &InNode,
+        link: Option<&InLink>,
+    ) -> Result<crate::transform::Descend<Dependencies>, Self::Error> {
+        Ok(match (self.claims)(node, link) {
+            Some(selected) => crate::transform::Descend::Atomic(Dependencies {
+                required: vec![selected],
+                intrinsic: Vec::new(),
+            }),
+            None => crate::transform::Descend::Recurse,
+        })
+    }
+
+    fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<Dependencies, Self::Error> {
+        Ok(match op {
+            InLeaf::Slot { .. } => Dependencies {
+                required: vec![node.ty.clone()],
+                intrinsic: Vec::new(),
+            },
+            // A bound argument reads what its layer decoded; that crossing is
+            // the layer's, stated there.
+            InLeaf::Bound => Dependencies::default(),
+        })
+    }
+
+    fn product(
+        &mut self,
+        _node: &InNode,
+        _op: &InProduct,
+        children: Lowered<'_, IntoRust, Dependencies>,
+    ) -> Result<Dependencies, Self::Error> {
+        Ok(Self::merge(children))
+    }
+
+    fn choice(
+        &mut self,
+        _node: &InNode,
+        _op: &InChoice,
+        variants: Lowered<'_, IntoRust, Dependencies>,
+    ) -> Result<Dependencies, Self::Error> {
+        let mut out = Self::merge(variants);
+        out.intrinsic
+            .push(Self::scalar(prebindgen_flat::flat::ScalarKind::I32));
+        Ok(out)
+    }
+
+    fn optional(
+        &mut self,
+        _node: &InNode,
+        op: &InPresence,
+        _inner: &InNode,
+        value: Dependencies,
+    ) -> Result<Dependencies, Self::Error> {
+        let mut out = value;
+        match op {
+            // Absence rides the dispatch's own selector.
+            InPresence::Selector => {}
+            InPresence::Flag(_) => out
+                .intrinsic
+                .push(Self::scalar(prebindgen_flat::flat::ScalarKind::Bool)),
+            InPresence::Payload { ty, .. } => out.required.push(ty.clone()),
+        }
+        Ok(out)
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &InNode,
+        op: &InRun,
+        _inner: &InNode,
+        value: Dependencies,
+    ) -> Result<Dependencies, Self::Error> {
+        let mut out = value;
+        out.required.push(op.ty.clone());
+        Ok(out)
     }
 }

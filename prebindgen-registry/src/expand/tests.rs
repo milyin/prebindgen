@@ -455,9 +455,11 @@ fn iterable_emit_shape() {
     let tree = InNode {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
-            op: InSlot {
-                slot: 0,
-                name: ident("kes"),
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(core),
@@ -700,7 +702,7 @@ fn recursive_input_cycle_errors() {
     // Mutual recursion terminates with a typed error that says WHERE: the
     // argument chain `a → b → a`, not just the function it started from.
     assert!(
-        err.to_string().contains("expand at `a.b.a`:"),
+        err.to_string().contains("input expansion at `a.b.a`:"),
         "the cycle names its argument chain: {err}"
     );
 }
@@ -942,18 +944,18 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
         Ok(match op {
             InPresence::Selector => format!("{value}?sel"),
             InPresence::Flag(s) => format!("{value}?#{}", s.slot),
-            InPresence::Payload(s) => format!("{value}?^#{}", s.slot),
+            InPresence::Payload { slot, .. } => format!("{value}?^#{}", slot.slot),
         })
     }
 
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InSlot,
+        op: &InRun,
         _inner: &InNode,
         value: String,
     ) -> Result<String, Self::Error> {
-        Ok(format!("[{value}]*#{}", op.slot))
+        Ok(format!("[{value}]*#{}", op.slot.slot))
     }
 }
 
@@ -1040,4 +1042,61 @@ fn core_lowers_through_the_shared_visitor() {
             ("sample_payload".to_string(), "Vec < u8 >".to_string()),
         ]
     );
+}
+
+/// #444 (review): the input side takes the same cutoff policy the output side
+/// does, so registration and lowering cannot disagree about which converters a
+/// construction demands. Asserted over registry roots, since a root is what a
+/// binding actually demands and `TypeCell::root` can only be gained.
+#[test]
+fn a_claimed_argument_is_not_rooted_by_registration() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let tree = &reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .expect("plan")
+        .tree;
+
+    let rooted = |reg: &Registry<()>, ty: syn::Type| -> Option<bool> {
+        reg.input_types
+            .get(&TypeKey::from_type(&ty))
+            .map(|cell| cell.root)
+    };
+
+    // The constructor's `String` argument is the only crossing; claiming the
+    // whole construction replaces it with `ZKeyExpr` itself.
+    let mut claimed: Registry<()> = reg_with(&[]);
+    crate::expand::register_dependencies(&mut claimed, tree, &mut |node, _link| {
+        // The claim states the reading of the converter it selected, rather
+        // than leaving the walk to guess it from the node.
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
+    });
+    assert_eq!(rooted(&claimed, syn::parse_quote!(ZKeyExpr)), Some(true));
+    assert_ne!(
+        rooted(&claimed, syn::parse_quote!(String)),
+        Some(true),
+        "an argument of a claimed construction is never demanded"
+    );
+
+    let mut plain: Registry<()> = reg_with(&[]);
+    crate::expand::register_dependencies(&mut plain, tree, &mut |_, _| None);
+    assert_eq!(rooted(&plain, syn::parse_quote!(String)), Some(true));
 }

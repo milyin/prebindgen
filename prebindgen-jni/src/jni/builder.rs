@@ -1130,7 +1130,7 @@ impl Declarations {
                         members: member_path,
                         name,
                         ty: field.ty.clone(),
-                        decon: FieldDecon::Leaves(crate::jni::synth_sum_leaves(self, sum_cfg, sum)),
+                        decon: FieldDecon::Subtree(crate::jni::synth_sum_tree(self, sum_cfg, sum)),
                     });
                     continue;
                 }

@@ -38,6 +38,43 @@ pub enum UnfoldError {
     RecordNotAccessor {
         func: syn::Ident,
     },
+    /// A variant arm of a decomposed sum carries something other than a plain
+    /// payload leaf. The flat projection binds one member per payload and gives
+    /// every leaf under the arm the arm's own tag, so a subtree there loses
+    /// both its member binding and — for a nested sum — its own tags.
+    UnsupportedVariantPayload {
+        /// The sum being decomposed.
+        target: String,
+        /// The arm whose payload could not be projected.
+        variant: String,
+        /// What the payload is instead of a leaf.
+        found: &'static str,
+    },
+    /// One alternative of a decomposed sum is not a variant arm. A choice says
+    /// exactly one alternative is live, and only an
+    /// [`OutProduct::Variant`](crate::unfold::OutProduct::Variant) arm says
+    /// which — anything else there flattens into a leaf belonging to no
+    /// alternative while the selector claims to choose between some.
+    ChoiceAlternativeNotAnArm {
+        /// The sum being decomposed.
+        target: String,
+        /// What the alternative is instead of an arm.
+        found: &'static str,
+    },
+    /// A variant arm sits somewhere other than under a choice, so its leaves
+    /// are grouped by a tag that no selector chooses between. The mirror of
+    /// [`ChoiceAlternativeNotAnArm`](Self::ChoiceAlternativeNotAnArm).
+    VariantArmOutsideChoice {
+        /// The arm's variant.
+        variant: String,
+    },
+    /// A leaf binds a variant member with no variant arm above it to say which
+    /// variant it binds in — the mirror of
+    /// [`UnsupportedVariantPayload`](Self::UnsupportedVariantPayload).
+    VariantMemberOutsideArm {
+        /// How the payload field was addressed.
+        member: String,
+    },
     /// A shape / record kind not yet implemented.
     Unsupported {
         func: syn::Ident,
@@ -169,6 +206,36 @@ impl std::fmt::Display for UnfoldError {
                 "deconstructor record `{}` is not a `.fun_accessor` — decomposer records may only \
                  reference functions declared via `.fun_accessor(...)`",
                 func
+            ),
+            UnfoldError::UnsupportedVariantPayload {
+                target,
+                variant,
+                found,
+            } => write!(
+                f,
+                "output expansion of `{}` at variant `{}`: a payload that is {} has no flat \
+                 reading — one member is bound per payload leaf, and every leaf under an arm \
+                 takes that arm's tag, so a subtree there loses its member binding and any tags \
+                 of its own",
+                target, variant, found
+            ),
+            UnfoldError::ChoiceAlternativeNotAnArm { target, found } => write!(
+                f,
+                "output expansion of `{}`: an alternative that is {} is not a variant arm — a \
+                 choice says exactly one alternative is live, and only an arm says which",
+                target, found
+            ),
+            UnfoldError::VariantArmOutsideChoice { variant } => write!(
+                f,
+                "output expansion: variant arm `{}` sits under no choice, so its leaves carry a \
+                 tag that no selector chooses between",
+                variant
+            ),
+            UnfoldError::VariantMemberOutsideArm { member } => write!(
+                f,
+                "output expansion: a leaf binds variant member `{}` but sits under no variant \
+                 arm, so nothing says which variant it is matched out of",
+                member
             ),
             UnfoldError::Unsupported { func, reason, at } => write!(
                 f,
