@@ -379,16 +379,34 @@ pub struct Dependencies {
 
 /// What a construction depends on, read off the tree rather than off the flat
 /// signature.
+///
+/// Assumes nothing is claimed by a direct converter — see
+/// [`dependencies_with`].
 pub fn dependencies(tree: &InNode) -> Dependencies {
-    tree.lower(&mut CollectDeps)
+    dependencies_with(tree, &mut |_, _| false)
+}
+
+/// [`dependencies`] under one adapter's converter selection: `claims` answers
+/// whether a direct converter builds the node reached by `link` whole.
+///
+/// A claimed subtree contributes exactly one dependency — the claimed node's
+/// own type — and nothing from below it, so registration and lowering cannot
+/// disagree about which converters a binding actually needs.
+pub fn dependencies_with(
+    tree: &InNode,
+    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> bool,
+) -> Dependencies {
+    tree.lower(&mut CollectDeps { claims })
         .expect("collecting dependencies of a built tree cannot fail")
 }
 
-/// The lowerer behind [`dependencies`]: each node states the crossings it
+/// The lowerer behind [`dependencies_with`]: each node states the crossings it
 /// needs, and nothing states one twice.
-struct CollectDeps;
+struct CollectDeps<'a> {
+    claims: &'a mut dyn FnMut(&InNode, Option<&InLink>) -> bool,
+}
 
-impl CollectDeps {
+impl CollectDeps<'_> {
     fn merge(parts: Lowered<'_, IntoRust, Dependencies>) -> Dependencies {
         let mut out = Dependencies::default();
         for (_, mut part) in parts {
@@ -403,9 +421,24 @@ impl CollectDeps {
     }
 }
 
-impl TransformLowerer<IntoRust> for CollectDeps {
+impl TransformLowerer<IntoRust> for CollectDeps<'_> {
     type Value = Dependencies;
     type Error = std::convert::Infallible;
+
+    fn descend(
+        &mut self,
+        node: &InNode,
+        link: Option<&InLink>,
+    ) -> Result<crate::transform::Descend<Dependencies>, Self::Error> {
+        Ok(if (self.claims)(node, link) {
+            crate::transform::Descend::Atomic(Dependencies {
+                required: vec![node.ty.clone()],
+                intrinsic: Vec::new(),
+            })
+        } else {
+            crate::transform::Descend::Recurse
+        })
+    }
 
     fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<Dependencies, Self::Error> {
         Ok(match op {

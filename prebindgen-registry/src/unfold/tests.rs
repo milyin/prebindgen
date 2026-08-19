@@ -2153,6 +2153,7 @@ impl crate::transform::TransformLowerer<OutOfRust> for Direct {
     fn descend(
         &mut self,
         node: &OutNode,
+        _link: Option<&OutLink>,
     ) -> Result<crate::transform::Descend<String>, Self::Error> {
         let ty = node.ty.spell().to_string();
         self.asked.push(ty.clone());
@@ -2339,5 +2340,120 @@ fn a_spliced_sum_is_named_not_required() {
     assert!(
         reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
         "the live payload is a required crossing"
+    );
+}
+
+/// #444 (review): a claimed subtree must drop out of **registration** too, not
+/// only out of the lowerer that claimed it. Asking `dependencies_with` the same
+/// question the lowerer answers is what couples them — a `dependencies()` that
+/// recursed anyway would root converters for children the adapter never
+/// converts, and one of those failing to resolve would fail a binding that does
+/// not need it.
+#[test]
+fn a_claimed_subtree_drops_out_of_the_dependency_set() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let all = crate::unfold::dependencies(&plan.tree);
+    let names = |d: &[prebindgen_flat::flat::TypeRef]| -> Vec<String> {
+        d.iter().map(|t| t.spell().to_string()).collect()
+    };
+    assert_eq!(
+        names(&all.required),
+        vec!["& ZKeyExpr", "& str", "i64"],
+        "with nothing claimed, every crossing is required"
+    );
+
+    // The same tree, with an adapter that converts a whole `ZKeyExpr` directly.
+    let claimed = crate::unfold::dependencies_with(&plan.tree, &mut |node, _link| {
+        node.ty.spell().to_string() == "ZKeyExpr"
+    });
+    assert_eq!(
+        names(&claimed.required),
+        vec!["ZKeyExpr", "i64"],
+        "the claimed type replaces its children, which are not required at all"
+    );
+}
+
+/// #444 (review): the decision is taken for a value **in a position**. The same
+/// `ZKeyExpr` reached by a borrowing accessor and by an owning one converts and
+/// cleans up differently, so the pre-descent hook is handed the edge as well as
+/// the node.
+#[test]
+fn the_cutoff_sees_the_edge_it_was_reached_by() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let mut seen: Vec<(String, Option<String>)> = Vec::new();
+    crate::unfold::dependencies_with(&plan.tree, &mut |node, link| {
+        seen.push((
+            node.ty.spell().to_string(),
+            link.map(|l| {
+                l.steps
+                    .iter()
+                    .map(|s| s.ident().to_string())
+                    .collect::<Vec<_>>()
+                    .join(".")
+            }),
+        ));
+        false
+    });
+    assert!(
+        seen.contains(&(
+            "ZKeyExpr".to_string(),
+            Some("z_sample_key_expr".to_string())
+        )),
+        "the nested product is offered with the accessor that reached it: {seen:?}"
+    );
+    assert!(
+        seen.iter()
+            .any(|(ty, link)| ty == "ZSample" && link.is_none()),
+        "the node under the `Option` layer has no edge of its own: {seen:?}"
+    );
+}
+
+/// #444 (review): a run delivering whole elements depends on the element's own
+/// converter. The derived leaf list drops it — a whole element is not a named
+/// wire slot — but "what is a slot" and "what needs a converter" are different
+/// questions, and answering the second with the first left `Vec<T>`'s required
+/// set empty for anyone reading the API rather than the construction sites.
+#[test]
+fn a_whole_element_run_requires_its_element() {
+    use crate::transform::TransformKind;
+
+    let elem = tref(syn::parse_quote!(&ZSample));
+    let tree = OutNode {
+        ty: tref(syn::parse_quote!(Vec<&ZSample>)),
+        kind: TransformKind::Sequence {
+            op: (),
+            inner: Box::new(OutNode {
+                ty: elem.clone(),
+                kind: TransformKind::Leaf(OutLeaf {
+                    nullable: false,
+                    identity: false,
+                    reach: OutReach::Accessor,
+                }),
+            }),
+        },
+    };
+    let (leaves, _) = crate::unfold::flat_view(&tree);
+    assert!(
+        leaves.is_empty(),
+        "a whole element is delivered to the fold, not as a named slot"
+    );
+    let deps = crate::unfold::dependencies(&tree);
+    assert_eq!(
+        deps.required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["& ZSample"],
+        "…but it still crosses through its own converter"
     );
 }

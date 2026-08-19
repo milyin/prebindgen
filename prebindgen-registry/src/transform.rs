@@ -129,8 +129,19 @@ pub trait TransformLowerer<D: TransformDirection> {
     /// The default recurses, which is what a lowerer that has no direct
     /// converters wants. Answer [`Descend::Atomic`] to claim the whole subtree
     /// — see [`Descend`] for what that settles.
-    fn descend(&mut self, node: &TransformNode<D>) -> Result<Descend<Self::Value>, Self::Error> {
-        let _ = node;
+    ///
+    /// `link` is the edge the node was reached by, `None` at the root and under
+    /// an arity layer, which reaches its inner node directly. A converter is
+    /// chosen for a value *in a position*, not for a type — the same
+    /// `ZKeyExpr` reached by an owning accessor and by a borrowing one converts
+    /// and cleans up differently — so the decision needs the edge, not only the
+    /// node.
+    fn descend(
+        &mut self,
+        node: &TransformNode<D>,
+        link: Option<&D::Link>,
+    ) -> Result<Descend<Self::Value>, Self::Error> {
+        let _ = (node, link);
         Ok(Descend::Recurse)
     }
 
@@ -187,9 +198,19 @@ impl<D: TransformDirection> TransformNode<D> {
     /// parents and in declaration order — unless the lowerer answers
     /// [`Descend::Atomic`] for a node, which ends that subtree there.
     pub fn lower<L: TransformLowerer<D>>(&self, lowerer: &mut L) -> Result<L::Value, L::Error> {
+        self.lower_at(None, lowerer)
+    }
+
+    /// [`lower`](Self::lower), told which edge reached this node so the
+    /// pre-descent decision can see it.
+    fn lower_at<L: TransformLowerer<D>>(
+        &self,
+        link: Option<&D::Link>,
+        lowerer: &mut L,
+    ) -> Result<L::Value, L::Error> {
         // Asked before anything below is touched: an atomic answer is what
         // makes a subtree contribute nothing at all.
-        if let Descend::Atomic(value) = lowerer.descend(self)? {
+        if let Descend::Atomic(value) = lowerer.descend(self, link)? {
             return Ok(value);
         }
         match &self.kind {
@@ -203,11 +224,12 @@ impl<D: TransformDirection> TransformNode<D> {
                 lowerer.choice(self, op, lowered)
             }
             TransformKind::Optional { op, inner } => {
-                let value = inner.lower(lowerer)?;
+                // A layer reaches its inner node directly — there is no edge.
+                let value = inner.lower_at(None, lowerer)?;
                 lowerer.optional(self, op, inner, value)
             }
             TransformKind::Sequence { op, inner } => {
-                let value = inner.lower(lowerer)?;
+                let value = inner.lower_at(None, lowerer)?;
                 lowerer.sequence(self, op, inner, value)
             }
         }
@@ -221,7 +243,7 @@ fn lower_all<'a, D: TransformDirection, L: TransformLowerer<D>>(
 ) -> Result<Lowered<'a, D, L::Value>, L::Error> {
     let mut lowered = Vec::with_capacity(children.len());
     for child in children {
-        let value = child.node.lower(lowerer)?;
+        let value = child.node.lower_at(Some(&child.link), lowerer)?;
         lowered.push((child, value));
     }
     Ok(lowered)

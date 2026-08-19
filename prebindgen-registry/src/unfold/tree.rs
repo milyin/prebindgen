@@ -436,16 +436,40 @@ pub struct Dependencies {
 /// What a decomposition depends on, read off the tree rather than off a leaf
 /// list — so the question is answered by the same structure every other pass
 /// walks.
+///
+/// Assumes nothing is claimed by a direct converter. An adapter that claims
+/// subtrees must ask [`dependencies_with`] with the **same** decision it lowers
+/// by, or it will have rooted converters it never calls.
 pub fn dependencies(root: &OutNode) -> Dependencies {
-    root.lower(&mut CollectDeps)
+    dependencies_with(root, &mut |_, _| false)
+}
+
+/// [`dependencies`] under one adapter's converter selection: `claims` answers
+/// whether a direct converter handles the node reached by `link` whole.
+///
+/// A claimed subtree contributes exactly one dependency — the claimed node's
+/// own type, which is the converter that will be called — and nothing from
+/// below it. Taking the decision as a parameter is what keeps registration and
+/// lowering from disagreeing: an adapter that claims a subtree in its lowerer
+/// but not here would root converters for children it never converts, and one
+/// of those children failing to resolve would fail a binding that does not
+/// need it.
+pub fn dependencies_with(
+    root: &OutNode,
+    claims: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> bool,
+) -> Dependencies {
+    root.lower(&mut CollectDeps { claims })
         .expect("collecting dependencies of a built tree cannot fail")
 }
 
-/// The lowerer behind [`dependencies`]: a leaf needs its converter, a choice
-/// names its sum, and everything else contributes only what is under it.
-struct CollectDeps;
+/// The lowerer behind [`dependencies_with`]: a leaf needs its converter, a
+/// choice names its sum, a claimed node needs its own, and everything else
+/// contributes only what is under it.
+struct CollectDeps<'a> {
+    claims: &'a mut dyn FnMut(&OutNode, Option<&OutLink>) -> bool,
+}
 
-impl CollectDeps {
+impl CollectDeps<'_> {
     fn merge(parts: Lowered<'_, OutOfRust, Dependencies>) -> Dependencies {
         let mut out = Dependencies::default();
         for (_, mut part) in parts {
@@ -456,9 +480,24 @@ impl CollectDeps {
     }
 }
 
-impl TransformLowerer<OutOfRust> for CollectDeps {
+impl TransformLowerer<OutOfRust> for CollectDeps<'_> {
     type Value = Dependencies;
     type Error = std::convert::Infallible;
+
+    fn descend(
+        &mut self,
+        node: &OutNode,
+        link: Option<&OutLink>,
+    ) -> Result<crate::transform::Descend<Dependencies>, Self::Error> {
+        Ok(if (self.claims)(node, link) {
+            crate::transform::Descend::Atomic(Dependencies {
+                required: vec![node.ty.clone()],
+                referenced: Vec::new(),
+            })
+        } else {
+            crate::transform::Descend::Recurse
+        })
+    }
 
     fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<Dependencies, Self::Error> {
         Ok(Dependencies {
@@ -503,14 +542,14 @@ impl TransformLowerer<OutOfRust> for CollectDeps {
         &mut self,
         _node: &OutNode,
         _op: &(),
-        inner: &OutNode,
+        _inner: &OutNode,
         value: Dependencies,
     ) -> Result<Dependencies, Self::Error> {
-        // A whole element crosses through its own converter, which the plan
-        // requires where it records the element; it is not a wire slot here.
-        if matches!(inner.kind, TransformKind::Leaf(_)) {
-            return Ok(Dependencies::default());
-        }
+        // A whole element is exactly the value crossing through its own
+        // converter, so it is a dependency like any other. It is not a named
+        // wire slot — which is why the derived leaf list drops it — but the two
+        // questions are different, and answering the second here left the
+        // required set of a `Vec<T>` empty.
         Ok(value)
     }
 }
