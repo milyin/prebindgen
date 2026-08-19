@@ -296,7 +296,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             }
             Some(quote!({ #stmts #reached }))
         };
-        match &uplan.shape() {
+        match uplan.shape() {
             UnfoldShape::Optional((), _) => match compose(quote!(__inner), by_ref) {
                 Some(inner) => quote!({
                     let __cvsrc = #raw_call;

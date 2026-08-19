@@ -112,7 +112,7 @@ pub(crate) fn emit_unfold_delivery(
     // fold args are either the element WHOLE (M4) or its decomposed leaves (M5),
     // with `acc` the erased `A` (`Object`). `Option<Vec<T>>` additionally yields a
     // null result for `None` (the fold is skipped).
-    let opt_iterable = match &plan.shape() {
+    let opt_iterable = match plan.shape() {
         UnfoldShape::Iterable(_) => Some(false),
         UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Iterable(_)) => {
             Some(true)
@@ -139,7 +139,7 @@ pub(crate) fn emit_unfold_delivery(
             }
         };
 
-        let loop_body = if let Some(element) = plan.element().as_ref() {
+        let loop_body = if let Some(element) = plan.element() {
             // Whole-element (M4): encode the element via its own converter —
             // a raw typed jvalue for a primitive-wire element, a JObject
             // otherwise (mirrors `leaf_is_prim`; the folder interface
@@ -247,7 +247,7 @@ pub(crate) fn emit_unfold_delivery(
         };
     }
 
-    match &plan.shape() {
+    match plan.shape() {
         UnfoldShape::Base => {
             let statics = iface_statics(
                 iface.expect("builder interface spec derivable for a registered declaration"),
