@@ -354,3 +354,221 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
         )
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// The callback plan (#447 §3)
+// ──────────────────────────────────────────────────────────────────────
+
+/// One declared callback's resolved boundary: how each argument crosses, what
+/// `extern "C" fn` parameters that costs, and what the trampoline does with it.
+///
+/// The C closure struct's `call` pointer and the Rust trampoline that fires it
+/// are two renderings of one boundary. They used to classify every argument
+/// separately — the declaration to list its wire parameters, the dispatch to
+/// fill them — agreeing because both walked the same declaration deterministically
+/// rather than because they read one resolution. This is that resolution, built
+/// once per callback and handed to both.
+pub(crate) struct CCallbackPlan {
+    /// One entry per declared argument, in signature order.
+    pub(crate) args: Vec<CCallbackArg>,
+}
+
+impl CCallbackPlan {
+    /// The `extern "C" fn` parameter types, in order — the `call` pointer's
+    /// signature minus its trailing context pointer.
+    pub(crate) fn wires(&self) -> impl Iterator<Item = &syn::Type> {
+        self.args.iter().flat_map(|a| a.wires.iter())
+    }
+
+    /// Whether any argument's encoder calls `__cbg_alloc_array`, so the crate
+    /// must carry that helper — a requirement of the plan, like every other
+    /// consequence of the encoders it selected.
+    pub(crate) fn needs_array_alloc(&self) -> bool {
+        self.args.iter().any(|a| match &a.kind {
+            CCallbackArgKind::Composite(plan) => plan.needs_array_alloc,
+            _ => false,
+        })
+    }
+}
+
+/// One callback argument, resolved.
+pub(crate) struct CCallbackArg {
+    /// The Rust type the closure parameter is written with.
+    pub(crate) src: syn::Type,
+    /// The `extern "C" fn` parameters this argument contributes. A slice costs
+    /// two, a decomposed composite one per wire field, everything else one.
+    pub(crate) wires: Vec<syn::Type>,
+    /// How it crosses, and what the trampoline needs to do it.
+    pub(crate) kind: CCallbackArgKind,
+}
+
+/// How one callback argument reaches C.
+pub(crate) enum CCallbackArgKind {
+    /// A shared slice, delivered by reference as `(*const elem_wire, usize)` —
+    /// zero-copy, so there is nothing to encode and nothing to drop.
+    Slice { elem_wire: syn::Type },
+    /// An owned handle the C side may take, delivered as `*mut wire`. Dropped
+    /// after the call, which is a no-op if C took it.
+    Takeable {
+        conv: syn::Ident,
+        opaque: syn::Type,
+        fallible: bool,
+    },
+    /// A value with no wire of its own, decomposed into its shape's fields.
+    Composite(CValuePlan),
+    /// One value through its own converter.
+    Single { conv: syn::Ident, fallible: bool },
+}
+
+impl CbindgenBuilder {
+    /// The resolved plan for one declared callback, built once and shared.
+    ///
+    /// Stored rather than recomputed, because "both sides call the same
+    /// function" only makes them agree while the function stays deterministic —
+    /// which is a property of today's implementation, not of the boundary. One
+    /// stored plan makes the declaration and the trampoline the same resolution
+    /// by construction (#447 §3).
+    ///
+    /// Built from the declaration and the registry alone, so it does not depend
+    /// on which emitter asks first. Entries only ever gain in the registry, so
+    /// a plan built once its arguments resolved stays the answer.
+    pub(crate) fn callback_plan(
+        &self,
+        key: &CallbackKey,
+        registry: &impl Conversions<()>,
+    ) -> std::rc::Rc<CCallbackPlan> {
+        if let Some(hit) = self.callback_plans.borrow().get(key) {
+            return hit.clone();
+        }
+        let plan = std::rc::Rc::new(self.build_callback_plan(key, registry));
+        self.callback_plans
+            .borrow_mut()
+            .insert(key.clone(), plan.clone());
+        plan
+    }
+
+    fn build_callback_plan(
+        &self,
+        key: &CallbackKey,
+        registry: &impl Conversions<()>,
+    ) -> CCallbackPlan {
+        let cfg = self
+            .callbacks
+            .get(key)
+            .expect("a callback plan is asked for by one of its own emitters");
+        let mut args = Vec::new();
+        for (i, declared) in cfg.args.iter().enumerate() {
+            // The slice test reads the DECLARED spelling: a `.callback(...)`
+            // argument is written by the build script, and a slice one may
+            // never have been interned, so there is no reading to ask.
+            if let Some((src_elem, elem_wire)) = self.callback_slice_elem_wire(declared) {
+                args.push(CCallbackArg {
+                    src: syn::parse_quote!(&[#src_elem]),
+                    wires: vec![
+                        syn::parse_quote!(*const #elem_wire),
+                        syn::parse_quote!(usize),
+                    ],
+                    kind: CCallbackArgKind::Slice { elem_wire },
+                });
+                continue;
+            }
+            let reading = registry.reading_of(declared).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen: callback arg `{}` was never classified",
+                    declared.to_token_stream()
+                )
+            });
+            let entry = registry.output_entry(&reading).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen: callback arg `{}` has no output converter (declare it \
+                     as a opaque_ptr/data_struct/enum_type)",
+                    declared.to_token_stream()
+                )
+            });
+            let src = self.src_ty_deep_of(&reading);
+            let wire = entry.destination.clone();
+            let conv = entry.function.sig.ident.clone();
+            let fallible = returns_result(&entry.function.sig.output);
+            let is_takeable = cfg.takeable.contains(&i);
+
+            if is_takeable {
+                args.push(CCallbackArg {
+                    src,
+                    wires: vec![syn::parse_quote!(*mut #wire)],
+                    kind: CCallbackArgKind::Takeable {
+                        conv,
+                        opaque: wire,
+                        fallible,
+                    },
+                });
+                continue;
+            }
+            if self.callback_arg_is_composite(&reading, is_takeable, registry) {
+                // Decomposed: the C params are the fields its shape lowers to,
+                // each `MaybeUninit` so an absent value can leave its slot
+                // unwritten without the wrapper materialising something to fill
+                // it — and without leaving it indeterminate for a callee that
+                // reads it anyway.
+                let plan = self.c_value_plan(&reading, registry);
+                let wires = plan
+                    .shape
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        let w = &f.wire;
+                        syn::parse_quote!(::core::mem::MaybeUninit<#w>)
+                    })
+                    .collect();
+                args.push(CCallbackArg {
+                    src,
+                    wires,
+                    kind: CCallbackArgKind::Composite(plan),
+                });
+                continue;
+            }
+            // A marker converter with no structural lowering has no C ABI at
+            // all — the one shape neither branch above can carry.
+            assert!(
+                !marker_destination(&entry.destination),
+                "Cbindgen: callback argument `{}` has no C ABI — it resolves to a marker \
+                 converter and is not one of the shapes lowered structurally (`Option<T>`, \
+                 `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback \
+                 arguments instead.",
+                declared.to_token_stream(),
+            );
+            args.push(CCallbackArg {
+                src,
+                wires: vec![wire],
+                kind: CCallbackArgKind::Single { conv, fallible },
+            });
+        }
+        CCallbackPlan { args }
+    }
+}
+
+/// The statement binding one callback argument's converted wire value.
+///
+/// A firing callback has no error channel, so a fallible converter aborts —
+/// stated once here because both the takeable and the single-value arms need
+/// exactly this and differ only in whether the binding is mutable.
+pub(crate) fn convert_or_abort(
+    conv: &syn::Ident,
+    arg: &syn::Ident,
+    wire: &syn::Ident,
+    fallible: bool,
+    mutable: bool,
+) -> TokenStream {
+    let mut_kw = if mutable { quote!(mut) } else { quote!() };
+    if fallible {
+        quote!(
+            let #mut_kw #wire = match #conv(#arg) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
+                }
+            };
+        )
+    } else {
+        quote!(let #mut_kw #wire = #conv(#arg);)
+    }
+}
