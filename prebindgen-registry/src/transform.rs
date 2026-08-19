@@ -226,3 +226,73 @@ fn lower_all<'a, D: TransformDirection, L: TransformLowerer<D>>(
     }
     Ok(lowered)
 }
+
+/// A tree is cloned where one decomposition serves several boundary uses — the
+/// same sum returned by a dozen functions, each wrapping it in its own arity
+/// layers. Written out rather than derived: `derive(Clone)` would ask for
+/// `D: Clone`, and a direction marker is uninhabited.
+impl<D: TransformDirection> Clone for TransformNode<D>
+where
+    D::Leaf: Clone,
+    D::Product: Clone,
+    D::Choice: Clone,
+    D::Optional: Clone,
+    D::Sequence: Clone,
+    D::Link: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            ty: self.ty.clone(),
+            kind: self.kind.clone(),
+        }
+    }
+}
+
+impl<D: TransformDirection> Clone for TransformKind<D>
+where
+    D::Leaf: Clone,
+    D::Product: Clone,
+    D::Choice: Clone,
+    D::Optional: Clone,
+    D::Sequence: Clone,
+    D::Link: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::Leaf(op) => Self::Leaf(op.clone()),
+            Self::Product { op, children } => Self::Product {
+                op: op.clone(),
+                children: children.clone(),
+            },
+            Self::Choice { op, variants } => Self::Choice {
+                op: op.clone(),
+                variants: variants.clone(),
+            },
+            Self::Optional { op, inner } => Self::Optional {
+                op: op.clone(),
+                inner: inner.clone(),
+            },
+            Self::Sequence { op, inner } => Self::Sequence {
+                op: op.clone(),
+                inner: inner.clone(),
+            },
+        }
+    }
+}
+
+impl<D: TransformDirection> Clone for TransformChild<D>
+where
+    D::Leaf: Clone,
+    D::Product: Clone,
+    D::Choice: Clone,
+    D::Optional: Clone,
+    D::Sequence: Clone,
+    D::Link: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            link: self.link.clone(),
+            node: self.node.clone(),
+        }
+    }
+}

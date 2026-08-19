@@ -27,9 +27,9 @@ impl TransformDirection for OutOfRust {
     type Leaf = OutLeaf;
     type Product = OutProduct;
     /// Decomposition has no alternatives: every record of a deconstructor
-    /// contributes. Uninhabited, so a [`TransformKind::Choice`] node cannot be
-    /// built in this direction at all.
-    type Choice = std::convert::Infallible;
+    /// A **sum**: exactly one alternative of the decomposed value is live, and
+    /// which one is what the choice's synthesized selector says.
+    type Choice = OutChoice;
     /// The `Option<T>` / `Option<&T>` return layer carries nothing of its own:
     /// absent delivers a null result and the builder is skipped.
     type Optional = ();
@@ -47,6 +47,7 @@ pub type OutChild = TransformChild<OutOfRust>;
 /// A value that crosses out as one leaf. Its type is the node's
 /// [`ty`](TransformNode::ty) and its access path is the links above it — this
 /// carries only what neither of those says.
+#[derive(Clone)]
 pub struct OutLeaf {
     /// `true` when the leaf is null **of itself**, independently of the path
     /// reaching it: a conditional handle delivery (`Option<&T>`), or a
@@ -55,13 +56,43 @@ pub struct OutLeaf {
     pub nullable: bool,
     /// The move/clone-the-value handle leaf — see [`UnfoldLeaf::identity`].
     pub identity: bool,
-    /// How the leaf is reached — see [`LeafSource`].
-    pub source: LeafSource,
-    /// Sum-alternative membership — see [`UnfoldLeaf::group`].
-    pub group: Option<i32>,
+    /// How the leaf is reached.
+    pub reach: OutReach,
+}
+
+/// How a leaf is reached from the value the links above it lead to.
+///
+/// The [`LeafSource`] a derived leaf carries is composed from this and from
+/// where the leaf sits: a [`VariantMember`](Self::VariantMember) only becomes a
+/// [`LeafSource::VariantField`] once the [choice arm](OutProduct::Variant) above
+/// it says which variant, so the arm is named once rather than on every leaf
+/// under it.
+#[derive(Clone)]
+pub enum OutReach {
+    /// The links above are an accessor chain — see [`LeafSource::Accessor`].
+    Accessor,
+    /// The links above are a struct-field chain — see [`LeafSource::Field`].
+    Field,
+    /// A payload member of the enclosing arm's variant pattern — see
+    /// [`LeafSource::VariantField`].
+    VariantMember(syn::Member),
+}
+
+/// What a [`Choice`](TransformKind::Choice) node selects between: the
+/// alternatives of a decomposed sum, exactly one of which is live per value.
+///
+/// The selector is a wire value no source wrote, contributed by this node. It
+/// carries **the sum** rather than an `i32`, which is how an emitter finds the
+/// enum to `match` — the node's own [`ty`](TransformNode::ty) says which, so
+/// nothing is stored twice.
+#[derive(Clone)]
+pub struct OutChoice {
+    /// The selector leaf's name segment.
+    pub name: String,
 }
 
 /// How a product node's children are obtained from its value.
+#[derive(Clone)]
 pub enum OutProduct {
     /// Read the records off the value directly: the root of a decomposition,
     /// or a spliced child deconstructor reached through its link.
@@ -73,9 +104,19 @@ pub enum OutProduct {
         /// instead of being cloned — see [`Hoist::consuming`].
         consuming: bool,
     },
+    /// One alternative of a [choice](OutChoice): its fields are live only when
+    /// the selector reads this arm's tag.
+    Variant {
+        /// The variant's ident as declared in the source enum.
+        name: syn::Ident,
+        /// The selector value that makes this arm live — the
+        /// [`group`](UnfoldLeaf::group) every leaf under it derives.
+        tag: i32,
+    },
 }
 
 /// How one child is reached from its parent's value.
+#[derive(Clone)]
 pub struct OutLink {
     /// Access steps from the parent's value to the child's.
     pub steps: Vec<PathStep>,
@@ -94,7 +135,7 @@ pub fn flat_view(root: &OutNode) -> (Vec<UnfoldLeaf>, Vec<Hoist>) {
     let leaves = derived
         .leaves
         .into_iter()
-        .map(|(segs, mut leaf)| {
+        .map(|(segs, _, mut leaf)| {
             // A leaf that names nothing at any level is the root identity —
             // the only one, since every nesting level contributes a segment.
             leaf.name = if segs.is_empty() {
@@ -115,9 +156,17 @@ struct Partial {
     /// Leaves with their name segments carried alongside: the segments are
     /// joined only at the root, so a level that names nothing (a value form)
     /// prefixes nothing rather than an empty string.
-    leaves: Vec<(Vec<String>, UnfoldLeaf)>,
+    ///
+    /// A leaf reached as a variant payload also carries the member it binds,
+    /// until the [arm](OutProduct::Variant) above it says which variant that
+    /// member belongs to.
+    leaves: Vec<PartialLeaf>,
     hoists: Vec<Hoist>,
 }
+
+/// One leaf on its way up: its name segments so far, the member it binds if it
+/// is a variant payload, and the leaf itself.
+type PartialLeaf = (Vec<String>, Option<syn::Member>, UnfoldLeaf);
 
 /// The lowerer behind [`flat_view`].
 struct FlatView;
@@ -127,17 +176,25 @@ impl TransformLowerer<OutOfRust> for FlatView {
     type Error = std::convert::Infallible;
 
     fn leaf(&mut self, node: &OutNode, op: &OutLeaf) -> Result<Partial, Self::Error> {
+        // A variant payload's `LeafSource` is only complete once its arm names
+        // the variant, so the member waits beside the leaf until then.
+        let (source, member) = match &op.reach {
+            OutReach::Accessor => (LeafSource::Accessor, None),
+            OutReach::Field => (LeafSource::Field, None),
+            OutReach::VariantMember(m) => (LeafSource::Accessor, Some(m.clone())),
+        };
         Ok(Partial {
             leaves: vec![(
                 Vec::new(),
+                member,
                 UnfoldLeaf {
                     name: String::new(),
                     path: Vec::new(),
                     out_ty: node.ty.clone(),
                     identity: op.identity,
                     nullable: op.nullable,
-                    source: op.source.clone(),
-                    group: op.group,
+                    source,
+                    group: None,
                 },
             )],
             hoists: Vec::new(),
@@ -166,7 +223,7 @@ impl TransformLowerer<OutOfRust> for FlatView {
             // instead — the leaf says so itself where that is not true.
             let nullable = !matches!(child.node.kind, TransformKind::Leaf(_))
                 && child.link.steps.iter().any(PathStep::is_optional);
-            for (segs, leaf) in &mut part.leaves {
+            for (segs, _, leaf) in &mut part.leaves {
                 *segs = child
                     .link
                     .name
@@ -195,16 +252,69 @@ impl TransformLowerer<OutOfRust> for FlatView {
             out.leaves.append(&mut part.leaves);
             out.hoists.append(&mut part.hoists);
         }
+        // An arm names the variant its payload members bind in, and marks
+        // everything under it live only for its own tag.
+        if let OutProduct::Variant { name, tag } = op {
+            for (_, member, leaf) in &mut out.leaves {
+                leaf.group = Some(*tag);
+                if let Some(member) = member.take() {
+                    leaf.source = LeafSource::VariantField {
+                        variant: name.clone(),
+                        member,
+                    };
+                }
+            }
+        }
         Ok(out)
     }
 
     fn choice(
         &mut self,
-        _node: &OutNode,
-        op: &std::convert::Infallible,
-        _variants: Lowered<'_, OutOfRust, Partial>,
+        node: &OutNode,
+        op: &OutChoice,
+        variants: Lowered<'_, OutOfRust, Partial>,
     ) -> Result<Partial, Self::Error> {
-        match *op {}
+        // The selector rides ahead of the arms it chooses between, and carries
+        // **which sum** it selects over — the node's own type — rather than the
+        // `i32` it is on the wire. That is how an emitter finds the enum to
+        // `match`; nothing resolves a converter for it.
+        let mut out = Partial {
+            leaves: vec![(
+                vec![op.name.clone()],
+                None,
+                UnfoldLeaf {
+                    name: String::new(),
+                    path: Vec::new(),
+                    out_ty: node.ty.clone(),
+                    identity: false,
+                    nullable: false,
+                    source: LeafSource::SumTag,
+                    group: None,
+                },
+            )],
+            hoists: Vec::new(),
+        };
+        for (child, mut part) in variants {
+            for (segs, _, leaf) in &mut part.leaves {
+                *segs = child
+                    .link
+                    .name
+                    .iter()
+                    .cloned()
+                    .chain(segs.drain(..))
+                    .collect();
+                leaf.path = child
+                    .link
+                    .steps
+                    .iter()
+                    .cloned()
+                    .chain(leaf.path.drain(..))
+                    .collect();
+            }
+            out.leaves.append(&mut part.leaves);
+            out.hoists.append(&mut part.hoists);
+        }
+        Ok(out)
     }
 
     fn optional(
@@ -331,8 +441,18 @@ pub fn flat_tree(source: &prebindgen_flat::flat::TypeRef, leaves: &[UnfoldLeaf])
                         kind: TransformKind::Leaf(OutLeaf {
                             nullable: leaf.nullable,
                             identity: leaf.identity,
-                            source: leaf.source.clone(),
-                            group: leaf.group,
+                            // A sum's structure is a `Choice` node now, so a
+                            // list handed over here is a product and nothing
+                            // else: an alternative's tag and payload members
+                            // have no shallow reading.
+                            reach: match &leaf.source {
+                                LeafSource::Accessor => OutReach::Accessor,
+                                LeafSource::Field => OutReach::Field,
+                                LeafSource::SumTag | LeafSource::VariantField { .. } => panic!(
+                                    "a decomposition handed over as a flat leaf list cannot \
+                                     contain a sum — declare it as a choice tree"
+                                ),
+                            },
                         }),
                     },
                 })

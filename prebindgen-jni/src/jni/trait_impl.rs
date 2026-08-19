@@ -1610,7 +1610,7 @@ impl Declarations {
                 // `Variant::type_ref` exists for exactly this, and it works in
                 // the declare phase where a `reading()` lookup could not.
                 source: sum.type_ref().clone(),
-                leaves: crate::jni::synth_sum_leaves(self, sum_cfg, sum),
+                tree: crate::jni::synth_sum_tree(self, sum_cfg, sum),
             });
         }
         out

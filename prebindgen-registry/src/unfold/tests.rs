@@ -1666,45 +1666,68 @@ fn duplicate_declarations_collected() {
     );
 }
 
-/// The tag + group leaves a sum decomposition is made of. Mirrors what the
-/// JNI adapter synthesizes: a selector followed by one group per alternative.
+/// The decomposition a sum is made of, mirroring what the JNI adapter declares:
+/// a choice over one arm per alternative, each a product of its payload
+/// members. `Reading` has a unit `Missing` (tag 0) and an `Exact(i64)` (tag 1).
 ///
-/// The selector's `out_ty` is **the sum**, as `synth_sum_leaves` stores it — it
-/// names *which* sum it chooses between, which is how the emitter finds the enum
-/// to `match`. It said `i32` here, the tag's wire type, which made the
-/// registration test prove only that *some* converter-free leaf gets a cell
-/// rather than that the selector registers the sum it names (#282).
+/// The tag leaf, its `out_ty` — **the sum**, which is how the emitter finds the
+/// enum to `match` — and every leaf's group are DERIVED from this; the
+/// declaration says only what the sum is.
 fn reading_sum_decon() -> SumDecon {
-    let tag = UnfoldLeaf {
-        name: "tag".to_string(),
-        path: vec![],
-        out_ty: tref(syn::parse_quote!(Reading)),
-        identity: false,
-        nullable: false,
-        source: LeafSource::SumTag,
-        group: None,
-    };
-    let field = |name: &str, variant: &str, idx: u32, ty: syn::Type, group: i32| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::VariantField {
-            variant: ident(variant),
-            member: syn::Member::Unnamed(syn::Index::from(idx as usize)),
+    use crate::transform::TransformKind;
+
+    let arm = |name: &str, tag: i32, fields: Vec<OutChild>| OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: Vec::new(),
         },
-        group: Some(group),
+        node: OutNode {
+            ty: tref(syn::parse_quote!(Reading)),
+            kind: TransformKind::Product {
+                op: OutProduct::Variant {
+                    name: ident(name),
+                    tag,
+                },
+                children: fields,
+            },
+        },
+    };
+    let payload = |name: &str, idx: u32, ty: syn::Type| OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: vec![name.to_string()],
+        },
+        node: OutNode {
+            ty: tref(ty),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                reach: OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(
+                    idx as usize,
+                ))),
+            }),
+        },
     };
     SumDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Reading)),
         source: tref(syn::parse_quote!(Reading)),
-        leaves: vec![
-            tag,
-            // group 0 (`Missing`) is empty — a unit variant contributes only
-            // its tag.
-            field("exact_v0", "Exact", 0, syn::parse_quote!(i64), 1),
-        ],
+        tree: OutNode {
+            ty: tref(syn::parse_quote!(Reading)),
+            kind: TransformKind::Choice {
+                op: OutChoice {
+                    name: "tag".to_string(),
+                },
+                variants: vec![
+                    // A unit variant contributes only its tag.
+                    arm("Missing", 0, Vec::new()),
+                    arm(
+                        "Exact",
+                        1,
+                        vec![payload("exact_v0", 0, syn::parse_quote!(i64))],
+                    ),
+                ],
+            },
+        },
     }
 }
 
@@ -1721,6 +1744,15 @@ fn sum_return_is_a_fixed_builder_plan() {
     apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
 
     let plan = reg.unfold_plans.get(&ident("read_one")).expect("plan");
+    // The plan's tree IS the choice the declaration stated — a sum is not a
+    // product, and the leaf list below is derived from that.
+    assert!(
+        matches!(
+            &plan.tree.kind,
+            crate::transform::TransformKind::Choice { variants, .. } if variants.len() == 2
+        ),
+        "a sum decomposes through a choice node, one arm per alternative"
+    );
     assert!(plan.fixed_builder, "sum ⇒ fixed builder");
     assert_eq!(plan.delivery, Delivery::Callback);
     assert!(matches!(plan.shape, UnfoldShape::Base));
@@ -1948,10 +1980,11 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
     fn choice(
         &mut self,
         _node: &OutNode,
-        op: &std::convert::Infallible,
-        _variants: crate::transform::Lowered<'_, OutOfRust, String>,
+        op: &OutChoice,
+        variants: crate::transform::Lowered<'_, OutOfRust, String>,
     ) -> Result<String, Self::Error> {
-        match *op {}
+        let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
+        Ok(format!("{}?{{{}}}", op.name, arms.join(" | ")))
     }
 
     fn optional(
@@ -2120,10 +2153,11 @@ impl crate::transform::TransformLowerer<OutOfRust> for Direct {
     fn choice(
         &mut self,
         _node: &OutNode,
-        op: &std::convert::Infallible,
-        _variants: crate::transform::Lowered<'_, OutOfRust, String>,
+        op: &OutChoice,
+        variants: crate::transform::Lowered<'_, OutOfRust, String>,
     ) -> Result<String, Self::Error> {
-        match *op {}
+        let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
+        Ok(format!("{}?{{{}}}", op.name, arms.join(" | ")))
     }
 
     fn optional(
