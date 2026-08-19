@@ -2112,6 +2112,55 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
         ),
         "got {err}"
     );
+
+    // A reading that owns an `Option` of its own does NOT thereby carry
+    // selector presence: `match` sees an outer kind, not a semantic shape, so a
+    // `Box<Option<T>>` slot marked `wrapped` would emit a match the `Box`
+    // blocks. Presence is added around such a reading instead — and here the
+    // claim is then contradictory, so it is refused rather than lowered.
+    let err = match select(
+        syn::parse_quote!(Option<String>),
+        Claim::direct(tref(syn::parse_quote!(Box<Option<String>>))),
+    ) {
+        Ok(_) => panic!("a boxed optional reading is not selector presence"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::DirectLiftMismatch { bound, target, .. }
+                if bound == "Box < Option < String > >" && target == "String"
+        ),
+        "presence was added around the reading, so the claim reads as what it is: {err}"
+    );
+
+    // …and a reading that needs presence added gets it explicitly, so the
+    // emitted match is on an `Option` the slot really has.
+    let selected = select(
+        syn::parse_quote!(Option<String>),
+        Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<String>))),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::expand::wire_leaves(&selected)[1]
+            .ty
+            .spell()
+            .to_string(),
+        "Option < OwnedObject < String > >",
+        "selector presence is on the slot, outermost"
+    );
+    let compact: String =
+        crate::expand::emit_fold_tree(&selected, &[ident("sel"), ident("a_0")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect();
+    assert!(
+        compact.contains(
+            "Option::Some(__v)=>::core::result::Result::Ok(::core::clone::Clone::clone(&*__v))"
+        ),
+        "the match is on the presence the slot carries: {compact}"
+    );
 }
 
 /// `Direct` says the reading IS the value, so a claim where the two differ is a

@@ -687,6 +687,24 @@ impl Claim {
     }
 }
 
+/// The payload of the `Option` **selector presence adds**, which is the one the
+/// emitter matches on.
+///
+/// Deliberately not [`optional_inner`](prebindgen_flat::flat::TypeRef::optional_inner):
+/// that looks through `Box` and `Cow`, because a destination language sees an
+/// optional either way, while `match slot { Some(..) }` does not see through
+/// either. A `Box<Option<T>>` reading carries no positional presence — its
+/// `Option` belongs to the converter — so presence has to be added around it
+/// rather than found inside it.
+fn presence_payload(
+    ty: &prebindgen_flat::flat::TypeRef,
+) -> Option<&prebindgen_flat::flat::TypeRef> {
+    match ty.kind() {
+        prebindgen_flat::flat::TypeKind::Optional(inner) => Some(inner),
+        _ => None,
+    }
+}
+
 /// Which arity layer a claim landed on — the two differ only in what they bind
 /// and how they name themselves in a refusal.
 #[derive(Clone, Copy)]
@@ -870,19 +888,27 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         // directly is what let an owned-producing lift through onto a borrowed
         // argument hidden under presence.
         //
-        // `position_ty` is idempotent in the wrapped case: an already-optional
-        // reading there can only be the position type an existing leaf handed
-        // straight back, since a selector-wrapped position never carries an
-        // optional value — a parameter that is itself `Option` is built
-        // unwrapped (`wrapped = dispatched && !popt`).
-        let position_ty = if wrapped && selected.optional_inner().is_none() {
+        // `position_ty` is idempotent in the wrapped case: a reading that is
+        // already an `Option` **at its outer kind** can only be the position
+        // type an existing leaf handed straight back, since a selector-wrapped
+        // position never carries an optional value — a parameter that is itself
+        // `Option` is built unwrapped (`wrapped = dispatched && !popt`).
+        //
+        // Asked with `presence_payload` rather than the semantic accessor: a
+        // `Box<Option<T>>` reading owns that `Option` itself, and presence has
+        // to be added around it, or the leaf would be marked `wrapped` while
+        // the emitter's `match` cannot reach through the `Box`.
+        let position_ty = if wrapped && presence_payload(&selected).is_none() {
             selected.optional()
         } else {
             selected.clone()
         };
+        // The stored position always has that outer `Option` directly —
+        // `build_arg` writes `pty.optional()` — so the same question answers
+        // for both ends.
         let peel = |ty: &prebindgen_flat::flat::TypeRef| {
             if wrapped {
-                ty.optional_inner().unwrap_or(ty).clone()
+                presence_payload(ty).unwrap_or(ty).clone()
             } else {
                 ty.clone()
             }
