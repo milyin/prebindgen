@@ -133,7 +133,19 @@ pub fn flat_view(root: &OutNode) -> Result<(Vec<UnfoldLeaf>, Vec<Hoist>), super:
     let leaves = derived
         .leaves
         .into_iter()
-        .map(|(segs, _, mut leaf)| {
+        .map(|(segs, member, mut leaf)| {
+            // A member binding still pending here had no variant arm above it
+            // to say which variant it binds in, so it would project as though
+            // the value were walked to rather than matched out. The mirror of
+            // the arm's own check.
+            if let Some(member) = member {
+                return Err(super::UnfoldError::VariantMemberOutsideArm {
+                    member: match member {
+                        syn::Member::Named(i) => i.to_string(),
+                        syn::Member::Unnamed(i) => i.index.to_string(),
+                    },
+                });
+            }
             // A leaf that names nothing at any level is the root identity —
             // the only one, since every nesting level contributes a segment.
             leaf.name = if segs.is_empty() {
@@ -141,9 +153,9 @@ pub fn flat_view(root: &OutNode) -> Result<(Vec<UnfoldLeaf>, Vec<Hoist>), super:
             } else {
                 segs.join("__")
             };
-            leaf
+            Ok(leaf)
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     Ok((leaves, derived.hoists))
 }
 
@@ -208,15 +220,31 @@ impl TransformLowerer<OutOfRust> for FlatView {
         op: &OutProduct,
         children: Lowered<'_, OutOfRust, Partial>,
     ) -> Result<Partial, Self::Error> {
-        // A variant arm's payloads must each be one leaf. Asked of the children
-        // themselves rather than inferred from what came back: a nested sum
-        // shows up as a leaf that already has a group, but a nested product,
-        // option or run does not, and would be projected with its member
-        // binding silently dropped. See `UnsupportedVariantPayload`.
+        // A variant arm's payloads must each be a leaf that BINDS A MEMBER.
+        // Being a leaf is not enough: the binding an arm upgrades to
+        // `LeafSource::VariantField` comes from the leaf's own
+        // `OutReach::VariantMember`, so a leaf reached any other way is grouped
+        // under the arm while keeping reach semantics that say it was found by
+        // walking the value — which is not how a payload is reached at all.
+        //
+        // Asked of the children themselves rather than inferred from what came
+        // back: a nested sum happens to show up as leaves that already carry a
+        // group, but nothing else does.
         if let OutProduct::Variant { name, .. } = op {
             for (child, _) in &children {
                 let found = match &child.node.kind {
-                    TransformKind::Leaf(_) => continue,
+                    TransformKind::Leaf(OutLeaf {
+                        reach: OutReach::VariantMember(_),
+                        ..
+                    }) => continue,
+                    TransformKind::Leaf(OutLeaf {
+                        reach: OutReach::Field,
+                        ..
+                    }) => "a leaf reached by field access, binding no member",
+                    TransformKind::Leaf(OutLeaf {
+                        reach: OutReach::Accessor,
+                        ..
+                    }) => "a leaf reached by an accessor, binding no member",
                     TransformKind::Product { .. } => "a product",
                     TransformKind::Choice { .. } => "a choice",
                     TransformKind::Optional { .. } => "an option",

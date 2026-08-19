@@ -2546,10 +2546,14 @@ fn refused(r: Result<(Vec<UnfoldLeaf>, Vec<Hoist>), UnfoldError>) -> UnfoldError
     }
 }
 
-/// #444 (review): a variant payload that is not a plain leaf has no flat
-/// reading, whatever kind of node it is. `UnfoldLeaf` binds one member per
-/// payload and every leaf under an arm takes that arm's tag, so a subtree there
-/// loses its member binding — and a nested sum loses its own tags on top.
+/// #444 (review): a variant payload must be a leaf that BINDS A MEMBER.
+///
+/// Being a leaf is not enough — the binding an arm upgrades to
+/// `LeafSource::VariantField` comes from the leaf's own reach, so a leaf
+/// reached by field access or an accessor would be grouped under the arm while
+/// claiming it was walked to. And a subtree of any kind loses the binding
+/// outright, a nested sum losing its own tags on top, because `group` holds one
+/// tag per leaf.
 ///
 /// Reported as a typed planning error naming the sum and the arm, not an abort:
 /// the projection is public, and an adapter handing over a shape it cannot have
@@ -2558,7 +2562,7 @@ fn refused(r: Result<(Vec<UnfoldLeaf>, Vec<Hoist>), UnfoldError>) -> UnfoldError
 /// Nothing produces either shape today — a sum's payload members are leaves —
 /// so the refusal is what makes that a stated limit instead of an accident.
 #[test]
-fn a_variant_payload_that_is_not_a_leaf_is_refused() {
+fn a_variant_payload_must_be_a_leaf_that_binds_a_member() {
     use crate::transform::TransformKind;
 
     let arm_payload = |payload: OutNode| -> OutNode {
@@ -2593,14 +2597,15 @@ fn a_variant_payload_that_is_not_a_leaf_is_refused() {
             },
         }
     };
-    let leaf = || OutNode {
+    let leaf = |reach: OutReach| OutNode {
         ty: tref(syn::parse_quote!(i64)),
         kind: TransformKind::Leaf(OutLeaf {
             nullable: false,
             identity: false,
-            reach: OutReach::Field,
+            reach,
         }),
     };
+    let member = || OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(0usize)));
 
     // A nested SUM — the case the previous check caught, now by structure
     // rather than by noticing its leaves already had a group.
@@ -2627,7 +2632,7 @@ fn a_variant_payload_that_is_not_a_leaf_is_refused() {
                     steps: vec![PathStep::field(ident("id"), false)],
                     name: vec!["id".to_string()],
                 },
-                node: leaf(),
+                node: leaf(OutReach::Field),
             }],
         },
     };
@@ -2646,7 +2651,7 @@ fn a_variant_payload_that_is_not_a_leaf_is_refused() {
         ty: tref(syn::parse_quote!(Vec<i64>)),
         kind: TransformKind::Sequence {
             op: (),
-            inner: Box::new(leaf()),
+            inner: Box::new(leaf(OutReach::Field)),
         },
     };
     let err = refused(crate::unfold::flat_view(&arm_payload(run)));
@@ -2655,6 +2660,49 @@ fn a_variant_payload_that_is_not_a_leaf_is_refused() {
         "got {err}"
     );
 
-    // A plain payload leaf still projects.
-    assert!(crate::unfold::flat_view(&arm_payload(leaf())).is_ok());
+    // A leaf is not enough on its own: the binding an arm upgrades comes from
+    // the leaf's own reach, so one reached by field access or by an accessor
+    // would be grouped under the arm while claiming it was walked to.
+    for (reach, what) in [
+        (OutReach::Field, "field access"),
+        (OutReach::Accessor, "an accessor"),
+    ] {
+        let err = refused(crate::unfold::flat_view(&arm_payload(leaf(reach))));
+        assert!(
+            matches!(&err, UnfoldError::UnsupportedVariantPayload { found, .. } if found.contains(what)),
+            "got {err}"
+        );
+    }
+
+    // A payload leaf that BINDS A MEMBER projects, and comes out as the
+    // variant field it is.
+    let (leaves, _) = crate::unfold::flat_view(&arm_payload(leaf(member())))
+        .expect("a payload that binds a member projects");
+    assert!(
+        leaves.iter().any(|l| matches!(
+            &l.source,
+            LeafSource::VariantField { variant, .. } if variant == "Wrapped"
+        )),
+        "the arm upgrades its payload's binding"
+    );
+
+    // The mirror: a member binding with no arm above it says which variant it
+    // is matched out of, so nothing can complete it.
+    let err = refused(crate::unfold::flat_view(&OutNode {
+        ty: tref(syn::parse_quote!(Outer)),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children: vec![OutChild {
+                link: OutLink {
+                    steps: Vec::new(),
+                    name: vec!["stray".to_string()],
+                },
+                node: leaf(member()),
+            }],
+        },
+    }));
+    assert!(
+        matches!(&err, UnfoldError::VariantMemberOutsideArm { .. }),
+        "got {err}"
+    );
 }

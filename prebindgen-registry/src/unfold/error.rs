@@ -50,6 +50,13 @@ pub enum UnfoldError {
         /// What the payload is instead of a leaf.
         found: &'static str,
     },
+    /// A leaf binds a variant member with no variant arm above it to say which
+    /// variant it binds in — the mirror of
+    /// [`UnsupportedVariantPayload`](Self::UnsupportedVariantPayload).
+    VariantMemberOutsideArm {
+        /// How the payload field was addressed.
+        member: String,
+    },
     /// A shape / record kind not yet implemented.
     Unsupported {
         func: syn::Ident,
@@ -193,6 +200,12 @@ impl std::fmt::Display for UnfoldError {
                  takes that arm's tag, so a subtree there loses its member binding and any tags \
                  of its own",
                 target, variant, found
+            ),
+            UnfoldError::VariantMemberOutsideArm { member } => write!(
+                f,
+                "output expansion: a leaf binds variant member `{}` but sits under no variant \
+                 arm, so nothing says which variant it is matched out of",
+                member
             ),
             UnfoldError::Unsupported { func, reason, at } => write!(
                 f,
