@@ -248,3 +248,82 @@ fn c_layer(ty: &TypeRef) -> Option<(OrdinaryLayer, TypeRef)> {
     }
     None
 }
+
+impl CbindgenBuilder {
+    /// Whether encoding a crossing can fail, read off the same plan the layout
+    /// comes from.
+    ///
+    /// The walk this mirrors says it plainly: "the third walk over the same
+    /// value, and it stops where the other two do". Here it does not have to
+    /// stop anywhere — a node with a wire of its own is already a leaf, because
+    /// `select` made it one, so the question is just "does this leaf's
+    /// converter return `Result`", forwarded up through the layers.
+    pub(crate) fn plan_is_fallible(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
+        self.value_plan(ty, registry)
+            .lower(&mut FallibleFromPlan { registry })
+            .expect("asking a C value plan about fallibility cannot fail")
+    }
+}
+
+/// Lowers a semantic plan to whether its encode can fail.
+struct FallibleFromPlan<'a, R: Conversions<()>> {
+    registry: &'a R,
+}
+
+impl<R: Conversions<()>> TransformLowerer<OutOfRust> for FallibleFromPlan<'_, R> {
+    type Value = bool;
+    type Error = std::convert::Infallible;
+
+    fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<bool, Self::Error> {
+        Ok(self
+            .registry
+            .output_entry(&node.ty)
+            .is_some_and(|entry| returns_result(&entry.function.sig.output)))
+    }
+
+    /// A layer converts nothing itself; whether the crossing can fail is
+    /// whatever it wraps.
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: bool,
+    ) -> Result<bool, Self::Error> {
+        Ok(value)
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: bool,
+    ) -> Result<bool, Self::Error> {
+        Ok(value)
+    }
+
+    fn product(
+        &mut self,
+        node: &OutNode,
+        _op: &OutProduct,
+        _children: Lowered<'_, OutOfRust, bool>,
+    ) -> Result<bool, Self::Error> {
+        unreachable!(
+            "a C value plan has no products: `{}` reached one",
+            node.ty.key()
+        )
+    }
+
+    fn choice(
+        &mut self,
+        node: &OutNode,
+        _op: &OutChoice,
+        _variants: Lowered<'_, OutOfRust, bool>,
+    ) -> Result<bool, Self::Error> {
+        unreachable!(
+            "a C value plan has no choices: `{}` reached one",
+            node.ty.key()
+        )
+    }
+}

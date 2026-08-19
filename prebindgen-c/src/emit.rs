@@ -513,7 +513,7 @@ impl CbindgenBuilder {
             None => (&f.ret, None),
         };
         let err_ty: Option<syn::Type> = err_reading.map(|t| spelled(t, emit));
-        let has_fallible_output = Self::output_is_fallible(value_ty, registry);
+        let has_fallible_output = self.output_is_fallible(value_ty, registry);
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -964,7 +964,21 @@ impl CbindgenBuilder {
         }
     }
 
-    fn output_is_fallible(ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
+    fn output_is_fallible(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
+        let walked = Self::output_is_fallible_walk(ty, registry);
+        // #444 §5: the same answer off the semantic plan, compared on every
+        // call the suite makes — like the layout above.
+        #[cfg(test)]
+        assert_eq!(
+            walked,
+            self.plan_is_fallible(ty, registry),
+            "#444: the plan's fallibility for `{}` differs from the walk's",
+            ty.key()
+        );
+        walked
+    }
+
+    fn output_is_fallible_walk(ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
         // The third walk over the same value, and it stops where the other two
         // do: a node with a wire of its own is encoded by its own converter, so
         // whether the encode can fail is THAT converter's answer. Peeling past
@@ -983,7 +997,7 @@ impl CbindgenBuilder {
                 .or_else(|| r_cow_slice_elem(ty))
                 .or_else(|| r_scalar_slice_elem(ty))
             {
-                return Self::output_is_fallible(inner, registry);
+                return Self::output_is_fallible_walk(inner, registry);
             }
         }
         registry
