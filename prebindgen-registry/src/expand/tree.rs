@@ -482,6 +482,27 @@ impl TransformLowerer<IntoRust> for CollectDeps {
     }
 }
 
+/// Error returned by [`select`] when the adapter claims a subtree with no wire
+/// slot to inherit.
+///
+/// A subtree made entirely of [`InLeaf::Bound`] values carries no position on
+/// the foreign signature — those values are bound by a containing layer, not
+/// passed as independent wire slots.  A converter must land on a wire slot, so
+/// claiming such a subtree is always an error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundOnlySubtreeClaimed;
+
+impl std::fmt::Display for BoundOnlySubtreeClaimed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "a claimed construction has no wire slot: the subtree consists entirely of \
+             layer-bound values and has no position to inherit",
+        )
+    }
+}
+
+impl std::error::Error for BoundOnlySubtreeClaimed {}
+
 /// Apply one adapter's converter selection, producing the tree every later pass
 /// reads: each subtree the adapter claims becomes one wire slot carrying the
 /// reading of the converter it chose.
@@ -495,14 +516,19 @@ impl TransformLowerer<IntoRust> for CollectDeps {
 /// dense run in their original order, and a claimed subtree takes the earliest
 /// position it replaced — so an adapter's choice of converter is also its
 /// choice of layout, which is what #444 §1 asks for.
+///
+/// # Errors
+///
+/// Returns [`BoundOnlySubtreeClaimed`] when the adapter claims a subtree whose
+/// only leaves are [`InLeaf::Bound`] — values supplied by a containing layer
+/// rather than independent wire slots.  Such a subtree has no position to
+/// inherit on the foreign signature.
 pub fn select(
     tree: &InNode,
     claim: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
-) -> InNode {
-    let selected = tree
-        .lower(&mut Select { claim })
-        .expect("selecting over a built tree cannot fail");
-    renumber(&selected)
+) -> Result<InNode, BoundOnlySubtreeClaimed> {
+    tree.lower(&mut Select { claim })
+        .map(|selected| renumber(&selected))
 }
 
 /// The lowerer behind [`select`]: it rebuilds the tree, replacing a claimed
@@ -548,7 +574,7 @@ impl Select<'_> {
 
 impl TransformLowerer<IntoRust> for Select<'_> {
     type Value = InNode;
-    type Error = std::convert::Infallible;
+    type Error = BoundOnlySubtreeClaimed;
 
     fn descend(
         &mut self,
@@ -558,10 +584,9 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         let Some(selected) = (self.claim)(node, link) else {
             return Ok(crate::transform::Descend::Recurse);
         };
-        let slot = Self::first_slot(node).expect(
-            "a claimed construction occupies at least one wire slot — a subtree of nothing but \
-             layer-bound values has no position to inherit",
-        );
+        let Some(slot) = Self::first_slot(node) else {
+            return Err(BoundOnlySubtreeClaimed);
+        };
         Ok(crate::transform::Descend::Atomic(InNode {
             ty: selected,
             kind: TransformKind::Leaf(InLeaf::Slot {

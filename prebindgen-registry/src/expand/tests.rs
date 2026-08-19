@@ -1084,7 +1084,8 @@ fn selecting_a_construction_replaces_its_slots() {
     // An adapter that builds a whole `ZKeyExpr` from one value of its own.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
         (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
-    });
+    })
+    .unwrap();
     let leaves = crate::expand::wire_leaves(&selected);
     assert_eq!(
         leaves.len(),
@@ -1176,9 +1177,61 @@ fn selecting_renumbers_the_surviving_slots() {
     // into position 0 — keeping its name, because it is the same value.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
         (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.borrowed())
-    });
+    })
+    .unwrap();
     let leaves = crate::expand::wire_leaves(&selected);
     assert_eq!(leaves.len(), 2);
     assert_eq!(leaves[0].ty.spell().to_string(), "& ZKeyExpr");
     assert_eq!(leaves[1].name.to_string(), "sample_payload");
+}
+
+/// Claiming a subtree that occupies no wire slot of its own — the constructor
+/// node inside an `InPresence::Payload` optional — is an error, not a panic.
+///
+/// In the `Payload` case the layer's single slot holds the `Option`-wrapped
+/// argument, and the constructor under it receives the payload as
+/// `InLeaf::Bound` (bound by the layer, not from a wire slot).  There is no
+/// wire position for a converter to land on, so `select` returns
+/// `BoundOnlySubtreeClaimed`.
+#[test]
+fn claiming_a_bound_only_subtree_is_an_error() {
+    // `attachment: Option<ZZBytes>` with one single-arg constructor.
+    // The resulting tree has Optional(Payload, inner=Product([Bound])).
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_zbytes_from_vec(bytes: Vec<u8>) -> ZZBytes { todo!() }",
+        "fn z_session_delete(s: &ZSession, attachment: Option<ZZBytes>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_delete"),
+        param: ident("attachment"),
+        declared_target: Some(key("ZZBytes")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_zbytes_from_vec"))]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_delete"), ident("attachment")))
+        .unwrap();
+
+    // The outer Optional has the only wire slot; its inner Product's children
+    // are all InLeaf::Bound.  Claiming the inner Product (skipping the Optional
+    // by not claiming it) has no wire position to inherit.
+    let result = crate::expand::select(plan.tree(), &mut |node, _link| {
+        // Claim on the ZZBytes product, but NOT on the wrapping Optional.
+        (node.ty.spell().to_string() == "ZZBytes"
+            && !matches!(node.kind, TransformKind::Optional { .. }))
+        .then(|| node.ty.clone())
+    });
+    assert!(
+        matches!(result, Err(crate::expand::BoundOnlySubtreeClaimed)),
+        "claiming a bound-only subtree must return BoundOnlySubtreeClaimed"
+    );
 }

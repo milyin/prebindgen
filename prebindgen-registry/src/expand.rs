@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
     tree::{
-        dependencies, select, wire_leaves, Dependencies, InChild, InChoice, InLeaf, InLink, InNode,
-        InPresence, InProduct, InRun, InSlot, IntoRust,
+        dependencies, select, wire_leaves, BoundOnlySubtreeClaimed, Dependencies, InChild,
+        InChoice, InLeaf, InLink, InNode, InPresence, InProduct, InRun, InSlot, IntoRust,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
