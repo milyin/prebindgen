@@ -546,35 +546,44 @@ struct Select<'a> {
 
 impl Select<'_> {
     /// The slot a claimed subtree inherits: the earliest one it replaced, whose
-    /// name is what the foreign signature already called that position.
-    fn first_slot(node: &InNode) -> Option<InSlot> {
+    /// name is what the foreign signature already called that position — and
+    /// whether that position is `Option`-wrapped by selector presence.
+    ///
+    /// The wrapping belongs to the POSITION, not to the value in it. A subtree
+    /// inside a live `Choice` arm is absent whenever another arm is selected,
+    /// so whatever crosses there must still be able to say "not this one".
+    /// Structural slots — a selector, a presence flag, a run length — are never
+    /// selector-wrapped arguments, so they contribute `false`; that is also the
+    /// answer when the claim swallows the whole choice, which then sits under
+    /// no selector at all.
+    fn first_slot(node: &InNode) -> Option<(InSlot, bool)> {
         match &node.kind {
-            TransformKind::Leaf(InLeaf::Slot { slot, .. }) => Some(slot.clone()),
+            TransformKind::Leaf(InLeaf::Slot { slot, wrapped }) => Some((slot.clone(), *wrapped)),
             TransformKind::Leaf(InLeaf::Bound) => None,
             TransformKind::Product { children, .. } => children
                 .iter()
                 .filter_map(|c| Self::first_slot(&c.node))
-                .min_by_key(|s| s.slot),
+                .min_by_key(|(s, _)| s.slot),
             TransformKind::Choice { op, variants } => variants
                 .iter()
                 .filter_map(|v| Self::first_slot(&v.node))
-                .chain(std::iter::once(op.selector.clone()))
-                .min_by_key(|s| s.slot),
+                .chain(std::iter::once((op.selector.clone(), false)))
+                .min_by_key(|(s, _)| s.slot),
             TransformKind::Optional { op, inner } => {
                 let own = match op {
                     InPresence::Selector => None,
-                    InPresence::Flag(s) => Some(s.clone()),
-                    InPresence::Payload { slot, .. } => Some(slot.clone()),
+                    InPresence::Flag(s) => Some((s.clone(), false)),
+                    InPresence::Payload { slot, .. } => Some((slot.clone(), false)),
                 };
                 Self::first_slot(inner)
                     .into_iter()
                     .chain(own)
-                    .min_by_key(|s| s.slot)
+                    .min_by_key(|(s, _)| s.slot)
             }
             TransformKind::Sequence { op, inner } => Self::first_slot(inner)
                 .into_iter()
-                .chain(std::iter::once(op.slot.clone()))
-                .min_by_key(|s| s.slot),
+                .chain(std::iter::once((op.slot.clone(), false)))
+                .min_by_key(|(s, _)| s.slot),
         }
     }
 }
@@ -591,19 +600,18 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         let Some(selected) = (self.claim)(node, link) else {
             return Ok(crate::transform::Descend::Recurse);
         };
-        let Some(slot) = Self::first_slot(node) else {
+        let Some((slot, wrapped)) = Self::first_slot(node) else {
             return Err(BoundOnlySubtreeClaimed {
                 claimed: node.ty.key().to_string(),
             });
         };
         Ok(crate::transform::Descend::Atomic(InNode {
+            // The claim states the reading; the position states its presence.
+            // The reading is NOT re-wrapped here — a claimed node under selector
+            // presence is already offered with its `Option` on, so the adapter
+            // sees the wrapped type and answers about it.
             ty: selected,
-            kind: TransformKind::Leaf(InLeaf::Slot {
-                slot,
-                // Selector presence wrapped the arguments it replaced, not the
-                // value that now crosses in their place.
-                wrapped: false,
-            }),
+            kind: TransformKind::Leaf(InLeaf::Slot { slot, wrapped }),
         }))
     }
 

@@ -1238,3 +1238,82 @@ fn claiming_a_bound_only_subtree_is_an_error() {
     assert_eq!(err.claimed, "ZZBytes", "the error says which construction");
     assert!(err.to_string().contains("no wire slot"), "and why: {err}");
 }
+
+/// #444 §3: `Option`-wrapping by selector presence belongs to the POSITION, not
+/// to the value in it. Claiming a subtree inside a live `Choice` arm leaves the
+/// dispatch standing, so that position is still absent whenever another arm is
+/// selected — the claimed value has to keep saying "not this one".
+#[test]
+fn a_claim_inside_a_live_choice_stays_wrapped() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .expect("plan");
+
+    // A selector plus one `Option`-wrapped slot per arm.
+    assert_eq!(plan.leaves().len(), 3);
+    assert_eq!(plan.selector(), Some(0));
+
+    // The adapter converts the constructor's own argument directly, and claims
+    // ONLY that — the choice above it stands.
+    // The arm's argument is offered WITH its selector-presence `Option` on, so
+    // the adapter answers about the wrapped position.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        (node.ty.spell().to_string() == "Option < String >").then(|| node.ty.clone())
+    })
+    .unwrap();
+
+    assert_eq!(
+        crate::expand::wire_leaves(&selected).len(),
+        3,
+        "the dispatch survives, so the selector and both arms keep their slots"
+    );
+
+    // `wrapped` is read straight off the tree by the construct emitter, which
+    // uses it to decide whether a slot is unwrapped (missing ⇒ `Err`) before it
+    // reaches the constructor — so the claimed leaf itself is what to check.
+    fn claimed_wrapped(node: &crate::expand::InNode) -> Option<bool> {
+        match &node.kind {
+            TransformKind::Leaf(crate::expand::InLeaf::Slot { slot, wrapped }) => {
+                (slot.name == "a_0").then_some(*wrapped)
+            }
+            TransformKind::Leaf(_) => None,
+            TransformKind::Product { children, .. } => {
+                children.iter().find_map(|c| claimed_wrapped(&c.node))
+            }
+            TransformKind::Choice { variants, .. } => {
+                variants.iter().find_map(|v| claimed_wrapped(&v.node))
+            }
+            TransformKind::Optional { inner, .. } | TransformKind::Sequence { inner, .. } => {
+                claimed_wrapped(inner)
+            }
+        }
+    }
+    assert_eq!(
+        claimed_wrapped(&selected),
+        Some(true),
+        "a claim inside a live choice keeps the position's selector presence"
+    );
+}
