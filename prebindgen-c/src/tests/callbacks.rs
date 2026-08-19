@@ -758,3 +758,39 @@ fn a_callback_plan_is_stored_not_rebuilt() {
         "the encoder it selected calls the array helper"
     );
 }
+
+/// A declared-but-unused callback signature emits no closure struct, and must
+/// not be planned either: its arguments were never classified, so there is no
+/// converter for a plan to resolve against.
+#[test]
+fn an_unused_callback_declaration_is_not_planned() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_plain(v: i64) -> Result<(), Error> {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Fn(func), loc.clone()),
+        (syn::Item::Struct(error_struct()), loc.clone()),
+    ]))
+    .expect("index items");
+
+    // Declared, and used by nothing.
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .data_struct(syn::parse_quote!(Error))
+        .base_name("z_error")
+        .error()
+        .callback(syn::parse_quote!(impl Fn(Vec<i64>) + Send + Sync + 'static))
+        .base_name("z_closure_unused_t")
+        .function(syn::parse_quote!(z_plain));
+
+    let src = write(cbindgen, registry, "cb_unused");
+    let compact: String = src.split_whitespace().collect();
+    assert!(
+        !compact.contains("z_closure_unused_t"),
+        "an unused callback declaration emits nothing: {src}"
+    );
+}

@@ -1498,17 +1498,12 @@ impl CbindgenBuilder {
         // identities — what the map is keyed by — and the arguments it was
         // declared with are beside it, so neither is rebuilt from the other
         // (#291).
-        let mut cb_keys: Vec<(&CallbackKey, &CbCfg)> = self.callbacks.iter().collect();
-        cb_keys.sort_by_key(|(k, _)| self.callback_c_name(k));
-        for (key, cfg) in cb_keys {
-            let args: Vec<syn::Type> = cfg.args.clone();
-            // Emit only if the callback is required (its input resolved); skip a
-            // declared-but-unused signature.
-            if registry
-                .reading_of(&callback_fn_type(&args))
-                .and_then(|tr| registry.input_entry(&tr))
-                .is_none()
-            {
+        let mut cb_keys: Vec<&CallbackKey> = self.callbacks.keys().collect();
+        cb_keys.sort_by_key(|k| self.callback_c_name(k));
+        for key in cb_keys {
+            // Emit only if the callback is required; skip a declared-but-unused
+            // signature.
+            if !self.callback_is_required(key, registry) {
                 continue;
             }
             // The declaration renders the plan's wire parameters. It does not
@@ -1643,6 +1638,23 @@ impl CbindgenBuilder {
 }
 
 impl CbindgenBuilder {
+    /// Whether a declared callback signature is actually **required** — its
+    /// `impl Fn(..)` input resolved, because some exported function takes one.
+    ///
+    /// A declared-but-unused signature emits no closure struct and must not be
+    /// planned either: its argument types were never classified, so there is no
+    /// converter for a plan to resolve against. Asked by the emission that
+    /// skips it and by the requirement fold that would otherwise plan it, so
+    /// the two cannot disagree about which callbacks exist.
+    fn callback_is_required(&self, key: &CallbackKey, registry: &Registry<()>) -> bool {
+        self.callbacks.get(key).is_some_and(|cfg| {
+            registry
+                .reading_of(&callback_fn_type(&cfg.args))
+                .and_then(|tr| registry.input_entry(&tr))
+                .is_some()
+        })
+    }
+
     /// Whether a callback argument crosses as a **decomposed composite** — the
     /// one delivery lowered from a [`CValuePlan`] rather than handed to the
     /// argument's own converter.
@@ -1687,6 +1699,7 @@ impl CbindgenBuilder {
             || self
                 .callbacks
                 .keys()
+                .filter(|key| self.callback_is_required(key, registry))
                 .any(|key| self.callback_plan(key, registry).needs_array_alloc())
     }
 
