@@ -2,10 +2,19 @@ use kotlin_codegen::{KtFile, KtType};
 
 use super::*;
 
+/// Render a spec's `asRaw` proxy.
+///
+/// Every param in these fixtures carries `reading: None` — they are leaves, and
+/// the proxy's layer walk is short-circuited for one — so an empty registry and
+/// a default declaration set are never consulted. A param WITH layers is
+/// covered where the layers come from: `prebindgen-jni/src/jni/tests`.
 fn render_as_raw(spec: IfaceSpec) -> String {
-    KtFile::new(&spec.package)
-        .decl(spec.to_as_raw_fun())
-        .render()
+    let registry = crate::test_util::reg_from_items(vec![]).expect("an empty registry");
+    let ext = crate::jni::Declarations::default();
+    let mut imports = std::collections::BTreeSet::new();
+    let fun = spec.to_as_raw_fun(&ext, &registry, &mut imports);
+    assert!(imports.is_empty(), "a leaf param imports nothing");
+    KtFile::new(&spec.package).decl(fun).render()
 }
 
 #[test]
@@ -22,6 +31,7 @@ fn as_raw_adapter_is_multiline_even_when_short() {
                 fqn: "io.test.Thing".to_string(),
                 niche_sentinel: None,
             },
+            reading: None,
         }],
         ret: KtType::unit(),
         descr: "(J)V".to_string(),
@@ -59,6 +69,7 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
                     fqn: "io.test.ZenohId".to_string(),
                     niche_sentinel: None,
                 },
+                reading: None,
             },
             IfaceParam::same("replierEid".to_string(), KtType::int()),
             IfaceParam::same("isOk".to_string(), KtType::boolean()),
@@ -70,6 +81,7 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
                     fqn: "io.test.KeyExpr".to_string(),
                     niche_sentinel: None,
                 },
+                reading: None,
             },
             IfaceParam {
                 name: "sample__payload".to_string(),
@@ -79,6 +91,7 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
                     fqn: "io.test.ZBytes".to_string(),
                     niche_sentinel: None,
                 },
+                reading: None,
             },
         ],
         ret: KtType::unit(),

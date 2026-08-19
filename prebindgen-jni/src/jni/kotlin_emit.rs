@@ -1299,7 +1299,15 @@ impl Declarations {
                 if s.needs_raw() {
                     file = file.decl(s.to_raw_decl());
                     if !typed_is_dead {
-                        file = file.decl(s.to_as_raw_fun());
+                        // The proxy peels a value's layers, which can name a
+                        // class (an enum's `fromInt`), so it registers imports
+                        // like every other emitter here.
+                        let mut proxy_imports: BTreeSet<String> = BTreeSet::new();
+                        let proxy = s.to_as_raw_fun(self, registry, &mut proxy_imports);
+                        for fqn in proxy_imports {
+                            file = file.import(fqn);
+                        }
+                        file = file.decl(proxy);
                     }
                     // Kept even when the proxy is suppressed: a hoisted
                     // singleton names the same classes by short name from its
@@ -1646,7 +1654,16 @@ impl Declarations {
         } else {
             name.to_string()
         };
-        self.carry_layers(registry, param, &leaf.out_ty, arg, false, 0, imports)
+        self.carry_layers(
+            registry,
+            &param.wrap,
+            param.raw.is_nullable(),
+            &leaf.out_ty,
+            arg,
+            false,
+            0,
+            imports,
+        )
     }
 
     /// One payload layer, and then the rest of them.
@@ -1667,10 +1684,12 @@ impl Declarations {
     /// The lambda parameter is implicit at the outermost run and named below it,
     /// because a nested `it` would shadow the one above.
     #[allow(clippy::too_many_arguments)]
-    fn carry_layers(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn carry_layers(
         &self,
         registry: &impl Conversions<KotlinMeta>,
-        param: &crate::jni::IfaceParam,
+        wrap: &crate::jni::WrapKind,
+        slot_nullable: bool,
         ty: &prebindgen_registry::flat::TypeRef,
         recv: String,
         nullable: bool,
@@ -1678,7 +1697,16 @@ impl Declarations {
         imports: &mut BTreeSet<String>,
     ) -> String {
         if let Some(inner) = ty.optional_inner() {
-            return self.carry_layers(registry, param, inner, recv, true, depth, imports);
+            return self.carry_layers(
+                registry,
+                wrap,
+                slot_nullable,
+                inner,
+                recv,
+                true,
+                depth,
+                imports,
+            );
         }
         if let Some(elem) = ty.sequence_elem() {
             let bound = if depth == 0 {
@@ -1688,7 +1716,8 @@ impl Declarations {
             };
             let body = self.carry_layers(
                 registry,
-                param,
+                wrap,
+                slot_nullable,
                 elem,
                 bound.clone(),
                 false,
@@ -1710,7 +1739,7 @@ impl Declarations {
         // NOT spelled nullably: absence is a value there, in a slot that is not
         // nullable at all, and `?.` on a primitive does not compile. Only the
         // outermost slot can be one — an element of a run is always boxed.
-        let nullable = nullable && (depth > 0 || param.raw.is_nullable());
+        let nullable = nullable && (depth > 0 || slot_nullable);
         // An enum payload rides its `jint` discriminant, so the interface types
         // it `Int` and the wrap has to name the enum class itself — read off the
         // same output-converter metadata `factory_field` reads for an enum
@@ -1730,7 +1759,7 @@ impl Declarations {
                 format!("{short}.fromInt({recv})")
             };
         }
-        param.wrap.wrap_expr(&recv, nullable)
+        wrap.wrap_expr(&recv, nullable)
     }
 
     /// The hoisted **folder-appender** singleton for a **whole single-leaf

@@ -139,6 +139,26 @@ pub(crate) struct IfaceParam {
     pub raw: KtType,
     /// How the proxy wraps raw → typed.
     pub wrap: WrapKind,
+    /// What the value **is**, when the param was built from a reading.
+    ///
+    /// The wrap belongs to the leaf, and a value can have layers over it — an
+    /// `Option`, a run, both, nested. The proxy applied the wrap to the whole
+    /// parameter, which is the defect #429 fixed for a sum payload and #438
+    /// found again here, in the one direction that fix did not reach. Carrying
+    /// the reading is what lets both callers run the SAME walk
+    /// ([`Declarations::carry_layers`]) rather than each deriving the layers
+    /// again.
+    ///
+    /// `None` for a param with no reading behind it — the sum tag, a
+    /// passthrough — where the leaf and the value are the same thing.
+    ///
+    /// The identity **as text**, not the reading and not a `TypeKey`: a spec is
+    /// memoized behind an `Arc`, and both a `TypeRef` and a key carry
+    /// non-`Send` interiors (`syn` nodes, an `Rc<str>`). `TypeKey::parse` and
+    /// `Conversions::reading` are the door back — the one this codebase
+    /// documents for a caller holding an identity that wants the model's
+    /// answer.
+    pub reading: Option<String>,
 }
 
 impl IfaceParam {
@@ -148,6 +168,41 @@ impl IfaceParam {
             typed: ty.clone(),
             raw: ty,
             wrap: WrapKind::None,
+            reading: None,
+        }
+    }
+
+    /// The raw → typed conversion for this parameter, as the proxy writes it.
+    ///
+    /// One rule with two callers: this and the sum builder both run
+    /// [`Declarations::carry_layers`], each with its own receiver, so the layers
+    /// over a value are peeled by one piece of code (#438).
+    pub fn conversion(
+        &self,
+        ext: &crate::jni::Declarations,
+        registry: &impl Conversions<KotlinMeta>,
+        imports: &mut std::collections::BTreeSet<String>,
+    ) -> String {
+        // A key the registry no longer knows is not a layer question — it is a
+        // param built from a type this generation never classified, and the
+        // leaf's own wrap is the whole answer there.
+        let reading = self
+            .reading
+            .as_deref()
+            .and_then(|text| TypeKey::parse(text).ok())
+            .and_then(|key| registry.reading(&key));
+        match reading {
+            Some(reading) => ext.carry_layers(
+                registry,
+                &self.wrap,
+                self.raw.is_nullable(),
+                &reading,
+                self.name.clone(),
+                self.raw.is_nullable(),
+                0,
+                imports,
+            ),
+            None => self.wrap.wrap_expr(&self.name, self.raw.is_nullable()),
         }
     }
 }
@@ -520,7 +575,12 @@ impl IfaceSpec {
     /// <Name>Raw { raw leaves… -> run(<wraps…>) }` — constructed once per
     /// registration; per message it performs exactly the typed-object
     /// constructions the consumer needs anyway, in JVM bytecode.
-    pub fn to_as_raw_fun(&self) -> KtFun {
+    pub fn to_as_raw_fun(
+        &self,
+        ext: &crate::jni::Declarations,
+        registry: &impl Conversions<KotlinMeta>,
+        imports: &mut std::collections::BTreeSet<String>,
+    ) -> KtFun {
         let bare_generics: Vec<String> = self
             .type_params
             .iter()
@@ -568,7 +628,7 @@ impl IfaceSpec {
             self.params
                 .iter()
                 .map(|p| RunArg {
-                    expr: p.wrap.wrap_expr(&p.name, p.raw.is_nullable()),
+                    expr: p.conversion(ext, registry, imports),
                     // A wrapped handle leaf closes as itself; its nullability
                     // rides `nullable` below, exactly as for a group.
                     close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
@@ -598,7 +658,7 @@ impl IfaceSpec {
                     None => {
                         let p = &self.params[at];
                         args.push(RunArg {
-                            expr: p.wrap.wrap_expr(&p.name, p.raw.is_nullable()),
+                            expr: p.conversion(ext, registry, imports),
                             close: p.wrap.is_owned_handle().then_some(FoldStrategy::Base),
                             nullable: p.raw.is_nullable(),
                             reassembled: false,
@@ -960,6 +1020,7 @@ fn leaf_iface_param(
                     typed: builder_kt.clone(),
                     raw,
                     wrap: WrapKind::Unsigned64 { niche_sentinel },
+                    reading: Some(out_ty.key().as_str().to_string()),
                 });
             }
             ProjectionKind::Handle => {}
@@ -996,6 +1057,7 @@ fn leaf_iface_param(
                     fqn,
                     niche_sentinel,
                 },
+                reading: Some(out_ty.key().as_str().to_string()),
             });
         }
         // Whole arg: typed class in both views (no proxy wrap).
@@ -1025,6 +1087,7 @@ fn leaf_iface_param(
                         typed: builder_kt.clone(),
                         raw,
                         wrap: WrapKind::None,
+                        reading: Some(out_ty.key().as_str().to_string()),
                     });
                 }
             }
@@ -1059,6 +1122,9 @@ pub(crate) fn owned_handle_iface_param(
         typed,
         raw,
         wrap: WrapKind::HandleOwned(fqn),
+        // A plan-less handle arg IS its leaf: there is no layer between the
+        // `jlong` and the class, so there is nothing for a walk to peel.
+        reading: None,
     })
 }
 
