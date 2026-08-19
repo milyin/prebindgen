@@ -49,7 +49,7 @@ not a rewrite.
 | 2c | The runtime — C side, in pure Rust | **landed** ([#409](https://github.com/milyin/prebindgen/pull/409)) |
 | 2d | The Kotlin compiler | **landed** |
 | 2e | The JVM runtime | not started — needs a cdylib per cell and a harness to enter it |
-| 7 | The callback-argument position | not started — the hole #428 came through |
+| 7 | The callback-argument position | **landed** |
 | 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
 | 4 | The call axis | **landed** ([#407](https://github.com/milyin/prebindgen/pull/407)) |
 | 5 | The declaration-policy axis | **landed** for the JNI vocabulary ([#408](https://github.com/milyin/prebindgen/pull/408)); C's own declarators blocked |
@@ -167,23 +167,40 @@ What it would settle is the claim neither compiler makes: that the two halves
 agree about a signature. A Kotlin `external fun` and a Rust `#[no_mangle]`
 symbol are checked against each other by nothing until a JVM looks one up.
 
-### 7. The callback-argument position
+### 7. The callback-argument position — landed
 
-The four positions are parameter, return, struct field and enum payload. A value
-also crosses as a **callback argument**, in the other direction: the generated
-code delivers it to a C closure or a Kotlin `run`, so the encoder, the wire and
-the declaration that names it are all different code from the four.
+The four positions were parameter, return, struct field and enum payload. A
+value also crosses as a **callback argument**, in the other direction: the
+generated code encodes it and hands it to a C closure or a Kotlin `run`, so the
+encoder, the wire and the declaration that names it are all different code from
+the four.
 
 #428 came through that hole, and it is the mirror image of #413 — the same
 composite, lowered structurally in one direction and left to a marker in the
-other. The matrix found one and not the other, which is the argument for the
-axis: a position the corpus omits is a hole no other axis can cover for it.
+other. The matrix found one and not the other.
 
-Cheaper than it looks. The fixtures already synthesize a function per cell, and
-a callback fixture is that function taking `impl Fn(<shape>)` instead of
-returning it; both adapters already have a declaration for one
-(`.callback(...)`, and the JNI side's plan). The compile and header stages
-apply unchanged.
+A fixture is the same synthesized function taking `impl Fn(<shape>)` instead of
+returning it, and the fixture's signature IS the declaration the C builder is
+handed, because that builder keys its closure struct on the whole `impl Fn(..)`
+type. The JNI adapter needs no declaration at all: a `fun!` whose parameter is
+an `impl Fn(..)` is enough. Every stage above — rustc, cbindgen, the Kotlin
+compiler, the ratchet — applies unchanged.
+
+One shape is excused, for a reason about Rust rather than about a generator:
+`impl Fn(impl Fn(..))` does not parse. A test pins that as the *only* excuse, so
+an excuse cannot grow to cover a shape a generator merely refuses — that would
+turn a rejection into a blank.
+
+**It found two defects immediately**, both invisible to every other axis:
+
+* [#437](https://github.com/milyin/prebindgen/issues/437) — C builds an array
+  for a `Vec` callback argument and never emits the helper that does it, because
+  the prerequisite gate reads a function's **return type** only. Six cells.
+* [#438](https://github.com/milyin/prebindgen/issues/438) — JNI's callback
+  adapter skips a value's `Option` and collection layers. That is
+  [#429](https://github.com/milyin/prebindgen/issues/429) exactly, in the one
+  direction #432 did not fix, because the two emitters each carry their own copy
+  of the rule.
 
 ### 3. The guarantee ratchet — landed
 
@@ -296,11 +313,16 @@ crate's coverage:
   a Rust `#[no_mangle]` symbol are checked against each other by nothing until a
   JVM looks one up, which is exactly what step 2e is for and why it is the next
   step rather than an optional one.
-* **#428** came from writing a fixture by hand. A **callback argument** is not
-  one of the four positions this crate enumerates, so the C column read 0 broken
+* **#428** came from writing a fixture by hand. A **callback argument** was not
+  one of the four positions this crate enumerated, so the C column read 0 broken
   cells for two merges while that defect was live — and it is the mirror image of
   #413, which the matrix *did* find in return position. A position the corpus
   omits is a hole the whole table cannot see, whatever its other axes do.
+
+  That position is step 7, and it landed. It found
+  [#437](https://github.com/milyin/prebindgen/issues/437) and
+  [#438](https://github.com/milyin/prebindgen/issues/438) on its first run —
+  the second of which is #429 in the direction #432 did not reach.
 
 ## Exits
 

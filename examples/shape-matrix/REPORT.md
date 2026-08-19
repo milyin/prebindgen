@@ -36,8 +36,8 @@ failing cell prints its diagnostics on the run's stderr.
 
 | Target | header | kotlin | rustc | bad header | bad kotlin | bad rust | rejected | panic | n/a |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| C | 70 | 0 | 0 | 0 | 0 | 0 | 42 | 32 | 22 |
-| Kotlin/JNI | 0 | 98 | 0 | 0 | 0 | 1 | 36 | 9 | 22 |
+| C | 84 | 0 | 0 | 0 | 0 | 6 | 51 | 37 | 24 |
+| Kotlin/JNI | 0 | 118 | 0 | 0 | 1 | 1 | 48 | 10 | 24 |
 
 The two targets end at different stages, and each column belongs to one of them: a C cell goes on to cbindgen and tops out at `header`, a Kotlin/JNI cell goes on to the Kotlin compiler and tops out at `kotlin`. `rustc` is where a cell stopped without reaching either — for JNI that means it emitted no Kotlin to compile, and for C that its Rust did not reach the header stage.
 
@@ -341,6 +341,79 @@ The two targets end at different stages, and each column belongs to one of them:
 
 </details>
 
+## Position: callback argument
+
+| Shape | Rust | C | Kotlin/JNI |
+|---|---|---|---|
+| `scalar` | `u64` | header | kotlin |
+| `bool` | `bool` | header | kotlin |
+| `unit` | `()` | **panic** | **panic** |
+| `string` | `String` | header | kotlin |
+| `str_ref` | `&str` | rejected | kotlin |
+| `record` | `Rec` | header | kotlin |
+| `handle` | `Handle` | header | kotlin |
+| `sum` | `Sum` | header | kotlin |
+| `unit_enum` | `Mode` | header | kotlin |
+| `shared_ref` | `&Rec` | rejected | kotlin |
+| `exclusive_ref` | `&mut Rec` | rejected | kotlin |
+| `handle_ref` | `&Handle` | header | kotlin |
+| `out_param` | `&mut MaybeUninit<u64>` | rejected | rejected |
+| `opt_scalar` | `Option<u64>` | header | kotlin |
+| `vec_scalar` | `Vec<u64>` | **bad rust** | rejected |
+| `slice_scalar` | `&[u64]` | header | rejected |
+| `slice_mut_scalar` | `&mut [u64]` | rejected | rejected |
+| `array_scalar` | `[u8; 4]` | rejected | rejected |
+| `boxed_scalar` | `Box<u64>` | rejected | rejected |
+| `cow_str` | `Cow<'static, str>` | rejected | kotlin |
+| `opt_record` | `Option<Rec>` | header | kotlin |
+| `opt_handle` | `Option<Handle>` | header | kotlin |
+| `opt_ref` | `Option<&Handle>` | header | kotlin |
+| `vec_record` | `Vec<Rec>` | **bad rust** | kotlin |
+| `vec_handle` | `Vec<Handle>` | **bad rust** | rejected |
+| `vec_ref` | `Vec<&Handle>` | **bad rust** | rejected |
+| `vec_sum` | `Vec<Sum>` | **bad rust** | rejected |
+| `opt_sum` | `Option<Sum>` | header | rejected |
+| `array_record` | `[Rec; 2]` | rejected | rejected |
+| `opt_vec` | `Option<Vec<u64>>` | **bad rust** | rejected |
+| `vec_opt` | `Vec<Option<u64>>` | **panic** | **bad kotlin** |
+| `result_scalar` | `Result<u64, ZError>` | **panic** | kotlin |
+| `result_handle` | `Result<Handle, ZError>` | **panic** | kotlin |
+| `result_sum_err` | `Result<u64, Sum>` | **panic** | kotlin |
+| `callback` | `impl Fn(u64) + Send + Sync + 'static` | — | — |
+| `callback_handle` | `impl Fn(Handle) + Send + Sync + 'static` | — | — |
+
+<details><summary>What the generators said</summary>
+
+- `unit` / C: Cbindgen: callback argument `()` has no C ABI — it resolves to a marker converter and is not one of the shapes lowered structurally (`Option<T>`, `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback arguments instead.
+- `unit` / Kotlin/JNI: jnigen unfold: leaf has unsupported wire `()`
+- `str_ref` / C: 3 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& str) + Send + Sync + 'static` — error: unresolved prebindgen output type `& str` — error: unresolved prebindgen output type `str`
+- `shared_ref` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& Rec) + Send + Sync + 'static` — error: unresolved prebindgen output type `& Rec`
+- `exclusive_ref` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& mut Rec) + Send + Sync + 'static` — error: unresolved prebindgen output type `& mut Rec`
+- `out_param` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& mut MaybeUninit < u64 >) + Send + Sync + 'static` — error: unresolved prebindgen output type `& mut MaybeUninit < u64 >`
+- `out_param` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& mut MaybeUninit < u64 >) + Send + Sync + 'static` — error: unresolved prebindgen output type `& mut MaybeUninit < u64 >`
+- `vec_scalar` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Vec < u64 >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Vec < u64 >`
+- `slice_scalar` / Kotlin/JNI: 3 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& [u64]) + Send + Sync + 'static` — error: unresolved prebindgen output type `& [u64]` — error: unresolved prebindgen output type `[u64]`
+- `slice_mut_scalar` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& mut [u64]) + Send + Sync + 'static` — error: unresolved prebindgen output type `& mut [u64]`
+- `slice_mut_scalar` / Kotlin/JNI: 3 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (& mut [u64]) + Send + Sync + 'static` — error: unresolved prebindgen output type `& mut [u64]` — error: unresolved prebindgen output type `[u64]`
+- `array_scalar` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn ([u8 ; 4]) + Send + Sync + 'static` — error: unresolved prebindgen output type `[u8 ; 4]`
+- `array_scalar` / Kotlin/JNI: 1 Kotlin validation error(s): — error [invalid-identifier] in `io.prebindgen.matrix.array_scalar__cbarg__jni`: fun interface name `[u8;4]Callback` is not a valid Kotlin identifier
+- `boxed_scalar` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Box < u64 >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Box < u64 >`
+- `boxed_scalar` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Box < u64 >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Box < u64 >`
+- `cow_str` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Cow < 'static , str >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Cow < 'static , str >`
+- `vec_handle` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Vec < Handle >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Vec < Handle >`
+- `vec_ref` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Vec < & Handle >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Vec < & Handle >`
+- `vec_sum` / Kotlin/JNI: 3 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Vec < Sum >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Vec < Sum >` — error: unresolved prebindgen output type `Sum`
+- `opt_sum` / Kotlin/JNI: 3 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Option < Sum >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Option < Sum >` — error: unresolved prebindgen output type…
+- `array_record` / C: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn ([Rec ; 2]) + Send + Sync + 'static` — error: unresolved prebindgen output type `[Rec ; 2]`
+- `array_record` / Kotlin/JNI: 2 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn ([Rec ; 2]) + Send + Sync + 'static` — error: unresolved prebindgen output type `[Rec ; 2]`
+- `opt_vec` / Kotlin/JNI: 3 required type(s) could not be resolved: — error: unresolved prebindgen input type `impl Fn (Option < Vec < u64 > >) + Send + Sync + 'static` — error: unresolved prebindgen output type `Option < Vec < u64 > >` — error: unresolved prebin…
+- `vec_opt` / C: Cbindgen: callback argument `Vec < Option < u64 > >` has no C ABI — it resolves to a marker converter and is not one of the shapes lowered structurally (`Option<T>`, `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback argum…
+- `result_scalar` / C: Cbindgen: callback argument `Result < u64 , ZError >` has no C ABI — it resolves to a marker converter and is not one of the shapes lowered structurally (`Option<T>`, `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback argu…
+- `result_handle` / C: Cbindgen: callback argument `Result < Handle , ZError >` has no C ABI — it resolves to a marker converter and is not one of the shapes lowered structurally (`Option<T>`, `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback a…
+- `result_sum_err` / C: Cbindgen: callback argument `Result < u64 , Sum >` has no C ABI — it resolves to a marker converter and is not one of the shapes lowered structurally (`Option<T>`, `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback argumen…
+
+</details>
+
 ## Calls
 
 Several values crossing together. Aliasing is a property of a **call** — two parameters can name the same resource — so it cannot be stated about either value on its own, and both generators emit a preflight under a rule about the whole parameter set.
@@ -431,8 +504,8 @@ What a declared type can be declared **as**, and the positions that exercise eac
 
 | Declared as | Exercised by |
 |---|---|
-| opaque handle | 36 cells, e.g. `handle` (parameter) |
-| value struct | 54 cells, e.g. `scalar` (struct field) |
-| enum with payloads | 48 cells, e.g. `scalar` (enum payload) |
-| fieldless enum | 4 cells, e.g. `unit_enum` (parameter) |
+| opaque handle | 45 cells, e.g. `handle` (parameter) |
+| value struct | 60 cells, e.g. `scalar` (struct field) |
+| enum with payloads | 52 cells, e.g. `scalar` (enum payload) |
+| fieldless enum | 5 cells, e.g. `unit_enum` (parameter) |
 

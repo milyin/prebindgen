@@ -317,6 +317,16 @@ pub enum Position {
     Field,
     /// The payload of one alternative of an enum that crosses whole.
     Payload,
+    /// An argument of a **callback** the binding delivers to, which is the
+    /// other direction: the generated code encodes the value and hands it to a
+    /// C closure or a Kotlin `run`, so the encoder, the wire and the
+    /// declaration that names it are all different code from the four above.
+    ///
+    /// #428 came through the gap this closes — the same composite `Vec`/`&[T]`
+    /// defect the matrix found in RETURN position (#413), lowered structurally
+    /// one way and left to a marker the other, invisible here for as long as
+    /// the position was.
+    Callback,
 }
 
 impl Position {
@@ -325,6 +335,7 @@ impl Position {
         Position::Return,
         Position::Field,
         Position::Payload,
+        Position::Callback,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -333,6 +344,7 @@ impl Position {
             Position::Return => "return",
             Position::Field => "struct field",
             Position::Payload => "enum payload",
+            Position::Callback => "callback argument",
         }
     }
 
@@ -344,6 +356,7 @@ impl Position {
             Position::Return => "ret",
             Position::Field => "field",
             Position::Payload => "payload",
+            Position::Callback => "cbarg",
         }
     }
 }

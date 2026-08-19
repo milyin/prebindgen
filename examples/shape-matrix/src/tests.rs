@@ -193,12 +193,33 @@ fn not_applicable_only_in_declarations() {
         for position in [Position::Param, Position::Return] {
             assert!(
                 not_applicable(shape, position).is_none(),
-                "shape `{}` is excused from the `{}` position; only field and payload \
-                 placements may be",
+                "shape `{}` is excused from the `{}` position; only a placement that \
+                 must be written as Rust — a declaration's field or payload, or the \
+                 argument of an `impl Fn` — may be",
                 shape.id,
                 position.as_str()
             );
         }
+    }
+}
+
+/// A callback argument is excused for exactly one reason, and the excuse is
+/// about **Rust**, not about the generators.
+///
+/// `impl Fn(impl Fn(..))` does not parse, so a callback shape has no cell in
+/// that position. Every other shape does — an excuse that grew to cover a shape
+/// a generator merely refuses would turn a rejection into a blank.
+#[test]
+fn a_callback_argument_is_excused_only_for_impl_trait() {
+    for shape in SHAPES {
+        let excused = not_applicable(shape, Position::Callback).is_some();
+        assert_eq!(
+            excused,
+            shape.spelling.contains("impl Fn"),
+            "shape `{}` is excused from the callback-argument position on the wrong \
+             grounds — only a nested `impl Trait` is not writable there",
+            shape.id,
+        );
     }
 }
 

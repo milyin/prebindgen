@@ -134,6 +134,13 @@ impl Target {
 /// and `impl Trait` is not a field type in any case. Everything else is asked
 /// of the generator rather than pre-judged here.
 pub fn not_applicable(shape: &Shape, position: Position) -> Option<&'static str> {
+    // A callback cannot take a callback: `impl Fn(impl Fn(..))` is not Rust.
+    if matches!(position, Position::Callback) {
+        return shape
+            .spelling
+            .contains("impl Fn")
+            .then_some("`impl Trait` is not an argument of an `impl Fn`");
+    }
     let in_declaration = matches!(position, Position::Field | Position::Payload);
     if !in_declaration {
         return None;
@@ -205,8 +212,27 @@ pub fn fixture_source(shape: &Shape, position: Position) -> String {
                 "pub fn {PROBE_FN}() -> {PROBE_TY} {{ unimplemented!() }}"
             ));
         }
+        Position::Callback => {
+            // The value crosses OUT, to a closure the caller supplied. The
+            // borrow keeps its elided lifetime rather than being anchored the
+            // way a return is: `impl Fn(&T)` is higher-ranked and legal, and it
+            // is what a real binding writes.
+            let sig = callback_signature(shape);
+            items.push(format!("pub fn {PROBE_FN}(cb: {sig}) {{ let _ = cb; }}"));
+        }
     }
     items.join("\n")
+}
+
+/// The `impl Fn(..)` a callback-position fixture takes, and the type both
+/// adapters are handed to declare it.
+///
+/// One spelling, used by the fixture and by the declaration, because a callback
+/// is declared BY its signature — the C builder keys its closure struct on the
+/// whole `impl Fn(..)` type — and two spellings of it would declare a callback
+/// the fixture does not have.
+pub fn callback_signature(shape: &Shape) -> String {
+    format!("impl Fn({}) + Send + Sync + 'static", shape.spelling)
 }
 
 /// The fixture for a call: one function taking every parameter of the call
@@ -360,7 +386,7 @@ pub fn declarations(shape: &Shape, position: Position) -> Vec<Decl> {
     let wrapper = match position {
         Position::Field => Some(ClassKind::Data),
         Position::Payload => Some(ClassKind::Sealed),
-        Position::Param | Position::Return => None,
+        Position::Param | Position::Return | Position::Callback => None,
     };
     if let Some(class) = wrapper {
         decls.push(Decl {
@@ -449,6 +475,7 @@ pub fn run(shape: &Shape, position: Position, target: Target, cell: &str) -> Out
         &declarations(shape, position),
         target,
         cell,
+        callback_of(shape, position).as_deref(),
     )
 }
 
@@ -485,7 +512,13 @@ pub fn run_policy(
             decl.class = class;
         }
     }
-    generate(&fixture_source(shape, position), &decls, target, cell)
+    generate(
+        &fixture_source(shape, position),
+        &decls,
+        target,
+        cell,
+        callback_of(shape, position).as_deref(),
+    )
 }
 
 /// Run one call shape. Same driver, different fixture: a call is a second axis
@@ -496,12 +529,22 @@ pub fn run_call(call: &Call, target: Target, cell: &str) -> Outcome {
         &call_declarations(call),
         target,
         cell,
+        None,
     )
 }
 
-fn generate(source: &str, decls: &[Decl], target: Target, cell: &str) -> Outcome {
+fn generate(
+    source: &str,
+    decls: &[Decl],
+    target: Target,
+    cell: &str,
+    callback: Option<&str>,
+) -> Outcome {
     let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| match target {
-        Target::C => run_c(source, decls).map(|rust| (rust, Vec::new())),
+        Target::C => run_c(source, decls, callback).map(|rust| (rust, Vec::new())),
+        // The JNI adapter needs no declaration for a callback: a `fun!` whose
+        // parameter is an `impl Fn(..)` is enough, and the plan for the argument
+        // comes from the signature. Only C keys a closure struct on the type.
         Target::Jni => run_jni(source, decls, cell),
     }));
 
@@ -626,7 +669,12 @@ pub fn to_c(cbindgen: prebindgen_c::CbindgenBuilder, decl: &Decl) -> prebindgen_
     }
 }
 
-fn run_c(source: &str, decls: &[Decl]) -> Result<String, String> {
+/// The callback signature a cell declares, if its position has one.
+fn callback_of(shape: &Shape, position: Position) -> Option<String> {
+    matches!(position, Position::Callback).then(|| callback_signature(shape))
+}
+
+fn run_c(source: &str, decls: &[Decl], callback: Option<&str>) -> Result<String, String> {
     let mut cbindgen = Cbindgen::builder()
         .items(items(source))
         .source_module(syn::parse_str(SOURCE_CRATE).expect("crate name is a path"))
@@ -639,6 +687,14 @@ fn run_c(source: &str, decls: &[Decl]) -> Result<String, String> {
         .panic();
     for decl in decls {
         cbindgen = to_c(cbindgen, decl);
+    }
+    if let Some(sig) = callback {
+        // The C adapter keys a closure struct on the whole `impl Fn(..)` type,
+        // so the declaration IS the signature the fixture wrote — the same
+        // string, not a second spelling of it.
+        cbindgen = cbindgen
+            .callback(syn::parse_str(sig).expect("the fixture's own callback signature"))
+            .base_name("probe_cb");
     }
     let generation = cbindgen.build().map_err(|e| e.to_string())?;
 
