@@ -1330,6 +1330,22 @@ fn synth_input_field_tree(
     root: &TypeKey,
     stack: &mut Vec<TypeKey>,
 ) -> Result<OutNode, FlatInputError> {
+    // The lowering recovers this node's struct from `ty` rather than carrying
+    // it, so the two readings of "which struct is this" must not drift: the
+    // classification `type_kind` answered for the field must name the struct
+    // `unwrapped` finds in the same type. Checked here, where both are in hand,
+    // because the corpus covers a wrapped root (`Box<Payload>`) but not yet a
+    // wrapped nested field.
+    debug_assert_eq!(
+        match ty.unwrapped().kind() {
+            flat::TypeKind::Named { id, .. } => id.ident(),
+            _ => None,
+        }
+        .as_ref(),
+        Some(&st.name),
+        "flatten tree: `{}` classifies as a struct the type does not name",
+        ty.key(),
+    );
     let node_key = TypeKey::from_ident(&st.name);
     if stack.contains(&node_key) {
         return Err(flat_error(
