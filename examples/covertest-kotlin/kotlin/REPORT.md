@@ -128,6 +128,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Stamp` decomposed → [secs, nanos] (Callback delivery)
 - `tagged_new` — `fun taggedNew(which: Int, onError: JniErrorHandler<Tagged?>): Tagged?`
 - `tagged_rank` — `fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int`
+- `ticks_emit` — `fun ticksEmit(f: TicksCallback, onError: JniErrorHandler<Unit>)`
 - `unsigned_data_maybe` — `fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong?`
 - `unsigned_emit` — `fun unsignedEmit(value: ULong, f: u64Callback, onError: JniErrorHandler<Unit>)`
 - `unsigned_optional` — `fun unsignedOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
@@ -264,6 +265,7 @@ Base package: `io.prebindgen.covertest`
 - `convert!(Label)`: input `#[prebindgen]` fn `label_in`, output `#[prebindgen]` fn `label_out`
 - `convert!(Millis)`: input `#[prebindgen]` fn `millis_from_long`, output `#[prebindgen]` fn `millis_value`
 - `convert!(Percent)`: input `TryInto` ⇄ `i32`, output `#[prebindgen]` fn `percent_out`
+- `convert!(Ticks)`: input `#[prebindgen]` fn `ticks_from_raw`, output `#[prebindgen]` fn `ticks_value`
 
 ## rust-side-only types
 

@@ -424,6 +424,45 @@ pub fn layered_of(which: i32) -> Layered {
     }
 }
 
+/// A `convert!`-declared newtype whose representation is a `u64`, so its Kotlin
+/// view is a `ULong` and its wire a `Long` — a leaf with a real conversion.
+///
+/// It exists because the value below needs one: a callback argument's layers
+/// can only be observed when the LEAF converts, and the obvious leaf (`u64`
+/// itself) already names a callback interface here — two signatures whose
+/// layers differ derive one name (#440), which is the same "look past the
+/// layers" habit one level out.
+#[prebindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ticks(pub u64);
+
+/// `Ticks` from its representation.
+#[prebindgen]
+pub fn ticks_from_raw(v: u64) -> Ticks {
+    Ticks(v)
+}
+
+/// `Ticks` to its representation.
+#[prebindgen]
+pub fn ticks_value(t: &Ticks) -> u64 {
+    t.0
+}
+
+/// A value with LAYERS as a **callback argument** — the direction #429's fix
+/// did not reach.
+///
+/// A sum payload and a callback argument are converted by different emitters,
+/// and each peeled the layers between a wire value and its leaf its own way:
+/// #432 taught the first, and the second went on applying the leaf's conversion
+/// to the whole value until #438. Fires with a list mixing present and absent
+/// elements, then with an empty one, so the per-element conversion and the
+/// empty case both cross.
+#[prebindgen]
+pub fn ticks_emit(f: impl Fn(Vec<Option<Ticks>>) + Send + Sync + 'static) {
+    f(vec![Some(Ticks(4)), None, Some(Ticks(6))]);
+    f(vec![]);
+}
+
 /// A handle-carrying sum as a **callback argument** — the same `Lookup` that
 /// [`lookup_of`] returns, arriving through `impl Fn` instead. Alternatives are
 /// delivered in `count` order starting at `-1`, so `n >= 3` covers all three:

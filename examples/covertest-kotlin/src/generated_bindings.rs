@@ -6229,6 +6229,124 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Storage_Send_Sync_static_2f26edcf<'env, 
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JObject_to_impl_Fn_Vec_Option_Ticks_Send_Sync_static_26c17cf0<
+    'env,
+    'v,
+>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<
+    impl Fn(Vec<Option<perftest_flat::Ticks>>) + Send + Sync + 'static,
+    __JniErr,
+> {
+    Ok({
+        use std::sync::Arc;
+        let java_vm = Arc::new(
+            env
+                .get_java_vm()
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Unable to retrieve JVM: {}", e)))?,
+        );
+        let callback_global_ref = env
+            .new_global_ref(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to global-ref callback: {}", e)))?;
+        let __invoke_class = env
+            .get_object_class(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!(
+                    "Unable to get callback class for {}: {}",
+                    "Fn(Vec < Option < Ticks > >)", e
+                ),
+            ))?;
+        let __invoke_id = env
+            .get_method_id(&__invoke_class, "run", "(Ljava/util/List;)V")
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!(
+                    "Unable to resolve run for {}: {}", "Fn(Vec < Option < Ticks > >)", e
+                ),
+            ))?;
+        Box::new(move |__cb_arg0: Vec<Option<perftest_flat::Ticks>>| {
+            let _ = (|| -> ::core::result::Result<(), __JniErr> {
+                let mut env = java_vm
+                    .attach_current_thread_as_daemon()
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "Attach thread for {}: {}", "Fn(Vec < Option < Ticks > >)", e
+                        ),
+                    ))?;
+                env.push_local_frame(16)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "push local frame for {}: {}",
+                            "Fn(Vec < Option < Ticks > >)", e
+                        ),
+                    ))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    let __cb0_enc = Vec_Option_Ticks_to_JObject_2f4b03da(
+                        &mut env,
+                        __cb_arg0,
+                    )?;
+                    let __cb0_obj: jni::objects::JObject = __cb0_enc;
+                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                        env.call_method_unchecked(
+                            &callback_global_ref,
+                            __invoke_id,
+                            jni::signature::ReturnType::Primitive(
+                                jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                jni::sys::jvalue {
+                                    l: __cb0_obj.as_raw(),
+                                },
+                            ],
+                        )
+                    }
+                        .map(|_| ())
+                        .map_err(|e| {
+                            let _ = env.exception_describe();
+                            <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(e.to_string())
+                        });
+                    __call_res?;
+                    Ok(())
+                })();
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
+                Ok(())
+            })()
+                .map_err(|e| {
+                    tracing::error!(
+                        "{} callback error: {e}", "Fn(Vec < Option < Ticks > >)"
+                    )
+                });
+        })
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_u64_Send_Sync_static_c7830b57<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -9346,6 +9464,45 @@ pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Option_Ticks_to_JObject_95efad57<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<perftest_flat::Ticks>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let v: Option<perftest_flat::Ticks> = v;
+        {
+            match v {
+                Some(value) => {
+                    let __raw: jni::sys::jlong = {
+                        let __inner_s0 = Ticks_to_u64_78fe2120(env, value)
+                            .map_err(|__e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(__e.to_string()))?;
+                        u64_to_jlong_4384a5d6(env, __inner_s0)?
+                    };
+                    ::prebindgen_jni_runtime::box_jlong(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Option box: {}", e)))?
+                }
+                None => jni::objects::JObject::null(),
+            }
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Vec_Option_u64_to_JObject_006312b6<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Vec<Option<u64>>>,
@@ -10054,6 +10211,25 @@ pub(crate) unsafe fn Tagged_to_JObject_641b984c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn Ticks_to_u64_78fe2120<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Ticks,
+) -> ::core::result::Result<u64, __JniErr> {
+    Ok(perftest_flat::ticks_value(&v))
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Unsigned_to_JObject_7e3cc618<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Unsigned,
@@ -10161,6 +10337,46 @@ pub(crate) unsafe fn Vec_Label_to_JObject_3fdf860d<'a>(
                     >>::from(__e.to_string()))?;
                 String_to_JString_c7f3ca43(env, __inner_s0)?
             };
+            let __elem_obj: jni::objects::JObject = __elem_wire.into();
+            __list
+                .add(env, &__elem_obj)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Vec<_>: list-add: {}", e)))?;
+        }
+        __list_obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    dead_code,
+    clippy::useless_conversion,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Vec_Option_Ticks_to_JObject_2f4b03da<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Vec<Option<perftest_flat::Ticks>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let v: Vec<Option<perftest_flat::Ticks>> = v;
+        let __list_obj = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
+        let __list = jni::objects::JList::from_env(env, &__list_obj)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        for __elem in v.into_iter() {
+            let __elem_wire = Option_Ticks_to_JObject_95efad57(env, __elem)?;
             let __elem_obj: jni::objects::JObject = __elem_wire.into();
             __list
                 .add(env, &__elem_obj)
@@ -24673,6 +24889,51 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_taggedRank<'a>(
                 &__e.to_string(),
             );
             0 as jni::sys::jint
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_ticksEmit<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    f: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let f = match JObject_to_impl_Fn_Vec_Option_Ticks_Send_Sync_static_26c17cf0(
+        &mut env,
+        &f,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let __out = perftest_flat::ticks_emit(f);
+    match unit_to_unit_9ecccf8e(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            ()
         }
     }
 }

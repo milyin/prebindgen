@@ -767,3 +767,57 @@ fn a_wrapped_borrow_callback_arg_declines() {
         "the refusal names the type: {err}"
     );
 }
+
+/// A callback argument's layers are peeled by the same walk a sum payload's
+/// are.
+///
+/// #429 was the sum builder applying the leaf's conversion to the whole wire
+/// value; #432 fixed it by walking the layers. The `asRaw` proxy — the other
+/// place a value is converted for delivery — kept its own one-shot wrap, so the
+/// same defect survived in the callback direction until the shape matrix gained
+/// that position (#438).
+///
+/// Both callers run `carry_layers` now, each with its own receiver, which is
+/// why this test and `a_payload_carries_its_option_and_collection_layers`
+/// assert the same expression from two directions.
+#[test]
+fn a_callback_argument_carries_its_layers() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn probe(cb: impl Fn(Vec<Option<u64>>) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().fun(prebindgen_registry::fun!(probe)));
+
+    let dir = unique_test_dir("jnigen_cb_arg_layers");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let kotlin = jni
+        .build_with(registry)
+        .expect("resolve")
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // The typed view is a list of optional `ULong`s and the raw twin a list of
+    // boxed `Long`s, so the conversion runs per element — not on the list.
+    assert!(
+        kotlin.contains("public fun run(vec: List<ULong?>)"),
+        "the typed view keeps its layers:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("vec.map { it?.toULong() }"),
+        "the proxy converts element by element:\n{kotlin}"
+    );
+}

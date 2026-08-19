@@ -677,6 +677,23 @@ internal fun StorageCallback.asRaw(): StorageCallbackRaw =
         }
     }
 
+public fun interface TicksCallback {
+    public fun run(vec: List<ULong?>)
+}
+
+internal fun interface TicksCallbackRaw {
+    public fun run(vec: List<Long?>)
+}
+
+@JvmSynthetic
+internal fun TicksCallback.asRaw(): TicksCallbackRaw =
+    TicksCallbackRaw {
+        vec ->
+        run(
+            vec.map { it?.toULong() }
+        )
+    }
+
 public fun interface u64Callback {
     public fun run(u64: ULong)
 }
@@ -1598,6 +1615,9 @@ internal object CovNative {
 
     @JvmSynthetic
     external fun taggedRank(tId: Long, tMarker: Marker, errorSink: Any): Int
+
+    @JvmSynthetic
+    external fun ticksEmit(f: Any, errorSink: Any)
 
     @JvmSynthetic
     external fun unsignedDataMaybe(

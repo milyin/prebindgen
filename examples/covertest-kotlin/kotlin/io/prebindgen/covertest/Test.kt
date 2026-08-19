@@ -66,6 +66,7 @@ import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.spanHolderNew
+import io.prebindgen.covertest.model.ticksEmit
 import io.prebindgen.covertest.model.vaultHolderNew
 import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
@@ -996,6 +997,27 @@ fun main() {
             check(m.isClosed())
             total
         } == 12L)
+    }
+
+    // The same layers as a CALLBACK ARGUMENT — the direction #429's fix did not
+    // reach.
+    //
+    // A sum payload and a callback argument are converted by different
+    // emitters, and each peeled the layers its own way: #432 taught the first,
+    // and the `asRaw` proxy went on applying the leaf's conversion to the whole
+    // value until #438. Both run one walk now, and this is the half a compiler
+    // cannot check — that the list arrives element by element, absences and all,
+    // rather than as one converted thing.
+    section("a callback argument carries its Option and collection layers") {
+        val seen = mutableListOf<List<ULong?>>()
+        ticksEmit({ vec -> seen.add(vec) }, boom)
+
+        check(seen.size == 2)
+        // A mixed list: each element converted, the absence preserved in place
+        // rather than collapsing the list or the value.
+        check(seen[0] == listOf(4uL, null, 6uL))
+        // …and an empty one is empty, not null.
+        check(seen[1].isEmpty())
     }
 
     // The sum whose payloads have LAYERS. The class that reassembles a variant
