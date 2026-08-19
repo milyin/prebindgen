@@ -513,7 +513,12 @@ impl CbindgenBuilder {
             None => (&f.ret, None),
         };
         let err_ty: Option<syn::Type> = err_reading.map(|t| spelled(t, emit));
-        let has_fallible_output = self.output_is_fallible(value_ty, registry);
+        // One plan for the returned value, read by everything below: its
+        // fallibility picks the error wiring, its shape partitions the C return
+        // and out-params, and its encoder fills them. These are three facts
+        // about one crossing, so they are one resolution (#444 §5).
+        let plan = self.c_value_plan(value_ty, registry);
+        let has_fallible_output = plan.fallible;
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -560,7 +565,7 @@ impl CbindgenBuilder {
         //   * Result + a free pointer niche  → NULL marks `Err` (value in-band);
         //   * Result without a free niche     → `bool` status, value to out-params;
         //   * no Result                       → field 0 is the C return, rest out.
-        let shape = self.lower_shape(value_ty, registry);
+        let shape = &plan.shape;
         let result_slot = shape.niches.clone().carve().map(|(slot, _)| slot);
         let result_in_band = err_ty.is_some() && result_slot.is_some();
         let field0_is_return = result_in_band || err_ty.is_none();
@@ -640,8 +645,7 @@ impl CbindgenBuilder {
             // No `Result`: straight-line. `void` when there are no fields.
             (None, _) => {
                 if let Some(field0_wire) = field0_wire.as_ref() {
-                    let enc =
-                        self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
+                    let enc = plan.encode(&quote!(__v), &targets, &input_route);
                     quote!(
                         #(#decodes)*
                         let __v = #call;
@@ -660,8 +664,7 @@ impl CbindgenBuilder {
                     .as_ref()
                     .expect("in-band result has a niche")
                     .value;
-                let enc =
-                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
+                let enc = plan.encode(&quote!(__v), &targets, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -675,8 +678,7 @@ impl CbindgenBuilder {
             }
             // `Result` without a free niche: `bool` status, value to out-params.
             (Some((_, e_conv, _)), false) => {
-                let enc =
-                    self.encode_value(value_ty, quote!(__v), &targets, registry, &input_route);
+                let enc = plan.encode(&quote!(__v), &targets, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -701,31 +703,6 @@ impl CbindgenBuilder {
                 #body
             }
         }
-    }
-
-    /// Lower how a *present / ok* value of `ty` is carried over the C ABI: an
-    /// ordered list of wire components plus the representation niches still
-    /// available for enclosing `Option`/`Result` layers. Mirrors the
-    /// niche-stacking model in `core::niches`.
-    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> ValueShape {
-        self.c_value_plan(ty, registry).shape
-    }
-
-    /// Emit the statements that write a native value `val` of type `ty` into the
-    /// `targets` lvalues (one per field of `lower_shape(ty)`, in order).
-    pub(super) fn encode_value(
-        &self,
-        ty: &TypeRef,
-        val: TokenStream,
-        targets: &[TokenStream],
-        registry: &impl Conversions<()>,
-        route: &ErrRoute,
-    ) -> TokenStream {
-        self.c_value_plan(ty, registry).encode(&val, targets, route)
-    }
-
-    fn output_is_fallible(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
-        self.c_value_plan(ty, registry).fallible
     }
 
     /// How one parameter *uses* the resource it names — the axis the alias rule
