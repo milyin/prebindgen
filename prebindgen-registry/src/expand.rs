@@ -835,7 +835,7 @@ pub fn emit_fold(
 }
 
 /// [`emit_fold`] over a construction tree that is not a plan's own — the tree
-/// [`select`](crate::expand::select) produced for an adapter's converter
+/// [`select`] produced for an adapter's converter
 /// choices.
 ///
 /// A selected tree owes the same contract as the tree it came from: the
