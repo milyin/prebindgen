@@ -157,6 +157,16 @@ fn main() {
                 .input(fun!(millis_from_long))
                 .output(fun!(millis_value)),
         )
+        // `Ticks`: a `u64` representation, so its Kotlin view is `ULong` and its
+        // wire a `Long` — a leaf with a real conversion, which is what
+        // `ticks_emit` needs to show that a callback argument's LAYERS are
+        // peeled (#438). `u64` itself would have been the obvious leaf and
+        // collides with the existing `impl Fn(u64)` interface name (#440).
+        .convert(
+            convert!(Ticks)
+                .input(fun!(ticks_from_raw))
+                .output(fun!(ticks_value)),
+        )
         // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
         // crate — the repr (`i32`) is stated, the impls do the work.
         .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
@@ -575,6 +585,9 @@ fn main() {
                 .fun(fun!(lookup_each))
                 // …and #429's layered payloads, one call per case.
                 .fun(fun!(layered_of))
+                // #438: the same layers as a CALLBACK ARGUMENT, which is a
+                // different emitter and kept its own one-shot wrap.
+                .fun(fun!(ticks_emit))
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
                 .fun(fun!(verdict_new))

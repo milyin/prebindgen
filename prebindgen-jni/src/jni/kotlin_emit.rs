@@ -1684,7 +1684,6 @@ impl Declarations {
     /// The lambda parameter is implicit at the outermost run and named below it,
     /// because a nested `it` would shadow the one above.
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn carry_layers(
         &self,
         registry: &impl Conversions<KotlinMeta>,

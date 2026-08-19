@@ -14,6 +14,7 @@ import io.prebindgen.covertest.MaybeHolder
 import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
+import io.prebindgen.covertest.TicksCallback
 import io.prebindgen.covertest.WrappedFields
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
@@ -2061,6 +2062,23 @@ public fun layeredOf(which: Int, onError: JniErrorHandler<Layered?>): Layered? {
     val __ret = CovNative.layeredOf(which, __LayeredBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as Layered
+}
+
+/**
+ * A value with LAYERS as a **callback argument** — the direction #429's fix
+ * did not reach.
+ *
+ * A sum payload and a callback argument are converted by different emitters,
+ * and each peeled the layers between a wire value and its leaf its own way:
+ * #432 taught the first, and the second went on applying the leaf's conversion
+ * to the whole value until #438. Fires with a list mixing present and absent
+ * elements, then with an empty one, so the per-element conversion and the
+ * empty case both cross.
+ */
+public fun ticksEmit(f: TicksCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.ticksEmit(f.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
 }
 
 /** Build a [`Verdict`] whose outcome comes from [`lookup_of`]. */
