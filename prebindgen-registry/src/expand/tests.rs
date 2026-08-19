@@ -697,6 +697,12 @@ fn recursive_input_cycle_errors() {
     )
     .unwrap_err();
     assert!(matches!(err, ExpandError::InputCycle { .. }), "got {err:?}");
+    // Mutual recursion terminates with a typed error that says WHERE: the
+    // argument chain `a → b → a`, not just the function it started from.
+    assert!(
+        err.to_string().contains("expand at `a.b.a`:"),
+        "the cycle names its argument chain: {err}"
+    );
 }
 
 /// C5 validation map: a variant ctor ident that names no `#[prebindgen]`

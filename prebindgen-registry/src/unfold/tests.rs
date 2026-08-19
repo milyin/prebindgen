@@ -728,6 +728,12 @@ fn nested_cycle_errors() {
     )
     .unwrap_err();
     assert!(matches!(err, UnfoldError::Cycle { .. }));
+    // The message says WHERE: `ZB` is reached through `a_to_b`, and it is the
+    // deconstructor spliced there that closes the loop.
+    assert_eq!(
+        err.to_string(),
+        "output expansion at `value.a_to_b()`: nested deconstructors form a cycle through `ZA`"
+    );
 }
 
 #[test]

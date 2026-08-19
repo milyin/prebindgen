@@ -476,13 +476,21 @@ fn build_plan<M>(
                     for (pname, pty) in &sig.params {
                         let name = ident(&format!("{}_{}", prefix, pname));
                         let arg = build_arg(
-                            exp, registry, ed, pty, name, /*dispatched=*/ false, &mut next,
+                            exp,
+                            registry,
+                            ed,
+                            pty,
+                            name,
+                            &format!("{}.{}", param, pname),
+                            /*dispatched=*/ false,
+                            &mut next,
                             visited,
                         )?;
                         if !matches!(arg.node.kind, TransformKind::Leaf(_)) {
                             return Err(ExpandError::UnsupportedOptional {
                                 func: ed.func.clone(),
                                 param: ed.param.clone(),
+                                at: format!("{}.{}", prefix, pname),
                                 reason: "nested-buildable constructor arguments cannot be optional",
                             });
                         }
@@ -499,7 +507,8 @@ fn build_plan<M>(
                 visited.insert(target.key());
                 let prefix = param.to_string();
                 let core = build_core(
-                    exp, registry, ed, target, variants, by_ref, &prefix, &mut next, visited,
+                    exp, registry, ed, target, variants, by_ref, &prefix, &prefix, &mut next,
+                    visited,
                 )?;
                 visited.remove(&target.key());
                 (InPresence::Selector, core)
@@ -526,7 +535,7 @@ fn build_plan<M>(
     visited.insert(target.key());
     let prefix = param.to_string();
     let tree = build_core(
-        exp, registry, ed, target, variants, by_ref, &prefix, &mut next, visited,
+        exp, registry, ed, target, variants, by_ref, &prefix, &prefix, &mut next, visited,
     )?;
     visited.remove(&target.key());
     Ok(FoldPlan {
@@ -592,7 +601,11 @@ fn next_slot(next: &mut usize) -> usize {
 ///
 /// `next` hands out wire slots — a node names the slot it uses and the
 /// signature is [collected](wire_leaves) from the finished tree. `prefix`
-/// disambiguates slot names across the tree.
+/// disambiguates slot names across the tree, and `at` is the chain of
+/// constructor parameter names a diagnostic reports the failing node by. The
+/// two differ: a single-argument constructor keeps its parent's slot prefix
+/// (the slot is named after the parameter), so `prefix` alone cannot say how
+/// deep a chain of them a failure sits at.
 #[allow(clippy::too_many_arguments)]
 fn build_core<M>(
     exp: &Expansions,
@@ -602,6 +615,7 @@ fn build_core<M>(
     variants: &[Variant],
     by_ref: bool,
     prefix: &str,
+    at: &str,
     next: &mut usize,
     visited: &mut HashSet<TypeKey>,
 ) -> Result<InNode, ExpandError> {
@@ -617,7 +631,15 @@ fn build_core<M>(
                 ident(&format!("{}_{}", prefix, pname))
             };
             args.push(build_arg(
-                exp, registry, ed, pty, name, false, next, visited,
+                exp,
+                registry,
+                ed,
+                pty,
+                name,
+                &format!("{at}.{pname}"),
+                false,
+                next,
+                visited,
             )?);
         }
         return Ok(ctor_node(target, func, sig.fallible, args));
@@ -636,7 +658,7 @@ fn build_core<M>(
                 let sig = ctor_signature(registry, func, &target.key())?;
                 let np = sig.params.len();
                 let mut args = Vec::new();
-                for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
+                for (pi, (pname, pty)) in sig.params.iter().enumerate() {
                     let name = if np == 1 {
                         ident(&format!("{}_{}", prefix, vi))
                     } else {
@@ -646,7 +668,15 @@ fn build_core<M>(
                     // `Option`-wrapped (selector presence). Recursive nesting
                     // under a combined arm is rejected by `build_arg`.
                     args.push(build_arg(
-                        exp, registry, ed, pty, name, true, next, visited,
+                        exp,
+                        registry,
+                        ed,
+                        pty,
+                        name,
+                        &format!("{at}.{pname}"),
+                        true,
+                        next,
+                        visited,
                     )?);
                 }
                 ctor_node(target, func, sig.fallible, args)
@@ -696,6 +726,7 @@ fn build_arg<M>(
     ed: &ExpandDecl,
     pty: &prebindgen_flat::flat::TypeRef,
     name: syn::Ident,
+    at: &str,
     dispatched: bool,
     next: &mut usize,
     visited: &mut HashSet<TypeKey>,
@@ -712,18 +743,21 @@ fn build_arg<M>(
         if dispatched {
             return Err(ExpandError::UnsupportedRecursive {
                 func: ed.func.clone(),
+                at: at.to_string(),
                 reason: "recursive input under a selector-dispatched constructor variant",
             });
         }
         if popt {
             return Err(ExpandError::UnsupportedRecursive {
                 func: ed.func.clone(),
+                at: at.to_string(),
                 reason: "recursive input on an Option<…> parameter",
             });
         }
         if !visited.insert(key.clone()) {
             return Err(ExpandError::InputCycle {
                 ty: key.to_string(),
+                at: at.to_string(),
             });
         }
         let variants = c.variants.clone();
@@ -735,6 +769,7 @@ fn build_arg<M>(
             &variants,
             pby_ref,
             &name.to_string(),
+            at,
             next,
             visited,
         )?;

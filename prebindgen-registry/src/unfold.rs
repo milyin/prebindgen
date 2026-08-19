@@ -1047,6 +1047,7 @@ fn process_decl<M>(
                     .map(|(_, e)| e.clone())
                     .ok_or_else(|| UnfoldError::Unsupported {
                         func: ed.func.clone(),
+                        at: node_path(&[]),
                         reason: "convert_error/deconstruct_error on a non-Result return",
                     })?
             }
@@ -1077,6 +1078,7 @@ fn process_decl<M>(
             if inner.optional_inner().is_some() {
                 return Err(UnfoldError::Unsupported {
                     func: ed.func.clone(),
+                    at: node_path(&[]),
                     reason: "Vec<Option<…>> returns",
                 });
             }
@@ -1397,6 +1399,7 @@ fn flatten<M>(
                 if seen_identity {
                     return Err(UnfoldError::MultipleIdentity {
                         target: source_key.to_string(),
+                        at: node_path(path_prefix),
                     });
                 }
                 seen_identity = true;
@@ -1449,6 +1452,7 @@ fn flatten<M>(
                 if consuming != accessor_consumes(registry, func) {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
+                        at: node_path(path_prefix),
                         reason: if consuming {
                             "declared as a CONSUMING value form (`.fields_self_into(..)`) but the \
                              accessor borrows its receiver — declare it with `.fields(..)`, or \
@@ -1482,6 +1486,7 @@ fn flatten<M>(
                 {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
+                        at: node_path(&root_path),
                         reason: "a value form nested under another one that is reached through \
                                  `Option` — conditional hoists do not nest",
                     });
@@ -1498,6 +1503,7 @@ fn flatten<M>(
                 if consuming && records.len() > 1 {
                     return Err(UnfoldError::Unsupported {
                         func: func.clone(),
+                        at: node_path(&root_path),
                         reason: "a consuming value form must be the only record of its \
                                  declaration — it moves the value, so `.field_self()` or \
                                  a sibling `.field()` would read a moved value",
@@ -1540,6 +1546,7 @@ fn flatten<M>(
                             Some(_) => {
                                 return Err(UnfoldError::Cycle {
                                     target: child_key.to_string(),
+                                    at: node_path(&root_path),
                                 });
                             }
                             None => None,
@@ -1684,6 +1691,7 @@ fn flatten<M>(
                     Some(_) => {
                         return Err(UnfoldError::Cycle {
                             target: child_key.to_string(),
+                            at: node_path(path_prefix),
                         });
                     }
                     None => None,
@@ -1738,6 +1746,7 @@ fn flatten<M>(
                         if seen_identity {
                             return Err(UnfoldError::MultipleIdentity {
                                 target: source_key.to_string(),
+                                at: node_path(path_prefix),
                             });
                         }
                         seen_identity = true;
@@ -1810,6 +1819,25 @@ fn build_tree<M>(
             children,
         },
     })
+}
+
+/// Where a node sits in a decomposition, for a diagnostic: the access chain
+/// from the returned value, `value` at the root. An accessor call reads `f()`
+/// and an `Option`-returning step keeps its `?`, so the reader sees the same
+/// reach the generated code takes.
+fn node_path(steps: &[PathStep]) -> String {
+    let mut out = String::from("value");
+    for step in steps {
+        out.push('.');
+        out.push_str(&step.ident().to_string());
+        if !step.is_field() {
+            out.push_str("()");
+        }
+        if step.is_optional() {
+            out.push('?');
+        }
+    }
+    out
 }
 
 /// Error if two leaves of one flattened deconstructor share a name. Author leaf
