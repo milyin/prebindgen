@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
     tree::{
-        wire_leaves, InChild, InChoice, InLeaf, InLink, InNode, InPresence, InProduct, InSlot,
-        IntoRust,
+        wire_leaves, InChild, InChoice, InLeaf, InLink, InNode, InPresence, InProduct, InRun,
+        InSlot, IntoRust,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -445,7 +445,6 @@ fn build_plan<M>(
                     let payload = InSlot {
                         slot: next_slot(&mut next),
                         name: param.clone(),
-                        ty: pty.optional(),
                     };
                     let arg = InChild {
                         link: InLink { by_ref: false },
@@ -455,7 +454,10 @@ fn build_plan<M>(
                         },
                     };
                     (
-                        InPresence::Payload(payload),
+                        InPresence::Payload {
+                            slot: payload,
+                            ty: pty.optional(),
+                        },
                         ctor_node(target, func, sig.fallible, vec![arg]),
                     )
                 } else {
@@ -464,11 +466,6 @@ fn build_plan<M>(
                     let flag = InSlot {
                         slot: next_slot(&mut next),
                         name: ident(&format!("{}_present", param)),
-                        // A presence flag no source wrote — placeless by
-                        // construction.
-                        ty: prebindgen_flat::flat::TypeRef::scalar(
-                            prebindgen_flat::flat::ScalarKind::Bool,
-                        ),
                     };
                     let prefix = param.to_string();
                     let mut args = Vec::new();
@@ -575,9 +572,9 @@ fn leaf_child(
     InChild {
         link: InLink { by_ref: false },
         node: InNode {
-            ty: ty.clone(),
+            ty,
             kind: TransformKind::Leaf(InLeaf::Slot {
-                slot: InSlot { slot, name, ty },
+                slot: InSlot { slot, name },
                 wrapped,
             }),
         },
@@ -647,8 +644,6 @@ fn build_core<M>(
     let selector = InSlot {
         slot: next_slot(next),
         name: ident(&format!("{}_sel", prefix)),
-        // The selector, likewise composed and placeless.
-        ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
     };
     let mut arms: Vec<InChild> = Vec::new();
     for (vi, v) in variants.iter().enumerate() {
@@ -1059,7 +1054,7 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
             // Presence rides the layer's own `Option` slot: unwrap it, bind the
             // payload, and the single-argument construction below reads that
             // binding.
-            InPresence::Payload(payload) => {
+            InPresence::Payload { slot: payload, .. } => {
                 let slot = &self.leaf_locals[payload.slot];
                 let bound = bound_local();
                 syn::parse_quote!(match #slot {
@@ -1077,11 +1072,11 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InSlot,
+        op: &InRun,
         _inner: &InNode,
         value: syn::Expr,
     ) -> Result<syn::Expr, Self::Error> {
-        let slot = &self.leaf_locals[op.slot];
+        let slot = &self.leaf_locals[op.slot.slot];
         let bound = bound_local();
         Ok(syn::parse_quote!(
             #slot

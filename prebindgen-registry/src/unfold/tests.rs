@@ -1975,12 +1975,11 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
     }
 }
 
-#[test]
-fn tree_lowers_through_the_shared_visitor() {
-    // `z_reply_sample -> Option<&ZSample>` whose ZSample splices ZKeyExpr
-    // (identity + string) and a nullable ZTimestamp. The tree is what the
-    // decomposition IS; the leaf list below is a derived view of it, so both
-    // readings of the same plan must agree on names, order and nullability.
+/// `z_reply_sample -> Option<&ZSample>` whose ZSample splices ZKeyExpr
+/// (identity + string) and a nullable ZTimestamp: an `Optional` layer over a
+/// product with a nested product under each of its two children. Shared by the
+/// traversal tests below.
+fn reply_sample_registry() -> Registry<()> {
     let mut reg: Registry<()> = reg_with(&[
         "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
         "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
@@ -2030,6 +2029,15 @@ fn tree_lowers_through_the_shared_visitor() {
         &acc_set_without("z_reply_sample"),
     )
     .expect("apply");
+    reg
+}
+
+#[test]
+fn tree_lowers_through_the_shared_visitor() {
+    // The tree is what the decomposition IS; the leaf list below is a derived
+    // view of it, so both readings of the same plan must agree on names, order
+    // and nullability.
+    let reg = reply_sample_registry();
 
     let plan = reg
         .unfold_plans
@@ -2065,5 +2073,132 @@ fn tree_lowers_through_the_shared_visitor() {
     assert_eq!(
         names,
         vec![("ke", false), ("ke__str", false), ("ts__ntp64", true)]
+    );
+}
+
+/// A stand-in adapter that has a **direct converter** for one type: it claims
+/// that subtree whole and never looks inside it. Records every node it was
+/// asked about, so a test can show what a claimed subtree costs — nothing.
+struct Direct {
+    /// Spelling of the type this adapter converts directly.
+    whole: &'static str,
+    /// Every node `descend` was asked about, in visit order.
+    asked: Vec<String>,
+}
+
+impl crate::transform::TransformLowerer<OutOfRust> for Direct {
+    type Value = String;
+    type Error = std::convert::Infallible;
+
+    fn descend(
+        &mut self,
+        node: &OutNode,
+    ) -> Result<crate::transform::Descend<String>, Self::Error> {
+        let ty = node.ty.spell().to_string();
+        self.asked.push(ty.clone());
+        Ok(if ty == self.whole {
+            crate::transform::Descend::Atomic(format!("<{ty}>"))
+        } else {
+            crate::transform::Descend::Recurse
+        })
+    }
+
+    fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<String, Self::Error> {
+        Ok(node.ty.spell().to_string())
+    }
+
+    fn product(
+        &mut self,
+        _node: &OutNode,
+        _op: &OutProduct,
+        children: crate::transform::Lowered<'_, OutOfRust, String>,
+    ) -> Result<String, Self::Error> {
+        let inner: Vec<String> = children.into_iter().map(|(_, v)| v).collect();
+        Ok(format!("({})", inner.join(", ")))
+    }
+
+    fn choice(
+        &mut self,
+        _node: &OutNode,
+        op: &std::convert::Infallible,
+        _variants: crate::transform::Lowered<'_, OutOfRust, String>,
+    ) -> Result<String, Self::Error> {
+        match *op {}
+    }
+
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("{value}?"))
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("[{value}]*"))
+    }
+}
+
+/// #444: an adapter with a direct converter claims a subtree before anything
+/// under it is visited, at a NESTED structural node — the `ZKeyExpr` product.
+/// Its children are neither lowered nor even offered, so they can contribute no
+/// slot, no converter dependency and no cleanup.
+#[test]
+fn a_direct_converter_ends_a_nested_subtree() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let mut direct = Direct {
+        whole: "ZKeyExpr",
+        asked: Vec::new(),
+    };
+    let rendered = plan.tree.lower(&mut direct).expect("lowering cannot fail");
+    assert_eq!(rendered, "(<ZKeyExpr>, (i64))?");
+
+    // What the claimed subtree contained — the cloned handle and the string —
+    // was never offered to the lowerer at all.
+    assert!(
+        !direct
+            .asked
+            .iter()
+            .any(|t| t == "& ZKeyExpr" || t == "& str"),
+        "a claimed subtree is not descended into: {:?}",
+        direct.asked
+    );
+    // Its sibling still is.
+    assert!(direct.asked.iter().any(|t| t == "i64"));
+}
+
+/// #444: the same decision at the OUTERMOST node — the `Option` layer — ends
+/// the whole plan, so nothing below it is visited.
+#[test]
+fn a_direct_converter_ends_the_whole_tree() {
+    let reg = reply_sample_registry();
+    let plan = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan");
+
+    let mut direct = Direct {
+        whole: "Option < & ZSample >",
+        asked: Vec::new(),
+    };
+    let rendered = plan.tree.lower(&mut direct).expect("lowering cannot fail");
+    assert_eq!(rendered, "<Option < & ZSample >>");
+    assert_eq!(
+        direct.asked,
+        vec!["Option < & ZSample >".to_string()],
+        "the root was claimed, so nothing under it was offered"
     );
 }

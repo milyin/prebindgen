@@ -95,6 +95,22 @@ pub struct TransformChild<D: TransformDirection> {
 /// [`TransformChild`] it came from.
 pub type Lowered<'a, D, V> = Vec<(&'a TransformChild<D>, V)>;
 
+/// What a lowerer decides about a node **before** its children are visited.
+///
+/// The point of deciding first is that an adapter with a direct converter for a
+/// whole subtree — a `Vec<u8>` that crosses as one array rather than as a run
+/// of elements — must be able to stop there. Answering [`Atomic`](Self::Atomic)
+/// means the subtree is never lowered, so it contributes no slots, no
+/// converter dependencies, no conversion and no cleanup: one decision, not the
+/// same decision repeated by every pass that walks the tree.
+pub enum Descend<V> {
+    /// This node's whole subtree is handled by `V`. Nothing below it is
+    /// visited.
+    Atomic(V),
+    /// Visit the children and combine them as usual.
+    Recurse,
+}
+
 /// Node-level policy for one traversal of a tree: the caller says what a leaf
 /// and a product *mean*, the tree supplies the recursion and the order.
 ///
@@ -107,6 +123,16 @@ pub trait TransformLowerer<D: TransformDirection> {
     type Value;
     /// Why lowering a node can fail.
     type Error;
+
+    /// Decide what to do with `node` before its children are visited.
+    ///
+    /// The default recurses, which is what a lowerer that has no direct
+    /// converters wants. Answer [`Descend::Atomic`] to claim the whole subtree
+    /// — see [`Descend`] for what that settles.
+    fn descend(&mut self, node: &TransformNode<D>) -> Result<Descend<Self::Value>, Self::Error> {
+        let _ = node;
+        Ok(Descend::Recurse)
+    }
 
     /// Lower a terminal. `node.ty` is the crossing type.
     fn leaf(&mut self, node: &TransformNode<D>, op: &D::Leaf) -> Result<Self::Value, Self::Error>;
@@ -158,8 +184,14 @@ pub trait TransformLowerer<D: TransformDirection> {
 
 impl<D: TransformDirection> TransformNode<D> {
     /// Run `lowerer` over this node and everything below it, children before
-    /// parents and in declaration order.
+    /// parents and in declaration order — unless the lowerer answers
+    /// [`Descend::Atomic`] for a node, which ends that subtree there.
     pub fn lower<L: TransformLowerer<D>>(&self, lowerer: &mut L) -> Result<L::Value, L::Error> {
+        // Asked before anything below is touched: an atomic answer is what
+        // makes a subtree contribute nothing at all.
+        if let Descend::Atomic(value) = lowerer.descend(self)? {
+            return Ok(value);
+        }
         match &self.kind {
             TransformKind::Leaf(op) => lowerer.leaf(self, op),
             TransformKind::Product { op, children } => {

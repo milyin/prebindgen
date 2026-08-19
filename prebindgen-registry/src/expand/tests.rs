@@ -455,9 +455,11 @@ fn iterable_emit_shape() {
     let tree = InNode {
         ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
         kind: TransformKind::Sequence {
-            op: InSlot {
-                slot: 0,
-                name: ident("kes"),
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
                 ty: tref(syn::parse_quote!(Vec<String>)),
             },
             inner: Box::new(core),
@@ -700,7 +702,7 @@ fn recursive_input_cycle_errors() {
     // Mutual recursion terminates with a typed error that says WHERE: the
     // argument chain `a → b → a`, not just the function it started from.
     assert!(
-        err.to_string().contains("expand at `a.b.a`:"),
+        err.to_string().contains("input expansion at `a.b.a`:"),
         "the cycle names its argument chain: {err}"
     );
 }
@@ -942,18 +944,18 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
         Ok(match op {
             InPresence::Selector => format!("{value}?sel"),
             InPresence::Flag(s) => format!("{value}?#{}", s.slot),
-            InPresence::Payload(s) => format!("{value}?^#{}", s.slot),
+            InPresence::Payload { slot, .. } => format!("{value}?^#{}", slot.slot),
         })
     }
 
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &InSlot,
+        op: &InRun,
         _inner: &InNode,
         value: String,
     ) -> Result<String, Self::Error> {
-        Ok(format!("[{value}]*#{}", op.slot))
+        Ok(format!("[{value}]*#{}", op.slot.slot))
     }
 }
 

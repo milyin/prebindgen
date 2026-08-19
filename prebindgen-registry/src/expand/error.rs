@@ -114,13 +114,13 @@ impl std::fmt::Display for ExpandError {
             ),
             ExpandError::InputCycle { ty, at } => write!(
                 f,
-                "expand at `{}`: recursive input forms a cycle through `{}` — a constructor \
-                 parameter's type transitively constructs itself",
+                "input expansion at `{}`: recursive input forms a cycle through `{}` — a \
+                 constructor parameter's type transitively constructs itself",
                 at, ty
             ),
             ExpandError::UnsupportedRecursive { func, reason, at } => write!(
                 f,
-                "expand: `{}` at `{}`: recursive input not supported here: {}",
+                "input expansion of `{}` at `{}` not supported: {}",
                 func, at, reason
             ),
             ExpandError::UnknownParam(func, param) => write!(
@@ -170,8 +170,8 @@ impl std::fmt::Display for ExpandError {
                 at,
             } => write!(
                 f,
-                "expand: optional parameter `{}` of `{}` is not supported at `{}`: {}",
-                param, func, at, reason
+                "input expansion of `{}` at `{}`: optional parameter `{}` is not supported: {}",
+                func, at, param, reason
             ),
             ExpandError::InvalidDeclarations { entries } => {
                 writeln!(f, "expand: invalid declarations:")?;

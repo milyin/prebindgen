@@ -633,7 +633,6 @@ mod tests {
                                 slot: InSlot {
                                     slot: i,
                                     name: p.name.clone(),
-                                    ty: p.ty.clone(),
                                 },
                                 wrapped: false,
                             }),
