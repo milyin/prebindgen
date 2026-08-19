@@ -605,6 +605,19 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                 claimed: node.ty.key().to_string(),
             });
         };
+        // A structural node names the OWNED core, while the reading chosen for
+        // it may be a borrow — which is why a claim answers with a reading and
+        // not a boolean. An identity over a borrowed reading has to clone, or
+        // the node hands back a reference where its own type says it produces
+        // the value, and the consumer that borrows it again gets `&&T`.
+        //
+        // Through the position's `Option` as well: a selector-wrapped `&T`
+        // arrives as `Option<&T>` and is still a borrow underneath.
+        let borrowed = selected
+            .optional_inner()
+            .unwrap_or(&selected)
+            .borrow_target()
+            .is_some();
         // The leaf's type and its `wrapped` flag have to say one thing: the
         // type is what the wire declares, the flag is whether the emitter
         // unwraps it. A structural node is offered WITHOUT the position's
@@ -643,9 +656,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
             _ => InNode {
                 ty: node.ty.clone(),
                 kind: TransformKind::Product {
-                    // Not cloned: the claim says the decoded value is the
-                    // target, so there is no borrow to preserve behind it.
-                    op: InProduct::Identity { clone: false },
+                    op: InProduct::Identity { clone: borrowed },
                     children: vec![InChild {
                         link: InLink { by_ref: false },
                         node: leaf,

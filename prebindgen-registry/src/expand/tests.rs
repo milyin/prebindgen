@@ -1183,6 +1183,29 @@ fn selecting_renumbers_the_surviving_slots() {
     assert_eq!(leaves.len(), 2);
     assert_eq!(leaves[0].ty.spell().to_string(), "& ZKeyExpr");
     assert_eq!(leaves[1].name.to_string(), "sample_payload");
+
+    // The signature is only half the contract: the claimed node's own type says
+    // it produces an owned `ZKeyExpr`, so a borrowed reading has to be cloned
+    // back up to it. Otherwise the consumer borrows a borrow.
+    let locals = vec![ident("ke"), ident("payload")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    assert!(
+        compact.contains("Clone::clone(&*ke)"),
+        "a borrowed selected reading is cloned into the owned value the node declares: {compact}"
+    );
+    assert!(
+        compact.contains("z_sample_new(&__a0,__a1)"),
+        "…so the outer constructor takes one borrow, not two: {compact}"
+    );
+    assert!(
+        !compact.contains("&&"),
+        "no double borrow reaches the call site: {compact}"
+    );
 }
 
 /// Claiming a subtree that occupies no wire slot of its own — the constructor
