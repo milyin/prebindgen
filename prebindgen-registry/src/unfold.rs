@@ -42,7 +42,10 @@ pub use self::{
         steps_are_movable, DeconId, DeconSpec, Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan,
         UnfoldShape,
     },
-    tree::{flat_tree, flat_view, OutChild, OutLeaf, OutLink, OutNode, OutOfRust, OutProduct},
+    tree::{
+        element_of, flat_tree, flat_view, shape_of, shaped, OutChild, OutLeaf, OutLink, OutNode,
+        OutOfRust, OutProduct,
+    },
 };
 
 use crate::transform::TransformKind;
@@ -461,6 +464,7 @@ pub(crate) fn apply<M>(
                     by_ref,
                     core_ty,
                     UnfoldShape::Base,
+                    &[],
                     &records,
                     decon,
                 )?;
@@ -678,14 +682,18 @@ fn wire_fixed_returns<M>(
             }
         }
         register_leaves(registry, &vd.leaves);
+        // `layer_types` ends at the core the shape stops on, so the layers are
+        // everything before it.
+        let layer_tys = &layers.layer_types[..layers.layer_types.len() - 1];
+        let tree = shaped(&shape, layer_tys, flat_tree(&vd.source, &vd.leaves));
         let plan = UnfoldPlan {
             source: vd.source.clone(),
             decon: Some(decon.clone()),
             by_ref,
-            shape,
-            tree: std::rc::Rc::new(flat_tree(&vd.source, &vd.leaves)),
+            shape: shape_of(&tree),
+            element: element_of(&tree).cloned(),
+            tree: std::rc::Rc::new(tree),
             leaves: vd.leaves.clone(),
-            element: None,
             delivery: Delivery::Callback,
             convert_out_ty: None,
             fixed_builder: true,
@@ -729,12 +737,15 @@ fn wire_fixed_callbacks<M>(
                 // A run of `T` is an Iterable fold over the element; anything else
                 // is a Base fold over the value itself. `Sequence` is the one
                 // question, and it covers `[T]` and `Vec<T>` alike.
-                let (shape, matches_key) = match after_ref.sequence_elem() {
+                let (shape, layer_tys, matches_key) = match after_ref.sequence_elem() {
                     Some(elem) => (
                         UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
+                        // The run itself, past the borrow the shape was read
+                        // through.
+                        vec![after_ref.clone()],
                         elem.key() == vd.key,
                     ),
-                    None => (UnfoldShape::Base, after_ref.key() == vd.key),
+                    None => (UnfoldShape::Base, Vec::new(), after_ref.key() == vd.key),
                 };
                 if !matches_key {
                     continue;
@@ -744,14 +755,15 @@ fn wire_fixed_callbacks<M>(
                     continue;
                 }
                 register_leaves(registry, &vd.leaves);
+                let tree = shaped(&shape, &layer_tys, flat_tree(&vd.source, &vd.leaves));
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),
                     decon: Some(decon.clone()),
                     by_ref,
-                    shape,
-                    tree: std::rc::Rc::new(flat_tree(&vd.source, &vd.leaves)),
+                    shape: shape_of(&tree),
+                    element: element_of(&tree).cloned(),
+                    tree: std::rc::Rc::new(tree),
                     leaves: vd.leaves.clone(),
-                    element: None,
                     delivery: Delivery::Callback,
                     convert_out_ty: None,
                     fixed_builder: true,
@@ -807,10 +819,15 @@ pub(crate) fn apply_leaf_vec_folds<M>(
                 let bare = peel_borrow(vec_elem).1;
                 if is_nominated(bare) {
                     let inner_shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
-                    let shape = if optional {
-                        UnfoldShape::Optional((), Box::new(inner_shape))
+                    // The types the layers wrap, outermost first: the declared
+                    // return, and under an `Option` the `Vec` inside it.
+                    let (shape, layer_tys) = if optional {
+                        (
+                            UnfoldShape::Optional((), Box::new(inner_shape)),
+                            vec![ret.clone(), after_opt.clone()],
+                        )
                     } else {
-                        inner_shape
+                        (inner_shape, vec![ret.clone()])
                     };
                     registry.require_output(vec_elem);
                     // The fold delivers the return element-by-element, so the
@@ -821,9 +838,10 @@ pub(crate) fn apply_leaf_vec_folds<M>(
                     // JObject-shaped), and de-requiring keeps that `None` from
                     // being flagged as an unresolved-required error.
                     registry.unrequire_output(&ret);
-                    registry
-                        .unfold_plans
-                        .insert(func.clone(), whole_leaf_fold_plan(vec_elem, shape));
+                    registry.unfold_plans.insert(
+                        func.clone(),
+                        whole_leaf_fold_plan(vec_elem, shape, &layer_tys),
+                    );
                 }
             }
         }
@@ -848,8 +866,13 @@ pub(crate) fn apply_leaf_vec_folds<M>(
                     continue;
                 }
                 registry.require_output(elem);
-                let plan =
-                    whole_leaf_fold_plan(elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
+                let plan = whole_leaf_fold_plan(
+                    elem,
+                    UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
+                    // The run itself, past the borrow the shape was read
+                    // through.
+                    std::slice::from_ref(after_ref),
+                );
                 registry.callback_arg_plans.insert(key, plan);
             }
         }
@@ -863,17 +886,31 @@ pub(crate) fn apply_leaf_vec_folds<M>(
 fn whole_leaf_fold_plan(
     vec_elem: &prebindgen_flat::flat::TypeRef,
     shape: UnfoldShape,
+    layer_tys: &[prebindgen_flat::flat::TypeRef],
 ) -> UnfoldPlan {
+    // Nothing is taken apart: a bare leaf under the run IS the whole element,
+    // crossing through its own output converter.
+    let tree = shaped(
+        &shape,
+        layer_tys,
+        OutNode {
+            ty: vec_elem.clone(),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                source: LeafSource::Accessor,
+                group: None,
+            }),
+        },
+    );
     UnfoldPlan {
         source: vec_elem.clone(),
         decon: None,
         by_ref: peel_borrow(vec_elem).0,
-        shape,
-        // Nothing is taken apart: the element crosses whole through its own
-        // converter (see `element`), so the tree is an empty decomposition.
-        tree: std::rc::Rc::new(flat_tree(vec_elem, &[])),
+        shape: shape_of(&tree),
+        element: element_of(&tree).cloned(),
+        tree: std::rc::Rc::new(tree),
         leaves: vec![],
-        element: Some(vec_elem.clone()),
         delivery: Delivery::Callback,
         convert_out_ty: None,
         fixed_builder: true,
@@ -1044,10 +1081,15 @@ fn process_decl<M>(
                 });
             }
             let iterable = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
-            let shape = if optional {
-                UnfoldShape::Optional((), Box::new(iterable))
+            // The types the layers wrap, outermost first: the declared return,
+            // and under an `Option` the `Vec` inside it.
+            let (shape, layer_tys) = if optional {
+                (
+                    UnfoldShape::Optional((), Box::new(iterable)),
+                    vec![ret_ty.clone(), after_opt.clone()],
+                )
             } else {
-                iterable
+                (iterable, vec![ret_ty.clone()])
             };
             // The fold delivers the return element-by-element, so the
             // whole-collection converter is not needed — and for an
@@ -1070,7 +1112,9 @@ fn process_decl<M>(
                 let records = d.records.clone();
                 let decon = decl_id(&ekey, d);
                 register_decon_spec(registry, acc, &decon, &records, element)?;
-                let plan = build_plan(acc, registry, ed, by_ref, element, shape, &records, decon)?;
+                let plan = build_plan(
+                    acc, registry, ed, by_ref, element, shape, &layer_tys, &records, decon,
+                )?;
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty);
                 }
@@ -1082,42 +1126,43 @@ fn process_decl<M>(
                 // crosses whole through its own converter.
                 let by_ref = peel_borrow(inner).0;
                 registry.require_output(inner);
-                UnfoldPlan {
-                    source: inner.clone(),
-                    decon: None,
-                    by_ref,
-                    shape,
-                    tree: std::rc::Rc::new(flat_tree(inner, &[])),
-                    leaves: vec![],
-                    element: Some(inner.clone()),
-                    delivery: ed.delivery,
-                    convert_out_ty: None,
-                    fixed_builder: false,
-                    hoists: Vec::new(),
-                }
+                let mut plan = whole_leaf_fold_plan(inner, shape, &layer_tys);
+                plan.by_ref = by_ref;
+                plan.delivery = ed.delivery;
+                plan.fixed_builder = false;
+                plan
             }
         } else {
             // Scalar/decomposed arm. The `Option` peel already happened above
             // for `Output` (exactly one layer — `Option<Option<…>>` is NOT
             // re-peeled and fails as "no deconstructor" for the inner
             // `Option`); for `Error` it happens here, unchanged.
-            let (optional, core_ty) = match ed.target {
-                DeconTarget::Output => (optional, after_opt),
+            // `opt_ty` is the type the `Option` layer wraps — the declared
+            // return for an output, the error type for an error target.
+            let (optional, core_ty, opt_ty) = match ed.target {
+                DeconTarget::Output => (optional, after_opt, &ret_ty),
                 DeconTarget::Error => match after_opt.optional_inner() {
-                    Some(inner) => (true, inner),
-                    None => (false, after_opt),
+                    Some(inner) => (true, inner, after_opt),
+                    None => (false, after_opt, after_opt),
                 },
             };
             let (by_ref, source) = peel_borrow(core_ty);
             let source_key = source.key();
-            let shape = if optional {
-                UnfoldShape::Optional((), Box::new(UnfoldShape::Base))
+            // The `Option` layer wraps the type it was peeled from, which for
+            // an error target may be the inner one rather than the return.
+            let (shape, layer_tys) = if optional {
+                (
+                    UnfoldShape::Optional((), Box::new(UnfoldShape::Base)),
+                    vec![opt_ty.clone()],
+                )
             } else {
-                UnfoldShape::Base
+                (UnfoldShape::Base, Vec::new())
             };
             let (records, decon) = resolve_deconstructor(acc, &source_key, ed)?;
             register_decon_spec(registry, acc, &decon, &records, source)?;
-            let plan = build_plan(acc, registry, ed, by_ref, source, shape, &records, decon)?;
+            let plan = build_plan(
+                acc, registry, ed, by_ref, source, shape, &layer_tys, &records, decon,
+            )?;
             for leaf in &plan.leaves {
                 registry.require_output(&leaf.out_ty);
             }
@@ -1253,10 +1298,12 @@ fn build_plan<M>(
     by_ref: bool,
     source: &prebindgen_flat::flat::TypeRef,
     shape: UnfoldShape,
+    layer_tys: &[prebindgen_flat::flat::TypeRef],
     records: &[DeconRecord],
     decon: DeconId,
 ) -> Result<UnfoldPlan, UnfoldError> {
-    let tree = build_tree(acc, registry, records, source, by_ref)?;
+    let core = build_tree(acc, registry, records, source, by_ref)?;
+    let tree = shaped(&shape, layer_tys, core);
     let (leaves, hoists) = flat_view(&tree);
     require_unique_leaf_names(source, &leaves)?;
     require_root_identity_last(by_ref, source, &leaves)?;
@@ -1265,10 +1312,10 @@ fn build_plan<M>(
         source: source.clone(),
         decon: Some(decon),
         by_ref,
-        shape,
+        shape: shape_of(&tree),
+        element: element_of(&tree).cloned(),
         tree: std::rc::Rc::new(tree),
         leaves,
-        element: None,
         delivery: ed.delivery,
         convert_out_ty: None,
         fixed_builder: false,

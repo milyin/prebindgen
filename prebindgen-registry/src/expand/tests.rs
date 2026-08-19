@@ -908,6 +908,26 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
         let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
         Ok(format!("#{} ? {}", op.selector, arms.join(" | ")))
     }
+
+    fn optional(
+        &mut self,
+        _node: &InNode,
+        op: &std::convert::Infallible,
+        _inner: &InNode,
+        _value: String,
+    ) -> Result<String, Self::Error> {
+        match *op {}
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &InNode,
+        op: &std::convert::Infallible,
+        _inner: &InNode,
+        _value: String,
+    ) -> Result<String, Self::Error> {
+        match *op {}
+    }
 }
 
 #[test]

@@ -1,13 +1,17 @@
 //! The out-of-Rust direction of the shared transformation tree (#442): how a
 //! returned Rust value is taken apart into the values that cross.
 //!
-//! The tree is what the decomposition IS; [`UnfoldPlan::leaves`] and
-//! [`UnfoldPlan::hoists`] are **derived views** of it, produced by
-//! [`flat_view`] through the same [`TransformLowerer`] a language adapter
-//! implements. Nothing is stored twice: a leaf's crossing type is its node's
-//! [`ty`](TransformNode::ty), its access path is the links above it, and its
-//! nullability is which of those links pass through an `Option`.
+//! The tree is what the plan IS — the `Option` / `Vec` layers the value
+//! crosses in ([`shaped`]) and the decomposition under them. [`UnfoldPlan::shape`],
+//! [`UnfoldPlan::element`], [`UnfoldPlan::leaves`] and [`UnfoldPlan::hoists`]
+//! are **derived views** of it, produced through the same [`TransformLowerer`]
+//! a language adapter implements. Nothing is stored twice: a leaf's crossing
+//! type is its node's [`ty`](TransformNode::ty), its access path is the links
+//! above it, and its nullability is which of those links pass through an
+//! `Option`.
 //!
+//! [`UnfoldPlan::shape`]: super::UnfoldPlan::shape
+//! [`UnfoldPlan::element`]: super::UnfoldPlan::element
 //! [`UnfoldPlan::leaves`]: super::UnfoldPlan::leaves
 //! [`UnfoldPlan::hoists`]: super::UnfoldPlan::hoists
 
@@ -15,7 +19,7 @@ use crate::transform::{
     Lowered, TransformChild, TransformDirection, TransformKind, TransformLowerer, TransformNode,
 };
 
-use super::{Hoist, LeafSource, PathStep, UnfoldLeaf};
+use super::{Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldShape};
 
 /// Direction marker: a Rust value taken apart into crossing values.
 pub enum OutOfRust {}
@@ -27,6 +31,12 @@ impl TransformDirection for OutOfRust {
     /// contributes. Uninhabited, so a [`TransformKind::Choice`] node cannot be
     /// built in this direction at all.
     type Choice = std::convert::Infallible;
+    /// The `Option<T>` / `Option<&T>` return layer carries nothing of its own:
+    /// absent delivers a null result and the builder is skipped.
+    type Optional = ();
+    /// The `Vec<T>` / `&[T]` return layer carries nothing of its own — how its
+    /// elements are delivered is what sits under it (see [`element_of`]).
+    type Sequence = ();
     type Link = OutLink;
 }
 
@@ -196,6 +206,105 @@ impl TransformLowerer<OutOfRust> for FlatView {
         _variants: Lowered<'_, OutOfRust, Partial>,
     ) -> Result<Partial, Self::Error> {
         match *op {}
+    }
+
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: Partial,
+    ) -> Result<Partial, Self::Error> {
+        // Whole-value presence, decided once for the delivery — not a step on
+        // any leaf's path, and not what makes a leaf nullable.
+        Ok(value)
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        inner: &OutNode,
+        value: Partial,
+    ) -> Result<Partial, Self::Error> {
+        // A leaf directly under the run is the WHOLE element: it crosses
+        // through its own output converter as the fold's element, not as a
+        // named slot of the call. Decomposed elements — a product under the
+        // run — contribute their leaves as usual.
+        if matches!(inner.kind, TransformKind::Leaf(_)) {
+            return Ok(Partial::default());
+        }
+        Ok(value)
+    }
+}
+
+/// The arity layers of `ty`, as nodes wrapping `core`.
+///
+/// `shape` is the layer stack already read off `ty`, and `layer_tys` are the
+/// types those layers wrap, outermost first — the caller holds both, and
+/// passing them beats re-reading a stack that was decided where the boundary
+/// was classified.
+pub fn shaped(
+    shape: &UnfoldShape,
+    layer_tys: &[prebindgen_flat::flat::TypeRef],
+    core: OutNode,
+) -> OutNode {
+    fn wrap(shape: &UnfoldShape, tys: &[prebindgen_flat::flat::TypeRef], core: OutNode) -> OutNode {
+        match shape {
+            UnfoldShape::Base => core,
+            UnfoldShape::Optional((), rest) => OutNode {
+                ty: tys[0].clone(),
+                kind: TransformKind::Optional {
+                    op: (),
+                    inner: Box::new(wrap(rest, &tys[1..], core)),
+                },
+            },
+            UnfoldShape::Iterable(rest) => OutNode {
+                ty: tys[0].clone(),
+                kind: TransformKind::Sequence {
+                    op: (),
+                    inner: Box::new(wrap(rest, &tys[1..], core)),
+                },
+            },
+        }
+    }
+    assert_eq!(
+        layer_count(shape),
+        layer_tys.len(),
+        "each arity layer names the type it wraps"
+    );
+    wrap(shape, layer_tys, core)
+}
+
+/// How many `Option` / `Vec` layers a shape stacks.
+fn layer_count(shape: &UnfoldShape) -> usize {
+    match shape {
+        UnfoldShape::Base => 0,
+        UnfoldShape::Optional((), rest) | UnfoldShape::Iterable(rest) => 1 + layer_count(rest),
+    }
+}
+
+/// The arity layers a tree wraps its decomposition in — the plan's
+/// [`shape`](super::UnfoldPlan::shape), read back off the nodes that carry it.
+pub fn shape_of(node: &OutNode) -> UnfoldShape {
+    match &node.kind {
+        TransformKind::Optional { inner, .. } => UnfoldShape::optional((), shape_of(inner)),
+        TransformKind::Sequence { inner, .. } => UnfoldShape::iterable(shape_of(inner)),
+        _ => UnfoldShape::Base,
+    }
+}
+
+/// The element type of a **whole-element** run: a leaf directly under a
+/// [`Sequence`](TransformKind::Sequence) crosses through its own output
+/// converter instead of being taken apart. `None` for every other tree,
+/// including a run whose elements ARE taken apart.
+pub fn element_of(node: &OutNode) -> Option<&prebindgen_flat::flat::TypeRef> {
+    match &node.kind {
+        TransformKind::Optional { inner, .. } => element_of(inner),
+        TransformKind::Sequence { inner, .. } => {
+            matches!(inner.kind, TransformKind::Leaf(_)).then(|| &inner.ty)
+        }
+        _ => None,
     }
 }
 

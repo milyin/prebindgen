@@ -29,6 +29,13 @@ impl TransformDirection for IntoRust {
     type Leaf = InLeaf;
     type Product = InProduct;
     type Choice = InChoice;
+    /// The `Option<T>` parameter layer and the `Vec<T>` one still live on
+    /// [`FoldPlan::shape`](super::FoldPlan::shape): moving them in means the
+    /// emitter reading a *bound* value the layer unwrapped, which the
+    /// children-first traversal has no hook for yet (#442). Uninhabited until
+    /// then, so neither node kind can be built in this direction.
+    type Optional = std::convert::Infallible;
+    type Sequence = std::convert::Infallible;
     type Link = InLink;
 }
 
@@ -217,5 +224,25 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
             },
         ));
         Ok(())
+    }
+
+    fn optional(
+        &mut self,
+        _node: &InNode,
+        op: &std::convert::Infallible,
+        _inner: &InNode,
+        _value: (),
+    ) -> Result<(), Self::Error> {
+        match *op {}
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &InNode,
+        op: &std::convert::Infallible,
+        _inner: &InNode,
+        _value: (),
+    ) -> Result<(), Self::Error> {
+        match *op {}
     }
 }

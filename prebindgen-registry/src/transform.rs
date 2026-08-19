@@ -37,6 +37,10 @@ pub trait TransformDirection {
     type Product;
     /// A node where **exactly one** child runs — a constructor dispatch.
     type Choice;
+    /// An `Option<…>` layer over one inner node.
+    type Optional;
+    /// A run of one inner node.
+    type Sequence;
     /// How one child hangs off its parent.
     type Link;
 }
@@ -52,11 +56,6 @@ pub struct TransformNode<D: TransformDirection> {
 }
 
 /// What a [`TransformNode`] does.
-///
-/// `Optional` and `Sequence` are the remaining structural kinds (#442): the
-/// outer `Option` / `Vec` layers still live on the plans' own
-/// [`Shape`](prebindgen_flat::shape::Shape), so adding those variants here
-/// would add arms nothing produces.
 pub enum TransformKind<D: TransformDirection> {
     /// A value that crosses as it is.
     Leaf(D::Leaf),
@@ -71,6 +70,16 @@ pub enum TransformKind<D: TransformDirection> {
     Choice {
         op: D::Choice,
         variants: Vec<TransformChild<D>>,
+    },
+    /// `Option<…>` over `inner`: absent, or `inner`.
+    Optional {
+        op: D::Optional,
+        inner: Box<TransformNode<D>>,
+    },
+    /// A run of `inner`s.
+    Sequence {
+        op: D::Sequence,
+        inner: Box<TransformNode<D>>,
     },
 }
 
@@ -125,6 +134,26 @@ pub trait TransformLowerer<D: TransformDirection> {
         op: &D::Choice,
         variants: Lowered<'_, D, Self::Value>,
     ) -> Result<Self::Value, Self::Error>;
+
+    /// Lift the already lowered `inner` over an `Option<…>` layer. `inner` is
+    /// handed over as well as its value, for a rule that turns on what kind of
+    /// node sits under the layer.
+    fn optional(
+        &mut self,
+        node: &TransformNode<D>,
+        op: &D::Optional,
+        inner: &TransformNode<D>,
+        value: Self::Value,
+    ) -> Result<Self::Value, Self::Error>;
+
+    /// Lift the already lowered `inner` over a run of it.
+    fn sequence(
+        &mut self,
+        node: &TransformNode<D>,
+        op: &D::Sequence,
+        inner: &TransformNode<D>,
+        value: Self::Value,
+    ) -> Result<Self::Value, Self::Error>;
 }
 
 impl<D: TransformDirection> TransformNode<D> {
@@ -140,6 +169,14 @@ impl<D: TransformDirection> TransformNode<D> {
             TransformKind::Choice { op, variants } => {
                 let lowered = lower_all(variants, lowerer)?;
                 lowerer.choice(self, op, lowered)
+            }
+            TransformKind::Optional { op, inner } => {
+                let value = inner.lower(lowerer)?;
+                lowerer.optional(self, op, inner, value)
+            }
+            TransformKind::Sequence { op, inner } => {
+                let value = inner.lower(lowerer)?;
+                lowerer.sequence(self, op, inner, value)
             }
         }
     }

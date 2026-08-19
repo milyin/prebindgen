@@ -1947,6 +1947,26 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
     ) -> Result<String, Self::Error> {
         match *op {}
     }
+
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("{value}?"))
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: String,
+    ) -> Result<String, Self::Error> {
+        Ok(format!("[{value}]*"))
+    }
 }
 
 #[test]
@@ -2010,12 +2030,22 @@ fn tree_lowers_through_the_shared_visitor() {
         .get(&ident("z_reply_sample"))
         .expect("plan");
 
-    // The whole decomposition, read through the hooks alone.
+    // The whole plan, read through the hooks alone — the `Option<&ZSample>`
+    // return is the trailing `?`, so the arity layer is a node like any other.
     let rendered = plan.tree.lower(&mut Render).expect("lowering cannot fail");
     assert_eq!(
         rendered,
         "[ke<-z_sample_key_expr: [<-: & ZKeyExpr (identity), str<-z_keyexpr_as_str: & str], \
-         ts<-z_sample_timestamp?: [ntp64<-z_timestamp_ntp64: i64]]"
+         ts<-z_sample_timestamp?: [ntp64<-z_timestamp_ntp64: i64]]?"
+    );
+    // …and the shape the plan exposes is read back off those same nodes.
+    assert!(
+        matches!(&plan.shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)),
+        "the layer node IS the plan's shape"
+    );
+    assert!(
+        plan.element.is_none(),
+        "the value is taken apart, not delivered whole"
     );
 
     // …and the derived view of the same tree, which is what the plan exposes:

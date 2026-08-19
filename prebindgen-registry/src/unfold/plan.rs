@@ -236,13 +236,19 @@ pub struct UnfoldPlan {
     pub by_ref: bool,
     /// Outer shape over the core decomposition (`Decompose` for a plain
     /// `T`/`&T` return).
+    ///
+    /// A derived view of [`Self::tree`]: each layer is an
+    /// [`Optional`](crate::transform::TransformKind::Optional) or
+    /// [`Sequence`](crate::transform::TransformKind::Sequence) node wrapping
+    /// the decomposition, and [`shape_of`](crate::unfold::shape_of) reads the
+    /// stack back off them.
     pub shape: UnfoldShape,
-    /// The decomposition itself: what is taken out of the value, and how
-    /// (#442). [`Self::leaves`] and [`Self::hoists`] are **derived views** of
-    /// this tree — [`flat_view`](crate::unfold::flat_view) produces them, and a
-    /// language adapter reads either the tree (through
-    /// [`TransformLowerer`](crate::transform::TransformLowerer)) or a view,
-    /// never a walk of its own.
+    /// The plan itself: the `Option` / `Vec` layers the value crosses in, and
+    /// what is taken out of it under them (#442). [`Self::shape`],
+    /// [`Self::element`], [`Self::leaves`] and [`Self::hoists`] are **derived
+    /// views** of this tree, and a language adapter reads either the tree
+    /// (through [`TransformLowerer`](crate::transform::TransformLowerer)) or a
+    /// view, never a walk of its own.
     ///
     /// Shared rather than cloned: a plan is copied to be re-delivered
     /// (`..plan` with a different [`Self::delivery`]), and the decomposition
@@ -260,6 +266,11 @@ pub struct UnfoldPlan {
     /// delivered to the fold via its own output converter + projection (not
     /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
     /// `Iterable` fold (which uses [`Self::leaves`]).
+    ///
+    /// A derived view of [`Self::tree`]: a leaf directly under the
+    /// [`Sequence`](crate::transform::TransformKind::Sequence) node crosses
+    /// whole, where a decomposed run has a product there instead. See
+    /// [`element_of`](crate::unfold::element_of).
     pub element: Option<prebindgen_flat::flat::TypeRef>,
     /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
     /// delivery.

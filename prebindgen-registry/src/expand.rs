@@ -1069,6 +1069,26 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
             }
         }))
     }
+
+    fn optional(
+        &mut self,
+        _node: &InNode,
+        op: &std::convert::Infallible,
+        _inner: &InNode,
+        _value: syn::Expr,
+    ) -> Result<syn::Expr, Self::Error> {
+        match *op {}
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &InNode,
+        op: &std::convert::Infallible,
+        _inner: &InNode,
+        _value: syn::Expr,
+    ) -> Result<syn::Expr, Self::Error> {
+        match *op {}
+    }
 }
 
 /// `path(args…)` lifted to `Result<Target, String>` (mapping a fallible
