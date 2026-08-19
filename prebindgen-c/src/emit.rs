@@ -860,6 +860,31 @@ impl CbindgenBuilder {
         registry: &impl Conversions<()>,
         route: &ErrRoute,
     ) -> TokenStream {
+        let walked = self.encode_value_walk(ty, val.clone(), targets, registry, route);
+        // #444 §5: the same statements from the resolved plan, where layout,
+        // fallibility and encoding come from one pass instead of three walks
+        // that have to agree — one of which used to call another mid-walk to
+        // find out where its targets were.
+        #[cfg(test)]
+        assert_eq!(
+            walked.to_string(),
+            self.c_value_plan(ty, registry)
+                .encode(&val, targets, route)
+                .to_string(),
+            "#444: the plan's encoding of `{}` differs from the walk's",
+            ty.key()
+        );
+        walked
+    }
+
+    fn encode_value_walk(
+        &self,
+        ty: &TypeRef,
+        val: TokenStream,
+        targets: &[TokenStream],
+        registry: &impl Conversions<()>,
+        route: &ErrRoute,
+    ) -> TokenStream {
         if matches!(ty.kind(), TypeKind::Unit) {
             return quote!();
         }
@@ -930,7 +955,7 @@ impl CbindgenBuilder {
                 if let Some((slot, _rest)) = inner.niches.clone().carve() {
                     // None reuses the next inner niche; Some encodes inline.
                     let inner_enc =
-                        self.encode_value(inner_ty, quote!(__x), targets, registry, route);
+                        self.encode_value_walk(inner_ty, quote!(__x), targets, registry, route);
                     let null = &slot.value;
                     let t0 = &targets[0];
                     return quote!(
@@ -943,7 +968,7 @@ impl CbindgenBuilder {
                 // Explicit `present` flag in targets[0]; inner value follows.
                 let present = &targets[0];
                 let inner_enc =
-                    self.encode_value(inner_ty, quote!(__x), &targets[1..], registry, route);
+                    self.encode_value_walk(inner_ty, quote!(__x), &targets[1..], registry, route);
                 return quote!(
                     match #val {
                         ::core::option::Option::Some(__x) => { #present = true; #inner_enc }

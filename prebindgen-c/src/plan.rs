@@ -327,3 +327,257 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for FallibleFromPlan<'_, R>
         )
     }
 }
+
+/// One C crossing, resolved: what it looks like on the wire, whether encoding
+/// it can fail, and how to encode it.
+///
+/// The three used to be three walks over the same `TypeRef` that had to agree —
+/// and `encode_value` called `lower_shape` mid-walk to find out where its
+/// targets were, so they were not even independent. Produced together from one
+/// pass over the semantic plan, they agree by construction.
+pub(crate) struct CValuePlan {
+    pub(crate) shape: ValueShape,
+    pub(crate) fallible: bool,
+    encode: Encoder,
+}
+
+/// Given the source expression and the lvalues its components are written into,
+/// the statements that do it. A function rather than a token stream because the
+/// value and the targets are chosen by whatever encloses a node — a run binds
+/// each element, an option binds its payload — and only the enclosing node
+/// knows them.
+type Encoder = std::rc::Rc<dyn Fn(&TokenStream, &[TokenStream], &ErrRoute<'_>) -> TokenStream>;
+
+impl CValuePlan {
+    /// Emit the statements writing `val` into `targets`.
+    pub(crate) fn encode(
+        &self,
+        val: &TokenStream,
+        targets: &[TokenStream],
+        route: &ErrRoute<'_>,
+    ) -> TokenStream {
+        (self.encode)(val, targets, route)
+    }
+}
+
+impl CbindgenBuilder {
+    /// Resolve one C crossing from its semantic plan.
+    pub(crate) fn c_value_plan(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> CValuePlan {
+        self.value_plan(ty, registry)
+            .lower(&mut PlanFromTree { registry })
+            .expect("resolving a C value plan cannot fail")
+    }
+}
+
+/// Lowers a semantic plan into the resolved C plan.
+struct PlanFromTree<'a, R: Conversions<()>> {
+    registry: &'a R,
+}
+
+impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
+    type Value = CValuePlan;
+    type Error = std::convert::Infallible;
+
+    fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<CValuePlan, Self::Error> {
+        if matches!(node.ty.kind(), TypeKind::Unit) {
+            return Ok(CValuePlan {
+                shape: ValueShape {
+                    fields: vec![],
+                    niches: Niches::empty(),
+                },
+                fallible: false,
+                encode: std::rc::Rc::new(|_, _, _| quote!()),
+            });
+        }
+        let entry = self.registry.output_entry(&node.ty).unwrap_or_else(|| {
+            panic!("Cbindgen: type `{}` has no output converter", node.ty.key())
+        });
+        let wire = entry.destination.clone();
+        let niches = if entry.niches.is_empty() && matches!(wire, syn::Type::Ptr(_)) {
+            let null = null_for(&wire);
+            Niches::one(syn::parse_quote!(#null), syn::parse_quote!(v.is_null()))
+        } else {
+            entry.niches.clone()
+        };
+        let conv = entry.function.sig.ident.clone();
+        let fallible = returns_result(&entry.function.sig.output);
+        Ok(CValuePlan {
+            shape: ValueShape {
+                fields: vec![WireField { suffix: "", wire }],
+                niches,
+            },
+            fallible,
+            encode: std::rc::Rc::new(move |val, targets, route| {
+                let t0 = &targets[0];
+                if fallible {
+                    let converted = route_result(quote!(#conv(#val)), route);
+                    quote!( #t0 = #converted; )
+                } else {
+                    quote!( #t0 = #conv(#val); )
+                }
+            }),
+        })
+    }
+
+    /// A run is a malloc'd copy plus its length, its elements converted one by
+    /// one. The element's own plan is not used: an array holds one C value per
+    /// element, so the element converter is called directly.
+    fn sequence(
+        &mut self,
+        node: &OutNode,
+        _op: &(),
+        inner: &OutNode,
+        _value: CValuePlan,
+    ) -> Result<CValuePlan, Self::Error> {
+        let entry = self.registry.output_entry(&inner.ty).unwrap_or_else(|| {
+            panic!(
+                "Cbindgen: run element `{}` has no output converter",
+                inner.ty.key()
+            )
+        });
+        assert!(
+            !marker_destination(&entry.destination),
+            "Cbindgen: run element `{}` has no wire of its own, so there is nothing for the \
+             array to hold — give it a `convert!` declaration or deliver its parts separately",
+            inner.ty.key(),
+        );
+        let elem_wire = entry.destination.clone();
+        let elem_conv = entry.function.sig.ident.clone();
+        let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
+        let fallible = returns_result(&entry.function.sig.output);
+        // A borrowed run is read by copying out of it; an owned one is consumed.
+        let borrowed =
+            r_cow_slice_elem(&node.ty).is_some() || r_scalar_slice_elem(&node.ty).is_some();
+        Ok(CValuePlan {
+            shape: ValueShape {
+                fields: vec![
+                    WireField {
+                        suffix: "",
+                        wire: syn::parse_quote!(*mut #elem_wire),
+                    },
+                    WireField {
+                        suffix: "_len",
+                        wire: syn::parse_quote!(usize),
+                    },
+                ],
+                niches: Niches::empty(),
+            },
+            fallible,
+            encode: std::rc::Rc::new(move |val, targets, route| {
+                let t_ptr = &targets[0];
+                let t_len = &targets[1];
+                let source = if borrowed {
+                    quote!(#val.iter().copied())
+                } else {
+                    quote!(#val)
+                };
+                if fallible {
+                    let converted = route_result(quote!(#elem_conv(__value)), route);
+                    quote!(
+                        let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
+                        for __value in #source {
+                            __arr.push(#converted);
+                        }
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #t_ptr = __p;
+                        #t_len = __n;
+                    )
+                } else {
+                    let mapped = if borrowed {
+                        quote!(#val.iter().copied().map(#elem_map))
+                    } else {
+                        quote!(#val.into_iter().map(#elem_map))
+                    };
+                    quote!(
+                        let __arr: ::std::vec::Vec<#elem_wire> = #mapped.collect();
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #t_ptr = __p;
+                        #t_len = __n;
+                    )
+                }
+            }),
+        })
+    }
+
+    /// An option spends one of the inner value's free niches, or prepends a
+    /// `present` flag. Which one it does decides where the inner value's
+    /// targets start — the reason the two used to have to agree across walks.
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: CValuePlan,
+    ) -> Result<CValuePlan, Self::Error> {
+        let inner_encode = value.encode.clone();
+        let fallible = value.fallible;
+        if let Some((slot, rest)) = value.shape.niches.clone().carve() {
+            let null = slot.value.clone();
+            return Ok(CValuePlan {
+                shape: ValueShape {
+                    fields: value.shape.fields,
+                    niches: rest,
+                },
+                fallible,
+                encode: std::rc::Rc::new(move |val, targets, route| {
+                    // `None` reuses the next inner niche; `Some` encodes inline.
+                    let inner_enc = inner_encode(&quote!(__x), targets, route);
+                    let t0 = &targets[0];
+                    quote!(
+                        match #val {
+                            ::core::option::Option::Some(__x) => { #inner_enc }
+                            ::core::option::Option::None => { #t0 = #null; }
+                        }
+                    )
+                }),
+            });
+        }
+        let mut fields = vec![WireField {
+            suffix: "_present",
+            wire: syn::parse_quote!(bool),
+        }];
+        fields.extend(value.shape.fields);
+        Ok(CValuePlan {
+            shape: ValueShape {
+                fields,
+                niches: Niches::empty(),
+            },
+            fallible,
+            encode: std::rc::Rc::new(move |val, targets, route| {
+                // Explicit `present` flag first; the inner value follows it.
+                let present = &targets[0];
+                let inner_enc = inner_encode(&quote!(__x), &targets[1..], route);
+                quote!(
+                    match #val {
+                        ::core::option::Option::Some(__x) => { #present = true; #inner_enc }
+                        ::core::option::Option::None => { #present = false; }
+                    }
+                )
+            }),
+        })
+    }
+
+    fn product(
+        &mut self,
+        node: &OutNode,
+        _op: &OutProduct,
+        _children: Lowered<'_, OutOfRust, CValuePlan>,
+    ) -> Result<CValuePlan, Self::Error> {
+        unreachable!(
+            "a C value plan has no products: `{}` reached one",
+            node.ty.key()
+        )
+    }
+
+    fn choice(
+        &mut self,
+        node: &OutNode,
+        _op: &OutChoice,
+        _variants: Lowered<'_, OutOfRust, CValuePlan>,
+    ) -> Result<CValuePlan, Self::Error> {
+        unreachable!(
+            "a C value plan has no choices: `{}` reached one",
+            node.ty.key()
+        )
+    }
+}
