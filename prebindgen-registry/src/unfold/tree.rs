@@ -129,6 +129,10 @@ pub struct OutLink {
 /// The flat views the plans expose: leaves in decomposition order, and the
 /// value forms to bind once. Derived — never stored beside the tree.
 pub fn flat_view(root: &OutNode) -> Result<(Vec<UnfoldLeaf>, Vec<Hoist>), super::UnfoldError> {
+    // The one parent position the lowerer cannot check for itself.
+    if is_variant_arm(root) {
+        return Err(arm_outside_choice(root));
+    }
     let derived = root.lower(&mut FlatView)?;
     let leaves = derived
         .leaves
@@ -178,6 +182,45 @@ struct Partial {
 /// is a variant payload, and the leaf itself.
 type PartialLeaf = (Vec<String>, Option<syn::Member>, UnfoldLeaf);
 
+/// The error a variant arm found outside a choice reports.
+fn arm_outside_choice(node: &OutNode) -> super::UnfoldError {
+    let variant = match &node.kind {
+        TransformKind::Product {
+            op: OutProduct::Variant { name, .. },
+            ..
+        } => name.to_string(),
+        _ => unreachable!("only asked of a variant arm"),
+    };
+    super::UnfoldError::VariantArmOutsideChoice { variant }
+}
+
+/// Whether a node is a variant arm — the only thing a choice's alternative may
+/// be, and the only place a variant arm may sit.
+fn is_variant_arm(node: &OutNode) -> bool {
+    matches!(
+        node.kind,
+        TransformKind::Product {
+            op: OutProduct::Variant { .. },
+            ..
+        }
+    )
+}
+
+/// What a node is, for a diagnostic about where it may not sit.
+fn node_kind_name(node: &OutNode) -> &'static str {
+    match &node.kind {
+        TransformKind::Leaf(_) => "a leaf",
+        TransformKind::Product {
+            op: OutProduct::Variant { .. },
+            ..
+        } => "a variant arm",
+        TransformKind::Product { .. } => "a product",
+        TransformKind::Choice { .. } => "a choice",
+        TransformKind::Optional { .. } => "an option",
+        TransformKind::Sequence { .. } => "a run",
+    }
+}
+
 /// The lowerer behind [`flat_view`].
 struct FlatView;
 
@@ -220,6 +263,17 @@ impl TransformLowerer<OutOfRust> for FlatView {
         op: &OutProduct,
         children: Lowered<'_, OutOfRust, Partial>,
     ) -> Result<Partial, Self::Error> {
+        // The mirror: an arm anywhere but under a choice carries a tag no
+        // selector chooses between. Checked at every parent a node can have —
+        // here, at the two layers, and at the root — so an arm is reachable
+        // only from `choice`.
+        if !matches!(op, OutProduct::Variant { .. }) {
+            for (child, _) in &children {
+                if is_variant_arm(&child.node) {
+                    return Err(arm_outside_choice(&child.node));
+                }
+            }
+        }
         // A variant arm's payloads must each be a leaf that BINDS A MEMBER.
         // Being a leaf is not enough: the binding an arm upgrades to
         // `LeafSource::VariantField` comes from the leaf's own
@@ -324,6 +378,17 @@ impl TransformLowerer<OutOfRust> for FlatView {
         op: &OutChoice,
         variants: Lowered<'_, OutOfRust, Partial>,
     ) -> Result<Partial, Self::Error> {
+        // Only a variant arm says WHICH alternative it is. Anything else here
+        // flattens into a leaf belonging to no alternative, while the selector
+        // ahead of it claims to choose between some.
+        for (child, _) in &variants {
+            if !is_variant_arm(&child.node) {
+                return Err(super::UnfoldError::ChoiceAlternativeNotAnArm {
+                    target: node.ty.key().to_string(),
+                    found: node_kind_name(&child.node),
+                });
+            }
+        }
         // The selector rides ahead of the arms it chooses between, and carries
         // **which sum** it selects over — the node's own type — rather than the
         // `i32` it is on the wire. That is how an emitter finds the enum to
@@ -371,9 +436,12 @@ impl TransformLowerer<OutOfRust> for FlatView {
         &mut self,
         _node: &OutNode,
         _op: &(),
-        _inner: &OutNode,
+        inner: &OutNode,
         value: Partial,
     ) -> Result<Partial, Self::Error> {
+        if is_variant_arm(inner) {
+            return Err(arm_outside_choice(inner));
+        }
         // Whole-value presence, decided once for the delivery — not a step on
         // any leaf's path, and not what makes a leaf nullable.
         Ok(value)

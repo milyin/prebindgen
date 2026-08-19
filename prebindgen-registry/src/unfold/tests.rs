@@ -2706,3 +2706,117 @@ fn a_variant_payload_must_be_a_leaf_that_binds_a_member() {
         "got {err}"
     );
 }
+
+/// #444 (review): a `Choice` and a variant arm must be paired, both ways — the
+/// same "bind the relationship in both directions" rule as the member/arm check
+/// above, one level up.
+///
+/// A choice whose alternative is anything else flattens into a selector
+/// followed by a leaf belonging to no alternative; an arm anywhere else groups
+/// its leaves by a tag no selector chooses between. Both flattened cleanly
+/// before this, so a plan could look valid and be uninterpretable.
+#[test]
+fn a_choice_and_a_variant_arm_must_be_paired() {
+    use crate::transform::TransformKind;
+
+    let payload = || OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: vec!["v0".to_string()],
+        },
+        node: OutNode {
+            ty: tref(syn::parse_quote!(i64)),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                reach: OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(0usize))),
+            }),
+        },
+    };
+    let arm = || OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: Vec::new(),
+        },
+        node: OutNode {
+            ty: tref(syn::parse_quote!(Outer)),
+            kind: TransformKind::Product {
+                op: OutProduct::Variant {
+                    name: ident("Wrapped"),
+                    tag: 0,
+                },
+                children: vec![payload()],
+            },
+        },
+    };
+    let choice_over = |variants: Vec<OutChild>| OutNode {
+        ty: tref(syn::parse_quote!(Outer)),
+        kind: TransformKind::Choice {
+            op: OutChoice {
+                name: "tag".to_string(),
+            },
+            variants,
+        },
+    };
+
+    // 1. A choice whose alternative is a plain leaf.
+    let err = refused(crate::unfold::flat_view(&choice_over(vec![OutChild {
+        link: OutLink {
+            steps: Vec::new(),
+            name: vec!["nope".to_string()],
+        },
+        node: OutNode {
+            ty: tref(syn::parse_quote!(i64)),
+            kind: TransformKind::Leaf(OutLeaf {
+                nullable: false,
+                identity: false,
+                reach: OutReach::Field,
+            }),
+        },
+    }])));
+    assert!(
+        matches!(
+            &err,
+            UnfoldError::ChoiceAlternativeNotAnArm { found, .. } if *found == "a leaf"
+        ),
+        "got {err}"
+    );
+
+    // 2. An arm under an ordinary product, and at the root.
+    let err = refused(crate::unfold::flat_view(&OutNode {
+        ty: tref(syn::parse_quote!(Holder)),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children: vec![arm()],
+        },
+    }));
+    assert!(
+        matches!(&err, UnfoldError::VariantArmOutsideChoice { variant } if variant == "Wrapped"),
+        "got {err}"
+    );
+    let err = refused(crate::unfold::flat_view(&arm().node));
+    assert!(
+        matches!(&err, UnfoldError::VariantArmOutsideChoice { .. }),
+        "got {err}"
+    );
+
+    // …and under an arity layer, the other parent a node can have.
+    let err = refused(crate::unfold::flat_view(&OutNode {
+        ty: tref(syn::parse_quote!(Option<Outer>)),
+        kind: TransformKind::Optional {
+            op: (),
+            inner: Box::new(arm().node),
+        },
+    }));
+    assert!(
+        matches!(&err, UnfoldError::VariantArmOutsideChoice { .. }),
+        "got {err}"
+    );
+
+    // 3. The paired shape still projects, selector first then the arm's leaf.
+    let (leaves, _) =
+        crate::unfold::flat_view(&choice_over(vec![arm()])).expect("a paired sum projects");
+    assert_eq!(leaves.len(), 2);
+    assert_eq!(leaves[0].source, LeafSource::SumTag);
+    assert_eq!(leaves[1].group, Some(0));
+}
