@@ -2283,3 +2283,61 @@ fn dependencies_come_from_the_tree() {
         "the selector names the sum it chooses between"
     );
 }
+
+/// #444: a sum spliced into a value form must be **named** by the plan, not
+/// **required** of it. The selector carries the enum so an emitter can `match`
+/// it, but a sum has no whole-value output converter, so demanding one would
+/// fail resolution for any binding that has not declared one anyway.
+///
+/// The three per-plan registration sites used to require every derived leaf's
+/// type flatly, which reached the synthesized selector too; they go through the
+/// same tree-derived split the fixed-decon paths use.
+#[test]
+fn a_spliced_sum_is_named_not_required() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn get_report() -> Report { todo!() }",
+        "fn report_to_struct(r: &Report) -> ReportStruct { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: key("Report"),
+        records: vec![DeconRecord::Fields {
+            func: ident("report_to_struct"),
+            consuming: false,
+            fields: vec![FieldRecord {
+                members: vec![ident("reading")],
+                name: "reading".into(),
+                ty: tref(syn::parse_quote!(Reading)),
+                decon: FieldDecon::Subtree(reading_sum_decon().tree),
+            }],
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("get_report")].into_iter().collect(),
+        &[ident("report_to_struct")].into_iter().collect(),
+    )
+    .expect("apply");
+
+    let plan = reg.unfold_plans.get(&ident("get_report")).expect("plan");
+    assert!(
+        plan.leaves().iter().any(|l| l.source == LeafSource::SumTag),
+        "the spliced sum contributes its selector"
+    );
+    let sum = reg
+        .output_types
+        .get(&TypeKey::from_type(&syn::parse_quote!(Reading)))
+        .expect("the selector registers the sum it chooses between");
+    assert!(
+        !sum.root,
+        "a sum is named, not required — it has no whole-value output converter"
+    );
+    // Its payload, which does cross, still is.
+    assert!(
+        reg.output_types[&TypeKey::from_type(&syn::parse_quote!(i64))].root,
+        "the live payload is a required crossing"
+    );
+}

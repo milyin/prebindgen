@@ -473,9 +473,7 @@ pub(crate) fn apply<M>(
                 if plan.leaves.is_empty() {
                     continue;
                 }
-                for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
-                }
+                register_dependencies(registry, &plan.tree);
                 registry.callback_arg_plans.insert(key, plan);
             }
         }
@@ -1148,9 +1146,7 @@ fn process_decl<M>(
                 let plan = build_plan(
                     acc, registry, ed, by_ref, element, shape, &layer_tys, &records, decon,
                 )?;
-                for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
-                }
+                register_dependencies(registry, &plan.tree);
                 plan
             } else {
                 // Whole element: keep the type exactly as written so the
@@ -1196,9 +1192,7 @@ fn process_decl<M>(
             let plan = build_plan(
                 acc, registry, ed, by_ref, source, shape, &layer_tys, &records, decon,
             )?;
-            for leaf in &plan.leaves {
-                registry.require_output(&leaf.out_ty);
-            }
+            register_dependencies(registry, &plan.tree);
             plan
         };
         // Delivery is by **leaf count**, not a per-decl flag:
