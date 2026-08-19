@@ -1,17 +1,25 @@
 //! The one recursive mechanism both boundary directions share.
 //!
 //! A **transformation tree** describes what happens at ONE boundary use: how a
-//! Rust value is taken apart into the values that cross ([`OutOfRust`](crate::unfold::OutOfRust)), or how
-//! the values that cross are put back together into a Rust one (`IntoRust`, not
-//! migrated yet — see #442). It is not a second type model: every node names
-//! its [`TypeRef`](prebindgen_flat::flat::TypeRef), which stays the authoritative reading.
+//! Rust value is taken apart into the values that cross
+//! ([`OutOfRust`](crate::unfold::OutOfRust)), or how the values that cross are
+//! put back together into a Rust one
+//! ([`IntoRust`](crate::expand::IntoRust)). It is not a second type model:
+//! every node names its [`TypeRef`](prebindgen_flat::flat::TypeRef), which
+//! stays the authoritative reading.
 //!
 //! The tree is generic over its **direction** so the recursion, the child
 //! ordering and the traversal are written once. Only the payloads differ:
 //! [`TransformDirection::Leaf`] says what one crossing value is, `Product` says
-//! how a node's children are obtained, and `Link` says how one child hangs off
-//! its parent. A language adapter supplies node-level policy through
-//! [`TransformLowerer`] and never writes the walk itself.
+//! how a node's children combine, `Choice` says how one of them is selected,
+//! and `Link` says how one child hangs off its parent. A language adapter
+//! supplies node-level policy through [`TransformLowerer`] and never writes the
+//! walk itself.
+//!
+//! A direction that has no use for a kind gives its payload an uninhabited
+//! type, and the kind is then unconstructible for that direction: decomposition
+//! has no `Choice`, so `OutOfRust::Choice` is
+//! [`Infallible`](std::convert::Infallible).
 //!
 //! The flat views the plans still expose — a leaf vector, a hoist list — are
 //! **derived** by lowering the tree ([`crate::unfold::UnfoldPlan::leaves`] is
@@ -27,7 +35,9 @@ pub trait TransformDirection {
     /// A node whose children **all** contribute — a deterministic product
     /// (a deconstructor's records, a constructor's arguments).
     type Product;
-    /// How one child is reached from its parent's value.
+    /// A node where **exactly one** child runs — a constructor dispatch.
+    type Choice;
+    /// How one child hangs off its parent.
     type Link;
 }
 
@@ -43,11 +53,10 @@ pub struct TransformNode<D: TransformDirection> {
 
 /// What a [`TransformNode`] does.
 ///
-/// `Optional` / `Sequence` / `Choice` nodes are the remaining structural kinds
-/// (#442): today the outer `Option` / `Vec` layers live on the plans' own
-/// [`Shape`](prebindgen_flat::shape::Shape) and the choice payloads belong to
-/// the not-yet-migrated input direction, so adding those variants here would
-/// add arms nothing produces.
+/// `Optional` and `Sequence` are the remaining structural kinds (#442): the
+/// outer `Option` / `Vec` layers still live on the plans' own
+/// [`Shape`](prebindgen_flat::shape::Shape), so adding those variants here
+/// would add arms nothing produces.
 pub enum TransformKind<D: TransformDirection> {
     /// A value that crosses as it is.
     Leaf(D::Leaf),
@@ -55,6 +64,13 @@ pub enum TransformKind<D: TransformDirection> {
     Product {
         op: D::Product,
         children: Vec<TransformChild<D>>,
+    },
+    /// Exactly one child runs — which one is `op`'s business. The children's
+    /// [links](TransformChild::link) carry nothing: an alternative is named by
+    /// its position, not by how it hangs off the choice.
+    Choice {
+        op: D::Choice,
+        variants: Vec<TransformChild<D>>,
     },
 }
 
@@ -65,6 +81,10 @@ pub struct TransformChild<D: TransformDirection> {
     /// The child itself.
     pub node: TransformNode<D>,
 }
+
+/// One node's already lowered children, each paired with the
+/// [`TransformChild`] it came from.
+pub type Lowered<'a, D, V> = Vec<(&'a TransformChild<D>, V)>;
 
 /// Node-level policy for one traversal of a tree: the caller says what a leaf
 /// and a product *mean*, the tree supplies the recursion and the order.
@@ -91,7 +111,19 @@ pub trait TransformLowerer<D: TransformDirection> {
         &mut self,
         node: &TransformNode<D>,
         op: &D::Product,
-        children: Vec<(&TransformChild<D>, Self::Value)>,
+        children: Lowered<'_, D, Self::Value>,
+    ) -> Result<Self::Value, Self::Error>;
+
+    /// Select between the already lowered alternatives of a choice, in
+    /// declaration order — which is also selector order.
+    ///
+    /// A direction whose `Choice` payload is uninhabited discharges this with
+    /// `match *op {}`: the kind cannot occur, so there is nothing to write.
+    fn choice(
+        &mut self,
+        node: &TransformNode<D>,
+        op: &D::Choice,
+        variants: Lowered<'_, D, Self::Value>,
     ) -> Result<Self::Value, Self::Error>;
 }
 
@@ -102,13 +134,26 @@ impl<D: TransformDirection> TransformNode<D> {
         match &self.kind {
             TransformKind::Leaf(op) => lowerer.leaf(self, op),
             TransformKind::Product { op, children } => {
-                let mut lowered = Vec::with_capacity(children.len());
-                for child in children {
-                    let value = child.node.lower(lowerer)?;
-                    lowered.push((child, value));
-                }
+                let lowered = lower_all(children, lowerer)?;
                 lowerer.product(self, op, lowered)
+            }
+            TransformKind::Choice { op, variants } => {
+                let lowered = lower_all(variants, lowerer)?;
+                lowerer.choice(self, op, lowered)
             }
         }
     }
+}
+
+/// Lower each child in order, keeping it paired with the child it came from.
+fn lower_all<'a, D: TransformDirection, L: TransformLowerer<D>>(
+    children: &'a [TransformChild<D>],
+    lowerer: &mut L,
+) -> Result<Lowered<'a, D, L::Value>, L::Error> {
+    let mut lowered = Vec::with_capacity(children.len());
+    for child in children {
+        let value = child.node.lower(lowerer)?;
+        lowered.push((child, value));
+    }
+    Ok(lowered)
 }

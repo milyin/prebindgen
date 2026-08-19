@@ -2399,9 +2399,10 @@ fn shape_notes(
     for (param, plan) in plans {
         let target = plan.target.to_string();
         let arms: Vec<String> = plan
-            .variants
-            .iter()
-            .map(|v| match &v.ctor {
+            .core
+            .arms()
+            .into_iter()
+            .map(|a| match a.ctor() {
                 Some(c) => format!("its `{c}` inputs"),
                 None => format!("an existing `{target}`"),
             })
@@ -2411,7 +2412,7 @@ fn shape_notes(
             .iter()
             .map(|l| snake_to_camel(&l.name.to_string()))
             .collect();
-        let how = if plan.selector.is_some() {
+        let how = if plan.selector().is_some() {
             if plan.produces_option() {
                 format!(
                     "pass EITHER {} — the selector chooses the arm, `-1` = absent",

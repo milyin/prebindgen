@@ -12,7 +12,7 @@
 //! [`UnfoldPlan::hoists`]: super::UnfoldPlan::hoists
 
 use crate::transform::{
-    TransformChild, TransformDirection, TransformKind, TransformLowerer, TransformNode,
+    Lowered, TransformChild, TransformDirection, TransformKind, TransformLowerer, TransformNode,
 };
 
 use super::{Hoist, LeafSource, PathStep, UnfoldLeaf};
@@ -23,6 +23,10 @@ pub enum OutOfRust {}
 impl TransformDirection for OutOfRust {
     type Leaf = OutLeaf;
     type Product = OutProduct;
+    /// Decomposition has no alternatives: every record of a deconstructor
+    /// contributes. Uninhabited, so a [`TransformKind::Choice`] node cannot be
+    /// built in this direction at all.
+    type Choice = std::convert::Infallible;
     type Link = OutLink;
 }
 
@@ -135,7 +139,7 @@ impl TransformLowerer<OutOfRust> for FlatView {
         &mut self,
         _node: &OutNode,
         op: &OutProduct,
-        children: Vec<(&OutChild, Partial)>,
+        children: Lowered<'_, OutOfRust, Partial>,
     ) -> Result<Partial, Self::Error> {
         let mut out = Partial::default();
         // Outermost-first: this node's own binding precedes everything reached
@@ -183,6 +187,15 @@ impl TransformLowerer<OutOfRust> for FlatView {
             out.hoists.append(&mut part.hoists);
         }
         Ok(out)
+    }
+
+    fn choice(
+        &mut self,
+        _node: &OutNode,
+        op: &std::convert::Infallible,
+        _variants: Lowered<'_, OutOfRust, Partial>,
+    ) -> Result<Partial, Self::Error> {
+        match *op {}
     }
 }
 

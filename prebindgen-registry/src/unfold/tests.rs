@@ -1918,7 +1918,7 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
         &mut self,
         _node: &OutNode,
         _op: &OutProduct,
-        children: Vec<(&OutChild, String)>,
+        children: crate::transform::Lowered<'_, OutOfRust, String>,
     ) -> Result<String, Self::Error> {
         let rendered: Vec<String> = children
             .into_iter()
@@ -1937,6 +1937,15 @@ impl crate::transform::TransformLowerer<OutOfRust> for Render {
             })
             .collect();
         Ok(format!("[{}]", rendered.join(", ")))
+    }
+
+    fn choice(
+        &mut self,
+        _node: &OutNode,
+        op: &std::convert::Infallible,
+        _variants: crate::transform::Lowered<'_, OutOfRust, String>,
+    ) -> Result<String, Self::Error> {
+        match *op {}
     }
 }
 

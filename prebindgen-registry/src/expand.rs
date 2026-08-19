@@ -37,11 +37,15 @@ use crate::{
 
 mod error;
 mod plan;
+mod tree;
 
 pub use self::{
     error::{ExpandDeclError, ExpandError},
-    plan::{FoldArg, FoldBuild, FoldLeaf, FoldPlan, FoldShape, FoldVariant},
+    plan::{FoldLeaf, FoldPlan, FoldShape},
+    tree::{InChild, InChoice, InLeaf, InLink, InNode, InProduct, IntoRust},
 };
+
+use crate::transform::{Lowered, TransformKind, TransformLowerer};
 
 // ──────────────────────────────────────────────────────────────────────
 // Declarations (populated by the language builder)
@@ -427,7 +431,7 @@ fn build_plan<M>(
             // Combined-selector dispatch under `Optional`.
             visited.insert(target.key());
             let prefix = param.to_string();
-            let (selector, fold_variants) = build_core(
+            let core = build_core(
                 exp,
                 registry,
                 ed,
@@ -444,31 +448,33 @@ fn build_plan<M>(
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
-                selector,
                 present: None,
-                variants: fold_variants,
+                core,
             });
         };
         let sig = ctor_signature(registry, func, &target.key())?;
         if sig.params.len() == 1 {
             let (_pn, pty) = &sig.params[0];
+            let leaf_ty = pty.optional();
             leaves.push(FoldLeaf {
                 name: param.clone(),
-                ty: pty.optional(),
+                ty: leaf_ty.clone(),
             });
             return Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
                 shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
-                selector: None,
                 present: None,
-                variants: vec![FoldVariant {
-                    ctor: Some(func.clone()),
-                    fallible: sig.fallible,
-                    clone: false,
-                    inputs: vec![FoldArg::Leaf(0, false)],
-                }],
+                // The sole leaf's `Option` is WHOLE-PARAM presence, unwrapped
+                // by the enclosing shape — not selector presence, so the
+                // constructor argument is not `wrapped`.
+                core: ctor_node(
+                    target,
+                    func,
+                    sig.fallible,
+                    vec![leaf_child(leaf_ty, 0, false)],
+                ),
             });
         }
         // Multi-arg: presence flag (leaf 0) + one flat leaf per ctor arg.
@@ -478,7 +484,7 @@ fn build_plan<M>(
             ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::Bool),
         });
         let prefix = param.to_string();
-        let mut inputs = Vec::new();
+        let mut args = Vec::new();
         for (pname, pty) in &sig.params {
             let name = ident(&format!("{}_{}", prefix, pname));
             let arg = build_arg(
@@ -491,28 +497,22 @@ fn build_plan<M>(
                 &mut leaves,
                 visited,
             )?;
-            if matches!(arg, FoldArg::Build(_)) {
+            if !matches!(arg.node.kind, TransformKind::Leaf(_)) {
                 return Err(ExpandError::UnsupportedOptional {
                     func: ed.func.clone(),
                     param: ed.param.clone(),
                     reason: "nested-buildable constructor arguments cannot be optional",
                 });
             }
-            inputs.push(arg);
+            args.push(arg);
         }
         return Ok(FoldPlan {
             target: target.clone(),
             by_ref,
             shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
             leaves,
-            selector: None,
             present: Some(0),
-            variants: vec![FoldVariant {
-                ctor: Some(func.clone()),
-                fallible: sig.fallible,
-                clone: false,
-                inputs,
-            }],
+            core: ctor_node(target, func, sig.fallible, args),
         });
     }
 
@@ -520,7 +520,7 @@ fn build_plan<M>(
     // on the cycle chain so a constructor parameter of the same type is rejected.
     visited.insert(target.key());
     let prefix = param.to_string();
-    let (selector, fold_variants) = build_core(
+    let core = build_core(
         exp,
         registry,
         ed,
@@ -537,17 +537,48 @@ fn build_plan<M>(
         by_ref,
         shape: FoldShape::Base,
         leaves,
-        selector,
         present: None,
-        variants: fold_variants,
+        core,
     })
 }
 
-/// Build a construct core (selector + dispatch arms) for `target` from its
-/// `variants`, appending wire leaves to `leaves`. Recursive: a constructor
-/// parameter whose type has its OWN default constructor is built as a nested
-/// [`FoldArg::Build`] (recursive input). Used by both the top-level [`build_plan`]
-/// and each nested build. `prefix` disambiguates leaf names across the tree.
+/// A constructor call over `args`, producing `target`.
+fn ctor_node(
+    target: &prebindgen_flat::flat::TypeRef,
+    func: &syn::Ident,
+    fallible: bool,
+    args: Vec<InChild>,
+) -> InNode {
+    InNode {
+        ty: target.clone(),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: func.clone(),
+                fallible,
+            },
+            children: args,
+        },
+    }
+}
+
+/// One wire leaf used as an argument: decoded from slot `leaf`, `wrapped` when
+/// selector presence put an `Option` around it.
+fn leaf_child(ty: prebindgen_flat::flat::TypeRef, leaf: usize, wrapped: bool) -> InChild {
+    InChild {
+        link: InLink { by_ref: false },
+        node: InNode {
+            ty,
+            kind: TransformKind::Leaf(InLeaf { leaf, wrapped }),
+        },
+    }
+}
+
+/// Build a construct core for `target` from its `variants`, appending wire
+/// leaves to `leaves`: a single constructor is one product, anything else is a
+/// selector choice over one product per arm. Recursive: a constructor parameter
+/// whose type has its OWN default constructor becomes a nested core in place of
+/// a leaf. Used by both the top-level [`build_plan`] and each nested build.
+/// `prefix` disambiguates leaf names across the tree.
 #[allow(clippy::too_many_arguments)]
 fn build_core<M>(
     exp: &Expansions,
@@ -559,7 +590,7 @@ fn build_core<M>(
     prefix: &str,
     leaves: &mut Vec<FoldLeaf>,
     visited: &mut HashSet<TypeKey>,
-) -> Result<(Option<usize>, Vec<FoldVariant>), ExpandError> {
+) -> Result<InNode, ExpandError> {
     if let [Variant::Ctor(func)] = variants {
         // Single constructor — no selector; args passed directly (not Option-wrapped).
         let sig = ctor_signature(registry, func, &target.key())?;
@@ -575,77 +606,74 @@ fn build_core<M>(
                 exp, registry, ed, pty, name, false, leaves, visited,
             )?);
         }
-        Ok((
-            None,
-            vec![FoldVariant {
-                ctor: Some(func.clone()),
-                fallible: sig.fallible,
-                clone: false,
-                inputs: args,
-            }],
-        ))
-    } else {
-        // Combined — selector leaf, then `Option`-wrapped per-arm inputs.
-        let sel_idx = leaves.len();
-        leaves.push(FoldLeaf {
-            name: ident(&format!("{}_sel", prefix)),
-            // The selector, likewise composed and placeless.
-            ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
-        });
-        let mut fold_variants: Vec<FoldVariant> = Vec::new();
-        for (vi, v) in variants.iter().enumerate() {
-            match v {
-                Variant::Ctor(func) => {
-                    let sig = ctor_signature(registry, func, &target.key())?;
-                    let np = sig.params.len();
-                    let mut args = Vec::new();
-                    for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
-                        let name = if np == 1 {
-                            ident(&format!("{}_{}", prefix, vi))
-                        } else {
-                            ident(&format!("{}_{}_{}", prefix, vi, pi))
-                        };
-                        // `dispatched = true`: a combined arm's leaves are
-                        // `Option`-wrapped (selector presence). Recursive nesting
-                        // under a combined arm is rejected by `build_arg`.
-                        args.push(build_arg(
-                            exp, registry, ed, pty, name, true, leaves, visited,
-                        )?);
-                    }
-                    fold_variants.push(FoldVariant {
-                        ctor: Some(func.clone()),
-                        fallible: sig.fallible,
-                        clone: false,
-                        inputs: args,
-                    });
-                }
-                Variant::Identity => {
-                    let idx = leaves.len();
-                    let leaf_ty = if by_ref {
-                        target.borrowed().optional()
+        return Ok(ctor_node(target, func, sig.fallible, args));
+    }
+    // Combined — selector leaf, then `Option`-wrapped per-arm inputs.
+    let sel_idx = leaves.len();
+    leaves.push(FoldLeaf {
+        name: ident(&format!("{}_sel", prefix)),
+        // The selector, likewise composed and placeless.
+        ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
+    });
+    let mut arms: Vec<InChild> = Vec::new();
+    for (vi, v) in variants.iter().enumerate() {
+        let node = match v {
+            Variant::Ctor(func) => {
+                let sig = ctor_signature(registry, func, &target.key())?;
+                let np = sig.params.len();
+                let mut args = Vec::new();
+                for (pi, (_pname, pty)) in sig.params.iter().enumerate() {
+                    let name = if np == 1 {
+                        ident(&format!("{}_{}", prefix, vi))
                     } else {
-                        target.optional()
+                        ident(&format!("{}_{}_{}", prefix, vi, pi))
                     };
-                    leaves.push(FoldLeaf {
-                        name: ident(&format!("{}_{}", prefix, vi)),
-                        ty: leaf_ty,
-                    });
-                    fold_variants.push(FoldVariant {
-                        ctor: None,
-                        fallible: false,
-                        clone: by_ref,
-                        inputs: vec![FoldArg::Leaf(idx, false)],
-                    });
+                    // `dispatched = true`: a combined arm's leaves are
+                    // `Option`-wrapped (selector presence). Recursive nesting
+                    // under a combined arm is rejected by `build_arg`.
+                    args.push(build_arg(
+                        exp, registry, ed, pty, name, true, leaves, visited,
+                    )?);
+                }
+                ctor_node(target, func, sig.fallible, args)
+            }
+            Variant::Identity => {
+                let idx = leaves.len();
+                let leaf_ty = if by_ref {
+                    target.borrowed().optional()
+                } else {
+                    target.optional()
+                };
+                leaves.push(FoldLeaf {
+                    name: ident(&format!("{}_{}", prefix, vi)),
+                    ty: leaf_ty.clone(),
+                });
+                InNode {
+                    ty: target.clone(),
+                    kind: TransformKind::Product {
+                        op: InProduct::Identity { clone: by_ref },
+                        children: vec![leaf_child(leaf_ty, idx, true)],
+                    },
                 }
             }
-        }
-        Ok((Some(sel_idx), fold_variants))
+        };
+        arms.push(InChild {
+            link: InLink { by_ref: false },
+            node,
+        });
     }
+    Ok(InNode {
+        ty: target.clone(),
+        kind: TransformKind::Choice {
+            op: InChoice { selector: sel_idx },
+            variants: arms,
+        },
+    })
 }
 
 /// Build one constructor-parameter input. If the parameter's (peeled) type has
-/// its own default constructor, recurse into a nested [`FoldArg::Build`]
-/// (recursive input); otherwise it is a flat wire [`FoldArg::Leaf`].
+/// its own default constructor, recurse into a nested core (a recursive input);
+/// otherwise it is a flat wire leaf.
 #[allow(clippy::too_many_arguments)]
 fn build_arg<M>(
     exp: &Expansions,
@@ -656,7 +684,7 @@ fn build_arg<M>(
     dispatched: bool,
     leaves: &mut Vec<FoldLeaf>,
     visited: &mut HashSet<TypeKey>,
-) -> Result<FoldArg, ExpandError> {
+) -> Result<InChild, ExpandError> {
     // The boundary layers down to the parameter's core type.
     let (popt, pby_ref, bare) = constructed_value_layers(pty);
     let key = bare.key();
@@ -684,7 +712,7 @@ fn build_arg<M>(
             });
         }
         let variants = c.variants.clone();
-        let (selector, vars) = build_core(
+        let node = build_core(
             exp,
             registry,
             ed,
@@ -696,29 +724,24 @@ fn build_arg<M>(
             visited,
         )?;
         visited.remove(&key);
-        Ok(FoldArg::Build(Box::new(FoldBuild {
-            target: bare.clone(),
-            by_ref: pby_ref,
-            selector,
-            variants: vars,
-        })))
+        Ok(InChild {
+            link: InLink { by_ref: pby_ref },
+            node,
+        })
     } else {
         let idx = leaves.len();
         // A dispatched (selector-presence) arm `Option`-wraps its leaves — but
         // an argument that is itself `Option<…>` passes through with its own
         // type: `None` is a legitimate value for the taken arm, and the wire
-        // cannot represent the double `Option` anyway. Marked `passthrough` so
-        // the emit side skips the selector-presence unwrap.
-        let passthrough = dispatched && popt;
+        // cannot represent the double `Option` anyway. Such an argument is not
+        // `wrapped`, so the emit side skips the selector-presence unwrap.
+        let wrapped = dispatched && !popt;
+        let leaf_ty = if wrapped { pty.optional() } else { pty.clone() };
         leaves.push(FoldLeaf {
             name,
-            ty: if dispatched && !passthrough {
-                pty.optional()
-            } else {
-                pty.clone()
-            },
+            ty: leaf_ty.clone(),
         });
-        Ok(FoldArg::Leaf(idx, passthrough))
+        Ok(leaf_child(leaf_ty, idx, wrapped))
     }
 }
 
@@ -769,7 +792,7 @@ fn fold_shape(
     match shape {
         FoldShape::Base => emit_core_construct(plan, leaf_locals, bound, qualify),
         FoldShape::Optional((), inner) => {
-            if let Some(sidx) = plan.selector {
+            if let Some(sidx) = plan.selector() {
                 // Combined-selector dispatch under `Optional`: the selector
                 // ALSO encodes absence — `-1` = `None`, `0..n-1` = the taken
                 // arm (dispatched by the shared construct core; an out-of-range
@@ -825,8 +848,8 @@ fn fold_shape(
 
 /// Emit the innermost construct → `Result<Target, String>`. With `bound =
 /// Some(v)` (under an `Optional`/`Iterable` layer ⇒ single, single-arg ctor)
-/// the ctor is applied to `v`; with `bound = None` (top level) it reads the
-/// leaves — a single constructor (any arity) or a combined-selector dispatch.
+/// the ctor is applied to `v`; with `bound = None` (top level) the whole
+/// construct core is lowered, reading the decoded leaves.
 fn emit_core_construct(
     plan: &FoldPlan,
     leaf_locals: &[syn::Ident],
@@ -837,217 +860,221 @@ fn emit_core_construct(
         // Shaped construct: a single, single-arg constructor applied to the
         // unwrapped element. (`apply` guarantees this shape — never identity,
         // never combined, never multi-arg under a shape layer.)
-        let var = &plan.variants[0];
-        let func = var
-            .ctor
-            .as_ref()
-            .expect("shaped expansion is single-constructor (never identity)");
-        return ctor_call_result(&qualify(func), std::slice::from_ref(v), var.fallible);
+        let TransformKind::Product {
+            op: InProduct::Ctor { func, fallible },
+            ..
+        } = &plan.core.kind
+        else {
+            unreachable!(
+                "shaped expansion is a single constructor (never identity, never combined)"
+            )
+        };
+        return ctor_call_result(&qualify(func), std::slice::from_ref(v), *fallible);
     }
-    emit_dispatch(plan.selector, &plan.variants, leaf_locals, qualify)
+    lower_core(&plan.core, leaf_locals, qualify)
 }
 
-/// Emit a construct dispatch → `Result<Target, String>`: a single variant
-/// applied directly (no selector), or a `match` over the selector leaf. Shared
-/// by the top-level [`emit_core_construct`] and each nested [`emit_build`].
-fn emit_dispatch(
-    selector: Option<usize>,
-    variants: &[FoldVariant],
+/// Lower one construct core to a `Result<Target, String>` expression, through
+/// the shared traversal — the registry writes node policy here and no recursion
+/// of its own.
+fn lower_core(
+    core: &InNode,
     leaf_locals: &[syn::Ident],
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
-    match selector {
-        None => variant_result_expr(
-            &variants[0],
-            leaf_locals,
-            qualify,
-            /*dispatched=*/ false,
-        ),
-        Some(si) => {
-            let sel = &leaf_locals[si];
-            let arms: Vec<TokenStream> = variants
-                .iter()
-                .enumerate()
-                .map(|(vi, v)| {
-                    let lit = vi as i32;
-                    let body =
-                        variant_result_expr(v, leaf_locals, qualify, /*dispatched=*/ true);
-                    quote!(#lit => #body,)
-                })
-                .collect();
-            syn::parse_quote!({
-                match #sel {
-                    #(#arms)*
-                    __sel => ::core::result::Result::Err(::std::format!(
-                        "invalid constructor selector: {}",
-                        __sel
-                    )),
-                }
-            })
+    core.lower(&mut ConstructEmitter {
+        leaf_locals,
+        qualify,
+    })
+    .expect("emitting a built construct cannot fail")
+}
+
+/// Lowers an into-Rust construct into the Rust expression that performs it.
+///
+/// Two kinds of value flow through it, told apart by the child's node kind
+/// exactly as the constructor call must anyway: a **leaf** lowers to its
+/// decoded local, while a **product or choice** lowers to an expression of type
+/// `Result<_, String>`.
+struct ConstructEmitter<'a> {
+    /// The already-decoded Rust locals, 1:1 with `FoldPlan::leaves`.
+    leaf_locals: &'a [syn::Ident],
+    /// Maps a constructor ident to its call path (e.g. prefixing the source
+    /// module).
+    qualify: &'a dyn Fn(&syn::Ident) -> syn::Path,
+}
+
+impl ConstructEmitter<'_> {
+    /// The `Option`-wrapped-by-selector-presence flag of a child that is a
+    /// leaf; `None` for a child that is a nested construct.
+    fn wrapped(child: &InChild) -> Option<bool> {
+        match &child.node.kind {
+            TransformKind::Leaf(op) => Some(op.wrapped),
+            _ => None,
         }
     }
 }
 
-/// Emit a nested recursive-input build → `Result<SubTarget, String>` (the dual
-/// of [`emit_core_construct`] for a [`FoldArg::Build`] parameter).
-fn emit_build(
-    b: &FoldBuild,
-    leaf_locals: &[syn::Ident],
-    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-) -> syn::Expr {
-    emit_dispatch(b.selector, &b.variants, leaf_locals, qualify)
-}
+impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
+    type Value = syn::Expr;
+    type Error = std::convert::Infallible;
 
-/// Build a `Result<Target, String>` expression for one core variant. When
-/// `dispatched` (a combined-selector arm), the variant's input leaves are
-/// `Option<_>` — only the selected arm's inputs are present — so they are
-/// unwrapped (a missing input yields `Err`); otherwise they are passed
-/// directly. (This `Option`-ness is *selector presence*, distinct from
-/// [`FoldShape::Optional`], which is whole-param presence handled by the
-/// enclosing fold.)
-fn variant_result_expr(
-    v: &FoldVariant,
-    leaf_locals: &[syn::Ident],
-    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    dispatched: bool,
-) -> syn::Expr {
-    // A Leaf arg's decoded local. Identity arms and combined-dispatched arms are
-    // Leaf-only (recursive `Build` args appear only in a non-dispatched single
-    // constructor — `build_arg` rejects nesting under a dispatched variant).
-    let leaf = |a: &FoldArg| -> &syn::Ident {
-        match a {
-            FoldArg::Leaf(i, _) => &leaf_locals[*i],
-            FoldArg::Build(_) => {
-                unreachable!("recursive Build arg only in a non-dispatched single constructor")
-            }
-        }
-    };
+    fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<syn::Expr, Self::Error> {
+        let local = &self.leaf_locals[op.leaf];
+        Ok(syn::parse_quote!(#local))
+    }
 
-    match &v.ctor {
-        None => {
-            // Identity: the sole input is the target value (or a borrow of it
-            // that we clone, for `&T` consumers — preserving the caller's handle).
-            let loc = leaf(&v.inputs[0]);
-            // `&*__v` derefs through whatever the borrow leaf decoded to (a
-            // plain `&T`, or an adapter smart-pointer like jnigen's
-            // `OwnedObject<T>`) down to `T`, then clones — keeping the caller's
-            // handle alive without the core knowing the adapter's borrow type.
-            let some_val: syn::Expr = if v.clone {
-                syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
-                    &*__v
-                )))
-            } else {
-                syn::parse_quote!(::core::result::Result::Ok(__v))
-            };
-            if dispatched {
-                syn::parse_quote!(match #loc {
-                    ::core::option::Option::Some(__v) => #some_val,
-                    ::core::option::Option::None => ::core::result::Result::Err(
-                        ::std::string::String::from("identity variant value missing")
-                    ),
-                })
-            } else if v.clone {
-                syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(&*#loc)))
-            } else {
-                syn::parse_quote!(::core::result::Result::Ok(#loc))
-            }
-        }
-        Some(func) => {
-            let path = qualify(func);
-            if dispatched {
-                // Combined arm — Leaf-only inputs. Selector-presence-wrapped
-                // inputs are unwrapped (missing ⇒ `Err`); **passthrough**
-                // inputs (constructor args that are themselves `Option<…>`)
-                // pass their decoded local directly — `None` is a legitimate
-                // value for the taken arm.
-                let mut wrapped_locals: Vec<&syn::Ident> = Vec::new();
-                let mut wrapped_binds: Vec<syn::Ident> = Vec::new();
-                let mut call_args: Vec<syn::Expr> = Vec::new();
-                for (i, a) in v.inputs.iter().enumerate() {
-                    let loc = leaf(a);
-                    if matches!(a, FoldArg::Leaf(_, true)) {
-                        call_args.push(syn::parse_quote!(#loc));
+    fn product(
+        &mut self,
+        _node: &InNode,
+        op: &InProduct,
+        children: Lowered<'_, IntoRust, syn::Expr>,
+    ) -> Result<syn::Expr, Self::Error> {
+        let missing = quote!(::core::result::Result::Err(::std::string::String::from(
+            "constructor variant input missing"
+        )));
+        match op {
+            InProduct::Identity { clone } => {
+                // The sole input is the target value (or a borrow of it that we
+                // clone, for `&T` consumers — preserving the caller's handle).
+                let (child, value) = &children[0];
+                // `&*__v` derefs through whatever the borrow leaf decoded to (a
+                // plain `&T`, or an adapter smart-pointer like jnigen's
+                // `OwnedObject<T>`) down to `T`, then clones — keeping the
+                // caller's handle alive without the core knowing the adapter's
+                // borrow type.
+                if Self::wrapped(child) == Some(true) {
+                    let some_val: syn::Expr = if *clone {
+                        syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
+                            &*__v
+                        )))
                     } else {
-                        let b = ident(&format!("__p{}", i));
-                        wrapped_locals.push(loc);
-                        wrapped_binds.push(b.clone());
-                        call_args.push(syn::parse_quote!(#b));
-                    }
+                        syn::parse_quote!(::core::result::Result::Ok(__v))
+                    };
+                    return Ok(syn::parse_quote!(match #value {
+                        ::core::option::Option::Some(__v) => #some_val,
+                        ::core::option::Option::None => ::core::result::Result::Err(
+                            ::std::string::String::from("identity variant value missing")
+                        ),
+                    }));
                 }
-                let call = ctor_call_result(&path, &call_args, v.fallible);
-                let missing = quote!(::core::result::Result::Err(::std::string::String::from(
-                    "constructor variant input missing"
-                )));
-                match wrapped_locals.len() {
-                    // All-passthrough arm: the selector alone decides; call directly.
-                    0 => call,
-                    1 => {
-                        // `match a { Some(p0) => <call>, None => Err }`
-                        let loc = wrapped_locals[0];
-                        let p0 = &wrapped_binds[0];
-                        syn::parse_quote!(match #loc {
-                            ::core::option::Option::Some(#p0) => #call,
-                            ::core::option::Option::None => #missing,
-                        })
+                Ok(if *clone {
+                    syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
+                        &*#value
+                    )))
+                } else {
+                    syn::parse_quote!(::core::result::Result::Ok(#value))
+                })
+            }
+            InProduct::Ctor { func, fallible } => {
+                let path = (self.qualify)(func);
+                if children.iter().all(|(c, _)| Self::wrapped(c).is_some()) {
+                    // Flat arguments only. Those `Option`-wrapped by selector
+                    // presence are unwrapped (missing ⇒ `Err`); the rest — a
+                    // non-dispatched constructor's arguments, and *passthrough*
+                    // ones the constructor itself declares `Option<…>` — are
+                    // passed as decoded.
+                    let mut wrapped_values: Vec<&syn::Expr> = Vec::new();
+                    let mut wrapped_binds: Vec<syn::Ident> = Vec::new();
+                    let mut call_args: Vec<syn::Expr> = Vec::new();
+                    for (i, (child, value)) in children.iter().enumerate() {
+                        if Self::wrapped(child) == Some(true) {
+                            let b = ident(&format!("__p{}", i));
+                            wrapped_values.push(value);
+                            wrapped_binds.push(b.clone());
+                            call_args.push(syn::parse_quote!(#b));
+                        } else {
+                            call_args.push(value.clone());
+                        }
                     }
-                    _ => {
-                        // `match (a, b, …) { (Some(p0), Some(p1), …) => <call>, _ => Err }`
-                        let some_pats: Vec<TokenStream> = wrapped_binds
-                            .iter()
-                            .map(|b| quote!(::core::option::Option::Some(#b)))
-                            .collect();
-                        syn::parse_quote!(match ( #(#wrapped_locals),* ) {
-                            ( #(#some_pats),* ) => #call,
-                            _ => #missing,
-                        })
-                    }
+                    let call = ctor_call_result(&path, &call_args, *fallible);
+                    return Ok(match wrapped_values.len() {
+                        // Nothing to unwrap: call directly.
+                        0 => call,
+                        1 => {
+                            // `match a { Some(p0) => <call>, None => Err }`
+                            let value = wrapped_values[0];
+                            let p0 = &wrapped_binds[0];
+                            syn::parse_quote!(match #value {
+                                ::core::option::Option::Some(#p0) => #call,
+                                ::core::option::Option::None => #missing,
+                            })
+                        }
+                        _ => {
+                            // `match (a, b, …) { (Some(p0), Some(p1), …) => <call>, _ => Err }`
+                            let some_pats: Vec<TokenStream> = wrapped_binds
+                                .iter()
+                                .map(|b| quote!(::core::option::Option::Some(#b)))
+                                .collect();
+                            syn::parse_quote!(match ( #(#wrapped_values),* ) {
+                                ( #(#some_pats),* ) => #call,
+                                _ => #missing,
+                            })
+                        }
+                    });
                 }
-            } else if v.inputs.iter().all(|a| matches!(a, FoldArg::Leaf(..))) {
-                // Non-dispatched, flat (no recursion): call directly — identical
-                // to the pre-recursion form.
-                let args: Vec<&syn::Ident> = v.inputs.iter().map(&leaf).collect();
-                ctor_call_result(&path, &args, v.fallible)
-            } else {
-                // Non-dispatched with ≥1 recursive `Build` arg: bind each arg
-                // (Leaf = the decoded value; Build = the nested construct,
+                // At least one argument is itself built. Bind every argument
+                // (a leaf to its decoded value; a nested construct
                 // `?`-unwrapped) in an IIFE that provides the `Result` context.
+                // Selector-presence unwrapping never meets this case —
+                // `build_arg` rejects a nested build under a dispatched arm.
                 let mut stmts: Vec<TokenStream> = Vec::new();
                 let mut args: Vec<TokenStream> = Vec::new();
-                for (i, a) in v.inputs.iter().enumerate() {
+                for (i, (child, value)) in children.iter().enumerate() {
                     let ai = ident(&format!("__a{}", i));
-                    match a {
-                        FoldArg::Leaf(li, _) => {
-                            let loc = &leaf_locals[*li];
-                            stmts.push(quote!(let #ai = #loc;));
+                    if Self::wrapped(child).is_some() {
+                        stmts.push(quote!(let #ai = #value;));
+                        args.push(quote!(#ai));
+                    } else {
+                        // Pin the nested build's error type to `String` so a
+                        // non-fallible inner ctor's bare `Ok(..)` infers `E`.
+                        stmts.push(quote!(
+                            let #ai = {
+                                let __r: ::core::result::Result<_, ::std::string::String> = #value;
+                                __r?
+                            };
+                        ));
+                        if child.link.by_ref {
+                            args.push(quote!(&#ai));
+                        } else {
                             args.push(quote!(#ai));
-                        }
-                        FoldArg::Build(b) => {
-                            // Pin the nested build's error type to `String` so a
-                            // non-fallible inner ctor's bare `Ok(..)` infers `E`.
-                            let be = emit_build(b, leaf_locals, qualify);
-                            stmts.push(quote!(
-                                let #ai = {
-                                    let __r: ::core::result::Result<_, ::std::string::String> = #be;
-                                    __r?
-                                };
-                            ));
-                            if b.by_ref {
-                                args.push(quote!(&#ai));
-                            } else {
-                                args.push(quote!(#ai));
-                            }
                         }
                     }
                 }
-                let call = ctor_call_result(&path, &args, v.fallible);
-                syn::parse_quote!({
+                let call = ctor_call_result(&path, &args, *fallible);
+                Ok(syn::parse_quote!({
                     (|| -> ::core::result::Result<_, ::std::string::String> {
                         #(#stmts)*
                         #call
                     })()
-                })
+                }))
             }
         }
+    }
+
+    fn choice(
+        &mut self,
+        _node: &InNode,
+        op: &InChoice,
+        variants: Lowered<'_, IntoRust, syn::Expr>,
+    ) -> Result<syn::Expr, Self::Error> {
+        let sel = &self.leaf_locals[op.selector];
+        let arms: Vec<TokenStream> = variants
+            .iter()
+            .enumerate()
+            .map(|(vi, (_, body))| {
+                let lit = vi as i32;
+                quote!(#lit => #body,)
+            })
+            .collect();
+        Ok(syn::parse_quote!({
+            match #sel {
+                #(#arms)*
+                __sel => ::core::result::Result::Err(::std::format!(
+                    "invalid constructor selector: {}",
+                    __sel
+                )),
+            }
+        }))
     }
 }
 
