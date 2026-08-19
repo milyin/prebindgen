@@ -86,6 +86,20 @@ mod handles {
         pub(super) span: Option<Span>,
     }
 
+    #[derive(Clone)]
+    pub struct Ingot {
+        pub(super) grams: i64,
+    }
+
+    pub struct Vault {
+        pub(super) always: Ingot,
+        pub(super) maybe: Option<Ingot>,
+    }
+
+    pub struct VaultHolder {
+        pub(super) vault: Option<Vault>,
+    }
+
     pub struct EscapeProbe {
         pub(super) value: i64,
     }
@@ -345,6 +359,68 @@ pub fn lookup_of(count: i64, total: f64) -> Lookup {
         c if c < 0 => Lookup::Failed("negative count".to_string()),
         0 => Lookup::Absent,
         c => Lookup::Found(summary_new(c, total)),
+    }
+}
+
+/// The payload shapes whose **layers** a sum's raw builder has to carry.
+///
+/// Between a wire slot and the property there can be a collection, an `Option`,
+/// and the leaf the wrap knows about, and the builder applied the leaf's
+/// conversion straight to the slot — so a null was dropped, a handle was minted
+/// from a nullable slot, and an element conversion ran on the list itself
+/// (#429). Every one of those is a Kotlin compile error; the Rust half is
+/// identical either way, which is why only a compiled harness can hold the
+/// line.
+///
+/// The last two alternatives are the controls, and they matter as much as the
+/// first three: distributing over a collection is right only when its elements
+/// convert. `Vec<u8>` surfaces as a Kotlin `ByteArray`, and mapping the
+/// identity over one produces a `List<Byte>` — the property's type replaced
+/// rather than preserved.
+#[prebindgen]
+#[derive(Clone)]
+pub enum Layered {
+    /// `Option<u64>` — JVM null is the absent case, so the unsigned conversion
+    /// has to be null-safe rather than applied through it.
+    Count(Option<u64>),
+    /// `Option<Summary>` — the same, over a handle that must be **minted** in
+    /// the present case and left alone in the absent one.
+    Held(Option<Summary>),
+    /// `Vec<Option<u64>>` — the absences are *inside* the list, so the slot is
+    /// un-inerted and the conversion runs per element.
+    Many(Vec<Option<u64>>),
+    /// A run under an `Option` — the two layers in the other order. Looking for
+    /// the run without peeling the `Option` first finds none, and the element
+    /// conversion lands on the list.
+    Values(Option<Vec<Option<u64>>>),
+    /// Layers nest: the element of this run is another run, so the leaf's
+    /// conversion belongs two levels down and a walk that unrolls a fixed two
+    /// applies it one level too high.
+    Nested(Vec<Vec<Option<u64>>>),
+    /// A control: a run of values that needs no element conversion, and whose
+    /// Kotlin type is not a `List` at all.
+    Blob(Vec<u8>),
+    /// A control: no layer between the slot and the property.
+    Plain(i64),
+}
+
+/// Build a [`Layered`], one `which` per alternative and per case within it:
+/// `0` absent count, `1` present count, `2` absent handle, `3` present handle,
+/// `4` a list mixing present and absent, `5` an absent run, `6` a present run,
+/// `7` a run of runs, `8` a byte run, anything else `Plain`.
+#[prebindgen]
+pub fn layered_of(which: i32) -> Layered {
+    match which {
+        0 => Layered::Count(None),
+        1 => Layered::Count(Some(4)),
+        2 => Layered::Held(None),
+        3 => Layered::Held(Some(summary_new(4, 8.0))),
+        4 => Layered::Many(vec![Some(1), None, Some(3)]),
+        5 => Layered::Values(None),
+        6 => Layered::Values(Some(vec![Some(5), None])),
+        7 => Layered::Nested(vec![vec![Some(6), None], vec![]]),
+        8 => Layered::Blob(vec![1, 2, 3]),
+        _ => Layered::Plain(7),
     }
 }
 
@@ -896,6 +972,75 @@ pub fn span_holder_new(seq: i64, required_ms: u64, delay_ms: i64) -> SpanHolder 
 #[prebindgen]
 pub fn span_holder_span(h: &SpanHolder) -> Option<&Span> {
     h.span.as_ref()
+}
+
+/// The handle twin of [`Span`] — #142's matrix on the projection that carries a
+/// niche without declaring one.
+///
+/// An opaque handle's `None` rides `0L`, because a `Box` pointer is never zero,
+/// exactly as a bounded `convert!` leaf's rides its declared sentinel. So the
+/// same two facts decide the wrap, and the same four combinations exist:
+/// `always` has no niche of its own and `maybe` does, and [`VaultHolder`] makes
+/// both reachable through an absent ancestor.
+///
+/// The row that needs a *running* JVM is the fourth — an `Option<handle>` under
+/// an optional ancestor. Both absences collapse to one nullable typed view, and
+/// the two halves that carry them (the JNI descriptor and the encoder's
+/// `jvalue`) can disagree while both still compile, which is what #433 was.
+#[prebindgen]
+pub type Vault = handles::Vault;
+
+/// The leaf [`Vault`] holds. Deliberately a handle with **no value form**: a
+/// declared one would be expanded into its own fields by the same walk, and the
+/// leaf under test would stop being a handle.
+#[prebindgen]
+pub type Ingot = handles::Ingot;
+
+/// What an [`Ingot`] weighs — enough to prove the handle delivered to the JVM
+/// points at the right object.
+#[prebindgen]
+pub fn ingot_grams(i: &Ingot) -> i64 {
+    i.grams
+}
+
+/// [`Vault`]'s value form: one handle leaf with a niche of its own, one without.
+#[prebindgen]
+pub struct VaultStruct {
+    pub always: Ingot,
+    pub maybe: Option<Ingot>,
+}
+
+/// The accessor `expand_return!(Vault).fields(fields!(..))` names.
+#[prebindgen]
+pub fn vault_to_struct(v: &Vault) -> VaultStruct {
+    VaultStruct {
+        always: v.always.clone(),
+        maybe: v.maybe.clone(),
+    }
+}
+
+/// The holder whose vault is reached **optionally** — the conditional hoist,
+/// and the only way to reach the fourth row.
+#[prebindgen]
+pub type VaultHolder = handles::VaultHolder;
+
+/// `None` when `seq` is negative and `maybe` is absent when `maybe_count` is,
+/// so one call reaches every row: ancestor absent, ancestor present with the
+/// leaf absent, and both present.
+#[prebindgen]
+pub fn vault_holder_new(seq: i64, count: i64, maybe_count: i64) -> VaultHolder {
+    VaultHolder {
+        vault: (seq >= 0).then(|| handles::Vault {
+            always: handles::Ingot { grams: count },
+            maybe: (maybe_count >= 0).then_some(handles::Ingot { grams: maybe_count }),
+        }),
+    }
+}
+
+/// The borrowed optional accessor that makes [`Vault`]'s leaves nullable.
+#[prebindgen]
+pub fn vault_holder_vault(h: &VaultHolder) -> Option<&Vault> {
+    h.vault.as_ref()
 }
 
 /// Deliver a converted value through the generated typed/raw callback twin —
@@ -1854,6 +1999,34 @@ pub fn holder_tag_or(h: Option<Holder>, fallback: i64) -> i64 {
     match h {
         Some(h) => h.tag + h.summary.count,
         None => fallback,
+    }
+}
+
+/// [`Holder`]'s optional twin: the handle field may be **absent**.
+///
+/// The two are the same shape with one `Option` between the field and the
+/// handle, and the factory that rebuilds them on the Kotlin side takes a
+/// different arm for each. The present arm has to mint the handle through the
+/// generated factory, because #404 made the constructor `private` — and the
+/// optional arm went on naming the constructor, so this shape emitted Kotlin
+/// that does not compile at all (#430).
+///
+/// Nothing in this crate had the shape, which is why an emission test was the
+/// only thing that could have caught it, and why it is here: a `MaybeHolder`
+/// returned to the JVM is built by that factory, so both arms are compiled and
+/// both are run.
+#[prebindgen]
+pub struct MaybeHolder {
+    pub tag: i64,
+    pub summary: Option<Summary>,
+}
+
+/// Build a [`MaybeHolder`] with the handle present or absent.
+#[prebindgen]
+pub fn maybe_holder_new(tag: i64, count: i64, total: f64, present: bool) -> MaybeHolder {
+    MaybeHolder {
+        tag,
+        summary: present.then_some(Summary { count, total }),
     }
 }
 

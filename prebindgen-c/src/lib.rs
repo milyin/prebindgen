@@ -607,6 +607,74 @@ fn r_is_vec(t: &TypeRef) -> bool {
     matches!(t.kind(), TypeKind::Vec(_))
 }
 
+/// A converter destination that is the unit — the mark `out_wrappers` puts on a
+/// type with no wire of its own.
+fn marker_destination(ty: &syn::Type) -> bool {
+    matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
+}
+
+/// The composite shapes [`Cbindgen::lower_shape`] decomposes: a value with no
+/// wire of its own, whose ABI is the fields it lowers to.
+///
+/// Read off the model rather than off the marker converter's `()` destination.
+/// `out_wrappers` gives that destination to a `Result` too, and no arm lowers
+/// one — so a destination test answers `yes` for a shape nothing can emit, and
+/// the caller ends up calling the marker it was trying to avoid (#428 review).
+fn r_is_lowered_composite(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
+    let composite = t.optional_inner().is_some() || r_is_vec(t) || r_cow_slice_elem(t).is_some();
+    composite && r_shape_is_lowerable(t, registry)
+}
+
+/// Whether this node already has a wire of its own: a real converter rather
+/// than the marker that stands in for a shape with none.
+///
+/// `select_output_type` tries `out_custom` before `out_wrappers`, so a declared
+/// conversion answers here — and the shape lowering has to agree with the
+/// converter table at **every** level, not only the outermost, or the two
+/// describe different ABIs for the same argument (#428 review).
+fn r_has_own_wire(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
+    registry
+        .output_entry(t)
+        .is_some_and(|e| !marker_destination(&e.destination))
+}
+
+/// Whether [`Cbindgen::lower_shape`] decomposes `t` **all the way down**.
+///
+/// Asking only about the outermost layer is not enough: `Option<Result<T, E>>`
+/// is an optional, so a shallow test admits it, and then the lowering reaches
+/// the `Result` as a base field and emits a call to *its* marker — the same
+/// failure one layer in (#428 review).
+///
+/// Every layer below the composite has to end at a value with a **wire of its
+/// own**, and that is a question for the converter table rather than a list of
+/// shapes: a marker destination means "no wire", whatever put it there.
+/// Enumerating the wrapper kinds instead missed `Vec<&'static [u8]>`, whose
+/// element is a plain borrow by every shape test and a shared-slice marker in
+/// the table (#428 review).
+fn r_shape_is_lowerable(t: &TypeRef, registry: &impl Conversions<()>) -> bool {
+    // A node with a wire of its own IS the bottom: `lower_shape` stops there
+    // too, so the recursion must not walk past it into a shape that node no
+    // longer describes.
+    if r_has_own_wire(t, registry) {
+        return true;
+    }
+    if let Some(inner) = t.optional_inner() {
+        return r_shape_is_lowerable(inner, registry);
+    }
+    // A run's element must lower to one wire of its own — the same rule
+    // `lower_shape` asserts when it builds the `(ptr, len)` pair.
+    let leaf = r_vec_elem(t).or_else(|| r_cow_slice_elem(t)).unwrap_or(t);
+    r_has_own_wire(leaf, registry)
+}
+
+/// The element of a `Vec<E>`.
+fn r_vec_elem(t: &TypeRef) -> Option<&TypeRef> {
+    match t.kind() {
+        TypeKind::Vec(elem) => Some(elem),
+        _ => None,
+    }
+}
+
 /// The opaque-pointer payload shape — `Box<T>` or `Option<Box<T>>` — off the
 /// classification, returning the reading of `T`.
 ///

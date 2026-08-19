@@ -86,6 +86,8 @@ Base package: `io.prebindgen.covertest`
 - `holder_tag_or` — `fun holderTagOr(h: Holder?, fallback: Long, onError: JniErrorHandler<Long>): Long`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String?>): String?`
 - `label_series_echo` — `fun labelSeriesEcho(labels: List<String>, onError: JniErrorHandler<List<String>?>): List<String>?`
+- `layered_of` — `fun layeredOf(which: Int, onError: JniErrorHandler<Layered?>): Layered?`
+  - shaped by: return `Layered` decomposed → [tag, count_v0, held_v0, many_v0, values_v0, nested_v0, blob_v0, plain_v0] (Callback delivery)
 - `ledger_each` — `fun ledgerEach(n: Long, sink: LedgerCallback, onError: JniErrorHandler<Unit>)`
 - `ledger_new` — `fun <R> ledgerNew(n: Long, onError: JniErrorHandler<R?>, build: LedgerBuilder<R>): R?`
   - shaped by: return `Ledger` decomposed → [ledgerFiled__summary__count, ledgerFiled__summary__total, ledgerFiled__taken, ledgerFiled__origin__secs, ledgerFiled__origin__nanos, ledgerFiled__outcome__tag, ledgerFiled__outcome__found_v0, ledgerFiled__outcome__failed_v0, ledgerFiled__label, ledgerArchived__summary__count, ledgerArchived__summary__total, ledgerArchived__taken, ledgerArchived__origin__secs, ledgerArchived__origin__nanos, ledgerArchived__outcome__tag, ledgerArchived__outcome__found_v0, ledgerArchived__outcome__failed_v0, ledgerArchived__label] (Callback delivery)
@@ -94,6 +96,7 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Lookup` decomposed → [tag, found_v0, failed_v0] (Callback delivery)
 - `marker_of` — `fun markerOf(which: Int, onError: JniErrorHandler<Marker?>): Marker?`
   - shaped by: return `Marker` decomposed → [tag, ranked_v0] (Callback delivery)
+- `maybe_holder_new` — `fun maybeHolderNew(tag: Long, count: Long, total: Double, present: Boolean, onError: JniErrorHandler<MaybeHolder?>): MaybeHolder?`
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
 - `observation_new` — `fun observationNew(which: Int, withFallback: Boolean, onError: JniErrorHandler<Observation?>): Observation?`
 - `observation_which` — `fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int`
@@ -132,6 +135,8 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Unsigned` decomposed → [byte, short, int, long, maybeLong] (Callback delivery)
 - `unsigned_series` — `fun unsignedSeries(onError: JniErrorHandler<List<ULong>?>): List<ULong>?`
   - shaped by: return `u64` decomposed → [] (Callback delivery)
+- `vault_holder_new` — `fun <R> vaultHolderNew(seq: Long, count: Long, maybeCount: Long, onError: JniErrorHandler<R?>, build: VaultHolderBuilder<R>): R?`
+  - shaped by: return `VaultHolder` decomposed → [vaultHolderVault__always, vaultHolderVault__maybe] (Callback delivery)
 - `verdict_new` — `fun verdictNew(id: Long, count: Long, total: Double, onError: JniErrorHandler<Verdict?>): Verdict?`
 - `wrapped_fields_sum` — `fun wrappedFieldsSum(w: WrappedFields, onError: JniErrorHandler<Long>): Long`
 
@@ -169,6 +174,10 @@ Base package: `io.prebindgen.covertest`
 
 - `escape_probe_new` — `fun escapeProbeNew(value: Long, onError: JniErrorHandler<Esc_Probe?>): Esc_Probe?`
 - `escape_probe_value` — `fun escapeProbeValue(onError: JniErrorHandler<Long>): Long`
+
+## class `io.prebindgen.covertest.model.Ingot` (ptr_class, Rust `Ingot`)
+
+- `ingot_grams` — `fun grams(onError: JniErrorHandler<Long>): Long`
 
 ## class `io.prebindgen.covertest.Payload` (data_class, Rust `Payload`)
 
@@ -211,8 +220,11 @@ Base package: `io.prebindgen.covertest`
 - `Hold`: sealed_class → `io.prebindgen.covertest.model.Hold` (wire `?`)
 - `HoldPolicy`: data_class → `io.prebindgen.covertest.model.HoldPolicy` (wire `jni :: objects :: JObject`)
 - `Holder`: data_class → `io.prebindgen.covertest.Holder` (wire `jni :: objects :: JObject`)
+- `Ingot`: ptr_class → `io.prebindgen.covertest.model.Ingot` (wire `jni :: sys :: jlong`)
+- `Layered`: sealed_class → `io.prebindgen.covertest.model.Layered` (wire `?`)
 - `Lookup`: sealed_class → `io.prebindgen.covertest.model.Lookup` (wire `?`)
 - `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
+- `MaybeHolder`: data_class → `io.prebindgen.covertest.MaybeHolder` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `ObjectBoundary16`: data_class → `io.prebindgen.covertest.model.ObjectBoundary16` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary2`: data_class → `io.prebindgen.covertest.model.ObjectBoundary2` (wire `jni :: objects :: JObject`)
@@ -240,6 +252,8 @@ Base package: `io.prebindgen.covertest`
 - `Summary`: ptr_class → `io.prebindgen.covertest.analytics.Summary` (wire `jni :: sys :: jlong`)
 - `Tagged`: data_class → `io.prebindgen.covertest.model.Tagged` (wire `jni :: objects :: JObject`)
 - `Unsigned`: data_class → `io.prebindgen.covertest.model.Unsigned` (wire `jni :: objects :: JObject`)
+- `Vault`: ptr_class → `io.prebindgen.covertest.model.Vault` (wire `jni :: sys :: jlong`)
+- `VaultHolder`: ptr_class → `io.prebindgen.covertest.model.VaultHolder` (wire `jni :: sys :: jlong`)
 - `Verdict`: data_class → `io.prebindgen.covertest.model.Verdict` (wire `jni :: objects :: JObject`)
 - `WrappedFields`: data_class → `io.prebindgen.covertest.WrappedFields` (wire `jni :: objects :: JObject`)
 

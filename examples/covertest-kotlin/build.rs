@@ -218,6 +218,12 @@ fn main() {
         // harness is what ties the two decisions together, since an emission
         // test never compiles the inner class.
         .package(package!().class(data_class!(Dossier)))
+        // #430: the same handle field with an `Option` in front of it. The
+        // present arm mints the handle, and it has to do so through the
+        // generated factory — the constructor is private (#404). Only a
+        // compiled run says which one the factory names, so the shape lives
+        // here rather than only in an emission test.
+        .package(package!().class(data_class!(MaybeHolder)))
         // A data class whose FIELDS carry transparent wrappers (#289 + #292):
         // `boxed: Box<Option<i64>>` must cross exactly as `plain: Option<i64>`
         // does — the decoupled `(present, value)` pair — with the `Box` put back
@@ -250,6 +256,12 @@ fn main() {
                 // `close()` — that is what lets a container cascade into it
                 // with the same one-liner a handle field gets (#218).
                 .class(sealed_class!(Lookup))
+                // #429: the sum whose payloads have LAYERS — an optional
+                // scalar, an optional handle, a list of optionals — beside two
+                // controls that must not gain one. The builder that reassembles
+                // them is Kotlin, so only a compiled run says whether each
+                // layer was carried.
+                .class(sealed_class!(Layered))
                 // …and `Verdict` is that container: the sum in DATA-CLASS FIELD
                 // position, the third place a handle is reached through.
                 // `Holder` above is the plain-handle field it must match.
@@ -269,6 +281,14 @@ fn main() {
                 // its wrap; the other's absence is the ancestor's `?.`.
                 .class(ptr_class!(Span))
                 .class(ptr_class!(SpanHolder))
+                // #433: the same matrix on an opaque handle leaf, whose niche
+                // is `0L` rather than a declared sentinel. `VaultHolder` is what
+                // reaches the fourth row — an `Option<handle>` under an absent
+                // ancestor — where the descriptor and the encoder can disagree
+                // while both halves still compile.
+                .class(ptr_class!(Vault))
+                .class(ptr_class!(VaultHolder))
+                .class(ptr_class!(Ingot).method(fun!(ingot_grams)))
                 // `Hold`'s payload is a CONVERTED type, so its leaf crosses
                 // through the `convert!(Duration)` chain; `HoldPolicy` puts
                 // that same payload in the data-class-field position.
@@ -422,6 +442,8 @@ fn main() {
         // `None`, never an ancestor's.
         .expand(expand_return!(Span).fields(fields!(span_to_struct)))
         .expand(expand_return!(SpanHolder).field(fun!(span_holder_span)))
+        .expand(expand_return!(Vault).fields(fields!(vault_to_struct)))
+        .expand(expand_return!(VaultHolder).field(fun!(vault_holder_vault)))
         // #220: `ProbeStruct.outcome` is `Option<Lookup>`. Its whole segment
         // gates together — one tuple bind whose absent arm defaults every slot
         // — because a sum's leaves are not independent. The selector boxes, so
@@ -551,12 +573,18 @@ fn main() {
                 // handle-carrying sum arriving through a CALLBACK, and a sum
                 // returned BORROWED (`&E` / `Option<&E>`).
                 .fun(fun!(lookup_each))
+                // …and #429's layered payloads, one call per case.
+                .fun(fun!(layered_of))
                 // #218: the same handle reached through a data-class FIELD, so
                 // the JVM harness can assert the container's cascade closes it.
                 .fun(fun!(verdict_new))
                 // …and reached one level deeper still, through a nested data
                 // class rather than a sum.
                 .fun(fun!(dossier_new))
+                // #430: the handle field with an `Option` in front of it. The
+                // return is what runs the factory, so both arms — minted and
+                // absent — are compiled and exercised.
+                .fun(fun!(maybe_holder_new))
                 // #213: the output boundary DERIVED from the type's value form
                 // rather than restated. `report_each` delivers the decomposed
                 // `Report` in one crossing; the leaf list comes from
@@ -574,6 +602,7 @@ fn main() {
                 .fun(fun!(ledger_each))
                 // #142: the holder whose span is optional.
                 .fun(fun!(span_holder_new))
+                .fun(fun!(vault_holder_new))
                 // A transparent wrapper (`Box<Option<String>>`) in and out. The
                 // model erases the `Box`, so this must cross exactly as a
                 // `String?` — and because this crate compiles its generated

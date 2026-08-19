@@ -37,6 +37,7 @@ import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Hold
 import io.prebindgen.covertest.model.HoldPolicy
+import io.prebindgen.covertest.model.Layered
 import io.prebindgen.covertest.model.Lookup
 import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
@@ -65,6 +66,7 @@ import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.spanHolderNew
+import io.prebindgen.covertest.model.vaultHolderNew
 import io.prebindgen.covertest.model.durationEmit
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.holdEcho
@@ -89,6 +91,7 @@ import io.prebindgen.covertest.model.reportEach
 import io.prebindgen.covertest.model.probeEach
 import io.prebindgen.covertest.model.probeNew
 import io.prebindgen.covertest.model.lookupOf
+import io.prebindgen.covertest.model.layeredOf
 import io.prebindgen.covertest.model.verdictNew
 import io.prebindgen.covertest.model.dossierNew
 import io.prebindgen.covertest.model.archiveReading
@@ -101,6 +104,7 @@ import io.prebindgen.covertest.model.readingSeries
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.Tagged
 import io.prebindgen.covertest.model.markerOf
+import io.prebindgen.covertest.model.maybeHolderNew
 import io.prebindgen.covertest.model.taggedNew
 import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
@@ -686,6 +690,31 @@ fun main() {
         check(summary.isClosed())
     }
 
+    // The same handle field with an `Option` in front of it. The factory that
+    // rebuilds the class takes a different arm per case, and the present arm has
+    // to MINT a handle — through the generated factory, since #404 made the
+    // constructor private. The optional arm went on naming the constructor, so
+    // this class did not compile at all (#430), which no emission test could
+    // say: the Rust half is identical either way. This section is the tie —
+    // it does not compile if the arm names something private, and the checks
+    // fail if either case rebuilds the wrong thing.
+    section("an optional handle field is minted through the factory, present and absent") {
+        val present = maybeHolderNew(3L, 4L, 8.0, true, boom).orThrow()
+        check(present.tag == 3L)
+        val held = present.summary ?: error("the present arm dropped the handle")
+        check(!held.isClosed())
+        check(held.count(boom) == 4L)
+        present.close()
+        check(held.isClosed())
+
+        // …and the absent arm produces `null` rather than a handle over pointer
+        // 0, so closing the container is a no-op with nothing to free.
+        val absentHolder = maybeHolderNew(7L, 4L, 8.0, false, boom).orThrow()
+        check(absentHolder.tag == 7L)
+        check(absentHolder.summary == null)
+        absentHolder.close()
+    }
+
     // An output boundary DERIVED from the type's value form
     // (`expand_return!(Report).fields(fields!(report_to_struct))`) instead of a
     // restated field list — #213. The point is that deriving changes NOTHING
@@ -923,6 +952,96 @@ fun main() {
         check(taggedRank(Tagged(1L, markerOf(0, boom).orThrow()), boom) == -1)
         check(taggedRank(Tagged(1L, markerOf(1, boom).orThrow()), boom) == 0)
         check(taggedRank(Tagged(1L, markerOf(2, boom).orThrow()), boom) == 10)
+    }
+
+    // The same two axes as the bounded-leaf matrix above, on an opaque HANDLE
+    // leaf — whose `None` rides `0L`, because a `Box` pointer is never zero,
+    // rather than a declared sentinel.
+    //
+    // The fourth row is why this runs rather than being asserted as text: an
+    // `Option<handle>` under an absent ancestor collapses two absences into one
+    // nullable typed view, and the two halves that carry them — the JNI
+    // descriptor and the encoder's `jvalue` — can disagree while both still
+    // compile. That is #433, and the first fix for it broke this row while
+    // fixing the second one.
+    section("an optional handle leaf reads its own niche and its ancestor's null") {
+        // Ancestor absent: both leaves are null through the `?.` alone, and the
+        // one WITH a niche must not report its sentinel as anything else.
+        check(vaultHolderNew(-1L, 5L, 7L, boom) { always, maybe ->
+            "${always == null}/${maybe == null}"
+        } == "true/true")
+
+        // Ancestor present, leaf absent: only the leaf with a niche of its own
+        // can be null here, and it is — through `0L`, not through a JVM null.
+        // The live one is a freshly minted OWNING handle, so it is closed after
+        // reading; `Ingot` is a plain `NativeHandle` with no Cleaner backstop,
+        // and dropping the only reference would leak the allocation.
+        check(vaultHolderNew(0L, 5L, -1L, boom) { always, maybe ->
+            check(maybe == null)
+            val a = always ?: error("the ancestor-nullable leaf was dropped")
+            a.use { it.grams(boom) }
+        } == 5L)
+
+        // Both present: each handle points at its own object, and each is the
+        // JVM's to close.
+        check(vaultHolderNew(0L, 5L, 7L, boom) { always, maybe ->
+            val a = always ?: error("the ancestor-nullable leaf was dropped")
+            val m = maybe ?: error("the niche-carrying leaf was dropped")
+            val total = a.grams(boom) + m.grams(boom)
+            // Each is the JVM's to close, and closing one leaves the other
+            // alone: they are distinct objects, not one pointer delivered twice.
+            a.close()
+            check(a.isClosed() && !m.isClosed())
+            m.close()
+            check(m.isClosed())
+            total
+        } == 12L)
+    }
+
+    // The sum whose payloads have LAYERS. The class that reassembles a variant
+    // from wire slots is Kotlin, and between a slot and the property there can
+    // be a collection, an `Option`, and the leaf conversion. Applying the leaf's
+    // conversion straight to the slot compiled nothing at all (#429), and the
+    // Rust half is identical either way — so a compiled run is the only thing
+    // that holds this line. The two controls at the end are half of it: a run
+    // that needs no element conversion must NOT be distributed over, or a
+    // `ByteArray` property comes back a `List<Byte>`.
+    section("a sum payload carries its Option and collection layers") {
+        // `Option<u64>`: JVM null is the absent case, not an error.
+        check((layeredOf(0, boom).orThrow() as Layered.Count).v0 == null)
+        check((layeredOf(1, boom).orThrow() as Layered.Count).v0 == 4uL)
+
+        // `Option<handle>`: the absence rides the handle's own niche, so the
+        // absent case is `0L` in a primitive slot rather than a JVM null in a
+        // boxed one (#433). Both arms run, and closing the present one closes
+        // the handle it minted.
+        check((layeredOf(2, boom).orThrow() as Layered.Held).v0 == null)
+        val held = layeredOf(3, boom).orThrow() as Layered.Held
+        val summary = held.v0 ?: error("the present arm dropped the handle")
+        check(summary.count(boom) == 4L)
+        held.close()
+        check(summary.isClosed())
+
+        // `Vec<Option<u64>>`: the absences are inside the list, so a mixed one
+        // arrives element by element rather than as one null.
+        check((layeredOf(4, boom).orThrow() as Layered.Many).v0 == listOf(1uL, null, 3uL))
+
+        // …and the same two layers in the other order. An absent run is null
+        // rather than an empty list, and a present one still converts element by
+        // element.
+        check((layeredOf(5, boom).orThrow() as Layered.Values).v0 == null)
+        check((layeredOf(6, boom).orThrow() as Layered.Values).v0 == listOf(5uL, null))
+
+        // Layers nest, and the conversion belongs at the bottom of the stack.
+        check(
+            (layeredOf(7, boom).orThrow() as Layered.Nested).v0 ==
+                listOf(listOf(6uL, null), emptyList())
+        )
+
+        // The controls. A `Vec<u8>` payload is a `ByteArray`, and a payload with
+        // no layer is passed straight through.
+        check((layeredOf(8, boom).orThrow() as Layered.Blob).v0.toList() == listOf<Byte>(1, 2, 3))
+        check((layeredOf(9, boom).orThrow() as Layered.Plain).v0 == 7L)
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

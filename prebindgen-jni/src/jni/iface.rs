@@ -43,7 +43,17 @@ pub(crate) enum WrapKind {
     /// Typed == raw (primitives, String, arrays, …): passthrough.
     None,
     /// Opaque handle: raw `Long` → typed handle class (dotted FQN).
-    Handle(String),
+    ///
+    /// `niche_sentinel` carries the absent representation when the leaf's own
+    /// `Option` rides a niche rather than a JVM null — a `Box` pointer is never
+    /// `0`, so `0L` is `None` and the slot stays a primitive. The peer of
+    /// [`Self::Unsigned64`]'s field, and for the same reason: the encoder emits
+    /// that niche, so a slot declared nullable instead asks the JVM to read an
+    /// object where a primitive was written (#433).
+    Handle {
+        fqn: String,
+        niche_sentinel: Option<String>,
+    },
     /// Opaque handle delivered to a callback as a **transient owned** value
     /// (raw `Long` → typed handle class, dotted FQN): the `asRaw` proxy wraps it
     /// AND closes it in a `finally` after `run` returns — the close-unless-taken
@@ -61,7 +71,8 @@ impl WrapKind {
     pub fn class_fqn(&self) -> Option<&str> {
         match self {
             WrapKind::None | WrapKind::Unsigned64 { .. } => None,
-            WrapKind::Handle(f) | WrapKind::HandleOwned(f) => Some(f),
+            WrapKind::Handle { fqn, .. } => Some(fqn),
+            WrapKind::HandleOwned(f) => Some(f),
         }
     }
 
@@ -90,10 +101,27 @@ impl WrapKind {
             None => arg.to_string(),
             Some(fqn) => {
                 let short = fqn.rsplit('.').next().unwrap_or(fqn);
-                if raw_nullable {
-                    format!("{arg}?.let {{ {} }}", handle_from_raw(short, "it"))
-                } else {
-                    handle_from_raw(short, arg)
+                // Two absences, and they compose: the leaf's own `None` rides
+                // the niche, and an ANCESTOR's rides the JVM null of a slot
+                // widened to carry it. Same four combinations the `Unsigned64`
+                // arm above spells, for the same reason.
+                let sentinel = match self {
+                    WrapKind::Handle { niche_sentinel, .. } => niche_sentinel.as_deref(),
+                    _ => None,
+                };
+                match (raw_nullable, sentinel) {
+                    (true, Some(sentinel)) => format!(
+                        "{arg}?.let {{ if (it == {sentinel}) null else {} }}",
+                        handle_from_raw(short, "it")
+                    ),
+                    (true, None) => {
+                        format!("{arg}?.let {{ {} }}", handle_from_raw(short, "it"))
+                    }
+                    (false, Some(sentinel)) => format!(
+                        "if ({arg} == {sentinel}) null else {}",
+                        handle_from_raw(short, arg)
+                    ),
+                    (false, None) => handle_from_raw(short, arg),
                 }
             }
         }
@@ -940,11 +968,34 @@ fn leaf_iface_param(
     if let Some(p) = proj.filter(|p| p.kind == ProjectionKind::Handle) {
         let fqn = ext.kotlin_fqn(&p.leaf_key)?.to_string();
         if raw_handle {
+            // The same rule the `Unsigned64` arm above follows, and the same two
+            // axes. The slot is the projection's own wire — a primitive `Long`,
+            // which is what the encoder writes — widened only for an absence
+            // that comes from an ANCESTOR, since that one has nothing but the
+            // JVM null to ride. Keying the width on the typed view instead
+            // widened it for the leaf's own `Option` too, putting a
+            // `Ljava/lang/Long;` in the descriptor over a `jvalue { j }` (#433).
+            //
+            // The sentinel is the other axis: the leaf's own `None`, which rides
+            // the niche whatever the ancestor does — a `Box` pointer is never 0.
+            let niche_sentinel = if builder_kt.is_nullable() {
+                wrap_sentinel(p, nullable)
+            } else {
+                None
+            };
+            let raw = if nullable {
+                KtType::long().nullable()
+            } else {
+                KtType::long()
+            };
             return Some(IfaceParam {
                 name,
                 typed: nullable_kt(KtType::cls(fqn.clone())),
-                raw: nullable_kt(KtType::long()),
-                wrap: WrapKind::Handle(fqn),
+                raw,
+                wrap: WrapKind::Handle {
+                    fqn,
+                    niche_sentinel,
+                },
             });
         }
         // Whole arg: typed class in both views (no proxy wrap).

@@ -298,3 +298,357 @@ fn callback_arg_qualifies_a_source_type_under_a_wrapper() {
         "{src}"
     );
 }
+
+/// An `Option<T>` callback argument is lowered like any other composite, not
+/// handed to the marker that stands in for one.
+///
+/// `out_wrappers` gives `Option`/`Vec`/`Cow` a marker converter with a `()`
+/// destination: it exists to resolve the entry and make the inner required,
+/// while the real ABI is structural. The return path lowers those shapes in
+/// `lower_shape`/`encode_value`; the callback-argument path had no case for
+/// them, so it fell back to calling the entry's converter — the marker, which
+/// takes no arguments (#428).
+#[test]
+fn callback_arg_lowers_an_optional_structurally() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            pub _0: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Option<&Handle>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .callback(syn::parse_quote!(
+            impl Fn(Option<&Handle>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_handle_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let src = write(cbindgen, registry, "cb_optional_arg");
+    let compact: String = src.split_whitespace().collect();
+
+    // The marker is never applied to anything: it takes no arguments.
+    assert!(
+        !compact.contains("__cbg_outmark_option___Handle(__a0)"),
+        "the composite marker is called as if it were a converter:\n{src}"
+    );
+    // `Option<&T>` over an opaque handle carries its absence in the pointer, so
+    // the C `call` takes one `*const handle` and NULL is `None`. The slot is
+    // `MaybeUninit`, which is `#[repr(transparent)]` and so is neither an ABI
+    // nor a header change — it is what lets an absent value leave its slot
+    // unwritten instead of being filled with a fabricated one.
+    assert!(
+        compact.contains(
+            "call:::core::option::Option<unsafeextern\"C\"fn(::core::mem::MaybeUninit<*consthandle>,"
+        ),
+        "the closure `call` takes the borrowed pointer:\n{src}"
+    );
+}
+
+/// …and so is a `Result` **under** an `Option`, which is the same defect one
+/// layer in.
+///
+/// `Option<Result<T, E>>` is an optional, so a test that looks only at the
+/// outermost layer admits it — and then the lowering reaches the `Result` as a
+/// base field and calls *its* marker (#428 review). Lowerability is a property
+/// of the whole shape, so the check recurses.
+#[test]
+fn a_result_under_an_option_is_refused_too() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            pub _0: u64,
+        }
+    );
+    let err: syn::ItemStruct = syn::parse_quote!(
+        pub struct Error {
+            pub _0: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Option<Result<Handle, Error>>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Struct(err), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_error(syn::parse_quote!(Error), syn::parse_quote!(error_message))
+        .callback(syn::parse_quote!(
+            impl Fn(Option<Result<Handle, Error>>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_opt_result_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_opt_result_arg");
+    });
+    assert!(
+        message.contains("has no C ABI"),
+        "a shape whose inner layer cannot be lowered is refused whole: {message}"
+    );
+}
+
+/// A run whose ELEMENT has no wire of its own is refused too — the case a list
+/// of shapes cannot catch.
+///
+/// `&[u8]` is a plain borrow by every shape test there is, and in the converter
+/// table it is a shared-slice **marker**: the `(ptr, len)` lowering for one is
+/// structural in the callback path, so it has no element wire to be the element
+/// of something else. `Vec<&'static [u8]>` therefore passed a check that
+/// enumerated wrapper kinds, and the lowering mapped a zero-argument marker over
+/// real slices (#428 review). Lowerability asks the table instead, so a marker
+/// disqualifies its shape whatever put it there.
+#[test]
+fn a_run_of_markers_is_refused() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Vec<&'static [u8]>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .callback(syn::parse_quote!(
+            impl Fn(Vec<&'static [u8]>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_slices_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_vec_slice_arg");
+    });
+    assert!(
+        message.contains("has no C ABI"),
+        "a run whose element has no wire of its own is refused whole: {message}"
+    );
+}
+
+/// A composite with a `convert!` of its own keeps that ABI: it is not
+/// decomposed just because its *shape* is one the lowering knows.
+///
+/// `select_output_type` tries `out_custom` before `out_wrappers`, so a declared
+/// conversion gives `Option<T>` a real wire and no marker. The struct emitter
+/// reads the destination and emits that one wire; a dispatcher that decided from
+/// the model shape alone would pass two arguments to a `call` declared with one
+/// (#428 review). Both halves ask the same question now.
+#[test]
+fn a_converted_optional_callback_arg_keeps_its_declared_wire() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "#[prebindgen] pub type Duration = std::time::Duration;",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+        "pub fn maybe_from_millis(v: i64) -> Option<Duration> { unimplemented!() }",
+        "pub fn maybe_to_millis(v: &Option<Duration>) -> i64 { unimplemented!() }",
+        "pub fn duration_each(cb: impl Fn(Option<Duration>) + Send + Sync + 'static) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
+    })
+    .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        // Both are declared, which is what makes this a real test of the gate:
+        // the inner type has a converter, so the shape IS lowerable, and only
+        // the marker test can tell that it must not be lowered.
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis)),
+        )
+        .convert(
+            prebindgen_registry::convert!(Option<Duration>)
+                .input(prebindgen_registry::fun!(maybe_from_millis))
+                .output(prebindgen_registry::fun!(maybe_to_millis)),
+        )
+        .callback(syn::parse_quote!(
+            impl Fn(Option<Duration>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_maybe_duration_t")
+        .function(syn::parse_quote!(duration_each));
+
+    let src = write(cbindgen, registry, "cb_converted_optional");
+    let compact: String = src.split_whitespace().collect();
+
+    // One parameter, the declared representation — not a decomposition.
+    assert!(
+        compact.contains("unsafeextern\"C\"fn(i64,*mut::core::ffi::c_void)")
+            && compact.contains("__cbg_out_Option___Duration__(__a0)"),
+        "the declared wire survives in the closure struct:\n{src}"
+    );
+    // …and the closure calls that converter rather than filling lowered slots.
+    assert!(
+        !compact.contains("MaybeUninit::<i64>::zeroed()"),
+        "a converted composite must not be decomposed:\n{src}"
+    );
+}
+
+/// …and a declared conversion still beats the shape when it is **nested**.
+///
+/// `Vec<Option<Duration>>` over a declared `Option<Duration>` is a run of a
+/// composite that has a wire of its own, so it lowers to that wire's pointer and
+/// length. Before the walk stopped at a node with its own converter, the
+/// predicate said lowerable — reading the element's real `i64` entry — while
+/// `lower_shape` refused the same element for being an `Option`, so the rule did
+/// not compose under `Vec` (#428 review).
+#[test]
+fn a_run_of_converted_optionals_uses_the_declared_wire() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "#[prebindgen] pub type Duration = std::time::Duration;",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+        "pub fn maybe_from_millis(v: i64) -> Option<Duration> { unimplemented!() }",
+        "pub fn maybe_to_millis(v: &Option<Duration>) -> i64 { unimplemented!() }",
+        "pub fn duration_each(cb: impl Fn(Vec<Option<Duration>>) + Send + Sync + 'static) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
+    })
+    .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis)),
+        )
+        .convert(
+            prebindgen_registry::convert!(Option<Duration>)
+                .input(prebindgen_registry::fun!(maybe_from_millis))
+                .output(prebindgen_registry::fun!(maybe_to_millis)),
+        )
+        .callback(syn::parse_quote!(
+            impl Fn(Vec<Option<Duration>>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_durations_t")
+        .function(syn::parse_quote!(duration_each));
+
+    let src = write(cbindgen, registry, "cb_vec_converted_optional");
+    let compact: String = src.split_whitespace().collect();
+
+    // The run lowers to the element's DECLARED wire, pointer and length.
+    assert!(
+        compact.contains("unsafeextern\"C\"fn(::core::mem::MaybeUninit<*muti64>,::core::mem::MaybeUninit<usize>,"),
+        "the array carries the declared element wire:\n{src}"
+    );
+    // …and each element goes through that converter, not through a decomposition.
+    assert!(
+        compact.contains("__cbg_out_Option___Duration__"),
+        "the declared element converter is what fills the array:\n{src}"
+    );
+}
+
+/// A `Vec<()>` is refused for the same reason as a run of slices: the unit has
+/// no storage to be an element, so there is nothing for the `(ptr, len)` pair
+/// to point at (#428 review).
+#[test]
+fn a_run_of_units_is_refused() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Vec<()>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .callback(syn::parse_quote!(impl Fn(Vec<()>) + Send + Sync + 'static))
+        .base_name("z_closure_units_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_vec_unit_arg");
+    });
+    assert!(
+        message.contains("has no C ABI"),
+        "a run whose element has no storage is refused whole: {message}"
+    );
+}
+
+/// A `Result` callback argument is refused where it is declared, not emitted as
+/// a call to the marker that stands in for it.
+///
+/// `out_wrappers` gives `Result<T, E>` the same `()` destination it gives
+/// `Option`/`Vec`/`Cow`, and no arm of `lower_shape` lowers one. So a rule that
+/// asked the *destination* whether a shape can be lowered structurally answered
+/// yes for this one and produced the very `E0061` #428 is about (#428 review).
+/// The question is the model's: which shapes does `lower_shape` decompose.
+#[test]
+fn a_result_callback_arg_is_refused_at_its_declaration() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        pub struct Handle {
+            pub _0: u64,
+        }
+    );
+    let err: syn::ItemStruct = syn::parse_quote!(
+        pub struct Error {
+            pub _0: u64,
+        }
+    );
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Result<Handle, Error>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Struct(err), loc.clone()),
+        (syn::Item::Fn(func), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(Handle))
+        .opaque_error(syn::parse_quote!(Error), syn::parse_quote!(error_message))
+        .callback(syn::parse_quote!(
+            impl Fn(Result<Handle, Error>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_result_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_result_arg");
+    });
+    assert!(
+        message.contains("has no C ABI") && message.contains("Result"),
+        "the refusal names the shape and why: {message}"
+    );
+}

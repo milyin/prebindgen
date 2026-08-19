@@ -112,10 +112,16 @@ pub(crate) fn factory_projection_wire_wrap(
                 );
             }
             match proj.kind {
-                // Handle null rides the `0L` jlong sentinel.
+                // Handle null rides the `0L` jlong sentinel. The present case
+                // mints the handle through `handle_from_raw` for the same
+                // reason the `Base` arm above does: a handle's constructor is
+                // private, and the factory is the only way in (#430).
                 Handle => (
                     KtType::long(),
-                    format!("if ({name} == 0L) null else {short}({name})"),
+                    format!(
+                        "if ({name} == 0L) null else {}",
+                        handle_from_raw(short, name)
+                    ),
                 ),
                 Unsigned64 => match nullable {
                     // A bounded unsigned representation reserves an invalid

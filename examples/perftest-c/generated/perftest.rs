@@ -361,8 +361,8 @@ pub(crate) unsafe fn __cbg_in_closure_payload_t(
         drop: c.drop,
     });
     move |__a0: &perftest_flat::Payload| {
-        let __w0 = __cbg_out_ref_Payload(__a0);
         if let ::core::option::Option::Some(__f) = __call {
+            let __w0 = __cbg_out_ref_Payload(__a0);
             unsafe { __f(__w0, __ctx.context) }
         }
     }
