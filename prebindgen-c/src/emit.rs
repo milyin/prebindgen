@@ -707,8 +707,21 @@ impl CbindgenBuilder {
     /// ordered list of wire components plus the representation niches still
     /// available for enclosing `Option`/`Result` layers. Mirrors the
     /// niche-stacking model in `core::niches`.
-    #[allow(clippy::only_used_in_recursion)]
     pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> ValueShape {
+        let shape = self.lower_shape_walk(ty, registry);
+        // #444 §5: the same layout, built from the registry's semantic tree
+        // instead of by walking the type here. Compared on every call the test
+        // suite makes rather than over a hand-picked corpus, because the corpus
+        // that matters is the one the real fixtures already exercise.
+        #[cfg(test)]
+        self.assert_plan_agrees(ty, registry, &shape);
+        shape
+    }
+
+    /// The historical walk. Replaced by [`Cbindgen::plan_shape`] once the
+    /// comparison above has held across the suite.
+    #[allow(clippy::only_used_in_recursion)]
+    fn lower_shape_walk(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> ValueShape {
         if matches!(ty.kind(), TypeKind::Unit) {
             return ValueShape {
                 fields: vec![],
@@ -797,7 +810,7 @@ impl CbindgenBuilder {
             // pointers and invalid scalar values declared by `convert!`; without a
             // niche it prepends an explicit `present: bool`.
             if let Some(inner_ty) = ty.optional_inner() {
-                let inner = self.lower_shape(inner_ty, registry);
+                let inner = self.lower_shape_walk(inner_ty, registry);
                 if let Some((_slot, rest)) = inner.niches.clone().carve() {
                     return ValueShape {
                         fields: inner.fields,
@@ -913,7 +926,7 @@ impl CbindgenBuilder {
                 }
             }
             if let Some(inner_ty) = ty.optional_inner() {
-                let inner = self.lower_shape(inner_ty, registry);
+                let inner = self.lower_shape_walk(inner_ty, registry);
                 if let Some((slot, _rest)) = inner.niches.clone().carve() {
                     // None reuses the next inner niche; Some encodes inline.
                     let inner_enc =
