@@ -511,6 +511,66 @@ fn a_converted_optional_callback_arg_keeps_its_declared_wire() {
     );
 }
 
+/// …and a declared conversion still beats the shape when it is **nested**.
+///
+/// `Vec<Option<Duration>>` over a declared `Option<Duration>` is a run of a
+/// composite that has a wire of its own, so it lowers to that wire's pointer and
+/// length. Before the walk stopped at a node with its own converter, the
+/// predicate said lowerable — reading the element's real `i64` entry — while
+/// `lower_shape` refused the same element for being an `Option`, so the rule did
+/// not compose under `Vec` (#428 review).
+#[test]
+fn a_run_of_converted_optionals_uses_the_declared_wire() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "#[prebindgen] pub type Duration = std::time::Duration;",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+        "pub fn maybe_from_millis(v: i64) -> Option<Duration> { unimplemented!() }",
+        "pub fn maybe_to_millis(v: &Option<Duration>) -> i64 { unimplemented!() }",
+        "pub fn duration_each(cb: impl Fn(Vec<Option<Duration>>) + Send + Sync + 'static) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
+    })
+    .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis)),
+        )
+        .convert(
+            prebindgen_registry::convert!(Option<Duration>)
+                .input(prebindgen_registry::fun!(maybe_from_millis))
+                .output(prebindgen_registry::fun!(maybe_to_millis)),
+        )
+        .callback(syn::parse_quote!(
+            impl Fn(Vec<Option<Duration>>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_durations_t")
+        .function(syn::parse_quote!(duration_each));
+
+    let src = write(cbindgen, registry, "cb_vec_converted_optional");
+    let compact: String = src.split_whitespace().collect();
+
+    // The run lowers to the element's DECLARED wire, pointer and length.
+    assert!(
+        compact.contains("unsafeextern\"C\"fn(::core::mem::MaybeUninit<*muti64>,::core::mem::MaybeUninit<usize>,"),
+        "the array carries the declared element wire:\n{src}"
+    );
+    // …and each element goes through that converter, not through a decomposition.
+    assert!(
+        compact.contains("__cbg_out_Option___Duration__"),
+        "the declared element converter is what fills the array:\n{src}"
+    );
+}
+
 /// A `Vec<()>` is refused for the same reason as a run of slices: the unit has
 /// no storage to be an element, so there is nothing for the `(ptr, len)` pair
 /// to point at (#428 review).
