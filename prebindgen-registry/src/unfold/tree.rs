@@ -128,10 +128,8 @@ pub struct OutLink {
 
 /// The flat views the plans expose: leaves in decomposition order, and the
 /// value forms to bind once. Derived — never stored beside the tree.
-pub fn flat_view(root: &OutNode) -> (Vec<UnfoldLeaf>, Vec<Hoist>) {
-    let derived = root
-        .lower(&mut FlatView)
-        .expect("deriving a flat view of a built tree cannot fail");
+pub fn flat_view(root: &OutNode) -> Result<(Vec<UnfoldLeaf>, Vec<Hoist>), super::UnfoldError> {
+    let derived = root.lower(&mut FlatView)?;
     let leaves = derived
         .leaves
         .into_iter()
@@ -146,7 +144,7 @@ pub fn flat_view(root: &OutNode) -> (Vec<UnfoldLeaf>, Vec<Hoist>) {
             leaf
         })
         .collect();
-    (leaves, derived.hoists)
+    Ok((leaves, derived.hoists))
 }
 
 /// Everything below one node, with paths and names still **relative** to it —
@@ -173,7 +171,10 @@ struct FlatView;
 
 impl TransformLowerer<OutOfRust> for FlatView {
     type Value = Partial;
-    type Error = std::convert::Infallible;
+    /// Unsupported structure is a planning error, not an abort: a projection is
+    /// public, and an adapter handing over a shape it cannot have should be told
+    /// which sum and which arm rather than stopping generation.
+    type Error = super::UnfoldError;
 
     fn leaf(&mut self, node: &OutNode, op: &OutLeaf) -> Result<Partial, Self::Error> {
         // A variant payload's `LeafSource` is only complete once its arm names
@@ -203,10 +204,31 @@ impl TransformLowerer<OutOfRust> for FlatView {
 
     fn product(
         &mut self,
-        _node: &OutNode,
+        node: &OutNode,
         op: &OutProduct,
         children: Lowered<'_, OutOfRust, Partial>,
     ) -> Result<Partial, Self::Error> {
+        // A variant arm's payloads must each be one leaf. Asked of the children
+        // themselves rather than inferred from what came back: a nested sum
+        // shows up as a leaf that already has a group, but a nested product,
+        // option or run does not, and would be projected with its member
+        // binding silently dropped. See `UnsupportedVariantPayload`.
+        if let OutProduct::Variant { name, .. } = op {
+            for (child, _) in &children {
+                let found = match &child.node.kind {
+                    TransformKind::Leaf(_) => continue,
+                    TransformKind::Product { .. } => "a product",
+                    TransformKind::Choice { .. } => "a choice",
+                    TransformKind::Optional { .. } => "an option",
+                    TransformKind::Sequence { .. } => "a run",
+                };
+                return Err(super::UnfoldError::UnsupportedVariantPayload {
+                    target: node.ty.key().to_string(),
+                    variant: name.to_string(),
+                    found,
+                });
+            }
+        }
         let mut out = Partial::default();
         // Outermost-first: this node's own binding precedes everything reached
         // through it.
@@ -256,21 +278,6 @@ impl TransformLowerer<OutOfRust> for FlatView {
         // everything under it live only for its own tag.
         if let OutProduct::Variant { name, tag } = op {
             for (_, member, leaf) in &mut out.leaves {
-                // A leaf that already belongs to a group is one an inner choice
-                // claimed, and the flat projection cannot hold both: `group` is
-                // one `i32` per leaf, so this arm's tag would silently replace
-                // the inner one and the nested sum would vanish from the
-                // `match` the emitter builds. Refused where it is built rather
-                // than mis-emitted — a hierarchical group identity is what a
-                // nested sum would need (#444 §2).
-                assert!(
-                    leaf.group.is_none(),
-                    "a choice nested inside a variant arm has no flat reading: leaf `{}` \
-                     already belongs to group {:?}, and arm `{name}` would replace it \
-                     with {tag}",
-                    leaf.name,
-                    leaf.group,
-                );
                 leaf.group = Some(*tag);
                 if let Some(member) = member.take() {
                     leaf.source = LeafSource::VariantField {

@@ -530,7 +530,7 @@ pub(crate) fn apply_value_structs<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for vd in &decons {
-        let (leaves, _) = flat_view(&vd.tree);
+        let (leaves, _) = flat_view(&vd.tree)?;
         let decon = wire_fixed_decon(registry, &vd.key, &vd.source, &leaves)?;
         let vd = &FixedDecon {
             key: vd.key.clone(),
@@ -647,7 +647,7 @@ pub(crate) fn apply_sum_returns<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for sd in &decons {
-        let (leaves, _) = flat_view(&sd.tree);
+        let (leaves, _) = flat_view(&sd.tree)?;
         let decon = wire_fixed_decon(registry, &sd.key, &sd.source, &leaves)?;
         let fixed = FixedDecon {
             key: sd.key.clone(),
@@ -1286,7 +1286,7 @@ fn register_decon_spec<M>(
     }
     // A `DeconSpec` describes the leaf list only — signature artifacts are
     // derived from it, never emitted code — so the tree's hoists are dropped.
-    let (leaves, _) = flat_view(&build_tree(acc, registry, records, source, true)?);
+    let (leaves, _) = flat_view(&build_tree(acc, registry, records, source, true)?)?;
     require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
@@ -1348,7 +1348,7 @@ fn build_plan<M>(
 ) -> Result<UnfoldPlan, UnfoldError> {
     let core = build_tree(acc, registry, records, source, by_ref)?;
     let tree = shaped(&shape, layer_tys, core);
-    let (leaves, hoists) = flat_view(&tree);
+    let (leaves, hoists) = flat_view(&tree)?;
     require_unique_leaf_names(source, &leaves)?;
     require_root_identity_last(by_ref, source, &leaves)?;
 

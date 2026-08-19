@@ -2455,7 +2455,7 @@ fn a_whole_element_run_requires_its_element() {
             }),
         },
     };
-    let (leaves, _) = crate::unfold::flat_view(&tree);
+    let (leaves, _) = crate::unfold::flat_view(&tree).expect("a whole-element run projects");
     assert!(
         leaves.is_empty(),
         "a whole element is delivered to the fold, not as a named slot"
@@ -2537,49 +2537,124 @@ fn a_claimed_subtree_is_not_rooted_by_registration() {
     assert_ne!(rooted(&plain, syn::parse_quote!(ZKeyExpr)), Some(true));
 }
 
-/// #444 (review): a choice nested inside a variant arm has no flat reading —
-/// `UnfoldLeaf::group` holds one tag per leaf, so the outer arm would silently
-/// replace the inner one and the nested sum would disappear from the `match`
-/// the emitter builds. Refused where the projection is derived, rather than
-/// mis-emitted.
+/// `flat_view`'s `Ok` side holds types without `Debug`, so a refusal is taken
+/// by matching rather than by `unwrap_err`.
+fn refused(r: Result<(Vec<UnfoldLeaf>, Vec<Hoist>), UnfoldError>) -> UnfoldError {
+    match r {
+        Ok(_) => panic!("expected the projection to refuse this shape"),
+        Err(e) => e,
+    }
+}
+
+/// #444 (review): a variant payload that is not a plain leaf has no flat
+/// reading, whatever kind of node it is. `UnfoldLeaf` binds one member per
+/// payload and every leaf under an arm takes that arm's tag, so a subtree there
+/// loses its member binding — and a nested sum loses its own tags on top.
 ///
-/// Nothing produces one today: a sum's payload members are leaves. The refusal
-/// is what makes that a stated limit instead of an accident.
+/// Reported as a typed planning error naming the sum and the arm, not an abort:
+/// the projection is public, and an adapter handing over a shape it cannot have
+/// should be told which one.
+///
+/// Nothing produces either shape today — a sum's payload members are leaves —
+/// so the refusal is what makes that a stated limit instead of an accident.
 #[test]
-#[should_panic(expected = "a choice nested inside a variant arm has no flat reading")]
-fn a_choice_nested_in_a_variant_arm_is_refused() {
+fn a_variant_payload_that_is_not_a_leaf_is_refused() {
     use crate::transform::TransformKind;
 
-    let inner = reading_sum_decon().tree;
-    let outer = OutNode {
-        ty: tref(syn::parse_quote!(Outer)),
-        kind: TransformKind::Choice {
-            op: OutChoice {
-                name: "tag".to_string(),
-            },
-            variants: vec![OutChild {
-                link: OutLink {
-                    steps: Vec::new(),
-                    name: Vec::new(),
+    let arm_payload = |payload: OutNode| -> OutNode {
+        OutNode {
+            ty: tref(syn::parse_quote!(Outer)),
+            kind: TransformKind::Choice {
+                op: OutChoice {
+                    name: "tag".to_string(),
                 },
-                node: OutNode {
-                    ty: tref(syn::parse_quote!(Outer)),
-                    kind: TransformKind::Product {
-                        op: OutProduct::Variant {
-                            name: ident("Wrapped"),
-                            tag: 0,
-                        },
-                        children: vec![OutChild {
-                            link: OutLink {
-                                steps: Vec::new(),
-                                name: vec!["inner".to_string()],
-                            },
-                            node: inner,
-                        }],
+                variants: vec![OutChild {
+                    link: OutLink {
+                        steps: Vec::new(),
+                        name: Vec::new(),
                     },
+                    node: OutNode {
+                        ty: tref(syn::parse_quote!(Outer)),
+                        kind: TransformKind::Product {
+                            op: OutProduct::Variant {
+                                name: ident("Wrapped"),
+                                tag: 0,
+                            },
+                            children: vec![OutChild {
+                                link: OutLink {
+                                    steps: Vec::new(),
+                                    name: vec!["inner".to_string()],
+                                },
+                                node: payload,
+                            }],
+                        },
+                    },
+                }],
+            },
+        }
+    };
+    let leaf = || OutNode {
+        ty: tref(syn::parse_quote!(i64)),
+        kind: TransformKind::Leaf(OutLeaf {
+            nullable: false,
+            identity: false,
+            reach: OutReach::Field,
+        }),
+    };
+
+    // A nested SUM — the case the previous check caught, now by structure
+    // rather than by noticing its leaves already had a group.
+    let err = refused(crate::unfold::flat_view(&arm_payload(
+        reading_sum_decon().tree,
+    )));
+    assert!(
+        matches!(
+            &err,
+            UnfoldError::UnsupportedVariantPayload { variant, found, .. }
+                if variant == "Wrapped" && *found == "a choice"
+        ),
+        "got {err}"
+    );
+
+    // A nested PRODUCT — which has no group on its leaves, so it passed the
+    // group-based check and was silently misprojected.
+    let product = OutNode {
+        ty: tref(syn::parse_quote!(InnerStruct)),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children: vec![OutChild {
+                link: OutLink {
+                    steps: vec![PathStep::field(ident("id"), false)],
+                    name: vec!["id".to_string()],
                 },
+                node: leaf(),
             }],
         },
     };
-    let _ = crate::unfold::flat_view(&outer);
+    let err = refused(crate::unfold::flat_view(&arm_payload(product)));
+    assert!(
+        matches!(&err, UnfoldError::UnsupportedVariantPayload { found, .. } if *found == "a product"),
+        "got {err}"
+    );
+    assert!(
+        err.to_string().contains("Outer") && err.to_string().contains("Wrapped"),
+        "the error names the sum and the arm: {err}"
+    );
+
+    // …and a run, for the same reason.
+    let run = OutNode {
+        ty: tref(syn::parse_quote!(Vec<i64>)),
+        kind: TransformKind::Sequence {
+            op: (),
+            inner: Box::new(leaf()),
+        },
+    };
+    let err = refused(crate::unfold::flat_view(&arm_payload(run)));
+    assert!(
+        matches!(&err, UnfoldError::UnsupportedVariantPayload { found, .. } if *found == "a run"),
+        "got {err}"
+    );
+
+    // A plain payload leaf still projects.
+    assert!(crate::unfold::flat_view(&arm_payload(leaf())).is_ok());
 }
