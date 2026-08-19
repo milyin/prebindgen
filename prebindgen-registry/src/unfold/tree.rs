@@ -641,33 +641,81 @@ impl TransformLowerer<OutOfRust> for CollectDeps {
     }
 }
 
+/// One arity layer a boundary reads off a type.
+pub enum OrdinaryLayer {
+    /// The value may be absent.
+    Optional,
+    /// The value is a run of its inner type.
+    Sequence,
+}
+
 /// The semantic plan of an **ordinary** boundary use: one with no declared
-/// decomposition, where the value crosses whole under whatever arity layers it
-/// is written with.
+/// decomposition, where the value crosses whole under whatever arity layers the
+/// boundary reads off it.
 ///
 /// This is what lets an adapter consume the mechanism without inventing
 /// declarations (#444 §2). Cbindgen declares no decompositions at all, so
 /// without it there is no tree to lower for the great majority of crossings —
 /// and an adapter that has to special-case "no plan" is back to walking
-/// `TypeRef` itself, which is the walk the tree exists to remove.
+/// `TypeRef`, which is the walk the tree exists to remove.
+///
+/// Uses [`TypeRef::layer_stack`](prebindgen_flat::flat::TypeRef::layer_stack)'s
+/// reading of the layers, which is deliberately bounded — at most one `Option`,
+/// then at most one run. A boundary that accepts more says so with
+/// [`ordinary_with`] rather than by walking the type itself.
 pub fn ordinary(ty: &prebindgen_flat::flat::TypeRef) -> OutNode {
-    let (shape, core) = ty.layer_stack();
-    let layer_tys: Vec<prebindgen_flat::flat::TypeRef> = {
-        let all = ty.layer_types();
-        all[..all.len() - 1].iter().map(|t| (*t).clone()).collect()
-    };
-    shaped(
-        &shape,
-        &layer_tys,
-        OutNode {
-            ty: core.clone(),
+    ordinary_with(ty, &mut |t| {
+        let (shape, core) = t.layer_stack();
+        match shape {
+            UnfoldShape::Base => None,
+            UnfoldShape::Optional(..) => t
+                .optional_inner()
+                .map(|inner| (OrdinaryLayer::Optional, inner.clone())),
+            UnfoldShape::Iterable(_) => {
+                let _ = core;
+                t.sequence_elem()
+                    .map(|elem| (OrdinaryLayer::Sequence, elem.clone()))
+            }
+        }
+    })
+}
+
+/// [`ordinary`] under one boundary's reading of the arity layers.
+///
+/// `peel` answers what the outermost layer of a type is and what it wraps, or
+/// `None` when the value crosses whole. The recursion is here rather than in
+/// the adapter for the same reason every other walk is: which layers a boundary
+/// accepts is node-level policy, and rebuilding the descent around it is not.
+///
+/// C accepts shapes the decomposition boundary does not — nested `Option`s,
+/// each spending a niche, and a shared-slice borrow as a run — and says so here
+/// instead of classifying the type itself.
+pub fn ordinary_with(
+    ty: &prebindgen_flat::flat::TypeRef,
+    peel: &mut dyn FnMut(
+        &prebindgen_flat::flat::TypeRef,
+    ) -> Option<(OrdinaryLayer, prebindgen_flat::flat::TypeRef)>,
+) -> OutNode {
+    match peel(ty) {
+        Some((layer, inner)) => {
+            let inner = Box::new(ordinary_with(&inner, peel));
+            OutNode {
+                ty: ty.clone(),
+                kind: match layer {
+                    OrdinaryLayer::Optional => TransformKind::Optional { op: (), inner },
+                    OrdinaryLayer::Sequence => TransformKind::Sequence { op: (), inner },
+                },
+            }
+        }
+        None => OutNode {
+            ty: ty.clone(),
             kind: TransformKind::Leaf(OutLeaf {
                 nullable: false,
                 identity: false,
                 reach: OutReach::Accessor,
             }),
         },
-    )
+    }
 }
 
 /// Apply one adapter's converter selection, producing the tree every later pass

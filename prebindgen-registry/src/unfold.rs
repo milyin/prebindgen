@@ -43,8 +43,9 @@ pub use self::{
         UnfoldShape,
     },
     tree::{
-        dependencies, element_of, flat_view, ordinary, select, shape_of, shaped, Dependencies,
-        OutChild, OutChoice, OutLeaf, OutLink, OutNode, OutOfRust, OutProduct, OutReach,
+        dependencies, element_of, flat_view, ordinary, ordinary_with, select, shape_of, shaped,
+        Dependencies, OrdinaryLayer, OutChild, OutChoice, OutLeaf, OutLink, OutNode, OutOfRust,
+        OutProduct, OutReach,
     },
 };
 use crate::transform::TransformKind;

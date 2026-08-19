@@ -21,7 +21,9 @@
 
 use prebindgen_registry::{
     transform::{Lowered, TransformLowerer},
-    unfold::{ordinary, select, OutChoice, OutLeaf, OutNode, OutOfRust, OutProduct},
+    unfold::{
+        ordinary_with, select, OrdinaryLayer, OutChoice, OutLeaf, OutNode, OutOfRust, OutProduct,
+    },
     Conversions,
 };
 
@@ -36,7 +38,8 @@ impl CbindgenBuilder {
     /// decompose into. Stating it once, before descending, is what the walk
     /// states at every arm.
     pub(crate) fn value_plan(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> OutNode {
-        select(&ordinary(ty), &mut |node, _link| {
+        let layers = ordinary_with(ty, &mut c_layer);
+        select(&layers, &mut |node, _link| {
             r_has_own_wire(&node.ty, registry).then(|| node.ty.clone())
         })
     }
@@ -209,20 +212,6 @@ impl CbindgenBuilder {
         let planned = render(&self.plan_shape(ty, registry));
         let walked = render(walked);
 
-        // Two shapes the registry's layer model does not describe, so the plan
-        // cannot yet reproduce them. Asserted to DIFFER rather than skipped: if
-        // the model grows to cover one, this fires and says to delete the
-        // exception, instead of the gap quietly closing unnoticed.
-        if let Some(why) = unmodelled(ty) {
-            assert_ne!(
-                walked,
-                planned,
-                "#444: `{}` is listed as unmodelled ({why}), but the plan now matches the walk — \
-                 remove the exception",
-                ty.key()
-            );
-            return;
-        }
         assert_eq!(
             walked,
             planned,
@@ -232,31 +221,30 @@ impl CbindgenBuilder {
     }
 }
 
-/// The shapes `unfold::ordinary` cannot express, and why (#444 §2).
+/// The arity layers **C's** boundary reads off a type, which is not the reading
+/// the decomposition boundary uses (#444 §2).
 ///
-/// `TypeRef::layer_stack` is deliberately bounded — at most one `Option`, then
-/// at most one run — because that is what the *unfold* boundary accepts, and
-/// recursing there would read a `Vec<Option<T>>`'s inner option as a boundary
-/// layer when it belongs to the element. C's own lowering has no such bound, so
-/// the two disagree on exactly these:
-#[cfg(test)]
-fn unmodelled(ty: &TypeRef) -> Option<&'static str> {
-    if ty
-        .optional_inner()
-        .is_some_and(|inner| inner.optional_inner().is_some())
-    {
-        // `Option<Option<T>>`: C's conversion recurses through every
-        // `optional_inner` layer, spending a niche at each, where the model
-        // stops after one because the boundary it describes has one way to say
-        // absent.
-        return Some("nested options");
+/// Two differences, both because C spends a representation niche per layer
+/// rather than having one way to say absent:
+///
+/// * `Option` peels all the way down, so `Option<Option<T>>` is two layers;
+/// * a shared-slice borrow is a run, where the model stops at the reference.
+fn c_layer(ty: &TypeRef) -> Option<(OrdinaryLayer, TypeRef)> {
+    // A declared conversion beats the shape, so a type with its own wire is not
+    // peeled at all — the same rule `select` applies one step later, asked here
+    // because a layer peeled off a value that crosses whole would describe an
+    // ABI the converter table does not hand out.
+    if let Some(inner) = ty.optional_inner() {
+        return Some((OrdinaryLayer::Optional, inner.clone()));
     }
-    if r_scalar_slice_elem(ty).is_some() {
-        // `&[T]` is a `Reference` wrapping a `Slice`, and `layer_stack` peels
-        // `Vec` or `Slice` directly — the outer reference is not a boundary
-        // layer in the model, so the walk stops there and the plan sees one
-        // opaque value where C sees a run.
-        return Some("a shared-slice borrow");
+    if let Some(elem) = r_cow_slice_elem(ty)
+        .or_else(|| r_scalar_slice_elem(ty))
+        .or_else(|| match ty.kind() {
+            TypeKind::Vec(elem) => Some(elem),
+            _ => None,
+        })
+    {
+        return Some((OrdinaryLayer::Sequence, elem.clone()));
     }
     None
 }
