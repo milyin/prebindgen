@@ -1760,7 +1760,16 @@ impl CbindgenBuilder {
                     arg,
                 );
             }
-            let composite = !is_takeable && r_is_lowered_composite(arg, registry);
+            // Both halves of the marker test, and both are load-bearing. The
+            // MODEL says which shapes `lower_shape` decomposes; the marker says
+            // this type has no wire of its own — and a `convert!`-declared
+            // `Option<T>` has one, because `out_custom` is tried before
+            // `out_wrappers`. Decomposing that from its shape alone would pass
+            // several arguments to a `call` the struct declared with one
+            // (#428 review).
+            let composite = !is_takeable
+                && marker_destination(&entry.destination)
+                && r_is_lowered_composite(arg, registry);
             if composite {
                 let shape = self.lower_shape(arg, registry);
                 closure_params.push(quote!(#ai: #src));
@@ -1772,21 +1781,27 @@ impl CbindgenBuilder {
                         format_ident!("__w{}_{}", i, f)
                     };
                     let wire = &field.wire;
-                    // `MaybeUninit`, not a zeroed value: a shape with a `present`
-                    // flag writes only the flag when the value is absent, which
-                    // is right for a RETURN — those fields are the caller's
-                    // out-params and it must not read them — but a callback has
-                    // to pass the slot along. Materialising a value to fill it
-                    // is what must not happen: not every wire's all-zero pattern
-                    // is a legal value of its type, and a declared `enum_type`'s
-                    // discriminants are the source's own, so zero need not name
-                    // a variant at all (#428 review).
+                    // A `MaybeUninit`, zeroed. Two things it must not be.
                     //
-                    // This makes no assumption about WHICH fields the encode
+                    // Not a `wire` value: a shape with a `present` flag writes
+                    // only the flag when the value is absent, and materialising
+                    // something to fill the slot is undefined for a wire whose
+                    // all-zero pattern is not a legal value of its type — a
+                    // declared `enum_type`'s discriminants are the source's own,
+                    // so zero need not name a variant at all.
+                    //
+                    // And not left indeterminate: the slot is passed BY VALUE to
+                    // foreign code, so whatever the stack or register held is
+                    // handed to a C callback that reads it despite the flag.
+                    // Zeroing costs a store and discloses nothing, while
+                    // `MaybeUninit` keeps it from ever being a `wire` (#428
+                    // review).
+                    //
+                    // Neither assumes anything about WHICH fields the encode
                     // writes, which is the encoder's business and not this
                     // caller's.
                     encode_stmts
-                        .push(quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::uninit();));
+                        .push(quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::zeroed();));
                     targets.push(quote!(*#fi.as_mut_ptr()));
                     call_args.push(quote!(#fi));
                 }

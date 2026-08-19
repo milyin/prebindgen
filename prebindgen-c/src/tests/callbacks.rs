@@ -447,6 +447,100 @@ fn a_run_of_markers_is_refused() {
     );
 }
 
+/// A composite with a `convert!` of its own keeps that ABI: it is not
+/// decomposed just because its *shape* is one the lowering knows.
+///
+/// `select_output_type` tries `out_custom` before `out_wrappers`, so a declared
+/// conversion gives `Option<T>` a real wire and no marker. The struct emitter
+/// reads the destination and emits that one wire; a dispatcher that decided from
+/// the model shape alone would pass two arguments to a `call` declared with one
+/// (#428 review). Both halves ask the same question now.
+#[test]
+fn a_converted_optional_callback_arg_keeps_its_declared_wire() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "#[prebindgen] pub type Duration = std::time::Duration;",
+        "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+        "pub fn maybe_from_millis(v: i64) -> Option<Duration> { unimplemented!() }",
+        "pub fn maybe_to_millis(v: &Option<Duration>) -> i64 { unimplemented!() }",
+        "pub fn duration_each(cb: impl Fn(Option<Duration>) + Send + Sync + 'static) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let item: syn::Item = syn::parse_str(source).unwrap();
+        (item, loc.clone())
+    })
+    .collect();
+    let registry = crate::test_util::reg_from_items(declare_referenced(items)).unwrap();
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(myflat))
+        // Both are declared, which is what makes this a real test of the gate:
+        // the inner type has a converter, so the shape IS lowerable, and only
+        // the marker test can tell that it must not be lowered.
+        .convert(
+            prebindgen_registry::convert!(Duration)
+                .input(prebindgen_registry::fun!(duration_from_millis))
+                .output(prebindgen_registry::fun!(duration_to_millis)),
+        )
+        .convert(
+            prebindgen_registry::convert!(Option<Duration>)
+                .input(prebindgen_registry::fun!(maybe_from_millis))
+                .output(prebindgen_registry::fun!(maybe_to_millis)),
+        )
+        .callback(syn::parse_quote!(
+            impl Fn(Option<Duration>) + Send + Sync + 'static
+        ))
+        .base_name("z_closure_maybe_duration_t")
+        .function(syn::parse_quote!(duration_each));
+
+    let src = write(cbindgen, registry, "cb_converted_optional");
+    let compact: String = src.split_whitespace().collect();
+
+    // One parameter, the declared representation — not a decomposition.
+    assert!(
+        compact.contains("unsafeextern\"C\"fn(i64,*mut::core::ffi::c_void)")
+            && compact.contains("__cbg_out_Option___Duration__(__a0)"),
+        "the declared wire survives in the closure struct:\n{src}"
+    );
+    // …and the closure calls that converter rather than filling lowered slots.
+    assert!(
+        !compact.contains("MaybeUninit::<i64>::zeroed()"),
+        "a converted composite must not be decomposed:\n{src}"
+    );
+}
+
+/// A `Vec<()>` is refused for the same reason as a run of slices: the unit has
+/// no storage to be an element, so there is nothing for the `(ptr, len)` pair
+/// to point at (#428 review).
+#[test]
+fn a_run_of_units_is_refused() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_declare_sub(cb: impl Fn(Vec<()>) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc.clone())]))
+            .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .callback(syn::parse_quote!(impl Fn(Vec<()>) + Send + Sync + 'static))
+        .base_name("z_closure_units_t")
+        .function(syn::parse_quote!(z_declare_sub));
+
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "cb_vec_unit_arg");
+    });
+    assert!(
+        message.contains("has no C ABI"),
+        "a run whose element has no storage is refused whole: {message}"
+    );
+}
+
 /// A `Result` callback argument is refused where it is declared, not emitted as
 /// a call to the marker that stands in for it.
 ///

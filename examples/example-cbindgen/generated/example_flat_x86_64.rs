@@ -516,8 +516,8 @@ pub(crate) unsafe fn __cbg_in_closure_history_batch_t(
     });
     move |__a0: ::std::vec::Vec<f64>| {
         if let ::core::option::Option::Some(__f) = __call {
-            let mut __w0_0 = ::core::mem::MaybeUninit::<*mut f64>::uninit();
-            let mut __w0_1 = ::core::mem::MaybeUninit::<usize>::uninit();
+            let mut __w0_0 = ::core::mem::MaybeUninit::<*mut f64>::zeroed();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<usize>::zeroed();
             let __arr: ::std::vec::Vec<f64> = __a0
                 .into_iter()
                 .map(__cbg_out_f64)
@@ -553,8 +553,8 @@ pub(crate) unsafe fn __cbg_in_closure_maybe_grade_t(
     });
     move |__a0: ::core::option::Option<example_flat::Grade>| {
         if let ::core::option::Option::Some(__f) = __call {
-            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::uninit();
-            let mut __w0_1 = ::core::mem::MaybeUninit::<grade_t>::uninit();
+            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::zeroed();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<grade_t>::zeroed();
             match __a0 {
                 ::core::option::Option::Some(__x) => {
                     *__w0_0.as_mut_ptr() = true;
@@ -592,8 +592,8 @@ pub(crate) unsafe fn __cbg_in_closure_maybe_value_t(
     });
     move |__a0: ::core::option::Option<f64>| {
         if let ::core::option::Option::Some(__f) = __call {
-            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::uninit();
-            let mut __w0_1 = ::core::mem::MaybeUninit::<f64>::uninit();
+            let mut __w0_0 = ::core::mem::MaybeUninit::<bool>::zeroed();
+            let mut __w0_1 = ::core::mem::MaybeUninit::<f64>::zeroed();
             match __a0 {
                 ::core::option::Option::Some(__x) => {
                     *__w0_0.as_mut_ptr() = true;
