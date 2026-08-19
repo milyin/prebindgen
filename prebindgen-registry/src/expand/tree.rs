@@ -593,28 +593,56 @@ impl LayerKind {
     }
 }
 
-/// The value a claimed arity layer binds out of its slot, derived from the
-/// reading the adapter chose.
+/// The value a claimed arity layer binds out of its slot — what the emitter's
+/// own operation on that slot yields, not what the model calls its element.
 ///
-/// **Through the borrow, not past it.** A run's emitter calls `into_iter()` on
-/// the slot, so `&[T]` and `&Vec<T>` bind `&T` while an owned `Vec<T>` binds
-/// `T` — and `sequence_elem` alone answers `None` for the borrowed spellings,
-/// because a reference is not looked through the way a transparent wrapper is.
-/// Taking the reading itself as the item there would advertise the whole
-/// collection on a node whose expression is one element, which is what an
-/// adapter lowerer reads to choose a conversion.
+/// The two part company wherever a wrapper survives into the generated code.
+/// The layer accessors read *through* `Box` and `Cow` because a destination
+/// language sees an optional or a run either way; the emitter runs
+/// `slot.into_iter()` and `match slot { Some(..) }` on the type as written, and
+/// those answer to the wrappers. A node typed from the semantic answer alone
+/// advertises a value its own expression never produces — invisible to the
+/// construct emitter, which reads only the `clone` bit, and wrong for the
+/// adapter lowerers this tree exists for.
+///
+/// A run binds a **borrowed** element unless the reading is an owned `Vec`:
+///
+/// * `&[T]`, `&Vec<T>` — iterating a borrow cannot move out;
+/// * `Cow<'_, [T]>` — iterates as its borrowed slice whatever it holds, so the
+///   item is `&T` even though the model's element is `T`;
+/// * `[T]` — a slice is never owned by value;
+/// * `Vec<T>`, `Box<Vec<T>>` — these move their elements out (a `Box` derefs
+///   into the `Vec`, which is consumed).
+///
+/// An optional binds the payload of a `match`, so its reading has to *be* an
+/// `Option` and not merely denote one: `Box<Option<T>>` reads as optional to
+/// the model, but `match` against `Some(..)` does not see through the `Box`.
+/// Nothing plans such a slot — a payload layer is built as `pty.optional()` —
+/// so only a claim can introduce one, and it is refused.
 fn layer_item(
     reading: &prebindgen_flat::flat::TypeRef,
     layer: LayerKind,
     node: &InNode,
 ) -> Result<prebindgen_flat::flat::TypeRef, SelectError> {
     let item = match layer {
-        LayerKind::Optional => reading.optional_inner().cloned(),
-        LayerKind::Sequence => match reading.borrow_target() {
-            // Iterating a borrowed collection yields borrowed elements.
-            Some(collection) => collection.sequence_elem().map(|e| e.borrowed()),
-            None => reading.sequence_elem().cloned(),
-        },
+        LayerKind::Optional => reading
+            .optional_inner()
+            // The `match` is on the slot as written, so a wrapper between it
+            // and the `Option` is not looked through.
+            .filter(|_| matches!(reading.kind(), prebindgen_flat::flat::TypeKind::Optional(_)))
+            .cloned(),
+        LayerKind::Sequence => {
+            let by_ref = reading.borrow_target().is_some()
+                || matches!(
+                    reading.unwrapped().kind(),
+                    prebindgen_flat::flat::TypeKind::Slice(_)
+                );
+            let elem = match reading.borrow_target() {
+                Some(collection) => collection.sequence_elem(),
+                None => reading.sequence_elem(),
+            };
+            elem.map(|e| if by_ref { e.borrowed() } else { e.clone() })
+        }
     };
     item.ok_or_else(|| SelectError::LayerReadingShape {
         layer: layer.name(),

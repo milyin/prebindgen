@@ -1653,3 +1653,97 @@ fn claiming_a_layer_with_the_wrong_shape_is_an_error() {
         "the refusal names the reading and why: {err}"
     );
 }
+
+/// #444 §3: a `Cow<'_, [T]>` run binds `&T`, not `T`.
+///
+/// The model looks through `Cow` — a destination language sees a run of `T`
+/// either way — but the emitter runs `into_iter()` on the type as written, and
+/// a `Cow` iterates as its borrowed slice whatever it currently holds. Typing
+/// the bound node from the model's element alone would promise `T` where the
+/// expression yields `&T`, and the fold would collect `Vec<&T>` against a node
+/// declaring `Vec<T>`.
+#[test]
+fn claiming_a_cow_run_binds_a_borrowed_element() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+
+    let selected = crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| tref(syn::parse_quote!(Cow<'static, [ZKeyExpr]>)))
+    })
+    .unwrap();
+
+    let TransformKind::Sequence { inner, .. } = &selected.kind else {
+        panic!("the run survives the claim")
+    };
+    let TransformKind::Product { children, .. } = &inner.kind else {
+        panic!("a claimed run stands over an identity core")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "& ZKeyExpr",
+        "a `Cow` run iterates as its borrowed slice, so the bound element is a borrow"
+    );
+
+    let locals = vec![ident("kes")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+    assert!(
+        compact.contains("Clone::clone(&*__inner)"),
+        "…so each element is cloned into the owned Vec the node declares: {compact}"
+    );
+}
+
+/// An optional claimed with a reading that only *denotes* an `Option` is
+/// refused: the payload emitter matches the slot as written, and `match` does
+/// not see through a `Box` the way the model's layer accessors do.
+#[test]
+fn claiming_an_optional_behind_a_wrapper_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Option<ZEncoding>)),
+        kind: TransformKind::Optional {
+            op: InPresence::Payload {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("enc"),
+                },
+                ty: tref(syn::parse_quote!(Option<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZEncoding)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    let err = match crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Optional { .. })
+            .then(|| tref(syn::parse_quote!(Box<Option<ZEncoding>>)))
+    }) {
+        Ok(_) => panic!("an optional behind a wrapper must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LayerReadingShape { layer, .. } if *layer == "an optional"
+        ),
+        "got {err}"
+    );
+}
