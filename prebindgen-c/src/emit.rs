@@ -952,17 +952,26 @@ impl CbindgenBuilder {
     }
 
     fn output_is_fallible(ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
-        let vec_elem = match ty.kind() {
-            TypeKind::Vec(e) => Some(&**e),
-            _ => None,
-        };
-        if let Some(inner) = ty
-            .optional_inner()
-            .or(vec_elem)
-            .or_else(|| r_cow_slice_elem(ty))
-            .or_else(|| r_scalar_slice_elem(ty))
-        {
-            return Self::output_is_fallible(inner, registry);
+        // The third walk over the same value, and it stops where the other two
+        // do: a node with a wire of its own is encoded by its own converter, so
+        // whether the encode can fail is THAT converter's answer. Peeling past
+        // it asks about a converter that never runs — which decides whether the
+        // binding needs `.panic()`, so the two disagreeing is a wrapper that
+        // aborts where nothing opted in, or an opt-in demanded for a conversion
+        // that cannot fail (#428 review).
+        if !r_has_own_wire(ty, registry) {
+            let vec_elem = match ty.kind() {
+                TypeKind::Vec(e) => Some(&**e),
+                _ => None,
+            };
+            if let Some(inner) = ty
+                .optional_inner()
+                .or(vec_elem)
+                .or_else(|| r_cow_slice_elem(ty))
+                .or_else(|| r_scalar_slice_elem(ty))
+            {
+                return Self::output_is_fallible(inner, registry);
+            }
         }
         registry
             .output_entry(ty)

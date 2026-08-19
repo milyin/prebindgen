@@ -275,3 +275,80 @@ fn opaque_error_lowering() {
         "{src}"
     );
 }
+
+/// A declared conversion's own fallibility is the one that counts, at whatever
+/// depth it sits.
+///
+/// Three walks read one value — the shape, the encode, and whether the encode
+/// can fail — and the third used to peel `Option`/`Vec`/`Cow` before consulting
+/// the converter table. Once the first two stop at a node with a wire of its
+/// own, the third disagreeing is not cosmetic: it decides whether a non-`Result`
+/// binding must opt into `.panic()`. Reading past a fallible custom converter
+/// says "infallible", and the emitted wrapper aborts where nobody opted in
+/// (#428 review).
+///
+/// Here `Option<Duration>` has a **fallible** declared output converter over an
+/// **infallible** `Duration` one, so the two answers differ and only the outer
+/// one is right.
+#[test]
+fn a_declared_conversion_owns_its_own_fallibility() {
+    let items = || {
+        let loc = SourceLocation::default();
+        [
+            "#[prebindgen] pub type Duration = std::time::Duration;",
+            "pub fn duration_from_millis(v: u64) -> Duration { unimplemented!() }",
+            "pub fn duration_to_millis(v: &Duration) -> u64 { unimplemented!() }",
+            "pub fn maybe_from_millis(v: i64) -> Option<Duration> { unimplemented!() }",
+            "pub fn maybe_to_millis(v: &Option<Duration>) -> Result<i64, String> { unimplemented!() }",
+            "pub fn maybe_get() -> Option<Duration> { unimplemented!() }",
+        ]
+        .into_iter()
+        .map(|source| {
+            let item: syn::Item = syn::parse_str(source).unwrap();
+            (item, loc.clone())
+        })
+        .collect::<Vec<_>>()
+    };
+    let declare = || {
+        CbindgenBuilder::new()
+            .source_module(syn::parse_quote!(myflat))
+            .convert(
+                prebindgen_registry::convert!(Duration)
+                    .input(prebindgen_registry::fun!(duration_from_millis))
+                    .output(prebindgen_registry::fun!(duration_to_millis)),
+            )
+            .convert(
+                prebindgen_registry::convert!(Option<Duration>)
+                    .input(prebindgen_registry::fun!(maybe_from_millis))
+                    .output(prebindgen_registry::fun!(maybe_to_millis)),
+            )
+    };
+
+    // No `.panic()`: the outer converter can fail and the function returns no
+    // `Result`, so there is nowhere for the error to go and the declaration is
+    // refused.
+    let registry = crate::test_util::reg_from_items(declare_referenced(items())).unwrap();
+    let message = catch_msg(|| {
+        let _ = write(
+            declare().function(syn::parse_quote!(maybe_get)),
+            registry,
+            "fallible_custom_option",
+        );
+    });
+    assert!(
+        message.contains("fallible binding conversion") && message.contains(".panic()"),
+        "the refusal names the missing opt-in: {message}"
+    );
+
+    // …and with the opt-in, the same declaration generates.
+    let registry = crate::test_util::reg_from_items(declare_referenced(items())).unwrap();
+    let src = write(
+        declare().function(syn::parse_quote!(maybe_get)).panic(),
+        registry,
+        "fallible_custom_option_panic",
+    );
+    assert!(
+        src.contains("__cbg_out_Option___Duration__"),
+        "the declared converter is what the wrapper calls:\n{src}"
+    );
+}
