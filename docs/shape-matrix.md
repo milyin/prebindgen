@@ -49,6 +49,7 @@ not a rewrite.
 | 2c | The runtime — C side, in pure Rust | **landed** ([#409](https://github.com/milyin/prebindgen/pull/409)) |
 | 2d | The Kotlin compiler | **landed** |
 | 2e | The JVM runtime | not started — needs a cdylib per cell and a harness to enter it |
+| 7 | The callback-argument position | not started — the hole #428 came through |
 | 3 | The guarantee ratchet — a floor per cell | **landed** ([#406](https://github.com/milyin/prebindgen/pull/406)) |
 | 4 | The call axis | **landed** ([#407](https://github.com/milyin/prebindgen/pull/407)) |
 | 5 | The declaration-policy axis | **landed** for the JNI vocabulary ([#408](https://github.com/milyin/prebindgen/pull/408)); C's own declarators blocked |
@@ -166,6 +167,24 @@ What it would settle is the claim neither compiler makes: that the two halves
 agree about a signature. A Kotlin `external fun` and a Rust `#[no_mangle]`
 symbol are checked against each other by nothing until a JVM looks one up.
 
+### 7. The callback-argument position
+
+The four positions are parameter, return, struct field and enum payload. A value
+also crosses as a **callback argument**, in the other direction: the generated
+code delivers it to a C closure or a Kotlin `run`, so the encoder, the wire and
+the declaration that names it are all different code from the four.
+
+#428 came through that hole, and it is the mirror image of #413 — the same
+composite, lowered structurally in one direction and left to a marker in the
+other. The matrix found one and not the other, which is the argument for the
+axis: a position the corpus omits is a hole no other axis can cover for it.
+
+Cheaper than it looks. The fixtures already synthesize a function per cell, and
+a callback fixture is that function taking `impl Fn(<shape>)` instead of
+returning it; both adapters already have a declaration for one
+(`.callback(...)`, and the JNI side's plan). The compile and header stages
+apply unchanged.
+
 ### 3. The guarantee ratchet — landed
 
 A floor per cell, in a committed `GUARANTEES.md`: the level it has been seen to
@@ -241,45 +260,47 @@ Blocked on the plans existing at all
 
 ## What it has found
 
-The table is not the deliverable; the tickets are. As of `146eb348`:
+The table is not the deliverable; the tickets are. Every one is fixed:
 
-| Issue | Finding | State |
+| Issue | Finding | Fixed by |
 |---|---|---|
-| [#410](https://github.com/milyin/prebindgen/issues/410) | JNI emits an unqualified `Cow` into the consumer's scope | fixed ([#423](https://github.com/milyin/prebindgen/pull/423)) |
-| [#411](https://github.com/milyin/prebindgen/issues/411) | JNI decodes an exclusive-borrow parameter as a shared or plain value | fixed ([#426](https://github.com/milyin/prebindgen/pull/426)) |
-| [#412](https://github.com/milyin/prebindgen/issues/412) | C moves out of a raw pointer for an `Option<T>` by-value parameter | fixed ([#425](https://github.com/milyin/prebindgen/pull/425)) |
-| [#413](https://github.com/milyin/prebindgen/issues/413) | C returns of borrowed elements: `&[T]` drops the value, `Vec<&T>` maps over an `unsafe fn` | fixed ([#427](https://github.com/milyin/prebindgen/pull/427)) |
-| [#414](https://github.com/milyin/prebindgen/issues/414) | C qualifies std `Option` into the source module, and leaves the declared type bare | fixed ([#424](https://github.com/milyin/prebindgen/pull/424)) |
-| [#428](https://github.com/milyin/prebindgen/issues/428) | C calls the composite marker for an `Option<&T>` **callback argument**, and the marker takes no arguments | open |
-| [#429](https://github.com/milyin/prebindgen/issues/429) | JNI's sum-payload builder converts the wire value as if it were the leaf — the `Option` and the collection layers are skipped | open |
-| [#430](https://github.com/milyin/prebindgen/issues/430) | JNI's `data_class` factory builds an opaque handle through the constructor #404 made private | open |
-| [#191](https://github.com/milyin/prebindgen/issues/191) | a third of C's refusals and a fifth of JNI's arrive as panics — now a measured number | open |
+| [#410](https://github.com/milyin/prebindgen/issues/410) | JNI emits an unqualified `Cow` into the consumer's scope | [#423](https://github.com/milyin/prebindgen/pull/423) |
+| [#411](https://github.com/milyin/prebindgen/issues/411) | JNI decodes an exclusive-borrow parameter as a shared or plain value | [#426](https://github.com/milyin/prebindgen/pull/426) |
+| [#412](https://github.com/milyin/prebindgen/issues/412) | C moves out of a raw pointer for an `Option<T>` by-value parameter | [#425](https://github.com/milyin/prebindgen/pull/425) |
+| [#413](https://github.com/milyin/prebindgen/issues/413) | C returns of borrowed elements: `&[T]` drops the value, `Vec<&T>` maps over an `unsafe fn` | [#427](https://github.com/milyin/prebindgen/pull/427) |
+| [#414](https://github.com/milyin/prebindgen/issues/414) | C qualifies std `Option` into the source module, and leaves the declared type bare | [#424](https://github.com/milyin/prebindgen/pull/424) |
+| [#429](https://github.com/milyin/prebindgen/issues/429) | JNI's sum-payload builder converts the wire value as if it were the leaf | [#432](https://github.com/milyin/prebindgen/pull/432) |
+| [#430](https://github.com/milyin/prebindgen/issues/430) | JNI's `data_class` factory builds a handle through the constructor #404 made private | [#431](https://github.com/milyin/prebindgen/pull/431) |
+| [#433](https://github.com/milyin/prebindgen/issues/433) | JNI declares a boxed slot for an `Option<handle>` payload the encoder writes as a primitive | [#434](https://github.com/milyin/prebindgen/pull/434) |
+| [#428](https://github.com/milyin/prebindgen/issues/428) | C calls the composite marker for an `Option<&T>` **callback argument** | [#435](https://github.com/milyin/prebindgen/pull/435) |
+| [#191](https://github.com/milyin/prebindgen/issues/191) | a third of C's refusals and a fifth of JNI's arrive as panics — a measured number, not a defect | open |
 
-Two of the five carried a diagnosis rather than a symptom, and both came from a
-comparison no single cell could make: #412 was narrowed to the by-value decode
-path because the same cell with the type declared as a handle compiles, and #414
-got both halves of one expression's qualification wrong in opposite directions.
+The report now has **one** cell short of the top of its target's ladder:
+`unit_enum__ret_as_ptr__jni`, where a fieldless enum declared as a handle trips
+the generated alignment assertion — a two-variant enum is 1-aligned and bit 0 is
+the closed tag. The refusal is correct and the vocabulary is what is wrong: it
+arrives as a compile error in the consumer's build rather than as a rejection at
+declaration time, which is #191's subject and what step 5 already recorded.
 
-All five are merged, and this branch has merged `main` back. The report moved
-the way the fixes predicted: C's `bad rust` column is 5 → 0 and Kotlin/JNI's
-6 → 1, with two JNI cells falling from `bad rust` to `rejected` — `&mut T` over
-anything but a handle now says so instead of emitting a wrapper that discards
-the callee's writes. That fall tripped the ratchet, which is the ratchet working:
-lowering those two floors is a hand edit in `146eb348`, visible in the diff.
+### What the findings say about the harness
 
-#429 and #430 are step 2d's, and they are the pattern this work keeps repeating:
-four cells that had been reporting `rustc` — the top of JNI's ladder as it then
-was — emit Kotlin the compiler refuses. Their Rust compiles, so nothing before
-the Kotlin compiler could have caught them. Between them the two defects hold the
-complementary halves of one correct answer: the field path does the null check
-the payload builder omits, and the payload builder calls the factory the field
-path does not.
+Two of the nine were found by a cell (#410, #414). Four were found by a *stage*
+added later over cells that were already passing — #411 and #412 by the compiler,
+#429/#430 by the Kotlin compiler. That is the case for building stages rather
+than more cells.
 
-**#428 is a finding about the corpus as much as about the generator.** It is
-#413 with the directions swapped — a composite lowered structurally in one
-direction and left to a marker in the other — and this crate did not catch it
-because a **callback argument is not one of the four positions** it enumerates.
-The fix for that is a corpus extension, not a generator change.
+The last two were found by **neither**, and both say the same thing about this
+crate's coverage:
+
+* **#433** came from a JVM run, not from a compiler. A Kotlin `external fun` and
+  a Rust `#[no_mangle]` symbol are checked against each other by nothing until a
+  JVM looks one up, which is exactly what step 2e is for and why it is the next
+  step rather than an optional one.
+* **#428** came from writing a fixture by hand. A **callback argument** is not
+  one of the four positions this crate enumerates, so the C column read 0 broken
+  cells for two merges while that defect was live — and it is the mirror image of
+  #413, which the matrix *did* find in return position. A position the corpus
+  omits is a hole the whole table cannot see, whatever its other axes do.
 
 ## Exits
 
