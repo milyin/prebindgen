@@ -693,10 +693,13 @@ fn build_core<M>(
                 ctor_node(target, func, sig.fallible, args)
             }
             Variant::Identity => {
+                // The PAYLOAD: an identity arm's own value, borrowed when the
+                // parameter is. Selector presence is derived from the leaf's
+                // `wrapped` wherever the wire is asked for (#447 §1).
                 let leaf_ty = if by_ref {
-                    target.borrowed().optional()
+                    target.borrowed()
                 } else {
-                    target.optional()
+                    target.clone()
                 };
                 let slot = next_slot(next);
                 InNode {
@@ -804,8 +807,10 @@ fn build_arg<M>(
         // cannot represent the double `Option` anyway. Such an argument is not
         // `wrapped`, so the emit side skips the selector-presence unwrap.
         let wrapped = dispatched && !popt;
-        let leaf_ty = if wrapped { pty.optional() } else { pty.clone() };
-        Ok(leaf_child(leaf_ty, next_slot(next), name, wrapped))
+        // The node carries the PAYLOAD; the `Option` selector presence adds is
+        // derived from `wrapped` wherever the wire is asked for, so the two
+        // cannot drift apart (#447 §1).
+        Ok(leaf_child(pty.clone(), next_slot(next), name, wrapped))
     }
 }
 

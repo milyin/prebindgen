@@ -304,8 +304,8 @@ impl TransformLowerer<IntoRust> for CollectSlots<'_> {
     fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<(), Self::Error> {
         // A bound argument reads what its layer unwrapped; that slot is the
         // layer's, contributed there.
-        if let InLeaf::Slot { slot, .. } = op {
-            self.take(slot, node.ty.clone());
+        if let InLeaf::Slot { slot, wrapped } = op {
+            self.take(slot, slot_wire_ty(&node.ty, *wrapped));
         }
         Ok(())
     }
@@ -422,8 +422,10 @@ impl TransformLowerer<IntoRust> for CollectDeps {
 
     fn leaf(&mut self, node: &InNode, op: &InLeaf) -> Result<Dependencies, Self::Error> {
         Ok(match op {
-            InLeaf::Slot { .. } => Dependencies {
-                required: vec![node.ty.clone()],
+            // The crossing a converter must exist for is what the slot
+            // carries, which is the payload plus any presence over it.
+            InLeaf::Slot { wrapped, .. } => Dependencies {
+                required: vec![slot_wire_ty(&node.ty, *wrapped)],
                 intrinsic: Vec::new(),
             },
             // A bound argument reads what its layer decoded; that crossing is
@@ -687,21 +689,22 @@ impl Claim {
     }
 }
 
-/// The payload of the `Option` **selector presence adds**, which is the one the
-/// emitter matches on.
+/// What a slot carries on the wire: its payload, plus the `Option` selector
+/// presence adds when a live choice arm gates it.
 ///
-/// Deliberately not [`optional_inner`](prebindgen_flat::flat::TypeRef::optional_inner):
-/// that looks through `Box` and `Cow`, because a destination language sees an
-/// optional either way, while `match slot { Some(..) }` does not see through
-/// either. A `Box<Option<T>>` reading carries no positional presence — its
-/// `Option` belongs to the converter — so presence has to be added around it
-/// rather than found inside it.
-fn presence_payload(
-    ty: &prebindgen_flat::flat::TypeRef,
-) -> Option<&prebindgen_flat::flat::TypeRef> {
-    match ty.kind() {
-        prebindgen_flat::flat::TypeKind::Optional(inner) => Some(inner),
-        _ => None,
+/// Presence and the crossing type are **one fact** derived here, not two fields
+/// that can disagree. A node's `ty` is always the value the position holds, and
+/// the wire type follows from whether the position is gated — so the state this
+/// used to be able to represent, a plain `T` beside `wrapped = true`, no longer
+/// exists to be constructed (#447 §1).
+pub fn slot_wire_ty(
+    payload: &prebindgen_flat::flat::TypeRef,
+    wrapped: bool,
+) -> prebindgen_flat::flat::TypeRef {
+    if wrapped {
+        payload.optional()
+    } else {
+        payload.clone()
     }
 }
 
@@ -888,33 +891,14 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         // directly is what let an owned-producing lift through onto a borrowed
         // argument hidden under presence.
         //
-        // `position_ty` is idempotent in the wrapped case: a reading that is
-        // already an `Option` **at its outer kind** can only be the position
-        // type an existing leaf handed straight back, since a selector-wrapped
-        // position never carries an optional value — a parameter that is itself
-        // `Option` is built unwrapped (`wrapped = dispatched && !popt`).
-        //
-        // Asked with `presence_payload` rather than the semantic accessor: a
-        // `Box<Option<T>>` reading owns that `Option` itself, and presence has
-        // to be added around it, or the leaf would be marked `wrapped` while
-        // the emitter's `match` cannot reach through the `Box`.
-        let position_ty = if wrapped && presence_payload(&selected).is_none() {
-            selected.optional()
-        } else {
-            selected.clone()
-        };
-        // The stored position always has that outer `Option` directly —
-        // `build_arg` writes `pty.optional()` — so the same question answers
-        // for both ends.
-        let peel = |ty: &prebindgen_flat::flat::TypeRef| {
-            if wrapped {
-                presence_payload(ty).unwrap_or(ty).clone()
-            } else {
-                ty.clone()
-            }
-        };
+        // A claim answers the PAYLOAD — the value the position holds — and the
+        // wire follows from whether that position is gated. One derivation, so
+        // the two cannot be stated inconsistently; before the invariant this
+        // needed an idempotence rule to decide whether an `Option` in the
+        // reading was the position's or the value's own (#447 §1).
         let (bound_ty, target_ty) = match &node.kind {
-            TransformKind::Leaf(_) => (peel(&position_ty), peel(&node.ty)),
+            // Both ends are payloads already.
+            TransformKind::Leaf(_) => (selected.clone(), node.ty.clone()),
             TransformKind::Optional { .. } => (
                 layer_item(&selected, LayerKind::Optional, node)?,
                 node.core().ty.clone(),
@@ -954,7 +938,10 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         }
 
         let leaf = InNode {
-            ty: position_ty,
+            // The payload, like every other slot leaf: the position's `Option`
+            // is `wrapped`'s to add, and stating it here as well is the
+            // disagreement the invariant removes.
+            ty: selected.clone(),
             kind: TransformKind::Leaf(InLeaf::Slot {
                 slot: slot.clone(),
                 wrapped,

@@ -1318,7 +1318,7 @@ fn a_claim_inside_a_live_choice_stays_wrapped() {
     // The arm's argument is offered WITH its selector-presence `Option` on, so
     // the adapter answers about the wrapped position.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
-        (node.ty.spell().to_string() == "Option < String >").then(|| Claim::direct(node.ty.clone()))
+        (node.ty.spell().to_string() == "String").then(|| Claim::direct(node.ty.clone()))
     })
     .unwrap();
 
@@ -2056,6 +2056,8 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
             }],
         },
     };
+    // Stored as the PAYLOAD; the selector's `Option` is the position's, added
+    // wherever the wire is asked for.
     let select = |arg: syn::Type, claim: Claim| {
         crate::expand::select(&tree(arg), &mut |node, _l| {
             matches!(node.kind, TransformKind::Leaf(_)).then(|| claim.clone())
@@ -2065,8 +2067,8 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
     // An OWNED argument: the lift is honoured, and the node it lands on
     // advertises the unwrapped target rather than the position's `Option`.
     let selected = select(
-        syn::parse_quote!(Option<ZKeyExpr>),
-        Claim::clone_deref(tref(syn::parse_quote!(Option<OwnedObject<ZKeyExpr>>))),
+        syn::parse_quote!(ZKeyExpr),
+        Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<ZKeyExpr>))),
     )
     .unwrap();
     let TransformKind::Choice { variants, .. } = &selected.kind else {
@@ -2096,8 +2098,8 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
     // A BORROWED argument: the same claim now has an owned-producing lift onto
     // a borrowed target, which the presence used to hide.
     let err = match select(
-        syn::parse_quote!(Option<&ZKeyExpr>),
-        Claim::clone_deref(tref(syn::parse_quote!(Option<OwnedObject<ZKeyExpr>>))),
+        syn::parse_quote!(&ZKeyExpr),
+        Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<ZKeyExpr>))),
     ) {
         Ok(_) => panic!("an owned lift onto a borrowed argument must be refused"),
         Err(e) => e,
@@ -2119,7 +2121,7 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
     // blocks. Presence is added around such a reading instead — and here the
     // claim is then contradictory, so it is refused rather than lowered.
     let err = match select(
-        syn::parse_quote!(Option<String>),
+        syn::parse_quote!(String),
         Claim::direct(tref(syn::parse_quote!(Box<Option<String>>))),
     ) {
         Ok(_) => panic!("a boxed optional reading is not selector presence"),
@@ -2137,7 +2139,7 @@ fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
     // …and a reading that needs presence added gets it explicitly, so the
     // emitted match is on an `Option` the slot really has.
     let selected = select(
-        syn::parse_quote!(Option<String>),
+        syn::parse_quote!(String),
         Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<String>))),
     )
     .unwrap();
@@ -2200,5 +2202,93 @@ fn a_direct_claim_that_is_not_the_value_is_an_error() {
                 if bound == "& ZKeyExpr" && target == "ZKeyExpr"
         ),
         "got {err}"
+    );
+}
+
+/// #447 §1: presence and the crossing type are one fact.
+///
+/// A slot leaf's `ty` is the value the position holds; whether that position is
+/// gated by a live choice is `wrapped`; and the wire type is *derived* from the
+/// pair. So the state this used to be able to hold — a plain `T` beside
+/// `wrapped = true`, where the signature declares `T` while the emitter matches
+/// `Some` — is no longer a state: there is nowhere to write the second, and
+/// disagreeing answers cannot be given because only one is stored.
+#[test]
+fn a_gated_slots_wire_type_is_derived_from_its_payload() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .expect("plan");
+
+    // The tree stores the payloads…
+    fn payloads(node: &InNode, out: &mut Vec<(String, bool)>) {
+        match &node.kind {
+            TransformKind::Leaf(InLeaf::Slot { wrapped, .. }) => {
+                out.push((node.ty.spell().to_string(), *wrapped))
+            }
+            TransformKind::Leaf(_) => {}
+            TransformKind::Product { children, .. } => {
+                children.iter().for_each(|c| payloads(&c.node, out))
+            }
+            TransformKind::Choice { variants, .. } => {
+                variants.iter().for_each(|v| payloads(&v.node, out))
+            }
+            TransformKind::Optional { inner, .. } | TransformKind::Sequence { inner, .. } => {
+                payloads(inner, out)
+            }
+        }
+    }
+    let mut stored = Vec::new();
+    payloads(plan.tree(), &mut stored);
+    assert_eq!(
+        stored,
+        vec![
+            ("String".to_string(), true),
+            ("& ZKeyExpr".to_string(), true)
+        ],
+        "each arm's argument is stored as its payload, gated by the dispatch"
+    );
+
+    // …and every reading of the wire derives the same type from them, rather
+    // than carrying a second copy that could drift.
+    let leaves = crate::expand::wire_leaves(plan.tree());
+    assert_eq!(
+        leaves
+            .iter()
+            .map(|l| l.ty.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["i32", "Option < String >", "Option < & ZKeyExpr >"],
+        "the selector, then each arm's gated slot"
+    );
+    assert_eq!(
+        crate::expand::dependencies(plan.tree())
+            .required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["Option < String >", "Option < & ZKeyExpr >"],
+        "and the crossings demanded are those same wire types"
     );
 }
