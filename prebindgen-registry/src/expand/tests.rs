@@ -126,7 +126,7 @@ fn constructor_plan_and_fold() {
         plan.leaves[2].ty.spell().to_string(),
         "Option < & ZKeyExpr >"
     );
-    let arms = plan.core.arms();
+    let arms = plan.tree.arms();
     assert_eq!(arms.len(), 2);
     assert!(arms[0].ctor().is_some());
     assert!(arms[1].ctor().is_none(), "identity arm");
@@ -183,7 +183,7 @@ fn optional_byvalue_single_ctor() {
         .expansion_plans
         .get(&(ident("z_session_delete"), ident("attachment")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(!plan.by_ref);
     assert_eq!(plan.leaves.len(), 1);
@@ -191,6 +191,14 @@ fn optional_byvalue_single_ctor() {
     assert_eq!(
         plan.leaves[0].ty.spell().to_string(),
         "Option < Vec < u8 > >"
+    );
+    // The layer owns that one slot and binds its payload (`^`); the
+    // constructor under it takes the binding, having no slot of its own.
+    assert_eq!(
+        plan.tree
+            .lower(&mut RenderIn)
+            .expect("lowering cannot fail"),
+        "z_zbytes_from_vec(^)?^#0"
     );
 
     let locals = vec![ident("att")];
@@ -236,7 +244,7 @@ fn optional_byref_single_ctor() {
         .expansion_plans
         .get(&(ident("z_session_put"), ident("encoding")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
     assert_eq!(plan.leaves[0].ty.spell().to_string(), "Option < String >");
@@ -283,10 +291,10 @@ fn optional_byref_multi_arg_ctor() {
         .expansion_plans
         .get(&(ident("z_session_put"), ident("encoding")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
-    assert_eq!(plan.present, Some(0), "explicit presence flag at leaf 0");
+    assert_eq!(plan.present(), Some(0), "explicit presence flag at leaf 0");
     // leaf 0 = present:bool, leaf 1 = id:i32, leaf 2 = schema:Option<String>
     assert_eq!(plan.leaves.len(), 3);
     assert_eq!(plan.leaves[0].name.to_string(), "encoding_present");
@@ -356,11 +364,11 @@ fn optional_combined_selector_encodes_absence() {
         .expansion_plans
         .get(&(ident("z_session_put"), ident("encoding")))
         .unwrap();
-    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(matches!(plan.shape(), FoldShape::Optional((), _)));
     assert!(plan.produces_option());
     assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
     assert_eq!(plan.selector(), Some(0), "selector at leaf 0");
-    assert_eq!(plan.present, None, "absence rides the selector, no flag");
+    assert_eq!(plan.present(), None, "absence rides the selector, no flag");
     // leaves: sel:i32, id:Option<i32> (wrapped), schema:Option<String>
     // (passthrough), identity:Option<&ZEncoding>.
     assert_eq!(plan.leaves.len(), 4);
@@ -376,14 +384,13 @@ fn optional_combined_selector_encodes_absence() {
         plan.leaves[3].ty.spell().to_string(),
         "Option < & ZEncoding >"
     );
-    let arms = plan.core.arms();
+    let arms = plan.tree.arms();
     assert!(
         matches!(
             &args(arms[0])[1].node.kind,
-            TransformKind::Leaf(InLeaf {
-                slot: 2,
-                wrapped: false,
-                ..
+            TransformKind::Leaf(InLeaf::Slot {
+                slot: InSlot { slot: 2, .. },
+                wrapped: false
             })
         ),
         "an already-Option ctor arg passes through unwrapped"
@@ -427,35 +434,40 @@ fn iterable_emit_shape() {
     // param expansion is declared), but the fold is emit-ready: a hand-built
     // plan must produce the `into_iter().map(...).collect::<Result<Vec<_>,_>>()`
     // form, with the inner single-arg ctor applied per element.
+    // The run owns the wire slot; the constructor under it takes the element
+    // the layer bound.
+    let core = InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_try_from"),
+                fallible: true,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(String)),
+                    kind: TransformKind::Leaf(InLeaf::Bound),
+                },
+            }],
+        },
+    };
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InSlot {
+                slot: 0,
+                name: ident("kes"),
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(core),
+        },
+    };
     let plan = FoldPlan {
         target: tref(syn::parse_quote!(ZKeyExpr)),
         by_ref: false,
-        shape: FoldShape::Iterable(Box::new(FoldShape::Base)),
-        leaves: vec![FoldLeaf {
-            name: ident("kes"),
-            ty: tref(syn::parse_quote!(Vec<String>)),
-        }],
-        present: None,
-        core: InNode {
-            ty: tref(syn::parse_quote!(ZKeyExpr)),
-            kind: TransformKind::Product {
-                op: InProduct::Ctor {
-                    func: ident("z_keyexpr_try_from"),
-                    fallible: true,
-                },
-                children: vec![InChild {
-                    link: InLink { by_ref: false },
-                    node: InNode {
-                        ty: tref(syn::parse_quote!(String)),
-                        kind: TransformKind::Leaf(InLeaf {
-                            slot: 0,
-                            name: ident("kes"),
-                            wrapped: false,
-                        }),
-                    },
-                }],
-            },
-        },
+        leaves: wire_leaves(&tree),
+        tree,
     };
     let locals = vec![ident("kes")];
     let s = emit_fold(&plan, &locals, &src_qualify)
@@ -619,8 +631,8 @@ fn recursive_input_nests_param_constructors() {
         .expect("sample plan");
     // Top: single z_sample_new ctor, 2 args, both recursive Build.
     assert_eq!(plan.selector(), None);
-    assert_eq!(plan.core.arms().len(), 1);
-    let args = args(&plan.core);
+    assert_eq!(plan.tree.arms().len(), 1);
+    let args = args(plan.tree.core());
     assert_eq!(args.len(), 2);
     assert!(is_build(&args[0]), "key_expr is a nested build");
     assert!(is_build(&args[1]), "payload is a nested build");
@@ -870,7 +882,12 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
     type Error = std::convert::Infallible;
 
     fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<String, Self::Error> {
-        Ok(format!("#{}{}", op.slot, if op.wrapped { "?" } else { "" }))
+        Ok(match op {
+            InLeaf::Slot { slot, wrapped } => {
+                format!("#{}{}", slot.slot, if *wrapped { "?" } else { "" })
+            }
+            InLeaf::Bound => "^".to_string(),
+        })
     }
 
     fn product(
@@ -906,27 +923,31 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
         variants: crate::transform::Lowered<'_, IntoRust, String>,
     ) -> Result<String, Self::Error> {
         let arms: Vec<String> = variants.into_iter().map(|(_, v)| v).collect();
-        Ok(format!("#{} ? {}", op.selector, arms.join(" | ")))
+        Ok(format!("#{} ? {}", op.selector.slot, arms.join(" | ")))
     }
 
     fn optional(
         &mut self,
         _node: &InNode,
-        op: &std::convert::Infallible,
+        op: &InPresence,
         _inner: &InNode,
-        _value: String,
+        value: String,
     ) -> Result<String, Self::Error> {
-        match *op {}
+        Ok(match op {
+            InPresence::Selector => format!("{value}?sel"),
+            InPresence::Flag(s) => format!("{value}?#{}", s.slot),
+            InPresence::Payload(s) => format!("{value}?^#{}", s.slot),
+        })
     }
 
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &std::convert::Infallible,
+        op: &InSlot,
         _inner: &InNode,
-        _value: String,
+        value: String,
     ) -> Result<String, Self::Error> {
-        match *op {}
+        Ok(format!("[{value}]*#{}", op.slot))
     }
 }
 
@@ -986,7 +1007,7 @@ fn core_lowers_through_the_shared_visitor() {
     // is a dispatch behind a by-ref link, the payload a single constructor, and
     // every wire slot names its index in `plan.leaves`.
     let rendered = plan
-        .core
+        .tree
         .lower(&mut RenderIn)
         .expect("lowering cannot fail");
     assert_eq!(

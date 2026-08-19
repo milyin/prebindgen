@@ -2399,7 +2399,7 @@ fn shape_notes(
     for (param, plan) in plans {
         let target = plan.target.to_string();
         let arms: Vec<String> = plan
-            .core
+            .tree
             .arms()
             .into_iter()
             .map(|a| match a.ctor() {

@@ -183,7 +183,7 @@ fn rust_type_erased(
 /// outer shape is in scope — its arms are filtered to single-leaf ones by
 /// [`resolve_split`] (nullable-arm rule, see module docs).
 fn plan_in_scope(plan: &FoldPlan) -> bool {
-    plan.selector().is_some() && plan.core.arms().iter().all(|a| a.leaf_args().is_some())
+    plan.selector().is_some() && plan.tree.arms().iter().all(|a| a.leaf_args().is_some())
 }
 
 /// One resolved split parameter of a function, positioned against the rendered
@@ -362,7 +362,7 @@ fn resolve_split<'a>(
     // presence flag (`null` = absent). Multi-leaf arms stay selector-only.
     let optional = plan.produces_option();
     let arms: Vec<(usize, Vec<(KtParam, usize)>)> = plan
-        .core
+        .tree
         .arms()
         .into_iter()
         .enumerate()
@@ -453,7 +453,7 @@ pub(crate) fn render_param_overloads(
                 .iter()
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
-                    let ctor = s.plan.core.arms()[s.arms[ai].0].ctor();
+                    let ctor = s.plan.tree.arms()[s.arms[ai].0].ctor();
                     arm_erased_sig(ext, registry, &s.plan.target.key(), ctor)
                 })
                 .collect()
@@ -576,7 +576,7 @@ fn combo_label(splits: &[Split], combo: &[usize]) -> String {
         .iter()
         .zip(combo)
         .map(|(s, &ai)| {
-            let v = match s.plan.core.arms()[s.arms[ai].0].ctor() {
+            let v = match s.plan.tree.arms()[s.arms[ai].0].ctor() {
                 Some(c) => c.to_string(),
                 None => "variant_self()".to_string(),
             };
@@ -590,7 +590,7 @@ fn combo_label(splits: &[Split], combo: &[usize]) -> String {
 mod tests {
     use prebindgen::SourceLocation;
     use prebindgen_registry::{
-        expand::{InChild, InLeaf, InLink, InProduct},
+        expand::{InChild, InLeaf, InLink, InProduct, InSlot},
         transform::TransformKind,
     };
 
@@ -629,9 +629,12 @@ mod tests {
                         link: InLink { by_ref: false },
                         node: InNode {
                             ty: p.ty.clone(),
-                            kind: TransformKind::Leaf(InLeaf {
-                                slot: i,
-                                name: p.name.clone(),
+                            kind: TransformKind::Leaf(InLeaf::Slot {
+                                slot: InSlot {
+                                    slot: i,
+                                    name: p.name.clone(),
+                                    ty: p.ty.clone(),
+                                },
                                 wrapped: false,
                             }),
                         },

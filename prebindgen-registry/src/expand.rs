@@ -42,7 +42,10 @@ mod tree;
 pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
-    tree::{wire_leaves, InChild, InChoice, InLeaf, InLink, InNode, InProduct, IntoRust},
+    tree::{
+        wire_leaves, InChild, InChoice, InLeaf, InLink, InNode, InPresence, InProduct, InSlot,
+        IntoRust,
+    },
 };
 
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -311,6 +314,7 @@ fn process_expand<M>(
         exp,
         registry,
         ed,
+        &param_ty,
         optional,
         by_ref,
         &target,
@@ -407,6 +411,7 @@ fn build_plan<M>(
     exp: &Expansions,
     registry: &Registry<M>,
     ed: &ExpandDecl,
+    param_ty: &prebindgen_flat::flat::TypeRef,
     optional: bool,
     by_ref: bool,
     target: &prebindgen_flat::flat::TypeRef,
@@ -418,88 +423,101 @@ fn build_plan<M>(
     // signature is collected from the tree once it stands.
     let mut next = 0usize;
 
-    // Optional (`Option<T>`/`Option<&T>`) param. No recursion under `Optional`.
-    //  * single single-arg ctor → one nullable leaf (`Option<arg>`) decides
-    //    presence.
+    // Optional (`Option<T>`/`Option<&T>`) param. No recursion under the layer.
+    // The three ways the layer decides presence — see `InPresence`:
+    //  * single single-arg ctor → the layer decodes its own `Option<arg>` slot
+    //    and hands the payload to the constructor.
     //  * single multi-arg ctor  → an explicit leading `present: bool` flag +
-    //    one plain (non-`Option`) leaf per arg. The flag keeps nullable
+    //    one plain (non-`Option`) slot per arg. The flag keeps nullable
     //    primitive args (e.g. an `Option<i32>` id) from boxing on the wire.
     //  * combined (≥2 variants) → the same selector dispatch as a non-optional
     //    param, with the selector ALSO encoding absence: `-1` = `None`,
     //    `0..n-1` = the taken arm (no separate present flag — not-taken arms'
-    //    leaves are null exactly as in the non-optional selector case).
+    //    slots are null exactly as in the non-optional selector case).
     if optional {
-        let [Variant::Ctor(func)] = variants else {
-            // Combined-selector dispatch under `Optional`.
-            visited.insert(target.key());
-            let prefix = param.to_string();
-            let core = build_core(
-                exp, registry, ed, target, variants, by_ref, &prefix, &mut next, visited,
-            )?;
-            visited.remove(&target.key());
-            return Ok(FoldPlan {
-                target: target.clone(),
-                by_ref,
-                shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
-                leaves: wire_leaves(&core, Vec::new()),
-                present: None,
-                core,
-            });
-        };
-        let sig = ctor_signature(registry, func, &target.key())?;
-        if sig.params.len() == 1 {
-            let (_pn, pty) = &sig.params[0];
-            // The sole slot's `Option` is WHOLE-PARAM presence, unwrapped by
-            // the enclosing shape — not selector presence, so the constructor
-            // argument is not `wrapped`.
-            let arg = leaf_child(pty.optional(), next_slot(&mut next), param.clone(), false);
-            let core = ctor_node(target, func, sig.fallible, vec![arg]);
-            return Ok(FoldPlan {
-                target: target.clone(),
-                by_ref,
-                shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
-                leaves: wire_leaves(&core, Vec::new()),
-                present: None,
-                core,
-            });
-        }
-        // Multi-arg: presence flag (slot 0) + one flat slot per ctor arg. The
-        // flag belongs to the PARAMETER, not to the construction — the
-        // `Optional` shape reads it and the constructor never sees it — so it
-        // is contributed to the signature beside the tree rather than by it.
-        let present = (
-            next_slot(&mut next),
-            FoldLeaf {
-                name: ident(&format!("{}_present", param)),
-                // A presence flag no source wrote — placeless by construction.
-                ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::Bool),
-            },
-        );
-        let prefix = param.to_string();
-        let mut args = Vec::new();
-        for (pname, pty) in &sig.params {
-            let name = ident(&format!("{}_{}", prefix, pname));
-            let arg = build_arg(
-                exp, registry, ed, pty, name, /*dispatched=*/ false, &mut next, visited,
-            )?;
-            if !matches!(arg.node.kind, TransformKind::Leaf(_)) {
-                return Err(ExpandError::UnsupportedOptional {
-                    func: ed.func.clone(),
-                    param: ed.param.clone(),
-                    reason: "nested-buildable constructor arguments cannot be optional",
-                });
+        let presence_and_core = match variants {
+            [Variant::Ctor(func)] => {
+                let sig = ctor_signature(registry, func, &target.key())?;
+                if sig.params.len() == 1 {
+                    let (_pn, pty) = &sig.params[0];
+                    // The layer's slot holds the ARGUMENT, optionally: its
+                    // `Option` is whole-parameter presence, and what the
+                    // constructor gets is the payload the layer unwrapped.
+                    let payload = InSlot {
+                        slot: next_slot(&mut next),
+                        name: param.clone(),
+                        ty: pty.optional(),
+                    };
+                    let arg = InChild {
+                        link: InLink { by_ref: false },
+                        node: InNode {
+                            ty: pty.clone(),
+                            kind: TransformKind::Leaf(InLeaf::Bound),
+                        },
+                    };
+                    (
+                        InPresence::Payload(payload),
+                        ctor_node(target, func, sig.fallible, vec![arg]),
+                    )
+                } else {
+                    // Multi-arg: presence flag first, then one plain slot per
+                    // constructor argument.
+                    let flag = InSlot {
+                        slot: next_slot(&mut next),
+                        name: ident(&format!("{}_present", param)),
+                        // A presence flag no source wrote — placeless by
+                        // construction.
+                        ty: prebindgen_flat::flat::TypeRef::scalar(
+                            prebindgen_flat::flat::ScalarKind::Bool,
+                        ),
+                    };
+                    let prefix = param.to_string();
+                    let mut args = Vec::new();
+                    for (pname, pty) in &sig.params {
+                        let name = ident(&format!("{}_{}", prefix, pname));
+                        let arg = build_arg(
+                            exp, registry, ed, pty, name, /*dispatched=*/ false, &mut next,
+                            visited,
+                        )?;
+                        if !matches!(arg.node.kind, TransformKind::Leaf(_)) {
+                            return Err(ExpandError::UnsupportedOptional {
+                                func: ed.func.clone(),
+                                param: ed.param.clone(),
+                                reason: "nested-buildable constructor arguments cannot be optional",
+                            });
+                        }
+                        args.push(arg);
+                    }
+                    (
+                        InPresence::Flag(flag),
+                        ctor_node(target, func, sig.fallible, args),
+                    )
+                }
             }
-            args.push(arg);
-        }
-        let present_slot = present.0;
-        let core = ctor_node(target, func, sig.fallible, args);
+            _ => {
+                // Combined-selector dispatch under the layer.
+                visited.insert(target.key());
+                let prefix = param.to_string();
+                let core = build_core(
+                    exp, registry, ed, target, variants, by_ref, &prefix, &mut next, visited,
+                )?;
+                visited.remove(&target.key());
+                (InPresence::Selector, core)
+            }
+        };
+        let (presence, core) = presence_and_core;
+        let tree = InNode {
+            ty: param_ty.clone(),
+            kind: TransformKind::Optional {
+                op: presence,
+                inner: Box::new(core),
+            },
+        };
         return Ok(FoldPlan {
             target: target.clone(),
             by_ref,
-            shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
-            leaves: wire_leaves(&core, vec![present]),
-            present: Some(present_slot),
-            core,
+            leaves: wire_leaves(&tree),
+            tree,
         });
     }
 
@@ -507,17 +525,15 @@ fn build_plan<M>(
     // on the cycle chain so a constructor parameter of the same type is rejected.
     visited.insert(target.key());
     let prefix = param.to_string();
-    let core = build_core(
+    let tree = build_core(
         exp, registry, ed, target, variants, by_ref, &prefix, &mut next, visited,
     )?;
     visited.remove(&target.key());
     Ok(FoldPlan {
         target: target.clone(),
         by_ref,
-        shape: FoldShape::Base,
-        leaves: wire_leaves(&core, Vec::new()),
-        present: None,
-        core,
+        leaves: wire_leaves(&tree),
+        tree,
     })
 }
 
@@ -551,10 +567,9 @@ fn leaf_child(
     InChild {
         link: InLink { by_ref: false },
         node: InNode {
-            ty,
-            kind: TransformKind::Leaf(InLeaf {
-                slot,
-                name,
+            ty: ty.clone(),
+            kind: TransformKind::Leaf(InLeaf::Slot {
+                slot: InSlot { slot, name, ty },
                 wrapped,
             }),
         },
@@ -608,7 +623,12 @@ fn build_core<M>(
         return Ok(ctor_node(target, func, sig.fallible, args));
     }
     // Combined — selector slot, then `Option`-wrapped per-arm inputs.
-    let sel_idx = next_slot(next);
+    let selector = InSlot {
+        slot: next_slot(next),
+        name: ident(&format!("{}_sel", prefix)),
+        // The selector, likewise composed and placeless.
+        ty: prebindgen_flat::flat::TypeRef::scalar(prebindgen_flat::flat::ScalarKind::I32),
+    };
     let mut arms: Vec<InChild> = Vec::new();
     for (vi, v) in variants.iter().enumerate() {
         let node = match v {
@@ -660,10 +680,7 @@ fn build_core<M>(
     Ok(InNode {
         ty: target.clone(),
         kind: TransformKind::Choice {
-            op: InChoice {
-                selector: sel_idx,
-                name: ident(&format!("{}_sel", prefix)),
-            },
+            op: InChoice { selector },
             variants: arms,
         },
     })
@@ -760,134 +777,36 @@ impl From<crate::declared_target::TargetMismatch> for ExpandError {
 ///
 /// The returned expression has type `Result<<shaped> plan.target, String>`
 /// (`Result<Target>`, `Result<Option<Target>>`, …). The adapter routes its
-/// `Err(String)` through its own error channel. Folds the [`FoldShape`] layers
-/// top-down over one shared core construct — the value
-/// analog of how `Option<_>`/`Vec<_>` wrappers compose at the wire.
+/// `Err(String)` through its own error channel. One pass over the plan's tree:
+/// the arity layers are nodes like the construction under them, so nothing here
+/// walks a second structure.
 pub fn emit_fold(
     plan: &FoldPlan,
     leaf_locals: &[syn::Ident],
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
-    fold_shape(&plan.shape, plan, leaf_locals, None, qualify)
+    plan.tree
+        .lower(&mut ConstructEmitter {
+            leaf_locals,
+            qualify,
+        })
+        .expect("emitting a built construct cannot fail")
 }
 
-/// Recurse over one [`FoldShape`] layer. `bound` is `Some(var)` when an
-/// enclosing `Optional`/`Iterable` layer has unwrapped the structured leaf and
-/// bound its element to `var` — the inner construct then builds from `var`
-/// instead of reading `leaf_locals`.
-fn fold_shape(
-    shape: &FoldShape,
-    plan: &FoldPlan,
-    leaf_locals: &[syn::Ident],
-    bound: Option<&syn::Ident>,
-    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-) -> syn::Expr {
-    match shape {
-        FoldShape::Base => emit_core_construct(plan, leaf_locals, bound, qualify),
-        FoldShape::Optional((), inner) => {
-            if let Some(sidx) = plan.selector() {
-                // Combined-selector dispatch under `Optional`: the selector
-                // ALSO encodes absence — `-1` = `None`, `0..n-1` = the taken
-                // arm (dispatched by the shared construct core; an out-of-range
-                // selector still hits its `Err` default arm).
-                let sel_local = &leaf_locals[sidx];
-                let inner_expr = emit_core_construct(plan, leaf_locals, None, qualify);
-                syn::parse_quote!(if #sel_local < 0 {
-                    ::core::result::Result::Ok(::core::option::Option::None)
-                } else {
-                    (#inner_expr).map(::core::option::Option::Some)
-                })
-            } else if let Some(pidx) = plan.present {
-                // Multi-arg: an explicit `present: bool` flag decides presence;
-                // the construct reads its plain arg leaves directly (`bound =
-                // None`), the flag leaf is consumed only by this `if`.
-                let present_local = &leaf_locals[pidx];
-                let inner_expr = emit_core_construct(plan, leaf_locals, None, qualify);
-                syn::parse_quote!(if #present_local {
-                    (#inner_expr).map(::core::option::Option::Some)
-                } else {
-                    ::core::result::Result::Ok(::core::option::Option::None)
-                })
-            } else {
-                // Single-arg: presence rides the sole shaped leaf's `Option`.
-                // The structured value is the enclosing bound var, or — at the
-                // top — that leaf's decoded local (`leaf_locals[0]`).
-                let value = bound.unwrap_or(&leaf_locals[0]);
-                let inner_ident = ident("__inner");
-                let inner_expr = fold_shape(inner, plan, leaf_locals, Some(&inner_ident), qualify);
-                syn::parse_quote!(match #value {
-                    ::core::option::Option::Some(#inner_ident) => {
-                        (#inner_expr).map(::core::option::Option::Some)
-                    }
-                    ::core::option::Option::None => {
-                        ::core::result::Result::Ok(::core::option::Option::None)
-                    }
-                })
-            }
-        }
-        FoldShape::Iterable(inner) => {
-            let value = bound.unwrap_or(&leaf_locals[0]);
-            let elem_ident = ident("__elem");
-            let inner_expr = fold_shape(inner, plan, leaf_locals, Some(&elem_ident), qualify);
-            syn::parse_quote!(
-                #value
-                    .into_iter()
-                    .map(|#elem_ident| #inner_expr)
-                    .collect::<::core::result::Result<::std::vec::Vec<_>, _>>()
-            )
-        }
-    }
+/// The local an arity layer binds its unwrapped value to, and the local an
+/// [`InLeaf::Bound`] argument reads. One name for both layers: a nested layer
+/// shadows its parent's binding, which is what reaching the innermost value
+/// means.
+fn bound_local() -> syn::Ident {
+    ident("__inner")
 }
 
-/// Emit the innermost construct → `Result<Target, String>`. With `bound =
-/// Some(v)` (under an `Optional`/`Iterable` layer ⇒ single, single-arg ctor)
-/// the ctor is applied to `v`; with `bound = None` (top level) the whole
-/// construct core is lowered, reading the decoded leaves.
-fn emit_core_construct(
-    plan: &FoldPlan,
-    leaf_locals: &[syn::Ident],
-    bound: Option<&syn::Ident>,
-    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-) -> syn::Expr {
-    if let Some(v) = bound {
-        // Shaped construct: a single, single-arg constructor applied to the
-        // unwrapped element. (`apply` guarantees this shape — never identity,
-        // never combined, never multi-arg under a shape layer.)
-        let TransformKind::Product {
-            op: InProduct::Ctor { func, fallible },
-            ..
-        } = &plan.core.kind
-        else {
-            unreachable!(
-                "shaped expansion is a single constructor (never identity, never combined)"
-            )
-        };
-        return ctor_call_result(&qualify(func), std::slice::from_ref(v), *fallible);
-    }
-    lower_core(&plan.core, leaf_locals, qualify)
-}
-
-/// Lower one construct core to a `Result<Target, String>` expression, through
-/// the shared traversal — the registry writes node policy here and no recursion
-/// of its own.
-fn lower_core(
-    core: &InNode,
-    leaf_locals: &[syn::Ident],
-    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-) -> syn::Expr {
-    core.lower(&mut ConstructEmitter {
-        leaf_locals,
-        qualify,
-    })
-    .expect("emitting a built construct cannot fail")
-}
-
-/// Lowers an into-Rust construct into the Rust expression that performs it.
+/// Lowers an into-Rust plan into the Rust expression that performs it.
 ///
 /// Two kinds of value flow through it, told apart by the child's node kind
-/// exactly as the constructor call must anyway: a **leaf** lowers to its
-/// decoded local, while a **product or choice** lowers to an expression of type
-/// `Result<_, String>`.
+/// exactly as the constructor call must anyway: a **leaf** lowers to the local
+/// holding its decoded value, while every other node lowers to an expression of
+/// type `Result<_, String>`.
 struct ConstructEmitter<'a> {
     /// The already-decoded Rust locals, 1:1 with `FoldPlan::leaves`.
     leaf_locals: &'a [syn::Ident],
@@ -901,7 +820,8 @@ impl ConstructEmitter<'_> {
     /// leaf; `None` for a child that is a nested construct.
     fn wrapped(child: &InChild) -> Option<bool> {
         match &child.node.kind {
-            TransformKind::Leaf(op) => Some(op.wrapped),
+            TransformKind::Leaf(InLeaf::Slot { wrapped, .. }) => Some(*wrapped),
+            TransformKind::Leaf(InLeaf::Bound) => Some(false),
             _ => None,
         }
     }
@@ -912,7 +832,10 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     type Error = std::convert::Infallible;
 
     fn leaf(&mut self, _node: &InNode, op: &InLeaf) -> Result<syn::Expr, Self::Error> {
-        let local = &self.leaf_locals[op.slot];
+        let local = match op {
+            InLeaf::Slot { slot, .. } => self.leaf_locals[slot.slot].clone(),
+            InLeaf::Bound => bound_local(),
+        };
         Ok(syn::parse_quote!(#local))
     }
 
@@ -963,9 +886,9 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
                 if children.iter().all(|(c, _)| Self::wrapped(c).is_some()) {
                     // Flat arguments only. Those `Option`-wrapped by selector
                     // presence are unwrapped (missing ⇒ `Err`); the rest — a
-                    // non-dispatched constructor's arguments, and *passthrough*
-                    // ones the constructor itself declares `Option<…>` — are
-                    // passed as decoded.
+                    // non-dispatched constructor's arguments, *passthrough* ones
+                    // the constructor itself declares `Option<…>`, and the value
+                    // an enclosing layer bound — are passed as decoded.
                     let mut wrapped_values: Vec<&syn::Expr> = Vec::new();
                     let mut wrapped_binds: Vec<syn::Ident> = Vec::new();
                     let mut call_args: Vec<syn::Expr> = Vec::new();
@@ -1050,7 +973,7 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
         op: &InChoice,
         variants: Lowered<'_, IntoRust, syn::Expr>,
     ) -> Result<syn::Expr, Self::Error> {
-        let sel = &self.leaf_locals[op.selector];
+        let sel = &self.leaf_locals[op.selector.slot];
         let arms: Vec<TokenStream> = variants
             .iter()
             .enumerate()
@@ -1073,21 +996,65 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
     fn optional(
         &mut self,
         _node: &InNode,
-        op: &std::convert::Infallible,
+        op: &InPresence,
         _inner: &InNode,
-        _value: syn::Expr,
+        value: syn::Expr,
     ) -> Result<syn::Expr, Self::Error> {
-        match *op {}
+        Ok(match op {
+            // The dispatch's selector ALSO encodes absence — `-1` = `None`,
+            // `0..n-1` = the taken arm (dispatched by the construction below;
+            // an out-of-range selector still hits its `Err` default arm).
+            InPresence::Selector => {
+                let sel = &self.leaf_locals[_inner.selector().expect("a selector-decided layer")];
+                syn::parse_quote!(if #sel < 0 {
+                    ::core::result::Result::Ok(::core::option::Option::None)
+                } else {
+                    (#value).map(::core::option::Option::Some)
+                })
+            }
+            // An explicit flag decides; the construction reads its plain
+            // argument slots directly, and the flag slot is consumed only here.
+            InPresence::Flag(flag) => {
+                let present = &self.leaf_locals[flag.slot];
+                syn::parse_quote!(if #present {
+                    (#value).map(::core::option::Option::Some)
+                } else {
+                    ::core::result::Result::Ok(::core::option::Option::None)
+                })
+            }
+            // Presence rides the layer's own `Option` slot: unwrap it, bind the
+            // payload, and the single-argument construction below reads that
+            // binding.
+            InPresence::Payload(payload) => {
+                let slot = &self.leaf_locals[payload.slot];
+                let bound = bound_local();
+                syn::parse_quote!(match #slot {
+                    ::core::option::Option::Some(#bound) => {
+                        (#value).map(::core::option::Option::Some)
+                    }
+                    ::core::option::Option::None => {
+                        ::core::result::Result::Ok(::core::option::Option::None)
+                    }
+                })
+            }
+        })
     }
 
     fn sequence(
         &mut self,
         _node: &InNode,
-        op: &std::convert::Infallible,
+        op: &InSlot,
         _inner: &InNode,
-        _value: syn::Expr,
+        value: syn::Expr,
     ) -> Result<syn::Expr, Self::Error> {
-        match *op {}
+        let slot = &self.leaf_locals[op.slot];
+        let bound = bound_local();
+        Ok(syn::parse_quote!(
+            #slot
+                .into_iter()
+                .map(|#bound| #value)
+                .collect::<::core::result::Result<::std::vec::Vec<_>, _>>()
+        ))
     }
 }
 
