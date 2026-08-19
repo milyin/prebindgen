@@ -509,6 +509,19 @@ pub enum SelectError {
     /// `Option`. A reading with neither shape leaves nothing to bind, and the
     /// node under the layer would have to advertise a type its expression
     /// never produces.
+    /// A leaf was claimed with a lift whose result cannot be the value that
+    /// position holds.
+    ///
+    /// The two deref lifts produce an owned value. A leaf whose declared type
+    /// is a borrow needs the value borrowed *through* the reading instead,
+    /// which no [`Lift`] states — so the claim is refused rather than lowered
+    /// into a value of the wrong ownership.
+    LeafLiftTarget {
+        /// The position that was claimed.
+        claimed: String,
+        /// The lift the adapter asked for.
+        lift: Lift,
+    },
     LayerReadingShape {
         /// The layer that was claimed, as `"a run"` or `"an optional"`.
         layer: &'static str,
@@ -527,6 +540,13 @@ impl std::fmt::Display for SelectError {
                 "input expansion: the claimed construction of `{claimed}` has no wire slot — its \
                  subtree is entirely layer-bound values, which a containing layer supplies rather \
                  than the foreign signature, so there is no position for a converter to land on",
+            ),
+            Self::LeafLiftTarget { claimed, lift } => write!(
+                f,
+                "input expansion: the leaf at `{claimed}` was claimed with `{lift:?}`, which \
+                 produces an owned value, but that position holds a borrow — borrowing through \
+                 the reading is not a lift the tree can state, so claim the value it borrows \
+                 from instead",
             ),
             Self::LayerReadingShape {
                 layer,
@@ -857,7 +877,34 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         // means — this one value IS the target — and its lowering already
         // unwraps the presence (missing ⇒ `Err`) and lifts the value into `Ok`.
         Ok(crate::transform::Descend::Atomic(match &node.kind {
-            TransformKind::Leaf(_) => leaf,
+            // A leaf claimed `Direct` is the value already, and stays one slot
+            // the enclosing construction reads. A leaf claimed with a deref
+            // lift is NOT: the operation has to happen somewhere, and a bare
+            // leaf has nowhere to put it — the constructor would receive the
+            // reading itself. So the leaf gains the same identity node a
+            // structural claim gets, which is the node that performs a lift.
+            TransformKind::Leaf(_) if lift == Lift::Direct => leaf,
+            TransformKind::Leaf(_) => {
+                // Both deref lifts produce an owned value. A position holding a
+                // borrow needs the value borrowed through the reading, which no
+                // `Lift` states.
+                if node.ty.borrow_target().is_some() {
+                    return Err(SelectError::LeafLiftTarget {
+                        claimed: node.ty.key().to_string(),
+                        lift,
+                    });
+                }
+                InNode {
+                    ty: node.ty.clone(),
+                    kind: TransformKind::Product {
+                        op: InProduct::Identity { lift },
+                        children: vec![InChild {
+                            link: InLink { by_ref: false },
+                            node: leaf,
+                        }],
+                    },
+                }
+            }
             // An ARITY LAYER maps its inner value over a shape, and the claim
             // replaced the whole layer — its presence or length slots included.
             // Keeping the layer over an identity core is what preserves that

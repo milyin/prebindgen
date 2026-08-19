@@ -1877,3 +1877,132 @@ fn a_cow_of_vec_run_is_refused() {
     };
     assert_eq!(children[0].node.ty.spell().to_string(), "& ZKeyExpr");
 }
+
+/// A claim on a **leaf** carries a lift like any other, and the operation has
+/// to reach the constructor that reads it.
+///
+/// A leaf is where converter selection lands most naturally, and a bare leaf
+/// has nowhere to put a deref: the enclosing construction would pass the
+/// reading itself. `Direct` still stays one plain slot, because there is
+/// nothing to perform.
+#[test]
+fn a_leaf_claim_lifts_before_its_constructor_reads_it() {
+    let tree = |target: syn::Type| InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_of"),
+                fallible: false,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(target),
+                    kind: TransformKind::Leaf(InLeaf::Slot {
+                        slot: InSlot {
+                            slot: 0,
+                            name: ident("k"),
+                        },
+                        wrapped: false,
+                    }),
+                },
+            }],
+        },
+    };
+    let folded = |target: syn::Type, claim: Claim| -> String {
+        let selected = crate::expand::select(&tree(target), &mut |node, _l| {
+            matches!(node.kind, TransformKind::Leaf(_)).then(|| claim.clone())
+        })
+        .unwrap();
+        crate::expand::emit_fold_tree(&selected, &[ident("k")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect()
+    };
+
+    // A non-owning handle: the constructor must read the copy, not the handle.
+    let cloned = folded(
+        syn::parse_quote!(ZKeyExpr),
+        Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<ZKeyExpr>))),
+    );
+    assert!(
+        cloned.contains("Ok(::core::clone::Clone::clone(&*k))"),
+        "the lift happens: {cloned}"
+    );
+    assert!(
+        cloned.contains("z_keyexpr_of(__a0)"),
+        "…and the constructor reads its result, not the reading: {cloned}"
+    );
+
+    // An owning wrapper moves out instead, asking nothing of `ZKeyExpr`.
+    let moved = folded(
+        syn::parse_quote!(ZKeyExpr),
+        Claim::move_deref(tref(syn::parse_quote!(Box<ZKeyExpr>))),
+    );
+    assert!(moved.contains("Ok(*k)"), "the lift happens: {moved}");
+    assert!(
+        moved.contains("z_keyexpr_of(__a0)"),
+        "…and the constructor reads its result: {moved}"
+    );
+
+    // `Direct` has nothing to perform, so the slot is still passed straight in.
+    assert_eq!(
+        folded(
+            syn::parse_quote!(ZKeyExpr),
+            Claim::direct(tref(syn::parse_quote!(ZKeyExpr)))
+        ),
+        "::core::result::Result::Ok(zenoh_flat::z_keyexpr_of(k))"
+    );
+}
+
+/// Both deref lifts produce an owned value, so a leaf whose position holds a
+/// **borrow** is refused: turning an adapter handle into `&T` is a
+/// borrow-through-deref, which no [`Lift`] states. Refusing beats lowering it
+/// into a value of the wrong ownership.
+#[test]
+fn a_non_direct_lift_onto_a_borrowed_leaf_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_of"),
+                fallible: false,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(&ZKeyExpr)),
+                    kind: TransformKind::Leaf(InLeaf::Slot {
+                        slot: InSlot {
+                            slot: 0,
+                            name: ident("k"),
+                        },
+                        wrapped: false,
+                    }),
+                },
+            }],
+        },
+    };
+    let err = match crate::expand::select(&tree, &mut |node, _l| {
+        matches!(node.kind, TransformKind::Leaf(_))
+            .then(|| Claim::clone_deref(tref(syn::parse_quote!(OwnedObject<ZKeyExpr>))))
+    }) {
+        Ok(_) => panic!("an owned lift onto a borrowed position must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LeafLiftTarget {
+                lift: Lift::CloneDeref,
+                ..
+            }
+        ),
+        "got {err}"
+    );
+    assert!(
+        err.to_string().contains("holds a borrow"),
+        "the refusal says why: {err}"
+    );
+}
