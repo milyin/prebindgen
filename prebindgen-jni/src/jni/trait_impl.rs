@@ -1564,16 +1564,14 @@ impl Declarations {
             if !is_data_class {
                 continue;
             }
-            if let Some(leaves) =
-                crate::jni::synth_value_struct_leaves(self, registry, item_struct, &[], "", 0)
+            if let Some(tree) =
+                crate::jni::synth_value_struct_tree(self, registry, item_struct, reading, 0)
             {
-                if !leaves.is_empty() {
-                    out.push(prebindgen_registry::unfold::ValueDecon {
-                        key,
-                        source: reading.clone(),
-                        leaves,
-                    });
-                }
+                out.push(prebindgen_registry::unfold::ValueDecon {
+                    key,
+                    source: reading.clone(),
+                    tree,
+                });
             }
         }
         out

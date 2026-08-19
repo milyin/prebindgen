@@ -43,8 +43,8 @@ pub use self::{
         UnfoldShape,
     },
     tree::{
-        element_of, flat_tree, flat_view, shape_of, shaped, OutChild, OutChoice, OutLeaf, OutLink,
-        OutNode, OutOfRust, OutProduct, OutReach,
+        element_of, flat_view, shape_of, shaped, OutChild, OutChoice, OutLeaf, OutLink, OutNode,
+        OutOfRust, OutProduct, OutReach,
     },
 };
 use crate::transform::TransformKind;
@@ -487,17 +487,21 @@ pub(crate) fn apply<M>(
 /// adapter (which knows the per-field encoding — projections, enums, nested
 /// classes) and handed over as
 /// [`Decompositions::value_structs`](crate::Decompositions::value_structs).
-/// Its [`leaves`](Self::leaves)
-/// are [`LeafSource::Field`] leaves: each crosses the boundary as its own field
-/// value and the foreign side reassembles the object (no Java object is built
-/// on the Rust side).
+/// Its derived leaves are [`LeafSource::Field`] leaves: each crosses the
+/// boundary as its own field value and the foreign side reassembles the object
+/// (no Java object is built on the Rust side).
 pub struct ValueDecon {
     /// Canonical key of the value struct (the `DeconId::Default` key).
     pub key: TypeKey,
-    /// The struct type (owned) the leaves decompose.
+    /// The struct type (owned) the tree decomposes.
     pub source: prebindgen_flat::flat::TypeRef,
-    /// Field-access leaves in foreign-signature / `fromParts` order.
-    pub leaves: Vec<UnfoldLeaf>,
+    /// The decomposition: a product over the struct's fields, with a nested
+    /// declared struct spliced as a product of its own.
+    ///
+    /// The leaf names, access paths and nullability the foreign signature /
+    /// `fromParts` order exposes are **derived** from it — each field states
+    /// one step and one name segment, and nesting composes them.
+    pub tree: OutNode,
 }
 
 /// Wire the synthesized by-value `data_class` decompositions into the registry:
@@ -528,15 +532,13 @@ pub(crate) fn apply_value_structs<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for vd in &decons {
-        let decon = wire_fixed_decon(registry, &vd.key, &vd.source, &vd.leaves)?;
-        // A value struct's leaves ARE a product, so the shallow reading of the
-        // list the adapter handed over is the whole of its structure.
-        let core = flat_tree(&vd.source, &vd.leaves);
+        let (leaves, _) = flat_view(&vd.tree);
+        let decon = wire_fixed_decon(registry, &vd.key, &vd.source, &leaves)?;
         let vd = &FixedDecon {
             key: vd.key.clone(),
             source: vd.source.clone(),
-            leaves: vd.leaves.clone(),
-            core: &core,
+            leaves,
+            core: &vd.tree,
         };
 
         // Output position: a declared fn returning the struct

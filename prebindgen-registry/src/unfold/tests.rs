@@ -1076,6 +1076,41 @@ fn option_vec_whole_element_plan() {
     );
 }
 
+/// A by-value `data_class` decomposition: a product over field leaves, as the
+/// JNI adapter declares one. `fields` are `(name, type)` in `fromParts` order.
+fn value_struct_decon(source: syn::Type, fields: &[(&str, syn::Type)]) -> ValueDecon {
+    use crate::transform::TransformKind;
+
+    let source = tref(source);
+    ValueDecon {
+        key: source.key(),
+        source: source.clone(),
+        tree: OutNode {
+            ty: source,
+            kind: TransformKind::Product {
+                op: OutProduct::Records,
+                children: fields
+                    .iter()
+                    .map(|(name, ty)| OutChild {
+                        link: OutLink {
+                            steps: vec![PathStep::field(ident(name), false)],
+                            name: vec![name.to_string()],
+                        },
+                        node: OutNode {
+                            ty: tref(ty.clone()),
+                            kind: TransformKind::Leaf(OutLeaf {
+                                nullable: false,
+                                identity: false,
+                                reach: OutReach::Field,
+                            }),
+                        },
+                    })
+                    .collect(),
+            },
+        },
+    }
+}
+
 #[test]
 fn value_struct_vec_is_fixed_iterable_fold() {
     // A by-value `data_class` returned as `Option<Vec<T>>` (perftest's
@@ -1085,23 +1120,13 @@ fn value_struct_vec_is_fixed_iterable_fold() {
     // Rust side); `None` ⇒ a null list. Closes the data_class→Vec milestone.
     let mut reg: Registry<()> =
         reg_with(&["fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> { todo!() }"]);
-    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![PathStep::field(ident(name), false)],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::Field,
-        group: None,
-    };
-    let vd = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![
-            leaf("id", syn::parse_quote!(i64)),
-            leaf("seq", syn::parse_quote!(i32)),
+    let vd = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[
+            ("id", syn::parse_quote!(i64)),
+            ("seq", syn::parse_quote!(i32)),
         ],
-    };
+    );
     let declared: std::collections::HashSet<syn::Ident> =
         ["storage_get_vec"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
@@ -1138,23 +1163,13 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     let mut reg: Registry<()> = reg_with(&[
         "fn storage_callback_vec(f: impl Fn(&[Payload]) + Send + Sync + 'static) { todo!() }",
     ]);
-    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![PathStep::field(ident(name), false)],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::Field,
-        group: None,
-    };
-    let vd = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![
-            leaf("id", syn::parse_quote!(i64)),
-            leaf("seq", syn::parse_quote!(i32)),
+    let vd = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[
+            ("id", syn::parse_quote!(i64)),
+            ("seq", syn::parse_quote!(i32)),
         ],
-    };
+    );
     let declared: std::collections::HashSet<syn::Ident> =
         ["storage_callback_vec"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
@@ -1178,11 +1193,10 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
     let mut reg2: Registry<()> = reg_with(&[
         "fn storage_callback(f: impl Fn(&Payload) + Send + Sync + 'static) { todo!() }",
     ]);
-    let vd2 = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![leaf("id", syn::parse_quote!(i64))],
-    };
+    let vd2 = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[("id", syn::parse_quote!(i64))],
+    );
     let declared2: std::collections::HashSet<syn::Ident> =
         ["storage_callback"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg2, vec![vd2], &declared2).expect("apply_value_structs");
@@ -1567,7 +1581,13 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
         decon: None,
         by_ref: false,
         shape: UnfoldShape::Base,
-        tree: std::rc::Rc::new(crate::unfold::flat_tree(&source, &[])),
+        tree: std::rc::Rc::new(OutNode {
+            ty: source.clone(),
+            kind: crate::transform::TransformKind::Product {
+                op: OutProduct::Records,
+                children: Vec::new(),
+            },
+        }),
         leaves: vec![],
         element: None,
         delivery: Delivery::Return,
@@ -1907,23 +1927,13 @@ fn sum_callback_arg_is_a_fixed_builder_plan() {
 fn a_vec_of_optionals_installs_no_fixed_fold() {
     let mut reg: Registry<()> =
         reg_with(&["fn storage_get_vec(s: &Storage) -> Vec<Option<Payload>> { todo!() }"]);
-    let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
-        name: name.to_string(),
-        path: vec![PathStep::field(ident(name), false)],
-        out_ty: tref(ty),
-        identity: false,
-        nullable: false,
-        source: LeafSource::Field,
-        group: None,
-    };
-    let vd = ValueDecon {
-        key: TypeKey::from_type(&syn::parse_quote!(Payload)),
-        source: tref(syn::parse_quote!(Payload)),
-        leaves: vec![
-            leaf("id", syn::parse_quote!(i64)),
-            leaf("seq", syn::parse_quote!(i32)),
+    let vd = value_struct_decon(
+        syn::parse_quote!(Payload),
+        &[
+            ("id", syn::parse_quote!(i64)),
+            ("seq", syn::parse_quote!(i32)),
         ],
-    };
+    );
     let declared: std::collections::HashSet<syn::Ident> =
         ["storage_get_vec"].iter().map(|s| ident(s)).collect();
     apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");

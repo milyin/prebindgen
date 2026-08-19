@@ -63,51 +63,44 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
         _ => quote!(jni::objects::JObject::null()),
     }
 }
-
-/// Synthesize the [`LeafSource::Field`](prebindgen_registry::unfold::LeafSource)
-/// leaves of a by-value `data_class` for the fixed-builder output/callback path
-/// — the pre-resolve analog of [`flatten_struct_encode`] (which runs at emit
-/// time). Each named field becomes one field-access leaf
-/// (`name`, `path = [..field idents]`, `out_ty = <field type>`); a non-optional
-/// nested data-class field recurses (inlined), so the whole graph crosses as
-/// decoupled leaves the foreign side reassembles.
+/// Build the decomposition of one by-value `data_class`: a product over its
+/// fields, with a nested declared struct spliced as a product of its own.
 ///
-/// Returns `None` (⇒ the type keeps the whole-value `fromParts` path) when a
-/// field needs a transform this fixed builder can't yet forward verbatim — a
-/// **projection** (opaque handle), an **enum**, or a nested
-/// data-class behind `Option` / `Vec`. (Those are handled by the slower
-/// [`struct_output_body`] until the synthesizer is widened to wrap them.)
+/// `None` where the fixed builder cannot forward a field — a handle, an enum,
+/// a sum, or a nested class behind `Option` / `Vec` — which leaves the whole
+/// value to its own converter.
 ///
-/// Classification reads only `ext.types` (`opaque`/`enum_cfg`) and the parsed
-/// model (`registry.flat()`) — both populated before `resolve` — never the
-/// output converter table (not yet built at this stage).
-pub(crate) fn synth_value_struct_leaves(
+/// The registry derives the leaf names, access paths and nullability from the
+/// links: each field states one step and one name segment, and nesting composes
+/// them. Runs BEFORE `resolve`, so it may only read the declaration and the
+/// struct's syntax — never the converter tables.
+pub(crate) fn synth_value_struct_tree(
     ext: &Declarations,
     registry: &impl Conversions<KotlinMeta>,
     s: &prebindgen_registry::flat::Struct,
-    path_prefix: &[prebindgen_registry::unfold::PathStep],
-    name_prefix: &str,
+    ty: &prebindgen_registry::flat::TypeRef,
     depth: usize,
-) -> Option<Vec<prebindgen_registry::unfold::UnfoldLeaf>> {
-    use prebindgen_registry::unfold::{LeafSource, PathStep, UnfoldLeaf};
+) -> Option<prebindgen_registry::unfold::OutNode> {
+    use prebindgen_registry::{
+        transform::TransformKind,
+        unfold::{OutChild, OutLeaf, OutLink, OutNode, OutProduct, OutReach, PathStep},
+    };
     if depth > 16 {
         return None;
     }
     // Named by construction — a tuple struct is an `Extern`, not a `Struct`.
-    let mut leaves: Vec<UnfoldLeaf> = Vec::new();
+    let mut children: Vec<OutChild> = Vec::new();
     for field in &s.fields {
         let fname = field.name.as_ref()?.clone();
         let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
-        let leaf_name = if name_prefix.is_empty() {
-            camel
-        } else {
-            format!("{name_prefix}__{camel}")
+        let link = OutLink {
+            // The synthesizer declines `Option`-wrapped nesting below, so an
+            // intermediate step is never optional; a TERMINAL `Option` field is
+            // not a nesting step either (its own converter carries the
+            // nullability).
+            steps: vec![PathStep::field(fname, false)],
+            name: vec![camel],
         };
-        let mut path = path_prefix.to_vec();
-        // The synthesizer declines `Option`-wrapped nesting below, so an
-        // intermediate step is never optional; a TERMINAL `Option` field is not
-        // a nesting step either (its own converter carries the nullability).
-        path.push(PathStep::field(fname, false));
 
         // A projection field (opaque handle) or an enum field
         // is delivered with a transform the fixed builder can't forward yet.
@@ -123,9 +116,9 @@ pub(crate) fn synth_value_struct_leaves(
             // plus one group per variant, which only the whole-value
             // `fromParts` path (`PlanFieldKind::Sum`) can lay out. Falling
             // through to the simple-leaf arm below would silently synthesize a
-            // leaf whose `out_ty` is the sum and then REQUIRE an output
-            // converter for it, failing the resolve with the sum named rather
-            // than the unsupported position.
+            // leaf whose type is the sum and then REQUIRE an output converter
+            // for it, failing the resolve with the sum named rather than the
+            // unsupported position.
             TypeKind::Handle | TypeKind::Enum | TypeKind::Sum => return None,
             TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
             _ => None,
@@ -136,9 +129,8 @@ pub(crate) fn synth_value_struct_leaves(
             {
                 return None;
             }
-            let child_leaves =
-                synth_value_struct_leaves(ext, registry, &child, &path, &leaf_name, depth + 1)?;
-            leaves.extend(child_leaves);
+            let node = synth_value_struct_tree(ext, registry, &child, &field.ty, depth + 1)?;
+            children.push(OutChild { link, node });
             continue;
         }
 
@@ -147,17 +139,25 @@ pub(crate) fn synth_value_struct_leaves(
         // foreign `fromParts` forwards it verbatim. Nullability is carried by
         // the converter (e.g. `Option<Box<String>>` → `String?`), so the leaf
         // itself isn't path-nullable.
-        leaves.push(UnfoldLeaf {
-            name: leaf_name,
-            path,
-            out_ty: field.ty.clone(),
-            identity: false,
-            nullable: false,
-            source: LeafSource::Field,
-            group: None,
+        children.push(OutChild {
+            link,
+            node: OutNode {
+                ty: field.ty.clone(),
+                kind: TransformKind::Leaf(OutLeaf {
+                    nullable: false,
+                    identity: false,
+                    reach: OutReach::Field,
+                }),
+            },
         });
     }
-    Some(leaves)
+    Some(OutNode {
+        ty: ty.clone(),
+        kind: TransformKind::Product {
+            op: OutProduct::Records,
+            children,
+        },
+    })
 }
 
 /// Recursively flatten a struct's output encode into a list of leaf wire
