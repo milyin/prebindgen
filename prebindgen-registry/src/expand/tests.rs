@@ -1317,3 +1317,62 @@ fn a_claim_inside_a_live_choice_stays_wrapped() {
         "a claim inside a live choice keeps the position's selector presence"
     );
 }
+
+/// #444 §3: claiming a **structural** node inside a live `Choice` — an arm's
+/// constructor product rather than one of its argument leaves.
+///
+/// The distinction matters because the two are offered differently. An argument
+/// leaf arrives with the position's `Option` already on it; the product above it
+/// arrives as the bare constructed type. If the claim's reading were stored
+/// unchanged, the leaf would declare a plain `ZKeyExpr` crossing while carrying
+/// `wrapped = true`, and the construct emitter would pattern-match that value as
+/// `Some(..)` — a tree that cannot generate compiling Rust.
+#[test]
+fn claiming_an_arm_product_keeps_the_position_optional() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_keyexpr_intersects"),
+        param: ident("a"),
+        declared_target: Some(key("ZKeyExpr")),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_keyexpr_intersects"), ident("a")))
+        .expect("plan");
+
+    // Claim each arm's product — reached by a link, unlike the root choice — so
+    // the dispatch above them survives.
+    let selected = crate::expand::select(plan.tree(), &mut |node, link| {
+        (link.is_some() && matches!(node.kind, TransformKind::Product { .. }))
+            .then(|| node.ty.clone())
+    })
+    .unwrap();
+
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(
+        leaves.len(),
+        3,
+        "the dispatch survives, so the selector and both arms keep their slots"
+    );
+    assert_eq!(
+        leaves[1].ty.spell().to_string(),
+        "Option < ZKeyExpr >",
+        "the claimed arm still has to be able to say `not this one`"
+    );
+}

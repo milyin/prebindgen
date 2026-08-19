@@ -605,12 +605,25 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                 claimed: node.ty.key().to_string(),
             });
         };
+        // The leaf's type and its `wrapped` flag have to say one thing: the
+        // type is what the wire declares, the flag is whether the emitter
+        // unwraps it. A structural node is offered WITHOUT the position's
+        // `Option` — an arm's constructor product is `ZKeyExpr` while its
+        // argument leaf is `Option<String>` — so the reading a claim returns
+        // there needs the layer put back on.
+        //
+        // Idempotent, because an already-optional reading at a wrapped position
+        // can only be the position type an existing leaf handed straight back:
+        // a selector-wrapped position never carries an optional value, since a
+        // parameter that is itself `Option` is built unwrapped (`wrapped =
+        // dispatched && !popt`).
+        let ty = if wrapped && selected.optional_inner().is_none() {
+            selected.optional()
+        } else {
+            selected
+        };
         Ok(crate::transform::Descend::Atomic(InNode {
-            // The claim states the reading; the position states its presence.
-            // The reading is NOT re-wrapped here — a claimed node under selector
-            // presence is already offered with its `Option` on, so the adapter
-            // sees the wrapped type and answers about it.
-            ty: selected,
+            ty,
             kind: TransformKind::Leaf(InLeaf::Slot { slot, wrapped }),
         }))
     }
