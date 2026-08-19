@@ -1215,7 +1215,7 @@ fn selecting_renumbers_the_surviving_slots() {
 /// argument, and the constructor under it receives the payload as
 /// `InLeaf::Bound` (bound by the layer, not from a wire slot).  There is no
 /// wire position for a converter to land on, so `select` returns
-/// `BoundOnlySubtreeClaimed`.
+/// `SelectError::BoundOnlySubtree`.
 #[test]
 fn claiming_a_bound_only_subtree_is_an_error() {
     // `attachment: Option<ZZBytes>` with one single-arg constructor.
@@ -1258,7 +1258,13 @@ fn claiming_a_bound_only_subtree_is_an_error() {
         Ok(_) => panic!("claiming a bound-only subtree must be refused"),
         Err(e) => e,
     };
-    assert_eq!(err.claimed, "ZZBytes", "the error says which construction");
+    assert_eq!(
+        err,
+        crate::expand::SelectError::BoundOnlySubtree {
+            claimed: "ZZBytes".to_string()
+        },
+        "the error says which construction"
+    );
     assert!(err.to_string().contains("no wire slot"), "and why: {err}");
 }
 
@@ -1513,5 +1519,141 @@ fn claiming_an_arity_layer_keeps_its_mapping() {
     assert!(
         !compact.contains("clone(&*enc)"),
         "the option is not dereferenced: {compact}"
+    );
+}
+
+/// #444 §3: the run analogue of [`claiming_an_arity_layer_keeps_its_mapping`],
+/// and the type a claimed run advertises for the value it binds.
+///
+/// A run's emitter iterates its slot, so a borrowed collection binds a borrowed
+/// element: `&[T]` binds `&T`, not `&[T]`. Deriving that with `sequence_elem`
+/// alone answers `None` for the borrowed spelling — a reference is not looked
+/// through the way a transparent wrapper is — and taking the reading itself
+/// would advertise the whole collection on a node whose expression is one
+/// element. Nothing in the current emitter reads that type, so only an adapter
+/// lowerer would see it, which is exactly who this tree is for.
+#[test]
+fn claiming_a_run_binds_one_borrowed_element() {
+    let reg: Registry<()> =
+        reg_with(&["fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }"]);
+    let _ = &reg;
+
+    // The run owns the wire slot; the constructor under it takes the element
+    // the layer bound.
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Product {
+                    op: InProduct::Ctor {
+                        func: ident("z_keyexpr_try_from"),
+                        fallible: true,
+                    },
+                    children: vec![InChild {
+                        link: InLink { by_ref: false },
+                        node: InNode {
+                            ty: tref(syn::parse_quote!(String)),
+                            kind: TransformKind::Leaf(InLeaf::Bound),
+                        },
+                    }],
+                },
+            }),
+        },
+    };
+
+    // The adapter decodes the whole run from one borrowed slice.
+    let selected = crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| tref(syn::parse_quote!(&[ZKeyExpr])))
+    })
+    .unwrap();
+
+    // The layer survives, carrying the claimed reading on its slot.
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(leaves.len(), 1);
+    assert_eq!(leaves[0].ty.spell().to_string(), "& [ZKeyExpr]");
+
+    // …and the node under it advertises what the layer actually binds.
+    let TransformKind::Sequence { inner, .. } = &selected.kind else {
+        panic!("the run survives the claim")
+    };
+    let TransformKind::Product { children, .. } = &inner.kind else {
+        panic!("a claimed run stands over an identity core")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "& ZKeyExpr",
+        "iterating a borrowed collection binds a borrowed element, not the collection"
+    );
+
+    let locals = vec![ident("kes")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    // Each borrowed element is cloned into the owned `Vec<ZKeyExpr>` the fold
+    // owes, and the run still collects.
+    assert!(
+        compact.contains("kes.into_iter().map(|__inner|"),
+        "the run still iterates its slot: {compact}"
+    );
+    assert!(
+        compact.contains("Clone::clone(&*__inner)"),
+        "the bound element is cloned to owned: {compact}"
+    );
+    assert!(
+        compact.contains("collect::<::core::result::Result<::std::vec::Vec<_>,_>>()"),
+        "…and collects into an owned Vec: {compact}"
+    );
+}
+
+/// An arity layer claimed with a reading that has none of that layer's shape is
+/// refused, rather than binding a value the layer cannot produce.
+#[test]
+fn claiming_a_layer_with_the_wrong_shape_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    // `ZKeyExpr` is one value, not a run of them: there is nothing to bind.
+    let err = match crate::expand::select(&tree, &mut |node, _link| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| tref(syn::parse_quote!(ZKeyExpr)))
+    }) {
+        Ok(_) => panic!("a run claimed with a non-run reading must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LayerReadingShape { layer, .. } if *layer == "a run"
+        ),
+        "got {err}"
+    );
+    assert!(
+        err.to_string().contains("ZKeyExpr") && err.to_string().contains("layer's shape"),
+        "the refusal names the reading and why: {err}"
     );
 }

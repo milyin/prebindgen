@@ -490,25 +490,57 @@ impl TransformLowerer<IntoRust> for CollectDeps {
 /// passed as independent wire slots.  A converter must land on a wire slot, so
 /// claiming such a subtree is always an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BoundOnlySubtreeClaimed {
-    /// The construction that was claimed, so the report says which one — the
-    /// same reason the planning errors carry a target and a node path.
-    pub claimed: String,
+pub enum SelectError {
+    /// The claimed subtree carries no wire slot to inherit — see the type's
+    /// own note.
+    BoundOnlySubtree {
+        /// The construction that was claimed, so the report says which one —
+        /// the same reason the planning errors carry a target and a node path.
+        claimed: String,
+    },
+    /// An arity layer was claimed with a reading that is not of that layer's
+    /// shape, so the value the layer binds cannot be derived from it.
+    ///
+    /// A layer iterates or unwraps the slot it is given: a run binds one
+    /// element of the collection, an optional binds the payload of the
+    /// `Option`. A reading with neither shape leaves nothing to bind, and the
+    /// node under the layer would have to advertise a type its expression
+    /// never produces.
+    LayerReadingShape {
+        /// The layer that was claimed, as `"a run"` or `"an optional"`.
+        layer: &'static str,
+        /// The node the layer stands over.
+        claimed: String,
+        /// The reading the adapter answered with.
+        reading: String,
+    },
 }
 
-impl std::fmt::Display for BoundOnlySubtreeClaimed {
+impl std::fmt::Display for SelectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "input expansion: the claimed construction of `{}` has no wire slot — its subtree is \
-             entirely layer-bound values, which a containing layer supplies rather than the \
-             foreign signature, so there is no position for a converter to land on",
-            self.claimed
-        )
+        match self {
+            Self::BoundOnlySubtree { claimed } => write!(
+                f,
+                "input expansion: the claimed construction of `{claimed}` has no wire slot — its \
+                 subtree is entirely layer-bound values, which a containing layer supplies rather \
+                 than the foreign signature, so there is no position for a converter to land on",
+            ),
+            Self::LayerReadingShape {
+                layer,
+                claimed,
+                reading,
+            } => write!(
+                f,
+                "input expansion: `{layer}` over `{claimed}` was claimed with the reading \
+                 `{reading}`, which is not of that layer's shape — the layer binds one value out \
+                 of the slot it is given, and this reading has none to bind. Claim the \
+                 construction under the layer instead, or answer with the layer's own shape",
+            ),
+        }
     }
 }
 
-impl std::error::Error for BoundOnlySubtreeClaimed {}
+impl std::error::Error for SelectError {}
 
 /// Apply one adapter's converter selection, producing the tree every later pass
 /// reads: each subtree the adapter claims becomes one wire slot carrying the
@@ -526,14 +558,14 @@ impl std::error::Error for BoundOnlySubtreeClaimed {}
 ///
 /// # Errors
 ///
-/// Returns [`BoundOnlySubtreeClaimed`] when the adapter claims a subtree whose
+/// Returns [`SelectError`] when the adapter claims a subtree whose
 /// only leaves are [`InLeaf::Bound`] — values supplied by a containing layer
 /// rather than independent wire slots.  Such a subtree has no position to
 /// inherit on the foreign signature.
 pub fn select(
     tree: &InNode,
     claim: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
-) -> Result<InNode, BoundOnlySubtreeClaimed> {
+) -> Result<InNode, SelectError> {
     tree.lower(&mut Select { claim })
         .map(|selected| renumber(&selected))
 }
@@ -542,6 +574,53 @@ pub fn select(
 /// subtree with the slot that stands for its converter.
 struct Select<'a> {
     claim: &'a mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+}
+
+/// Which arity layer a claim landed on — the two differ only in what they bind
+/// and how they name themselves in a refusal.
+#[derive(Clone, Copy)]
+enum LayerKind {
+    Optional,
+    Sequence,
+}
+
+impl LayerKind {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Optional => "an optional",
+            Self::Sequence => "a run",
+        }
+    }
+}
+
+/// The value a claimed arity layer binds out of its slot, derived from the
+/// reading the adapter chose.
+///
+/// **Through the borrow, not past it.** A run's emitter calls `into_iter()` on
+/// the slot, so `&[T]` and `&Vec<T>` bind `&T` while an owned `Vec<T>` binds
+/// `T` — and `sequence_elem` alone answers `None` for the borrowed spellings,
+/// because a reference is not looked through the way a transparent wrapper is.
+/// Taking the reading itself as the item there would advertise the whole
+/// collection on a node whose expression is one element, which is what an
+/// adapter lowerer reads to choose a conversion.
+fn layer_item(
+    reading: &prebindgen_flat::flat::TypeRef,
+    layer: LayerKind,
+    node: &InNode,
+) -> Result<prebindgen_flat::flat::TypeRef, SelectError> {
+    let item = match layer {
+        LayerKind::Optional => reading.optional_inner().cloned(),
+        LayerKind::Sequence => match reading.borrow_target() {
+            // Iterating a borrowed collection yields borrowed elements.
+            Some(collection) => collection.sequence_elem().map(|e| e.borrowed()),
+            None => reading.sequence_elem().cloned(),
+        },
+    };
+    item.ok_or_else(|| SelectError::LayerReadingShape {
+        layer: layer.name(),
+        claimed: node.ty.key().to_string(),
+        reading: reading.key().to_string(),
+    })
 }
 
 impl Select<'_> {
@@ -590,7 +669,7 @@ impl Select<'_> {
 
 impl TransformLowerer<IntoRust> for Select<'_> {
     type Value = InNode;
-    type Error = BoundOnlySubtreeClaimed;
+    type Error = SelectError;
 
     fn descend(
         &mut self,
@@ -601,7 +680,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
             return Ok(crate::transform::Descend::Recurse);
         };
         let Some((slot, wrapped)) = Self::first_slot(node) else {
-            return Err(BoundOnlySubtreeClaimed {
+            return Err(SelectError::BoundOnlySubtree {
                 claimed: node.ty.key().to_string(),
             });
         };
@@ -692,9 +771,11 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                         slot,
                         ty: selected.clone(),
                     },
-                    inner: Box::new(identity_over(
-                        selected.optional_inner().unwrap_or(&selected),
-                    )),
+                    inner: Box::new(identity_over(&layer_item(
+                        &selected,
+                        LayerKind::Optional,
+                        node,
+                    )?)),
                 },
             },
             TransformKind::Sequence { .. } => InNode {
@@ -704,7 +785,11 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                         slot,
                         ty: selected.clone(),
                     },
-                    inner: Box::new(identity_over(selected.sequence_elem().unwrap_or(&selected))),
+                    inner: Box::new(identity_over(&layer_item(
+                        &selected,
+                        LayerKind::Sequence,
+                        node,
+                    )?)),
                 },
             },
             // A base product or choice produces one value directly.
