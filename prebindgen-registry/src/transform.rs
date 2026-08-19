@@ -136,6 +136,17 @@ pub trait TransformLowerer<D: TransformDirection> {
     /// `ZKeyExpr` reached by an owning accessor and by a borrowing one converts
     /// and cleans up differently — so the decision needs the edge, not only the
     /// node.
+    ///
+    /// **What this still does not say** (#444 §5): the edge is the only context
+    /// offered, and a layer has none, so a lowerer cannot tell the element of a
+    /// run from a value at the root by looking at its arguments. Synthesising
+    /// an empty link for a layer would not help — a layer contributes no access
+    /// step and no name, so `Some(empty)` and `None` would say the same thing.
+    /// What an adapter actually wants there is the *position* — root,
+    /// product child, choice arm, run element — because an element must lower
+    /// to a single wire value where a root need not. That is a different
+    /// parameter from the link, and it should land with the adapter that reads
+    /// it rather than be guessed at now.
     fn descend(
         &mut self,
         node: &TransformNode<D>,
