@@ -2006,3 +2006,150 @@ fn a_non_direct_lift_onto_a_borrowed_leaf_is_an_error() {
         "the refusal says why: {err}"
     );
 }
+
+/// #444 §3: a claim on a **selector-wrapped** leaf, where the position's
+/// `Option` belongs to the dispatch and not to the value.
+///
+/// The emitter unwraps presence and then lifts, so that `Option` is on neither
+/// end of the operation. Reading the node's stored type instead hides the real
+/// target: a `&ZKeyExpr` argument inside a live arm is stored as
+/// `Option<&ZKeyExpr>`, whose `borrow_target()` is `None`, so an owned-producing
+/// lift slipped past the refusal and the identity advertised the position's
+/// `Option` while producing the payload.
+#[test]
+fn a_lift_on_a_wrapped_leaf_sees_through_the_presence() {
+    let tree = |arg: syn::Type| InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Choice {
+            op: InChoice {
+                selector: InSlot {
+                    slot: 0,
+                    name: ident("sel"),
+                },
+            },
+            variants: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(ZKeyExpr)),
+                    kind: TransformKind::Product {
+                        op: InProduct::Ctor {
+                            func: ident("z_keyexpr_of"),
+                            fallible: false,
+                        },
+                        children: vec![InChild {
+                            link: InLink { by_ref: false },
+                            node: InNode {
+                                // Stored WITH the selector's `Option`, which is
+                                // what a live arm's argument looks like.
+                                ty: tref(arg),
+                                kind: TransformKind::Leaf(InLeaf::Slot {
+                                    slot: InSlot {
+                                        slot: 1,
+                                        name: ident("a_0"),
+                                    },
+                                    wrapped: true,
+                                }),
+                            },
+                        }],
+                    },
+                },
+            }],
+        },
+    };
+    let select = |arg: syn::Type, claim: Claim| {
+        crate::expand::select(&tree(arg), &mut |node, _l| {
+            matches!(node.kind, TransformKind::Leaf(_)).then(|| claim.clone())
+        })
+    };
+
+    // An OWNED argument: the lift is honoured, and the node it lands on
+    // advertises the unwrapped target rather than the position's `Option`.
+    let selected = select(
+        syn::parse_quote!(Option<ZKeyExpr>),
+        Claim::clone_deref(tref(syn::parse_quote!(Option<OwnedObject<ZKeyExpr>>))),
+    )
+    .unwrap();
+    let TransformKind::Choice { variants, .. } = &selected.kind else {
+        panic!("the dispatch survives")
+    };
+    let TransformKind::Product { children, .. } = &variants[0].node.kind else {
+        panic!("the arm survives")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "ZKeyExpr",
+        "the identity owes the payload, not the position's `Option`"
+    );
+    let compact: String =
+        crate::expand::emit_fold_tree(&selected, &[ident("sel"), ident("a_0")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect();
+    assert!(
+        compact.contains(
+            "Option::Some(__v)=>::core::result::Result::Ok(::core::clone::Clone::clone(&*__v))"
+        ),
+        "presence is unwrapped and then the lift runs: {compact}"
+    );
+
+    // A BORROWED argument: the same claim now has an owned-producing lift onto
+    // a borrowed target, which the presence used to hide.
+    let err = match select(
+        syn::parse_quote!(Option<&ZKeyExpr>),
+        Claim::clone_deref(tref(syn::parse_quote!(Option<OwnedObject<ZKeyExpr>>))),
+    ) {
+        Ok(_) => panic!("an owned lift onto a borrowed argument must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LeafLiftTarget {
+                lift: Lift::CloneDeref,
+                ..
+            }
+        ),
+        "got {err}"
+    );
+}
+
+/// `Direct` says the reading IS the value, so a claim where the two differ is a
+/// contradiction — and `Ok(value)` offers no coercion to paper over it, the
+/// `Result`'s parameter being inferred rather than a coercion site.
+#[test]
+fn a_direct_claim_that_is_not_the_value_is_an_error() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    // A borrowed run binds `&ZKeyExpr`; claiming it `Direct` would collect
+    // `Vec<&ZKeyExpr>` where the node declares `Vec<ZKeyExpr>`.
+    let err = match crate::expand::select(&tree, &mut |node, _l| {
+        matches!(node.kind, TransformKind::Sequence { .. })
+            .then(|| Claim::direct(tref(syn::parse_quote!(&[ZKeyExpr]))))
+    }) {
+        Ok(_) => panic!("a direct claim that is not the value must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::DirectLiftMismatch { bound, target, .. }
+                if bound == "& ZKeyExpr" && target == "ZKeyExpr"
+        ),
+        "got {err}"
+    );
+}

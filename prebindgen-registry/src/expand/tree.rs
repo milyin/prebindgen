@@ -509,6 +509,22 @@ pub enum SelectError {
     /// `Option`. A reading with neither shape leaves nothing to bind, and the
     /// node under the layer would have to advertise a type its expression
     /// never produces.
+    /// A claim stated [`Lift::Direct`] — the reading IS the value — for a
+    /// position where the two differ.
+    ///
+    /// Exact rather than a guess: `Ok(value)` offers no coercion, because the
+    /// `Result`'s type parameter is inferred rather than a coercion site. So a
+    /// direct claim between two different types cannot be honoured by any
+    /// spelling of the same expression.
+    DirectLiftMismatch {
+        /// The position that was claimed.
+        claimed: String,
+        /// What the claim binds, once selector presence or an arity layer has
+        /// taken its share.
+        bound: String,
+        /// What that position owes.
+        target: String,
+    },
     /// A leaf was claimed with a lift whose result cannot be the value that
     /// position holds.
     ///
@@ -540,6 +556,16 @@ impl std::fmt::Display for SelectError {
                 "input expansion: the claimed construction of `{claimed}` has no wire slot — its \
                  subtree is entirely layer-bound values, which a containing layer supplies rather \
                  than the foreign signature, so there is no position for a converter to land on",
+            ),
+            Self::DirectLiftMismatch {
+                claimed,
+                bound,
+                target,
+            } => write!(
+                f,
+                "input expansion: the claim at `{claimed}` says its reading is the value \
+                 (`Lift::Direct`), but it binds `{bound}` where that position owes `{target}` — \
+                 state the operation between them, or claim a reading that is already the value",
             ),
             Self::LeafLiftTarget { claimed, lift } => write!(
                 f,
@@ -827,42 +853,105 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         // a selector-wrapped position never carries an optional value, since a
         // parameter that is itself `Option` is built unwrapped (`wrapped =
         // dispatched && !popt`).
-        let ty = if wrapped && selected.optional_inner().is_none() {
+        // ── The claim site, normalized ──────────────────────────────────
+        //
+        // Four facts, so that validating and rebuilding a claim never has to
+        // reason about a branch's particular spelling:
+        //
+        // * `position_ty` — the wire slot, selector presence included;
+        // * `bound_ty`    — what is left once presence or an arity layer has
+        //                   bound one value, which is the lift's input;
+        // * `target_ty`   — what the node owes with that same positional
+        //                   wrapper removed, which is the lift's output;
+        // * `lift`        — the operation between them, stated by the adapter.
+        //
+        // The emitter unwraps before it lifts, so a selector-wrapped position's
+        // `Option` belongs to neither end of the operation. Reading `node.ty`
+        // directly is what let an owned-producing lift through onto a borrowed
+        // argument hidden under presence.
+        //
+        // `position_ty` is idempotent in the wrapped case: an already-optional
+        // reading there can only be the position type an existing leaf handed
+        // straight back, since a selector-wrapped position never carries an
+        // optional value — a parameter that is itself `Option` is built
+        // unwrapped (`wrapped = dispatched && !popt`).
+        let position_ty = if wrapped && selected.optional_inner().is_none() {
             selected.optional()
         } else {
             selected.clone()
         };
+        let peel = |ty: &prebindgen_flat::flat::TypeRef| {
+            if wrapped {
+                ty.optional_inner().unwrap_or(ty).clone()
+            } else {
+                ty.clone()
+            }
+        };
+        let (bound_ty, target_ty) = match &node.kind {
+            TransformKind::Leaf(_) => (peel(&position_ty), peel(&node.ty)),
+            TransformKind::Optional { .. } => (
+                layer_item(&selected, LayerKind::Optional, node)?,
+                node.core().ty.clone(),
+            ),
+            TransformKind::Sequence { .. } => (
+                layer_item(&selected, LayerKind::Sequence, node)?,
+                node.core().ty.clone(),
+            ),
+            // A structural node is offered without the position's `Option`, so
+            // the claim's reading is already the lift's input.
+            _ => (selected.clone(), node.ty.clone()),
+        };
+
+        // ── …and validated once, in those terms ─────────────────────────
+        match lift {
+            // `Direct` says the bound value IS the target, and nothing coerces
+            // through `Ok(..)` — the `Result`'s parameter is inferred, not a
+            // coercion site. So this is a contradiction to detect, not a
+            // spelling to guess about.
+            Lift::Direct if bound_ty.key() != target_ty.key() => {
+                return Err(SelectError::DirectLiftMismatch {
+                    claimed: node.ty.key().to_string(),
+                    bound: bound_ty.key().to_string(),
+                    target: target_ty.key().to_string(),
+                })
+            }
+            // Both deref lifts produce an owned value. A target that is a
+            // borrow needs the value borrowed *through* the reading, which no
+            // `Lift` states.
+            Lift::CloneDeref | Lift::MoveDeref if target_ty.borrow_target().is_some() => {
+                return Err(SelectError::LeafLiftTarget {
+                    claimed: node.ty.key().to_string(),
+                    lift,
+                })
+            }
+            _ => {}
+        }
+
         let leaf = InNode {
-            ty,
+            ty: position_ty,
             kind: TransformKind::Leaf(InLeaf::Slot {
                 slot: slot.clone(),
                 wrapped,
             }),
         };
-
-        // An identity over one value the enclosing node binds. A structural
-        // node names the OWNED core while the reading chosen for it may be a
-        // borrow — which is why a claim answers with a reading and not a
-        // boolean — so a borrowed reading is cloned back up to the type the
-        // node declares. Without that, a consumer that borrows the result gets
-        // `&&T`.
-        // Typed with the CORE the claim replaces, not the claimed node: under a
-        // layer the identity stands where the construction stood, and
-        // `InNode::core` descends to it — an adapter asking the selected tree
-        // what it targets must still get the owned target, not the layer's
-        // `Option<&T>`.
-        let identity_over = |bound: &prebindgen_flat::flat::TypeRef| InNode {
-            ty: node.core().ty.clone(),
+        // An identity over one value the enclosing node binds, typed with what
+        // the node owes rather than what the claim reads: under a layer it
+        // stands where the construction stood and `InNode::core` descends to
+        // it, and under selector presence the `Option` is the position's, not
+        // the value's.
+        let identity_over = |bound: InNode| InNode {
+            ty: target_ty.clone(),
             kind: TransformKind::Product {
                 op: InProduct::Identity { lift },
                 children: vec![InChild {
                     link: InLink { by_ref: false },
-                    node: InNode {
-                        ty: bound.clone(),
-                        kind: TransformKind::Leaf(InLeaf::Bound),
-                    },
+                    node: bound,
                 }],
             },
+        };
+        let bound_leaf = || InNode {
+            ty: bound_ty.clone(),
+            kind: TransformKind::Leaf(InLeaf::Bound),
         };
         // A leaf claim replaces a leaf: it is consumed as an ordinary
         // constructor argument, and the constructor above it already unwraps
@@ -884,27 +973,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
             // reading itself. So the leaf gains the same identity node a
             // structural claim gets, which is the node that performs a lift.
             TransformKind::Leaf(_) if lift == Lift::Direct => leaf,
-            TransformKind::Leaf(_) => {
-                // Both deref lifts produce an owned value. A position holding a
-                // borrow needs the value borrowed through the reading, which no
-                // `Lift` states.
-                if node.ty.borrow_target().is_some() {
-                    return Err(SelectError::LeafLiftTarget {
-                        claimed: node.ty.key().to_string(),
-                        lift,
-                    });
-                }
-                InNode {
-                    ty: node.ty.clone(),
-                    kind: TransformKind::Product {
-                        op: InProduct::Identity { lift },
-                        children: vec![InChild {
-                            link: InLink { by_ref: false },
-                            node: leaf,
-                        }],
-                    },
-                }
-            }
+            TransformKind::Leaf(_) => identity_over(leaf),
             // An ARITY LAYER maps its inner value over a shape, and the claim
             // replaced the whole layer — its presence or length slots included.
             // Keeping the layer over an identity core is what preserves that
@@ -927,11 +996,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                         slot,
                         ty: selected.clone(),
                     },
-                    inner: Box::new(identity_over(&layer_item(
-                        &selected,
-                        LayerKind::Optional,
-                        node,
-                    )?)),
+                    inner: Box::new(identity_over(bound_leaf())),
                 },
             },
             TransformKind::Sequence { .. } => InNode {
@@ -941,24 +1006,11 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                         slot,
                         ty: selected.clone(),
                     },
-                    inner: Box::new(identity_over(&layer_item(
-                        &selected,
-                        LayerKind::Sequence,
-                        node,
-                    )?)),
+                    inner: Box::new(identity_over(bound_leaf())),
                 },
             },
             // A base product or choice produces one value directly.
-            _ => InNode {
-                ty: node.ty.clone(),
-                kind: TransformKind::Product {
-                    op: InProduct::Identity { lift },
-                    children: vec![InChild {
-                        link: InLink { by_ref: false },
-                        node: leaf,
-                    }],
-                },
-            },
+            _ => identity_over(leaf),
         }))
     }
 
