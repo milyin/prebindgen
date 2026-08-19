@@ -1044,12 +1044,12 @@ fn core_lowers_through_the_shared_visitor() {
     );
 }
 
-/// #444 (review): the input side takes the same cutoff policy the output side
-/// does, so registration and lowering cannot disagree about which converters a
-/// construction demands. Asserted over registry roots, since a root is what a
-/// binding actually demands and `TypeCell::root` can only be gained.
+/// #444 §1/§3: an adapter's selection on the input side is a **tree**, and
+/// producing it is also a choice of layout — a claimed construction's
+/// arguments, selector and presence slots collapse into the one value that
+/// crosses instead, and the surviving slots close ranks.
 #[test]
-fn a_claimed_argument_is_not_rooted_by_registration() {
+fn selecting_a_construction_replaces_its_slots() {
     let mut reg: Registry<()> = reg_with(&[
         "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
@@ -1059,7 +1059,10 @@ fn a_claimed_argument_is_not_rooted_by_registration() {
         func: ident("z_keyexpr_intersects"),
         param: ident("a"),
         declared_target: Some(key("ZKeyExpr")),
-        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_keyexpr_try_from"))]),
+        sel: ExpandSel::Subset(vec![
+            Variant::Ctor(ident("z_keyexpr_try_from")),
+            Variant::Identity,
+        ]),
     });
     apply(
         &mut reg,
@@ -1069,34 +1072,113 @@ fn a_claimed_argument_is_not_rooted_by_registration() {
         &Default::default(),
     )
     .expect("apply");
-    let tree = &reg
+    let plan = reg
         .expansion_plans
         .get(&(ident("z_keyexpr_intersects"), ident("a")))
-        .expect("plan")
-        .tree;
+        .expect("plan");
 
+    // Unselected: a selector plus one slot per arm.
+    assert_eq!(plan.leaves().len(), 3);
+    assert_eq!(plan.selector(), Some(0));
+
+    // An adapter that builds a whole `ZKeyExpr` from one value of its own.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
+    });
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(
+        leaves.len(),
+        1,
+        "the dispatch and both arms collapse into the value that crosses"
+    );
+    assert_eq!(leaves[0].ty.spell().to_string(), "ZKeyExpr");
+    assert_eq!(
+        crate::expand::dependencies(&selected)
+            .required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["ZKeyExpr"],
+        "and the arms' own crossings are not demanded"
+    );
+
+    // Registration follows the same tree, so nothing roots what is gone.
     let rooted = |reg: &Registry<()>, ty: syn::Type| -> Option<bool> {
         reg.input_types
             .get(&TypeKey::from_type(&ty))
             .map(|cell| cell.root)
     };
-
-    // The constructor's `String` argument is the only crossing; claiming the
-    // whole construction replaces it with `ZKeyExpr` itself.
     let mut claimed: Registry<()> = reg_with(&[]);
-    crate::expand::register_dependencies(&mut claimed, tree, &mut |node, _link| {
-        // The claim states the reading of the converter it selected, rather
-        // than leaving the walk to guess it from the node.
-        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
-    });
+    crate::expand::register_dependencies(&mut claimed, &selected);
     assert_eq!(rooted(&claimed, syn::parse_quote!(ZKeyExpr)), Some(true));
     assert_ne!(
-        rooted(&claimed, syn::parse_quote!(String)),
-        Some(true),
-        "an argument of a claimed construction is never demanded"
+        rooted(&claimed, syn::parse_quote!(Option<String>)),
+        Some(true)
     );
+}
 
-    let mut plain: Registry<()> = reg_with(&[]);
-    crate::expand::register_dependencies(&mut plain, tree, &mut |_, _| None);
-    assert_eq!(rooted(&plain, syn::parse_quote!(String)), Some(true));
+/// The surviving slots keep their order and close ranks, because the foreign
+/// signature is a sequence: what a caller passes second must still be what the
+/// wrapper reads second.
+#[test]
+fn selecting_renumbers_the_surviving_slots() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_sample_new(ke: &ZKeyExpr, payload: ZZBytes) -> ZSample { todo!() }",
+        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+        "fn z_zbytes_from_vec(v: Vec<u8>) -> ZZBytes { todo!() }",
+        "fn z_reply_sample(sample: ZSample) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    for (target, variants) in [
+        (key("ZSample"), vec![Variant::Ctor(ident("z_sample_new"))]),
+        (
+            key("ZKeyExpr"),
+            vec![
+                Variant::Ctor(ident("z_keyexpr_try_from")),
+                Variant::Identity,
+            ],
+        ),
+        (
+            key("ZZBytes"),
+            vec![Variant::Ctor(ident("z_zbytes_from_vec"))],
+        ),
+    ] {
+        exp.constructors.push(ConstructorDecl {
+            target,
+            variants,
+            default: true,
+        });
+    }
+    exp.expands.push(ExpandDecl {
+        func: ident("z_reply_sample"),
+        param: ident("sample"),
+        declared_target: Some(key("ZSample")),
+        sel: ExpandSel::TopLevel,
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_reply_sample"), ident("sample")))
+        .expect("plan");
+
+    // Slots 0..2 build the key expression, slot 3 the payload.
+    assert_eq!(plan.leaves().len(), 4);
+    assert_eq!(plan.leaves()[3].name.to_string(), "sample_payload");
+
+    // Claiming the key expression drops slots 0..2 and the payload closes up
+    // into position 0 — keeping its name, because it is the same value.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.borrowed())
+    });
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(leaves.len(), 2);
+    assert_eq!(leaves[0].ty.spell().to_string(), "& ZKeyExpr");
+    assert_eq!(leaves[1].name.to_string(), "sample_payload");
 }

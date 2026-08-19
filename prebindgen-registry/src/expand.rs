@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
     tree::{
-        dependencies, dependencies_with, wire_leaves, Dependencies, InChild, InChoice, InLeaf,
-        InLink, InNode, InPresence, InProduct, InRun, InSlot, IntoRust,
+        dependencies, select, wire_leaves, Dependencies, InChild, InChoice, InLeaf, InLink, InNode,
+        InPresence, InProduct, InRun, InSlot, IntoRust,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -321,7 +321,7 @@ fn process_expand<M>(
         &mut visited,
     )?;
 
-    register_dependencies(registry, &plan.tree, &mut claims_nothing());
+    register_dependencies(registry, &plan.tree);
     registry
         .expansion_plans
         .insert((ed.func.clone(), ed.param.clone()), plan);
@@ -411,22 +411,11 @@ struct CtorSig {
 /// make the *same* decision: a subtree claimed in one and not the other roots
 /// converters the binding never calls, and a root can only be gained, never
 /// taken back.
-fn register_dependencies<M>(
-    registry: &mut Registry<M>,
-    tree: &InNode,
-    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
-) {
-    let deps = dependencies_with(tree, claims);
+fn register_dependencies<M>(registry: &mut Registry<M>, tree: &InNode) {
+    let deps = dependencies(tree);
     for ty in deps.required.iter().chain(deps.intrinsic.iter()) {
         registry.require_input(ty);
     }
-}
-
-/// The selection every caller passes today: no adapter states one yet. Handing
-/// an adapter's in is #444 §5.
-fn claims_nothing() -> impl FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>
-{
-    |_, _| None
 }
 
 /// Build the [`FoldPlan`] for a chosen construction. A single `Ctor` variant
