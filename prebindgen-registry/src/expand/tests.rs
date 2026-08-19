@@ -134,7 +134,9 @@ fn constructor_plan_and_fold() {
         matches!(
             &arms[1].kind,
             TransformKind::Product {
-                op: InProduct::Identity { clone: true },
+                op: InProduct::Identity {
+                    lift: Lift::CloneDeref
+                },
                 ..
             }
         ),
@@ -399,7 +401,9 @@ fn optional_combined_selector_encodes_absence() {
         matches!(
             &arms[1].kind,
             TransformKind::Product {
-                op: InProduct::Identity { clone: true },
+                op: InProduct::Identity {
+                    lift: Lift::CloneDeref
+                },
                 ..
             }
         ),
@@ -914,10 +918,14 @@ impl crate::transform::TransformLowerer<IntoRust> for RenderIn {
                 if *fallible { "!" } else { "" },
                 args.join(", ")
             ),
-            InProduct::Identity { clone } => {
+            InProduct::Identity { lift } => {
                 format!(
                     "self{}({})",
-                    if *clone { ".clone" } else { "" },
+                    match lift {
+                        Lift::Direct => "",
+                        Lift::CloneDeref => ".clone",
+                        Lift::MoveDeref => ".move",
+                    },
                     args.join(", ")
                 )
             }
@@ -1083,7 +1091,7 @@ fn selecting_a_construction_replaces_its_slots() {
 
     // An adapter that builds a whole `ZKeyExpr` from one value of its own.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
-        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| Claim::direct(node.ty.clone()))
     })
     .unwrap();
     let leaves = crate::expand::wire_leaves(&selected);
@@ -1176,7 +1184,7 @@ fn selecting_renumbers_the_surviving_slots() {
     // Claiming the key expression drops slots 0..2 and the payload closes up
     // into position 0 — keeping its name, because it is the same value.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
-        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.borrowed())
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| Claim::clone_deref(node.ty.borrowed()))
     })
     .unwrap();
     let leaves = crate::expand::wire_leaves(&selected);
@@ -1251,7 +1259,7 @@ fn claiming_a_bound_only_subtree_is_an_error() {
         // Claim on the ZZBytes product, but NOT on the wrapping Optional.
         (node.ty.spell().to_string() == "ZZBytes"
             && !matches!(node.kind, TransformKind::Optional { .. }))
-        .then(|| node.ty.clone())
+        .then(|| Claim::direct(node.ty.clone()))
     });
     let err = match result {
         // `InNode` has no `Debug`, so the refusal is taken by matching.
@@ -1310,7 +1318,7 @@ fn a_claim_inside_a_live_choice_stays_wrapped() {
     // The arm's argument is offered WITH its selector-presence `Option` on, so
     // the adapter answers about the wrapped position.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
-        (node.ty.spell().to_string() == "Option < String >").then(|| node.ty.clone())
+        (node.ty.spell().to_string() == "Option < String >").then(|| Claim::direct(node.ty.clone()))
     })
     .unwrap();
 
@@ -1389,7 +1397,7 @@ fn claiming_an_arm_product_keeps_the_position_optional() {
     // the dispatch above them survives.
     let selected = crate::expand::select(plan.tree(), &mut |node, link| {
         (link.is_some() && matches!(node.kind, TransformKind::Product { .. }))
-            .then(|| node.ty.clone())
+            .then(|| Claim::direct(node.ty.clone()))
     })
     .unwrap();
 
@@ -1464,9 +1472,12 @@ fn claiming_an_arity_layer_keeps_its_mapping() {
         .expect("plan");
 
     // The adapter decodes the whole optional parameter from one wire value,
-    // through the reading the layer node itself names.
+    // through the reading the layer node itself names — and says how the
+    // payload it binds becomes the owned target: `&ZEncoding` is a borrow of
+    // the caller's value, so it is copied out of rather than consumed.
     let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
-        matches!(node.kind, TransformKind::Optional { .. }).then(|| node.ty.clone())
+        matches!(node.kind, TransformKind::Optional { .. })
+            .then(|| Claim::clone_deref(node.ty.clone()))
     })
     .unwrap();
 
@@ -1568,7 +1579,7 @@ fn claiming_a_run_binds_one_borrowed_element() {
     // The adapter decodes the whole run from one borrowed slice.
     let selected = crate::expand::select(&tree, &mut |node, _link| {
         matches!(node.kind, TransformKind::Sequence { .. })
-            .then(|| tref(syn::parse_quote!(&[ZKeyExpr])))
+            .then(|| Claim::clone_deref(tref(syn::parse_quote!(&[ZKeyExpr]))))
     })
     .unwrap();
 
@@ -1636,7 +1647,7 @@ fn claiming_a_layer_with_the_wrong_shape_is_an_error() {
     // `ZKeyExpr` is one value, not a run of them: there is nothing to bind.
     let err = match crate::expand::select(&tree, &mut |node, _link| {
         matches!(node.kind, TransformKind::Sequence { .. })
-            .then(|| tref(syn::parse_quote!(ZKeyExpr)))
+            .then(|| Claim::direct(tref(syn::parse_quote!(ZKeyExpr))))
     }) {
         Ok(_) => panic!("a run claimed with a non-run reading must be refused"),
         Err(e) => e,
@@ -1683,7 +1694,7 @@ fn claiming_a_cow_run_binds_a_borrowed_element() {
 
     let selected = crate::expand::select(&tree, &mut |node, _link| {
         matches!(node.kind, TransformKind::Sequence { .. })
-            .then(|| tref(syn::parse_quote!(Cow<'static, [ZKeyExpr]>)))
+            .then(|| Claim::clone_deref(tref(syn::parse_quote!(Cow<'static, [ZKeyExpr]>))))
     })
     .unwrap();
 
@@ -1734,7 +1745,7 @@ fn claiming_an_optional_behind_a_wrapper_is_an_error() {
     };
     let err = match crate::expand::select(&tree, &mut |node, _link| {
         matches!(node.kind, TransformKind::Optional { .. })
-            .then(|| tref(syn::parse_quote!(Box<Option<ZEncoding>>)))
+            .then(|| Claim::direct(tref(syn::parse_quote!(Box<Option<ZEncoding>>))))
     }) {
         Ok(_) => panic!("an optional behind a wrapper must be refused"),
         Err(e) => e,
@@ -1746,4 +1757,123 @@ fn claiming_an_optional_behind_a_wrapper_is_an_error() {
         ),
         "got {err}"
     );
+}
+
+/// A structural claim states how its reading becomes the node's value, and the
+/// fold emitter executes exactly that.
+///
+/// The registry cannot infer this: `Box<T>` owns its target and can be moved
+/// out of, while a non-owning adapter handle dereferences to storage its
+/// language still owns and can only be copied from. The two present the same
+/// target and the same deref shape, so the adapter — which chose the converter
+/// — states the operation.
+#[test]
+fn a_claim_states_how_its_reading_is_lifted() {
+    let ctor = || InNode {
+        ty: tref(syn::parse_quote!(ZKeyExpr)),
+        kind: TransformKind::Product {
+            op: InProduct::Ctor {
+                func: ident("z_keyexpr_try_from"),
+                fallible: true,
+            },
+            children: vec![InChild {
+                link: InLink { by_ref: false },
+                node: InNode {
+                    ty: tref(syn::parse_quote!(String)),
+                    kind: TransformKind::Leaf(InLeaf::Slot {
+                        slot: InSlot {
+                            slot: 0,
+                            name: ident("s"),
+                        },
+                        wrapped: false,
+                    }),
+                },
+            }],
+        },
+    };
+    let folded = |claim: Claim| -> String {
+        let selected = crate::expand::select(&ctor(), &mut |node, _l| {
+            matches!(node.kind, TransformKind::Product { .. }).then(|| claim.clone())
+        })
+        .unwrap();
+        crate::expand::emit_fold_tree(&selected, &[ident("v")], &src_qualify)
+            .to_token_stream()
+            .to_string()
+            .split_whitespace()
+            .collect()
+    };
+
+    // Owned: the reading IS the value, so it moves.
+    assert_eq!(
+        folded(Claim::direct(tref(syn::parse_quote!(ZKeyExpr)))),
+        "::core::result::Result::Ok(v)"
+    );
+    // A non-owning handle: dereference and copy out, leaving the caller's
+    // value alone. Its Rust type is the adapter's, and the fold never names it.
+    assert_eq!(
+        folded(Claim::clone_deref(tref(syn::parse_quote!(
+            OwnedObject<ZKeyExpr>
+        )))),
+        "::core::result::Result::Ok(::core::clone::Clone::clone(&*v))"
+    );
+    // An owning wrapper: dereference and move, which asks nothing of `ZKeyExpr`
+    // — in particular not `Clone`, which is why this cannot be folded into the
+    // case above.
+    assert_eq!(
+        folded(Claim::move_deref(tref(syn::parse_quote!(Box<ZKeyExpr>)))),
+        "::core::result::Result::Ok(*v)"
+    );
+}
+
+/// `Cow<'_, Vec<T>>` is a run to the model and not one to the emitter: a `Cow`
+/// cannot be moved out of, so `into_iter()` on it does not compile at all
+/// ("cannot move out of dereference"). `Cow<'_, [T]>` iterates its slice and
+/// binds `&T`; the `Vec` spelling has no such fallback, so it is refused rather
+/// than bound as something the layer cannot produce.
+#[test]
+fn a_cow_of_vec_run_is_refused() {
+    let tree = InNode {
+        ty: tref(syn::parse_quote!(Vec<ZKeyExpr>)),
+        kind: TransformKind::Sequence {
+            op: InRun {
+                slot: InSlot {
+                    slot: 0,
+                    name: ident("kes"),
+                },
+                ty: tref(syn::parse_quote!(Vec<String>)),
+            },
+            inner: Box::new(InNode {
+                ty: tref(syn::parse_quote!(ZKeyExpr)),
+                kind: TransformKind::Leaf(InLeaf::Bound),
+            }),
+        },
+    };
+    let claim_of = |reading: syn::Type| {
+        crate::expand::select(&tree, &mut |node, _l| {
+            matches!(node.kind, TransformKind::Sequence { .. })
+                .then(|| Claim::clone_deref(tref(reading.clone())))
+        })
+    };
+
+    let err = match claim_of(syn::parse_quote!(Cow<'static, Vec<ZKeyExpr>>)) {
+        Ok(_) => panic!("a `Cow<'_, Vec<T>>` run must be refused"),
+        Err(e) => e,
+    };
+    assert!(
+        matches!(
+            &err,
+            crate::expand::SelectError::LayerReadingShape { layer, .. } if *layer == "a run"
+        ),
+        "got {err}"
+    );
+
+    // …while the slice spelling, which does iterate, still binds a borrow.
+    let selected = claim_of(syn::parse_quote!(Cow<'static, [ZKeyExpr]>)).unwrap();
+    let TransformKind::Sequence { inner, .. } = &selected.kind else {
+        panic!("the run survives")
+    };
+    let TransformKind::Product { children, .. } = &inner.kind else {
+        panic!("over an identity core")
+    };
+    assert_eq!(children[0].node.ty.spell().to_string(), "& ZKeyExpr");
 }

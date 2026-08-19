@@ -43,8 +43,8 @@ pub use self::{
     error::{ExpandDeclError, ExpandError},
     plan::{FoldLeaf, FoldPlan, FoldShape},
     tree::{
-        dependencies, select, wire_leaves, Dependencies, InChild, InChoice, InLeaf, InLink, InNode,
-        InPresence, InProduct, InRun, InSlot, IntoRust, SelectError,
+        dependencies, select, wire_leaves, Claim, Dependencies, InChild, InChoice, InLeaf, InLink,
+        InNode, InPresence, InProduct, InRun, InSlot, IntoRust, Lift, SelectError,
     },
 };
 use crate::transform::{Lowered, TransformKind, TransformLowerer};
@@ -702,7 +702,15 @@ fn build_core<M>(
                 InNode {
                     ty: target.clone(),
                     kind: TransformKind::Product {
-                        op: InProduct::Identity { clone: by_ref },
+                        op: InProduct::Identity {
+                            // A `&T` arm reaches the caller's handle, so the
+                            // fold copies out of it rather than consuming it.
+                            lift: if by_ref {
+                                Lift::CloneDeref
+                            } else {
+                                Lift::Direct
+                            },
+                        },
                         children: vec![leaf_child(
                             leaf_ty,
                             slot,
@@ -910,23 +918,27 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
             "constructor variant input missing"
         )));
         match op {
-            InProduct::Identity { clone } => {
-                // The sole input is the target value (or a borrow of it that we
-                // clone, for `&T` consumers — preserving the caller's handle).
+            InProduct::Identity { lift } => {
+                // The sole input is the target value, or something that reaches
+                // it — the `lift` says which, and the adapter said the lift.
+                //
+                // Both deref forms go through `&*` / `*`, which see through
+                // whatever the leaf decoded to: a plain `&T`, a `Box<T>`, or an
+                // adapter smart-pointer like jnigen's `OwnedObject<T>`. The core
+                // never has to know that type, only whether the value can be
+                // moved out of it.
                 let (child, value) = &children[0];
-                // `&*__v` derefs through whatever the borrow leaf decoded to (a
-                // plain `&T`, or an adapter smart-pointer like jnigen's
-                // `OwnedObject<T>`) down to `T`, then clones — keeping the
-                // caller's handle alive without the core knowing the adapter's
-                // borrow type.
+                let lifted = |v: &syn::Expr| -> syn::Expr {
+                    match lift {
+                        Lift::Direct => syn::parse_quote!(::core::result::Result::Ok(#v)),
+                        Lift::CloneDeref => syn::parse_quote!(::core::result::Result::Ok(
+                            ::core::clone::Clone::clone(&*#v)
+                        )),
+                        Lift::MoveDeref => syn::parse_quote!(::core::result::Result::Ok(*#v)),
+                    }
+                };
                 if Self::wrapped(child) == Some(true) {
-                    let some_val: syn::Expr = if *clone {
-                        syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
-                            &*__v
-                        )))
-                    } else {
-                        syn::parse_quote!(::core::result::Result::Ok(__v))
-                    };
+                    let some_val = lifted(&syn::parse_quote!(__v));
                     return Ok(syn::parse_quote!(match #value {
                         ::core::option::Option::Some(__v) => #some_val,
                         ::core::option::Option::None => ::core::result::Result::Err(
@@ -934,13 +946,7 @@ impl TransformLowerer<IntoRust> for ConstructEmitter<'_> {
                         ),
                     }));
                 }
-                Ok(if *clone {
-                    syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
-                        &*#value
-                    )))
-                } else {
-                    syn::parse_quote!(::core::result::Result::Ok(#value))
-                })
+                Ok(lifted(value))
             }
             InProduct::Ctor { func, fallible } => {
                 let path = (self.qualify)(func);

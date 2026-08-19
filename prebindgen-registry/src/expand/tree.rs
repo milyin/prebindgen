@@ -100,10 +100,13 @@ pub enum InProduct {
     },
     /// The value itself, decoded from the node's single child.
     Identity {
-        /// A borrowed identity arm (`&T` parameter): the decoded value is a
-        /// borrow, and the fold clones it (`T: Clone`) so the caller's handle
-        /// is preserved rather than consumed.
-        clone: bool,
+        /// How the child's decoded value becomes this node's value.
+        ///
+        /// A borrowed identity arm (`&T` parameter) is
+        /// [`CloneDeref`](Lift::CloneDeref): the decoded value reaches the
+        /// caller's handle, and the fold copies out of it rather than consuming
+        /// it. A selection states its own — see [`Claim`].
+        lift: Lift,
     },
 }
 
@@ -564,7 +567,7 @@ impl std::error::Error for SelectError {}
 /// inherit on the foreign signature.
 pub fn select(
     tree: &InNode,
-    claim: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+    claim: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<Claim>,
 ) -> Result<InNode, SelectError> {
     tree.lower(&mut Select { claim })
         .map(|selected| renumber(&selected))
@@ -573,7 +576,69 @@ pub fn select(
 /// The lowerer behind [`select`]: it rebuilds the tree, replacing a claimed
 /// subtree with the slot that stands for its converter.
 struct Select<'a> {
-    claim: &'a mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
+    claim: &'a mut dyn FnMut(&InNode, Option<&InLink>) -> Option<Claim>,
+}
+
+/// How a claimed reading becomes the value the claimed node declares.
+///
+/// The registry cannot infer this from the reading's spelling, and it stopped
+/// trying: `Box<T>` owns its target and can be moved out of, jnigen's
+/// `OwnedObject<T>` dereferences to storage Java still owns and can only be
+/// cloned from, and the two can present the same target and the same deref
+/// shape. The adapter chose the converter, so the adapter states the operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lift {
+    /// The reading already IS the value — move it.
+    Direct,
+    /// Dereference and clone: the reading reaches storage it does not own, so
+    /// the value has to be copied out of it. `&T` and non-owning adapter
+    /// handles take this.
+    CloneDeref,
+    /// Dereference and move: the reading owns its target and hands it over.
+    /// `Box<T>` takes this, and unlike [`CloneDeref`](Self::CloneDeref) it asks
+    /// nothing of the target type.
+    MoveDeref,
+}
+
+/// What an adapter answers when it claims a subtree: the reading of the
+/// converter it chose, and how that reading yields the claimed node's value.
+///
+/// Two facts rather than one because they are independent — the same `&T` may
+/// be cloned from or, behind a different wrapper, moved out of — and only the
+/// adapter knows the second.
+#[derive(Debug, Clone)]
+pub struct Claim {
+    /// The reading whose input converter decodes the claimed wire slot.
+    pub reading: prebindgen_flat::flat::TypeRef,
+    /// How that reading becomes the value the node declares.
+    pub lift: Lift,
+}
+
+impl Claim {
+    /// A claim whose reading is already the value.
+    pub fn direct(reading: prebindgen_flat::flat::TypeRef) -> Self {
+        Self {
+            reading,
+            lift: Lift::Direct,
+        }
+    }
+
+    /// A claim whose reading must be dereferenced and cloned — the usual answer
+    /// for a borrow or a non-owning handle.
+    pub fn clone_deref(reading: prebindgen_flat::flat::TypeRef) -> Self {
+        Self {
+            reading,
+            lift: Lift::CloneDeref,
+        }
+    }
+
+    /// A claim whose reading owns its target and is dereferenced to move it.
+    pub fn move_deref(reading: prebindgen_flat::flat::TypeRef) -> Self {
+        Self {
+            reading,
+            lift: Lift::MoveDeref,
+        }
+    }
 }
 
 /// Which arity layer a claim landed on — the two differ only in what they bind
@@ -632,16 +697,30 @@ fn layer_item(
             .filter(|_| matches!(reading.kind(), prebindgen_flat::flat::TypeKind::Optional(_)))
             .cloned(),
         LayerKind::Sequence => {
-            let by_ref = reading.borrow_target().is_some()
-                || matches!(
-                    reading.unwrapped().kind(),
-                    prebindgen_flat::flat::TypeKind::Slice(_)
-                );
-            let elem = match reading.borrow_target() {
-                Some(collection) => collection.sequence_elem(),
-                None => reading.sequence_elem(),
-            };
-            elem.map(|e| if by_ref { e.borrowed() } else { e.clone() })
+            // A `Cow` cannot be moved out of, so `into_iter()` on one reaches
+            // its borrowed side or does not compile at all: `Cow<'_, [T]>`
+            // iterates the slice and yields `&T`, while `Cow<'_, Vec<T>>` is
+            // rejected outright ("cannot move out of dereference"). A slice is
+            // likewise never owned by value. Everything else that survives to
+            // here is a `Vec` the layer consumes — `Box<Vec<T>>` included,
+            // since a `Box` does hand its contents over.
+            let cow = reading.erased_wrappers().contains(&"Cow");
+            match reading.unwrapped().kind() {
+                prebindgen_flat::flat::TypeKind::Vec(_) if cow => None,
+                _ => {
+                    let by_ref = cow
+                        || reading.borrow_target().is_some()
+                        || matches!(
+                            reading.unwrapped().kind(),
+                            prebindgen_flat::flat::TypeKind::Slice(_)
+                        );
+                    let elem = match reading.borrow_target() {
+                        Some(collection) => collection.sequence_elem(),
+                        None => reading.sequence_elem(),
+                    };
+                    elem.map(|e| if by_ref { e.borrowed() } else { e.clone() })
+                }
+            }
         }
     };
     item.ok_or_else(|| SelectError::LayerReadingShape {
@@ -704,7 +783,11 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         node: &InNode,
         link: Option<&InLink>,
     ) -> Result<crate::transform::Descend<InNode>, Self::Error> {
-        let Some(selected) = (self.claim)(node, link) else {
+        let Some(Claim {
+            reading: selected,
+            lift,
+        }) = (self.claim)(node, link)
+        else {
             return Ok(crate::transform::Descend::Recurse);
         };
         let Some((slot, wrapped)) = Self::first_slot(node) else {
@@ -751,9 +834,7 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         let identity_over = |bound: &prebindgen_flat::flat::TypeRef| InNode {
             ty: node.core().ty.clone(),
             kind: TransformKind::Product {
-                op: InProduct::Identity {
-                    clone: bound.borrow_target().is_some(),
-                },
+                op: InProduct::Identity { lift },
                 children: vec![InChild {
                     link: InLink { by_ref: false },
                     node: InNode {
@@ -821,21 +902,16 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                 },
             },
             // A base product or choice produces one value directly.
-            _ => {
-                let bound = selected.clone();
-                InNode {
-                    ty: node.ty.clone(),
-                    kind: TransformKind::Product {
-                        op: InProduct::Identity {
-                            clone: bound.borrow_target().is_some(),
-                        },
-                        children: vec![InChild {
-                            link: InLink { by_ref: false },
-                            node: leaf,
-                        }],
-                    },
-                }
-            }
+            _ => InNode {
+                ty: node.ty.clone(),
+                kind: TransformKind::Product {
+                    op: InProduct::Identity { lift },
+                    children: vec![InChild {
+                        link: InLink { by_ref: false },
+                        node: leaf,
+                    }],
+                },
+            },
         }))
     }
 
