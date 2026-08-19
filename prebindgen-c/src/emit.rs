@@ -349,26 +349,6 @@ impl CbindgenBuilder {
             })
     }
 
-    /// Whether any declared function returns a `Vec<_>` (possibly nested under
-    /// `Result`/`Option`), so the array builder/freer prelude must be emitted.
-    ///
-    /// A run of values is the whole question — `Vec<T>` and `[T]` alike, and
-    /// through a transparent wrapper, so `Cow<'_, [T]>` counts as the `Vec<T>`
-    /// it crosses as. [`sequence_elem`](prebindgen_registry::flat::TypeRef::sequence_elem)
-    /// answers all three, which is why the two spellings this used to test
-    /// separately need no arms of their own.
-    pub(super) fn produces_array(&self, registry: &Registry<()>) -> bool {
-        self.functions.keys().any(|orig| {
-            registry
-                .flat()
-                .function(&orig)
-                // The model already decided that an elided return and `-> ()`
-                // are one thing, so there is no second arm to write here.
-                .map(|f| f.ret.walk().iter().any(|t| t.sequence_elem().is_some()))
-                .unwrap_or(false)
-        })
-    }
-
     /// Fields (`name`, `type`) of a declared data struct, looked up from the
     /// registry's indexed structs. `None` if the type isn't an indexed named
     /// struct.

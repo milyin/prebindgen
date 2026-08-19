@@ -94,6 +94,14 @@ fn c_run(ty: &TypeRef) -> Option<(&TypeRef, bool)> {
 pub(crate) struct CValuePlan {
     pub(crate) shape: ValueShape,
     pub(crate) fallible: bool,
+    /// Whether this plan's encoder calls `__cbg_alloc_array`, so the crate must
+    /// carry that helper's definition.
+    ///
+    /// A helper requirement is a fact of the resolved plan, not of the source
+    /// syntax: the encoder that calls it was chosen here, so what it needs is
+    /// answered here too. Read off the same plans the emitters consume, a
+    /// helper cannot be called by generated code the prelude does not define.
+    pub(crate) needs_array_alloc: bool,
     encode: Encoder,
 }
 
@@ -142,6 +150,7 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
                     niches: Niches::empty(),
                 },
                 fallible: false,
+                needs_array_alloc: false,
                 encode: std::rc::Rc::new(|_, _, _| quote!()),
             });
         }
@@ -163,6 +172,7 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
                 niches,
             },
             fallible,
+            needs_array_alloc: false,
             encode: std::rc::Rc::new(move |val, targets, route| {
                 let t0 = &targets[0];
                 if fallible {
@@ -219,6 +229,8 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
                 niches: Niches::empty(),
             },
             fallible,
+            // The run's own encoder is what calls the helper.
+            needs_array_alloc: true,
             encode: std::rc::Rc::new(move |val, targets, route| {
                 let t_ptr = &targets[0];
                 let t_len = &targets[1];
@@ -267,6 +279,9 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
     ) -> Result<CValuePlan, Self::Error> {
         let inner_encode = value.encode.clone();
         let fallible = value.fallible;
+        // A layer encodes through its inner value, so it needs whatever that
+        // encoder needs.
+        let needs_array_alloc = value.needs_array_alloc;
         if let Some((slot, rest)) = value.shape.niches.clone().carve() {
             let null = slot.value.clone();
             return Ok(CValuePlan {
@@ -275,6 +290,7 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
                     niches: rest,
                 },
                 fallible,
+                needs_array_alloc,
                 encode: std::rc::Rc::new(move |val, targets, route| {
                     // `None` reuses the next inner niche; `Some` encodes inline.
                     let inner_enc = inner_encode(&quote!(__x), targets, route);
@@ -299,6 +315,7 @@ impl<R: Conversions<()>> TransformLowerer<OutOfRust> for PlanFromTree<'_, R> {
                 niches: Niches::empty(),
             },
             fallible,
+            needs_array_alloc,
             encode: std::rc::Rc::new(move |val, targets, route| {
                 // Explicit `present` flag first; the inner value follows it.
                 let present = &targets[0];

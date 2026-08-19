@@ -540,6 +540,9 @@ fn a_run_of_converted_optionals_uses_the_declared_wire() {
 
     let cbindgen = CbindgenBuilder::new()
         .source_module(syn::parse_quote!(myflat))
+        // The callback's run hands a malloc'd array to C, so the layer needs a
+        // freer for it — the same obligation a run-valued return carries.
+        .free_memory_function("z_free")
         .convert(
             prebindgen_registry::convert!(Duration)
                 .input(prebindgen_registry::fun!(duration_from_millis))
@@ -650,5 +653,51 @@ fn a_result_callback_arg_is_refused_at_its_declaration() {
     assert!(
         message.contains("has no C ABI") && message.contains("Result"),
         "the refusal names the shape and why: {message}"
+    );
+}
+
+/// A run reaches the C boundary through a **callback argument** as readily as
+/// through a return, and the encoder it gets calls `__cbg_alloc_array`. The
+/// helper's definition has to follow the encoder that calls it, or the
+/// generated crate names a function nobody wrote.
+///
+/// No function here returns a run, which is what makes the case bite: helper
+/// discovery that reads return types alone sees nothing to emit.
+#[test]
+fn callback_only_run_emits_the_array_helper() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_on_batch(
+            callback: impl Fn(Vec<i64>) + Send + Sync + 'static,
+        ) -> Result<(), Error> {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Fn(func), loc.clone()),
+        (syn::Item::Struct(error_struct()), loc.clone()),
+    ]))
+    .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .data_struct(syn::parse_quote!(Error))
+        .base_name("z_error")
+        .error()
+        .callback(syn::parse_quote!(impl Fn(Vec<i64>) + Send + Sync + 'static))
+        .base_name("z_closure_batch_t")
+        .function(syn::parse_quote!(z_on_batch));
+
+    let src = write(cbindgen, registry, "cb_run");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("__cbg_alloc_array(__arr)"),
+        "the callback's run is encoded through the array helper: {src}"
+    );
+    assert!(
+        compact.contains("fn__cbg_alloc_array<W>"),
+        "…so its definition must be emitted too: {src}"
     );
 }
