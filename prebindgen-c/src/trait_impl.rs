@@ -1519,9 +1519,14 @@ impl CbindgenBuilder {
                     arg_wires.push(syn::parse_quote!(usize));
                     continue;
                 }
+                let reading = registry.reading_of(a).unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen: callback arg `{}` was never classified",
+                        a.to_token_stream()
+                    )
+                });
                 let wire = registry
-                    .reading_of(a)
-                    .and_then(|tr| registry.output_entry(&tr))
+                    .output_entry(&reading)
                     .unwrap_or_else(|| {
                         panic!(
                             "Cbindgen: callback arg `{}` has no output converter (declare it \
@@ -1534,9 +1539,22 @@ impl CbindgenBuilder {
                 // Takeable params are delivered as an owned pointer.
                 if takeable.contains(&i) {
                     arg_wires.push(syn::parse_quote!(*mut #wire));
-                } else {
-                    arg_wires.push(wire);
+                    continue;
                 }
+                // A composite has no wire of its own, so its C params are the
+                // fields its shape lowers to — exactly as `dispatch_fn_input`
+                // fills them (#428). Each is `MaybeUninit`: an absent value
+                // leaves its slot unwritten, and the wrapper must not build a
+                // Rust value to fill it with. `#[repr(transparent)]` keeps both
+                // the C ABI and the header spelling.
+                if marker_destination(&wire) && r_is_lowered_composite(&reading, registry) {
+                    for field in self.lower_shape(&reading, registry).fields {
+                        let w = field.wire;
+                        arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
+                    }
+                    continue;
+                }
+                arg_wires.push(wire);
             }
             let c_struct = self.callback_c_ident(key);
             items.push(syn::parse_quote!(
@@ -1711,8 +1729,95 @@ impl CbindgenBuilder {
             let src = self.src_ty_deep_of(arg);
             let ai = format_ident!("__a{}", i);
             let wi = format_ident!("__w{}", i);
-            closure_params.push(quote!(#ai: #src));
             let is_takeable = takeable.contains(&i);
+            // A COMPOSITE argument — `Option<T>`, `Vec<T>`, `Cow<'_, [T]>` — has
+            // no converter of its own: `out_wrappers` gives it a marker with a
+            // `()` destination, which exists to resolve the entry and make the
+            // inner required while the real ABI is structural. The return path
+            // lowers those in `lower_shape` / `encode_value`; this one used to
+            // call the marker as if it were a converter, which takes no
+            // arguments (#428). Same lowering, so the two directions cannot
+            // disagree about which shapes they know.
+            //
+            // A takeable argument is a whole-value policy over an opaque handle
+            // and never a composite, so it keeps the by-reference path below.
+            //
+            // Which shapes those are is the MODEL's answer, not the marker's: a
+            // `()` destination says the type has no wire of its own, and a
+            // `Result` has one of those too while no arm lowers it. Field COUNT
+            // cannot say it either — `Option<&T>` carves the pointer's niche and
+            // lowers to a single `*const`, one field and still nothing a
+            // converter call can produce.
+            if !is_takeable
+                && marker_destination(&entry.destination)
+                && !r_is_lowered_composite(arg, registry)
+            {
+                panic!(
+                    "Cbindgen: callback argument `{}` has no C ABI — it resolves to a marker \
+                     converter and is not one of the shapes lowered structurally (`Option<T>`, \
+                     `Vec<T>`, `Cow<'_, [T]>`). Deliver its parts as separate callback \
+                     arguments instead.",
+                    arg,
+                );
+            }
+            // Both halves of the marker test, and both are load-bearing. The
+            // MODEL says which shapes `lower_shape` decomposes; the marker says
+            // this type has no wire of its own — and a `convert!`-declared
+            // `Option<T>` has one, because `out_custom` is tried before
+            // `out_wrappers`. Decomposing that from its shape alone would pass
+            // several arguments to a `call` the struct declared with one
+            // (#428 review).
+            let composite = !is_takeable
+                && marker_destination(&entry.destination)
+                && r_is_lowered_composite(arg, registry);
+            if composite {
+                let shape = self.lower_shape(arg, registry);
+                closure_params.push(quote!(#ai: #src));
+                let mut targets = Vec::new();
+                for (f, field) in shape.fields.iter().enumerate() {
+                    let fi = if shape.fields.len() == 1 {
+                        wi.clone()
+                    } else {
+                        format_ident!("__w{}_{}", i, f)
+                    };
+                    let wire = &field.wire;
+                    // A `MaybeUninit`, zeroed. Two things it must not be.
+                    //
+                    // Not a `wire` value: a shape with a `present` flag writes
+                    // only the flag when the value is absent, and materialising
+                    // something to fill the slot is undefined for a wire whose
+                    // all-zero pattern is not a legal value of its type — a
+                    // declared `enum_type`'s discriminants are the source's own,
+                    // so zero need not name a variant at all.
+                    //
+                    // And not left indeterminate: the slot is passed BY VALUE to
+                    // foreign code, so whatever the stack or register held is
+                    // handed to a C callback that reads it despite the flag.
+                    // Zeroing costs a store and discloses nothing, while
+                    // `MaybeUninit` keeps it from ever being a `wire` (#428
+                    // review).
+                    //
+                    // Neither assumes anything about WHICH fields the encode
+                    // writes, which is the encoder's business and not this
+                    // caller's.
+                    encode_stmts
+                        .push(quote!(let mut #fi = ::core::mem::MaybeUninit::<#wire>::zeroed();));
+                    targets.push(quote!(*#fi.as_mut_ptr()));
+                    call_args.push(quote!(#fi));
+                }
+                // A firing callback has no error channel, so a fallible
+                // converter aborts — the same answer the single-value path
+                // below gives, spelled by the route the emitters share.
+                encode_stmts.push(self.encode_value(
+                    arg,
+                    quote!(#ai),
+                    &targets,
+                    registry,
+                    &ErrRoute::Panic,
+                ));
+                continue;
+            }
+            closure_params.push(quote!(#ai: #src));
             let mut_kw = if is_takeable { quote!(mut) } else { quote!() };
             if fallible {
                 encode_stmts.push(quote!(
@@ -1764,11 +1869,19 @@ impl CbindgenBuilder {
                 let __call = c.call;
                 let __ctx = ::std::sync::Arc::new(__Ctx { context: c.context, drop: c.drop });
                 move |#(#closure_params),*| {
-                    #(#encode_stmts)*
+                    // Encode INSIDE the guard: a closure struct whose `call` is
+                    // NULL receives nothing, and a converter that allocates —
+                    // `Vec`/`Cow` into a malloc'd array, a `String` into a
+                    // malloc'd `char *` — would hand that allocation to nobody
+                    // on every invocation (#428 review). Not converting at all
+                    // is also what the argument's own `Drop` expects: the value
+                    // is simply dropped, which is neither a leak nor a double
+                    // free.
                     if let ::core::option::Option::Some(__f) = __call {
+                        #(#encode_stmts)*
                         unsafe { __f(#(#call_args,)* __ctx.context) }
+                        #(#post_drops)*
                     }
-                    #(#post_drops)*
                 }
             }
         );

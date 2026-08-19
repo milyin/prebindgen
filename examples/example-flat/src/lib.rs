@@ -57,6 +57,23 @@ pub enum Operation {
     Div = 3,
 }
 
+/// An enum whose discriminants **skip zero** — the case an all-zero fill cannot
+/// be checked against.
+///
+/// A declared `enum_type`'s discriminants are the source's own, re-emitted
+/// verbatim, so the wire is this very enum and zero need not name a variant at
+/// all. Anything that fabricates a value for an absent slot builds an invalid
+/// one here, which is undefined behaviour whether or not the C side reads it
+/// (#428 review). `Option<f64>` cannot show that: every bit pattern is a legal
+/// `f64`.
+#[prebindgen]
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grade {
+    Low = 1,
+    High = 2,
+}
+
 /// A **data-carrying enum** (a sum type): exactly one alternative is live, and it
 /// carries that alternative's payload. Written as plain Rust — the invariant is in
 /// the type, not in a doc comment on a struct of optional fields.
@@ -421,6 +438,52 @@ pub fn calculator_for_each(c: &Calculator, f: impl Fn(f64) + Send + Sync + 'stat
     for v in &c.history {
         f(*v);
     }
+}
+
+/// The same delivery with an **optional** argument — a composite in argument
+/// position.
+///
+/// `Option`/`Vec`/`Cow` have no converter of their own: each resolves to a
+/// marker whose destination is `()`, and the real ABI is the shape it lowers
+/// to. The return path has always lowered them; the callback-argument path
+/// called that marker as if it were a converter, and a marker takes no
+/// arguments — so this shape emitted a binding that did not build (#428).
+///
+/// Fires once with the last recorded value and once with `None`, so both arms
+/// of the lowering reach C from a single call: an `Option<f64>` has no spare
+/// bit pattern, so it crosses as a `bool` beside the value.
+#[prebindgen]
+pub fn calculator_last_or_none(c: &Calculator, f: impl Fn(Option<f64>) + Send + Sync + 'static) {
+    f(c.history.last().copied());
+    f(None);
+}
+
+/// Deliver the whole history as an owned array — the composite whose lowering
+/// **allocates**.
+///
+/// A `Vec<T>` argument crosses as a malloc'd `(ptr, len)` pair the C side owns,
+/// so a closure whose `call` is NULL must not convert at all: nobody would
+/// receive that block, and nobody could free it (#428 review). Its sibling
+/// callbacks allocate nothing, so only this one can say whether the encode is
+/// inside the guard.
+#[prebindgen]
+pub fn calculator_history_batch(c: &Calculator, f: impl Fn(Vec<f64>) + Send + Sync + 'static) {
+    f(c.history.clone());
+}
+
+/// The same shape over a [`Grade`], whose discriminants skip zero.
+///
+/// The absent arm must leave the value slot alone rather than fill it: the wire
+/// IS the Rust enum, so a fabricated zero would be an invalid value of it. Fires
+/// present then absent, like its sibling.
+#[prebindgen]
+pub fn calculator_grade_or_none(c: &Calculator, f: impl Fn(Option<Grade>) + Send + Sync + 'static) {
+    f((c.value > 0.0).then_some(if c.value > 10.0 {
+        Grade::High
+    } else {
+        Grade::Low
+    }));
+    f(None);
 }
 
 /// Reset the accumulator to zero (feature-gated, mirroring zenoh-flat's

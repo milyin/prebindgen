@@ -345,6 +345,144 @@ static void test_alias_preflight(void) {
     calculator_drop(merged);
 }
 
+/* A composite in ARGUMENT position: `impl Fn(Option<f64>)`.
+ *
+ * A composite has no converter of its own — `Option`/`Vec`/`Cow` resolve to a
+ * marker whose destination is `()` — and the real ABI is the shape it lowers
+ * to. The callback-argument path used to call that marker as if it were a
+ * converter, and a marker takes no arguments, so this shape emitted a binding
+ * that did not build (#428).
+ *
+ * `Option<f64>` has no spare bit pattern, so the shape is a `bool` beside the
+ * value and the C `call` takes both. When the flag is false the value is
+ * unspecified — the same contract a `Result`'s out-param carries — so this
+ * reads it only in the present case. */
+struct maybe_calls {
+    int fired;
+    bool present[2];
+    double value;
+};
+
+static void on_maybe_value(bool present, double value, void *ctx) {
+    struct maybe_calls *calls = (struct maybe_calls *)ctx;
+    if (calls->fired < 2) {
+        calls->present[calls->fired] = present;
+        if (present) {
+            calls->value = value;
+        }
+    }
+    calls->fired++;
+}
+
+/* The same shape over an enum whose discriminants skip zero — the case
+ * `Option<double>` cannot detect.
+ *
+ * A declared `enum_type`'s wire is the Rust enum itself, so filling the absent
+ * slot with any fabricated value builds an invalid one. The slot is left
+ * unwritten instead, and C reads it only when the flag says to. */
+struct maybe_grades {
+    int fired;
+    bool present[2];
+    enum grade_t value;
+};
+
+static void on_maybe_grade(bool present, enum grade_t value, void *ctx) {
+    struct maybe_grades *calls = (struct maybe_grades *)ctx;
+    if (calls->fired < 2) {
+        calls->present[calls->fired] = present;
+        if (present) {
+            calls->value = value;
+        }
+    }
+    calls->fired++;
+}
+
+static void test_optional_enum_callback_arg(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+    double applied = -1.0;
+    CHECK(calculator_apply(c, Add, 20.0, &applied, &e));
+    CHECK(e == NULL);
+
+    struct maybe_grades calls = {0, {false, false}, Low};
+    struct closure_maybe_grade_t closure = {
+        .context = &calls, .call = on_maybe_grade, .drop = NULL};
+    calculator_grade_or_none(c, closure);
+
+    CHECK(calls.fired == 2);
+    CHECK(calls.present[0]);
+    CHECK(calls.value == High);
+    CHECK(!calls.present[1]);
+
+    calculator_drop(c);
+}
+
+/* A composite whose lowering ALLOCATES, delivered to a closure that cannot
+ * receive it.
+ *
+ * `Vec<f64>` crosses as a malloc'd `(double *, size_t)` the C side owns. A
+ * closure struct whose `call` is NULL receives nothing, so converting the
+ * argument at all would hand that block to nobody — a leak on every
+ * invocation, and one only a leak detector can see (#428 review). This section
+ * is why `smoke-asan.sh` runs under LSan: with the encode outside the call
+ * guard, the block below is reported and the run fails.
+ *
+ * The live case is beside it, so the same fixture shows the array still
+ * arrives when there IS a callback — a guard that skipped the call as well
+ * would pass a leak check and be useless. */
+static void on_history_batch(double *values, uintptr_t len, void *ctx) {
+    double *sum = (double *)ctx;
+    for (uintptr_t i = 0; i < len; i++) {
+        *sum += values[i];
+    }
+    example_free(values); /* the array is C's to free */
+}
+
+static void test_allocating_callback_arg(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+    double applied = -1.0;
+    CHECK(calculator_apply(c, Add, 4.0, &applied, &e));
+    CHECK(calculator_apply(c, Add, 6.0, &applied, &e));
+    CHECK(e == NULL);
+
+    /* Live: the batch arrives and is freed by the receiver. */
+    double sum = 0.0;
+    struct closure_history_batch_t live = {
+        .context = &sum, .call = on_history_batch, .drop = NULL};
+    calculator_history_batch(c, live);
+    CHECK(sum == 14.0); /* 4 + 10 */
+
+    /* No `call`: nothing may be allocated, because nothing could free it. */
+    struct closure_history_batch_t silent = {
+        .context = NULL, .call = NULL, .drop = NULL};
+    calculator_history_batch(c, silent);
+
+    calculator_drop(c);
+}
+
+static void test_optional_callback_arg(void) {
+    char *e = NULL;
+    calculator_t *c = calculator_new();
+    double applied = -1.0;
+    CHECK(calculator_apply(c, Add, 7.0, &applied, &e));
+    CHECK(applied == 7.0);
+    CHECK(e == NULL);
+
+    struct maybe_calls calls = {0, {false, false}, -1.0};
+    struct closure_maybe_value_t closure = {
+        .context = &calls, .call = on_maybe_value, .drop = NULL};
+    calculator_last_or_none(c, closure);
+
+    /* Fires twice from one call: the recorded value, then `None`. */
+    CHECK(calls.fired == 2);
+    CHECK(calls.present[0]);
+    CHECK(calls.value == 7.0);
+    CHECK(!calls.present[1]);
+
+    calculator_drop(c);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
@@ -355,6 +493,9 @@ int main(void) {
     test_out_of_domain_bool_data_struct_field();
     test_nested_union_payload();
     test_alias_preflight();
+    test_optional_callback_arg();
+    test_optional_enum_callback_arg();
+    test_allocating_callback_arg();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
@@ -362,6 +503,8 @@ int main(void) {
     }
     printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
            "converter-derived payloads, out-of-domain bool payload and "
-           "data-struct field, nested union payload, alias preflight\n");
+           "data-struct field, nested union payload, alias preflight, "
+           "optional callback argument (scalar and zero-less enum), "
+           "allocating callback argument with and without a call\n");
     return 0;
 }

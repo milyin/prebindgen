@@ -708,100 +708,112 @@ impl CbindgenBuilder {
     /// available for enclosing `Option`/`Result` layers. Mirrors the
     /// niche-stacking model in `core::niches`.
     #[allow(clippy::only_used_in_recursion)]
-    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &Registry<()>) -> ValueShape {
+    pub(super) fn lower_shape(&self, ty: &TypeRef, registry: &impl Conversions<()>) -> ValueShape {
         if matches!(ty.kind(), TypeKind::Unit) {
             return ValueShape {
                 fields: vec![],
                 niches: Niches::empty(),
             };
         }
-        // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
-        // value (one converter); a composite element is unsupported.
-        // `TypeKind::Vec` and not `sequence_elem`: that reading peels the
-        // erased wrappers first, so a `Cow<'_, [u8]>` would answer here and
-        // take the `Vec` lowering instead of its own arm below.
-        if let TypeKind::Vec(elem) = ty.kind() {
-            assert!(
-                elem.optional_inner().is_none()
-                    && elem.sequence_elem().is_none()
-                    && elem.fallible_parts().is_none(),
-                "Cbindgen: `Vec<{}>` element must be a single-value type \
-                 (scalar, data struct, String, or handle), not a composite",
-                elem.key(),
-            );
-            let entry = registry.output_entry(elem).unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen: `Vec` element `{}` has no output converter",
-                    elem.key()
-                )
-            });
-            let elem_wire = entry.destination.clone();
-            return ValueShape {
-                fields: vec![
-                    WireField {
-                        suffix: "",
-                        wire: syn::parse_quote!(*mut #elem_wire),
-                    },
-                    WireField {
-                        suffix: "_len",
-                        wire: syn::parse_quote!(usize),
-                    },
-                ],
-                niches: Niches::empty(),
-            };
-        }
-        // `Cow<'_, [T]>` and `&[T]` → `T_wire* + size_t`. The C side receives an
-        // owned malloc'd copy, just like `Vec<T>` outputs.
-        //
-        // A shared slice reaches this only as a RETURN: a slice parameter is a
-        // pointer pair the caller supplies, and a slice callback argument is
-        // lowered by `prereq_callback_structs`. Without the second predicate a
-        // slice return fell through to the base-value path and took the `()`
-        // destination of the marker converter that exists for that callback
-        // lowering, so the wrapper returned nothing and called the marker with
-        // an argument it does not take (#413).
-        if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
-            let entry = registry.output_entry(elem).unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen: `Cow` slice element `{}` has no output converter",
-                    elem.key()
-                )
-            });
-            let elem_wire = entry.destination.clone();
-            return ValueShape {
-                fields: vec![
-                    WireField {
-                        suffix: "",
-                        wire: syn::parse_quote!(*mut #elem_wire),
-                    },
-                    WireField {
-                        suffix: "_len",
-                        wire: syn::parse_quote!(usize),
-                    },
-                ],
-                niches: Niches::empty(),
-            };
-        }
-        // `Option<T>` consumes one available inner niche. This includes NULL
-        // pointers and invalid scalar values declared by `convert!`; without a
-        // niche it prepends an explicit `present: bool`.
-        if let Some(inner_ty) = ty.optional_inner() {
-            let inner = self.lower_shape(inner_ty, registry);
-            if let Some((_slot, rest)) = inner.niches.clone().carve() {
+        // A DECLARED conversion beats the shape, at every level and not only the
+        // outermost. `select_output_type` tries `out_custom` before
+        // `out_wrappers`, so a `convert!`-declared `Option<T>` has a wire of its
+        // own; decomposing it anyway would describe a different ABI from the one
+        // the converter table hands out, and the two must agree (#428 review).
+        // The base case below already does this for a type with no shape arm.
+        if !r_has_own_wire(ty, registry) {
+            // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
+            // value (one converter); a composite element is unsupported.
+            // `TypeKind::Vec` and not `sequence_elem`: that reading peels the
+            // erased wrappers first, so a `Cow<'_, [u8]>` would answer here and
+            // take the `Vec` lowering instead of its own arm below.
+            if let TypeKind::Vec(elem) = ty.kind() {
+                let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen: `Vec` element `{}` has no output converter",
+                        elem.key()
+                    )
+                });
+                // The element must lower to ONE C value, and that is the converter
+                // table's answer rather than a list of shapes: a marker destination
+                // means "no wire of its own", whatever put it there — an `Option`, a
+                // shared slice, another run, the unit. A composite element WITH a
+                // declared conversion has a wire and is fine.
+                assert!(
+                    !marker_destination(&entry.destination),
+                    "Cbindgen: `Vec<{}>` element has no wire of its own, so there is \
+                 nothing for the array to hold — give it a `convert!` \
+                 declaration or deliver its parts separately",
+                    elem.key(),
+                );
+                let elem_wire = entry.destination.clone();
                 return ValueShape {
-                    fields: inner.fields,
-                    niches: rest,
+                    fields: vec![
+                        WireField {
+                            suffix: "",
+                            wire: syn::parse_quote!(*mut #elem_wire),
+                        },
+                        WireField {
+                            suffix: "_len",
+                            wire: syn::parse_quote!(usize),
+                        },
+                    ],
+                    niches: Niches::empty(),
                 };
             }
-            let mut fields = vec![WireField {
-                suffix: "_present",
-                wire: syn::parse_quote!(bool),
-            }];
-            fields.extend(inner.fields);
-            return ValueShape {
-                fields,
-                niches: Niches::empty(),
-            };
+            // `Cow<'_, [T]>` and `&[T]` → `T_wire* + size_t`. The C side receives an
+            // owned malloc'd copy, just like `Vec<T>` outputs.
+            //
+            // A shared slice reaches this only as a RETURN: a slice parameter is a
+            // pointer pair the caller supplies, and a slice callback argument is
+            // lowered by `prereq_callback_structs`. Without the second predicate a
+            // slice return fell through to the base-value path and took the `()`
+            // destination of the marker converter that exists for that callback
+            // lowering, so the wrapper returned nothing and called the marker with
+            // an argument it does not take (#413).
+            if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
+                let entry = registry.output_entry(elem).unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen: `Cow` slice element `{}` has no output converter",
+                        elem.key()
+                    )
+                });
+                let elem_wire = entry.destination.clone();
+                return ValueShape {
+                    fields: vec![
+                        WireField {
+                            suffix: "",
+                            wire: syn::parse_quote!(*mut #elem_wire),
+                        },
+                        WireField {
+                            suffix: "_len",
+                            wire: syn::parse_quote!(usize),
+                        },
+                    ],
+                    niches: Niches::empty(),
+                };
+            }
+            // `Option<T>` consumes one available inner niche. This includes NULL
+            // pointers and invalid scalar values declared by `convert!`; without a
+            // niche it prepends an explicit `present: bool`.
+            if let Some(inner_ty) = ty.optional_inner() {
+                let inner = self.lower_shape(inner_ty, registry);
+                if let Some((_slot, rest)) = inner.niches.clone().carve() {
+                    return ValueShape {
+                        fields: inner.fields,
+                        niches: rest,
+                    };
+                }
+                let mut fields = vec![WireField {
+                    suffix: "_present",
+                    wire: syn::parse_quote!(bool),
+                }];
+                fields.extend(inner.fields);
+                return ValueShape {
+                    fields,
+                    niches: Niches::empty(),
+                };
+            }
         }
         // Base value: one wire component from its rank-0/1 converter. Custom
         // conversions may declare scalar niches; otherwise a pointer wire
@@ -832,94 +844,100 @@ impl CbindgenBuilder {
         ty: &TypeRef,
         val: TokenStream,
         targets: &[TokenStream],
-        registry: &Registry<()>,
+        registry: &impl Conversions<()>,
         route: &ErrRoute,
     ) -> TokenStream {
         if matches!(ty.kind(), TypeKind::Unit) {
             return quote!();
         }
-        if let TypeKind::Vec(elem) = ty.kind() {
-            let entry = registry.output_entry(elem).expect("Vec element converter");
-            let elem_conv = entry.function.sig.ident.clone();
-            let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
-            let elem_wire = entry.destination.clone();
-            let t_ptr = &targets[0];
-            let t_len = &targets[1];
-            if returns_result(&entry.function.sig.output) {
-                let converted = route_result(quote!(#elem_conv(__value)), route);
-                return quote!(
-                    let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
-                    for __value in #val {
-                        __arr.push(#converted);
-                    }
-                    let (__p, __n) = __cbg_alloc_array(__arr);
-                    #t_ptr = __p;
-                    #t_len = __n;
-                );
-            } else {
-                return quote!(
-                    let __arr: ::std::vec::Vec<#elem_wire> =
-                        #val.into_iter().map(#elem_map).collect();
-                    let (__p, __n) = __cbg_alloc_array(__arr);
-                    #t_ptr = __p;
-                    #t_len = __n;
-                );
+        // The peer of `lower_shape`'s guard: a node with a wire of its own is
+        // encoded by its own converter, whatever its shape. The two walk the
+        // same value and must stop at the same places (#428 review).
+        if !r_has_own_wire(ty, registry) {
+            if let TypeKind::Vec(elem) = ty.kind() {
+                let entry = registry.output_entry(elem).expect("Vec element converter");
+                let elem_conv = entry.function.sig.ident.clone();
+                let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
+                let elem_wire = entry.destination.clone();
+                let t_ptr = &targets[0];
+                let t_len = &targets[1];
+                if returns_result(&entry.function.sig.output) {
+                    let converted = route_result(quote!(#elem_conv(__value)), route);
+                    return quote!(
+                        let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
+                        for __value in #val {
+                            __arr.push(#converted);
+                        }
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #t_ptr = __p;
+                        #t_len = __n;
+                    );
+                } else {
+                    return quote!(
+                        let __arr: ::std::vec::Vec<#elem_wire> =
+                            #val.into_iter().map(#elem_map).collect();
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #t_ptr = __p;
+                        #t_len = __n;
+                    );
+                }
             }
-        }
-        if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
-            let entry = registry
-                .output_entry(elem)
-                .expect("slice element converter");
-            let elem_conv = entry.function.sig.ident.clone();
-            let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
-            let elem_wire = entry.destination.clone();
-            let t_ptr = &targets[0];
-            let t_len = &targets[1];
-            if returns_result(&entry.function.sig.output) {
-                let converted = route_result(quote!(#elem_conv(__value)), route);
-                return quote!(
-                    let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
-                    for __value in #val.iter().copied() {
-                        __arr.push(#converted);
-                    }
-                    let (__p, __n) = __cbg_alloc_array(__arr);
-                    #t_ptr = __p;
-                    #t_len = __n;
-                );
-            } else {
-                return quote!(
-                    let __arr: ::std::vec::Vec<#elem_wire> =
-                        #val.iter().copied().map(#elem_map).collect();
-                    let (__p, __n) = __cbg_alloc_array(__arr);
-                    #t_ptr = __p;
-                    #t_len = __n;
-                );
+            if let Some(elem) = r_cow_slice_elem(ty).or_else(|| r_scalar_slice_elem(ty)) {
+                let entry = registry
+                    .output_entry(elem)
+                    .expect("slice element converter");
+                let elem_conv = entry.function.sig.ident.clone();
+                let elem_map = map_arg(&elem_conv, entry.function.sig.unsafety.is_some());
+                let elem_wire = entry.destination.clone();
+                let t_ptr = &targets[0];
+                let t_len = &targets[1];
+                if returns_result(&entry.function.sig.output) {
+                    let converted = route_result(quote!(#elem_conv(__value)), route);
+                    return quote!(
+                        let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
+                        for __value in #val.iter().copied() {
+                            __arr.push(#converted);
+                        }
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #t_ptr = __p;
+                        #t_len = __n;
+                    );
+                } else {
+                    return quote!(
+                        let __arr: ::std::vec::Vec<#elem_wire> =
+                            #val.iter().copied().map(#elem_map).collect();
+                        let (__p, __n) = __cbg_alloc_array(__arr);
+                        #t_ptr = __p;
+                        #t_len = __n;
+                    );
+                }
             }
-        }
-        if let Some(inner_ty) = ty.optional_inner() {
-            let inner = self.lower_shape(inner_ty, registry);
-            if let Some((slot, _rest)) = inner.niches.clone().carve() {
-                // None reuses the next inner niche; Some encodes inline.
-                let inner_enc = self.encode_value(inner_ty, quote!(__x), targets, registry, route);
-                let null = &slot.value;
-                let t0 = &targets[0];
+            if let Some(inner_ty) = ty.optional_inner() {
+                let inner = self.lower_shape(inner_ty, registry);
+                if let Some((slot, _rest)) = inner.niches.clone().carve() {
+                    // None reuses the next inner niche; Some encodes inline.
+                    let inner_enc =
+                        self.encode_value(inner_ty, quote!(__x), targets, registry, route);
+                    let null = &slot.value;
+                    let t0 = &targets[0];
+                    return quote!(
+                        match #val {
+                            ::core::option::Option::Some(__x) => { #inner_enc }
+                            ::core::option::Option::None => { #t0 = #null; }
+                        }
+                    );
+                }
+                // Explicit `present` flag in targets[0]; inner value follows.
+                let present = &targets[0];
+                let inner_enc =
+                    self.encode_value(inner_ty, quote!(__x), &targets[1..], registry, route);
                 return quote!(
                     match #val {
-                        ::core::option::Option::Some(__x) => { #inner_enc }
-                        ::core::option::Option::None => { #t0 = #null; }
+                        ::core::option::Option::Some(__x) => { #present = true; #inner_enc }
+                        ::core::option::Option::None => { #present = false; }
                     }
                 );
             }
-            // Explicit `present` flag in targets[0]; inner value follows.
-            let present = &targets[0];
-            let inner_enc =
-                self.encode_value(inner_ty, quote!(__x), &targets[1..], registry, route);
-            return quote!(
-                match #val {
-                    ::core::option::Option::Some(__x) => { #present = true; #inner_enc }
-                    ::core::option::Option::None => { #present = false; }
-                }
-            );
         }
         // Base value: run its output converter into the single target.
         let entry = registry.output_entry(ty).expect("base value converter");
@@ -933,18 +951,27 @@ impl CbindgenBuilder {
         }
     }
 
-    fn output_is_fallible(ty: &TypeRef, registry: &Registry<()>) -> bool {
-        let vec_elem = match ty.kind() {
-            TypeKind::Vec(e) => Some(&**e),
-            _ => None,
-        };
-        if let Some(inner) = ty
-            .optional_inner()
-            .or(vec_elem)
-            .or_else(|| r_cow_slice_elem(ty))
-            .or_else(|| r_scalar_slice_elem(ty))
-        {
-            return Self::output_is_fallible(inner, registry);
+    fn output_is_fallible(ty: &TypeRef, registry: &impl Conversions<()>) -> bool {
+        // The third walk over the same value, and it stops where the other two
+        // do: a node with a wire of its own is encoded by its own converter, so
+        // whether the encode can fail is THAT converter's answer. Peeling past
+        // it asks about a converter that never runs — which decides whether the
+        // binding needs `.panic()`, so the two disagreeing is a wrapper that
+        // aborts where nothing opted in, or an opt-in demanded for a conversion
+        // that cannot fail (#428 review).
+        if !r_has_own_wire(ty, registry) {
+            let vec_elem = match ty.kind() {
+                TypeKind::Vec(e) => Some(&**e),
+                _ => None,
+            };
+            if let Some(inner) = ty
+                .optional_inner()
+                .or(vec_elem)
+                .or_else(|| r_cow_slice_elem(ty))
+                .or_else(|| r_scalar_slice_elem(ty))
+            {
+                return Self::output_is_fallible(inner, registry);
+            }
         }
         registry
             .output_entry(ty)
