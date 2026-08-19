@@ -237,6 +237,18 @@ pub struct UnfoldPlan {
     /// Outer shape over the core decomposition (`Decompose` for a plain
     /// `T`/`&T` return).
     pub shape: UnfoldShape,
+    /// The decomposition itself: what is taken out of the value, and how
+    /// (#442). [`Self::leaves`] and [`Self::hoists`] are **derived views** of
+    /// this tree — [`flat_view`](crate::unfold::flat_view) produces them, and a
+    /// language adapter reads either the tree (through
+    /// [`TransformLowerer`](crate::transform::TransformLowerer)) or a view,
+    /// never a walk of its own.
+    ///
+    /// Shared rather than cloned: a plan is copied to be re-delivered
+    /// (`..plan` with a different [`Self::delivery`]), and the decomposition
+    /// underneath is the same one. `Rc` because the model it names is
+    /// `syn`-backed and so single-threaded already.
+    pub tree: std::rc::Rc<crate::unfold::OutNode>,
     /// Flattened output leaves, in builder-argument order. Populated for
     /// `Decompose`/`Optional` (accessor decomposition) and for a **decomposed**
     /// `Iterable` fold (per-element leaves — explicit-accessor or a synthesized
