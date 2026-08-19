@@ -256,6 +256,21 @@ impl TransformLowerer<OutOfRust> for FlatView {
         // everything under it live only for its own tag.
         if let OutProduct::Variant { name, tag } = op {
             for (_, member, leaf) in &mut out.leaves {
+                // A leaf that already belongs to a group is one an inner choice
+                // claimed, and the flat projection cannot hold both: `group` is
+                // one `i32` per leaf, so this arm's tag would silently replace
+                // the inner one and the nested sum would vanish from the
+                // `match` the emitter builds. Refused where it is built rather
+                // than mis-emitted — a hierarchical group identity is what a
+                // nested sum would need (#444 §2).
+                assert!(
+                    leaf.group.is_none(),
+                    "a choice nested inside a variant arm has no flat reading: leaf `{}` \
+                     already belongs to group {:?}, and arm `{name}` would replace it \
+                     with {tag}",
+                    leaf.name,
+                    leaf.group,
+                );
                 leaf.group = Some(*tag);
                 if let Some(member) = member.take() {
                     leaf.source = LeafSource::VariantField {
@@ -441,22 +456,28 @@ pub struct Dependencies {
 /// subtrees must ask [`dependencies_with`] with the **same** decision it lowers
 /// by, or it will have rooted converters it never calls.
 pub fn dependencies(root: &OutNode) -> Dependencies {
-    dependencies_with(root, &mut |_, _| false)
+    dependencies_with(root, &mut |_, _| None)
 }
 
 /// [`dependencies`] under one adapter's converter selection: `claims` answers
-/// whether a direct converter handles the node reached by `link` whole.
+/// with the **reading of the converter it selected** for the node reached by
+/// `link`, or `None` to recurse.
 ///
-/// A claimed subtree contributes exactly one dependency — the claimed node's
-/// own type, which is the converter that will be called — and nothing from
-/// below it. Taking the decision as a parameter is what keeps registration and
-/// lowering from disagreeing: an adapter that claims a subtree in its lowerer
-/// but not here would root converters for children it never converts, and one
-/// of those children failing to resolve would fail a binding that does not
-/// need it.
+/// A claimed subtree contributes exactly that reading and nothing from below
+/// it. The reading is the adapter's to state rather than this walk's to guess:
+/// a structural node carries the OWNED core type, while the value at that
+/// position may be a borrow — `flatten` makes the same distinction when it
+/// gives a non-owned identity leaf `source.borrowed()` — so requiring
+/// `node.ty` would root `T` where the plan calls the converter for `&T`, and
+/// resolution would build one converter and omit the other.
+///
+/// Taking the decision as a parameter is what keeps registration and lowering
+/// from disagreeing: an adapter that claims a subtree in its lowerer but not
+/// here would root converters for children it never converts, and one of those
+/// failing to resolve would fail a binding that does not need it.
 pub fn dependencies_with(
     root: &OutNode,
-    claims: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> bool,
+    claims: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
 ) -> Dependencies {
     root.lower(&mut CollectDeps { claims })
         .expect("collecting dependencies of a built tree cannot fail")
@@ -466,7 +487,7 @@ pub fn dependencies_with(
 /// choice names its sum, a claimed node needs its own, and everything else
 /// contributes only what is under it.
 struct CollectDeps<'a> {
-    claims: &'a mut dyn FnMut(&OutNode, Option<&OutLink>) -> bool,
+    claims: &'a mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
 }
 
 impl CollectDeps<'_> {
@@ -489,13 +510,12 @@ impl TransformLowerer<OutOfRust> for CollectDeps<'_> {
         node: &OutNode,
         link: Option<&OutLink>,
     ) -> Result<crate::transform::Descend<Dependencies>, Self::Error> {
-        Ok(if (self.claims)(node, link) {
-            crate::transform::Descend::Atomic(Dependencies {
-                required: vec![node.ty.clone()],
+        Ok(match (self.claims)(node, link) {
+            Some(selected) => crate::transform::Descend::Atomic(Dependencies {
+                required: vec![selected],
                 referenced: Vec::new(),
-            })
-        } else {
-            crate::transform::Descend::Recurse
+            }),
+            None => crate::transform::Descend::Recurse,
         })
     }
 

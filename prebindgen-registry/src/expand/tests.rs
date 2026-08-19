@@ -1085,7 +1085,9 @@ fn a_claimed_argument_is_not_rooted_by_registration() {
     // whole construction replaces it with `ZKeyExpr` itself.
     let mut claimed: Registry<()> = reg_with(&[]);
     crate::expand::register_dependencies(&mut claimed, tree, &mut |node, _link| {
-        node.ty.spell().to_string() == "ZKeyExpr"
+        // The claim states the reading of the converter it selected, rather
+        // than leaving the walk to guess it from the node.
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
     });
     assert_eq!(rooted(&claimed, syn::parse_quote!(ZKeyExpr)), Some(true));
     assert_ne!(
@@ -1095,6 +1097,6 @@ fn a_claimed_argument_is_not_rooted_by_registration() {
     );
 
     let mut plain: Registry<()> = reg_with(&[]);
-    crate::expand::register_dependencies(&mut plain, tree, &mut |_, _| false);
+    crate::expand::register_dependencies(&mut plain, tree, &mut |_, _| None);
     assert_eq!(rooted(&plain, syn::parse_quote!(String)), Some(true));
 }

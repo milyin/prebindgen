@@ -383,18 +383,21 @@ pub struct Dependencies {
 /// Assumes nothing is claimed by a direct converter — see
 /// [`dependencies_with`].
 pub fn dependencies(tree: &InNode) -> Dependencies {
-    dependencies_with(tree, &mut |_, _| false)
+    dependencies_with(tree, &mut |_, _| None)
 }
 
 /// [`dependencies`] under one adapter's converter selection: `claims` answers
-/// whether a direct converter builds the node reached by `link` whole.
+/// with the **reading of the converter it selected** for the node reached by
+/// `link`, or `None` to recurse.
 ///
-/// A claimed subtree contributes exactly one dependency — the claimed node's
-/// own type — and nothing from below it, so registration and lowering cannot
-/// disagree about which converters a binding actually needs.
+/// A claimed subtree contributes exactly that reading and nothing from below
+/// it. The reading is stated rather than taken from `node.ty` for the reason
+/// [`unfold::dependencies_with`](crate::unfold::dependencies_with) gives: a
+/// structural node names the owned value it produces, which is not necessarily
+/// what crosses at that position.
 pub fn dependencies_with(
     tree: &InNode,
-    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> bool,
+    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
 ) -> Dependencies {
     tree.lower(&mut CollectDeps { claims })
         .expect("collecting dependencies of a built tree cannot fail")
@@ -403,7 +406,7 @@ pub fn dependencies_with(
 /// The lowerer behind [`dependencies_with`]: each node states the crossings it
 /// needs, and nothing states one twice.
 struct CollectDeps<'a> {
-    claims: &'a mut dyn FnMut(&InNode, Option<&InLink>) -> bool,
+    claims: &'a mut dyn FnMut(&InNode, Option<&InLink>) -> Option<prebindgen_flat::flat::TypeRef>,
 }
 
 impl CollectDeps<'_> {
@@ -430,13 +433,12 @@ impl TransformLowerer<IntoRust> for CollectDeps<'_> {
         node: &InNode,
         link: Option<&InLink>,
     ) -> Result<crate::transform::Descend<Dependencies>, Self::Error> {
-        Ok(if (self.claims)(node, link) {
-            crate::transform::Descend::Atomic(Dependencies {
-                required: vec![node.ty.clone()],
+        Ok(match (self.claims)(node, link) {
+            Some(selected) => crate::transform::Descend::Atomic(Dependencies {
+                required: vec![selected],
                 intrinsic: Vec::new(),
-            })
-        } else {
-            crate::transform::Descend::Recurse
+            }),
+            None => crate::transform::Descend::Recurse,
         })
     }
 

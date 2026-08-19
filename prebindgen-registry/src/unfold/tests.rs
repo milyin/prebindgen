@@ -2368,13 +2368,26 @@ fn a_claimed_subtree_drops_out_of_the_dependency_set() {
     );
 
     // The same tree, with an adapter that converts a whole `ZKeyExpr` directly.
-    let claimed = crate::unfold::dependencies_with(&plan.tree, &mut |node, _link| {
-        node.ty.spell().to_string() == "ZKeyExpr"
+    // The claim states the reading of the converter it selected. The node says
+    // `ZKeyExpr` — the owned core — while the accessor that reached it borrows,
+    // so the converter the plan calls is the one for `&ZKeyExpr`. Taking
+    // `node.ty` here would root a converter the plan never calls and omit the
+    // one it does.
+    let claimed = crate::unfold::dependencies_with(&plan.tree, &mut |node, link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| {
+            let borrowed = link.is_some_and(|l| l.steps.iter().any(|s| !s.yields_owned()));
+            if borrowed {
+                node.ty.borrowed()
+            } else {
+                node.ty.clone()
+            }
+        })
     });
     assert_eq!(
         names(&claimed.required),
-        vec!["ZKeyExpr", "i64"],
-        "the claimed type replaces its children, which are not required at all"
+        vec!["& ZKeyExpr", "i64"],
+        "the selected reading replaces the children, and it is the borrowed one \
+         because the accessor that reached the subtree borrows"
     );
 }
 
@@ -2402,7 +2415,7 @@ fn the_cutoff_sees_the_edge_it_was_reached_by() {
                     .join(".")
             }),
         ));
-        false
+        None
     });
     assert!(
         seen.contains(&(
@@ -2459,10 +2472,13 @@ fn a_whole_element_run_requires_its_element() {
 }
 
 /// #444 (review): the cutoff must reach **registration**, not only the pass
-/// that answered it. Asserted over registry roots rather than over the
-/// projection, because a root is what a binding actually demands a converter
-/// for — and `TypeCell::root` only ever gains, so a claim honoured in one pass
-/// and not another cannot be taken back.
+/// that answered it — and it must root the reading the adapter selected, not
+/// the one the node happens to name.
+///
+/// Asserted over registry roots rather than over the projection, because a root
+/// is what a binding actually demands a converter for, and `TypeCell::root`
+/// only ever gains, so a claim honoured in one pass and not another cannot be
+/// taken back.
 #[test]
 fn a_claimed_subtree_is_not_rooted_by_registration() {
     let reg = reply_sample_registry();
@@ -2479,26 +2495,91 @@ fn a_claimed_subtree_is_not_rooted_by_registration() {
             .map(|cell| cell.root)
     };
 
-    // A fresh registry, so only what this registration asks for is rooted.
-    let mut claimed: Registry<()> = reg_with(&[]);
-    crate::unfold::register_dependencies(&mut claimed, &tree, &mut |node, _link| {
-        node.ty.spell().to_string() == "ZKeyExpr"
+    // A BORROWING accessor reached this subtree, so the converter the plan
+    // calls is the one for `&ZKeyExpr`. The node names the owned core, which is
+    // why the claim states its reading rather than leaving it to be guessed.
+    let mut borrowed: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut borrowed, &tree, &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.borrowed())
     });
     assert_eq!(
-        rooted(&claimed, syn::parse_quote!(ZKeyExpr)),
+        rooted(&borrowed, syn::parse_quote!(&ZKeyExpr)),
         Some(true),
-        "the claimed type is what the binding converts"
+        "the selected reading is what the binding converts"
     );
     assert_ne!(
-        rooted(&claimed, syn::parse_quote!(&str)),
+        rooted(&borrowed, syn::parse_quote!(ZKeyExpr)),
+        Some(true),
+        "the owned core is NOT what crosses at a borrowed position"
+    );
+    assert_ne!(
+        rooted(&borrowed, syn::parse_quote!(&str)),
         Some(true),
         "a child of the claimed subtree is never demanded"
     );
 
-    // The same tree with nothing claimed roots the children instead — so the
-    // difference is the policy, not the tree.
+    // The same claim through an OWNING selection roots the owned reading
+    // instead — the difference is the adapter's choice, not the tree's.
+    let mut owned: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut owned, &tree, &mut |node, _link| {
+        (node.ty.spell().to_string() == "ZKeyExpr").then(|| node.ty.clone())
+    });
+    assert_eq!(rooted(&owned, syn::parse_quote!(ZKeyExpr)), Some(true));
+    assert_ne!(rooted(&owned, syn::parse_quote!(&ZKeyExpr)), Some(true));
+
+    // With nothing claimed the children are rooted instead, so the difference
+    // is the policy and not the tree. `&ZKeyExpr` is rooted here too, but for
+    // an unrelated reason — the subtree's own identity leaf clones through it —
+    // which is why `&str` is what discriminates the two registrations.
     let mut plain: Registry<()> = reg_with(&[]);
-    crate::unfold::register_dependencies(&mut plain, &tree, &mut |_, _| false);
+    crate::unfold::register_dependencies(&mut plain, &tree, &mut |_, _| None);
     assert_eq!(rooted(&plain, syn::parse_quote!(&str)), Some(true));
     assert_ne!(rooted(&plain, syn::parse_quote!(ZKeyExpr)), Some(true));
+}
+
+/// #444 (review): a choice nested inside a variant arm has no flat reading —
+/// `UnfoldLeaf::group` holds one tag per leaf, so the outer arm would silently
+/// replace the inner one and the nested sum would disappear from the `match`
+/// the emitter builds. Refused where the projection is derived, rather than
+/// mis-emitted.
+///
+/// Nothing produces one today: a sum's payload members are leaves. The refusal
+/// is what makes that a stated limit instead of an accident.
+#[test]
+#[should_panic(expected = "a choice nested inside a variant arm has no flat reading")]
+fn a_choice_nested_in_a_variant_arm_is_refused() {
+    use crate::transform::TransformKind;
+
+    let inner = reading_sum_decon().tree;
+    let outer = OutNode {
+        ty: tref(syn::parse_quote!(Outer)),
+        kind: TransformKind::Choice {
+            op: OutChoice {
+                name: "tag".to_string(),
+            },
+            variants: vec![OutChild {
+                link: OutLink {
+                    steps: Vec::new(),
+                    name: Vec::new(),
+                },
+                node: OutNode {
+                    ty: tref(syn::parse_quote!(Outer)),
+                    kind: TransformKind::Product {
+                        op: OutProduct::Variant {
+                            name: ident("Wrapped"),
+                            tag: 0,
+                        },
+                        children: vec![OutChild {
+                            link: OutLink {
+                                steps: Vec::new(),
+                                name: vec!["inner".to_string()],
+                            },
+                            node: inner,
+                        }],
+                    },
+                },
+            }],
+        },
+    };
+    let _ = crate::unfold::flat_view(&outer);
 }

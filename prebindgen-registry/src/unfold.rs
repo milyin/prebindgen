@@ -616,7 +616,7 @@ pub struct SumDecon {
 fn register_dependencies<M>(
     registry: &mut crate::registry::Registry<M>,
     tree: &OutNode,
-    claims: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> bool,
+    claims: &mut dyn FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef>,
 ) {
     let deps = dependencies_with(tree, claims);
     for ty in &deps.required {
@@ -635,8 +635,9 @@ fn register_dependencies<M>(
 /// not the other roots converters the binding never calls, and
 /// [`TypeCell::root`](crate::TypeEntry) only ever gains, so a second pass
 /// cannot take a root back. Handing an adapter's selection in here is #444 §5.
-fn claims_nothing() -> impl FnMut(&OutNode, Option<&OutLink>) -> bool {
-    |_, _| false
+fn claims_nothing(
+) -> impl FnMut(&OutNode, Option<&OutLink>) -> Option<prebindgen_flat::flat::TypeRef> {
+    |_, _| None
 }
 
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.

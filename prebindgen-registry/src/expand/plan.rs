@@ -40,10 +40,19 @@ pub struct FoldPlan {
     /// with, and the construction under them (#442). Everything recursive about
     /// an expansion lives here — a constructor argument that is itself built
     /// has the same node kinds as the top level.
-    pub tree: crate::expand::InNode,
+    pub(crate) tree: crate::expand::InNode,
 }
 
 impl FoldPlan {
+    /// The construction itself — see the field's own note.
+    ///
+    /// Handed out by reference and never by value, for the reason
+    /// [`UnfoldPlan::tree`](crate::unfold::UnfoldPlan::tree) gives: the
+    /// signature beside it is collected from this tree when the plan is built.
+    pub fn tree(&self) -> &crate::expand::InNode {
+        &self.tree
+    }
+
     /// Flattened wire leaves, in foreign-signature order — see the field's own
     /// note.
     pub fn leaves(&self) -> &[FoldLeaf] {

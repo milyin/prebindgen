@@ -217,7 +217,7 @@ impl super::JniGen {
         plans.sort_by_key(|(p, _)| p.to_string());
         for (param, plan) in plans {
             let variants: Vec<String> = plan
-                .tree
+                .tree()
                 .arms()
                 .into_iter()
                 .map(|a| match a.ctor() {
