@@ -454,6 +454,9 @@ impl TransformLowerer<OutOfRust> for FlatView {
         inner: &OutNode,
         value: Partial,
     ) -> Result<Partial, Self::Error> {
+        if is_variant_arm(inner) {
+            return Err(arm_outside_choice(inner));
+        }
         // A leaf directly under the run is the WHOLE element: it crosses
         // through its own output converter as the fold's element, not as a
         // named slot of the call. Decomposed elements — a product under the

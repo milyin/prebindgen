@@ -2800,18 +2800,29 @@ fn a_choice_and_a_variant_arm_must_be_paired() {
         "got {err}"
     );
 
-    // …and under an arity layer, the other parent a node can have.
-    let err = refused(crate::unfold::flat_view(&OutNode {
-        ty: tref(syn::parse_quote!(Option<Outer>)),
-        kind: TransformKind::Optional {
+    // …and under EACH arity layer. Both, because "the parent positions a node
+    // can have" is the whole argument for the check being exhaustive, and an
+    // unchecked one is a shape that still flattens into grouped leaves with no
+    // selector.
+    for layer in [
+        TransformKind::Optional {
             op: (),
             inner: Box::new(arm().node),
         },
-    }));
-    assert!(
-        matches!(&err, UnfoldError::VariantArmOutsideChoice { .. }),
-        "got {err}"
-    );
+        TransformKind::Sequence {
+            op: (),
+            inner: Box::new(arm().node),
+        },
+    ] {
+        let err = refused(crate::unfold::flat_view(&OutNode {
+            ty: tref(syn::parse_quote!(Wrapper)),
+            kind: layer,
+        }));
+        assert!(
+            matches!(&err, UnfoldError::VariantArmOutsideChoice { .. }),
+            "got {err}"
+        );
+    }
 
     // 3. The paired shape still projects, selector first then the arm's leaf.
     let (leaves, _) =
