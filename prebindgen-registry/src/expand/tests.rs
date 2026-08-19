@@ -2292,3 +2292,109 @@ fn a_gated_slots_wire_type_is_derived_from_its_payload() {
         "and the crossings demanded are those same wire types"
     );
 }
+
+/// #447 §1: the slot numbers in the tree are **derivable** — a walk in
+/// allocation order reproduces every one of them.
+///
+/// The check that has to hold before slot allocation can move out of the
+/// canonical tree and into adapter-local planning. If a projection walking the
+/// semantic structure yields today's numbering, the numbering is not a fact the
+/// tree has to carry; if it does not, something about the layout is not
+/// positional and the relocation would change generated signatures.
+///
+/// Allocation is pre-order: a layer takes its own slot before the construction
+/// under it, and a dispatch its selector before its arms.
+#[test]
+fn slot_numbers_are_derivable_from_the_tree_walk() {
+    fn stored(node: &InNode, out: &mut Vec<usize>) {
+        match &node.kind {
+            TransformKind::Leaf(InLeaf::Slot { slot, .. }) => out.push(slot.slot),
+            TransformKind::Leaf(InLeaf::Bound) => {}
+            TransformKind::Product { children, .. } => {
+                children.iter().for_each(|c| stored(&c.node, out))
+            }
+            TransformKind::Choice { op, variants } => {
+                out.push(op.selector.slot);
+                variants.iter().for_each(|v| stored(&v.node, out));
+            }
+            TransformKind::Optional { op, inner } => {
+                match op {
+                    InPresence::Selector => {}
+                    InPresence::Flag(s) => out.push(s.slot),
+                    InPresence::Payload { slot, .. } => out.push(slot.slot),
+                }
+                stored(inner, out);
+            }
+            TransformKind::Sequence { op, inner } => {
+                out.push(op.slot.slot);
+                stored(inner, out);
+            }
+        }
+    }
+
+    // Three shapes that allocate differently: a dispatch (selector then arms),
+    // a single-constructor optional (the layer's own payload slot), and a
+    // multi-argument optional (an explicit flag, then one slot per argument).
+    let cases: Vec<(&str, Vec<&str>, &str, &str, Vec<Variant>)> = vec![
+        (
+            "dispatch",
+            vec![
+                "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+                "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+            ],
+            "z_keyexpr_intersects",
+            "a",
+            vec![
+                Variant::Ctor(ident("z_keyexpr_try_from")),
+                Variant::Identity,
+            ],
+        ),
+        (
+            "optional payload",
+            vec![
+                "fn z_encoding_from_string(s: String) -> ZEncoding { todo!() }",
+                "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+            ],
+            "z_session_put",
+            "encoding",
+            vec![Variant::Ctor(ident("z_encoding_from_string"))],
+        ),
+    ];
+
+    for (label, items, func, param, variants) in cases {
+        let mut reg: Registry<()> = reg_with(&items);
+        let mut exp = Expansions::default();
+        exp.expands.push(ExpandDecl {
+            func: ident(func),
+            param: ident(param),
+            declared_target: None,
+            sel: ExpandSel::Subset(variants),
+        });
+        apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        )
+        .unwrap_or_else(|e| panic!("{label}: apply: {e}"));
+        let plan = reg
+            .expansion_plans
+            .get(&(ident(func), ident(param)))
+            .unwrap_or_else(|| panic!("{label}: plan"));
+
+        let mut order = Vec::new();
+        stored(plan.tree(), &mut order);
+        assert_eq!(
+            order,
+            (0..order.len()).collect::<Vec<_>>(),
+            "{label}: a pre-order walk meets the slots in numbering order, so the numbers \
+             are the walk's and need not be stored"
+        );
+        assert_eq!(
+            order.len(),
+            plan.leaves().len(),
+            "{label}: and it meets every slot the wire has"
+        );
+    }
+}
