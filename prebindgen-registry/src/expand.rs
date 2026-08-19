@@ -831,12 +831,27 @@ pub fn emit_fold(
     leaf_locals: &[syn::Ident],
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
-    plan.tree
-        .lower(&mut ConstructEmitter {
-            leaf_locals,
-            qualify,
-        })
-        .expect("emitting a built construct cannot fail")
+    emit_fold_tree(plan.tree(), leaf_locals, qualify)
+}
+
+/// [`emit_fold`] over a construction tree that is not a plan's own — the tree
+/// [`select`](crate::expand::select) produced for an adapter's converter
+/// choices.
+///
+/// A selected tree owes the same contract as the tree it came from: the
+/// expression has type `Result<<shaped> target, String>`. Without this an
+/// adapter can choose its converters and then has nothing to emit from, since
+/// a `FoldPlan` cannot be built outside this crate.
+pub fn emit_fold_tree(
+    tree: &InNode,
+    leaf_locals: &[syn::Ident],
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+) -> syn::Expr {
+    tree.lower(&mut ConstructEmitter {
+        leaf_locals,
+        qualify,
+    })
+    .expect("emitting a built construct cannot fail")
 }
 
 /// The local an arity layer binds its unwrapped value to, and the local an

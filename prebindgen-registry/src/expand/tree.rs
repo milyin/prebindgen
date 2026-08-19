@@ -622,9 +622,36 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         } else {
             selected
         };
-        Ok(crate::transform::Descend::Atomic(InNode {
+        let leaf = InNode {
             ty,
             kind: TransformKind::Leaf(InLeaf::Slot { slot, wrapped }),
+        };
+        // A leaf claim replaces a leaf: it is consumed as an ordinary
+        // constructor argument, and the constructor above it already unwraps
+        // selector presence and produces the `Result`.
+        //
+        // A STRUCTURAL claim replaces a node that produced a value — an arm's
+        // constructor, an arity layer, a nested construction — and whatever
+        // consumes it still expects one. `emit_fold` promises
+        // `Result<target, String>`, so dropping to a bare leaf would hand a
+        // choice arm an `Option<T>` where its sibling arms give `Result<T, _>`.
+        // An identity product over the claimed leaf says exactly what a claim
+        // means — this one value IS the target — and its lowering already
+        // unwraps the presence (missing ⇒ `Err`) and lifts the value into `Ok`.
+        Ok(crate::transform::Descend::Atomic(match &node.kind {
+            TransformKind::Leaf(_) => leaf,
+            _ => InNode {
+                ty: node.ty.clone(),
+                kind: TransformKind::Product {
+                    // Not cloned: the claim says the decoded value is the
+                    // target, so there is no borrow to preserve behind it.
+                    op: InProduct::Identity { clone: false },
+                    children: vec![InChild {
+                        link: InLink { by_ref: false },
+                        node: leaf,
+                    }],
+                },
+            },
         }))
     }
 

@@ -1375,4 +1375,27 @@ fn claiming_an_arm_product_keeps_the_position_optional() {
         "Option < ZKeyExpr >",
         "the claimed arm still has to be able to say `not this one`"
     );
+
+    // The signature being right is half of it: the fold expression owes the
+    // same `Result<target, String>` the unselected tree owes, or the claimed
+    // arm hands the dispatch an `Option` where its siblings give a `Result`.
+    let locals = vec![ident("sel"), ident("v0"), ident("vid")];
+    let folded = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify);
+    let compact: String = folded
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    assert!(compact.contains("matchsel"), "dispatch survives: {compact}");
+    // The present path unwraps the arm's presence and lifts the value.
+    assert!(
+        compact.contains("Option::Some(__v)=>::core::result::Result::Ok(__v)"),
+        "a claimed arm lifts its value into `Ok`: {compact}"
+    );
+    // …and the missing one is an error, not a silently absent value.
+    assert!(
+        compact.contains("identityvariantvaluemissing"),
+        "a claimed arm rejects a missing slot: {compact}"
+    );
 }
