@@ -1548,7 +1548,7 @@ impl CbindgenBuilder {
                 // leaves its slot unwritten, and the wrapper must not build a
                 // Rust value to fill it with. `#[repr(transparent)]` keeps both
                 // the C ABI and the header spelling.
-                if marker_destination(&wire) && r_is_lowered_composite(&reading, registry) {
+                if self.callback_arg_is_composite(&reading, takeable.contains(&i), registry) {
                     for field in self.c_value_plan(&reading, registry).shape.fields {
                         let w = field.wire;
                         arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
