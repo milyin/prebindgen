@@ -43,8 +43,8 @@ pub use self::{
         UnfoldShape,
     },
     tree::{
-        element_of, flat_view, shape_of, shaped, OutChild, OutChoice, OutLeaf, OutLink, OutNode,
-        OutOfRust, OutProduct, OutReach,
+        dependencies, element_of, flat_view, shape_of, shaped, Dependencies, OutChild, OutChoice,
+        OutLeaf, OutLink, OutNode, OutOfRust, OutProduct, OutReach,
     },
 };
 use crate::transform::TransformKind;
@@ -615,13 +615,13 @@ pub struct SumDecon {
 /// true for jnigen via `export_type`, and not true at all for a registry
 /// assembled without declarations. The invariant holds by construction now
 /// rather than by declaration order.
-fn register_leaves<M>(registry: &mut crate::registry::Registry<M>, leaves: &[UnfoldLeaf]) {
-    for leaf in leaves {
-        if leaf.has_converter() {
-            registry.require_output(&leaf.out_ty);
-        } else {
-            registry.reference_output(&leaf.out_ty);
-        }
+fn register_dependencies<M>(registry: &mut crate::registry::Registry<M>, tree: &OutNode) {
+    let deps = dependencies(tree);
+    for ty in &deps.required {
+        registry.require_output(ty);
+    }
+    for ty in &deps.referenced {
+        registry.reference_output(ty);
     }
 }
 
@@ -713,7 +713,7 @@ fn wire_fixed_returns<M>(
                 registry.unrequire_output(layer);
             }
         }
-        register_leaves(registry, &vd.leaves);
+        register_dependencies(registry, vd.core);
         // `layer_types` ends at the core the shape stops on, so the layers are
         // everything before it.
         let layer_tys = &layers.layer_types[..layers.layer_types.len() - 1];
@@ -786,7 +786,7 @@ fn wire_fixed_callbacks<M>(
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
-                register_leaves(registry, &vd.leaves);
+                register_dependencies(registry, vd.core);
                 let tree = shaped(&shape, &layer_tys, vd.core.clone());
                 let plan = UnfoldPlan {
                     source: vd.source.clone(),

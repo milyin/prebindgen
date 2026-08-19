@@ -2246,3 +2246,23 @@ fn a_direct_converter_ends_the_whole_tree() {
         "the root was claimed, so nothing under it was offered"
     );
 }
+
+/// #444: what a decomposition needs converters for is read off the tree, not
+/// off a leaf list — and a sum's selector names its enum without demanding a
+/// whole-value converter that cannot exist.
+#[test]
+fn dependencies_come_from_the_tree() {
+    let deps = crate::unfold::dependencies(&reading_sum_decon().tree);
+    let required: Vec<String> = deps.required.iter().map(|t| t.key().to_string()).collect();
+    let referenced: Vec<String> = deps
+        .referenced
+        .iter()
+        .map(|t| t.key().to_string())
+        .collect();
+    assert_eq!(required, vec!["i64".to_string()], "the one payload crosses");
+    assert_eq!(
+        referenced,
+        vec!["Reading".to_string()],
+        "the selector names the sum it chooses between"
+    );
+}

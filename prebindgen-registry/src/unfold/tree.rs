@@ -416,3 +416,101 @@ pub fn element_of(node: &OutNode) -> Option<&prebindgen_flat::flat::TypeRef> {
         _ => None,
     }
 }
+
+/// The converters a decomposition needs, and the types it only names.
+///
+/// Derived by [`dependencies`], which is what makes it agree with the plan an
+/// adapter lowers: a subtree claimed whole by a direct converter contributes
+/// nothing here either.
+#[derive(Default)]
+pub struct Dependencies {
+    /// Types the binding **demands** an output converter for — every value that
+    /// actually crosses.
+    pub required: Vec<prebindgen_flat::flat::TypeRef>,
+    /// Types the decomposition names without converting: a sum, which the
+    /// selector chooses between. Registering one says it entered the pipeline;
+    /// requiring it would demand a whole-value converter that cannot exist.
+    pub referenced: Vec<prebindgen_flat::flat::TypeRef>,
+}
+
+/// What a decomposition depends on, read off the tree rather than off a leaf
+/// list — so the question is answered by the same structure every other pass
+/// walks.
+pub fn dependencies(root: &OutNode) -> Dependencies {
+    root.lower(&mut CollectDeps)
+        .expect("collecting dependencies of a built tree cannot fail")
+}
+
+/// The lowerer behind [`dependencies`]: a leaf needs its converter, a choice
+/// names its sum, and everything else contributes only what is under it.
+struct CollectDeps;
+
+impl CollectDeps {
+    fn merge(parts: Lowered<'_, OutOfRust, Dependencies>) -> Dependencies {
+        let mut out = Dependencies::default();
+        for (_, mut part) in parts {
+            out.required.append(&mut part.required);
+            out.referenced.append(&mut part.referenced);
+        }
+        out
+    }
+}
+
+impl TransformLowerer<OutOfRust> for CollectDeps {
+    type Value = Dependencies;
+    type Error = std::convert::Infallible;
+
+    fn leaf(&mut self, node: &OutNode, _op: &OutLeaf) -> Result<Dependencies, Self::Error> {
+        Ok(Dependencies {
+            required: vec![node.ty.clone()],
+            referenced: Vec::new(),
+        })
+    }
+
+    fn product(
+        &mut self,
+        _node: &OutNode,
+        _op: &OutProduct,
+        children: Lowered<'_, OutOfRust, Dependencies>,
+    ) -> Result<Dependencies, Self::Error> {
+        Ok(Self::merge(children))
+    }
+
+    fn choice(
+        &mut self,
+        node: &OutNode,
+        _op: &OutChoice,
+        variants: Lowered<'_, OutOfRust, Dependencies>,
+    ) -> Result<Dependencies, Self::Error> {
+        let mut out = Self::merge(variants);
+        // The selector names the sum it chooses between and converts nothing:
+        // the emitter assigns the tag per arm.
+        out.referenced.push(node.ty.clone());
+        Ok(out)
+    }
+
+    fn optional(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        _inner: &OutNode,
+        value: Dependencies,
+    ) -> Result<Dependencies, Self::Error> {
+        Ok(value)
+    }
+
+    fn sequence(
+        &mut self,
+        _node: &OutNode,
+        _op: &(),
+        inner: &OutNode,
+        value: Dependencies,
+    ) -> Result<Dependencies, Self::Error> {
+        // A whole element crosses through its own converter, which the plan
+        // requires where it records the element; it is not a wire slot here.
+        if matches!(inner.kind, TransformKind::Leaf(_)) {
+            return Ok(Dependencies::default());
+        }
+        Ok(value)
+    }
+}
