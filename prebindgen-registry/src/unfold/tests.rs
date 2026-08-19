@@ -2457,3 +2457,48 @@ fn a_whole_element_run_requires_its_element() {
         "…but it still crosses through its own converter"
     );
 }
+
+/// #444 (review): the cutoff must reach **registration**, not only the pass
+/// that answered it. Asserted over registry roots rather than over the
+/// projection, because a root is what a binding actually demands a converter
+/// for — and `TypeCell::root` only ever gains, so a claim honoured in one pass
+/// and not another cannot be taken back.
+#[test]
+fn a_claimed_subtree_is_not_rooted_by_registration() {
+    let reg = reply_sample_registry();
+    let tree = reg
+        .unfold_plans
+        .get(&ident("z_reply_sample"))
+        .expect("plan")
+        .tree
+        .clone();
+
+    let rooted = |reg: &Registry<()>, ty: syn::Type| -> Option<bool> {
+        reg.output_types
+            .get(&TypeKey::from_type(&ty))
+            .map(|cell| cell.root)
+    };
+
+    // A fresh registry, so only what this registration asks for is rooted.
+    let mut claimed: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut claimed, &tree, &mut |node, _link| {
+        node.ty.spell().to_string() == "ZKeyExpr"
+    });
+    assert_eq!(
+        rooted(&claimed, syn::parse_quote!(ZKeyExpr)),
+        Some(true),
+        "the claimed type is what the binding converts"
+    );
+    assert_ne!(
+        rooted(&claimed, syn::parse_quote!(&str)),
+        Some(true),
+        "a child of the claimed subtree is never demanded"
+    );
+
+    // The same tree with nothing claimed roots the children instead — so the
+    // difference is the policy, not the tree.
+    let mut plain: Registry<()> = reg_with(&[]);
+    crate::unfold::register_dependencies(&mut plain, &tree, &mut |_, _| false);
+    assert_eq!(rooted(&plain, syn::parse_quote!(&str)), Some(true));
+    assert_ne!(rooted(&plain, syn::parse_quote!(ZKeyExpr)), Some(true));
+}
