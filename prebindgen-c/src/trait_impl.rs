@@ -1548,7 +1548,7 @@ impl CbindgenBuilder {
                 // Rust value to fill it with. `#[repr(transparent)]` keeps both
                 // the C ABI and the header spelling.
                 if marker_destination(&wire) && r_is_lowered_composite(&reading, registry) {
-                    for field in self.lower_shape(&reading, registry).fields {
+                    for field in self.c_value_plan(&reading, registry).shape.fields {
                         let w = field.wire;
                         arg_wires.push(syn::parse_quote!(::core::mem::MaybeUninit<#w>));
                     }
@@ -1771,7 +1771,11 @@ impl CbindgenBuilder {
                 && marker_destination(&entry.destination)
                 && r_is_lowered_composite(arg, registry);
             if composite {
-                let shape = self.lower_shape(arg, registry);
+                // One plan, read for both the slots and the encode: a callback
+                // argument's layout and the statements that fill it must be the
+                // same resolution, not two that happen to agree (#444 §5).
+                let plan = self.c_value_plan(arg, registry);
+                let shape = &plan.shape;
                 closure_params.push(quote!(#ai: #src));
                 let mut targets = Vec::new();
                 for (f, field) in shape.fields.iter().enumerate() {
@@ -1808,13 +1812,7 @@ impl CbindgenBuilder {
                 // A firing callback has no error channel, so a fallible
                 // converter aborts — the same answer the single-value path
                 // below gives, spelled by the route the emitters share.
-                encode_stmts.push(self.encode_value(
-                    arg,
-                    quote!(#ai),
-                    &targets,
-                    registry,
-                    &ErrRoute::Panic,
-                ));
+                encode_stmts.push(plan.encode(&quote!(#ai), &targets, &ErrRoute::Panic));
                 continue;
             }
             closure_params.push(quote!(#ai: #src));
