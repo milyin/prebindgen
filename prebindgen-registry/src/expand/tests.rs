@@ -1422,3 +1422,87 @@ fn claiming_an_arm_product_keeps_the_position_optional() {
         "a claimed arm rejects a missing slot: {compact}"
     );
 }
+
+/// #444 §3: claiming an **arity layer** — the `Option` shape of the parameter
+/// itself, not a construction under it.
+///
+/// A layer maps its inner value over a shape, and a claim replaces the whole
+/// layer, its presence slot included. Collapsing that to a bare identity hands
+/// `Clone::clone(&*v)` an `Option<&T>`, which does not deref, and owes
+/// `Option<T>` while producing `Option<&T>`. The layer has to survive the
+/// claim, over a core that lifts the bound value.
+#[test]
+fn claiming_an_arity_layer_keeps_its_mapping() {
+    let mut reg: Registry<()> = reg_with(&[
+        "fn z_encoding_from_string(s: String) -> ZEncoding { todo!() }",
+        "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.expands.push(ExpandDecl {
+        func: ident("z_session_put"),
+        param: ident("encoding"),
+        declared_target: Some(key("ZEncoding")),
+        sel: ExpandSel::Subset(vec![Variant::Ctor(ident("z_encoding_from_string"))]),
+    });
+    apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .expect("apply");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_put"), ident("encoding")))
+        .expect("plan");
+
+    // The adapter decodes the whole optional parameter from one wire value,
+    // through the reading the layer node itself names.
+    let selected = crate::expand::select(plan.tree(), &mut |node, _link| {
+        matches!(node.kind, TransformKind::Optional { .. }).then(|| node.ty.clone())
+    })
+    .unwrap();
+
+    let leaves = crate::expand::wire_leaves(&selected);
+    assert_eq!(
+        leaves.len(),
+        1,
+        "the construction's slots collapse into one"
+    );
+    assert_eq!(leaves[0].ty.spell().to_string(), "Option < & ZEncoding >");
+    assert_eq!(
+        crate::expand::dependencies(&selected)
+            .required
+            .iter()
+            .map(|t| t.spell().to_string())
+            .collect::<Vec<_>>(),
+        vec!["Option < & ZEncoding >"],
+        "only the claimed crossing is required; the constructor's argument is gone"
+    );
+
+    let locals = vec![ident("enc")];
+    let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string()
+        .split_whitespace()
+        .collect();
+
+    // `Some`: the layer binds the payload, and the borrowed reading is cloned
+    // up to the owned value the fold owes.
+    assert!(
+        compact.contains("Option::Some(__inner)=>{(::core::result::Result::Ok(::core::clone::Clone::clone(&*__inner))).map(::core::option::Option::Some)}"),
+        "the present arm yields an owned value inside the option: {compact}"
+    );
+    // `None`: absent stays absent, and is not an error.
+    assert!(
+        compact
+            .contains("Option::None=>{::core::result::Result::Ok(::core::option::Option::None)}"),
+        "the absent arm yields `Ok(None)`: {compact}"
+    );
+    // The whole point: no `Clone::clone(&*enc)` on the option itself.
+    assert!(
+        !compact.contains("clone(&*enc)"),
+        "the option is not dereferenced: {compact}"
+    );
+}

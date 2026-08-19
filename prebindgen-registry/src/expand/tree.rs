@@ -605,19 +605,6 @@ impl TransformLowerer<IntoRust> for Select<'_> {
                 claimed: node.ty.key().to_string(),
             });
         };
-        // A structural node names the OWNED core, while the reading chosen for
-        // it may be a borrow — which is why a claim answers with a reading and
-        // not a boolean. An identity over a borrowed reading has to clone, or
-        // the node hands back a reference where its own type says it produces
-        // the value, and the consumer that borrows it again gets `&&T`.
-        //
-        // Through the position's `Option` as well: a selector-wrapped `&T`
-        // arrives as `Option<&T>` and is still a borrow underneath.
-        let borrowed = selected
-            .optional_inner()
-            .unwrap_or(&selected)
-            .borrow_target()
-            .is_some();
         // The leaf's type and its `wrapped` flag have to say one thing: the
         // type is what the wire declares, the flag is whether the emitter
         // unwraps it. A structural node is offered WITHOUT the position's
@@ -633,11 +620,36 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         let ty = if wrapped && selected.optional_inner().is_none() {
             selected.optional()
         } else {
-            selected
+            selected.clone()
         };
         let leaf = InNode {
             ty,
-            kind: TransformKind::Leaf(InLeaf::Slot { slot, wrapped }),
+            kind: TransformKind::Leaf(InLeaf::Slot {
+                slot: slot.clone(),
+                wrapped,
+            }),
+        };
+
+        // An identity over one value the enclosing node binds. A structural
+        // node names the OWNED core while the reading chosen for it may be a
+        // borrow — which is why a claim answers with a reading and not a
+        // boolean — so a borrowed reading is cloned back up to the type the
+        // node declares. Without that, a consumer that borrows the result gets
+        // `&&T`.
+        let identity_over = |bound: &prebindgen_flat::flat::TypeRef| InNode {
+            ty: node.ty.clone(),
+            kind: TransformKind::Product {
+                op: InProduct::Identity {
+                    clone: bound.borrow_target().is_some(),
+                },
+                children: vec![InChild {
+                    link: InLink { by_ref: false },
+                    node: InNode {
+                        ty: bound.clone(),
+                        kind: TransformKind::Leaf(InLeaf::Bound),
+                    },
+                }],
+            },
         };
         // A leaf claim replaces a leaf: it is consumed as an ordinary
         // constructor argument, and the constructor above it already unwraps
@@ -653,16 +665,59 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         // unwraps the presence (missing ⇒ `Err`) and lifts the value into `Ok`.
         Ok(crate::transform::Descend::Atomic(match &node.kind {
             TransformKind::Leaf(_) => leaf,
-            _ => InNode {
+            // An ARITY LAYER maps its inner value over a shape, and the claim
+            // replaced the whole layer — its presence or length slots included.
+            // Keeping the layer over an identity core is what preserves that
+            // mapping: the layer unwraps the claimed slot and binds one inner
+            // value, and the identity lifts that value to what the node
+            // declares. Collapsing to a bare identity instead would hand
+            // `Clone::clone(&*v)` an `Option<&T>`, which does not deref, and
+            // would owe `Option<T>` while producing `Option<&T>`.
+            //
+            // The layer's slot carries the claimed reading, so its own
+            // `Option` / collection IS the presence or the run — there is no
+            // second one to reconcile. A selector-wrapped position cannot hold
+            // an arity layer at all: `build_arg` refuses a recursive input
+            // under a dispatched constructor variant, so nothing nests one
+            // there.
+            TransformKind::Optional { .. } => InNode {
                 ty: node.ty.clone(),
-                kind: TransformKind::Product {
-                    op: InProduct::Identity { clone: borrowed },
-                    children: vec![InChild {
-                        link: InLink { by_ref: false },
-                        node: leaf,
-                    }],
+                kind: TransformKind::Optional {
+                    op: InPresence::Payload {
+                        slot,
+                        ty: selected.clone(),
+                    },
+                    inner: Box::new(identity_over(
+                        selected.optional_inner().unwrap_or(&selected),
+                    )),
                 },
             },
+            TransformKind::Sequence { .. } => InNode {
+                ty: node.ty.clone(),
+                kind: TransformKind::Sequence {
+                    op: InRun {
+                        slot,
+                        ty: selected.clone(),
+                    },
+                    inner: Box::new(identity_over(selected.sequence_elem().unwrap_or(&selected))),
+                },
+            },
+            // A base product or choice produces one value directly.
+            _ => {
+                let bound = selected.clone();
+                InNode {
+                    ty: node.ty.clone(),
+                    kind: TransformKind::Product {
+                        op: InProduct::Identity {
+                            clone: bound.borrow_target().is_some(),
+                        },
+                        children: vec![InChild {
+                            link: InLink { by_ref: false },
+                            node: leaf,
+                        }],
+                    },
+                }
+            }
         }))
     }
 
