@@ -1481,6 +1481,15 @@ fn claiming_an_arity_layer_keeps_its_mapping() {
         "only the claimed crossing is required; the constructor's argument is gone"
     );
 
+    // The shape survives and still targets the owned value: an adapter reading
+    // the selected tree gets the same answers the plan gave.
+    assert!(matches!(selected.shape(), FoldShape::Optional((), _)));
+    assert_eq!(
+        selected.core().ty.spell().to_string(),
+        "ZEncoding",
+        "the claim replaces the construction, not what it targets"
+    );
+
     let locals = vec![ident("enc")];
     let compact: String = crate::expand::emit_fold_tree(&selected, &locals, &src_qualify)
         .to_token_stream()

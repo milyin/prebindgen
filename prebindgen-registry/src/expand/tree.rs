@@ -636,8 +636,13 @@ impl TransformLowerer<IntoRust> for Select<'_> {
         // boolean — so a borrowed reading is cloned back up to the type the
         // node declares. Without that, a consumer that borrows the result gets
         // `&&T`.
+        // Typed with the CORE the claim replaces, not the claimed node: under a
+        // layer the identity stands where the construction stood, and
+        // `InNode::core` descends to it — an adapter asking the selected tree
+        // what it targets must still get the owned target, not the layer's
+        // `Option<&T>`.
         let identity_over = |bound: &prebindgen_flat::flat::TypeRef| InNode {
-            ty: node.ty.clone(),
+            ty: node.core().ty.clone(),
             kind: TransformKind::Product {
                 op: InProduct::Identity {
                     clone: bound.borrow_target().is_some(),
