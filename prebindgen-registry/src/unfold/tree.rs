@@ -779,17 +779,26 @@ impl TransformLowerer<OutOfRust> for Select<'_> {
         link: Option<&OutLink>,
     ) -> Result<crate::transform::Descend<OutNode>, Self::Error> {
         Ok(match (self.claim)(node, link) {
+            // A claim changes WHICH converter carries the value, never what the
+            // position means. Where the claimed node is already a leaf its own
+            // `OutLeaf` says that — a nullable payload stays nullable, an
+            // identity leaf stays identity, and a variant member keeps naming
+            // its member — so only the reading is replaced. Synthesizing a
+            // default leaf there would silently drop all three.
             Some(selected) => crate::transform::Descend::Atomic(OutNode {
                 ty: selected,
-                kind: TransformKind::Leaf(OutLeaf {
-                    nullable: false,
-                    identity: false,
-                    // How the claimed value is REACHED is unchanged by claiming
-                    // it: the links above still say, and the last step says
-                    // which kind of chain they are.
-                    reach: match link.and_then(|l| l.steps.last()) {
-                        Some(step) if step.is_field() => OutReach::Field,
-                        _ => OutReach::Accessor,
+                kind: TransformKind::Leaf(match &node.kind {
+                    TransformKind::Leaf(op) => op.clone(),
+                    _ => OutLeaf {
+                        nullable: false,
+                        identity: false,
+                        // How a claimed subtree is REACHED is unchanged by
+                        // claiming it: the links above still say, and the last
+                        // step says which kind of chain they are.
+                        reach: match link.and_then(|l| l.steps.last()) {
+                            Some(step) if step.is_field() => OutReach::Field,
+                            _ => OutReach::Accessor,
+                        },
                     },
                 }),
             }),

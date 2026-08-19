@@ -2824,3 +2824,78 @@ fn a_choice_and_a_variant_arm_must_be_paired() {
     assert_eq!(leaves[0].source, LeafSource::SumTag);
     assert_eq!(leaves[1].group, Some(0));
 }
+
+/// #444 §3: a claim says which converter carries a value, not what the position
+/// means. Where the claimed node is already a leaf, its own semantics have to
+/// survive the replacement — otherwise selecting over a decomposition tree
+/// silently turns a nullable variant payload into a non-null accessor read.
+#[test]
+fn selecting_an_existing_leaf_keeps_its_semantics() {
+    use crate::transform::TransformKind;
+
+    let rich = OutLeaf {
+        nullable: true,
+        identity: true,
+        reach: OutReach::VariantMember(syn::Member::Unnamed(syn::Index::from(0usize))),
+    };
+    let tree = OutNode {
+        ty: tref(syn::parse_quote!(Outer)),
+        kind: TransformKind::Choice {
+            op: OutChoice {
+                name: "tag".to_string(),
+            },
+            variants: vec![OutChild {
+                link: OutLink {
+                    steps: Vec::new(),
+                    name: Vec::new(),
+                },
+                node: OutNode {
+                    ty: tref(syn::parse_quote!(Outer)),
+                    kind: TransformKind::Product {
+                        op: OutProduct::Variant {
+                            name: ident("Wrapped"),
+                            tag: 0,
+                        },
+                        children: vec![OutChild {
+                            link: OutLink {
+                                steps: Vec::new(),
+                                name: vec!["wrapped_v0".to_string()],
+                            },
+                            node: OutNode {
+                                ty: tref(syn::parse_quote!(Payload)),
+                                kind: TransformKind::Leaf(rich.clone()),
+                            },
+                        }],
+                    },
+                },
+            }],
+        },
+    };
+
+    // The adapter converts the payload directly, and through the BORROWED
+    // reading — so the reading changes and the meaning of the position must not.
+    let selected = crate::unfold::select(&tree, &mut |node, _link| {
+        (node.ty.spell().to_string() == "Payload").then(|| node.ty.borrowed())
+    });
+
+    let TransformKind::Choice { variants, .. } = &selected.kind else {
+        panic!("the choice survives selection")
+    };
+    let TransformKind::Product { children, .. } = &variants[0].node.kind else {
+        panic!("the arm survives selection")
+    };
+    let TransformKind::Leaf(op) = &children[0].node.kind else {
+        panic!("the claimed payload is a leaf")
+    };
+    assert_eq!(
+        children[0].node.ty.spell().to_string(),
+        "& Payload",
+        "the claim replaces the reading"
+    );
+    assert!(op.nullable, "a nullable payload stays nullable");
+    assert!(op.identity, "an identity leaf stays identity");
+    assert!(
+        matches!(&op.reach, OutReach::VariantMember(syn::Member::Unnamed(i)) if i.index == 0),
+        "a variant member keeps naming its member, not a generic field read"
+    );
+}

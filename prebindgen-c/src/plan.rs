@@ -53,10 +53,11 @@ impl CbindgenBuilder {
 /// * `Option` peels all the way down, so `Option<Option<T>>` is two layers;
 /// * a shared-slice borrow is a run, where the model stops at the reference.
 fn c_layer(ty: &TypeRef) -> Option<(OrdinaryLayer, TypeRef)> {
-    // A declared conversion beats the shape, so a type with its own wire is not
-    // peeled at all — the same rule `select` applies one step later, asked here
-    // because a layer peeled off a value that crosses whole would describe an
-    // ABI the converter table does not hand out.
+    // Shape only: this reads layers off the type and never consults the
+    // converter table. Peeling a value that in fact crosses whole is harmless
+    // because `ordinary_with` leaves the wrapped type on the layer node, so
+    // `select` claims it there and the layers below it are discarded — the
+    // "declared conversion beats the shape" rule lives in that claim, not here.
     if let Some(inner) = ty.optional_inner() {
         return Some((OrdinaryLayer::Optional, inner.clone()));
     }
