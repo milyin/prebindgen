@@ -80,11 +80,11 @@ pub(crate) fn callback_input(
         // interface + appender singleton, driven from the trampoline.
         if let Some(plan) = registry
             .callback_arg_plan(&arg_ty.key())
-            .filter(|p| super::render::is_iterable_fold(&p.shape))
+            .filter(|p| super::render::is_iterable_fold(p.shape()))
         {
             // Every leaf converter must already be resolved (deferral safety).
             // A synthesized leaf (a sum's tag) has no converter to wait for.
-            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
+            for leaf in plan.leaves().iter().filter(|l| l.has_converter()) {
                 registry.output_entry(&leaf.out_ty)?;
             }
             let spec = folder_iface_for_plan(ext, registry, plan)?;
@@ -123,7 +123,7 @@ pub(crate) fn callback_input(
             // local frame so they are freed per element (the daemon-thread
             // local-ref discipline — only the `acc` ref crosses iterations).
             let acc = format_ident!("__fold{}_acc", i);
-            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
+            let obj_idents: Vec<syn::Ident> = (0..plan.leaves().len())
                 .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
                 .collect();
             let (leaf_stmts, leaf_args) = encode_plan_leaves(
@@ -135,7 +135,7 @@ pub(crate) fn callback_input(
                 &fail,
                 emit,
             );
-            let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
+            let elem_frame = std::cmp::max(16, 2 * plan.leaves().len() + 6);
             let elem_frame_lit = syn::LitInt::new(&elem_frame.to_string(), Span::call_site());
             preludes.push(quote! {
                 let #acc: jni::objects::JObject = env
@@ -181,13 +181,13 @@ pub(crate) fn callback_input(
             // leaf (a sum's tag) has no converter to wait for: requiring one
             // would make the trampoline wait forever on an `i32` crossing the
             // binding may not have.
-            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
+            for leaf in plan.leaves().iter().filter(|l| l.has_converter()) {
                 let e = registry.output_entry(&leaf.out_ty)?;
                 if leaf.identity && e.metadata.projection.is_none() {
                     return None;
                 }
             }
-            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
+            let obj_idents: Vec<syn::Ident> = (0..plan.leaves().len())
                 .map(|k| format_ident!("__cb{}_obj{}", i, k))
                 .collect();
             let (stmts, arg_exprs) = encode_plan_leaves(

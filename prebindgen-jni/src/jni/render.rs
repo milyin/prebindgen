@@ -1450,7 +1450,7 @@ fn classify_output(
         // `Vec<data_class>` fold, a `List<Class>` composed on the Kotlin side.
         // The concrete element/return Kotlin type. For a decomposed `data_class`
         // builder/fold it is the data class (`plan.source`'s registered FQN); for
-        // a **whole-element leaf** fold (`plan.element` set — String / handle)
+        // a **whole-element leaf** fold (`plan.element()` set — String / handle)
         // `plan.source` (e.g. `String`) has no class FQN, so take the
         // element's typed view from the folder interface's element param instead.
         // Full-FQN class type: the render-time `ImportSet` shortens it (and
@@ -1784,7 +1784,7 @@ fn error_sink_parts(
                 (p.raw.clone(), p.wrap.clone())
             })
             .collect();
-        debug_assert_eq!(ze_info.len(), error_plan.leaves.len());
+        debug_assert_eq!(ze_info.len(), error_plan.leaves().len());
         imports.insert(domain_spec.capture_fqn());
         // The domain redispatch args — the decomposed leaves only (no `je`).
         // The native side always fills the raw ze on `Err`, so non-null slots
@@ -2408,7 +2408,7 @@ fn shape_notes(
             })
             .collect();
         let leaf_names: Vec<String> = plan
-            .leaves
+            .leaves()
             .iter()
             .map(|l| snake_to_camel(&l.name.to_string()))
             .collect();
@@ -2436,7 +2436,7 @@ fn shape_notes(
 
     if let Some(plan) = registry.unfold_plans().get(fn_ident) {
         let source = plan.source.to_string();
-        let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
+        let leaves: Vec<&str> = plan.leaves().iter().map(|l| l.name.as_str()).collect();
         match plan.delivery {
             prebindgen_registry::unfold::Delivery::Callback if !leaves.is_empty() => {
                 notes.push(format!(
@@ -2456,7 +2456,7 @@ fn shape_notes(
 
     if let Some(plan) = registry.error_plans().get(fn_ident) {
         let source = plan.source.to_string();
-        let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
+        let leaves: Vec<&str> = plan.leaves().iter().map(|l| l.name.as_str()).collect();
         notes.push(format!(
             "On a domain error `onError` receives the decomposed Rust `{source}` error \
              (`{}`); a binding/system failure goes to `onBindingError` instead.",

@@ -17,11 +17,10 @@
 //! [`FoldPlan::leaves`]: super::FoldPlan::leaves
 //! [`FoldPlan::shape`]: super::FoldPlan::shape
 
+use super::{FoldLeaf, FoldShape};
 use crate::transform::{
     Lowered, TransformChild, TransformDirection, TransformKind, TransformLowerer, TransformNode,
 };
-
-use super::{FoldLeaf, FoldShape};
 
 /// Direction marker: crossing values assembled into a Rust value.
 pub enum IntoRust {}

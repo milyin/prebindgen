@@ -232,7 +232,7 @@ impl super::JniGen {
             ));
         }
         if let Some(plan) = registry.unfold_plans().get(rust_ident) {
-            let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
+            let leaves: Vec<&str> = plan.leaves().iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "return `{}` decomposed → [{}] ({:?} delivery)",
                 plan.source,
@@ -241,7 +241,7 @@ impl super::JniGen {
             ));
         }
         if let Some(plan) = registry.error_plans().get(rust_ident) {
-            let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
+            let leaves: Vec<&str> = plan.leaves().iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
                 "domain error `{}` decomposed → onError [{}] (binding failures → onBindingError)",
                 plan.source,

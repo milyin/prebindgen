@@ -14,6 +14,12 @@
 pub use prebindgen_flat::shape::Shape as FoldShape;
 
 /// A resolved expansion for one `(function, parameter)`.
+///
+/// [`leaves`](Self::leaves) is readable but not settable from outside the
+/// crate, and neither is a plan constructible there: it is collected from
+/// [`Self::tree`] where the plan is built, and a caller that could set it could
+/// make a tree-reading adapter and a signature-reading one see different
+/// expansions.
 pub struct FoldPlan {
     /// Owned type the core construct produces — what the underlying call needs
     /// (before any [`Self::shape`] wrapping). A **reading**: `emit.spell(&target)` in an emission callback
@@ -29,7 +35,7 @@ pub struct FoldPlan {
     /// A derived view of [`Self::tree`]: every slot is described by the node
     /// that uses it, and [`wire_leaves`](crate::expand::wire_leaves) collects
     /// them.
-    pub leaves: Vec<FoldLeaf>,
+    pub(crate) leaves: Vec<FoldLeaf>,
     /// The plan itself: the `Option` / `Vec` layers the parameter is written
     /// with, and the construction under them (#442). Everything recursive about
     /// an expansion lives here — a constructor argument that is itself built
@@ -38,6 +44,12 @@ pub struct FoldPlan {
 }
 
 impl FoldPlan {
+    /// Flattened wire leaves, in foreign-signature order — see the field's own
+    /// note.
+    pub fn leaves(&self) -> &[FoldLeaf] {
+        &self.leaves
+    }
+
     /// Outer shape over the core construct (`Construct` for a plain `T`/`&T`
     /// param; `Optional(Construct)` for `Option<T>`/`Option<&T>`).
     ///

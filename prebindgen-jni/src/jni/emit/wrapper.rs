@@ -264,7 +264,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let call_expr: TokenStream = if is_convert {
         use prebindgen_registry::unfold::UnfoldShape;
         let uplan = unfold_plan.expect("is_convert ⇒ plan");
-        let leaf = &uplan.leaves[0];
+        let leaf = &uplan.leaves()[0];
         let by_ref = uplan.by_ref;
         // One derivation, shared with the multi-leaf encoder — the value forms
         // are bound by the same [`bind_hoists`] and the leaf reached by the
@@ -281,7 +281,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // `.map(|__inner| __inner)` (`clippy::map_identity`). Generated code
         // runs through the consumer's own lints, where both are denials.
         let compose = |base: TokenStream, base_is_ref: bool| -> Option<TokenStream> {
-            let hoisted = bind_hoists(&qualify, &uplan.hoists, &base, base_is_ref);
+            let hoisted = bind_hoists(&qualify, uplan.hoists(), &base, base_is_ref);
             let stmts = &hoisted.stmts;
             let reached = match hoisted.rebase(&leaf.path) {
                 Some((local, rest, consuming)) => {
@@ -296,7 +296,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             }
             Some(quote!({ #stmts #reached }))
         };
-        match &uplan.shape {
+        match &uplan.shape() {
             UnfoldShape::Optional((), _) => match compose(quote!(__inner), by_ref) {
                 Some(inner) => quote!({
                     let __cvsrc = #raw_call;
@@ -321,7 +321,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // while ENCODING the error itself degrades to the BINDING channel
         // (`signal_binding_error`). The success `T` flows into the normal
         // output phase.
-        let eze_idents: Vec<syn::Ident> = (0..ep.leaves.len())
+        let eze_idents: Vec<syn::Ident> = (0..ep.leaves().len())
             .map(|i| format_ident!("__eze{}", i))
             .collect();
         let ze_fail = |msg: TokenStream| -> TokenStream {
@@ -889,8 +889,8 @@ pub(crate) fn emit_expanded_param(
     let mut prelude: Vec<TokenStream> = Vec::new();
     let mut leaf_locals: Vec<syn::Ident> = Vec::new();
 
-    debug_assert_eq!(plan.leaves.len(), leaves.len());
-    for (leaf, classified) in plan.leaves.iter().zip(leaves) {
+    debug_assert_eq!(plan.leaves().len(), leaves.len());
+    for (leaf, classified) in plan.leaves().iter().zip(leaves) {
         let leaf_ty = &leaf.ty;
         // The ascription generated Rust writes for this leaf's local.
         let leaf_ty_tokens = emit.spell(leaf_ty);

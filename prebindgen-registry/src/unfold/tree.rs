@@ -15,11 +15,10 @@
 //! [`UnfoldPlan::leaves`]: super::UnfoldPlan::leaves
 //! [`UnfoldPlan::hoists`]: super::UnfoldPlan::hoists
 
+use super::{Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldShape};
 use crate::transform::{
     Lowered, TransformChild, TransformDirection, TransformKind, TransformLowerer, TransformNode,
 };
-
-use super::{Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldShape};
 
 /// Direction marker: a Rust value taken apart into crossing values.
 pub enum OutOfRust {}

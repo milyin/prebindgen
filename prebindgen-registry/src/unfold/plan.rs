@@ -222,6 +222,13 @@ pub enum LeafSource {
 }
 
 /// A resolved output expansion for one function.
+///
+/// The views derived from [`Self::tree`] — [`shape`](Self::shape),
+/// [`leaves`](Self::leaves), [`element`](Self::element) and
+/// [`hoists`](Self::hoists) — are readable but not settable from outside the
+/// crate, and neither is a plan constructible there: they are computed from the
+/// tree where the plan is built, and a caller that could set one could make a
+/// tree-reading adapter and a view-reading one see different decompositions.
 #[derive(Clone)]
 pub struct UnfoldPlan {
     /// Owned core type the records decompose — the function's return after
@@ -242,7 +249,7 @@ pub struct UnfoldPlan {
     /// [`Sequence`](crate::transform::TransformKind::Sequence) node wrapping
     /// the decomposition, and [`shape_of`](crate::unfold::shape_of) reads the
     /// stack back off them.
-    pub shape: UnfoldShape,
+    pub(crate) shape: UnfoldShape,
     /// The plan itself: the `Option` / `Vec` layers the value crosses in, and
     /// what is taken out of it under them (#442). [`Self::shape`],
     /// [`Self::element`], [`Self::leaves`] and [`Self::hoists`] are **derived
@@ -261,7 +268,7 @@ pub struct UnfoldPlan {
     /// `data_class` [`Self::fixed_builder`]); **empty** only for a
     /// **whole-element** `Iterable`, which delivers each element via
     /// [`Self::element`].
-    pub leaves: Vec<UnfoldLeaf>,
+    pub(crate) leaves: Vec<UnfoldLeaf>,
     /// For a **whole-element** `Iterable` plan: the owned/ref element type,
     /// delivered to the fold via its own output converter + projection (not
     /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
@@ -271,7 +278,7 @@ pub struct UnfoldPlan {
     /// [`Sequence`](crate::transform::TransformKind::Sequence) node crosses
     /// whole, where a decomposed run has a product there instead. See
     /// [`element_of`](crate::unfold::element_of).
-    pub element: Option<prebindgen_flat::flat::TypeRef>,
+    pub(crate) element: Option<prebindgen_flat::flat::TypeRef>,
     /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
     /// delivery.
     pub delivery: Delivery,
@@ -296,7 +303,31 @@ pub struct UnfoldPlan {
     /// value form, and that child call is a second hoist nested under the
     /// first. Ordered outermost-first, so a hoist can be composed from the
     /// longest already-bound prefix of itself.
-    pub hoists: Vec<Hoist>,
+    pub(crate) hoists: Vec<Hoist>,
+}
+
+impl UnfoldPlan {
+    /// Outer shape over the core decomposition — see the field's own note.
+    pub fn shape(&self) -> &UnfoldShape {
+        &self.shape
+    }
+
+    /// Flattened output leaves, in builder-argument order — see the field's
+    /// own note.
+    pub fn leaves(&self) -> &[UnfoldLeaf] {
+        &self.leaves
+    }
+
+    /// The whole-element type of an `Iterable` plan that delivers its elements
+    /// whole — see the field's own note.
+    pub fn element(&self) -> Option<&prebindgen_flat::flat::TypeRef> {
+        self.element.as_ref()
+    }
+
+    /// Value forms to evaluate once and bind — see the field's own note.
+    pub fn hoists(&self) -> &[Hoist] {
+        &self.hoists
+    }
 }
 
 /// One hoisted value form: where it sits, and whether it **consumes** the value

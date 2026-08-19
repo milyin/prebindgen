@@ -194,7 +194,7 @@ struct Split<'a> {
     plan: &'a FoldPlan,
     /// Start of this param's contiguous leaf block in `sel_fun.params`.
     start: usize,
-    /// Block length (`plan.leaves.len()`).
+    /// Block length (`plan.leaves().len()`).
     len: usize,
     /// Selector-leaf index within the block.
     sel_idx: usize,
@@ -343,7 +343,7 @@ fn resolve_split<'a>(
         f.name
     );
     let leaf_names: Vec<String> = plan
-        .leaves
+        .leaves()
         .iter()
         .map(|l| kt_param_name(&l.name.to_string()))
         .collect();

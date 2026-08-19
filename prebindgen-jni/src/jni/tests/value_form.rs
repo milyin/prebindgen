@@ -251,7 +251,7 @@ fn deriving_matches_the_equivalent_hand_written_list() {
         let gen = jni.build_with(registry).expect("resolve");
         gen.registry()
             .callback_arg_plans_for_test()
-            .flat_map(|p| p.leaves.iter())
+            .flat_map(|p| p.leaves().iter())
             .map(|l| (l.name.clone(), l.out_ty.to_string()))
             .collect()
     };
