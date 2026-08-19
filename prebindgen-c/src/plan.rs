@@ -185,6 +185,15 @@ impl CbindgenBuilder {
     /// runs over the fixtures the C tests already have — real declarations with
     /// real converters — rather than a list of types chosen by whoever wrote
     /// the check, which is the list most likely to miss the case that differs.
+    ///
+    /// Compares the wire components and not the leftover niches, deliberately.
+    /// A niche disagreement has exactly one visible consequence — whether an
+    /// `Option` layer spends a niche or prepends a `_present` field — and that
+    /// shows up as a field divergence here, because the check runs on the
+    /// crossing type itself rather than on its core in isolation. What it would
+    /// miss is two shapes that both run out of niches and emit `_present` while
+    /// disagreeing about what a hypothetical outer layer would have had left;
+    /// worth a `render_niches` side only once such a divergence is found.
     pub(crate) fn assert_plan_agrees(
         &self,
         ty: &TypeRef,
@@ -236,12 +245,17 @@ fn unmodelled(ty: &TypeRef) -> Option<&'static str> {
         .optional_inner()
         .is_some_and(|inner| inner.optional_inner().is_some())
     {
-        // `Option<Option<T>>`: C spends one niche per layer, all the way down.
+        // `Option<Option<T>>`: C's conversion recurses through every
+        // `optional_inner` layer, spending a niche at each, where the model
+        // stops after one because the boundary it describes has one way to say
+        // absent.
         return Some("nested options");
     }
     if r_scalar_slice_elem(ty).is_some() {
-        // `&[T]`: a shared-slice borrow is a run to C, but `layer_stack` does
-        // not look through the borrow, so the plan sees one opaque value.
+        // `&[T]` is a `Reference` wrapping a `Slice`, and `layer_stack` peels
+        // `Vec` or `Slice` directly — the outer reference is not a boundary
+        // layer in the model, so the walk stops there and the plan sees one
+        // opaque value where C sees a run.
         return Some("a shared-slice borrow");
     }
     None
