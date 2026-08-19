@@ -321,15 +321,7 @@ fn process_expand<M>(
         &mut visited,
     )?;
 
-    // Both halves are required for now: the current layout's selector and
-    // presence flag cross as an `i32` and a `bool`, so their converters must
-    // resolve. They are named apart (`Dependencies::intrinsic`) because an
-    // adapter that picks its own physical representation should not inherit
-    // this one's — see #444 §1.
-    let deps = dependencies(&plan.tree);
-    for ty in deps.required.iter().chain(deps.intrinsic.iter()) {
-        registry.require_input(ty);
-    }
+    register_dependencies(registry, &plan.tree, &mut claims_nothing());
     registry
         .expansion_plans
         .insert((ed.func.clone(), ed.param.clone()), plan);
@@ -405,6 +397,35 @@ struct CtorSig {
     /// that needs the spelling takes it at the point it stores one.
     params: Vec<(syn::Ident, prebindgen_flat::flat::TypeRef)>,
     fallible: bool,
+}
+
+/// Root every input converter a construction needs, under one converter
+/// selection.
+///
+/// Both halves of [`Dependencies`] are required for now: the current layout's
+/// selector and presence flag cross as an `i32` and a `bool`, so their
+/// converters must resolve. They are named apart because an adapter that picks
+/// its own physical representation should not inherit this one's (#444 §1).
+///
+/// `claims` is taken rather than assumed because registration and lowering must
+/// make the *same* decision: a subtree claimed in one and not the other roots
+/// converters the binding never calls, and a root can only be gained, never
+/// taken back.
+fn register_dependencies<M>(
+    registry: &mut Registry<M>,
+    tree: &InNode,
+    claims: &mut dyn FnMut(&InNode, Option<&InLink>) -> bool,
+) {
+    let deps = dependencies_with(tree, claims);
+    for ty in deps.required.iter().chain(deps.intrinsic.iter()) {
+        registry.require_input(ty);
+    }
+}
+
+/// The selection every caller passes today: no adapter states one yet. Handing
+/// an adapter's in is #444 §5.
+fn claims_nothing() -> impl FnMut(&InNode, Option<&InLink>) -> bool {
+    |_, _| false
 }
 
 /// Build the [`FoldPlan`] for a chosen construction. A single `Ctor` variant
